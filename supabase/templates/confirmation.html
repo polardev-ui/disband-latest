@@ -20,7 +20,7 @@
             <td style="padding:32px;">
               <h1 style="margin:0 0 12px;color:#f2f3f5;font-size:20px;font-weight:700;">Confirm your email</h1>
               <p style="margin:0 0 24px;color:#b5bac1;font-size:15px;line-height:1.6;">
-                Thanks for signing up{{ if .Email }} as <strong style="color:#dbdee1;">{{ .Email }}</strong>{{ end }}.
+                Thanks for signing up as <strong style="color:#dbdee1;">{{ .Email }}</strong>.
                 Tap the button below to verify your email and finish creating your account.
               </p>
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;">
@@ -30,13 +30,9 @@
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 16px;color:#949ba4;font-size:13px;line-height:1.6;">
-                Or enter this code in the app:
-              </p>
+              <p style="margin:0 0 16px;color:#949ba4;font-size:13px;line-height:1.6;">Or enter this code in the app:</p>
               <p style="margin:0 0 24px;padding:12px 16px;background-color:#1e1f22;border-radius:8px;color:#f2f3f5;font-size:24px;font-weight:700;letter-spacing:6px;text-align:center;">{{ .Token }}</p>
-              <p style="margin:0;color:#949ba4;font-size:12px;line-height:1.6;">
-                If you didn't create a Disband account, you can safely ignore this email.
-              </p>
+              <p style="margin:0;color:#949ba4;font-size:12px;line-height:1.6;">If you didn't create a Disband account, you can safely ignore this email.</p>
             </td>
           </tr>
           <tr>

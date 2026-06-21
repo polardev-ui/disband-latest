@@ -2,19 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
-interface GroupCallSignal {
-  type: "ring" | "join" | "leave" | "offer" | "answer" | "ice";
+interface SignalPayload {
+  type: "ring" | "offer" | "answer" | "ice" | "leave";
   from: string;
   to?: string;
-  groupId?: string;
-  groupName?: string;
-  callerName?: string;
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+}
+
+export interface GroupCallParticipant {
+  user_id: string;
+  profile?: Profile;
+  joined_at?: string;
 }
 
 const ICE: RTCIceServer[] = [
@@ -32,32 +36,54 @@ export function useGroupCallManager(
 ) {
   const [phase, setPhase] = useState<GroupCallPhase>("idle");
   const [groupId, setGroupId] = useState<string | null>(null);
-  const [groupName, setGroupName] = useState<string>("");
-  const [participants, setParticipants] = useState<string[]>([]);
+  const [groupName, setGroupName] = useState("");
+  const [joined, setJoined] = useState(false);
+  const [presence, setPresence] = useState<GroupCallParticipant[]>([]);
+  const [ringingIds, setRingingIds] = useState<Set<string>>(new Set());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const localRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const signalRef = useRef<RealtimeChannel | null>(null);
   const listenRef = useRef<RealtimeChannel | null>(null);
-  const participantsRef = useRef<string[]>([]);
   const groupIdRef = useRef<string | null>(null);
   const phaseRef = useRef<GroupCallPhase>("idle");
+  const joinedRef = useRef(false);
   const cameraRef = useRef(false);
+  const iceQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
-  useEffect(() => { participantsRef.current = participants; }, [participants]);
   useEffect(() => { groupIdRef.current = groupId; }, [groupId]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { joinedRef.current = joined; }, [joined]);
   useEffect(() => { cameraRef.current = cameraEnabled; }, [cameraEnabled]);
 
   useEffect(() => {
     localRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
   }, [micMuted]);
 
-  const sendToUser = useCallback(async (targetId: string, payload: GroupCallSignal) => {
+  const loadPresence = useCallback(async (gid: string) => {
+    const supabase = getSupabaseClient();
+    const { data: rows } = await supabase.from("group_call_presence").select("*").eq("group_id", gid);
+    if (!rows?.length) {
+      setPresence([]);
+      return;
+    }
+    const { data: profiles } = await supabase.from("profiles").select("*").in("id", rows.map((r) => r.user_id));
+    const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    setPresence(
+      rows.map((r) => ({
+        user_id: r.user_id,
+        joined_at: r.joined_at,
+        profile: map.get(r.user_id),
+      })),
+    );
+  }, []);
+
+  const sendToUser = useCallback(async (targetId: string, payload: Record<string, unknown>) => {
     const supabase = getSupabaseClient();
     const ch = supabase.channel(`call-user:${targetId}`, { config: { broadcast: { self: false } } });
     await ch.subscribe();
@@ -65,9 +91,14 @@ export function useGroupCallManager(
     await ch.unsubscribe();
   }, []);
 
-  const cleanup = useCallback(async () => {
+  const broadcast = useCallback((payload: SignalPayload) => {
+    void signalRef.current?.send({ type: "broadcast", event: "group-call", payload });
+  }, []);
+
+  const cleanupMedia = useCallback(async () => {
     peersRef.current.forEach((pc) => pc.close());
     peersRef.current.clear();
+    iceQueueRef.current.clear();
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
     setLocalStream(null);
@@ -76,48 +107,34 @@ export function useGroupCallManager(
       await signalRef.current.unsubscribe();
       signalRef.current = null;
     }
-    setParticipants([]);
+    setJoined(false);
+    setRingingIds(new Set());
+    stopRingtone();
+  }, []);
+
+  const cleanup = useCallback(async () => {
+    const gid = groupIdRef.current;
+    const uid = userId;
+    if (gid && uid && joinedRef.current) {
+      const supabase = getSupabaseClient();
+      await supabase.from("group_call_presence").delete().eq("group_id", gid).eq("user_id", uid);
+      broadcast({ type: "leave", from: uid });
+    }
+    await cleanupMedia();
+    setPhase("idle");
     setGroupId(null);
     setGroupName("");
-    setPhase("idle");
     setIncomingRing(null);
-  }, []);
+    if (gid) await loadPresence(gid);
+  }, [userId, broadcast, cleanupMedia, loadPresence]);
 
-  const broadcast = useCallback((payload: GroupCallSignal) => {
-    void signalRef.current?.send({ type: "broadcast", event: "group-call", payload });
-  }, []);
-
-  const notifyLeave = useCallback(async (peerId: string) => {
-    if (!userId || !groupIdRef.current) return;
-    const payload: GroupCallSignal = { type: "leave", from: userId, to: peerId, groupId: groupIdRef.current };
-    broadcast(payload);
-    await sendToUser(peerId, payload);
-  }, [userId, broadcast, sendToUser]);
-
-  const handlePairwiseEnd = useCallback(async (remaining: string[]) => {
-    if (remaining.length === 2 && userId && remaining.includes(userId)) {
-      const other = remaining.find((id) => id !== userId);
-      if (other) await notifyLeave(other);
+  const flushIce = useCallback(async (remoteId: string, pc: RTCPeerConnection) => {
+    const queued = iceQueueRef.current.get(remoteId) ?? [];
+    iceQueueRef.current.delete(remoteId);
+    for (const c of queued) {
+      await pc.addIceCandidate(c);
     }
-  }, [userId, notifyLeave]);
-
-  const removeParticipant = useCallback(async (peerId: string) => {
-    const pc = peersRef.current.get(peerId);
-    if (pc) {
-      pc.close();
-      peersRef.current.delete(peerId);
-    }
-    setRemoteStreams((prev) => {
-      const next = new Map(prev);
-      next.delete(peerId);
-      return next;
-    });
-    setParticipants((prev) => {
-      const next = prev.filter((id) => id !== peerId);
-      void handlePairwiseEnd(next);
-      return next;
-    });
-  }, [handlePairwiseEnd]);
+  }, []);
 
   const createPeer = useCallback(
     async (remoteId: string, initiator: boolean) => {
@@ -130,51 +147,55 @@ export function useGroupCallManager(
       if (local) local.getTracks().forEach((t) => pc.addTrack(t, local));
 
       pc.ontrack = (ev) => {
-        if (ev.streams[0]) {
-          setRemoteStreams((prev) => new Map(prev).set(remoteId, ev.streams[0]));
-        }
+        if (ev.streams[0]) setRemoteStreams((prev) => new Map(prev).set(remoteId, ev.streams[0]));
       };
       pc.onicecandidate = (ev) => {
         if (ev.candidate) {
-          broadcast({
-            type: "ice",
-            from: userId,
-            to: remoteId,
-            groupId: groupIdRef.current!,
-            candidate: ev.candidate.toJSON(),
-          });
+          broadcast({ type: "ice", from: userId, to: remoteId, candidate: ev.candidate.toJSON() });
         }
       };
       pc.onconnectionstatechange = () => {
         if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-          void removeParticipant(remoteId);
+          pc.close();
+          peersRef.current.delete(remoteId);
+          setRemoteStreams((prev) => {
+            const next = new Map(prev);
+            next.delete(remoteId);
+            return next;
+          });
         }
       };
 
       if (initiator) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        broadcast({ type: "offer", from: userId, to: remoteId, groupId: groupIdRef.current!, sdp: offer });
+        broadcast({ type: "offer", from: userId, to: remoteId, sdp: offer });
       }
     },
-    [userId, broadcast, removeParticipant],
+    [userId, broadcast],
   );
 
   const handleSignal = useCallback(
-    async (payload: GroupCallSignal) => {
+    async (payload: SignalPayload) => {
       if (!userId || payload.from === userId) return;
       if (payload.to && payload.to !== userId) return;
-      if (payload.groupId && groupIdRef.current && payload.groupId !== groupIdRef.current) return;
+      if (!joinedRef.current) return;
 
       if (payload.type === "leave") {
-        await removeParticipant(payload.from);
-        if (participantsRef.current.length <= 1 && phaseRef.current === "active") {
+        const pc = peersRef.current.get(payload.from);
+        pc?.close();
+        peersRef.current.delete(payload.from);
+        setRemoteStreams((prev) => {
+          const next = new Map(prev);
+          next.delete(payload.from);
+          return next;
+        });
+        // 2-person call: when the only peer leaves, end for us too
+        if (peersRef.current.size === 0 && joinedRef.current) {
           await cleanup();
         }
         return;
       }
-
-      if (phaseRef.current !== "active") return;
 
       let pc = peersRef.current.get(payload.from);
       if (!pc && (payload.type === "offer" || payload.type === "answer")) {
@@ -185,16 +206,37 @@ export function useGroupCallManager(
 
       if (payload.type === "offer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
+        await flushIce(payload.from, pc);
         const ans = await pc.createAnswer();
         await pc.setLocalDescription(ans);
-        broadcast({ type: "answer", from: userId, to: payload.from, groupId: groupIdRef.current!, sdp: ans });
+        broadcast({ type: "answer", from: userId, to: payload.from, sdp: ans });
       } else if (payload.type === "answer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
+        await flushIce(payload.from, pc);
       } else if (payload.type === "ice" && payload.candidate) {
-        await pc.addIceCandidate(payload.candidate);
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(payload.candidate);
+        } else {
+          const q = iceQueueRef.current.get(payload.from) ?? [];
+          q.push(payload.candidate);
+          iceQueueRef.current.set(payload.from, q);
+        }
       }
     },
-    [userId, broadcast, createPeer, removeParticipant, cleanup],
+    [userId, broadcast, createPeer, flushIce, cleanup],
+  );
+
+  const subscribeSignal = useCallback(
+    (gid: string) => {
+      const supabase = getSupabaseClient();
+      if (signalRef.current) void signalRef.current.unsubscribe();
+      const ch = supabase.channel(`group-call:${gid}`, { config: { broadcast: { self: false } } });
+      ch.on("broadcast", { event: "group-call" }, ({ payload }) => {
+        void handleSignal(payload as SignalPayload);
+      }).subscribe();
+      signalRef.current = ch;
+    },
+    [handleSignal],
   );
 
   const joinCallMedia = useCallback(async () => {
@@ -207,39 +249,64 @@ export function useGroupCallManager(
     stream.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
   }, [micMuted]);
 
-  const subscribeGroup = useCallback(
-    async (gid: string) => {
-      const supabase = getSupabaseClient();
-      if (signalRef.current) await signalRef.current.unsubscribe();
-      const ch = supabase.channel(`group-call:${gid}`, { config: { broadcast: { self: false } } });
-      ch.on("broadcast", { event: "group-call" }, ({ payload }) => {
-        void handleSignal(payload as GroupCallSignal);
-        const p = payload as GroupCallSignal;
-        if (p.type === "join" && p.from !== userId) {
-          setParticipants((prev) => (prev.includes(p.from) ? prev : [...prev, p.from]));
-          if (phaseRef.current === "active" && userId) {
-            void createPeer(p.from, true);
-          }
-        }
-      }).subscribe();
-      signalRef.current = ch;
+  const connectToExisting = useCallback(
+    async (others: GroupCallParticipant[]) => {
+      if (!userId) return;
+      for (const p of others) {
+        if (p.user_id !== userId) await createPeer(p.user_id, true);
+      }
     },
-    [userId, handleSignal, createPeer],
+    [userId, createPeer],
+  );
+
+  const joinGroupCall = useCallback(
+    async (gid: string, name: string) => {
+      if (!userId || !profile) return;
+      setError(null);
+      setIncomingRing(null);
+      stopRingtone();
+      setGroupId(gid);
+      setGroupName(name);
+      groupIdRef.current = gid;
+      setPhase("active");
+
+      try {
+        await joinCallMedia();
+        subscribeSignal(gid);
+        const supabase = getSupabaseClient();
+        await supabase.from("group_call_presence").upsert({ group_id: gid, user_id: userId });
+        setJoined(true);
+        const { data: rows } = await supabase.from("group_call_presence").select("*").eq("group_id", gid);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("*")
+          .in("id", (rows ?? []).map((r) => r.user_id));
+        const profileMap = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+        const loaded: GroupCallParticipant[] = (rows ?? []).map((r) => ({
+          user_id: r.user_id,
+          joined_at: r.joined_at,
+          profile: profileMap.get(r.user_id),
+        }));
+        setPresence(loaded);
+        await connectToExisting(loaded.filter((p) => p.user_id !== userId));
+      } catch (e) {
+        setError((e as Error).message);
+        await cleanup();
+      }
+    },
+    [userId, profile, joinCallMedia, subscribeSignal, connectToExisting, cleanup],
   );
 
   const startGroupCall = useCallback(
     async (gid: string, name: string, memberIds: string[]) => {
       if (!userId || !profile) return;
-      setGroupId(gid);
-      setGroupName(name);
-      groupIdRef.current = gid;
-      setPhase("active");
-      await joinCallMedia();
-      await subscribeGroup(gid);
-      setParticipants([userId]);
-      broadcast({ type: "join", from: userId, groupId: gid, groupName: name, callerName: displayName(profile) });
-      for (const mid of memberIds) {
-        if (mid === userId) continue;
+      await joinGroupCall(gid, name);
+      const supabase = getSupabaseClient();
+      const { data: rows } = await supabase.from("group_call_presence").select("user_id").eq("group_id", gid);
+      const inCall = new Set((rows ?? []).map((r) => r.user_id));
+      const toRing = memberIds.filter((id) => id !== userId && !inCall.has(id));
+      setRingingIds(new Set(toRing));
+      for (const mid of toRing) {
         void sendToUser(mid, {
           type: "ring",
           from: userId,
@@ -248,46 +315,42 @@ export function useGroupCallManager(
           callerName: displayName(profile),
         });
       }
+      window.setTimeout(() => setRingingIds(new Set()), 30000);
     },
-    [userId, profile, joinCallMedia, subscribeGroup, broadcast, sendToUser],
+    [userId, profile, joinGroupCall, sendToUser],
   );
 
-  const joinGroupCall = useCallback(
-    async (gid: string, name: string) => {
-      if (!userId || !profile) return;
-      setIncomingRing(null);
-      setGroupId(gid);
-      setGroupName(name);
-      groupIdRef.current = gid;
-      setPhase("active");
-      await joinCallMedia();
-      await subscribeGroup(gid);
-      setParticipants([userId]);
-      broadcast({ type: "join", from: userId, groupId: gid, groupName: name, callerName: displayName(profile) });
+  const watchGroup = useCallback(
+    async (gid: string | null, name = "") => {
+      if (!gid) {
+        if (!joinedRef.current) {
+          setGroupId(null);
+          setGroupName("");
+          setPresence([]);
+          setPhase("idle");
+        }
+        return;
+      }
+      if (!joinedRef.current) {
+        setGroupId(gid);
+        setGroupName(name);
+        setPhase("idle");
+      }
+      await loadPresence(gid);
     },
-    [userId, profile, joinCallMedia, subscribeGroup, broadcast],
+    [loadPresence],
   );
 
   const endGroupCall = useCallback(async () => {
-    if (!userId || !groupIdRef.current) {
-      await cleanup();
-      return;
-    }
-    const remaining = participantsRef.current.filter((id) => id !== userId);
-    await handlePairwiseEnd(remaining);
-    for (const pid of remaining) {
-      await notifyLeave(pid);
-    }
-    broadcast({ type: "leave", from: userId, groupId: groupIdRef.current });
     await cleanup();
-  }, [userId, handlePairwiseEnd, notifyLeave, broadcast, cleanup]);
+  }, [cleanup]);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraRef.current;
     setCameraEnabled(next);
     cameraRef.current = next;
     const stream = localRef.current;
-    if (!stream || phaseRef.current !== "active") return;
+    if (!stream || !joinedRef.current) return;
     const existing = stream.getVideoTracks()[0];
     if (next) {
       if (existing) { existing.enabled = true; return; }
@@ -302,39 +365,83 @@ export function useGroupCallManager(
     setLocalStream(new MediaStream(stream.getTracks()));
   }, []);
 
+  const dismissRing = useCallback(() => {
+    stopRingtone();
+    setIncomingRing(null);
+    if (phaseRef.current === "ringing") setPhase("idle");
+  }, []);
+
+  // Listen for incoming rings
   useEffect(() => {
     if (!userId) return;
     const supabase = getSupabaseClient();
     const ch = supabase.channel(`call-user:${userId}`, { config: { broadcast: { self: false } } });
     ch.on("broadcast", { event: "group-call" }, ({ payload }) => {
-      const p = payload as GroupCallSignal;
-      if (p.from === userId) return;
-      if (p.type === "ring" && p.groupId && p.groupName) {
-        setIncomingRing({ groupId: p.groupId, groupName: p.groupName, fromId: p.from });
+      const p = payload as { type?: string; from?: string; groupId?: string; groupName?: string };
+      if (p.from === userId || !p.groupId || !p.groupName) return;
+      if (p.type === "ring" && phaseRef.current !== "active") {
+        setIncomingRing({ groupId: p.groupId, groupName: p.groupName, fromId: p.from! });
         setPhase("ringing");
-      } else if (p.type === "leave" && phaseRef.current === "active" && p.from !== userId) {
-        void removeParticipant(p.from);
+        startRingtone();
       }
     }).subscribe();
     listenRef.current = ch;
     return () => { void ch.unsubscribe(); };
-  }, [userId, removeParticipant]);
+  }, [userId]);
 
-  useEffect(() => () => { void cleanup(); }, [cleanup]);
+  // Realtime presence for active group
+  useEffect(() => {
+    if (!groupId) return;
+    void loadPresence(groupId);
+    const supabase = getSupabaseClient();
+    const sub = supabase
+      .channel(`gc-presence:${groupId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "group_call_presence", filter: `group_id=eq.${groupId}` },
+        () => void loadPresence(groupId),
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [groupId, loadPresence]);
+
+  // Connect to new joiners while we're in call
+  useEffect(() => {
+    if (!joined || !userId) return;
+    presence.forEach((p) => {
+      if (p.user_id !== userId && !peersRef.current.has(p.user_id)) {
+        void createPeer(p.user_id, true);
+      }
+    });
+  }, [presence, joined, userId, createPeer]);
+
+  const cleanupRef = useRef(cleanup);
+  cleanupRef.current = cleanup;
+  useEffect(() => () => { void cleanupRef.current(); }, []);
+
+  const inCallUserIds = new Set(presence.map((p) => p.user_id));
+  const selfInCall = userId ? inCallUserIds.has(userId) : false;
 
   return {
     phase,
     groupId,
     groupName,
-    participants,
+    joined,
+    selfInCall,
+    presence,
+    inCallUserIds,
+    ringingIds,
     localStream,
     remoteStreams,
     cameraEnabled,
     incomingRing,
+    error,
+    loadPresence,
+    watchGroup,
     startGroupCall,
     joinGroupCall,
     endGroupCall,
     toggleCamera,
-    dismissRing: () => { setIncomingRing(null); setPhase("idle"); },
+    dismissRing,
   };
-}
+};

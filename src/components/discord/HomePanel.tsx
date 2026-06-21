@@ -7,6 +7,7 @@ import { displayName } from "@/lib/utils";
 import { IconFriends, IconGroup, IconPlus } from "@/components/icons";
 import { UserPanel } from "./UserPanel";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
+import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
 const STATUS_BG = {
   online: "bg-status-online",
@@ -19,15 +20,20 @@ interface HomePanelProps {
   onOpenSettings: () => void;
   onUserPanelContext?: (e: React.MouseEvent) => void;
   onFriendClick?: (friendId: string) => void;
+  onGroupContext?: (group: GroupChatWithMembers, x: number, y: number) => void;
 }
 
-export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick }: HomePanelProps) {
+export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, onGroupContext }: HomePanelProps) {
   const {
     friends,
     pendingIncoming,
     pendingOutgoing,
     dmThreads,
     groupChats,
+    groupCallCounts,
+    activeGroupChatId,
+    activeDmThreadId,
+    viewMode,
     sendFriendRequest,
     respondFriendRequest,
     openDmWithFriend,
@@ -98,40 +104,61 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick }:
                 <IconPlus size={16} />
               </button>
             </div>
-            {groupChats.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                onClick={() => void selectGroupChat(g.id)}
-                className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 text-brand">
-                  <IconGroup size={16} />
-                </div>
-                <div className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{g.name}</span>
-                  <span className="block truncate text-[11px] text-text-muted">{g.members.length} members</span>
-                </div>
-              </button>
-            ))}
+            {groupChats.map((g) => {
+              const inCallCount = groupCallCounts.get(g.id) ?? 0;
+              const active = viewMode === "group" && activeGroupChatId === g.id;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => void selectGroupChat(g.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onGroupContext?.(g, e.clientX, e.clientY);
+                  }}
+                  className={`mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover ${
+                    active ? "bg-interactive-selected" : ""
+                  }`}
+                >
+                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 text-brand">
+                    <IconGroup size={16} />
+                    {inCallCount > 0 && (
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{g.name}</span>
+                    <span className="block truncate text-[11px] text-text-muted">
+                      {g.members.length} members
+                      {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
 
             <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
               Direct Messages — {dmThreads.length}
             </p>
-            {dmThreads.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => void selectDmThread(t.id)}
-                className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
-              >
+            {dmThreads.map((t) => {
+              const active = viewMode === "dm" && activeDmThreadId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => void selectDmThread(t.id)}
+                  className={`mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover ${
+                    active ? "bg-interactive-selected" : ""
+                  }`}
+                >
                 <div className="relative">
                   <Avatar profile={t.friend} size="sm" />
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[t.friend.status]}`} />
                 </div>
                 <span className="truncate text-sm">{displayName(t.friend)}</span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
 
             <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
               All Friends — {friends.length}
