@@ -15,6 +15,12 @@ import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { playMentionPing, requestNotificationPermission, showSystemNotification } from "@/lib/notifications";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { parseMentions, normalizeMessageContent } from "@/lib/utils";
+import {
+  matchesOptimisticRow,
+  type MessageContext,
+  type MessageReaction,
+  type MessageSendOptions,
+} from "@/lib/messages";
 import type {
   AppNotification,
   Channel,
@@ -97,9 +103,14 @@ interface AppContextValue {
   createRole: (data: { name: string; color: string }) => Promise<string | null>;
   assignMemberRole: (userId: string, roleId: string | null) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
-  sendChannelMessage: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
-  sendDmMessage: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
-  sendGroupMessage: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
+  sendChannelMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
+  sendDmMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
+  sendGroupMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
+  editChannelMessage: (messageId: string, content: string) => Promise<string | null>;
+  editDmMessage: (messageId: string, content: string) => Promise<string | null>;
+  editGroupMessage: (messageId: string, content: string) => Promise<string | null>;
+  toggleReaction: (context: MessageContext, messageId: string, emoji: string) => Promise<void>;
+  messageReactions: MessageReaction[];
   deleteMessage: (messageId: string) => Promise<void>;
   deleteDmMessage: (messageId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
@@ -126,6 +137,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [groupChats, setGroupChats] = useState<GroupChatWithMembers[]>([]);
   const [groupCallCounts, setGroupCallCounts] = useState<Map<string, number>>(new Map());
   const [groupMessages, setGroupMessages] = useState<(GroupMessage & { author: Profile })[]>([]);
+  const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [voicePresence, setVoicePresence] = useState<(VoicePresence & { profile: Profile })[]>([]);
@@ -309,7 +321,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("channel_id", channelId)
       .order("created_at", { ascending: true })
       .limit(100);
-    setMessages((data as (Message & { author: Profile })[]) ?? []);
+    const rows = (data as (Message & { author: Profile })[]) ?? [];
+    setMessages(rows);
+    const ids = rows.map((m) => m.id);
+    if (ids.length) {
+      const { data: rxn } = await supabase
+        .from("message_reactions")
+        .select("*")
+        .eq("context_type", "channel")
+        .in("message_id", ids);
+      setMessageReactions((prev) => [
+        ...prev.filter((r) => r.context_type !== "channel"),
+        ...((rxn ?? []) as MessageReaction[]),
+      ]);
+    } else {
+      setMessageReactions((prev) => prev.filter((r) => r.context_type !== "channel"));
+    }
   }, []);
 
   const loadFriendships = useCallback(async (uid: string) => {
@@ -360,7 +387,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true })
       .limit(100);
-    setDmMessages((data as (DmMessage & { author: Profile })[]) ?? []);
+    const rows = (data as (DmMessage & { author: Profile })[]) ?? [];
+    setDmMessages(rows);
+    const ids = rows.map((m) => m.id);
+    if (ids.length) {
+      const { data: rxn } = await supabase
+        .from("message_reactions")
+        .select("*")
+        .eq("context_type", "dm")
+        .in("message_id", ids);
+      setMessageReactions((prev) => [
+        ...prev.filter((r) => r.context_type !== "dm"),
+        ...((rxn ?? []) as MessageReaction[]),
+      ]);
+    } else {
+      setMessageReactions((prev) => prev.filter((r) => r.context_type !== "dm"));
+    }
   }, []);
 
   const loadGroupChats = useCallback(async (uid: string) => {
@@ -401,7 +443,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(100);
-    setGroupMessages((data as (GroupMessage & { author: Profile })[]) ?? []);
+    const rows = (data as (GroupMessage & { author: Profile })[]) ?? [];
+    setGroupMessages(rows);
+    const ids = rows.map((m) => m.id);
+    if (ids.length) {
+      const { data: rxn } = await supabase
+        .from("message_reactions")
+        .select("*")
+        .eq("context_type", "group")
+        .in("message_id", ids);
+      setMessageReactions((prev) => [
+        ...prev.filter((r) => r.context_type !== "group"),
+        ...((rxn ?? []) as MessageReaction[]),
+      ]);
+    } else {
+      setMessageReactions((prev) => prev.filter((r) => r.context_type !== "group"));
+    }
   }, []);
 
   const loadNotifications = useCallback(async (uid: string) => {
@@ -515,7 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) return prev;
               const withoutDupes = prev.filter(
-                (m) => !(m.id.startsWith("opt-") && m.author_id === msg.author_id && m.content === msg.content),
+                (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
               );
               if (!author) return withoutDupes;
               return [...withoutDupes, { ...msg, author }];
@@ -526,7 +583,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
-        () => void loadMessages(activeChannelId),
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (id) setMessages((prev) => prev.filter((m) => m.id !== id));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
+        (payload) => {
+          const updated = payload.new as Message;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+          );
+        },
       )
       .subscribe();
     return () => {
@@ -558,12 +628,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setDmMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) return prev;
               const withoutDupes = prev.filter(
-                (m) => !(m.id.startsWith("opt-") && m.author_id === msg.author_id && m.content === msg.content),
+                (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
               );
               if (!author) return withoutDupes;
               return [...withoutDupes, { ...msg, author }];
             });
           })();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (id) setDmMessages((prev) => prev.filter((m) => m.id !== id));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
+        (payload) => {
+          const updated = payload.new as DmMessage;
+          setDmMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+          );
         },
       )
       .subscribe();
@@ -583,6 +671,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
         (payload) => {
           const msg = payload.new as GroupMessage;
+          if (msg.mentions?.includes(userId)) {
+            playMentionPing();
+            showSystemNotification("You were mentioned", msg.content);
+          }
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
@@ -592,12 +684,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setGroupMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) return prev;
               const withoutDupes = prev.filter(
-                (m) => !(m.id.startsWith("opt-") && m.author_id === msg.author_id && m.content === msg.content),
+                (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
               );
               if (!author) return withoutDupes;
               return [...withoutDupes, { ...msg, author }];
             });
           })();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (id) setGroupMessages((prev) => prev.filter((m) => m.id !== id));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
+        (payload) => {
+          const updated = payload.new as GroupMessage;
+          setGroupMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+          );
         },
       )
       .subscribe();
@@ -784,6 +894,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       goOffline();
     };
   }, [userId, configured, setLiveStatus]);
+
+  // Live reaction updates
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const sub = supabase
+      .channel(`reactions:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "message_reactions" },
+        (payload) => {
+          const r = payload.new as MessageReaction;
+          setMessageReactions((prev) =>
+            prev.some((x) => x.id === r.id) ? prev : [...prev, r],
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "message_reactions" },
+        (payload) => {
+          const old = payload.old as { id?: string };
+          if (old.id) setMessageReactions((prev) => prev.filter((r) => r.id !== old.id));
+        },
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [userId, configured]);
 
   // Track unread DMs globally
   useEffect(() => {
@@ -992,9 +1130,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId, loadGroupChats]);
 
   const deleteGroupMessage = useCallback(async (messageId: string) => {
-    await getSupabaseClient().from("group_messages").delete().eq("id", messageId);
     setGroupMessages((prev) => prev.filter((m) => m.id !== messageId));
-  }, []);
+    const { error } = await getSupabaseClient().from("group_messages").delete().eq("id", messageId);
+    if (error && activeGroupChatId) await loadGroupMessages(activeGroupChatId);
+  }, [activeGroupChatId, loadGroupMessages]);
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
     const { data, error } = await getSupabaseClient().rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -1157,8 +1296,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [serverRoles],
   );
 
-  const sendChannelMessage = useCallback(async (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => {
+  const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
+    const { attachment, replyToId } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment) return "Empty message";
 
@@ -1171,6 +1311,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_url: attachment?.url ?? null,
       attachment_type: attachment?.type ?? null,
       attachment_key: attachment?.key ?? null,
+      attachment_name: attachment?.name ?? null,
+      attachment_size: attachment?.size ?? null,
+      reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, members.map((m) => m.profile)),
       created_at: new Date().toISOString(),
       edited_at: null,
@@ -1188,6 +1331,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attachment_url: attachment?.url ?? null,
         attachment_type: attachment?.type ?? null,
         attachment_key: attachment?.key ?? null,
+        attachment_name: attachment?.name ?? null,
+        attachment_size: attachment?.size ?? null,
+        reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
       .select("*, author:profiles(*)")
@@ -1199,14 +1345,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const saved = data as Message & { author: Profile };
     setMessages((prev) => {
-      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id);
+      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       return [...without, saved];
     });
     return null;
   }, [userId, activeChannelId, profile, members]);
 
-  const sendDmMessage = useCallback(async (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => {
+  const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
+    const { attachment, replyToId } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment) return "Empty message";
 
@@ -1221,8 +1368,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_url: attachment?.url ?? null,
       attachment_type: attachment?.type ?? null,
       attachment_key: attachment?.key ?? null,
+      attachment_name: attachment?.name ?? null,
+      attachment_size: attachment?.size ?? null,
+      reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, other),
       created_at: new Date().toISOString(),
+      edited_at: null,
       author: profile,
     };
     setDmMessages((prev) => [...prev, optimistic]);
@@ -1237,6 +1388,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attachment_url: attachment?.url ?? null,
         attachment_type: attachment?.type ?? null,
         attachment_key: attachment?.key ?? null,
+        attachment_name: attachment?.name ?? null,
+        attachment_size: attachment?.size ?? null,
+        reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
       .select("*, author:profiles(*)")
@@ -1248,14 +1402,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const saved = data as DmMessage & { author: Profile };
     setDmMessages((prev) => {
-      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id);
+      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       return [...without, saved];
     });
     return null;
   }, [userId, activeDmThreadId, profile, dmThreads]);
 
-  const sendGroupMessage = useCallback(async (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => {
+  const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
+    const { attachment, replyToId } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment) return "Empty message";
 
@@ -1269,8 +1424,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_url: attachment?.url ?? null,
       attachment_type: attachment?.type ?? null,
       attachment_key: attachment?.key ?? null,
+      attachment_name: attachment?.name ?? null,
+      attachment_size: attachment?.size ?? null,
+      reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, group?.members ?? []),
       created_at: new Date().toISOString(),
+      edited_at: null,
       author: profile,
     };
     setGroupMessages((prev) => [...prev, optimistic]);
@@ -1285,6 +1444,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attachment_url: attachment?.url ?? null,
         attachment_type: attachment?.type ?? null,
         attachment_key: attachment?.key ?? null,
+        attachment_name: attachment?.name ?? null,
+        attachment_size: attachment?.size ?? null,
+        reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
       .select("*, author:profiles(*)")
@@ -1296,19 +1458,104 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const saved = data as GroupMessage & { author: Profile };
     setGroupMessages((prev) => {
-      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id);
+      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       return [...without, saved];
     });
     return null;
   }, [userId, activeGroupChatId, profile, groupChats]);
 
   const deleteMessage = useCallback(async (messageId: string) => {
-    await getSupabaseClient().from("messages").delete().eq("id", messageId);
-  }, []);
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    const { error } = await getSupabaseClient().from("messages").delete().eq("id", messageId);
+    if (error && activeChannelId) await loadMessages(activeChannelId);
+  }, [activeChannelId, loadMessages]);
 
   const deleteDmMessage = useCallback(async (messageId: string) => {
-    await getSupabaseClient().from("dm_messages").delete().eq("id", messageId);
-  }, []);
+    setDmMessages((prev) => prev.filter((m) => m.id !== messageId));
+    const { error } = await getSupabaseClient().from("dm_messages").delete().eq("id", messageId);
+    if (error && activeDmThreadId) await loadDmMessages(activeDmThreadId);
+  }, [activeDmThreadId, loadDmMessages]);
+
+  const editChannelMessage = useCallback(async (messageId: string, content: string) => {
+    if (!userId || !activeChannelId) return "Not signed in";
+    const normalized = normalizeMessageContent(content);
+    if (!normalized) return "Message cannot be empty";
+    const editedAt = new Date().toISOString();
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, content: normalized, edited_at: editedAt } : m)),
+    );
+    const { error } = await getSupabaseClient()
+      .from("messages")
+      .update({ content: normalized, edited_at: editedAt })
+      .eq("id", messageId)
+      .eq("author_id", userId);
+    if (error) {
+      await loadMessages(activeChannelId);
+      return error.message;
+    }
+    return null;
+  }, [userId, activeChannelId, loadMessages]);
+
+  const editDmMessage = useCallback(async (messageId: string, content: string) => {
+    if (!userId || !activeDmThreadId) return "Not signed in";
+    const normalized = normalizeMessageContent(content);
+    if (!normalized) return "Message cannot be empty";
+    const editedAt = new Date().toISOString();
+    setDmMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, content: normalized, edited_at: editedAt } : m)),
+    );
+    const { error } = await getSupabaseClient()
+      .from("dm_messages")
+      .update({ content: normalized, edited_at: editedAt })
+      .eq("id", messageId)
+      .eq("author_id", userId);
+    if (error) {
+      await loadDmMessages(activeDmThreadId);
+      return error.message;
+    }
+    return null;
+  }, [userId, activeDmThreadId, loadDmMessages]);
+
+  const editGroupMessage = useCallback(async (messageId: string, content: string) => {
+    if (!userId || !activeGroupChatId) return "Not signed in";
+    const normalized = normalizeMessageContent(content);
+    if (!normalized) return "Message cannot be empty";
+    const editedAt = new Date().toISOString();
+    setGroupMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, content: normalized, edited_at: editedAt } : m)),
+    );
+    const { error } = await getSupabaseClient()
+      .from("group_messages")
+      .update({ content: normalized, edited_at: editedAt })
+      .eq("id", messageId)
+      .eq("author_id", userId);
+    if (error) {
+      await loadGroupMessages(activeGroupChatId);
+      return error.message;
+    }
+    return null;
+  }, [userId, activeGroupChatId, loadGroupMessages]);
+
+  const toggleReaction = useCallback(async (context: MessageContext, messageId: string, emoji: string) => {
+    if (!userId) return;
+    const supabase = getSupabaseClient();
+    const existing = messageReactions.find(
+      (r) => r.context_type === context && r.message_id === messageId && r.user_id === userId && r.emoji === emoji,
+    );
+    if (existing) {
+      setMessageReactions((prev) => prev.filter((r) => r.id !== existing.id));
+      await supabase.from("message_reactions").delete().eq("id", existing.id);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("message_reactions")
+      .insert({ context_type: context, message_id: messageId, user_id: userId, emoji })
+      .select("*")
+      .single();
+    if (!error && data) {
+      setMessageReactions((prev) => [...prev, data as MessageReaction]);
+    }
+  }, [userId, messageReactions]);
 
   const markNotificationsRead = useCallback(async () => {
     if (!userId) return;
@@ -1399,6 +1646,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sendChannelMessage,
     sendDmMessage,
     sendGroupMessage,
+    editChannelMessage,
+    editDmMessage,
+    editGroupMessage,
+    toggleReaction,
+    messageReactions,
     deleteMessage,
     deleteDmMessage,
     markNotificationsRead,

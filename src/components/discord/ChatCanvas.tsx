@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { ChatMessage, shouldGroupMessages, type ChatMessageData } from "./ChatMessage";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from "react";
+import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
+import { ReactionPicker } from "./MessageReactions";
 import { IconHash } from "@/components/icons";
+import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
+
+export interface ChatCanvasHandle {
+  setReplyTo: (reply: ReplyPreview | null) => void;
+  setEditing: (edit: { id: string; content: string } | null) => void;
+  openReactionPicker: (messageId: string, x: number, y: number) => void;
+}
 
 interface ChatCanvasProps {
   channelName: string;
@@ -12,43 +20,89 @@ interface ChatCanvasProps {
   members: Profile[];
   roles?: ServerRole[];
   currentUserId?: string | null;
+  messageContext: MessageContext;
+  reactions?: MessageReaction[];
   getAuthorColor?: (authorId: string) => string | null | undefined;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
-  onSend: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
+  onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
+  onEdit?: (messageId: string, content: string) => Promise<string | null>;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
   onAuthorClick?: (profile: Profile) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
 }
 
-export function ChatCanvas({
-  channelName,
-  messages,
-  members,
-  roles = [],
-  currentUserId,
-  getAuthorColor,
-  headerExtra,
-  headerTrailing,
-  callPanel,
-  channelIcon,
-  onSend,
-  onMessageContext,
-  onAuthorClick,
-}: ChatCanvasProps) {
+export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function ChatCanvas(
+  {
+    channelName,
+    messages,
+    members,
+    roles = [],
+    currentUserId,
+    messageContext,
+    reactions = [],
+    getAuthorColor,
+    headerExtra,
+    headerTrailing,
+    callPanel,
+    channelIcon,
+    onSend,
+    onEdit,
+    onToggleReaction,
+    onMessageContext,
+    onAuthorClick,
+    onLoadMore,
+    hasMore,
+  },
+  ref,
+) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [replyTo, setReplyTo] = useState<ReplyPreview | null>(null);
+  const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    setReplyTo,
+    setEditing,
+    openReactionPicker: (messageId, x, y) => setPicker({ messageId, x, y }),
+  }));
+
+  const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages.length]);
+
+  function jumpToMessage(messageId: string) {
+    const node = document.getElementById(`msg-${messageId}`);
+    if (node) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightId(messageId);
+      setTimeout(() => setHighlightId(null), 2000);
+    }
+  }
+
+  async function handleSend(content: string, options?: MessageSendOptions) {
+    if (editing && onEdit) {
+      const err = await onEdit(editing.id, content);
+      if (!err) setEditing(null);
+      return err;
+    }
+    return onSend(content, options);
+  }
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         {channelIcon ?? <IconHash size={24} className="text-text-muted" />}
         <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{channelName}</h1>
+        <span className="hidden text-xs text-text-muted sm:inline">{messages.length} messages</span>
         {headerExtra}
         {headerTrailing}
       </header>
@@ -56,43 +110,82 @@ export function ChatCanvas({
       {callPanel && <div className="shrink-0">{callPanel}</div>}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
+        {hasMore && onLoadMore && (
+          <div className="mb-4 flex justify-center px-4">
+            <button
+              type="button"
+              onClick={onLoadMore}
+              className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+            >
+              Load earlier messages
+            </button>
+          </div>
+        )}
+
         <div className="mb-4 flex items-center px-4">
           <div className="h-px flex-1 bg-divider" />
           <span className="mx-4 text-xs font-semibold text-text-muted">Welcome to #{channelName}</span>
           <div className="h-px flex-1 bg-divider" />
         </div>
 
-        {messages.map((msg, i) => {
-          const prev = messages[i - 1];
+        {enriched.map((msg, i) => {
+          const prev = enriched[i - 1];
           const grouped = shouldGroupMessages(prev, msg);
           const showHeader = !grouped;
+          const msgReactions = reactions.filter(
+            (r) => r.context_type === messageContext && r.message_id === msg.id,
+          );
           return (
-            <ChatMessage
+        <ChatMessage
               key={msg.id}
               message={msg}
               showHeader={showHeader}
               compact={grouped}
               currentUserId={currentUserId}
               authorColor={getAuthorColor?.(msg.author_id)}
+              reactions={msgReactions}
               onAuthorClick={onAuthorClick}
               members={members}
+              highlight={highlightId === msg.id}
+              onJumpToReply={jumpToMessage}
+              onToggleReaction={
+                onToggleReaction ? (emoji) => onToggleReaction(msg.id, emoji) : undefined
+              }
               onContextMenu={(e) => {
                 e.preventDefault();
                 onMessageContext(msg, e.clientX, e.clientY);
               }}
+              onDoubleClick={
+                onToggleReaction
+                  ? () => onToggleReaction(msg.id, "👍")
+                  : undefined
+              }
             />
           );
         })}
       </div>
+
+      <ReactionPicker
+        open={!!picker}
+        x={picker?.x ?? 0}
+        y={picker?.y ?? 0}
+        onSelect={(emoji) => picker && onToggleReaction?.(picker.messageId, emoji)}
+        onClose={() => setPicker(null)}
+      />
 
       <div className="shrink-0">
         <ChatInput
           placeholder={`Message #${channelName}`}
           members={members}
           roles={roles}
-          onSend={onSend}
+          replyTo={replyTo}
+          onClearReply={() => setReplyTo(null)}
+          editingMessageId={editing?.id ?? null}
+          editingContent={editing?.content}
+          onCancelEdit={() => setEditing(null)}
+          onSend={handleSend}
         />
       </div>
     </main>
   );
-}
+});
