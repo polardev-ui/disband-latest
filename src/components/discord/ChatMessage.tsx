@@ -17,8 +17,8 @@ export interface ChatMessageData {
 
 interface ChatMessageProps {
   message: ChatMessageData;
-  index: number;
   showHeader: boolean;
+  compact: boolean;
   currentUserId?: string | null;
   authorColor?: string | null;
   onAuthorClick?: (profile: Profile) => void;
@@ -51,9 +51,9 @@ function MessageBody({ content, members }: { content: string; members: Profile[]
   return (
     <>
       {textOnly && (
-        <p className="whitespace-pre-line break-words text-[15px] leading-snug text-text-normal">
+        <span className="break-words text-[15px] leading-[1.375rem] text-text-normal">
           {renderContent(textOnly, members)}
-        </p>
+        </span>
       )}
       {codes.map((code) => (
         <ServerInviteCard key={code} code={code} />
@@ -62,10 +62,13 @@ function MessageBody({ content, members }: { content: string; members: Profile[]
   );
 }
 
+/** px-4 + avatar(40) + gap(16) = 72px content indent for compact rows */
+const COMPACT_INDENT = "pl-[72px]";
+
 export function ChatMessage({
   message,
-  index,
   showHeader,
+  compact,
   currentUserId,
   authorColor,
   onAuthorClick,
@@ -76,15 +79,39 @@ export function ChatMessage({
   const isOwn = message.author_id === currentUserId;
   const nameColor = authorColor ?? author?.accent_color ?? undefined;
   const canOpenProfile = author && onAuthorClick;
+  const body = normalizeMessageContent(message.content);
 
   function openAuthor() {
     if (author && onAuthorClick) onAuthorClick(author);
   }
 
+  if (compact) {
+    return (
+      <article
+        className={`group relative ${COMPACT_INDENT} pr-4 py-[1px] hover:bg-interactive-hover/30`}
+        onContextMenu={onContextMenu}
+      >
+        <time className="pointer-events-none absolute left-1 top-1/2 w-14 -translate-y-1/2 text-right text-[10px] text-text-muted opacity-0 group-hover:opacity-100">
+          {formatMessageTime(message.created_at).split(" at ").pop()}
+        </time>
+        {body && <MessageBody content={body} members={members} />}
+        {message.attachment_url && (
+          <div className="mt-0.5 max-w-md">
+            {message.attachment_type === "video" ? (
+              <video src={message.attachment_url} controls className="max-h-80 max-w-full rounded-lg border border-black/20" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={message.attachment_url} alt="Attachment" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
+            )}
+          </div>
+        )}
+      </article>
+    );
+  }
+
   return (
     <article
-      className="message-enter group flex gap-4 px-4 py-0.5 hover:bg-interactive-hover/30"
-      style={{ animationDelay: `${index * 60}ms` }}
+      className="message-enter group mt-[17px] flex gap-4 px-4 first:mt-0 hover:bg-interactive-hover/30"
       onContextMenu={onContextMenu}
     >
       {showHeader ? (
@@ -95,17 +122,11 @@ export function ChatMessage({
         ) : (
           <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5" />
         )
-      ) : (
-        <div className="w-10 shrink-0">
-          <time className="invisible text-[11px] text-text-muted group-hover:visible">
-            {formatMessageTime(message.created_at).split(" at ").pop()}
-          </time>
-        </div>
-      )}
+      ) : null}
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pt-0.5">
         {showHeader && (
-          <header className="mb-0.5 flex items-baseline gap-2">
+          <header className="mb-0.5 flex items-baseline gap-2 leading-none">
             {canOpenProfile ? (
               <button
                 type="button"
@@ -124,9 +145,9 @@ export function ChatMessage({
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
           </header>
         )}
-        {message.content && <MessageBody content={normalizeMessageContent(message.content)} members={members} />}
+        {body && <MessageBody content={body} members={members} />}
         {message.attachment_url && (
-          <div className="mt-1 max-w-md">
+          <div className="mt-0.5 max-w-md">
             {message.attachment_type === "video" ? (
               <video src={message.attachment_url} controls className="max-h-80 max-w-full rounded-lg border border-black/20" />
             ) : (
@@ -138,4 +159,10 @@ export function ChatMessage({
       </div>
     </article>
   );
+}
+
+export function shouldGroupMessages(prev: ChatMessageData | undefined, msg: ChatMessageData): boolean {
+  if (!prev || prev.author_id !== msg.author_id) return false;
+  const gap = new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime();
+  return gap <= 7 * 60 * 1000;
 }
