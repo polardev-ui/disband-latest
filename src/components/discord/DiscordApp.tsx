@@ -86,7 +86,8 @@ export function DiscordApp() {
 
   const dmCallActive = call.phase === "outgoing" || call.phase === "active";
   const groupCallActive = groupCall.joined;
-  const groupVoiceLive = groupCall.presence.length > 0;
+  const groupVoiceLive =
+    groupCall.presence.length > 0 && groupCall.groupId === activeGroup?.id;
   const callBannerPeer = call.activePeer ?? dmFriend;
 
   useEffect(() => {
@@ -540,10 +541,7 @@ export function DiscordApp() {
               cameraEnabled={groupCall.cameraEnabled}
               micMuted={app.micMuted}
               deafened={app.deafened}
-              onJoin={() => {
-                if (groupVoiceLive) void groupCall.joinGroupCall(activeGroup.id, activeGroup.name);
-                else startGroupVoiceCall();
-              }}
+              onJoin={() => void groupCall.joinGroupCall(activeGroup.id, activeGroup.name)}
               onLeave={() => void groupCall.endGroupCall()}
               onToggleCamera={() => void groupCall.toggleCamera()}
               onToggleMic={toggleMic}
@@ -566,7 +564,10 @@ export function DiscordApp() {
                 !groupCall.joined ? (
                   <HeaderCallButton
                     disabled={call.phase !== "idle"}
-                    onClick={startGroupVoiceCall}
+                    onClick={() => {
+                      if (groupVoiceLive) void groupCall.joinGroupCall(activeGroup.id, activeGroup.name);
+                      else startGroupVoiceCall();
+                    }}
                   />
                 ) : null
               }
@@ -591,7 +592,7 @@ export function DiscordApp() {
         </div>
       )}
 
-      {groupCallActive && app.viewMode !== "group" && (() => {
+      {(groupCall.joined || groupCall.presence.length > 0) && app.viewMode !== "group" && (() => {
         const callGroup = app.groupChats.find((g) => g.id === groupCall.groupId);
         if (!callGroup) return null;
         return (

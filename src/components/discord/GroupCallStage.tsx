@@ -92,23 +92,15 @@ export function GroupCallStage({
   onToggleCamera,
   onToggleMic,
 }: GroupCallStageProps) {
-  const callActive = presence.length > 0;
+  if (presence.length === 0) return null;
 
-  const displayMembers = callActive
-    ? presence.map((p) => ({
-        id: p.user_id,
-        profile: p.profile ?? members.find((m) => m.id === p.user_id),
-        stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
-        mirrored: p.user_id === selfId,
-        ringing: false,
-      }))
-    : members.slice(0, 6).map((m) => ({
-        id: m.id,
-        profile: m,
-        stream: null as MediaStream | null,
-        mirrored: false,
-        ringing: ringingIds.has(m.id),
-      }));
+  const displayMembers = presence.map((p) => ({
+    id: p.user_id,
+    profile: p.profile ?? members.find((m) => m.id === p.user_id),
+    stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
+    mirrored: p.user_id === selfId,
+    ringing: false,
+  }));
 
   return (
     <div className="flex min-h-[320px] flex-col items-center justify-between bg-black px-6 py-8">
@@ -116,11 +108,7 @@ export function GroupCallStage({
         <p className="text-xs font-bold uppercase tracking-widest text-white/40">Group Call</p>
         <h2 className="mt-1 text-lg font-semibold text-white">{groupName}</h2>
         <p className="mt-1 text-sm text-white/50">
-          {callActive
-            ? `${presence.length} in voice${ringingIds.size ? ` · ${ringingIds.size} ringing` : ""}`
-            : joined
-              ? "Connecting…"
-              : "No one in voice yet"}
+          {`${presence.length} in voice${ringingIds.size ? ` · ${ringingIds.size} ringing` : ""}`}
         </p>
       </div>
 
@@ -147,7 +135,7 @@ export function GroupCallStage({
           {cameraEnabled ? <IconVideo size={24} /> : <IconVideoOff size={24} />}
         </button>
 
-        {!joined && callActive ? (
+        {!joined ? (
           <button
             type="button"
             onClick={onJoin}
@@ -156,7 +144,7 @@ export function GroupCallStage({
           >
             <IconPhone size={24} />
           </button>
-        ) : joined ? (
+        ) : (
           <>
             <button
               type="button"
@@ -177,15 +165,6 @@ export function GroupCallStage({
               <IconPhoneOff size={24} />
             </button>
           </>
-        ) : (
-          <button
-            type="button"
-            onClick={onJoin}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
-            title="Start / join voice"
-          >
-            <IconPhone size={24} />
-          </button>
         )}
       </div>
 

@@ -111,16 +111,16 @@ export function ChatMessage({
 
   return (
     <article
-      className="message-enter group mt-[17px] flex gap-4 px-4 first:mt-0 hover:bg-interactive-hover/30"
+      className="message-enter group mt-[17px] flex items-start gap-4 px-4 first:mt-0 hover:bg-interactive-hover/30"
       onContextMenu={onContextMenu}
     >
       {showHeader ? (
         canOpenProfile ? (
-          <button type="button" onClick={openAuthor} className="mt-0.5 shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-brand">
+          <button type="button" onClick={openAuthor} className="mt-0.5 shrink-0 self-start rounded-full focus:outline-none focus:ring-2 focus:ring-brand">
             <Avatar profile={author} size="md" />
           </button>
         ) : (
-          <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5" />
+          <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5 shrink-0 self-start" />
         )
       ) : null}
 
