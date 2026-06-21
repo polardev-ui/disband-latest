@@ -1,0 +1,7 @@
+# pnpm 10+ reads project settings from here instead of the package.json "pnpm" field.
+# Allow sharp to run its build script (pulled in transitively by Next.js).
+onlyBuiltDependencies:
+  - sharp
+
+# Don't fail `pnpm <script>` on the pre-run dependency check.
+verifyDepsBeforeRun: false

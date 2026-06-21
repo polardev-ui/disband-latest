@@ -1,0 +1,25 @@
+[package]
+name = "disband"
+version = "0.1.0"
+description = "Disband — one codebase, every platform."
+authors = ["Disband"]
+edition = "2021"
+rust-version = "1.77.2"
+
+# The library is what Tauri's mobile/desktop entry points link against.
+[lib]
+name = "disband_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+# Used by the `tauri dev`/`tauri build` tooling.
+custom-protocol = ["tauri/custom-protocol"]
