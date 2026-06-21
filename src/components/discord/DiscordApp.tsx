@@ -72,6 +72,14 @@ export function DiscordApp() {
 
   const openProfile = useCallback((profile: Profile) => setProfileTarget(profile), []);
 
+  const handleAuthorClick = useCallback(
+    (author: Profile) => {
+      if (author.id === app.user?.id && app.profile) openProfile(app.profile);
+      else openProfile(author);
+    },
+    [app.user?.id, app.profile, openProfile],
+  );
+
   const handleSelectChannel = useCallback(
     (channelId: string) => {
       app.selectChannel(channelId);
@@ -381,6 +389,7 @@ export function DiscordApp() {
           }
           onSend={app.sendDmMessage}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, true)}
+          onAuthorClick={handleAuthorClick}
         />
       )}
 
@@ -412,6 +421,7 @@ export function DiscordApp() {
           getAuthorColor={getAuthorColor}
           onSend={app.sendChannelMessage}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, false)}
+          onAuthorClick={handleAuthorClick}
         />
       )}
 
@@ -454,6 +464,7 @@ export function DiscordApp() {
               }
             : undefined
         }
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

@@ -165,8 +165,18 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} className="mt-1 h-10 w-full cursor-pointer rounded bg-bg-accent" />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Banner</span>
-                    <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} className="mt-1 block text-sm text-text-muted" />
+                    <span className="text-xs font-bold uppercase text-text-muted">Profile banner</span>
+                    <p className="mt-0.5 text-xs text-text-muted">Shown on your profile when others view you</p>
+                    {profile?.banner_url && (
+                      <div
+                        className="mt-2 h-20 rounded-lg bg-cover bg-center ring-1 ring-divider"
+                        style={{ backgroundImage: `url(${profile.banner_url})` }}
+                      />
+                    )}
+                    <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm text-brand hover:bg-interactive-hover">
+                      {profile?.banner_url ? "Change banner" : "Upload banner"}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
+                    </label>
                   </label>
                   <div>
                     <span className="text-xs font-bold uppercase text-text-muted">Status</span>

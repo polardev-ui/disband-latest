@@ -21,6 +21,7 @@ interface ChatMessageProps {
   showHeader: boolean;
   currentUserId?: string | null;
   authorColor?: string | null;
+  onAuthorClick?: (profile: Profile) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
@@ -50,7 +51,7 @@ function MessageBody({ content, members }: { content: string; members: Profile[]
   return (
     <>
       {textOnly && (
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375] text-text-normal">
+        <p className="whitespace-pre-line break-words text-[15px] leading-snug text-text-normal">
           {renderContent(textOnly, members)}
         </p>
       )}
@@ -67,12 +68,18 @@ export function ChatMessage({
   showHeader,
   currentUserId,
   authorColor,
+  onAuthorClick,
   onContextMenu,
   members = [],
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const isOwn = message.author_id === currentUserId;
   const nameColor = authorColor ?? author?.accent_color ?? undefined;
+  const canOpenProfile = author && onAuthorClick;
+
+  function openAuthor() {
+    if (author && onAuthorClick) onAuthorClick(author);
+  }
 
   return (
     <article
@@ -81,7 +88,13 @@ export function ChatMessage({
       onContextMenu={onContextMenu}
     >
       {showHeader ? (
-        <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5" />
+        canOpenProfile ? (
+          <button type="button" onClick={openAuthor} className="mt-0.5 shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-brand">
+            <Avatar profile={author} size="md" />
+          </button>
+        ) : (
+          <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5" />
+        )
       ) : (
         <div className="w-10 shrink-0">
           <time className="invisible text-[11px] text-text-muted group-hover:visible">
@@ -90,12 +103,23 @@ export function ChatMessage({
         </div>
       )}
 
-      <div className="min-w-0 flex-1 pb-1">
+      <div className="min-w-0 flex-1">
         {showHeader && (
-          <header className="flex items-baseline gap-2">
-            <span className="text-[15px] font-medium hover:underline" style={{ color: nameColor }}>
-              {displayName(author ?? {})}
-            </span>
+          <header className="mb-0.5 flex items-baseline gap-2">
+            {canOpenProfile ? (
+              <button
+                type="button"
+                onClick={openAuthor}
+                className="text-[15px] font-medium hover:underline focus:outline-none"
+                style={{ color: nameColor }}
+              >
+                {displayName(author)}
+              </button>
+            ) : (
+              <span className="text-[15px] font-medium" style={{ color: nameColor }}>
+                {displayName(author ?? {})}
+              </span>
+            )}
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
           </header>
