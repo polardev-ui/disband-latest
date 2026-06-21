@@ -5,6 +5,7 @@ import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
+import { MobileGateLoading, useMobileWebGate } from "@/components/mobile/MobileWebGate";
 import { useEffect, useRef } from "react";
 
 function InviteBootstrap() {
@@ -39,6 +40,12 @@ function AppShell() {
 }
 
 export function DisbandRoot() {
+  const mobileGate = useMobileWebGate();
+
+  if (mobileGate !== "allow") {
+    return <MobileGateLoading />;
+  }
+
   return (
     <ThemeProvider>
       <AppProvider>
