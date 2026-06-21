@@ -24,6 +24,7 @@ import type {
   Profile,
   Server,
   ServerMember,
+  ServerRole,
   UserStatus,
   ViewMode,
   VoicePresence,
@@ -39,6 +40,7 @@ interface AppContextValue {
   categories: ChannelCategory[];
   channels: Channel[];
   members: (ServerMember & { profile: Profile })[];
+  serverRoles: ServerRole[];
   messages: (Message & { author: Profile })[];
   dmThreads: (DmThread & { friend: Profile })[];
   dmMessages: (DmMessage & { author: Profile })[];
@@ -75,6 +77,12 @@ interface AppContextValue {
   updateServer: (serverId: string, patch: Partial<Server>) => Promise<string | null>;
   deleteServer: (serverId: string) => Promise<string | null>;
   leaveServer: (serverId: string) => Promise<string | null>;
+  joinServerByInvite: (code: string) => Promise<string | null>;
+  kickMember: (userId: string) => Promise<string | null>;
+  banMember: (userId: string, reason?: string) => Promise<string | null>;
+  createRole: (data: { name: string; color: string }) => Promise<string | null>;
+  assignMemberRole: (userId: string, roleId: string | null) => Promise<string | null>;
+  getMemberColor: (member: ServerMember) => string | null;
   sendChannelMessage: (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => Promise<string | null>;
   sendDmMessage: (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => Promise<string | null>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -94,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<ChannelCategory[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [members, setMembers] = useState<(ServerMember & { profile: Profile })[]>([]);
+  const [serverRoles, setServerRoles] = useState<ServerRole[]>([]);
   const [messages, setMessages] = useState<(Message & { author: Profile })[]>([]);
   const [dmThreads, setDmThreads] = useState<(DmThread & { friend: Profile })[]>([]);
   const [dmMessages, setDmMessages] = useState<(DmMessage & { author: Profile })[]>([]);
@@ -166,13 +175,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadServerDetails = useCallback(async (serverId: string) => {
     const supabase = getSupabaseClient();
-    const [{ data: cats }, { data: chs }, { data: mems }] = await Promise.all([
+    const [{ data: cats }, { data: chs }, { data: mems }, { data: roles }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
       supabase.from("server_members").select("*").eq("server_id", serverId),
+      supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
     ]);
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels((chs as Channel[]) ?? []);
+    setServerRoles((roles as ServerRole[]) ?? []);
     const memberRows = (mems as ServerMember[]) ?? [];
     if (memberRows.length === 0) {
       setMembers([]);
@@ -566,6 +577,75 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [userId, loadServers, setViewHome]);
 
+  const joinServerByInvite = useCallback(async (code: string) => {
+    if (!userId) return "Not signed in";
+    await ensureProfile(userId, user?.email);
+    const { data: id, error } = await getSupabaseClient().rpc("join_server_by_invite", { p_code: code });
+    if (error) return error.message;
+    await loadServers(userId);
+    await selectServer(id as string);
+    return null;
+  }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
+
+  const kickMember = useCallback(async (targetUserId: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("kick_server_member", {
+      p_server_id: activeServerId,
+      p_user_id: targetUserId,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const banMember = useCallback(async (targetUserId: string, reason?: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("ban_server_member", {
+      p_server_id: activeServerId,
+      p_user_id: targetUserId,
+      p_reason: reason ?? null,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const createRole = useCallback(async (data: { name: string; color: string }) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().from("server_roles").insert({
+      server_id: activeServerId,
+      name: data.name.trim(),
+      color: data.color,
+      position: serverRoles.length,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, serverRoles.length, loadServerDetails]);
+
+  const assignMemberRole = useCallback(async (targetUserId: string, roleId: string | null) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient()
+      .from("server_members")
+      .update({ role_id: roleId })
+      .eq("server_id", activeServerId)
+      .eq("user_id", targetUserId);
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const getMemberColor = useCallback(
+    (member: ServerMember) => {
+      if (member.role_id) {
+        const role = serverRoles.find((r) => r.id === member.role_id);
+        if (role?.color) return role.color;
+      }
+      return null;
+    },
+    [serverRoles],
+  );
+
   const sendChannelMessage = useCallback(async (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => {
     if (!userId || !activeChannelId) return "No channel selected";
     const mentionIds = parseMentions(content, members.map((m) => m.profile));
@@ -639,6 +719,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     categories,
     channels,
     members,
+    serverRoles,
     messages,
     dmThreads,
     dmMessages,
@@ -675,6 +756,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateServer,
     deleteServer,
     leaveServer,
+    joinServerByInvite,
+    kickMember,
+    banMember,
+    createRole,
+    assignMemberRole,
+    getMemberColor,
     sendChannelMessage,
     sendDmMessage,
     deleteMessage,

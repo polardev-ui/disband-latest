@@ -50,3 +50,53 @@ export function serverInitials(name: string): string {
     .slice(0, 2)
     .toUpperCase();
 }
+
+/** Discord-style text channel slug: lowercase, hyphens, no spaces. */
+export function normalizeChannelName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-_]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export function getInviteUrl(code: string): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/server/${code}`;
+  }
+  return `https://disband-latest.vercel.app/server/${code}`;
+}
+
+const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/server\/([a-zA-Z0-9]{7})\b/g;
+
+export function extractInviteCodes(text: string): string[] {
+  const codes = new Set<string>();
+  let m: RegExpExecArray | null;
+  const re = new RegExp(INVITE_RE.source, "g");
+  while ((m = re.exec(text)) !== null) codes.add(m[1]);
+  return [...codes];
+}
+
+export interface AvatarCrop {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+export function avatarStyle(
+  url: string | null | undefined,
+  crop?: AvatarCrop | null,
+): { objectFit: "cover"; objectPosition: string; transform: string; transformOrigin: string } | undefined {
+  if (!url) return undefined;
+  const zoom = crop?.zoom ?? 1;
+  const x = crop?.x ?? 0;
+  const y = crop?.y ?? 0;
+  return {
+    objectFit: "cover" as const,
+    objectPosition: `${50 + x}% ${50 + y}%`,
+    transform: `scale(${zoom})`,
+    transformOrigin: `${50 + x}% ${50 + y}%`,
+  };
+}

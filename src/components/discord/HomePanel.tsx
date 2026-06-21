@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { IconFriends } from "@/components/icons";
 import { UserPanel } from "./UserPanel";
@@ -16,9 +17,10 @@ const STATUS_BG = {
 interface HomePanelProps {
   onOpenSettings: () => void;
   onUserPanelContext?: (e: React.MouseEvent) => void;
+  onFriendClick?: (friendId: string) => void;
 }
 
-export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps) {
+export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick }: HomePanelProps) {
   const {
     friends,
     pendingIncoming,
@@ -26,7 +28,6 @@ export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps
     dmThreads,
     sendFriendRequest,
     respondFriendRequest,
-    removeFriend,
     openDmWithFriend,
     selectDmThread,
   } = useApp();
@@ -92,8 +93,9 @@ export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps
                 onClick={() => void selectDmThread(t.id)}
                 className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-                  {displayName(t.friend).charAt(0)}
+                <div className="relative">
+                  <Avatar profile={t.friend} size="sm" />
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[t.friend.status]}`} />
                 </div>
                 <span className="truncate text-sm">{displayName(t.friend)}</span>
               </button>
@@ -106,13 +108,11 @@ export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps
               <button
                 key={f.id}
                 type="button"
-                onClick={() => void openDmWithFriend(f.id)}
+                onClick={() => (onFriendClick ? onFriendClick(f.id) : void openDmWithFriend(f.id))}
                 className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
               >
                 <div className="relative">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/80 text-xs font-bold text-white">
-                    {displayName(f).charAt(0)}
-                  </div>
+                  <Avatar profile={f} size="sm" />
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[f.status]}`} />
                 </div>
                 <span className="truncate text-sm">{displayName(f)}</span>
@@ -125,7 +125,10 @@ export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps
           <>
             {pendingIncoming.map((f) => (
               <div key={f.id} className="mb-2 rounded bg-bg-accent p-2">
-                <p className="text-sm">{f.requester ? displayName(f.requester) : "Unknown"}</p>
+                <div className="flex items-center gap-2">
+                  {f.requester && <Avatar profile={f.requester} size="sm" />}
+                  <p className="text-sm">{f.requester ? displayName(f.requester) : "Unknown"}</p>
+                </div>
                 <div className="mt-2 flex gap-2">
                   <button type="button" onClick={() => void respondFriendRequest(f.id, true)} className="rounded bg-brand px-2 py-1 text-xs text-white">
                     Accept
@@ -137,7 +140,8 @@ export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps
               </div>
             ))}
             {pendingOutgoing.map((f) => (
-              <div key={f.id} className="mb-2 rounded bg-bg-accent p-2 text-sm text-text-muted">
+              <div key={f.id} className="mb-2 flex items-center gap-2 rounded bg-bg-accent p-2 text-sm text-text-muted">
+                {f.addressee && <Avatar profile={f.addressee} size="sm" />}
                 Outgoing to {f.addressee ? displayName(f.addressee) : "..."}
               </div>
             ))}

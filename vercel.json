@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/server/:code", "destination": "/" },
+    { "source": "/server/:code/", "destination": "/" }
+  ]
+}
