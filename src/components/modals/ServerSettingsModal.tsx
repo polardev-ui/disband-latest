@@ -3,41 +3,74 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { IconClose, IconCopy, IconTrash } from "@/components/icons";
-import { getInviteUrl } from "@/lib/utils";
+import {
+  IconClose,
+  IconCopy,
+  IconTrash,
+  IconSettings,
+  IconLink,
+  IconShield,
+  IconPalette,
+  IconAlert,
+} from "@/components/icons";
+import { getInviteUrl, serverInitials } from "@/lib/utils";
 
 interface ServerSettingsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
+type Section = "overview" | "invite" | "roles" | "appearance" | "danger";
+
+const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean }[] = [
+  { id: "overview", label: "Overview", icon: IconSettings },
+  { id: "invite", label: "Invites", icon: IconLink },
+  { id: "roles", label: "Roles", icon: IconShield, ownerOnly: true },
+  { id: "appearance", label: "Appearance", icon: IconPalette, ownerOnly: true },
+  { id: "danger", label: "Danger Zone", icon: IconAlert, ownerOnly: true },
+];
+
 export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps) {
   const { activeServer, updateServer, deleteServer, user, serverRoles, createRole } = useApp();
   const { upload } = useMediaUpload();
-  const [name, setName] = useState(activeServer?.name ?? "");
-  const [description, setDescription] = useState(activeServer?.description ?? "");
+  const [section, setSection] = useState<Section>("overview");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [roleName, setRoleName] = useState("");
   const [roleColor, setRoleColor] = useState("#5865f2");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!activeServer) return;
     setName(activeServer.name);
     setDescription(activeServer.description ?? "");
-  }, [activeServer]);
+    setSection("overview");
+  }, [activeServer, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open || !activeServer) return null;
   const isOwner = activeServer.owner_id === user?.id;
   const inviteUrl = activeServer.invite_code ? getInviteUrl(activeServer.invite_code) : null;
+  const navItems = NAV.filter((n) => !n.ownerOnly || isOwner);
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
+  async function saveOverview() {
     setLoading(true);
+    setError(null);
     const err = await updateServer(activeServer!.id, { name, description });
     if (err) setError(err);
-    else onClose();
+    else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
     setLoading(false);
   }
 
@@ -55,8 +88,12 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     if (res) await updateServer(activeServer!.id, { icon_url: res.url });
   }
 
-  async function handleCreateRole(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleBanner(file: File) {
+    const res = await upload(file);
+    if (res) await updateServer(activeServer!.id, { banner_url: res.url });
+  }
+
+  async function handleCreateRole() {
     if (!roleName.trim()) return;
     setLoading(true);
     const err = await createRole({ name: roleName.trim(), color: roleColor });
@@ -73,99 +110,196 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <form onSubmit={save} className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-bg-primary p-6 shadow-2xl">
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-bg-primary">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-divider px-6">
+        <div className="flex items-center gap-3">
+          {activeServer.icon_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={activeServer.icon_url} alt="" className="h-8 w-8 rounded-[30%] object-cover" />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-[30%] bg-brand text-xs font-bold text-white">
+              {serverInitials(activeServer.name)}
+            </div>
+          )}
+          <div>
+            <h1 className="font-bold">{activeServer.name}</h1>
+            <p className="text-xs text-text-muted">Server Settings</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded p-2 text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          aria-label="Close"
+        >
           <IconClose size={24} />
         </button>
-        <h2 className="text-xl font-bold">Server Settings</h2>
+      </header>
 
-        {inviteUrl && (
-          <div className="mt-4 rounded bg-bg-accent p-3">
-            <p className="text-xs font-bold uppercase text-text-muted">Invite Link</p>
-            <p className="mt-1 truncate text-sm">{inviteUrl}</p>
-            <button
-              type="button"
-              onClick={copyInvite}
-              className="mt-2 flex items-center gap-1 text-sm text-brand hover:underline"
-            >
-              <IconCopy size={14} /> {copied ? "Copied!" : "Copy link"}
-            </button>
-          </div>
-        )}
-
-        <div className="mt-4 space-y-3">
-          <label className="block">
-            <span className="text-xs font-bold uppercase text-text-muted">Name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={!isOwner}
-              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold uppercase text-text-muted">Description</span>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={!isOwner}
-              rows={3}
-              className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
-            />
-          </label>
-          {isOwner && (
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-brand hover:underline">
-              Change icon
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
-            </label>
-          )}
-        </div>
-
-        {isOwner && (
-          <div className="mt-6 border-t border-divider pt-4">
-            <h3 className="font-semibold">Roles</h3>
-            <ul className="mt-2 space-y-1">
-              {serverRoles.map((r) => (
-                <li key={r.id} className="flex items-center gap-2 text-sm">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: r.color }} />
-                  {r.name}
-                  {r.is_default && <span className="text-xs text-text-muted">(default)</span>}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <input
-                value={roleName}
-                onChange={(e) => setRoleName(e.target.value)}
-                placeholder="New role name"
-                className="flex-1 rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-              />
-              <input type="color" value={roleColor} onChange={(e) => setRoleColor(e.target.value)} className="h-10 w-12 cursor-pointer rounded" />
-              <button type="button" onClick={(e) => void handleCreateRole(e)} disabled={loading} className="rounded bg-brand px-3 py-2 text-sm font-semibold text-white">
-                Add Role
+      <div className="flex min-h-0 flex-1">
+        <nav className="hidden w-56 shrink-0 flex-col border-r border-divider bg-bg-secondary p-4 md:flex">
+          <label className="mb-2 px-2 text-xs font-bold uppercase text-text-muted">Settings</label>
+          <select
+            value={section}
+            onChange={(e) => setSection(e.target.value as Section)}
+            className="mb-4 w-full rounded bg-bg-accent px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand md:hidden"
+          >
+            {navItems.map((n) => (
+              <option key={n.id} value={n.id}>{n.label}</option>
+            ))}
+          </select>
+          {navItems.map((n) => {
+            const Icon = n.icon;
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setSection(n.id)}
+                className={`mb-0.5 hidden w-full items-center gap-2 rounded px-2 py-2 text-left text-sm transition-colors md:flex ${
+                  section === n.id ? "bg-interactive-selected text-text-normal" : "text-text-muted hover:bg-interactive-hover"
+                }`}
+              >
+                <Icon size={16} /> {n.label}
               </button>
-            </div>
-            <p className="mt-2 text-xs text-text-muted">Right-click a member to assign roles, kick, or ban.</p>
+            );
+          })}
+        </nav>
+
+        <div className="flex-1 overflow-y-auto p-6 md:p-10">
+          <div className="mx-auto max-w-2xl">
+            {section === "overview" && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Overview</h2>
+                <p className="text-sm text-text-muted">Basic information about your server.</p>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-text-muted">Server name</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!isOwner}
+                    className="mt-1 w-full rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-text-muted">Description</span>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    disabled={!isOwner}
+                    rows={4}
+                    placeholder="Tell people what this server is about"
+                    className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
+                  />
+                </label>
+                {isOwner && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void saveOverview()}
+                    className="rounded bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                  >
+                    Save Changes
+                  </button>
+                )}
+                {saved && <p className="text-sm text-status-online">Saved!</p>}
+              </div>
+            )}
+
+            {section === "invite" && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Invites</h2>
+                <p className="text-sm text-text-muted">Share this link to invite people to your server.</p>
+                {inviteUrl ? (
+                  <div className="rounded-lg border border-divider bg-bg-secondary p-5">
+                    <p className="break-all font-mono text-sm">{inviteUrl}</p>
+                    <button
+                      type="button"
+                      onClick={copyInvite}
+                      className="mt-4 flex items-center gap-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                    >
+                      <IconCopy size={16} /> {copied ? "Copied!" : "Copy Invite Link"}
+                    </button>
+                    <p className="mt-3 text-xs text-text-muted">
+                      Paste this link in chat to show a rich invite preview with Join Server button.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-muted">Invite code not available — run migration 0004.</p>
+                )}
+              </div>
+            )}
+
+            {section === "roles" && isOwner && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Roles</h2>
+                <p className="text-sm text-text-muted">Create roles and assign them via right-click on members. Role colors change name colors.</p>
+                <ul className="divide-y divide-divider rounded-lg border border-divider bg-bg-secondary">
+                  {serverRoles.map((r) => (
+                    <li key={r.id} className="flex items-center gap-3 px-4 py-3">
+                      <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
+                      <span className="font-medium">{r.name}</span>
+                      {r.is_default && <span className="text-xs text-text-muted">Default</span>}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={roleName}
+                    onChange={(e) => setRoleName(e.target.value)}
+                    placeholder="Role name"
+                    className="min-w-[160px] flex-1 rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                  />
+                  <input type="color" value={roleColor} onChange={(e) => setRoleColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded" />
+                  <button type="button" onClick={() => void handleCreateRole()} disabled={loading} className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white">
+                    Create Role
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {section === "appearance" && isOwner && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Appearance</h2>
+                <p className="text-sm text-text-muted">Customize how your server looks in invites and the sidebar.</p>
+                <label className="flex cursor-pointer items-center justify-between rounded-lg border border-divider bg-bg-secondary p-4 hover:bg-interactive-hover">
+                  <div>
+                    <p className="font-medium">Server icon</p>
+                    <p className="text-xs text-text-muted">Recommended 512×512</p>
+                  </div>
+                  <input type="file" accept="image/*" className="text-sm" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
+                </label>
+                <label className="flex cursor-pointer items-center justify-between rounded-lg border border-divider bg-bg-secondary p-4 hover:bg-interactive-hover">
+                  <div>
+                    <p className="font-medium">Server banner</p>
+                    <p className="text-xs text-text-muted">Shown on invite previews</p>
+                  </div>
+                  <input type="file" accept="image/*" className="text-sm" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
+                </label>
+              </div>
+            )}
+
+            {section === "danger" && isOwner && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold text-status-dnd">Danger Zone</h2>
+                <div className="rounded-lg border border-status-dnd/30 bg-status-dnd/5 p-5">
+                  <p className="font-medium">Delete this server</p>
+                  <p className="mt-1 text-sm text-text-muted">Permanently delete all channels, messages, and members. This cannot be undone.</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={loading}
+                    className="mt-4 flex items-center gap-2 rounded bg-status-dnd px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                  >
+                    <IconTrash size={16} /> Delete Server
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {error && <p className="mt-4 text-sm text-status-dnd">{error}</p>}
           </div>
-        )}
-
-        {error && <p className="mt-2 text-sm text-status-dnd">{error}</p>}
-
-        <div className="mt-4 flex gap-2">
-          {isOwner && (
-            <button type="submit" disabled={loading} className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
-              Save
-            </button>
-          )}
-          {isOwner && (
-            <button type="button" onClick={() => void handleDelete()} className="ml-auto flex items-center gap-1 rounded bg-status-dnd/20 px-4 py-2 text-sm font-semibold text-status-dnd hover:bg-status-dnd hover:text-white">
-              <IconTrash size={16} /> Delete Server
-            </button>
-          )}
         </div>
-      </form>
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -89,6 +90,8 @@ interface AppContextValue {
   deleteDmMessage: (messageId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
   loadVoicePresence: (channelId: string) => Promise<void>;
+  dmUnread: { threadId: string; friend: Profile; count: number } | null;
+  clearDmUnread: (threadId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -115,6 +118,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeDmThreadId, setActiveDmThreadId] = useState<string | null>(null);
   const [micMuted, setMicMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
+  const [dmUnreadMap, setDmUnreadMap] = useState<
+    Map<string, { friend: Profile; count: number; latestAt: string }>
+  >(new Map());
+
+  const activeDmRef = useRef<string | null>(null);
+  const viewModeRef = useRef<ViewMode>("home");
+  useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
 
   const user = session?.user ?? null;
   const userId = user?.id ?? null;
@@ -138,6 +149,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => friendships.filter((f) => f.status === "pending" && f.requester_id === userId),
     [friendships, userId],
   );
+
+  const dmUnread = useMemo((): { threadId: string; friend: Profile; count: number } | null => {
+    const entries = [...dmUnreadMap.entries()];
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => b[1].latestAt.localeCompare(a[1].latestAt));
+    const [threadId, entry] = entries[0];
+    return { threadId, friend: entry.friend, count: entry.count };
+  }, [dmUnreadMap]);
+
+  const clearDmUnread = useCallback((threadId: string) => {
+    setDmUnreadMap((prev) => {
+      if (!prev.has(threadId)) return prev;
+      const next = new Map(prev);
+      next.delete(threadId);
+      return next;
+    });
+  }, []);
 
   const loadProfile = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
@@ -401,6 +429,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [activeDmThreadId, configured, userId, loadDmMessages]);
 
+  // Track unread DMs globally
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const sub = supabase
+      .channel(`dm-unread:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "dm_messages" },
+        (payload) => {
+          const msg = payload.new as DmMessage;
+          if (msg.author_id === userId) return;
+          if (viewModeRef.current === "dm" && activeDmRef.current === msg.thread_id) return;
+
+          void (async () => {
+            const { data: author } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
+            if (!author) return;
+            setDmUnreadMap((prev) => {
+              const next = new Map(prev);
+              const cur = next.get(msg.thread_id);
+              next.set(msg.thread_id, {
+                friend: author as Profile,
+                count: (cur?.count ?? 0) + 1,
+                latestAt: msg.created_at,
+              });
+              return next;
+            });
+          })();
+        },
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [userId, configured]);
+
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await getSupabaseClient().auth.signInWithPassword({ email, password });
     return error?.message ?? null;
@@ -482,8 +544,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setViewMode("dm");
     setActiveDmThreadId(threadId);
     setActiveChannelId(null);
+    clearDmUnread(threadId);
     await loadDmMessages(threadId);
-  }, [loadDmMessages]);
+  }, [loadDmMessages, clearDmUnread]);
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
     const { data, error } = await getSupabaseClient().rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -768,6 +831,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteDmMessage,
     markNotificationsRead,
     loadVoicePresence,
+    dmUnread,
+    clearDmUnread,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

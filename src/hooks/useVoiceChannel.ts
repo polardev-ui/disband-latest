@@ -22,6 +22,8 @@ export function useVoiceChannel(
   channelId: string | null,
   userId: string | null,
   profile: Profile | null,
+  micMuted: boolean,
+  deafened: boolean,
 ) {
   const [joined, setJoined] = useState(false);
   const [participants, setParticipants] = useState<(VoicePresence & { profile?: Profile })[]>([]);
@@ -32,6 +34,14 @@ export function useVoiceChannel(
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const signalRef = useRef<RealtimeChannel | null>(null);
   const audioRefsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+
+  useEffect(() => {
+    localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
+  }, [micMuted]);
+
+  useEffect(() => {
+    audioRefsRef.current.forEach((el) => { el.muted = deafened; });
+  }, [deafened]);
 
   const loadPresence = useCallback(async () => {
     if (!channelId) return;

@@ -1,3 +1,6 @@
+allowBuilds:
+  sharp: set this to true or false
+
 # pnpm 10+ reads project settings from here instead of the package.json "pnpm" field.
 # Allow sharp to run its build script (pulled in transitively by Next.js).
 onlyBuiltDependencies:
