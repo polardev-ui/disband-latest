@@ -21,7 +21,12 @@ export function useMobileWebGate(): MobileGateState {
     }
 
     const path = window.location.pathname;
-    if (/^\/mobile\/?$/i.test(path) || path.startsWith("/mobile/")) {
+    if (
+      /^\/mobile\/?$/i.test(path)
+      || path.startsWith("/mobile/")
+      || path.startsWith("/privacy")
+      || path.startsWith("/terms")
+    ) {
       setState("allow");
       return;
     }

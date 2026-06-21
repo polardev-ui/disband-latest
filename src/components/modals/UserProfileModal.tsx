@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { getProfilePanelMutedColor, getProfilePanelStyle } from "@/lib/profileColor";
 import { displayName } from "@/lib/utils";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import type { Profile } from "@/lib/supabase/types";
 
 interface UserProfileModalProps {
@@ -60,11 +61,14 @@ export function UserProfileModal({
             </span>
           </div>
           <h2 className="text-xl font-bold leading-tight">{title}</h2>
-          {profile.username && (
-            <p className="text-sm" style={{ color: mutedColor }}>
-              @{profile.username}
-            </p>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {profile.username && (
+              <p className="text-sm" style={{ color: mutedColor }}>
+                @{profile.username}
+              </p>
+            )}
+            <PlatformBadge profile={profile} />
+          </div>
           {profile.bio && (
             <p className="mt-2 text-sm leading-snug opacity-90">{profile.bio}</p>
           )}

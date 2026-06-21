@@ -45,7 +45,7 @@ export function AuthScreen() {
         setError(result.error);
       } else if (result.needsEmailConfirmation !== false) {
         setSuccess(
-          `Check your email to verify your account. We sent a link to ${email.trim()} — look in spam if you don't see it within a minute.`,
+          `Check your email to verify your account. We sent a link to ${email.trim()} — then log in at /login.`,
         );
       }
     }

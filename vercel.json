@@ -13,6 +13,42 @@
       "statusCode": 302
     },
     {
+      "source": "/app",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
+        }
+      ],
+      "destination": "/mobile",
+      "statusCode": 302
+    },
+    {
+      "source": "/login",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
+        }
+      ],
+      "destination": "/mobile",
+      "statusCode": 302
+    },
+    {
+      "source": "/home",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
+        }
+      ],
+      "destination": "/mobile",
+      "statusCode": 302
+    },
+    {
       "source": "/server/:code",
       "has": [
         {
@@ -26,7 +62,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/server/:code", "destination": "/" },
-    { "source": "/server/:code/", "destination": "/" }
+    { "source": "/server/:code", "destination": "/app" },
+    { "source": "/server/:code/", "destination": "/app" }
   ]
 }

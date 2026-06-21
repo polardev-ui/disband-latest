@@ -17,6 +17,8 @@ export interface Profile {
   accent_color_2: string | null;
   theme: ThemePreference;
   avatar_crop: { zoom: number; x: number; y: number } | null;
+  show_owner_badge: boolean;
+  show_staff_badge: boolean;
   created_at: string;
   updated_at: string;
 }
