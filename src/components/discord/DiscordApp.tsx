@@ -192,7 +192,10 @@ export function DiscordApp() {
       />
 
       {app.viewMode === "home" || app.viewMode === "dm" ? (
-        <HomePanel />
+        <HomePanel
+          onOpenSettings={() => setSettingsOpen(true)}
+          onUserPanelContext={handleUserPanelContext}
+        />
       ) : (
         <ChannelList
           title={app.activeServer?.name ?? "Server"}
@@ -203,14 +206,8 @@ export function DiscordApp() {
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenServerSettings={() => setServerSettingsOpen(true)}
           onChannelContext={handleChannelContext}
+          onUserPanelContext={handleUserPanelContext}
         />
-      )}
-
-      {/* User panel context — overlay on channel list bottom */}
-      {(app.viewMode === "server") && (
-        <div className="pointer-events-none fixed bottom-0 left-[72px] z-10 hidden w-60 md:block">
-          <div className="pointer-events-auto h-[52px]" onContextMenu={handleUserPanelContext} />
-        </div>
       )}
 
       {app.viewMode === "dm" && dmFriend && (

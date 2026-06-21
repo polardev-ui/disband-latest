@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { displayName } from "@/lib/utils";
 import { IconFriends } from "@/components/icons";
+import { UserPanel } from "./UserPanel";
 
 const STATUS_BG = {
   online: "bg-status-online",
@@ -12,7 +13,12 @@ const STATUS_BG = {
   offline: "bg-status-offline",
 } as const;
 
-export function HomePanel() {
+interface HomePanelProps {
+  onOpenSettings: () => void;
+  onUserPanelContext?: (e: React.MouseEvent) => void;
+}
+
+export function HomePanel({ onOpenSettings, onUserPanelContext }: HomePanelProps) {
   const {
     friends,
     pendingIncoming,
@@ -141,6 +147,8 @@ export function HomePanel() {
           </>
         )}
       </div>
+
+      <UserPanel onOpenSettings={onOpenSettings} onContextMenu={onUserPanelContext} />
     </aside>
   );
 }

@@ -132,8 +132,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
-    const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
+    const { data } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
     if (data) setProfile(data as Profile);
+  }, []);
+
+  /** Creates a profiles row if the auth trigger missed it (fixes server FK errors). */
+  const ensureProfile = useCallback(async (uid: string, email?: string | null) => {
+    const supabase = getSupabaseClient();
+    const { data: existing } = await supabase.from("profiles").select("id").eq("id", uid).maybeSingle();
+    if (existing) return null;
+
+    const { error } = await supabase.from("profiles").insert({
+      id: uid,
+      display_name: email?.split("@")[0] ?? "User",
+    });
+    return error?.message ?? null;
   }, []);
 
   const loadServers = useCallback(async (uid: string) => {
@@ -221,7 +234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const enriched = await Promise.all(
       threads.map(async (t) => {
         const friendId = t.user_a === uid ? t.user_b : t.user_a;
-        const { data: fp } = await supabase.from("profiles").select("*").eq("id", friendId).single();
+        const { data: fp } = await supabase.from("profiles").select("*").eq("id", friendId).maybeSingle();
         return { ...t, friend: fp as Profile | null };
       }),
     );
@@ -290,7 +303,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setServers([]);
       return;
     }
-    void refreshAll();
+    void (async () => {
+      await ensureProfile(userId, user?.email);
+      await refreshAll();
+    })();
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime subscriptions
@@ -381,10 +397,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, username: string) => {
     const supabase = getSupabaseClient();
+    const normalized = username.trim().toLowerCase();
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return error.message;
     if (data.user) {
-      await supabase.from("profiles").update({ username, display_name: username }).eq("id", data.user.id);
+      // Upsert — UPDATE alone fails silently when the trigger didn't create a row
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        {
+          id: data.user.id,
+          username: normalized,
+          display_name: username.trim(),
+        },
+        { onConflict: "id" },
+      );
+      if (profileError) return profileError.message;
     }
     return null;
   }, []);
@@ -399,7 +425,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     if (!userId) return "Not signed in";
-    const { error } = await getSupabaseClient().from("profiles").update(patch).eq("id", userId);
+    const payload = { ...patch };
+    if (payload.username) payload.username = payload.username.trim().toLowerCase();
+    if (payload.display_name) payload.display_name = payload.display_name.trim();
+    const { error } = await getSupabaseClient().from("profiles").update(payload).eq("id", userId);
     if (error) return error.message;
     await loadProfile(userId);
     return null;
@@ -454,12 +483,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendFriendRequest = useCallback(async (username: string) => {
     if (!userId) return "Not signed in";
+    const normalized = username.trim().toLowerCase();
+    if (!normalized) return "Enter a username";
+
     const supabase = getSupabaseClient();
-    const { data: target } = await supabase.from("profiles").select("id").eq("username", username).single();
-    if (!target) return "User not found";
-    const targetId = (target as { id: string }).id;
-    if (targetId === userId) return "Cannot friend yourself";
-    const { error } = await supabase.from("friendships").insert({ requester_id: userId, addressee_id: targetId });
+    const { data: target, error: lookupError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", normalized)
+      .maybeSingle();
+
+    if (lookupError) return lookupError.message;
+    if (!target) return `No user found with username "${normalized}"`;
+    if (target.id === userId) return "Cannot friend yourself";
+
+    const { error } = await supabase.from("friendships").insert({
+      requester_id: userId,
+      addressee_id: target.id,
+    });
     if (error) return error.message;
     await loadFriendships(userId);
     return null;
@@ -488,6 +529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createServer = useCallback(async (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => {
     if (!userId) return "Not signed in";
+    await ensureProfile(userId, user?.email);
     const { data: id, error } = await getSupabaseClient().rpc("create_server", {
       p_name: data.name,
       p_icon_url: data.iconUrl ?? null,
@@ -498,7 +540,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadServers(userId);
     await selectServer(id as string);
     return null;
-  }, [userId, loadServers, selectServer]);
+  }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
 
   const updateServer = useCallback(async (serverId: string, patch: Partial<Server>) => {
     const { error } = await getSupabaseClient().from("servers").update(patch).eq("id", serverId);
