@@ -1,6 +1,7 @@
 "use client";
 
 import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
+import { getUsernameStyle } from "@/lib/profileColor";
 import { Avatar } from "@/components/ui/Avatar";
 import { ServerInviteCard } from "./ServerInviteCard";
 import type { Profile } from "@/lib/supabase/types";
@@ -77,7 +78,11 @@ export function ChatMessage({
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const isOwn = message.author_id === currentUserId;
-  const nameColor = authorColor ?? author?.accent_color ?? undefined;
+  const nameStyle = authorColor
+    ? { color: authorColor }
+    : author
+      ? getUsernameStyle(author)
+      : undefined;
   const canOpenProfile = author && onAuthorClick;
   const body = normalizeMessageContent(message.content);
 
@@ -132,12 +137,12 @@ export function ChatMessage({
                 type="button"
                 onClick={openAuthor}
                 className="text-[15px] font-medium hover:underline focus:outline-none"
-                style={{ color: nameColor }}
+                style={nameStyle}
               >
                 {displayName(author)}
               </button>
             ) : (
-              <span className="text-[15px] font-medium" style={{ color: nameColor }}>
+              <span className="text-[15px] font-medium" style={nameStyle}>
                 {displayName(author ?? {})}
               </span>
             )}

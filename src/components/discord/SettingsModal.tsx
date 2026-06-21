@@ -6,7 +6,16 @@ import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
+import { ProfileName } from "@/components/ui/ProfileName";
 import { IconClose } from "@/components/icons";
+import {
+  DEFAULT_ACCENT,
+  getAccentBackground,
+  getAvatarStyle,
+  isProfileGradient,
+  usesCustomAccent,
+  type ProfileAccentFields,
+} from "@/lib/profileColor";
 import type { AvatarCrop } from "@/lib/utils";
 import type { UserStatus } from "@/lib/supabase/types";
 
@@ -30,7 +39,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [accent, setAccent] = useState("#5865f2");
+  const [accent1, setAccent1] = useState(DEFAULT_ACCENT);
+  const [accent2, setAccent2] = useState("#eb459e");
+  const [useDefaultAccent, setUseDefaultAccent] = useState(true);
   const [status, setStatus] = useState<UserStatus>("online");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -42,7 +53,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setDisplayName(profile.display_name ?? "");
     setUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
-    setAccent(profile.accent_color ?? "#5865f2");
+    const custom = usesCustomAccent(profile);
+    setUseDefaultAccent(!custom);
+    setAccent1(profile.accent_color ?? DEFAULT_ACCENT);
+    setAccent2(profile.accent_color_2 ?? profile.accent_color ?? "#eb459e");
     setStatus(profile.status);
   }, [profile]);
 
@@ -55,13 +69,22 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   if (!open) return null;
 
+  const previewAccent: ProfileAccentFields = useDefaultAccent
+    ? { accent_color: null, accent_color_2: null }
+    : { accent_color: accent1, accent_color_2: accent2 };
+
   async function saveProfile() {
     setError(null);
+    if (!useDefaultAccent && (!accent1.trim() || !accent2.trim())) {
+      setError("Pick both profile colors, or use the default style.");
+      return;
+    }
     const err = await updateProfile({
       display_name: displayName.trim() || null,
       username: username.trim() || null,
       bio: bio.trim() || null,
-      accent_color: accent,
+      accent_color: useDefaultAccent ? null : accent1,
+      accent_color_2: useDefaultAccent ? null : accent2,
       status,
     });
     if (err) setError(err);
@@ -160,10 +183,89 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <span className="text-xs font-bold uppercase text-text-muted">Bio</span>
                     <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand" />
                   </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Accent color</span>
-                    <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} className="mt-1 h-10 w-full cursor-pointer rounded bg-bg-accent" />
-                  </label>
+                  <div className="block">
+                    <span className="text-xs font-bold uppercase text-text-muted">Profile color</span>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Use the default Disband blue, or pick two colors — same color for solid, different for a gradient.
+                    </p>
+
+                    <label className="mt-3 flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2">
+                      <input
+                        type="radio"
+                        name="accent-mode"
+                        checked={useDefaultAccent}
+                        onChange={() => setUseDefaultAccent(true)}
+                        className="accent-brand"
+                      />
+                      <span className="text-sm">Default style</span>
+                      <span
+                        className="ml-auto h-6 w-6 rounded-full ring-1 ring-divider"
+                        style={{ backgroundColor: DEFAULT_ACCENT }}
+                      />
+                    </label>
+
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2">
+                      <input
+                        type="radio"
+                        name="accent-mode"
+                        checked={!useDefaultAccent}
+                        onChange={() => setUseDefaultAccent(false)}
+                        className="accent-brand"
+                      />
+                      <span className="text-sm">Custom colors</span>
+                    </label>
+
+                    {!useDefaultAccent && (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="block">
+                          <span className="text-xs text-text-muted">Color 1</span>
+                          <input
+                            type="color"
+                            value={accent1}
+                            onChange={(e) => setAccent1(e.target.value)}
+                            className="mt-1 h-10 w-full cursor-pointer rounded bg-bg-accent"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-text-muted">Color 2</span>
+                          <input
+                            type="color"
+                            value={accent2}
+                            onChange={(e) => setAccent2(e.target.value)}
+                            className="mt-1 h-10 w-full cursor-pointer rounded bg-bg-accent"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="mt-4 overflow-hidden rounded-lg border border-divider bg-bg-secondary">
+                      <div
+                        className="h-16"
+                        style={{ background: getAccentBackground(previewAccent) }}
+                      />
+                      <div className="flex items-center gap-3 p-3">
+                        <div
+                          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold"
+                          style={getAvatarStyle(previewAccent)}
+                        >
+                          {(displayName || username || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <ProfileName
+                            profile={previewAccent}
+                            className="text-base font-semibold"
+                          />
+                          <p className="text-xs text-text-muted">
+                            {useDefaultAccent
+                              ? "Default"
+                              : isProfileGradient(previewAccent)
+                                ? "Gradient"
+                                : "Solid color"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <label className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Profile banner</span>
                     <p className="mt-0.5 text-xs text-text-muted">Shown on your profile when others view you</p>

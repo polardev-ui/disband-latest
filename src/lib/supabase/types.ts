@@ -13,6 +13,7 @@ export interface Profile {
   status: UserStatus;
   banner_url: string | null;
   accent_color: string | null;
+  accent_color_2: string | null;
   theme: ThemePreference;
   avatar_crop: { zoom: number; x: number; y: number } | null;
   created_at: string;
@@ -200,6 +201,7 @@ export interface Database {
           status?: UserStatus;
           banner_url?: string | null;
           accent_color?: string | null;
+          accent_color_2?: string | null;
           theme?: ThemePreference;
         };
         Update: {
@@ -210,6 +212,7 @@ export interface Database {
           status?: UserStatus;
           banner_url?: string | null;
           accent_color?: string | null;
+          accent_color_2?: string | null;
           theme?: ThemePreference;
         };
         Relationships: [];

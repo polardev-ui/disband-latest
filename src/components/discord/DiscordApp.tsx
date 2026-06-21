@@ -102,7 +102,7 @@ export function DiscordApp() {
   const getAuthorColor = useCallback(
     (authorId: string) => {
       const member = app.members.find((m) => m.user_id === authorId);
-      if (member) return app.getMemberColor(member) ?? member.profile.accent_color;
+      if (member) return app.getMemberColor(member) ?? undefined;
       return undefined;
     },
     [app],

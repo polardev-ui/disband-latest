@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
+import { attachRemoteTrack, createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -147,7 +148,7 @@ export function useGroupCallManager(
       if (local) local.getTracks().forEach((t) => pc.addTrack(t, local));
 
       pc.ontrack = (ev) => {
-        if (ev.streams[0]) setRemoteStreams((prev) => new Map(prev).set(remoteId, ev.streams[0]));
+        setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, ev.track, ev.streams[0]));
       };
       pc.onicecandidate = (ev) => {
         if (ev.candidate) {
@@ -341,6 +342,14 @@ export function useGroupCallManager(
     [loadPresence],
   );
 
+  const renegotiatePeer = useCallback(
+    async (remoteId: string, pc: RTCPeerConnection) => {
+      const offer = await createOfferForPeer(pc);
+      broadcast({ type: "offer", from: userId!, to: remoteId, sdp: offer });
+    },
+    [userId, broadcast],
+  );
+
   const endGroupCall = useCallback(async () => {
     await cleanup();
   }, [cleanup]);
@@ -351,19 +360,34 @@ export function useGroupCallManager(
     cameraRef.current = next;
     const stream = localRef.current;
     if (!stream || !joinedRef.current) return;
+
     const existing = stream.getVideoTracks()[0];
+
     if (next) {
-      if (existing) { existing.enabled = true; return; }
-      const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      const track = cam.getVideoTracks()[0];
-      stream.addTrack(track);
-      peersRef.current.forEach((pc) => pc.addTrack(track, stream));
+      let track = existing;
+      if (track) {
+        track.enabled = true;
+      } else {
+        const cam = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+        track = cam.getVideoTracks()[0];
+        stream.addTrack(track);
+      }
+      for (const [remoteId, pc] of peersRef.current) {
+        await setPeerVideoTrack(pc, stream, track);
+        await renegotiatePeer(remoteId, pc);
+      }
     } else if (existing) {
       existing.stop();
       stream.removeTrack(existing);
+      for (const [remoteId, pc] of peersRef.current) {
+        await setPeerVideoTrack(pc, stream, null);
+        await renegotiatePeer(remoteId, pc);
+      }
     }
     setLocalStream(new MediaStream(stream.getTracks()));
-  }, []);
+  }, [renegotiatePeer]);
 
   const dismissRing = useCallback(() => {
     stopRingtone();

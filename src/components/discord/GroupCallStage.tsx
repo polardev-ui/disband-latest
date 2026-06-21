@@ -6,6 +6,7 @@ import { IconPhone, IconPhoneOff, IconVideo, IconVideoOff } from "@/components/i
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
+import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 
 interface GroupCallStageProps {
   groupName: string;
@@ -40,7 +41,7 @@ function VideoBubble({
   ring?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const hasVideo = stream?.getVideoTracks().some((t) => t.enabled);
+  const hasVideo = useLiveVideoStream(stream);
 
   useEffect(() => {
     if (ref.current && stream && hasVideo) {
