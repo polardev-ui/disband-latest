@@ -27,6 +27,9 @@ import {
   Link,
   Palette,
   AlertTriangle,
+  Video,
+  VideoOff,
+  UsersRound,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -62,6 +65,9 @@ export const IconShield = icon(Shield);
 export const IconLink = icon(Link);
 export const IconPalette = icon(Palette);
 export const IconAlert = icon(AlertTriangle);
+export const IconVideo = icon(Video);
+export const IconVideoOff = icon(VideoOff);
+export const IconGroup = icon(UsersRound);
 
 export function IconStatus(props: IconProps & { status: "online" | "idle" | "dnd" | "offline" }) {
   const colors = {

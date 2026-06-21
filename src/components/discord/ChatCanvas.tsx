@@ -14,8 +14,10 @@ interface ChatCanvasProps {
   currentUserId?: string | null;
   getAuthorColor?: (authorId: string) => string | null | undefined;
   headerExtra?: React.ReactNode;
+  headerTrailing?: React.ReactNode;
   callPanel?: React.ReactNode;
-  onSend: (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => Promise<string | null>;
+  channelIcon?: React.ReactNode;
+  onSend: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
   onAuthorClick?: (profile: Profile) => void;
 }
@@ -28,7 +30,9 @@ export function ChatCanvas({
   currentUserId,
   getAuthorColor,
   headerExtra,
+  headerTrailing,
   callPanel,
+  channelIcon,
   onSend,
   onMessageContext,
   onAuthorClick,
@@ -43,9 +47,10 @@ export function ChatCanvas({
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-bg-primary">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
-        <IconHash size={24} className="text-text-muted" />
-        <h1 className="text-[15px] font-semibold">{channelName}</h1>
+        {channelIcon ?? <IconHash size={24} className="text-text-muted" />}
+        <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{channelName}</h1>
         {headerExtra}
+        {headerTrailing}
       </header>
 
       {callPanel}

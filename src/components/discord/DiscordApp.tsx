@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useCallManager } from "@/hooks/useCallManager";
+import { useGroupCallManager } from "@/hooks/useGroupCallManager";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
@@ -11,7 +12,12 @@ import { ChatCanvas } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
 import { DmUnreadBadge } from "./DmUnreadBadge";
-import { DmCallPanel, DmCallStartBar, IncomingCallOverlay } from "./CallUI";
+import {
+  CallPanel,
+  GroupRingOverlay,
+  HeaderCallButton,
+  IncomingCallOverlay,
+} from "./CallUI";
 import { SettingsModal } from "./SettingsModal";
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
 import { ServerSettingsModal } from "@/components/modals/ServerSettingsModal";
@@ -22,6 +28,7 @@ import {
   IconSettings,
   IconTrash,
   IconFriends,
+  IconGroup,
 } from "@/components/icons";
 import { displayName, getInviteUrl } from "@/lib/utils";
 import type { Channel, Profile, Server } from "@/lib/supabase/types";
@@ -43,6 +50,13 @@ export function DiscordApp() {
     app.deafened,
   );
 
+  const groupCall = useGroupCallManager(
+    app.user?.id ?? null,
+    app.profile,
+    app.micMuted,
+    app.deafened,
+  );
+
   useEffect(() => {
     const el = remoteAudioRef.current;
     if (el && call.remoteStream) {
@@ -55,6 +69,18 @@ export function DiscordApp() {
   const activeChannel = app.channels.find((c) => c.id === app.activeChannelId);
   const isVoice = activeChannel?.type === "voice";
   const dmFriend = app.dmThreads.find((t) => t.id === app.activeDmThreadId)?.friend;
+  const activeGroup = app.groupChats.find((g) => g.id === app.activeGroupChatId);
+
+  const toggleMic = () => app.setMicMuted(!app.micMuted);
+  const toggleDeafen = () => {
+    const next = !app.deafened;
+    app.setDeafened(next);
+    if (next) app.setMicMuted(true);
+  };
+
+  const dmCallActive = call.phase === "outgoing" || call.phase === "active";
+  const groupCallActive = groupCall.phase === "active";
+  const callBannerPeer = call.activePeer ?? dmFriend;
 
   const canModerate =
     app.activeServer?.owner_id === app.user?.id ||
@@ -278,10 +304,6 @@ export function DiscordApp() {
 
   const profileFriend = profileTarget ? app.friends.some((f) => f.id === profileTarget.id) : false;
 
-  const callBannerPeer = call.activePeer ?? dmFriend;
-  const showCallBanner =
-    callBannerPeer && (call.phase === "outgoing" || call.phase === "active");
-
   const startVoiceCall = useCallback(
     (peer: Profile) => {
       void app.openDmWithFriend(peer.id);
@@ -289,6 +311,62 @@ export function DiscordApp() {
     },
     [app, call],
   );
+
+  const startGroupVoiceCall = useCallback(() => {
+    if (!activeGroup || !app.user) return;
+    const memberIds = activeGroup.members.map((m) => m.id);
+    void groupCall.startGroupCall(activeGroup.id, activeGroup.name, memberIds);
+  }, [activeGroup, app.user, groupCall]);
+
+  const groupRemoteLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    activeGroup?.members.forEach((m) => map.set(m.id, displayName(m)));
+    return map;
+  }, [activeGroup]);
+
+  const renderCallPanel = () => {
+    if (dmCallActive && callBannerPeer) {
+      return (
+        <CallPanel
+          peer={callBannerPeer}
+          title={displayName(callBannerPeer)}
+          subtitle={call.phase === "outgoing" ? "Calling… waiting for answer" : "Connected — you're live"}
+          phase={call.phase === "outgoing" ? "outgoing" : "active"}
+          localStream={call.localStream}
+          remoteStream={call.remoteStream}
+          micMuted={app.micMuted}
+          deafened={app.deafened}
+          cameraEnabled={call.cameraEnabled}
+          onToggleMic={toggleMic}
+          onToggleDeafen={toggleDeafen}
+          onToggleCamera={() => void call.toggleCamera()}
+          onEnd={() => void call.endCall()}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      );
+    }
+    if (groupCallActive && activeGroup && app.viewMode === "group") {
+      return (
+        <CallPanel
+          title={activeGroup.name}
+          subtitle={`${groupCall.participants.length + 1} in call`}
+          phase="active"
+          localStream={groupCall.localStream}
+          remoteStreams={groupCall.remoteStreams}
+          remoteLabels={groupRemoteLabels}
+          micMuted={app.micMuted}
+          deafened={app.deafened}
+          cameraEnabled={groupCall.cameraEnabled}
+          onToggleMic={toggleMic}
+          onToggleDeafen={toggleDeafen}
+          onToggleCamera={() => void groupCall.toggleCamera()}
+          onEnd={() => void groupCall.endGroupCall()}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden">
@@ -306,6 +384,14 @@ export function DiscordApp() {
           profile={call.incoming.profile}
           onAccept={() => void call.acceptCall()}
           onReject={() => void call.rejectCall()}
+        />
+      )}
+
+      {groupCall.incomingRing && (
+        <GroupRingOverlay
+          groupName={groupCall.incomingRing.groupName}
+          onJoin={() => void groupCall.joinGroupCall(groupCall.incomingRing!.groupId, groupCall.incomingRing!.groupName)}
+          onDismiss={groupCall.dismissRing}
         />
       )}
 
@@ -328,7 +414,7 @@ export function DiscordApp() {
         onServerContext={handleServerContext}
       />
 
-      {app.viewMode === "home" || app.viewMode === "dm" ? (
+      {app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" ? (
         <HomePanel
           onOpenSettings={() => setSettingsOpen(true)}
           onUserPanelContext={handleUserPanelContext}
@@ -357,33 +443,55 @@ export function DiscordApp() {
           messages={dmMessages}
           members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
           currentUserId={app.user?.id}
-          callPanel={
-            showCallBanner && callBannerPeer ? (
-              <DmCallPanel
-                peer={callBannerPeer}
-                phase={call.phase === "outgoing" ? "outgoing" : "active"}
-                micMuted={app.micMuted}
-                deafened={app.deafened}
-                onToggleMic={() => app.setMicMuted(!app.micMuted)}
-                onToggleDeafen={() => {
-                  const next = !app.deafened;
-                  app.setDeafened(next);
-                  if (next) app.setMicMuted(true);
-                }}
-                onEnd={() => void call.endCall()}
-                onOpenSettings={() => setSettingsOpen(true)}
+          headerTrailing={
+            !dmCallActive ? (
+              <HeaderCallButton
+                disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+                onClick={() => void startVoiceCall(dmFriend)}
               />
-            ) : (
-              <DmCallStartBar
-                disabled={call.phase !== "idle"}
-                onStart={() => void startVoiceCall(dmFriend)}
-              />
-            )
+            ) : null
           }
+          callPanel={renderCallPanel()}
           onSend={app.sendDmMessage}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, true)}
           onAuthorClick={handleAuthorClick}
         />
+      )}
+
+      {app.viewMode === "group" && activeGroup && (
+        <ChatCanvas
+          channelName={activeGroup.name}
+          channelIcon={<IconGroup size={22} className="text-text-muted" />}
+          messages={app.groupMessages.map((m) => ({
+            id: m.id,
+            author_id: m.author_id,
+            content: m.content,
+            attachment_url: m.attachment_url,
+            attachment_type: m.attachment_type,
+            created_at: m.created_at,
+            author: m.author,
+          }))}
+          members={activeGroup.members}
+          currentUserId={app.user?.id}
+          headerTrailing={
+            !groupCallActive ? (
+              <HeaderCallButton
+                disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+                onClick={startGroupVoiceCall}
+              />
+            ) : null
+          }
+          callPanel={renderCallPanel()}
+          onSend={app.sendGroupMessage}
+          onMessageContext={(m, x, y) => handleMessageContext(m, x, y, true)}
+          onAuthorClick={handleAuthorClick}
+        />
+      )}
+
+      {dmCallActive && app.viewMode !== "dm" && (
+        <div className="fixed left-[4.5rem] right-0 top-0 z-50 max-w-xl">
+          {renderCallPanel()}
+        </div>
       )}
 
       {app.viewMode === "home" && (

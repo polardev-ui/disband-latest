@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 
 export function AuthScreen() {
@@ -10,7 +10,9 @@ export function AuthScreen() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   if (!configured) {
     return (
@@ -28,14 +30,34 @@ export function AuthScreen() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (submittingRef.current || success) return;
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
-    const err =
-      mode === "login"
-        ? await signIn(email, password)
-        : await signUp(email, password, username);
-    if (err) setError(err);
+    setSuccess(null);
+
+    if (mode === "login") {
+      const err = await signIn(email, password);
+      if (err) setError(err);
+    } else {
+      const result = await signUp(email, password, username);
+      if (result.error) {
+        setError(result.error);
+      } else if (result.needsEmailConfirmation !== false) {
+        setSuccess(
+          `Check your email to verify your account. We sent a link to ${email.trim()} — look in spam if you don't see it within a minute.`,
+        );
+      }
+    }
+
     setLoading(false);
+    submittingRef.current = false;
+  }
+
+  function switchMode(next: "login" | "signup") {
+    setMode(next);
+    setError(null);
+    setSuccess(null);
   }
 
   return (
@@ -46,69 +68,98 @@ export function AuthScreen() {
             D
           </div>
           <h1 className="text-2xl font-bold text-text-normal">
-            {mode === "login" ? "Welcome back!" : "Create an account"}
+            {success ? "Check your email" : mode === "login" ? "Welcome back!" : "Create an account"}
           </h1>
           <p className="mt-1 text-sm text-text-muted">
-            {mode === "login" ? "We're so excited to see you again!" : "Join Disband today"}
+            {success
+              ? "Verify your email to finish signing up"
+              : mode === "login"
+                ? "We're so excited to see you again!"
+                : "Join Disband today"}
           </p>
         </div>
 
-        {mode === "signup" && (
-          <label className="mb-3 block">
-            <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Username</span>
-            <input
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-              pattern="[a-zA-Z0-9_]{2,32}"
-            />
-          </label>
+        {success ? (
+          <div className="mb-4 space-y-3">
+            <p className="rounded-lg border border-status-online/30 bg-status-online/10 px-3 py-3 text-sm leading-relaxed text-text-normal">
+              {success}
+            </p>
+            <p className="text-center text-xs text-text-muted">
+              After verifying, come back here and log in with your email and password.
+            </p>
+          </div>
+        ) : (
+          <>
+            {mode === "signup" && (
+              <label className="mb-3 block">
+                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Username</span>
+                <input
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                  pattern="[a-zA-Z0-9_]{2,32}"
+                />
+              </label>
+            )}
+
+            <label className="mb-3 block">
+              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Email</span>
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+              />
+            </label>
+
+            <label className="mb-4 block">
+              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Password</span>
+              <input
+                required
+                type="password"
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+              />
+            </label>
+          </>
         )}
-
-        <label className="mb-3 block">
-          <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Email</span>
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-          />
-        </label>
-
-        <label className="mb-4 block">
-          <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Password</span>
-          <input
-            required
-            type="password"
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-          />
-        </label>
 
         {error && <p className="mb-3 text-sm text-status-dnd">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
-        >
-          {loading ? "..." : mode === "login" ? "Log In" : "Continue"}
-        </button>
+        {!success && (
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
+          >
+            {loading ? "..." : mode === "login" ? "Log In" : "Continue"}
+          </button>
+        )}
 
-        <p className="mt-4 text-center text-sm text-text-muted">
-          {mode === "login" ? "Need an account? " : "Already have an account? "}
+        {success ? (
           <button
             type="button"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
-            className="text-text-link hover:underline"
+            onClick={() => switchMode("login")}
+            className="mt-4 w-full rounded bg-interactive-hover py-2.5 text-sm font-semibold text-text-normal"
           >
-            {mode === "login" ? "Register" : "Log in"}
+            Back to log in
           </button>
-        </p>
+        ) : (
+          <p className="mt-4 text-center text-sm text-text-muted">
+            {mode === "login" ? "Need an account? " : "Already have an account? "}
+            <button
+              type="button"
+              onClick={() => switchMode(mode === "login" ? "signup" : "login")}
+              className="text-text-link hover:underline"
+            >
+              {mode === "login" ? "Register" : "Log in"}
+            </button>
+          </p>
+        )}
       </form>
     </div>
   );

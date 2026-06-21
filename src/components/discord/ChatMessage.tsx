@@ -10,7 +10,7 @@ export interface ChatMessageData {
   author_id: string;
   content: string;
   attachment_url?: string | null;
-  attachment_type?: "image" | "video" | null;
+  attachment_type?: "image" | "video" | "gif" | null;
   created_at: string;
   author?: Profile;
 }

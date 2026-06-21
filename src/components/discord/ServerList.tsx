@@ -9,7 +9,7 @@ import type { Server } from "@/lib/supabase/types";
 interface ServerListProps {
   servers: Server[];
   activeServerId: string | null;
-  viewMode: "home" | "server" | "dm";
+  viewMode: "home" | "server" | "dm" | "group";
   onSelectHome: () => void;
   onSelectServer: (id: string) => void;
   onCreateServer: () => void;
@@ -33,18 +33,18 @@ export function ServerList({
         <button
           type="button"
           aria-label="Direct Messages"
-          aria-current={viewMode === "home" || viewMode === "dm" ? "true" : undefined}
+          aria-current={viewMode === "home" || viewMode === "dm" || viewMode === "group" ? "true" : undefined}
           onClick={onSelectHome}
           className="group relative flex h-12 w-12 items-center justify-center"
         >
           <span
             className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-white transition-all duration-150 ease-in-out ${
-              viewMode === "home" || viewMode === "dm" ? "h-10 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
+              viewMode === "home" || viewMode === "dm" || viewMode === "group" ? "h-10 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
             }`}
           />
           <span
             className={`flex h-12 w-12 items-center justify-center text-white transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-              viewMode === "home" || viewMode === "dm" ? "rounded-[30%] bg-brand" : "rounded-[50%] bg-brand/90"
+              viewMode === "home" || viewMode === "dm" || viewMode === "group" ? "rounded-[30%] bg-brand" : "rounded-[50%] bg-brand/90"
             }`}
           >
             <IconHome size={22} />

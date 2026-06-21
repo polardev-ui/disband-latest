@@ -16,11 +16,13 @@ export interface PendingAttachment {
   name: string;
 }
 
+import { GifPicker } from "./GifPicker";
+
 interface ChatInputProps {
   placeholder: string;
   members?: Profile[];
   roles?: ServerRole[];
-  onSend: (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => Promise<string | null>;
+  onSend: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
 }
 
 interface MentionItem {
@@ -302,6 +304,11 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
             disabled={isUploading}
             rows={1}
             className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none bg-transparent text-[15px] leading-snug text-text-normal placeholder:text-text-muted focus:outline-none"
+          />
+          <GifPicker
+            onSelect={(url) => {
+              void onSend("", { url, type: "gif" });
+            }}
           />
         </div>
         {error && <p className="px-4 pb-2 text-xs text-status-dnd">{error}</p>}
