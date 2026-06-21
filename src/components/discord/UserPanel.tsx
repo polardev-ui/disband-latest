@@ -75,7 +75,11 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
         <button
           type="button"
           aria-pressed={deafened}
-          onClick={() => setDeafened(!deafened)}
+          onClick={() => {
+            const next = !deafened;
+            setDeafened(next);
+            if (next) setMicMuted(true);
+          }}
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
             deafened ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
           }`}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useCallManager } from "@/hooks/useCallManager";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
@@ -9,7 +10,8 @@ import { HomePanel } from "./HomePanel";
 import { ChatCanvas } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
-import { DirectCallBar } from "./DirectCallBar";
+import { DmUnreadBadge } from "./DmUnreadBadge";
+import { ActiveCallBanner, IncomingCallOverlay } from "./CallUI";
 import { SettingsModal } from "./SettingsModal";
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
 import { ServerSettingsModal } from "@/components/modals/ServerSettingsModal";
@@ -26,10 +28,6 @@ import { displayName, getInviteUrl } from "@/lib/utils";
 import type { Channel, Profile, Server } from "@/lib/supabase/types";
 import type { ChatMessageData } from "./ChatMessage";
 
-function directCallId(a: string, b: string) {
-  return [a, b].sort().join(":");
-}
-
 export function DiscordApp() {
   const app = useApp();
   const { openMenu } = useContextMenu();
@@ -37,7 +35,23 @@ export function DiscordApp() {
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
-  const [directCallPeer, setDirectCallPeer] = useState<Profile | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const call = useCallManager(
+    app.user?.id ?? null,
+    app.profile,
+    app.micMuted,
+    app.deafened,
+  );
+
+  useEffect(() => {
+    const el = remoteAudioRef.current;
+    if (el && call.remoteStream) {
+      el.srcObject = call.remoteStream;
+      el.muted = app.deafened;
+      void el.play().catch(() => {});
+    }
+  }, [call.remoteStream, app.deafened]);
 
   const activeChannel = app.channels.find((c) => c.id === app.activeChannelId);
   const isVoice = activeChannel?.type === "voice";
@@ -257,8 +271,40 @@ export function DiscordApp() {
 
   const profileFriend = profileTarget ? app.friends.some((f) => f.id === profileTarget.id) : false;
 
+  const callBannerPeer = call.activePeer ?? dmFriend;
+  const showCallBanner =
+    callBannerPeer && (call.phase === "outgoing" || call.phase === "active");
+
+  const startVoiceCall = useCallback(
+    (peer: Profile) => {
+      void app.openDmWithFriend(peer.id);
+      void call.startCall(peer);
+    },
+    [app, call],
+  );
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
+    <div className="relative flex h-screen w-screen overflow-hidden">
+      {app.dmUnread && !(app.viewMode === "dm" && app.activeDmThreadId === app.dmUnread.threadId) && (
+        <DmUnreadBadge
+          friend={app.dmUnread.friend}
+          count={app.dmUnread.count}
+          onClick={() => void app.selectDmThread(app.dmUnread!.threadId)}
+        />
+      )}
+
+      {call.phase === "incoming" && call.incoming && (
+        <IncomingCallOverlay
+          callerName={call.incoming.callerName}
+          profile={call.incoming.profile}
+          onAccept={() => void call.acceptCall()}
+          onReject={() => void call.rejectCall()}
+        />
+      )}
+
+      {call.remoteStream && (
+        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+      )}
       <ServerList
         servers={app.servers}
         activeServerId={app.activeServerId}
@@ -299,19 +345,28 @@ export function DiscordApp() {
           members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
           currentUserId={app.user?.id}
           headerExtra={
-            directCallPeer && app.user ? (
-              <DirectCallBar
-                localUserId={app.user.id}
-                peer={directCallPeer}
-                callId={directCallId(app.user.id, directCallPeer.id)}
-                onEnd={() => setDirectCallPeer(null)}
+            showCallBanner && callBannerPeer ? (
+              <ActiveCallBanner
+                peer={callBannerPeer}
+                phase={call.phase === "outgoing" ? "outgoing" : "active"}
+                micMuted={app.micMuted}
+                deafened={app.deafened}
+                onToggleMic={() => app.setMicMuted(!app.micMuted)}
+                onToggleDeafen={() => {
+                  const next = !app.deafened;
+                  app.setDeafened(next);
+                  if (next) app.setMicMuted(true);
+                }}
+                onEnd={() => void call.endCall()}
+                onOpenSettings={() => setSettingsOpen(true)}
               />
             ) : (
               <div className="flex gap-2 border-t border-black/10 px-4 py-1">
                 <button
                   type="button"
-                  onClick={() => setDirectCallPeer(dmFriend)}
-                  className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-status-online hover:bg-interactive-hover"
+                  disabled={call.phase !== "idle"}
+                  onClick={() => void startVoiceCall(dmFriend)}
+                  className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-status-online hover:bg-interactive-hover disabled:opacity-40"
                 >
                   <IconPhone size={14} /> Start Voice Call
                 </button>
@@ -334,7 +389,11 @@ export function DiscordApp() {
       )}
 
       {app.viewMode === "server" && activeChannel && isVoice && (
-        <VoicePanel channelId={activeChannel.id} channelName={activeChannel.name} />
+        <VoicePanel
+          channelId={activeChannel.id}
+          channelName={activeChannel.name}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       )}
 
       {app.viewMode === "server" && activeChannel && !isVoice && (
@@ -383,8 +442,7 @@ export function DiscordApp() {
         onVoiceCall={
           profileTarget && profileFriend
             ? () => {
-                setDirectCallPeer(profileTarget);
-                void app.openDmWithFriend(profileTarget.id);
+                void startVoiceCall(profileTarget);
                 setProfileTarget(null);
               }
             : undefined
