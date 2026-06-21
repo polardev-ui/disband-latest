@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { directCallId, startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
+import { createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -125,7 +126,7 @@ export function useCallManager(
     stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
     pc.ontrack = (ev) => {
-      if (ev.streams[0]) setRemoteStream(ev.streams[0]);
+      setRemoteStream((prev) => mergeTrackIntoStream(prev, ev.track));
     };
     pc.onicecandidate = (ev) => {
       if (ev.candidate) {
@@ -179,19 +180,22 @@ export function useCallManager(
     const stream = localRef.current;
     if (!pc || !stream || phaseRef.current !== "active") return;
 
+    const peerId = activePeerIdRef.current;
     const existing = stream.getVideoTracks()[0];
+
     if (next) {
-      if (existing) {
-        existing.enabled = true;
-        return;
+      let track = existing;
+      if (track) {
+        track.enabled = true;
+      } else {
+        const cam = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+        track = cam.getVideoTracks()[0];
+        stream.addTrack(track);
       }
-      const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      const track = cam.getVideoTracks()[0];
-      stream.addTrack(track);
-      pc.addTrack(track, stream);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const peerId = activePeerIdRef.current;
+      await setPeerVideoTrack(pc, stream, track);
+      const offer = await createOfferForPeer(pc);
       if (peerId && signalRef.current) {
         void signalRef.current.send({
           type: "broadcast",
@@ -200,10 +204,17 @@ export function useCallManager(
         });
       }
     } else if (existing) {
-      existing.enabled = false;
       existing.stop();
       stream.removeTrack(existing);
-      pc.getSenders().filter((s) => s.track?.kind === "video").forEach((s) => pc.removeTrack(s));
+      await setPeerVideoTrack(pc, stream, null);
+      const offer = await createOfferForPeer(pc);
+      if (peerId && signalRef.current) {
+        void signalRef.current.send({
+          type: "broadcast",
+          event: "call",
+          payload: { type: "offer", from: userId!, to: peerId, sdp: offer },
+        });
+      }
     }
     setLocalStream(new MediaStream(stream.getTracks()));
   }, [userId]);

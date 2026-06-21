@@ -15,6 +15,7 @@ import {
 } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
 import { useEffect, useRef } from "react";
+import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 
 interface CallControlsProps {
   micMuted: boolean;
@@ -86,13 +87,15 @@ export function CallControls({
 
 function VideoTile({ stream, label, mirrored }: { stream: MediaStream | null; label: string; mirrored?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const hasVideo = useLiveVideoStream(stream);
+
   useEffect(() => {
     if (ref.current && stream) {
       ref.current.srcObject = stream;
       void ref.current.play().catch(() => {});
     }
-  }, [stream]);
-  const hasVideo = stream?.getVideoTracks().some((t) => t.enabled);
+  }, [stream, hasVideo]);
+
   if (!hasVideo) return null;
   return (
     <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40">

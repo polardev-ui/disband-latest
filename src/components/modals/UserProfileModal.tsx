@@ -2,7 +2,9 @@
 
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
-import { Avatar, displayName } from "@/components/ui/Avatar";
+import { Avatar } from "@/components/ui/Avatar";
+import { ProfileName } from "@/components/ui/ProfileName";
+import { getAccentBackground } from "@/lib/profileColor";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -41,7 +43,7 @@ export function UserProfileModal({
         <div
           className="h-32 bg-cover bg-center"
           style={{
-            backgroundColor: profile.accent_color ?? "#5865f2",
+            background: profile.banner_url ? undefined : getAccentBackground(profile),
             backgroundImage: profile.banner_url ? `url(${profile.banner_url})` : undefined,
           }}
         />
@@ -55,9 +57,7 @@ export function UserProfileModal({
               <StatusIndicator status={profile.status} size="md" />
             </span>
           </div>
-          <h2 className="text-xl font-bold leading-tight" style={{ color: profile.accent_color ?? undefined }}>
-            {displayName(profile)}
-          </h2>
+          <ProfileName profile={profile} as="h2" className="text-xl font-bold leading-tight" />
           {profile.username && <p className="text-sm text-text-muted">@{profile.username}</p>}
           {profile.bio && <p className="mt-2 text-sm leading-snug text-text-normal">{profile.bio}</p>}
           <div className="mt-2">

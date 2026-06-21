@@ -1,13 +1,13 @@
 "use client";
 
 import { displayName, avatarStyle, type AvatarCrop } from "@/lib/utils";
+import { getAvatarStyle, type ProfileAccentFields } from "@/lib/profileColor";
 
 interface AvatarProps {
-  profile: {
+  profile: ProfileAccentFields & {
     avatar_url?: string | null;
     display_name?: string | null;
     username?: string | null;
-    accent_color?: string | null;
     avatar_crop?: AvatarCrop | null;
   };
   size?: "sm" | "md" | "lg";
@@ -20,11 +20,12 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   const name = displayName(profile);
   const crop = "avatar_crop" in profile ? profile.avatar_crop : null;
   const style = avatarStyle(profile.avatar_url, crop);
+  const accentStyle = getAvatarStyle(profile);
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ${SIZES[size]} ${className}`}
-      style={{ backgroundColor: profile.accent_color ?? "#5865f2" }}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${SIZES[size]} ${className}`}
+      style={accentStyle}
     >
       {profile.avatar_url ? (
         // eslint-disable-next-line @next/next/no-img-element
