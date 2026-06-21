@@ -4,6 +4,7 @@ import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageCon
 import { getUsernameStyle } from "@/lib/profileColor";
 import { Avatar } from "@/components/ui/Avatar";
 import { ServerInviteCard } from "./ServerInviteCard";
+import { MessageAttachment } from "./MessageAttachment";
 import type { Profile } from "@/lib/supabase/types";
 
 export interface ChatMessageData {
@@ -52,7 +53,7 @@ function MessageBody({ content, members }: { content: string; members: Profile[]
   return (
     <>
       {textOnly && (
-        <span className="break-words text-[15px] leading-[1.375rem] text-text-normal">
+        <span className="whitespace-pre-wrap break-words text-[15px] leading-[1.375rem] text-text-normal">
           {renderContent(textOnly, members)}
         </span>
       )}
@@ -101,17 +102,7 @@ export function ChatMessage({
         </time>
         {body && <MessageBody content={body} members={members} />}
         {message.attachment_url && (
-          <div className="mt-0.5 max-w-md">
-            {message.attachment_type === "video" ? (
-              <video src={message.attachment_url} controls className="max-h-80 max-w-full rounded-lg border border-black/20" />
-            ) : message.attachment_type === "gif" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={message.attachment_url} alt="GIF" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={message.attachment_url} alt="Attachment" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
-            )}
-          </div>
+          <MessageAttachment url={message.attachment_url} type={message.attachment_type} />
         )}
       </article>
     );
@@ -155,17 +146,7 @@ export function ChatMessage({
         )}
         {body && <MessageBody content={body} members={members} />}
         {message.attachment_url && (
-          <div className="mt-0.5 max-w-md">
-            {message.attachment_type === "video" ? (
-              <video src={message.attachment_url} controls className="max-h-80 max-w-full rounded-lg border border-black/20" />
-            ) : message.attachment_type === "gif" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={message.attachment_url} alt="GIF" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={message.attachment_url} alt="Attachment" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
-            )}
-          </div>
+          <MessageAttachment url={message.attachment_url} type={message.attachment_type} />
         )}
       </div>
     </article>
