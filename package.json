@@ -14,7 +14,8 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "sync:auth-emails": "node scripts/sync-auth-email-templates.mjs",
-    "verify:auth-emails": "node scripts/sync-auth-email-templates.mjs --verify"
+    "verify:auth-emails": "node scripts/sync-auth-email-templates.mjs --verify",
+    "send:mobile-launch": "node scripts/send-mobile-launch.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
