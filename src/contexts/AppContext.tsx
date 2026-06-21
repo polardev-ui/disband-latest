@@ -1007,11 +1007,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
+    if (typeof window !== "undefined") {
+      window.location.href = "/home";
+    }
   }, [userId]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     if (!userId || !profile) return "Not signed in";
     const payload = { ...patch };
+    delete payload.show_owner_badge;
+    delete payload.show_staff_badge;
     if (payload.username) payload.username = payload.username.trim().toLowerCase();
     if (payload.display_name) payload.display_name = payload.display_name.trim();
     if (payload.status !== undefined) {

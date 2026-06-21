@@ -1,5 +1,5 @@
-import { DisbandRoot } from "@/components/DisbandRoot";
+import { RootRedirect } from "@/components/routing/RootRedirect";
 
-export default function HomePage() {
-  return <DisbandRoot />;
+export default function RootPage() {
+  return <RootRedirect />;
 }

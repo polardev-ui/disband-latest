@@ -181,3 +181,41 @@ body {
 .tooltip-content {
   animation: tooltip-enter 0.12s ease-out forwards;
 }
+
+/* Marketing homepage */
+@keyframes marketing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.marketing-fade-up {
+  animation: marketing-fade-up 0.7s ease-out forwards;
+  opacity: 0;
+}
+
+.marketing-delay-1 { animation-delay: 0.1s; }
+.marketing-delay-2 { animation-delay: 0.2s; }
+.marketing-delay-3 { animation-delay: 0.35s; }
+
+.marketing-float {
+  animation: marketing-float 6s ease-in-out infinite;
+}
+
+.marketing-glow {
+  animation: marketing-float 8s ease-in-out infinite;
+}

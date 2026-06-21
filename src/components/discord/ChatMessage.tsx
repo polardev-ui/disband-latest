@@ -4,6 +4,7 @@ import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageCon
 import { getUsernameStyle } from "@/lib/profileColor";
 import { summarizeReactions, type ReactionSummary, type ReplyPreview } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
+import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
 import { MessageAttachment } from "./MessageAttachment";
 import { MessageReactions } from "./MessageReactions";
@@ -216,6 +217,7 @@ export function ChatMessage({
               </span>
             )}
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
+            {author && <PlatformBadge profile={author} />}
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
             {editedTag}
           </header>

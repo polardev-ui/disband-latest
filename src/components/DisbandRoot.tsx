@@ -18,7 +18,7 @@ function InviteBootstrap() {
     if (!m) return;
     handled.current = true;
     const code = m[1];
-    window.history.replaceState({}, "", "/");
+    window.history.replaceState({}, "", "/app");
     void joinServerByInvite(code);
   }, [ready, session, joinServerByInvite]);
 
