@@ -342,6 +342,17 @@ export interface Database {
         Args: { p_friend_id: string };
         Returns: string;
       };
+      ensure_user_profile: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      complete_signup_profile: {
+        Args: {
+          p_username?: string | null;
+          p_display_name?: string | null;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

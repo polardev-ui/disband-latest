@@ -2,7 +2,15 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
-import { IconMic, IconMicOff, IconHeadphones, IconHeadphonesOff, IconPhoneOff, IconPhone, IconSettings } from "@/components/icons";
+import {
+  IconMic,
+  IconMicOff,
+  IconHeadphones,
+  IconHeadphonesOff,
+  IconPhoneOff,
+  IconPhone,
+  IconSettings,
+} from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
 
 interface CallControlsProps {
@@ -12,7 +20,7 @@ interface CallControlsProps {
   onToggleDeafen: () => void;
   onEnd: () => void;
   onOpenSettings?: () => void;
-  compact?: boolean;
+  size?: "compact" | "prominent";
 }
 
 export function CallControls({
@@ -22,49 +30,46 @@ export function CallControls({
   onToggleDeafen,
   onEnd,
   onOpenSettings,
-  compact,
+  size = "compact",
 }: CallControlsProps) {
-  const btn = compact ? "h-9 w-9" : "h-11 w-11";
+  const prominent = size === "prominent";
+  const btn = prominent ? "h-12 w-12" : "h-9 w-9";
+  const icon = prominent ? 22 : 16;
+
   return (
-    <div className={`flex items-center gap-2 ${compact ? "" : "mt-4"}`}>
-      <button
-        type="button"
-        onClick={onToggleMic}
-        title={micMuted ? "Unmute" : "Mute"}
-        className={`flex ${btn} items-center justify-center rounded-full transition-colors ${
-          micMuted ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
-        }`}
-      >
-        {micMuted ? <IconMicOff size={compact ? 16 : 20} /> : <IconMic size={compact ? 16 : 20} />}
-      </button>
-      <button
-        type="button"
-        onClick={onToggleDeafen}
-        title={deafened ? "Undeafen" : "Deafen"}
-        className={`flex ${btn} items-center justify-center rounded-full transition-colors ${
-          deafened ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
-        }`}
-      >
-        {deafened ? <IconHeadphonesOff size={compact ? 16 : 20} /> : <IconHeadphones size={compact ? 16 : 20} />}
-      </button>
-      <button
-        type="button"
-        onClick={onEnd}
-        title="End call"
-        className={`flex ${btn} items-center justify-center rounded-full bg-status-dnd text-white hover:opacity-90`}
-      >
-        <IconPhoneOff size={compact ? 16 : 20} />
-      </button>
-      {onOpenSettings && (
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          title="Settings"
-          className={`flex ${btn} items-center justify-center rounded-full bg-bg-accent text-text-muted hover:bg-interactive-hover hover:text-text-normal`}
-        >
-          <IconSettings size={compact ? 16 : 20} />
-        </button>
-      )}
+    <div className={`flex items-center ${prominent ? "justify-center gap-6" : "gap-2"}`}>
+      {[
+        { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff, label: micMuted ? "Unmute" : "Mute" },
+        { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff, label: deafened ? "Undeafen" : "Deafen" },
+        { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, label: "End", danger: true },
+        ...(onOpenSettings ? [{ onClick: onOpenSettings, title: "Settings", active: false, on: IconSettings, off: IconSettings, label: "Settings" }] : []),
+      ].map((item) => {
+        const Icon = item.active && "off" in item && item.off ? item.off : item.on;
+        const inner = (
+          <button
+            key={item.label}
+            type="button"
+            onClick={item.onClick}
+            title={item.title}
+            className={`flex ${btn} items-center justify-center rounded-full transition-all ${
+              "danger" in item && item.danger
+                ? "bg-status-dnd text-white shadow-lg shadow-status-dnd/30 hover:scale-105 hover:brightness-110"
+                : item.active
+                  ? "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
+                  : "bg-bg-accent text-text-normal hover:bg-interactive-hover hover:scale-105"
+            }`}
+          >
+            <Icon size={icon} />
+          </button>
+        );
+        if (!prominent) return inner;
+        return (
+          <div key={item.label} className="flex flex-col items-center gap-1.5">
+            {inner}
+            <span className="text-[11px] font-medium text-text-muted">{item.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -97,7 +102,7 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
           <button
             type="button"
             onClick={onReject}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg hover:scale-105 transition-transform"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105"
             aria-label="Decline"
           >
             <IconPhoneOff size={24} />
@@ -105,7 +110,7 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
           <button
             type="button"
             onClick={onAccept}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white shadow-lg hover:scale-105 transition-transform"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white shadow-lg transition-transform hover:scale-105"
             aria-label="Accept"
           >
             <IconPhone size={24} />
@@ -116,7 +121,7 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
   );
 }
 
-interface ActiveCallBannerProps {
+interface DmCallPanelProps {
   peer: Profile;
   phase: "outgoing" | "active";
   micMuted: boolean;
@@ -127,7 +132,8 @@ interface ActiveCallBannerProps {
   onOpenSettings?: () => void;
 }
 
-export function ActiveCallBanner({
+/** Prominent in-DM voice call card — easy to spot while chatting. */
+export function DmCallPanel({
   peer,
   phase,
   micMuted,
@@ -136,25 +142,82 @@ export function ActiveCallBanner({
   onToggleDeafen,
   onEnd,
   onOpenSettings,
-}: ActiveCallBannerProps) {
+}: DmCallPanelProps) {
+  const calling = phase === "outgoing";
+
   return (
-    <div className="flex shrink-0 items-center justify-between gap-4 border-b border-status-online/20 bg-gradient-to-r from-status-online/10 to-brand/5 px-4 py-2">
-      <div className="flex min-w-0 items-center gap-3">
-        <Avatar profile={peer} size="sm" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{displayName(peer)}</p>
-          <p className="text-xs text-text-muted">{phase === "outgoing" ? "Calling…" : "Voice connected"}</p>
+    <div className="shrink-0 border-b border-status-online/30 bg-gradient-to-b from-status-online/[0.12] to-bg-primary px-4 py-4">
+      <div className="mx-auto max-w-lg overflow-hidden rounded-2xl border border-status-online/35 bg-[#1e1f22] shadow-[0_8px_32px_rgba(0,0,0,0.45),0_0_0_1px_rgba(35,165,89,0.15)]">
+        <div className="relative px-5 pb-5 pt-5">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-status-online to-transparent opacity-80" />
+
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              {calling && (
+                <>
+                  <span className="absolute inset-0 animate-ping rounded-full bg-status-online/25" />
+                  <span className="absolute inset-[-4px] animate-pulse rounded-full border-2 border-status-online/40" />
+                </>
+              )}
+              <Avatar profile={peer} size="lg" className="relative h-16 w-16 text-xl ring-[3px] ring-status-online/50" />
+              {!calling && (
+                <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-[3px] border-[#1e1f22] bg-status-online" />
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-status-online/20 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-status-online">
+                  <span className={`h-1.5 w-1.5 rounded-full bg-status-online ${calling ? "animate-pulse" : ""}`} />
+                  Voice Call
+                </span>
+              </div>
+              <p className="mt-1 truncate text-lg font-bold text-text-normal">{displayName(peer)}</p>
+              <p className="text-sm text-text-muted">
+                {calling ? "Calling… waiting for answer" : "Connected — you're live"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-white/5 pt-4">
+            <CallControls
+              size="prominent"
+              micMuted={micMuted}
+              deafened={deafened}
+              onToggleMic={onToggleMic}
+              onToggleDeafen={onToggleDeafen}
+              onEnd={onEnd}
+              onOpenSettings={onOpenSettings}
+            />
+          </div>
         </div>
       </div>
-      <CallControls
-        compact
-        micMuted={micMuted}
-        deafened={deafened}
-        onToggleMic={onToggleMic}
-        onToggleDeafen={onToggleDeafen}
-        onEnd={onEnd}
-        onOpenSettings={onOpenSettings}
-      />
     </div>
   );
+}
+
+interface DmCallStartProps {
+  onStart: () => void;
+  disabled?: boolean;
+}
+
+export function DmCallStartBar({ onStart, disabled }: DmCallStartProps) {
+  return (
+    <div className="shrink-0 border-b border-black/20 px-4 py-2">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onStart}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-status-online/30 bg-status-online/10 px-4 py-2 text-sm font-semibold text-status-online transition-all hover:bg-status-online/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <IconPhone size={16} />
+        Start Voice Call
+      </button>
+    </div>
+  );
+}
+
+/** @deprecated Use DmCallPanel */
+export function ActiveCallBanner(props: DmCallPanelProps) {
+  return <DmCallPanel {...props} />;
 }

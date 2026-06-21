@@ -11,7 +11,7 @@ import { ChatCanvas } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
 import { DmUnreadBadge } from "./DmUnreadBadge";
-import { ActiveCallBanner, IncomingCallOverlay } from "./CallUI";
+import { DmCallPanel, DmCallStartBar, IncomingCallOverlay } from "./CallUI";
 import { SettingsModal } from "./SettingsModal";
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
 import { ServerSettingsModal } from "@/components/modals/ServerSettingsModal";
@@ -22,7 +22,6 @@ import {
   IconSettings,
   IconTrash,
   IconFriends,
-  IconPhone,
 } from "@/components/icons";
 import { displayName, getInviteUrl } from "@/lib/utils";
 import type { Channel, Profile, Server } from "@/lib/supabase/types";
@@ -358,9 +357,9 @@ export function DiscordApp() {
           messages={dmMessages}
           members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
           currentUserId={app.user?.id}
-          headerExtra={
+          callPanel={
             showCallBanner && callBannerPeer ? (
-              <ActiveCallBanner
+              <DmCallPanel
                 peer={callBannerPeer}
                 phase={call.phase === "outgoing" ? "outgoing" : "active"}
                 micMuted={app.micMuted}
@@ -375,16 +374,10 @@ export function DiscordApp() {
                 onOpenSettings={() => setSettingsOpen(true)}
               />
             ) : (
-              <div className="flex gap-2 border-t border-black/10 px-4 py-1">
-                <button
-                  type="button"
-                  disabled={call.phase !== "idle"}
-                  onClick={() => void startVoiceCall(dmFriend)}
-                  className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-status-online hover:bg-interactive-hover disabled:opacity-40"
-                >
-                  <IconPhone size={14} /> Start Voice Call
-                </button>
-              </div>
+              <DmCallStartBar
+                disabled={call.phase !== "idle"}
+                onStart={() => void startVoiceCall(dmFriend)}
+              />
             )
           }
           onSend={app.sendDmMessage}
