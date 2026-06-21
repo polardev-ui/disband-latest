@@ -15,6 +15,7 @@ interface CallSignal {
   to?: string;
   callId?: string;
   callerName?: string;
+  rejecterName?: string;
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
 }
@@ -39,6 +40,7 @@ export function useCallManager(
   const [activePeer, setActivePeer] = useState<Profile | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [callNotice, setCallNotice] = useState<string | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
@@ -177,12 +179,18 @@ export function useCallManager(
   }, [incoming, userId, sendToUser, setupRtc]);
 
   const rejectCall = useCallback(async () => {
-    if (!incoming || !userId) return;
+    if (!incoming || !userId || !profile) return;
     stopRingtone();
-    await sendToUser(incoming.fromId, { type: "reject", from: userId, to: incoming.fromId, callId: incoming.callId });
+    await sendToUser(incoming.fromId, {
+      type: "reject",
+      from: userId,
+      to: incoming.fromId,
+      callId: incoming.callId,
+      rejecterName: displayName(profile),
+    });
     setIncoming(null);
     setPhase("idle");
-  }, [incoming, userId, sendToUser]);
+  }, [incoming, userId, profile, sendToUser]);
 
   const endCall = useCallback(async () => {
     stopRingtone();
@@ -212,7 +220,13 @@ export function useCallManager(
       void (async () => {
         if (p.type === "ring" && p.callId) {
           if (phaseRef.current !== "idle") {
-            await sendToUser(p.from, { type: "reject", from: userId!, to: p.from, callId: p.callId });
+            await sendToUser(p.from, {
+              type: "reject",
+              from: userId!,
+              to: p.from,
+              callId: p.callId,
+              rejecterName: profile ? displayName(profile) : "User",
+            });
             return;
           }
           const { data: fp } = await supabase.from("profiles").select("*").eq("id", p.from).maybeSingle();
@@ -228,15 +242,22 @@ export function useCallManager(
           stopRingtone();
           setPhase("active");
           await setupRtc(p.callId, p.from, true);
-        } else if (p.type === "reject" || p.type === "cancel") {
-          if (phaseRef.current === "outgoing" || phaseRef.current === "incoming") await reset();
+        } else if (p.type === "reject") {
+          if (phaseRef.current === "outgoing") {
+            setCallNotice(`${p.rejecterName ?? "They"} declined your call`);
+            window.setTimeout(() => setCallNotice(null), 5000);
+          }
+          await reset();
+        } else if (p.type === "cancel") {
+          if (phaseRef.current === "incoming") await reset();
+          else if (phaseRef.current === "outgoing") await reset();
         }
       })();
     }).subscribe();
 
     listenRef.current = ch;
     return () => { void ch.unsubscribe(); };
-  }, [userId, sendToUser, setupRtc, reset]);
+  }, [userId, profile, sendToUser, setupRtc, reset]);
 
   useEffect(() => () => { void reset(); }, [reset]);
 
@@ -247,6 +268,7 @@ export function useCallManager(
     remoteStream,
     remoteAudioRef,
     error,
+    callNotice,
     startCall,
     acceptCall,
     rejectCall,
