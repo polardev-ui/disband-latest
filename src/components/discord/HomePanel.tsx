@@ -54,7 +54,7 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
   }
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary">
+    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden bg-bg-secondary">
       <header className="flex h-12 items-center border-b border-black/20 px-4 shadow-sm">
         <IconFriends className="mr-2 text-text-muted" />
         <span className="font-semibold text-text-normal">Friends</span>
@@ -90,7 +90,7 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
         {error && <p className="mt-1 text-xs text-status-dnd">{error}</p>}
       </form>
 
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2">
         {tab === "friends" && (
           <>
             <div className="flex items-center justify-between px-2 py-1">

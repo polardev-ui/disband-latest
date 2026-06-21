@@ -45,7 +45,7 @@ export function ChatCanvas({
   }, [messages]);
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-bg-primary">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         {channelIcon ?? <IconHash size={24} className="text-text-muted" />}
         <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{channelName}</h1>
@@ -53,9 +53,9 @@ export function ChatCanvas({
         {headerTrailing}
       </header>
 
-      {callPanel}
+      {callPanel && <div className="shrink-0">{callPanel}</div>}
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
         <div className="mb-4 flex items-center px-4">
           <div className="h-px flex-1 bg-divider" />
           <span className="mx-4 text-xs font-semibold text-text-muted">Welcome to #{channelName}</span>
@@ -85,12 +85,14 @@ export function ChatCanvas({
         })}
       </div>
 
-      <ChatInput
-        placeholder={`Message #${channelName}`}
-        members={members}
-        roles={roles}
-        onSend={onSend}
-      />
+      <div className="shrink-0">
+        <ChatInput
+          placeholder={`Message #${channelName}`}
+          members={members}
+          roles={roles}
+          onSend={onSend}
+        />
+      </div>
     </main>
   );
 }

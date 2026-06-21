@@ -104,7 +104,7 @@ export function GroupCallStage({
   }));
 
   return (
-    <div className="flex min-h-[320px] flex-col items-center justify-between bg-black px-6 py-8">
+    <div className="flex shrink-0 flex-col items-center justify-between bg-black px-6 py-8">
       <div className="text-center">
         <p className="text-xs font-bold uppercase tracking-widest text-white/40">Group Call</p>
         <h2 className="mt-1 text-lg font-semibold text-white">{groupName}</h2>
