@@ -55,7 +55,7 @@ export function ChatCanvas({
 
       {callPanel}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-4">
         <div className="mb-4 flex items-center px-4">
           <div className="h-px flex-1 bg-divider" />
           <span className="mx-4 text-xs font-semibold text-text-muted">Welcome to #{channelName}</span>

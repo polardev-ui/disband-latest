@@ -178,7 +178,7 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
   }
 
   return (
-    <div className="relative px-4 pb-6 pt-2">
+    <div className="relative shrink-0 px-4 pb-6 pt-2">
       {showMentions && mentionItems.length > 0 && (
         <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
           {(() => {
