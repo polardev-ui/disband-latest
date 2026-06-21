@@ -33,6 +33,14 @@ export async function searchGifs(query: string, limit = 20): Promise<GiphyImage[
   return json.results ?? json.data ?? [];
 }
 
+/** Giphy CDN GIF URL → MP4 for reliable autoplay in chat */
+export function giphyMp4Url(gifUrl: string): string | null {
+  if (!/giphy\.com/i.test(gifUrl)) return null;
+  if (/\.mp4(\?|$)/i.test(gifUrl)) return gifUrl;
+  if (/\.gif(\?|$)/i.test(gifUrl)) return gifUrl.replace(/\.gif(\?.*)?$/i, ".mp4$1");
+  return null;
+}
+
 /** URL for sending in chat (full GIF) */
 export function gifUrl(gif: GiphyImage): string | null {
   return (

@@ -142,6 +142,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeDmRef = useRef<string | null>(null);
   const viewModeRef = useRef<ViewMode>("home");
+  const profileRef = useRef<Profile | null>(null);
+  const preferredStatusRef = useRef<UserStatus>("online");
+  profileRef.current = profile;
   useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
 
@@ -215,6 +218,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addressee: f.addressee?.id === updated.id ? { ...f.addressee, ...updated } : f.addressee,
       })),
     );
+    setVoicePresence((prev) =>
+      prev.map((p) => (p.user_id === updated.id ? { ...p, profile: { ...p.profile, ...updated } } : p)),
+    );
     setDmUnreadMap((prev) => {
       const next = new Map(prev);
       for (const [tid, entry] of next) {
@@ -225,6 +231,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const setLiveStatus = useCallback(async (status: UserStatus) => {
+    if (!userId) return;
+    const current = profileRef.current;
+    if (current) {
+      patchProfileInState({ ...current, status, updated_at: new Date().toISOString() });
+    }
+    await getSupabaseClient().from("profiles").update({ status }).eq("id", userId);
+  }, [userId, patchProfileInState]);
 
   const loadProfile = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
@@ -668,6 +683,108 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured, patchProfileInState]);
 
+  // Live status for friends
+  useEffect(() => {
+    if (!userId || !configured || friends.length === 0) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase.channel(`friend-profiles:${userId}`);
+    for (const friend of friends) {
+      channel.on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${friend.id}` },
+        (payload) => patchProfileInState(payload.new as Profile),
+      );
+    }
+    channel.subscribe();
+    return () => { void channel.unsubscribe(); };
+  }, [userId, configured, friends.map((f) => f.id).sort().join(","), patchProfileInState]);
+
+  // Live status for server members
+  useEffect(() => {
+    if (!configured || !activeServerId || members.length === 0) return;
+    const supabase = getSupabaseClient();
+    const ids = [...new Set(members.map((m) => m.user_id))].filter((id) => id !== userId);
+    if (ids.length === 0) return;
+    const channel = supabase.channel(`member-profiles:${activeServerId}`);
+    for (const id of ids) {
+      channel.on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${id}` },
+        (payload) => patchProfileInState(payload.new as Profile),
+      );
+    }
+    channel.subscribe();
+    return () => { void channel.unsubscribe(); };
+  }, [configured, activeServerId, userId, members.map((m) => m.user_id).sort().join(","), patchProfileInState]);
+
+  // Live status for group chat members
+  useEffect(() => {
+    if (!userId || !configured || groupChats.length === 0) return;
+    const ids = new Set<string>();
+    for (const group of groupChats) {
+      for (const member of group.members) ids.add(member.id);
+    }
+    ids.delete(userId);
+    if (ids.size === 0) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase.channel(`group-profiles:${userId}`);
+    for (const id of ids) {
+      channel.on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${id}` },
+        (payload) => patchProfileInState(payload.new as Profile),
+      );
+    }
+    channel.subscribe();
+    return () => { void channel.unsubscribe(); };
+  }, [
+    userId,
+    configured,
+    groupChats
+      .map((g) => `${g.id}:${g.members.map((m) => m.id).sort().join(",")}`)
+      .sort()
+      .join("|"),
+    patchProfileInState,
+  ]);
+
+  // Presence: offline when tab closes/hidden, restore preferred status when visible
+  useEffect(() => {
+    if (!profile) return;
+    preferredStatusRef.current = profile.preferred_status ?? profile.status;
+  }, [profile?.id, profile?.preferred_status, profile?.status]);
+
+  useEffect(() => {
+    if (!userId || !profile || !configured) return;
+    const preferred = profile.preferred_status ?? profile.status;
+    preferredStatusRef.current = preferred;
+    if (document.visibilityState === "visible" && profile.status === "offline" && preferred !== "offline") {
+      void setLiveStatus(preferred);
+    }
+  }, [userId, profile?.id, configured, setLiveStatus]);
+
+  useEffect(() => {
+    if (!userId || !configured) return;
+
+    const goOffline = () => { void setLiveStatus("offline"); };
+    const restore = () => { void setLiveStatus(preferredStatusRef.current); };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") goOffline();
+      else restore();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", goOffline);
+    window.addEventListener("pageshow", restore);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", goOffline);
+      window.removeEventListener("pageshow", restore);
+      goOffline();
+    };
+  }, [userId, configured, setLiveStatus]);
+
   // Track unread DMs globally
   useEffect(() => {
     if (!userId || !configured) return;
@@ -743,19 +860,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (userId) {
+      await getSupabaseClient().from("profiles").update({ status: "offline" }).eq("id", userId);
+    }
     await getSupabaseClient().auth.signOut();
     setViewMode("home");
     setActiveServerId(null);
     setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
-  }, []);
+  }, [userId]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     if (!userId || !profile) return "Not signed in";
     const payload = { ...patch };
     if (payload.username) payload.username = payload.username.trim().toLowerCase();
     if (payload.display_name) payload.display_name = payload.display_name.trim();
+    if (payload.status !== undefined) {
+      payload.preferred_status = payload.status;
+      preferredStatusRef.current = payload.status;
+    }
     const optimistic = { ...profile, ...payload, updated_at: new Date().toISOString() };
     patchProfileInState(optimistic);
     const { error } = await getSupabaseClient().from("profiles").update(payload).eq("id", userId);

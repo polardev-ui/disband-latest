@@ -57,7 +57,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setUseDefaultAccent(!custom);
     setAccent1(profile.accent_color ?? DEFAULT_ACCENT);
     setAccent2(profile.accent_color_2 ?? profile.accent_color ?? "#eb459e");
-    setStatus(profile.status);
+    setStatus(profile.preferred_status ?? profile.status);
   }, [profile]);
 
   useEffect(() => {
