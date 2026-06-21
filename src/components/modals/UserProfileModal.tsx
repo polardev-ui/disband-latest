@@ -3,6 +3,7 @@
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar, displayName } from "@/components/ui/Avatar";
+import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import type { Profile } from "@/lib/supabase/types";
 
 interface UserProfileModalProps {
@@ -48,15 +49,20 @@ export function UserProfileModal({
           <IconClose size={20} />
         </button>
         <div className="px-4 pb-4">
-          <div className="-mt-12 mb-3">
+          <div className="relative -mt-12 mb-2 inline-block">
             <Avatar profile={profile} size="lg" className="ring-4 ring-bg-primary" />
+            <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-bg-primary p-0.5">
+              <StatusIndicator status={profile.status} size="md" />
+            </span>
           </div>
-          <h2 className="text-xl font-bold" style={{ color: profile.accent_color ?? undefined }}>
+          <h2 className="text-xl font-bold leading-tight" style={{ color: profile.accent_color ?? undefined }}>
             {displayName(profile)}
           </h2>
           {profile.username && <p className="text-sm text-text-muted">@{profile.username}</p>}
-          {profile.bio && <p className="mt-2 text-sm text-text-normal">{profile.bio}</p>}
-          <p className="mt-1 text-xs capitalize text-text-muted">{profile.status}</p>
+          {profile.bio && <p className="mt-2 text-sm leading-snug text-text-normal">{profile.bio}</p>}
+          <div className="mt-2">
+            <StatusIndicator status={profile.status} size="sm" showLabel />
+          </div>
 
           {isSelf ? (
             onOpenSettings && (

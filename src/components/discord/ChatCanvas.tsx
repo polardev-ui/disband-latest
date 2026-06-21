@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ChatMessage, type ChatMessageData } from "./ChatMessage";
+import { ChatMessage, shouldGroupMessages, type ChatMessageData } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { IconHash } from "@/components/icons";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
@@ -57,13 +57,14 @@ export function ChatCanvas({
 
         {messages.map((msg, i) => {
           const prev = messages[i - 1];
-          const showHeader = !prev || prev.author_id !== msg.author_id;
+          const grouped = shouldGroupMessages(prev, msg);
+          const showHeader = !grouped;
           return (
             <ChatMessage
               key={msg.id}
               message={msg}
-              index={i}
               showHeader={showHeader}
+              compact={grouped}
               currentUserId={currentUserId}
               authorColor={getAuthorColor?.(msg.author_id)}
               onAuthorClick={onAuthorClick}
