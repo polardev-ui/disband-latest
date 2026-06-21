@@ -13,7 +13,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { playMentionPing, requestNotificationPermission, showSystemNotification } from "@/lib/notifications";
-import { parseMentions } from "@/lib/utils";
+import { parseMentions, normalizeMessageContent } from "@/lib/utils";
 import type {
   AppNotification,
   Channel,
@@ -391,7 +391,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
             playMentionPing();
             showSystemNotification("You were mentioned", msg.content);
           }
-          void loadMessages(activeChannelId);
+          void (async () => {
+            let author: Profile | undefined = profile ?? undefined;
+            if (msg.author_id !== userId) {
+              const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
+              author = data as Profile | undefined;
+            }
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === msg.id)) return prev;
+              const withoutDupes = prev.filter(
+                (m) => !(m.id.startsWith("opt-") && m.author_id === msg.author_id && m.content === msg.content),
+              );
+              if (!author) return withoutDupes;
+              return [...withoutDupes, { ...msg, author }];
+            });
+          })();
         },
       )
       .on(
@@ -403,7 +417,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       void sub.unsubscribe();
     };
-  }, [activeChannelId, configured, userId, loadMessages]);
+  }, [activeChannelId, configured, userId, loadMessages, profile]);
 
   useEffect(() => {
     if (!activeDmThreadId || !configured || !userId) return;
@@ -420,14 +434,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
             playMentionPing();
             showSystemNotification("You were mentioned", msg.content);
           }
-          void loadDmMessages(activeDmThreadId);
+          void (async () => {
+            let author: Profile | undefined = profile ?? undefined;
+            if (msg.author_id !== userId) {
+              const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
+              author = data as Profile | undefined;
+            }
+            setDmMessages((prev) => {
+              if (prev.some((m) => m.id === msg.id)) return prev;
+              const withoutDupes = prev.filter(
+                (m) => !(m.id.startsWith("opt-") && m.author_id === msg.author_id && m.content === msg.content),
+              );
+              if (!author) return withoutDupes;
+              return [...withoutDupes, { ...msg, author }];
+            });
+          })();
         },
       )
       .subscribe();
     return () => {
       void sub.unsubscribe();
     };
-  }, [activeDmThreadId, configured, userId, loadDmMessages]);
+  }, [activeDmThreadId, configured, userId, loadDmMessages, profile]);
 
   // Track unread DMs globally
   useEffect(() => {
@@ -710,36 +738,101 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const sendChannelMessage = useCallback(async (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => {
-    if (!userId || !activeChannelId) return "No channel selected";
-    const mentionIds = parseMentions(content, members.map((m) => m.profile));
-    const { error } = await getSupabaseClient().from("messages").insert({
+    if (!userId || !activeChannelId || !profile) return "No channel selected";
+    const normalized = normalizeMessageContent(content);
+    if (!normalized && !attachment) return "Empty message";
+
+    const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Message & { author: Profile } = {
+      id: tempId,
       channel_id: activeChannelId,
       author_id: userId,
-      content,
+      content: normalized,
       attachment_url: attachment?.url ?? null,
       attachment_type: attachment?.type ?? null,
       attachment_key: attachment?.key ?? null,
-      mentions: mentionIds,
+      mentions: parseMentions(normalized, members.map((m) => m.profile)),
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      author: profile,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+
+    const mentionIds = parseMentions(normalized, members.map((m) => m.profile));
+    const { data, error } = await getSupabaseClient()
+      .from("messages")
+      .insert({
+        channel_id: activeChannelId,
+        author_id: userId,
+        content: normalized,
+        attachment_url: attachment?.url ?? null,
+        attachment_type: attachment?.type ?? null,
+        attachment_key: attachment?.key ?? null,
+        mentions: mentionIds,
+      })
+      .select("*, author:profiles(*)")
+      .single();
+
+    if (error) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      return error.message;
+    }
+    const saved = data as Message & { author: Profile };
+    setMessages((prev) => {
+      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id);
+      return [...without, saved];
     });
-    return error?.message ?? null;
-  }, [userId, activeChannelId, members]);
+    return null;
+  }, [userId, activeChannelId, profile, members]);
 
   const sendDmMessage = useCallback(async (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => {
-    if (!userId || !activeDmThreadId) return "No conversation selected";
+    if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
+    const normalized = normalizeMessageContent(content);
+    if (!normalized && !attachment) return "Empty message";
+
     const thread = dmThreads.find((t) => t.id === activeDmThreadId);
     const other = thread ? [thread.friend] : [];
-    const mentionIds = parseMentions(content, other);
-    const { error } = await getSupabaseClient().from("dm_messages").insert({
+    const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: DmMessage & { author: Profile } = {
+      id: tempId,
       thread_id: activeDmThreadId,
       author_id: userId,
-      content,
+      content: normalized,
       attachment_url: attachment?.url ?? null,
       attachment_type: attachment?.type ?? null,
       attachment_key: attachment?.key ?? null,
-      mentions: mentionIds,
+      mentions: parseMentions(normalized, other),
+      created_at: new Date().toISOString(),
+      author: profile,
+    };
+    setDmMessages((prev) => [...prev, optimistic]);
+
+    const mentionIds = parseMentions(normalized, other);
+    const { data, error } = await getSupabaseClient()
+      .from("dm_messages")
+      .insert({
+        thread_id: activeDmThreadId,
+        author_id: userId,
+        content: normalized,
+        attachment_url: attachment?.url ?? null,
+        attachment_type: attachment?.type ?? null,
+        attachment_key: attachment?.key ?? null,
+        mentions: mentionIds,
+      })
+      .select("*, author:profiles(*)")
+      .single();
+
+    if (error) {
+      setDmMessages((prev) => prev.filter((m) => m.id !== tempId));
+      return error.message;
+    }
+    const saved = data as DmMessage & { author: Profile };
+    setDmMessages((prev) => {
+      const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id);
+      return [...without, saved];
     });
-    return error?.message ?? null;
-  }, [userId, activeDmThreadId, dmThreads]);
+    return null;
+  }, [userId, activeDmThreadId, profile, dmThreads]);
 
   const deleteMessage = useCallback(async (messageId: string) => {
     await getSupabaseClient().from("messages").delete().eq("id", messageId);

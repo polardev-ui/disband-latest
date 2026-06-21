@@ -305,6 +305,12 @@ export function DiscordApp() {
       {call.remoteStream && (
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
       )}
+
+      {call.callNotice && (
+        <div className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-lg border border-divider bg-bg-secondary px-4 py-3 text-sm shadow-xl">
+          {call.callNotice}
+        </div>
+      )}
       <ServerList
         servers={app.servers}
         activeServerId={app.activeServerId}
@@ -401,6 +407,7 @@ export function DiscordApp() {
           channelName={activeChannel.name}
           messages={channelMessages}
           members={app.members.map((m) => m.profile)}
+          roles={app.serverRoles}
           currentUserId={app.user?.id}
           getAuthorColor={getAuthorColor}
           onSend={app.sendChannelMessage}

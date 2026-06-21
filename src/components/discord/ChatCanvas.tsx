@@ -4,12 +4,13 @@ import { useEffect, useRef } from "react";
 import { ChatMessage, type ChatMessageData } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { IconHash } from "@/components/icons";
-import type { Profile } from "@/lib/supabase/types";
+import type { Profile, ServerRole } from "@/lib/supabase/types";
 
 interface ChatCanvasProps {
   channelName: string;
   messages: ChatMessageData[];
   members: Profile[];
+  roles?: ServerRole[];
   currentUserId?: string | null;
   getAuthorColor?: (authorId: string) => string | null | undefined;
   headerExtra?: React.ReactNode;
@@ -21,6 +22,7 @@ export function ChatCanvas({
   channelName,
   messages,
   members,
+  roles = [],
   currentUserId,
   getAuthorColor,
   headerExtra,
@@ -74,8 +76,9 @@ export function ChatCanvas({
 
       <ChatInput
         placeholder={`Message #${channelName}`}
+        members={members}
+        roles={roles}
         onSend={onSend}
-        mentionHint={`Tip: use @username to mention someone (${members.filter((m) => m.username).length} members)`}
       />
     </main>
   );

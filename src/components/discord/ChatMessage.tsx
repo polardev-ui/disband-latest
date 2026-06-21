@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMessageTime, displayName, extractInviteCodes } from "@/lib/utils";
+import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
 import { ServerInviteCard } from "./ServerInviteCard";
 import type { Profile } from "@/lib/supabase/types";
@@ -100,7 +100,7 @@ export function ChatMessage({
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
           </header>
         )}
-        {message.content && <MessageBody content={message.content} members={members} />}
+        {message.content && <MessageBody content={normalizeMessageContent(message.content)} members={members} />}
         {message.attachment_url && (
           <div className="mt-1 max-w-md">
             {message.attachment_type === "video" ? (

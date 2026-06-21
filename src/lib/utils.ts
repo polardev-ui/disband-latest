@@ -27,6 +27,22 @@ export function parseMentions(
   return [...ids];
 }
 
+/** Remove trailing blank lines; keep internal line breaks when followed by content. */
+export function normalizeMessageContent(content: string): string {
+  const lines = content.split("\n");
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+    lines.pop();
+  }
+  return lines.join("\n");
+}
+
+export function getMentionQuery(text: string, cursor: number): { start: number; query: string } | null {
+  const before = text.slice(0, cursor);
+  const match = before.match(/@([a-zA-Z0-9_-]*)$/);
+  if (!match) return null;
+  return { start: cursor - match[0].length, query: match[1] };
+}
+
 export function displayName(p: {
   display_name?: string | null;
   username?: string | null;
