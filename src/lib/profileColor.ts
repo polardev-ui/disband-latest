@@ -72,6 +72,25 @@ function lightenHex(hex: string, targetLuminance = 0.55): string {
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
+function getAccentSampleColor(profile: ProfileAccentFields): string {
+  if (!usesCustomAccent(profile)) return DEFAULT_ACCENT;
+  if (isProfileGradient(profile)) return mixHex(profile.accent_color!, profile.accent_color_2!, 0.5);
+  return profile.accent_color!;
+}
+
+export function getProfilePanelStyle(profile: ProfileAccentFields): CSSProperties {
+  const sample = getAccentSampleColor(profile);
+  return {
+    background: getAccentBackground(profile),
+    color: contrastTextColor(sample),
+  };
+}
+
+export function getProfilePanelMutedColor(profile: ProfileAccentFields): string {
+  const sample = getAccentSampleColor(profile);
+  return contrastTextColor(sample) === "#ffffff" ? "rgba(255,255,255,0.72)" : "rgba(6,6,7,0.62)";
+}
+
 export function getAccentBackground(profile: ProfileAccentFields): string {
   if (!usesCustomAccent(profile)) return DEFAULT_ACCENT;
   const c1 = profile.accent_color!;

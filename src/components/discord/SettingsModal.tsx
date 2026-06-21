@@ -6,12 +6,12 @@ import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { ProfileName } from "@/components/ui/ProfileName";
 import { IconClose } from "@/components/icons";
 import {
   DEFAULT_ACCENT,
-  getAccentBackground,
   getAvatarStyle,
+  getProfilePanelMutedColor,
+  getProfilePanelStyle,
   isProfileGradient,
   usesCustomAccent,
   type ProfileAccentFields,
@@ -238,30 +238,38 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </div>
                     )}
 
-                    <div className="mt-4 overflow-hidden rounded-lg border border-divider bg-bg-secondary">
-                      <div
-                        className="h-16"
-                        style={{ background: getAccentBackground(previewAccent) }}
-                      />
-                      <div className="flex items-center gap-3 p-3">
+                    <div className="mt-4 overflow-hidden rounded-lg border border-divider">
+                      {profile?.banner_url && (
                         <div
-                          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold"
-                          style={getAvatarStyle(previewAccent)}
-                        >
-                          {(displayName || username || "?").charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <ProfileName
-                            profile={previewAccent}
-                            className="text-base font-semibold"
-                          />
-                          <p className="text-xs text-text-muted">
-                            {useDefaultAccent
-                              ? "Default"
-                              : isProfileGradient(previewAccent)
-                                ? "Gradient"
-                                : "Solid color"}
-                          </p>
+                          className="h-16 bg-cover bg-center"
+                          style={{ backgroundImage: `url(${profile.banner_url})` }}
+                        />
+                      )}
+                      <div className="p-3" style={getProfilePanelStyle(previewAccent)}>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold ring-2 ring-black/15"
+                            style={getAvatarStyle(previewAccent)}
+                          >
+                            {(displayName || username || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-base font-semibold leading-tight">
+                              {displayName.trim() || username || "Display name"}
+                            </p>
+                            {username && (
+                              <p className="text-sm" style={{ color: getProfilePanelMutedColor(previewAccent) }}>
+                                @{username}
+                              </p>
+                            )}
+                            <p className="mt-0.5 text-xs opacity-75">
+                              {useDefaultAccent
+                                ? "Default"
+                                : isProfileGradient(previewAccent)
+                                  ? "Gradient"
+                                  : "Solid color"}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
