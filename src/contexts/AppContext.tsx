@@ -78,6 +78,11 @@ interface AppContextValue {
   selectDmThread: (threadId: string) => Promise<void>;
   selectGroupChat: (groupId: string) => Promise<void>;
   createGroupChat: (name: string, memberIds: string[]) => Promise<string | null>;
+  leaveGroupChat: (groupId: string) => Promise<string | null>;
+  inviteToGroup: (groupId: string, memberIds: string[]) => Promise<string | null>;
+  renameGroupChat: (groupId: string, name: string) => Promise<string | null>;
+  deleteGroupMessage: (messageId: string) => Promise<void>;
+  groupCallCounts: Map<string, number>;
   openDmWithFriend: (friendId: string) => Promise<void>;
   sendFriendRequest: (username: string) => Promise<string | null>;
   respondFriendRequest: (id: string, accept: boolean) => Promise<void>;
@@ -119,6 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dmThreads, setDmThreads] = useState<(DmThread & { friend: Profile })[]>([]);
   const [dmMessages, setDmMessages] = useState<(DmMessage & { author: Profile })[]>([]);
   const [groupChats, setGroupChats] = useState<GroupChatWithMembers[]>([]);
+  const [groupCallCounts, setGroupCallCounts] = useState<Map<string, number>>(new Map());
   const [groupMessages, setGroupMessages] = useState<(GroupMessage & { author: Profile })[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -583,6 +589,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [activeGroupChatId, configured, userId, loadGroupMessages, profile]);
 
+  // Live group membership updates
+  useEffect(() => {
+    if (!userId || !configured || groupChats.length === 0) return;
+    const supabase = getSupabaseClient();
+    const subs = groupChats.map((g) =>
+      supabase
+        .channel(`gcm:${g.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "group_chat_members", filter: `group_id=eq.${g.id}` },
+          () => void loadGroupChats(userId),
+        )
+        .subscribe(),
+    );
+    return () => { subs.forEach((s) => void s.unsubscribe()); };
+  }, [userId, configured, groupChats.map((g) => g.id).join(","), loadGroupChats]);
+
+  // Live server member list
+  useEffect(() => {
+    if (!activeServerId || !configured) return;
+    const supabase = getSupabaseClient();
+    const sub = supabase
+      .channel(`sm:${activeServerId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServerId}` },
+        () => void loadServerDetails(activeServerId),
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [activeServerId, configured, loadServerDetails]);
+
+  // Group call activity badges in sidebar
+  useEffect(() => {
+    if (!userId || !configured || groupChats.length === 0) {
+      setGroupCallCounts(new Map());
+      return;
+    }
+    const supabase = getSupabaseClient();
+    const loadCounts = async () => {
+      const ids = groupChats.map((g) => g.id);
+      const { data } = await supabase.from("group_call_presence").select("group_id").in("group_id", ids);
+      const counts = new Map<string, number>();
+      (data ?? []).forEach((r: { group_id: string }) => {
+        counts.set(r.group_id, (counts.get(r.group_id) ?? 0) + 1);
+      });
+      setGroupCallCounts(counts);
+    };
+    void loadCounts();
+    const subs = groupChats.map((g) =>
+      supabase
+        .channel(`gcp-badge:${g.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "group_call_presence", filter: `group_id=eq.${g.id}` },
+          () => void loadCounts(),
+        )
+        .subscribe(),
+    );
+    return () => { subs.forEach((s) => void s.unsubscribe()); };
+  }, [userId, configured, groupChats.map((g) => g.id).join(",")]);
+
   // Live profile updates (avatar/banner) across tabs
   useEffect(() => {
     if (!userId || !configured) return;
@@ -763,6 +831,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await selectGroupChat(id as string);
     return null;
   }, [userId, loadGroupChats, selectGroupChat]);
+
+  const leaveGroupChat = useCallback(async (groupId: string) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient().rpc("leave_group_chat", { p_group_id: groupId });
+    if (error) return error.message;
+    if (activeGroupChatId === groupId) {
+      setActiveGroupChatId(null);
+      setGroupMessages([]);
+      setViewMode("home");
+    }
+    await loadGroupChats(userId);
+    return null;
+  }, [userId, activeGroupChatId, loadGroupChats]);
+
+  const inviteToGroup = useCallback(async (groupId: string, memberIds: string[]) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient().rpc("add_group_members", {
+      p_group_id: groupId,
+      p_member_ids: memberIds,
+    });
+    if (error) return error.message;
+    await loadGroupChats(userId);
+    return null;
+  }, [userId, loadGroupChats]);
+
+  const renameGroupChat = useCallback(async (groupId: string, name: string) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient().rpc("rename_group_chat", {
+      p_group_id: groupId,
+      p_name: name.trim(),
+    });
+    if (error) return error.message;
+    await loadGroupChats(userId);
+    return null;
+  }, [userId, loadGroupChats]);
+
+  const deleteGroupMessage = useCallback(async (messageId: string) => {
+    await getSupabaseClient().from("group_messages").delete().eq("id", messageId);
+    setGroupMessages((prev) => prev.filter((m) => m.id !== messageId));
+  }, []);
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
     const { data, error } = await getSupabaseClient().rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -1145,6 +1253,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectDmThread,
     selectGroupChat,
     createGroupChat,
+    leaveGroupChat,
+    inviteToGroup,
+    renameGroupChat,
+    deleteGroupMessage,
+    groupCallCounts,
     openDmWithFriend,
     sendFriendRequest,
     respondFriendRequest,

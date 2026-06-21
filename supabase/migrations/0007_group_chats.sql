@@ -44,31 +44,34 @@ alter table public.group_chats         enable row level security;
 alter table public.group_chat_members  enable row level security;
 alter table public.group_messages      enable row level security;
 
+create or replace function public.is_group_member(p_group_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.group_chat_members
+    where group_id = p_group_id and user_id = auth.uid()
+  );
+$$;
+
+grant execute on function public.is_group_member(uuid) to authenticated;
+
 create policy "group_chats_select" on public.group_chats for select to authenticated
-  using (exists (
-    select 1 from public.group_chat_members m
-    where m.group_id = group_chats.id and m.user_id = auth.uid()
-  ));
+  using (public.is_group_member(id));
 
 create policy "group_chat_members_select" on public.group_chat_members for select to authenticated
-  using (user_id = auth.uid() or exists (
-    select 1 from public.group_chat_members m
-    where m.group_id = group_chat_members.group_id and m.user_id = auth.uid()
-  ));
+  using (public.is_group_member(group_id));
 
 create policy "group_messages_select" on public.group_messages for select to authenticated
-  using (exists (
-    select 1 from public.group_chat_members m
-    where m.group_id = group_messages.group_id and m.user_id = auth.uid()
-  ));
+  using (public.is_group_member(group_id));
 
 create policy "group_messages_insert" on public.group_messages for insert to authenticated
   with check (
     author_id = auth.uid()
-    and exists (
-      select 1 from public.group_chat_members m
-      where m.group_id = group_messages.group_id and m.user_id = auth.uid()
-    )
+    and public.is_group_member(group_id)
   );
 
 create policy "group_messages_delete_own" on public.group_messages for delete to authenticated
