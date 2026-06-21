@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
+import { gifPreviewUrl, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose } from "@/components/icons";
 
 interface GifPickerProps {
@@ -77,21 +77,26 @@ export function GifPicker({ onSelect }: GifPickerProps) {
           <div className="grid max-h-64 grid-cols-2 gap-1 overflow-y-auto p-2">
             {loading && <p className="col-span-2 py-4 text-center text-sm text-text-muted">Loading…</p>}
             {error && <p className="col-span-2 py-4 text-center text-sm text-status-dnd">{error}</p>}
+            {!loading && !error && gifs.length === 0 && (
+              <p className="col-span-2 py-4 text-center text-sm text-text-muted">No GIFs found</p>
+            )}
             {!loading && !error && gifs.map((gif) => {
-              const url = gifUrl(gif);
-              if (!url) return null;
+              const preview = gifPreviewUrl(gif);
+              const full = gifUrl(gif);
+              if (!preview || !full) return null;
               return (
                 <button
                   key={gif.id}
                   type="button"
                   onClick={() => {
-                    onSelect(url);
+                    onSelect(full);
                     setOpen(false);
                   }}
                   className="overflow-hidden rounded hover:ring-2 hover:ring-brand"
+                  title={gif.title}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="h-24 w-full object-cover" />
+                  <img src={preview} alt={gif.title ?? "GIF"} className="h-24 w-full object-cover" loading="lazy" />
                 </button>
               );
             })}

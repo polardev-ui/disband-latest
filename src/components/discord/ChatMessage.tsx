@@ -104,6 +104,9 @@ export function ChatMessage({
           <div className="mt-0.5 max-w-md">
             {message.attachment_type === "video" ? (
               <video src={message.attachment_url} controls className="max-h-80 max-w-full rounded-lg border border-black/20" />
+            ) : message.attachment_type === "gif" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={message.attachment_url} alt="GIF" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={message.attachment_url} alt="Attachment" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
@@ -155,6 +158,9 @@ export function ChatMessage({
           <div className="mt-0.5 max-w-md">
             {message.attachment_type === "video" ? (
               <video src={message.attachment_url} controls className="max-h-80 max-w-full rounded-lg border border-black/20" />
+            ) : message.attachment_type === "gif" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={message.attachment_url} alt="GIF" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={message.attachment_url} alt="Attachment" className="max-h-80 max-w-full rounded-lg border border-black/20 object-contain" />
