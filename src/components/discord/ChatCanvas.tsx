@@ -16,6 +16,7 @@ interface ChatCanvasProps {
   headerExtra?: React.ReactNode;
   onSend: (content: string, attachment?: { url: string; type: "image" | "video"; key?: string }) => Promise<string | null>;
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
+  onAuthorClick?: (profile: Profile) => void;
 }
 
 export function ChatCanvas({
@@ -28,6 +29,7 @@ export function ChatCanvas({
   headerExtra,
   onSend,
   onMessageContext,
+  onAuthorClick,
 }: ChatCanvasProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +66,7 @@ export function ChatCanvas({
               showHeader={showHeader}
               currentUserId={currentUserId}
               authorColor={getAuthorColor?.(msg.author_id)}
+              onAuthorClick={onAuthorClick}
               members={members}
               onContextMenu={(e) => {
                 e.preventDefault();

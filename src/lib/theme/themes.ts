@@ -15,8 +15,8 @@ export interface ThemeDefinition {
 export const THEMES: ThemeDefinition[] = [
   {
     id: "dark",
-    label: "Discord Dark",
-    description: "Classic Discord dark theme",
+    label: "Disband Dark",
+    description: "Classic Disband dark theme",
     swatch: ["#1e1f22", "#2b2d31", "#313338", "#5865f2"],
   },
   {
@@ -27,7 +27,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "light",
-    label: "Discord Light",
+    label: "Disband Light",
     description: "Bright and clean",
     swatch: ["#e3e5e8", "#f2f3f5", "#ffffff", "#5865f2"],
   },

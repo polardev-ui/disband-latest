@@ -27,9 +27,11 @@ export function parseMentions(
   return [...ids];
 }
 
-/** Remove trailing blank lines; keep internal line breaks when followed by content. */
+/** Remove trailing blank lines; collapse accidental double line breaks. */
 export function normalizeMessageContent(content: string): string {
-  const lines = content.split("\n");
+  let text = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  text = text.replace(/\n{2,}/g, "\n");
+  const lines = text.split("\n");
   while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
     lines.pop();
   }
