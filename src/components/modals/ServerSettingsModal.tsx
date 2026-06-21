@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { IconClose, IconTrash } from "@/components/icons";
+import { IconClose, IconCopy, IconTrash } from "@/components/icons";
+import { getInviteUrl } from "@/lib/utils";
 
 interface ServerSettingsModalProps {
   open: boolean;
@@ -11,15 +12,25 @@ interface ServerSettingsModalProps {
 }
 
 export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps) {
-  const { activeServer, updateServer, deleteServer, user } = useApp();
+  const { activeServer, updateServer, deleteServer, user, serverRoles, createRole } = useApp();
   const { upload } = useMediaUpload();
   const [name, setName] = useState(activeServer?.name ?? "");
   const [description, setDescription] = useState(activeServer?.description ?? "");
+  const [roleName, setRoleName] = useState("");
+  const [roleColor, setRoleColor] = useState("#5865f2");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!activeServer) return;
+    setName(activeServer.name);
+    setDescription(activeServer.description ?? "");
+  }, [activeServer]);
 
   if (!open || !activeServer) return null;
   const isOwner = activeServer.owner_id === user?.id;
+  const inviteUrl = activeServer.invite_code ? getInviteUrl(activeServer.invite_code) : null;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -44,14 +55,45 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     if (res) await updateServer(activeServer!.id, { icon_url: res.url });
   }
 
+  async function handleCreateRole(e: React.FormEvent) {
+    e.preventDefault();
+    if (!roleName.trim()) return;
+    setLoading(true);
+    const err = await createRole({ name: roleName.trim(), color: roleColor });
+    if (err) setError(err);
+    else setRoleName("");
+    setLoading(false);
+  }
+
+  function copyInvite() {
+    if (!inviteUrl) return;
+    void navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <form onSubmit={save} className="relative w-full max-w-lg rounded-lg bg-bg-primary p-6 shadow-2xl">
+      <form onSubmit={save} className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-bg-primary p-6 shadow-2xl">
         <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted">
           <IconClose size={24} />
         </button>
         <h2 className="text-xl font-bold">Server Settings</h2>
+
+        {inviteUrl && (
+          <div className="mt-4 rounded bg-bg-accent p-3">
+            <p className="text-xs font-bold uppercase text-text-muted">Invite Link</p>
+            <p className="mt-1 truncate text-sm">{inviteUrl}</p>
+            <button
+              type="button"
+              onClick={copyInvite}
+              className="mt-2 flex items-center gap-1 text-sm text-brand hover:underline"
+            >
+              <IconCopy size={14} /> {copied ? "Copied!" : "Copy link"}
+            </button>
+          </div>
+        )}
 
         <div className="mt-4 space-y-3">
           <label className="block">
@@ -80,6 +122,34 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
             </label>
           )}
         </div>
+
+        {isOwner && (
+          <div className="mt-6 border-t border-divider pt-4">
+            <h3 className="font-semibold">Roles</h3>
+            <ul className="mt-2 space-y-1">
+              {serverRoles.map((r) => (
+                <li key={r.id} className="flex items-center gap-2 text-sm">
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: r.color }} />
+                  {r.name}
+                  {r.is_default && <span className="text-xs text-text-muted">(default)</span>}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                value={roleName}
+                onChange={(e) => setRoleName(e.target.value)}
+                placeholder="New role name"
+                className="flex-1 rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+              />
+              <input type="color" value={roleColor} onChange={(e) => setRoleColor(e.target.value)} className="h-10 w-12 cursor-pointer rounded" />
+              <button type="button" onClick={(e) => void handleCreateRole(e)} disabled={loading} className="rounded bg-brand px-3 py-2 text-sm font-semibold text-white">
+                Add Role
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-text-muted">Right-click a member to assign roles, kick, or ban.</p>
+          </div>
+        )}
 
         {error && <p className="mt-2 text-sm text-status-dnd">{error}</p>}
 

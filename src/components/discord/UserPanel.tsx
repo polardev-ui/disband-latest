@@ -9,6 +9,7 @@ import {
   IconMicOff,
   IconSettings,
 } from "@/components/icons";
+import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import type { UserStatus } from "@/lib/supabase/types";
 
@@ -46,17 +47,7 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
         className="flex min-w-0 flex-1 items-center gap-2 rounded p-1 text-left transition-all duration-150 ease-in-out hover:bg-interactive-hover"
       >
         <div className="relative shrink-0">
-          <div
-            className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: profile?.accent_color ?? "#5865f2" }}
-          >
-            {profile?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              name.charAt(0).toUpperCase()
-            )}
-          </div>
+          <Avatar profile={profile ?? { display_name: name }} size="sm" />
           <span
             className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[#232428] ${STATUS_BG[status]}`}
           />

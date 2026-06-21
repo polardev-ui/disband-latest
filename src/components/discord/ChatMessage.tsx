@@ -1,6 +1,8 @@
 "use client";
 
-import { formatMessageTime, displayName } from "@/lib/utils";
+import { formatMessageTime, displayName, extractInviteCodes } from "@/lib/utils";
+import { Avatar } from "@/components/ui/Avatar";
+import { ServerInviteCard } from "./ServerInviteCard";
 import type { Profile } from "@/lib/supabase/types";
 
 export interface ChatMessageData {
@@ -18,6 +20,7 @@ interface ChatMessageProps {
   index: number;
   showHeader: boolean;
   currentUserId?: string | null;
+  authorColor?: string | null;
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
@@ -40,16 +43,36 @@ function renderContent(content: string, members: Profile[] = []) {
   });
 }
 
+function MessageBody({ content, members }: { content: string; members: Profile[] }) {
+  const codes = extractInviteCodes(content);
+  const textOnly = content.replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "").trim();
+
+  return (
+    <>
+      {textOnly && (
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375] text-text-normal">
+          {renderContent(textOnly, members)}
+        </p>
+      )}
+      {codes.map((code) => (
+        <ServerInviteCard key={code} code={code} />
+      ))}
+    </>
+  );
+}
+
 export function ChatMessage({
   message,
   index,
   showHeader,
   currentUserId,
+  authorColor,
   onContextMenu,
   members = [],
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const isOwn = message.author_id === currentUserId;
+  const nameColor = authorColor ?? author?.accent_color ?? undefined;
 
   return (
     <article
@@ -58,17 +81,7 @@ export function ChatMessage({
       onContextMenu={onContextMenu}
     >
       {showHeader ? (
-        <div
-          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white"
-          style={{ backgroundColor: author?.accent_color ?? "#5865f2" }}
-        >
-          {author?.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={author.avatar_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            displayName(author ?? {}).charAt(0).toUpperCase()
-          )}
-        </div>
+        <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5" />
       ) : (
         <div className="w-10 shrink-0">
           <time className="invisible text-[11px] text-text-muted group-hover:visible">
@@ -80,18 +93,14 @@ export function ChatMessage({
       <div className="min-w-0 flex-1 pb-1">
         {showHeader && (
           <header className="flex items-baseline gap-2">
-            <span className="text-[15px] font-medium hover:underline" style={{ color: author?.accent_color ?? undefined }}>
+            <span className="text-[15px] font-medium hover:underline" style={{ color: nameColor }}>
               {displayName(author ?? {})}
             </span>
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
           </header>
         )}
-        {message.content && (
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375] text-text-normal">
-            {renderContent(message.content, members)}
-          </p>
-        )}
+        {message.content && <MessageBody content={message.content} members={members} />}
         {message.attachment_url && (
           <div className="mt-1 max-w-md">
             {message.attachment_type === "video" ? (

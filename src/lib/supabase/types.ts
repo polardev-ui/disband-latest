@@ -14,6 +14,7 @@ export interface Profile {
   banner_url: string | null;
   accent_color: string | null;
   theme: ThemePreference;
+  avatar_crop: { zoom: number; x: number; y: number } | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +39,23 @@ export interface Server {
   banner_url: string | null;
   description: string | null;
   owner_id: string;
+  invite_code?: string;
+  created_at: string;
+}
+
+export interface ServerRole {
+  id: string;
+  server_id: string;
+  name: string;
+  color: string;
+  permissions: {
+    kick?: boolean;
+    ban?: boolean;
+    manage_roles?: boolean;
+    manage_server?: boolean;
+  };
+  position: number;
+  is_default: boolean;
   created_at: string;
 }
 
@@ -45,6 +63,7 @@ export interface DbServerMember {
   server_id: string;
   user_id: string;
   role: MemberRole;
+  role_id: string | null;
   joined_at: string;
 }
 
