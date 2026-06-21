@@ -11,6 +11,7 @@ export interface Profile {
   avatar_url: string | null;
   bio: string | null;
   status: UserStatus;
+  preferred_status: UserStatus | null;
   banner_url: string | null;
   accent_color: string | null;
   accent_color_2: string | null;
@@ -199,6 +200,7 @@ export interface Database {
           avatar_url?: string | null;
           bio?: string | null;
           status?: UserStatus;
+          preferred_status?: UserStatus | null;
           banner_url?: string | null;
           accent_color?: string | null;
           accent_color_2?: string | null;
@@ -210,6 +212,7 @@ export interface Database {
           avatar_url?: string | null;
           bio?: string | null;
           status?: UserStatus;
+          preferred_status?: UserStatus | null;
           banner_url?: string | null;
           accent_color?: string | null;
           accent_color_2?: string | null;
