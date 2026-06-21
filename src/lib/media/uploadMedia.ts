@@ -1,17 +1,16 @@
 /**
  * Custom media API client.
  *
- * ALL image/video uploads in Disband go through this utility — never through
- * Supabase Storage. The returned `url` is what you persist in the
- * `media_posts.asset_url` column.
- *
- *   Endpoint: POST {MEDIA_API_URL}/images
- *   Payload:  FormData with a "file" field
- *   Response: { success: true, url: "...", key: "..." }
+ * Image/video uploads use POST {MEDIA_API_URL}/images
+ * Generic files use POST {MEDIA_API_URL}/files
  */
+
+import type { AttachmentType } from "@/lib/messages";
 
 const MEDIA_API_URL =
   process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1";
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export interface MediaUploadResult {
   url: string;
@@ -37,26 +36,35 @@ export class MediaUploadError extends Error {
 }
 
 export interface UploadMediaOptions {
-  /** Abort the request (e.g. on unmount or user cancel). */
   signal?: AbortSignal;
-  /** Override the endpoint path; defaults to "images". */
-  endpoint?: "images";
+  endpoint?: "images" | "files";
 }
 
-/**
- * Upload a single file to the custom media API and return its hosted URL + key.
- * Throws {@link MediaUploadError} on any non-success response.
- */
+export function inferAttachmentType(file: File): AttachmentType {
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("image/")) return "image";
+  return "file";
+}
+
+function endpointForFile(file: File, override?: "images" | "files"): "images" | "files" {
+  if (override) return override;
+  return inferAttachmentType(file) === "file" ? "files" : "images";
+}
+
 export async function uploadMedia(
   file: File,
   options: UploadMediaOptions = {},
 ): Promise<MediaUploadResult> {
-  const { signal, endpoint = "images" } = options;
+  const { signal, endpoint: endpointOverride } = options;
 
   if (!file) {
     throw new MediaUploadError("No file provided to uploadMedia().");
   }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new MediaUploadError(`File is too large (max ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB).`);
+  }
 
+  const endpoint = endpointForFile(file, endpointOverride);
   const formData = new FormData();
   formData.append("file", file);
 
@@ -69,10 +77,10 @@ export async function uploadMedia(
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw err; // let callers detect cancellation
+      throw err;
     }
     throw new MediaUploadError(
-      `Network error while uploading media: ${(err as Error).message}`,
+      `Network error while uploading: ${(err as Error).message}`,
     );
   }
 
@@ -80,7 +88,7 @@ export async function uploadMedia(
   try {
     data = (await response.json()) as MediaApiResponse;
   } catch {
-    // Non-JSON body — fall through to status-based error below.
+    // Non-JSON body
   }
 
   if (!response.ok || !data?.success || !data.url) {
@@ -92,7 +100,7 @@ export async function uploadMedia(
   return { url: data.url, key: data.key ?? "" };
 }
 
-/** Best-effort classification used to fill `media_posts.media_type`. */
+/** @deprecated use inferAttachmentType */
 export function inferMediaType(file: File): "image" | "video" {
   return file.type.startsWith("video/") ? "video" : "image";
 }

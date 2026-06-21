@@ -1,28 +1,35 @@
 "use client";
 
-import { useRef, useState, useCallback, useMemo } from "react";
+import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconPlus } from "@/components/icons";
 import { displayName, getMentionQuery, normalizeMessageContent } from "@/lib/utils";
+import { inferAttachmentType } from "@/lib/media/uploadMedia";
+import { formatFileSize, type AttachmentType, type MessageSendOptions, type ReplyPreview } from "@/lib/messages";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
+import { GifPicker } from "./GifPicker";
 
 export interface PendingAttachment {
   id: string;
   url: string;
-  type: "image" | "video";
+  type: AttachmentType;
   key?: string;
   previewUrl: string;
   name: string;
+  size: number;
 }
-
-import { GifPicker } from "./GifPicker";
 
 interface ChatInputProps {
   placeholder: string;
   members?: Profile[];
   roles?: ServerRole[];
-  onSend: (content: string, attachment?: { url: string; type: "image" | "video" | "gif"; key?: string }) => Promise<string | null>;
+  replyTo?: ReplyPreview | null;
+  onClearReply?: () => void;
+  editingMessageId?: string | null;
+  editingContent?: string;
+  onCancelEdit?: () => void;
+  onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
 }
 
 interface MentionItem {
@@ -35,7 +42,17 @@ interface MentionItem {
   profile?: Profile;
 }
 
-export function ChatInput({ placeholder, members = [], roles = [], onSend }: ChatInputProps) {
+export function ChatInput({
+  placeholder,
+  members = [],
+  roles = [],
+  replyTo,
+  onClearReply,
+  editingMessageId,
+  editingContent,
+  onCancelEdit,
+  onSend,
+}: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +62,14 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { upload, isUploading } = useMediaUpload();
+
+  useEffect(() => {
+    if (editingMessageId && editingContent != null) {
+      setText(editingContent);
+      setPending([]);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [editingMessageId, editingContent]);
 
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
@@ -78,10 +103,13 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
   const addFiles = useCallback(async (files: FileList | File[]) => {
     setError(null);
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
       const result = await upload(file);
-      if (!result) continue;
-      const type = file.type.startsWith("video/") ? "video" : "image";
+      if (!result) {
+        setError((prev) => prev ?? "Upload failed. Try a smaller file or different format.");
+        continue;
+      }
+      const type = inferAttachmentType(file);
+      const previewUrl = type === "file" ? "" : result.url;
       setPending((prev) => [
         ...prev,
         {
@@ -89,8 +117,9 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
           url: result.url,
           type,
           key: result.key,
-          previewUrl: result.url,
+          previewUrl,
           name: file.name,
+          size: file.size,
         },
       ]);
     }
@@ -117,15 +146,18 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
     const content = normalizeMessageContent(text);
-    if (!content && pending.length === 0) return;
+    if (!content && pending.length === 0 && !editingMessageId) return;
 
     setError(null);
     const attachments = [...pending];
+    const replyToId = editingMessageId ? undefined : replyTo?.id;
     setPending([]);
     setText("");
+    onClearReply?.();
+    onCancelEdit?.();
 
     if (attachments.length === 0) {
-      const err = await onSend(content);
+      const err = await onSend(content, { replyToId });
       if (err) {
         setError(err);
         setText(content);
@@ -136,9 +168,14 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
     for (let i = 0; i < attachments.length; i++) {
       const att = attachments[i];
       const err = await onSend(i === 0 ? content : "", {
-        url: att.url,
-        type: att.type,
-        key: att.key,
+        attachment: {
+          url: att.url,
+          type: att.type,
+          key: att.key,
+          name: att.name,
+          size: att.size,
+        },
+        replyToId: i === 0 ? replyToId : undefined,
       });
       if (err) {
         setError(err);
@@ -150,6 +187,19 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Escape") {
+      if (replyTo) {
+        e.preventDefault();
+        onClearReply?.();
+        return;
+      }
+      if (editingMessageId) {
+        e.preventDefault();
+        onCancelEdit?.();
+        setText("");
+        return;
+      }
+    }
     if (showMentions && mentionItems.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -164,10 +214,6 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         insertMention(mentionItems[mentionIdx] ?? mentionItems[0]);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
         return;
       }
     }
@@ -233,6 +279,29 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
         </div>
       )}
 
+      {(replyTo || editingMessageId) && (
+        <div className="mb-1 flex items-center gap-2 rounded-t-lg border border-b-0 border-divider bg-bg-secondary px-3 py-2 text-sm">
+          <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
+            <p className="text-xs font-semibold text-brand">
+              {editingMessageId ? "Editing message" : `Replying to ${replyTo?.author ? displayName(replyTo.author as Profile) : "message"}`}
+            </p>
+            {!editingMessageId && replyTo && (
+              <p className="truncate text-xs text-text-muted">
+                {normalizeMessageContent(replyTo.content) || replyTo.attachment_type || "Attachment"}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => { onClearReply?.(); onCancelEdit?.(); setText(""); }}
+            className="shrink-0 text-text-muted hover:text-text-normal"
+            aria-label="Cancel"
+          >
+            <IconClose size={16} />
+          </button>
+        </div>
+      )}
+
       <form
         onSubmit={submit}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -242,7 +311,7 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
           setDragOver(false);
           if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-lg bg-bg-accent transition-all duration-150 ease-in-out ${dragOver ? "ring-2 ring-brand" : ""}`}
+        className={`relative rounded-lg bg-bg-accent transition-all duration-150 ease-in-out ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {pending.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -250,6 +319,11 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
               <div key={att.id} className="group relative">
                 {att.type === "video" ? (
                   <video src={att.previewUrl} className="h-20 w-20 rounded object-cover" />
+                ) : att.type === "file" ? (
+                  <div className="flex h-20 w-36 flex-col justify-center rounded border border-divider bg-bg-secondary px-2">
+                    <p className="truncate text-xs font-medium">{att.name}</p>
+                    <p className="text-[10px] text-text-muted">{formatFileSize(att.size)}</p>
+                  </div>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={att.previewUrl} alt="" className="h-20 w-20 rounded object-cover" />
@@ -284,7 +358,6 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
           <input
             ref={fileRef}
             type="file"
-            accept="image/*,video/*"
             multiple
             className="hidden"
             onChange={(e) => { if (e.target.files?.length) void addFiles(e.target.files); e.target.value = ""; }}
@@ -300,14 +373,15 @@ export function ChatInput({ placeholder, members = [], roles = [], onSend }: Cha
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
             onClick={(e) => setCursor(e.currentTarget.selectionStart)}
             onKeyDown={onKeyDown}
-            placeholder={placeholder}
+            placeholder={editingMessageId ? "Edit your message…" : placeholder}
             disabled={isUploading}
             rows={1}
             className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none bg-transparent text-[15px] leading-snug text-text-normal placeholder:text-text-muted focus:outline-none"
           />
           <GifPicker
             onSelect={(url) => {
-              void onSend("", { url, type: "gif" });
+              void onSend("", { attachment: { url, type: "gif" }, replyToId: replyTo?.id });
+              onClearReply?.();
             }}
           />
         </div>

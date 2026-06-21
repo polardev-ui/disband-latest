@@ -34,6 +34,8 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
     activeGroupChatId,
     activeDmThreadId,
     viewMode,
+    notifications,
+    markNotificationsRead,
     sendFriendRequest,
     respondFriendRequest,
     openDmWithFriend,
@@ -44,6 +46,7 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"friends" | "pending">("friends");
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const unreadNotifs = notifications.filter((n) => !n.read).length;
 
   async function addFriend(e: React.FormEvent) {
     e.preventDefault();
@@ -57,7 +60,17 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden bg-bg-secondary">
       <header className="flex h-12 items-center border-b border-black/20 px-4 shadow-sm">
         <IconFriends className="mr-2 text-text-muted" />
-        <span className="font-semibold text-text-normal">Friends</span>
+        <span className="flex-1 font-semibold text-text-normal">Friends</span>
+        {unreadNotifs > 0 && (
+          <button
+            type="button"
+            onClick={() => void markNotificationsRead()}
+            className="text-[11px] font-medium text-brand hover:underline"
+            title="Mark all notifications read"
+          >
+            {unreadNotifs} new
+          </button>
+        )}
       </header>
 
       <div className="flex gap-1 px-2 pt-2">

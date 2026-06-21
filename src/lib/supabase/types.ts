@@ -96,8 +96,11 @@ export interface DbMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | null;
   attachment_key: string | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  reply_to_id: string | null;
   mentions: string[];
   created_at: string;
   edited_at: string | null;
@@ -113,10 +116,14 @@ export interface DbDmMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | null;
   attachment_key: string | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  reply_to_id: string | null;
   mentions: string[];
   created_at: string;
+  edited_at: string | null;
 }
 
 export interface DmMessage extends DbDmMessage {
@@ -154,10 +161,14 @@ export interface GroupMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | null;
   attachment_key: string | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  reply_to_id: string | null;
   mentions: string[];
   created_at: string;
+  edited_at: string | null;
   author?: Profile;
 }
 

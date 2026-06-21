@@ -8,7 +8,7 @@ import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMen
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
-import { ChatCanvas } from "./ChatCanvas";
+import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
 import { DmUnreadBadge } from "./DmUnreadBadge";
@@ -34,8 +34,9 @@ import {
   IconGroup,
   IconPhone,
 } from "@/components/icons";
-import { displayName, getInviteUrl } from "@/lib/utils";
+import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import type { Channel, Profile, Server } from "@/lib/supabase/types";
+import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 
 export function DiscordApp() {
@@ -48,6 +49,22 @@ export function DiscordApp() {
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const channelChatRef = useRef<ChatCanvasHandle>(null);
+  const dmChatRef = useRef<ChatCanvasHandle>(null);
+  const groupChatRef = useRef<ChatCanvasHandle>(null);
+  const [online, setOnline] = useState(true);
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
 
   const call = useCallManager(
     app.user?.id ?? null,
@@ -190,9 +207,34 @@ export function DiscordApp() {
   }, [activeGroup, app.user, groupCall]);
 
   const handleMessageContext = useCallback(
-    (message: ChatMessageData, x: number, y: number, isDm = false, isGroup = false) => {
+    (message: ChatMessageData, x: number, y: number, context: MessageContext) => {
       const isOwn = message.author_id === app.user?.id;
+      const chatRef =
+        context === "dm" ? dmChatRef : context === "group" ? groupChatRef : channelChatRef;
+
       openMenu(x, y, [
+        {
+          id: "reply",
+          label: "Reply",
+          icon: <IconFriends size={16} />,
+          onClick: () => {
+            chatRef.current?.setReplyTo({
+              id: message.id,
+              author_id: message.author_id,
+              content: message.content,
+              attachment_type: message.attachment_type,
+              author: message.author
+                ? { id: message.author.id, username: message.author.username, display_name: message.author.display_name }
+                : undefined,
+            });
+          },
+        },
+        {
+          id: "react",
+          label: "Add Reaction",
+          icon: <IconCopy size={16} />,
+          onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
+        },
         {
           id: "copy",
           label: "Copy Text",
@@ -200,6 +242,23 @@ export function DiscordApp() {
           disabled: !message.content,
           onClick: () => void navigator.clipboard.writeText(message.content),
         },
+        {
+          id: "copy-id",
+          label: "Copy Message ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(message.id),
+        },
+        ...(isOwn && normalizeMessageContent(message.content)
+          ? [
+              {
+                id: "edit",
+                label: "Edit Message",
+                icon: <IconSettings size={16} />,
+                onClick: () =>
+                  chatRef.current?.setEditing({ id: message.id, content: message.content }),
+              },
+            ]
+          : []),
         ...(isOwn
           ? [
               {
@@ -208,8 +267,8 @@ export function DiscordApp() {
                 icon: <IconTrash size={16} />,
                 danger: true,
                 onClick: () => {
-                  if (isGroup) void app.deleteGroupMessage(message.id);
-                  else if (isDm) void app.deleteDmMessage(message.id);
+                  if (context === "group") void app.deleteGroupMessage(message.id);
+                  else if (context === "dm") void app.deleteDmMessage(message.id);
                   else void app.deleteMessage(message.id);
                 },
               },
@@ -354,25 +413,35 @@ export function DiscordApp() {
     [app, canModerate, openMenu, openProfile],
   );
 
-  const channelMessages: ChatMessageData[] = app.messages.map((m) => ({
+  const mapChatMessage = (m: {
+    id: string;
+    author_id: string;
+    content: string;
+    attachment_url: string | null;
+    attachment_type: ChatMessageData["attachment_type"];
+    attachment_name?: string | null;
+    attachment_size?: number | null;
+    reply_to_id?: string | null;
+    edited_at?: string | null;
+    created_at: string;
+    author?: Profile;
+  }): ChatMessageData => ({
     id: m.id,
     author_id: m.author_id,
     content: m.content,
     attachment_url: m.attachment_url,
     attachment_type: m.attachment_type,
+    attachment_name: m.attachment_name ?? null,
+    attachment_size: m.attachment_size ?? null,
+    reply_to_id: m.reply_to_id ?? null,
+    edited_at: m.edited_at ?? null,
     created_at: m.created_at,
     author: m.author,
-  }));
+  });
 
-  const dmMessages: ChatMessageData[] = app.dmMessages.map((m) => ({
-    id: m.id,
-    author_id: m.author_id,
-    content: m.content,
-    attachment_url: m.attachment_url,
-    attachment_type: m.attachment_type,
-    created_at: m.created_at,
-    author: m.author,
-  }));
+  const channelMessages: ChatMessageData[] = app.messages.map(mapChatMessage);
+  const dmMessages: ChatMessageData[] = app.dmMessages.map(mapChatMessage);
+  const groupMessages: ChatMessageData[] = app.groupMessages.map(mapChatMessage);
 
   const profileFriend = profileTarget ? app.friends.some((f) => f.id === profileTarget.id) : false;
 
@@ -436,6 +505,11 @@ export function DiscordApp() {
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden">
+      {!online && (
+        <div className="fixed left-0 right-0 top-0 z-[100] bg-status-dnd px-4 py-2 text-center text-sm font-medium text-white">
+          You are offline. Messages will send when your connection returns.
+        </div>
+      )}
       {app.dmUnread && !(app.viewMode === "dm" && app.activeDmThreadId === app.dmUnread.threadId) && (
         <DmUnreadBadge
           friend={app.dmUnread.friend}
@@ -506,10 +580,13 @@ export function DiscordApp() {
 
       {app.viewMode === "dm" && dmFriend && (
         <ChatCanvas
+          ref={dmChatRef}
           channelName={displayName(dmFriend)}
           messages={dmMessages}
           members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
           currentUserId={app.user?.id}
+          messageContext="dm"
+          reactions={app.messageReactions}
           headerTrailing={
             !dmCallActive ? (
               <HeaderCallButton
@@ -520,7 +597,9 @@ export function DiscordApp() {
           }
           callPanel={renderCallPanel()}
           onSend={app.sendDmMessage}
-          onMessageContext={(m, x, y) => handleMessageContext(m, x, y, true)}
+          onEdit={app.editDmMessage}
+          onToggleReaction={(id, emoji) => void app.toggleReaction("dm", id, emoji)}
+          onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "dm")}
           onAuthorClick={handleAuthorClick}
         />
       )}
@@ -547,19 +626,14 @@ export function DiscordApp() {
               onToggleMic={toggleMic}
             />
             <ChatCanvas
+              ref={groupChatRef}
               channelName={activeGroup.name}
               channelIcon={<IconGroup size={22} className="text-text-muted" />}
-              messages={app.groupMessages.map((m) => ({
-                id: m.id,
-                author_id: m.author_id,
-                content: m.content,
-                attachment_url: m.attachment_url,
-                attachment_type: m.attachment_type,
-                created_at: m.created_at,
-                author: m.author,
-              }))}
+              messages={groupMessages}
               members={activeGroup.members}
               currentUserId={app.user?.id}
+              messageContext="group"
+              reactions={app.messageReactions}
               headerTrailing={
                 !groupCall.joined ? (
                   <HeaderCallButton
@@ -572,7 +646,9 @@ export function DiscordApp() {
                 ) : null
               }
               onSend={app.sendGroupMessage}
-              onMessageContext={(m, x, y) => handleMessageContext(m, x, y, false, true)}
+              onEdit={app.editGroupMessage}
+              onToggleReaction={(id, emoji) => void app.toggleReaction("group", id, emoji)}
+              onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "group")}
               onAuthorClick={handleAuthorClick}
             />
           </div>
@@ -639,14 +715,19 @@ export function DiscordApp() {
 
       {app.viewMode === "server" && activeChannel && !isVoice && (
         <ChatCanvas
+          ref={channelChatRef}
           channelName={activeChannel.name}
           messages={channelMessages}
           members={app.members.map((m) => m.profile)}
           roles={app.serverRoles}
           currentUserId={app.user?.id}
+          messageContext="channel"
+          reactions={app.messageReactions}
           getAuthorColor={getAuthorColor}
           onSend={app.sendChannelMessage}
-          onMessageContext={(m, x, y) => handleMessageContext(m, x, y, false)}
+          onEdit={app.editChannelMessage}
+          onToggleReaction={(id, emoji) => void app.toggleReaction("channel", id, emoji)}
+          onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "channel")}
           onAuthorClick={handleAuthorClick}
         />
       )}
