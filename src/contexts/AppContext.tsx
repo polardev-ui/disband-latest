@@ -174,15 +174,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Creates a profiles row if the auth trigger missed it (fixes server FK errors). */
-  const ensureProfile = useCallback(async (uid: string, email?: string | null) => {
+  const ensureProfile = useCallback(async (_uid: string, _email?: string | null) => {
     const supabase = getSupabaseClient();
-    const { data: existing } = await supabase.from("profiles").select("id").eq("id", uid).maybeSingle();
-    if (existing) return null;
-
-    const { error } = await supabase.from("profiles").insert({
-      id: uid,
-      display_name: email?.split("@")[0] ?? "User",
-    });
+    const { error } = await supabase.rpc("ensure_user_profile");
     return error?.message ?? null;
   }, []);
 
@@ -499,18 +493,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(async (email: string, password: string, username: string) => {
     const supabase = getSupabaseClient();
     const normalized = username.trim().toLowerCase();
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return error.message;
-    if (data.user) {
-      // Upsert — UPDATE alone fails silently when the trigger didn't create a row
-      const { error: profileError } = await supabase.from("profiles").upsert(
-        {
-          id: data.user.id,
+    const displayName = username.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
           username: normalized,
-          display_name: username.trim(),
+          display_name: displayName,
         },
-        { onConflict: "id" },
-      );
+      },
+    });
+    if (error) return error.message;
+    // Profile row is created by handle_new_user trigger (uses metadata above).
+    // When email confirmation is off, finish username via RPC — direct upsert hits RLS.
+    if (data.session) {
+      const { error: profileError } = await supabase.rpc("complete_signup_profile", {
+        p_username: normalized,
+        p_display_name: displayName,
+      });
       if (profileError) return profileError.message;
     }
     return null;
