@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
-import { IconFriends } from "@/components/icons";
+import { IconFriends, IconGroup, IconPlus } from "@/components/icons";
 import { UserPanel } from "./UserPanel";
+import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 
 const STATUS_BG = {
   online: "bg-status-online",
@@ -26,14 +27,17 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick }:
     pendingIncoming,
     pendingOutgoing,
     dmThreads,
+    groupChats,
     sendFriendRequest,
     respondFriendRequest,
     openDmWithFriend,
     selectDmThread,
+    selectGroupChat,
   } = useApp();
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"friends" | "pending">("friends");
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   async function addFriend(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +87,35 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick }:
       <div className="flex-1 overflow-y-auto px-2">
         {tab === "friends" && (
           <>
-            <p className="px-2 py-1 text-xs font-bold uppercase text-text-muted">
+            <div className="flex items-center justify-between px-2 py-1">
+              <p className="text-xs font-bold uppercase text-text-muted">Group Chats — {groupChats.length}</p>
+              <button
+                type="button"
+                onClick={() => setCreateGroupOpen(true)}
+                title="Create group"
+                className="rounded p-0.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+              >
+                <IconPlus size={16} />
+              </button>
+            </div>
+            {groupChats.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => void selectGroupChat(g.id)}
+                className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 text-brand">
+                  <IconGroup size={16} />
+                </div>
+                <div className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{g.name}</span>
+                  <span className="block truncate text-[11px] text-text-muted">{g.members.length} members</span>
+                </div>
+              </button>
+            ))}
+
+            <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
               Direct Messages — {dmThreads.length}
             </p>
             {dmThreads.map((t) => (
@@ -153,6 +185,7 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick }:
       </div>
 
       <UserPanel onOpenSettings={onOpenSettings} onContextMenu={onUserPanelContext} />
+      <CreateGroupChatModal open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </aside>
   );
 }

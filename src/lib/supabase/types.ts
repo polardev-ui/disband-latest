@@ -94,7 +94,7 @@ export interface DbMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | null;
+  attachment_type: "image" | "video" | "gif" | null;
   attachment_key: string | null;
   mentions: string[];
   created_at: string;
@@ -111,7 +111,7 @@ export interface DbDmMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | null;
+  attachment_type: "image" | "video" | "gif" | null;
   attachment_key: string | null;
   mentions: string[];
   created_at: string;
@@ -130,6 +130,37 @@ export interface DbDmThread {
 
 export interface DmThread extends DbDmThread {
   friend?: Profile;
+}
+
+export interface GroupChat {
+  id: string;
+  name: string;
+  owner_id: string;
+  icon_url: string | null;
+  created_at: string;
+}
+
+export interface GroupChatMember {
+  group_id: string;
+  user_id: string;
+  joined_at: string;
+}
+
+export interface GroupMessage {
+  id: string;
+  group_id: string;
+  author_id: string;
+  content: string;
+  attachment_url: string | null;
+  attachment_type: "image" | "video" | "gif" | null;
+  attachment_key: string | null;
+  mentions: string[];
+  created_at: string;
+  author?: Profile;
+}
+
+export interface GroupChatWithMembers extends GroupChat {
+  members: Profile[];
 }
 
 export interface DbVoicePresence {
@@ -153,7 +184,7 @@ export interface AppNotification {
   created_at: string;
 }
 
-export type ViewMode = "home" | "server" | "dm";
+export type ViewMode = "home" | "server" | "dm" | "group";
 
 export interface Database {
   public: {
@@ -352,6 +383,10 @@ export interface Database {
           p_display_name?: string | null;
         };
         Returns: undefined;
+      };
+      create_group_chat: {
+        Args: { p_name: string; p_member_ids: string[] };
+        Returns: string;
       };
     };
     Enums: {

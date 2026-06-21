@@ -38,7 +38,9 @@ export function useCallManager(
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [incoming, setIncoming] = useState<IncomingCallInfo | null>(null);
   const [activePeer, setActivePeer] = useState<Profile | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [callNotice, setCallNotice] = useState<string | null>(null);
 
@@ -50,7 +52,9 @@ export function useCallManager(
   const activeCallIdRef = useRef<string | null>(null);
   const activePeerIdRef = useRef<string | null>(null);
   const phaseRef = useRef<CallPhase>("idle");
+  const cameraRef = useRef(false);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { cameraRef.current = cameraEnabled; }, [cameraEnabled]);
 
   const applyMic = useCallback((muted: boolean) => {
     localRef.current?.getAudioTracks().forEach((t) => { t.enabled = !muted; });
@@ -68,6 +72,7 @@ export function useCallManager(
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
+    setLocalStream(null);
     setRemoteStream(null);
     if (signalRef.current) {
       await signalRef.current.unsubscribe();
@@ -94,10 +99,23 @@ export function useCallManager(
     await ch.unsubscribe();
   }, []);
 
+  const notifyPeerLeave = useCallback(async (peerId: string, callId: string | null) => {
+    if (!userId) return;
+    const payload: CallSignal = { type: "leave", from: userId, to: peerId, callId: callId ?? undefined };
+    if (signalRef.current) {
+      await signalRef.current.send({ type: "broadcast", event: "call", payload });
+    }
+    await sendToUser(peerId, payload);
+  }, [userId, sendToUser]);
+
   const setupRtc = useCallback(async (callId: string, peerId: string, asCaller: boolean) => {
     if (!userId) return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: cameraRef.current ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false,
+    });
     localRef.current = stream;
+    setLocalStream(stream);
     applyMic(micMuted);
 
     const supabase = getSupabaseClient();
@@ -116,6 +134,12 @@ export function useCallManager(
           event: "call",
           payload: { type: "ice", from: userId, to: peerId, candidate: ev.candidate.toJSON() } satisfies CallSignal,
         });
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      const state = pc.connectionState;
+      if (state === "disconnected" || state === "failed" || state === "closed") {
+        void reset();
       }
     };
 
@@ -146,6 +170,43 @@ export function useCallManager(
       void ch.send({ type: "broadcast", event: "call", payload: { type: "offer", from: userId, to: peerId, sdp: offer } });
     }
   }, [userId, micMuted, applyMic, reset]);
+
+  const toggleCamera = useCallback(async () => {
+    const next = !cameraRef.current;
+    setCameraEnabled(next);
+    cameraRef.current = next;
+    const pc = pcRef.current;
+    const stream = localRef.current;
+    if (!pc || !stream || phaseRef.current !== "active") return;
+
+    const existing = stream.getVideoTracks()[0];
+    if (next) {
+      if (existing) {
+        existing.enabled = true;
+        return;
+      }
+      const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      const track = cam.getVideoTracks()[0];
+      stream.addTrack(track);
+      pc.addTrack(track, stream);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const peerId = activePeerIdRef.current;
+      if (peerId && signalRef.current) {
+        void signalRef.current.send({
+          type: "broadcast",
+          event: "call",
+          payload: { type: "offer", from: userId!, to: peerId, sdp: offer },
+        });
+      }
+    } else if (existing) {
+      existing.enabled = false;
+      existing.stop();
+      stream.removeTrack(existing);
+      pc.getSenders().filter((s) => s.track?.kind === "video").forEach((s) => pc.removeTrack(s));
+    }
+    setLocalStream(new MediaStream(stream.getTracks()));
+  }, [userId]);
 
   const startCall = useCallback(async (peer: Profile) => {
     if (!userId || !profile) return;
@@ -200,12 +261,12 @@ export function useCallManager(
     if (userId && peerId) {
       if (currentPhase === "outgoing") {
         await sendToUser(peerId, { type: "cancel", from: userId, to: peerId, callId: callId ?? undefined });
-      } else if (signalRef.current) {
-        await signalRef.current.send({ type: "broadcast", event: "call", payload: { type: "leave", from: userId } });
+      } else if (currentPhase === "active") {
+        await notifyPeerLeave(peerId, callId);
       }
     }
     await reset();
-  }, [userId, sendToUser, reset]);
+  }, [userId, sendToUser, notifyPeerLeave, reset]);
 
   // Listen for incoming calls
   useEffect(() => {
@@ -249,8 +310,11 @@ export function useCallManager(
           }
           await reset();
         } else if (p.type === "cancel") {
-          if (phaseRef.current === "incoming") await reset();
-          else if (phaseRef.current === "outgoing") await reset();
+          if (phaseRef.current === "incoming" || phaseRef.current === "outgoing") await reset();
+        } else if (p.type === "leave") {
+          if (phaseRef.current === "active" && activePeerIdRef.current === p.from) {
+            await reset();
+          }
         }
       })();
     }).subscribe();
@@ -265,7 +329,9 @@ export function useCallManager(
     phase,
     incoming,
     activePeer,
+    localStream,
     remoteStream,
+    cameraEnabled,
     remoteAudioRef,
     error,
     callNotice,
@@ -273,5 +339,6 @@ export function useCallManager(
     acceptCall,
     rejectCall,
     endCall,
+    toggleCamera,
   };
 }
