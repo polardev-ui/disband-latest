@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/*
+ * Disband — Discord-accurate theme engine
+ * CSS variables scoped to [data-theme] drive the entire UI.
+ */
+
+@theme inline {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-bg-accent: var(--bg-accent);
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-selected: var(--interactive-selected);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-text-normal: var(--text-normal);
+  --color-text-muted: var(--text-muted);
+  --color-text-link: var(--text-link);
+  --color-status-online: var(--status-online);
+  --color-status-idle: var(--status-idle);
+  --color-status-dnd: var(--status-dnd);
+  --color-status-offline: var(--status-offline);
+  --color-divider: var(--divider);
+
+  --font-sans: var(--font-discord);
+}
+
+/* ---- Discord Dark (default) ---- */
+:root,
+[data-theme="dark"] {
+  --bg-primary: #313338;
+  --bg-secondary: #2b2d31;
+  --bg-tertiary: #1e1f22;
+  --bg-accent: #1e1f22;
+  --interactive-hover: #35373c;
+  --interactive-selected: #393c41;
+  --brand: #5865f2;
+  --brand-hover: #4752c4;
+  --text-normal: #dbdee1;
+  --text-muted: #949ba4;
+  --text-link: #00a8fc;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #3f4147;
+  --font-discord: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+}
+
+/* ---- AMOLED (deeper blacks, same structure) ---- */
+[data-theme="midnight"] {
+  --bg-primary: #060607;
+  --bg-secondary: #0a0a0b;
+  --bg-tertiary: #050506;
+  --bg-accent: #111214;
+  --interactive-hover: #1a1b1e;
+  --interactive-selected: #232428;
+  --brand: #5865f2;
+  --brand-hover: #4752c4;
+  --text-normal: #dbdee1;
+  --text-muted: #949ba4;
+  --text-link: #00a8fc;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #2e3035;
+}
+
+/* ---- Discord Light ---- */
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f3f5;
+  --bg-tertiary: #e3e5e8;
+  --bg-accent: #e3e5e8;
+  --interactive-hover: #e3e5e8;
+  --interactive-selected: #d4d7dc;
+  --brand: #5865f2;
+  --brand-hover: #4752c4;
+  --text-normal: #313338;
+  --text-muted: #5c5e66;
+  --text-link: #006ce7;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #e3e5e8;
+}
+
+/* ---- Sunset variant (Discord layout, warm accents) ---- */
+[data-theme="sunset"] {
+  --bg-primary: #2a2224;
+  --bg-secondary: #231c1e;
+  --bg-tertiary: #181214;
+  --bg-accent: #181214;
+  --interactive-hover: #32282b;
+  --interactive-selected: #3b2f33;
+  --brand: #eb459e;
+  --brand-hover: #c93d86;
+  --text-normal: #f2e8e4;
+  --text-muted: #a8948e;
+  --text-link: #fbbf24;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #3f3538;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--bg-tertiary);
+  color: var(--text-normal);
+  font-family: var(--font-discord);
+  font-size: 16px;
+  line-height: 1.375;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Discord-style scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--interactive-selected);
+}
+
+/* Message entrance animation */
+@keyframes message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.message-enter {
+  animation: message-enter 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+/* Tooltip fade-in */
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tooltip-content {
+  animation: tooltip-enter 0.12s ease-out forwards;
+}
