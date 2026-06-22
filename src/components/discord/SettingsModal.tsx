@@ -9,6 +9,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell } from "@/components/icons";
 import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
+import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
+import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
+import { MAX_BIO_LENGTH } from "@/lib/word-limit";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { getDisbandUserMedia } from "@/lib/media";
@@ -303,15 +306,27 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                   <label className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Display name</span>
-                    <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand" />
+                    <input value={displayName} onChange={(e) => setDisplayName(e.target.value.slice(0, 25))} maxLength={25} className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand" />
                   </label>
-                  <label className="block">
+                  <div className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Username</span>
-                    <input value={username} onChange={(e) => setUsername(e.target.value)} className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand" />
-                  </label>
+                    <UsernameAvailabilityInput
+                      value={username}
+                      onChange={setUsername}
+                      currentUsername={profile?.username}
+                    />
+                  </div>
                   <label className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Bio</span>
-                    <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand" />
+                    <textarea
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value.slice(0, MAX_BIO_LENGTH))}
+                      rows={3}
+                      maxLength={MAX_BIO_LENGTH}
+                      placeholder="Tell people about yourself. Line breaks are allowed."
+                      className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                    />
+                    <p className="mt-1 text-right text-xs text-text-muted">{bio.length}/{MAX_BIO_LENGTH}</p>
                   </label>
                   <div className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Profile color</span>
@@ -488,6 +503,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   )}
 
                   <MfaSettingsPanel />
+
+                  <PlatformModerationPanel />
 
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>

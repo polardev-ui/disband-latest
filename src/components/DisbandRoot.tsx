@@ -5,6 +5,7 @@ import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
+import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
 import { MobileGateLoading, useMobileWebGate } from "@/components/mobile/MobileWebGate";
@@ -28,12 +29,13 @@ function InviteBootstrap() {
 }
 
 function AppShell() {
-  const { ready, session, mfaRequired } = useApp();
+  const { ready, session, mfaRequired, platformBan } = useApp();
   if (!ready) {
     return <div className="flex h-screen items-center justify-center bg-bg-tertiary text-text-muted">Loading...</div>;
   }
   if (!session) return <AuthScreen />;
   if (mfaRequired) return <MfaChallengeScreen />;
+  if (platformBan?.banned) return <PlatformBanScreen />;
   return (
     <>
       <InviteBootstrap />

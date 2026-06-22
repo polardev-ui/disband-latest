@@ -32,7 +32,7 @@ const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: 
 ];
 
 export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps) {
-  const { activeServer, updateServer, deleteServer, user, serverRoles, createRole } = useApp();
+  const { activeServer, updateServer, deleteServer, user, serverRoles, createRole, updateRole } = useApp();
   const { upload } = useMediaUpload();
   const [section, setSection] = useState<Section>("overview");
   const [name, setName] = useState("");
@@ -100,6 +100,20 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     const err = await createRole({ name: roleName.trim(), color: roleColor });
     if (err) setError(err);
     else setRoleName("");
+    setLoading(false);
+  }
+
+  async function togglePermission(
+    roleId: string,
+    current: { kick?: boolean; ban?: boolean; manage_roles?: boolean; manage_server?: boolean },
+    permission: "kick" | "ban" | "manage_roles" | "manage_server",
+  ) {
+    setLoading(true);
+    setError(null);
+    const err = await updateRole(roleId, {
+      permissions: { ...current, [permission]: !current[permission] },
+    });
+    if (err) setError(err);
     setLoading(false);
   }
 
@@ -239,15 +253,43 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
             {section === "roles" && isOwner && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Roles</h2>
-                <p className="text-sm text-text-muted">Create roles and assign them via right-click on members. Role colors change name colors.</p>
-                <ul className="divide-y divide-divider rounded-lg border border-divider bg-bg-secondary">
-                  {serverRoles.map((r) => (
-                    <li key={r.id} className="flex items-center gap-3 px-4 py-3">
-                      <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
-                      <span className="font-medium">{r.name}</span>
-                      {r.is_default && <span className="text-xs text-text-muted">Default</span>}
-                    </li>
-                  ))}
+                <p className="text-sm text-text-muted">Create roles, set permissions, and assign them via right-click on members. Members with a role that grants Ban Members can right-click and ban people from the server.</p>
+                <ul className="space-y-3">
+                  {serverRoles.map((r) => {
+                    const perms = r.permissions ?? {};
+                    const PERMS: { key: "kick" | "ban" | "manage_roles" | "manage_server"; label: string }[] = [
+                      { key: "kick", label: "Kick Members" },
+                      { key: "ban", label: "Ban Members" },
+                      { key: "manage_roles", label: "Manage Roles" },
+                      { key: "manage_server", label: "Manage Server" },
+                    ];
+                    return (
+                      <li key={r.id} className="rounded-lg border border-divider bg-bg-secondary p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
+                          <span className="font-medium">{r.name}</span>
+                          {r.is_default && <span className="text-xs text-text-muted">Default</span>}
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {PERMS.map((p) => (
+                            <label key={p.key} className="flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={!!perms[p.key]}
+                                disabled={loading || r.is_default}
+                                onChange={() => void togglePermission(r.id, perms, p.key)}
+                                className="h-4 w-4 accent-brand"
+                              />
+                              {p.label}
+                            </label>
+                          ))}
+                        </div>
+                        {r.is_default && (
+                          <p className="mt-2 text-xs text-text-muted">The default @everyone role cannot hold moderation permissions.</p>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
                 <div className="flex flex-wrap gap-2">
                   <input
