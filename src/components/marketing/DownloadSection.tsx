@@ -3,10 +3,26 @@
 import { useEffect, useState } from "react";
 import {
   detectClientPlatform,
+  fetchLatestReleaseFromGitHub,
   pickAssetForPlatform,
   type GitHubRelease,
   type ReleaseAsset,
 } from "@/lib/github-releases";
+
+async function loadReleases(): Promise<{
+  release: GitHubRelease | null;
+  assets: ReleaseAsset[];
+}> {
+  try {
+    const res = await fetch("/api/releases");
+    if (res.ok) {
+      return (await res.json()) as { release: GitHubRelease | null; assets: ReleaseAsset[] };
+    }
+  } catch {
+    // Static export (Tauri) has no API routes — fall back to GitHub directly.
+  }
+  return fetchLatestReleaseFromGitHub();
+}
 
 export function DownloadSection() {
   const [release, setRelease] = useState<GitHubRelease | null>(null);
@@ -17,9 +33,8 @@ export function DownloadSection() {
 
   useEffect(() => {
     setPlatform(detectClientPlatform());
-    void fetch("/api/releases")
-      .then((r) => r.json())
-      .then((data: { release: GitHubRelease | null; assets: ReleaseAsset[] }) => {
+    void loadReleases()
+      .then((data) => {
         setRelease(data.release);
         setAssets(data.assets ?? []);
       })
