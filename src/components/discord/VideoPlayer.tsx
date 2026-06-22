@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface VideoPlayerProps {
   src: string;
   className?: string;
+  onLoad?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -14,7 +15,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function VideoPlayer({ src, className = "" }: VideoPlayerProps) {
+export function VideoPlayer({ src, className = "", onLoad }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -84,7 +85,10 @@ export function VideoPlayer({ src, className = "" }: VideoPlayerProps) {
         onPlay={() => { setPlaying(true); revealControls(); }}
         onPause={() => { setPlaying(false); setShowControls(true); }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration);
+          onLoad?.();
+        }}
         onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
       />
 

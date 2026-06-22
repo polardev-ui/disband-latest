@@ -13,9 +13,9 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
-import { playMentionPing, requestNotificationPermission, showSystemNotification } from "@/lib/notifications";
+import { playMentionPing, notifyUser, setNotificationFocusState, parseNotificationLink } from "@/lib/notifications";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
-import { parseMentions, normalizeMessageContent } from "@/lib/utils";
+import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   matchesOptimisticRow,
   type MessageContext,
@@ -116,6 +116,8 @@ interface AppContextValue {
   deleteDmMessage: (messageId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
   loadVoicePresence: (channelId: string) => Promise<void>;
+  setVoiceJoinedChannelId: (channelId: string | null) => void;
+  setCallPhase: (phase: "idle" | "outgoing" | "incoming" | "active") => void;
   dmUnread: { threadId: string; friend: Profile; count: number } | null;
   clearDmUnread: (threadId: string) => void;
 }
@@ -149,17 +151,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeGroupChatId, setActiveGroupChatId] = useState<string | null>(null);
   const [micMuted, setMicMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
+  const [voiceJoinedChannelId, setVoiceJoinedChannelId] = useState<string | null>(null);
+  const [callPhase, setCallPhase] = useState<"idle" | "outgoing" | "incoming" | "active">("idle");
   const [dmUnreadMap, setDmUnreadMap] = useState<
     Map<string, { friend: Profile; count: number; latestAt: string }>
   >(new Map());
+  const [dmThreadActivity, setDmThreadActivity] = useState<Record<string, string>>({});
 
   const activeDmRef = useRef<string | null>(null);
+  const activeChannelRef = useRef<string | null>(null);
+  const activeGroupRef = useRef<string | null>(null);
+  const channelsRef = useRef<Channel[]>([]);
+  const groupChatsRef = useRef<GroupChatWithMembers[]>([]);
   const viewModeRef = useRef<ViewMode>("home");
   const profileRef = useRef<Profile | null>(null);
   const preferredStatusRef = useRef<UserStatus>("online");
   profileRef.current = profile;
+  channelsRef.current = channels;
+  groupChatsRef.current = groupChats;
   useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
+  useEffect(() => { activeChannelRef.current = activeChannelId; }, [activeChannelId]);
+  useEffect(() => { activeGroupRef.current = activeGroupChatId; }, [activeGroupChatId]);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+
+  useEffect(() => {
+    setNotificationFocusState({
+      viewMode,
+      activeServerId,
+      activeChannelId,
+      activeDmThreadId,
+      activeGroupChatId,
+      voiceJoinedChannelId,
+      callPhase,
+    });
+  }, [
+    viewMode,
+    activeServerId,
+    activeChannelId,
+    activeDmThreadId,
+    activeGroupChatId,
+    voiceJoinedChannelId,
+    callPhase,
+  ]);
 
   const user = session?.user ?? null;
   const userId = user?.id ?? null;
@@ -169,10 +202,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const friends = useMemo(() => {
     if (!userId) return [] as Profile[];
-    return friendships
-      .filter((f) => f.status === "accepted")
-      .map((f) => (f.requester_id === userId ? f.addressee : f.requester))
-      .filter((p): p is Profile => !!p);
+    const seen = new Set<string>();
+    const list: Profile[] = [];
+    for (const f of friendships) {
+      if (f.status !== "accepted") continue;
+      const p = f.requester_id === userId ? f.addressee : f.requester;
+      if (p && !seen.has(p.id)) {
+        seen.add(p.id);
+        list.push(p);
+      }
+    }
+    return list;
   }, [friendships, userId]);
 
   const pendingIncoming = useMemo(
@@ -191,6 +231,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [threadId, entry] = entries[0];
     return { threadId, friend: entry.friend, count: entry.count };
   }, [dmUnreadMap]);
+
+  const sortedDmThreads = useMemo(() => {
+    return [...dmThreads].sort((a, b) => {
+      const ta = dmThreadActivity[a.id] ?? a.created_at;
+      const tb = dmThreadActivity[b.id] ?? b.created_at;
+      return tb.localeCompare(ta);
+    });
+  }, [dmThreads, dmThreadActivity]);
 
   const clearDmUnread = useCallback((threadId: string) => {
     setDmUnreadMap((prev) => {
@@ -378,6 +426,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }),
     );
     setDmThreads(enriched.filter((t): t is DmThread & { friend: Profile } => !!t.friend));
+
+    const ids = threads.map((t) => t.id);
+    if (ids.length) {
+      const { data: msgRows } = await supabase
+        .from("dm_messages")
+        .select("thread_id, created_at")
+        .in("thread_id", ids)
+        .order("created_at", { ascending: false });
+      const activity: Record<string, string> = {};
+      for (const row of (msgRows ?? []) as { thread_id: string; created_at: string }[]) {
+        if (!activity[row.thread_id]) activity[row.thread_id] = row.created_at;
+      }
+      if (Object.keys(activity).length) {
+        setDmThreadActivity((prev) => ({ ...activity, ...prev }));
+      }
+    }
+  }, []);
+
+  const bumpDmThreadActivity = useCallback((threadId: string, at?: string) => {
+    const ts = at ?? new Date().toISOString();
+    setDmThreadActivity((prev) => {
+      if (prev[threadId] === ts) return prev;
+      return { ...prev, [threadId]: ts };
+    });
   }, []);
 
   const loadDmMessages = useCallback(async (threadId: string) => {
@@ -496,7 +568,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     const supabase = getSupabaseClient();
-    void requestNotificationPermission();
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -531,10 +602,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
         const n = payload.new as AppNotification;
         setNotifications((prev) => [n, ...prev]);
-        if (n.type === "mention") {
-          playMentionPing();
-          showSystemNotification(n.title, n.body ?? undefined);
-        }
+        const target = parseNotificationLink(n.link);
+        if (n.type === "mention") playMentionPing();
+        notifyUser(n.title, n.body ?? undefined, target ?? undefined);
       })
       .subscribe();
 
@@ -560,10 +630,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const msg = payload.new as Message;
-          if (msg.mentions?.includes(userId)) {
-            playMentionPing();
-            showSystemNotification("You were mentioned", msg.content);
-          }
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
@@ -616,10 +682,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
         (payload) => {
           const msg = payload.new as DmMessage;
-          if (msg.mentions?.includes(userId)) {
-            playMentionPing();
-            showSystemNotification("You were mentioned", msg.content);
-          }
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
@@ -634,6 +696,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               if (!author) return withoutDupes;
               return [...withoutDupes, { ...msg, author }];
             });
+            bumpDmThreadActivity(msg.thread_id, msg.created_at);
           })();
         },
       )
@@ -659,7 +722,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       void sub.unsubscribe();
     };
-  }, [activeDmThreadId, configured, userId, loadDmMessages, profile]);
+  }, [activeDmThreadId, configured, userId, loadDmMessages, profile, bumpDmThreadActivity]);
 
   useEffect(() => {
     if (!activeGroupChatId || !configured || !userId) return;
@@ -672,10 +735,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
         (payload) => {
           const msg = payload.new as GroupMessage;
-          if (msg.mentions?.includes(userId)) {
-            playMentionPing();
-            showSystemNotification("You were mentioned", msg.content);
-          }
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
@@ -951,6 +1010,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
               });
               return next;
             });
+            bumpDmThreadActivity(msg.thread_id, msg.created_at);
+            notifyUser(
+              displayName(author as Profile),
+              msg.content.slice(0, 120),
+              { kind: "dm", threadId: msg.thread_id },
+            );
+          })();
+        },
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [userId, configured, bumpDmThreadActivity]);
+
+  // Server channel message notifications (when not viewing that channel)
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const sub = supabase
+      .channel(`msg-notify:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const msg = payload.new as Message;
+          if (msg.author_id === userId) return;
+          const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
+          if (!channel) return;
+          void (async () => {
+            const { data: author } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", msg.author_id)
+              .maybeSingle();
+            if (!author) return;
+            notifyUser(
+              `#${channel.name}`,
+              `${displayName(author as Profile)}: ${msg.content.slice(0, 120)}`,
+              { kind: "channel", channelId: msg.channel_id },
+            );
+          })();
+        },
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [userId, configured]);
+
+  // Group message notifications (when not viewing that group)
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const sub = supabase
+      .channel(`group-notify:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "group_messages" },
+        (payload) => {
+          const msg = payload.new as GroupMessage;
+          if (msg.author_id === userId) return;
+          const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
+          if (!group) return;
+          void (async () => {
+            const { data: author } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", msg.author_id)
+              .maybeSingle();
+            if (!author) return;
+            notifyUser(
+              group.name,
+              `${displayName(author as Profile)}: ${msg.content.slice(0, 120)}`,
+              { kind: "group", groupId: msg.group_id },
+            );
           })();
         },
       )
@@ -1174,11 +1305,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!target) return `No user found with username "${normalized}"`;
     if (target.id === userId) return "Cannot friend yourself";
 
+    const { data: existingRows, error: existingError } = await supabase
+      .from("friendships")
+      .select("id, status, requester_id, addressee_id")
+      .or(
+        `and(requester_id.eq.${userId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${userId})`,
+      );
+
+    if (existingError) return existingError.message;
+
+    const existing = (existingRows ?? [])[0];
+    if (existing) {
+      if (existing.status === "accepted") return "You are already friends";
+      if (existing.status === "pending") {
+        if (existing.requester_id === target.id) {
+          return "This user already sent you a friend request — check Pending to accept or decline";
+        }
+        return "Friend request already sent";
+      }
+    }
+
     const { error } = await supabase.from("friendships").insert({
       requester_id: userId,
       addressee_id: target.id,
     });
-    if (error) return error.message;
+    if (error) {
+      if (error.code === "23505") {
+        return "A friend request already exists with this user";
+      }
+      return error.message;
+    }
     await loadFriendships(userId);
     return null;
   }, [userId, loadFriendships]);
@@ -1393,6 +1549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       author: profile,
     };
     setDmMessages((prev) => [...prev, optimistic]);
+    bumpDmThreadActivity(activeDmThreadId, optimistic.created_at);
 
     const mentionIds = parseMentions(normalized, other);
     const { data, error } = await getSupabaseClient()
@@ -1421,8 +1578,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       return [...without, saved];
     });
+    bumpDmThreadActivity(activeDmThreadId, saved.created_at);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
@@ -1608,7 +1766,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     members,
     serverRoles,
     messages,
-    dmThreads,
+    dmThreads: sortedDmThreads,
     dmMessages,
     groupChats,
     groupMessages,
@@ -1671,6 +1829,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteDmMessage,
     markNotificationsRead,
     loadVoicePresence,
+    setVoiceJoinedChannelId,
+    setCallPhase,
     dmUnread,
     clearDmUnread,
   };

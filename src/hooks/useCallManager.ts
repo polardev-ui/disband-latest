@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { directCallId, startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
+import { getDisbandUserMedia } from "@/lib/media";
+import { notifyUser, requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -111,7 +113,7 @@ export function useCallManager(
 
   const setupRtc = useCallback(async (callId: string, peerId: string, asCaller: boolean) => {
     if (!userId) return;
-    const stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await getDisbandUserMedia({
       audio: true,
       video: cameraRef.current ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false,
     });
@@ -188,7 +190,7 @@ export function useCallManager(
       if (track) {
         track.enabled = true;
       } else {
-        const cam = await navigator.mediaDevices.getUserMedia({
+        const cam = await getDisbandUserMedia({
           video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         });
         track = cam.getVideoTracks()[0];
@@ -222,6 +224,7 @@ export function useCallManager(
   const startCall = useCallback(async (peer: Profile) => {
     if (!userId || !profile) return;
     setError(null);
+    void requestNotificationPermissionFromGesture();
     const callId = directCallId(userId, peer.id);
     activeCallIdRef.current = callId;
     activePeerIdRef.current = peer.id;
@@ -239,6 +242,7 @@ export function useCallManager(
   const acceptCall = useCallback(async () => {
     if (!incoming || !userId) return;
     stopRingtone();
+    void requestNotificationPermissionFromGesture();
     const supabase = getSupabaseClient();
     const { data: fp } = await supabase.from("profiles").select("*").eq("id", incoming.fromId).maybeSingle();
     if (fp) setActivePeer(fp as Profile);
@@ -310,6 +314,11 @@ export function useCallManager(
           });
           setPhase("incoming");
           startRingtone();
+          notifyUser(
+            `Incoming call from ${p.callerName ?? "Someone"}`,
+            "Open Disband to answer",
+            { kind: "call", peerId: p.from },
+          );
         } else if (p.type === "accept" && p.callId && phaseRef.current === "outgoing") {
           stopRingtone();
           setPhase("active");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getDisbandUserMedia } from "@/lib/media";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -175,7 +176,7 @@ export function useVoiceChannel(
     if (!channelId || !userId) return;
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await getDisbandUserMedia({ audio: true, video: false });
       localStreamRef.current = stream;
 
       const supabase = getSupabaseClient();

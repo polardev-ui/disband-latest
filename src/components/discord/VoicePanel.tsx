@@ -6,6 +6,7 @@ import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import { Avatar } from "@/components/ui/Avatar";
 import { CallControls } from "./CallUI";
 import { displayName } from "@/lib/utils";
+import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { IconSpeaker } from "@/components/icons";
 
 interface VoicePanelProps {
@@ -23,6 +24,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     deafened,
     setMicMuted,
     setDeafened,
+    setVoiceJoinedChannelId,
   } = useApp();
   const voice = useVoiceChannel(channelId, user?.id ?? null, profile, micMuted, deafened);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -30,6 +32,17 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   useEffect(() => {
     void loadVoicePresence(channelId);
   }, [channelId, loadVoicePresence, voice.participants.length]);
+
+  useEffect(() => {
+    if (voice.joined) setVoiceJoinedChannelId(channelId);
+    else setVoiceJoinedChannelId(null);
+  }, [voice.joined, channelId, setVoiceJoinedChannelId]);
+
+  useEffect(() => {
+    return () => {
+      setVoiceJoinedChannelId(null);
+    };
+  }, [channelId, setVoiceJoinedChannelId]);
 
   useEffect(() => {
     audioRefs.current.forEach((el) => { el.muted = deafened; });
@@ -75,7 +88,10 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
           {!voice.joined ? (
             <button
               type="button"
-              onClick={() => void voice.join()}
+              onClick={() => {
+                void requestNotificationPermissionFromGesture();
+                void voice.join();
+              }}
               className="rounded-full bg-status-online px-8 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
             >
               Join Voice

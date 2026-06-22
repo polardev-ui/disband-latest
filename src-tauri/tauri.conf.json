@@ -37,7 +37,11 @@
     "longDescription": "Disband — a cross-platform app for macOS, Windows, Linux and the Web, built from a single Next.js codebase.",
     "macOS": {
       "minimumSystemVersion": "10.15",
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Disband uses your microphone for voice channels and calls.",
+        "NSCameraUsageDescription": "Disband uses your camera for video calls."
+      }
     },
     "icon": [
       "icons/32x32.png",
