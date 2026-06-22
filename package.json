@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
   "type": "module",
@@ -18,7 +18,9 @@
     "verify:auth-emails": "node scripts/sync-auth-email-templates.mjs --verify",
     "send:mobile-launch": "node scripts/send-mobile-launch.mjs",
     "version:set": "node scripts/set-version.mjs",
-    "release:next": "node scripts/next-release-version.mjs"
+    "release:next": "node scripts/next-release-version.mjs",
+    "git:push-main": "git push origin refs/heads/main",
+    "git:fix-main-ref": "node scripts/fix-main-ref-conflict.mjs --delete-tag"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
