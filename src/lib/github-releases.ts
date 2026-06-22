@@ -219,6 +219,33 @@ export function pickLatestSemverRelease(rows: GitHubReleaseJson[]): GitHubReleas
   return best?.release ?? null;
 }
 
+/** Prefer semver releases; fall back to the newest release that has installable assets. */
+export function pickLatestDownloadRelease(rows: GitHubReleaseJson[]): GitHubRelease | null {
+  const semver = pickLatestSemverRelease(rows);
+  if (semver?.assets.length) return semver;
+
+  let best: { release: GitHubRelease; publishedAt: number } | null = null;
+  for (const row of rows) {
+    if (row.draft || row.prerelease) continue;
+    const release = parseGitHubRelease(row);
+    if (!release.assets.length) continue;
+    const publishedAt = Date.parse(row.published_at);
+    if (!best || publishedAt > best.publishedAt) {
+      best = { release, publishedAt };
+    }
+  }
+  return best?.release ?? null;
+}
+
+/** Derive a display version from installer filenames when the release tag is not semver. */
+export function inferVersionFromAssets(assets: ReleaseAsset[]): string | null {
+  for (const asset of assets) {
+    const match = asset.name.match(/[_-]v?(\d+\.\d+\.\d+)/i);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 async function fetchGitHubReleaseRows(): Promise<GitHubReleaseJson[]> {
   const repo = GITHUB_REPO_SLUG;
   const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=30`, {
@@ -238,6 +265,6 @@ export async function fetchLatestReleaseFromGitHub(): Promise<{
   assets: ReleaseAsset[];
 }> {
   const rows = await fetchGitHubReleaseRows();
-  const release = pickLatestSemverRelease(rows);
+  const release = pickLatestDownloadRelease(rows);
   return { release, assets: release?.assets ?? [] };
 }
