@@ -13,7 +13,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
-import { playMentionPing, notifyUser, setNotificationFocusState, parseNotificationLink } from "@/lib/notifications";
+import { playMentionPing, notifyUser, alertIncomingDm, setNotificationFocusState, parseNotificationLink } from "@/lib/notifications";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
@@ -697,6 +697,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return [...withoutDupes, { ...msg, author }];
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
+            if (msg.author_id !== userId && author) {
+              alertIncomingDm(
+                displayName(author),
+                msg.content.slice(0, 120) || undefined,
+                profileRef.current,
+              );
+            }
           })();
         },
       )
@@ -995,7 +1002,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as DmMessage;
           if (msg.author_id === userId) return;
-          if (viewModeRef.current === "dm" && activeDmRef.current === msg.thread_id) return;
+          const inActiveDmChat =
+            viewModeRef.current === "dm" && activeDmRef.current === msg.thread_id;
+          if (inActiveDmChat) return;
 
           void (async () => {
             const { data: author } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
@@ -1011,10 +1020,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return next;
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
-            notifyUser(
+            alertIncomingDm(
               displayName(author as Profile),
-              msg.content.slice(0, 120),
-              { kind: "dm", threadId: msg.thread_id },
+              msg.content.slice(0, 120) || undefined,
+              profileRef.current,
             );
           })();
         },
