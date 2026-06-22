@@ -1,5 +1,11 @@
 export type DownloadPlatform = "macos" | "windows" | "linux" | "unknown";
 
+/** owner/repo slug for GitHub Releases (not a URL). */
+export const GITHUB_REPO_SLUG =
+  process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest";
+
+export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO_SLUG}/releases/latest`;
+
 export interface ReleaseAsset {
   name: string;
   url: string;
@@ -79,7 +85,7 @@ export async function fetchLatestReleaseFromGitHub(): Promise<{
   release: GitHubRelease | null;
   assets: ReleaseAsset[];
 }> {
-  const repo = process.env.NEXT_PUBLIC_GITHUB_REPO ?? "wsgpolar/disband";
+  const repo = GITHUB_REPO_SLUG;
   const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
     headers: { Accept: "application/vnd.github+json" },
   });
