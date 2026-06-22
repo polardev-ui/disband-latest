@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import Link from "next/link";
+import { isTauri } from "@/lib/platform";
 
 function LoginGate() {
   const { ready, session } = useApp();
@@ -26,12 +27,14 @@ function LoginGate() {
 
   return (
     <div className="relative min-h-screen bg-bg-tertiary">
-      <Link
-        href="/home"
-        className="absolute left-6 top-6 z-10 flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-text-normal"
-      >
-        ← Back to home
-      </Link>
+      {!isTauri() && (
+        <Link
+          href="/home"
+          className="absolute left-6 top-6 z-10 flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-text-normal"
+        >
+          ← Back to home
+        </Link>
+      )}
       <AuthScreen />
     </div>
   );

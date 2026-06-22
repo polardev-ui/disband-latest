@@ -2,20 +2,18 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PUBLIC_ENV } from "@/lib/public-env";
 
 let browserClient: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient {
   if (browserClient) return browserClient;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = PUBLIC_ENV.supabaseUrl;
+  const anonKey = PUBLIC_ENV.supabaseAnonKey;
 
   if (!url || !anonKey) {
-    throw new Error(
-      "Missing Supabase env vars. Copy .env.example to .env.local and fill in " +
-        "NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
-    );
+    throw new Error("Missing Supabase configuration.");
   }
 
   browserClient = createBrowserClient(url, anonKey);
@@ -24,8 +22,5 @@ export function getSupabaseClient(): SupabaseClient {
 
 /** True when Supabase env vars are present — lets the UI degrade gracefully. */
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  return Boolean(PUBLIC_ENV.supabaseUrl && PUBLIC_ENV.supabaseAnonKey);
 }
