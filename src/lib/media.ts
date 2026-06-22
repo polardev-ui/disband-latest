@@ -59,6 +59,11 @@ export async function getDisbandUserMedia(
         typeof merged.audio === "object" &&
         "deviceId" in merged.audio &&
         merged.audio.deviceId;
+      const pinnedVideo =
+        merged.video &&
+        typeof merged.video === "object" &&
+        "deviceId" in merged.video &&
+        merged.video.deviceId;
       if (
         pinnedInput &&
         domErr &&
@@ -69,6 +74,18 @@ export async function getDisbandUserMedia(
         return await navigator.mediaDevices.getUserMedia({
           ...merged,
           audio: true,
+        });
+      }
+      if (
+        pinnedVideo &&
+        domErr &&
+        (domErr.name === "OverconstrainedError" ||
+          domErr.name === "NotFoundError" ||
+          domErr.name === "NotReadableError")
+      ) {
+        return await navigator.mediaDevices.getUserMedia({
+          ...merged,
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         });
       }
       throw err instanceof Error ? err : new Error("Could not access microphone.");

@@ -100,9 +100,11 @@ function VideoTile({
   const hasVideo = useLiveVideoStream(stream);
 
   useEffect(() => {
-    if (ref.current && stream) {
+    if (ref.current && stream && hasVideo) {
       ref.current.srcObject = stream;
       void ref.current.play().catch(() => {});
+    } else if (ref.current) {
+      ref.current.srcObject = null;
     }
   }, [stream, hasVideo]);
 

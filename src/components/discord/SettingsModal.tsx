@@ -13,8 +13,10 @@ import { getDisbandUserMedia } from "@/lib/media";
 import {
   getPreferredAudioInputId,
   getPreferredAudioOutputId,
+  getPreferredVideoInputId,
   setPreferredAudioInputId,
   setPreferredAudioOutputId,
+  setPreferredVideoInputId,
 } from "@/lib/audio-settings";
 import {
   DEFAULT_ACCENT,
@@ -104,13 +106,15 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
   const [audioInput, setAudioInput] = useState("");
   const [audioOutput, setAudioOutput] = useState("");
+  const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
-  const { inputs, outputs, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
+  const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
   useEffect(() => {
     if (!open) return;
     setAudioInput(getPreferredAudioInputId() ?? "");
     setAudioOutput(getPreferredAudioOutputId() ?? "");
+    setVideoInput(getPreferredVideoInputId() ?? "");
     void refreshDevices();
   }, [open, refreshDevices]);
 
@@ -509,7 +513,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               {tab === "voice" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">
-                    Choose your microphone and speaker for voice channels and calls. Device lists populate after permission is granted.
+                    Choose your microphone, speaker, and camera for voice channels and calls. Device lists populate after permission is granted.
                   </p>
                   <button
                     type="button"
@@ -549,6 +553,23 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     >
                       <option value="">System default</option>
                       {outputs.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase text-text-muted">Camera</span>
+                    <select
+                      value={videoInput}
+                      disabled={devicesLoading}
+                      onChange={(e) => {
+                        setVideoInput(e.target.value);
+                        setPreferredVideoInputId(e.target.value);
+                      }}
+                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                    >
+                      <option value="">System default</option>
+                      {cameras.map((device) => (
                         <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
                       ))}
                     </select>

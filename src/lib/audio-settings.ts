@@ -1,5 +1,6 @@
 const INPUT_KEY = "disband:audio-input";
 const OUTPUT_KEY = "disband:audio-output";
+const VIDEO_KEY = "disband:video-input";
 
 export function getPreferredAudioInputId(): string | undefined {
   if (typeof window === "undefined") return undefined;
@@ -25,6 +26,18 @@ export function setPreferredAudioOutputId(deviceId: string) {
   else localStorage.removeItem(OUTPUT_KEY);
 }
 
+export function getPreferredVideoInputId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const value = localStorage.getItem(VIDEO_KEY);
+  return value || undefined;
+}
+
+export function setPreferredVideoInputId(deviceId: string) {
+  if (typeof window === "undefined") return;
+  if (deviceId) localStorage.setItem(VIDEO_KEY, deviceId);
+  else localStorage.removeItem(VIDEO_KEY);
+}
+
 export async function applyAudioOutputToElement(
   element: HTMLMediaElement | null | undefined,
   deviceId?: string,
@@ -46,5 +59,12 @@ export function buildAudioConstraints(): boolean | MediaTrackConstraints {
 }
 
 export function buildVideoConstraints(): boolean | MediaTrackConstraints {
-  return { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } };
+  const deviceId = getPreferredVideoInputId();
+  const base: MediaTrackConstraints = {
+    facingMode: "user",
+    width: { ideal: 640 },
+    height: { ideal: 480 },
+  };
+  if (!deviceId) return base;
+  return { ...base, deviceId: { ideal: deviceId } };
 }
