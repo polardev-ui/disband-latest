@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   detectClientPlatform,
   fetchLatestReleaseFromGitHub,
+  GITHUB_RELEASES_URL,
   pickAssetForPlatform,
   type GitHubRelease,
   type ReleaseAsset,
@@ -16,7 +17,13 @@ async function loadReleases(): Promise<{
   try {
     const res = await fetch("/api/releases");
     if (res.ok) {
-      return (await res.json()) as { release: GitHubRelease | null; assets: ReleaseAsset[] };
+      const data = (await res.json()) as {
+        release: GitHubRelease | null;
+        assets: ReleaseAsset[];
+      };
+      if (data.release || (data.assets?.length ?? 0) > 0) {
+        return data;
+      }
     }
   } catch {
     // Static export (Tauri) has no API routes — fall back to GitHub directly.
@@ -68,9 +75,17 @@ export function DownloadSection() {
             )}
           </div>
         ) : (
-          <p className="mt-8 text-sm text-[#949ba4]">
-            Desktop builds are published on GitHub Releases. Check back soon or browse all downloads below.
-          </p>
+          <div className="mt-8 space-y-3">
+            <p className="text-sm text-[#949ba4]">
+              Desktop builds are published on GitHub Releases. Check back soon or browse all downloads below.
+            </p>
+            <a
+              href={GITHUB_RELEASES_URL}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-[#1e1f22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:border-brand/40 hover:bg-[#313338]"
+            >
+              View downloads on GitHub
+            </a>
+          </div>
         )}
 
         {assets.length > 0 && (
