@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { Avatar } from "@/components/ui/Avatar";
+import { displayName } from "@/lib/utils";
+import type { Profile } from "@/lib/supabase/types";
 
 interface PlatformBanRow {
   user_id: string;
@@ -14,13 +17,18 @@ interface PlatformBanRow {
 
 export function PlatformModerationPanel() {
   const { profile, platformBanUser, platformUnbanUser } = useApp();
-  const [username, setUsername] = useState("");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Profile[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [selected, setSelected] = useState<Profile | null>(null);
   const [password, setPassword] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [bans, setBans] = useState<PlatformBanRow[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const loadBans = useCallback(async () => {
     const { data: { session } } = await getSupabaseClient().auth.getSession();
@@ -37,17 +45,61 @@ export function PlatformModerationPanel() {
     if (profile?.show_owner_badge) void loadBans();
   }, [profile?.show_owner_badge, loadBans]);
 
+  // Debounced username/display-name search.
+  useEffect(() => {
+    const term = query.trim();
+    if (selected || term.length < 1) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const handle = setTimeout(async () => {
+      const escaped = term.replace(/[%_,]/g, (m) => `\\${m}`);
+      const { data } = await getSupabaseClient()
+        .from("profiles")
+        .select("*")
+        .or(`username.ilike.%${escaped}%,display_name.ilike.%${escaped}%`)
+        .limit(8);
+      setResults((data as Profile[]) ?? []);
+      setSearching(false);
+      setDropdownOpen(true);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query, selected]);
+
+  // Close dropdown on outside click.
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
   if (!profile?.show_owner_badge) return null;
 
+  function pickUser(user: Profile) {
+    setSelected(user);
+    setQuery("");
+    setResults([]);
+    setDropdownOpen(false);
+    setError(null);
+    setSuccess(null);
+  }
+
   async function handleBan() {
+    if (!selected) return;
     setError(null);
     setSuccess(null);
     setLoading(true);
-    const err = await platformBanUser({ username: username.trim(), password, reason: reason.trim() || undefined });
+    const err = await platformBanUser({ userId: selected.id, password, reason: reason.trim() || undefined });
     if (err) setError(err);
     else {
-      setSuccess(`Banned @${username.trim().toLowerCase()}`);
-      setUsername("");
+      setSuccess(`Banned ${selected.username ? `@${selected.username}` : displayName(selected)}`);
+      setSelected(null);
       setReason("");
       await loadBans();
     }
@@ -81,15 +133,60 @@ export function PlatformModerationPanel() {
         </p>
       </div>
 
-      <label className="block">
-        <span className="text-xs font-bold uppercase text-text-muted">Username to ban</span>
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="username"
-          className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-        />
-      </label>
+      <div ref={containerRef} className="relative">
+        <span className="text-xs font-bold uppercase text-text-muted">User to ban</span>
+        {selected ? (
+          <div className="mt-1 flex items-center gap-3 rounded bg-bg-accent px-3 py-2">
+            <Avatar profile={selected} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{displayName(selected)}</p>
+              {selected.username && <p className="truncate text-xs text-text-muted">@{selected.username}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="shrink-0 rounded border border-divider px-2 py-1 text-xs hover:bg-interactive-hover"
+            >
+              Change
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => results.length > 0 && setDropdownOpen(true)}
+              placeholder="Search by username or display name…"
+              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+            />
+            {dropdownOpen && (searching || results.length > 0 || query.trim().length > 0) && (
+              <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-divider bg-bg-secondary shadow-lg">
+                {searching && (
+                  <p className="px-3 py-3 text-xs text-text-muted">Searching…</p>
+                )}
+                {!searching && results.length === 0 && (
+                  <p className="px-3 py-3 text-xs text-text-muted">No users found.</p>
+                )}
+                {!searching &&
+                  results.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => pickUser(user)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-interactive-hover"
+                    >
+                      <Avatar profile={user} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{displayName(user)}</p>
+                        {user.username && <p className="truncate text-xs text-text-muted">@{user.username}</p>}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       <label className="block">
         <span className="text-xs font-bold uppercase text-text-muted">Reason (optional)</span>
@@ -112,7 +209,7 @@ export function PlatformModerationPanel() {
 
       <button
         type="button"
-        disabled={loading || !username.trim() || !password}
+        disabled={loading || !selected || !password}
         onClick={() => void handleBan()}
         className="rounded bg-status-danger px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
       >
