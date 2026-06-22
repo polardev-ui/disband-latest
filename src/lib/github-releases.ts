@@ -73,3 +73,23 @@ export function parseGitHubRelease(json: {
     assets,
   };
 }
+
+/** Client-side fetch for static export (Tauri) where `/api/releases` is unavailable. */
+export async function fetchLatestReleaseFromGitHub(): Promise<{
+  release: GitHubRelease | null;
+  assets: ReleaseAsset[];
+}> {
+  const repo = process.env.NEXT_PUBLIC_GITHUB_REPO ?? "wsgpolar/disband";
+  const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  if (res.status === 404) {
+    return { release: null, assets: [] };
+  }
+  if (!res.ok) {
+    throw new Error("Could not load releases.");
+  }
+  const json = await res.json();
+  const release = parseGitHubRelease(json);
+  return { release, assets: release.assets };
+}
