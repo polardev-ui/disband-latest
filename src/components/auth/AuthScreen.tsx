@@ -5,9 +5,11 @@ import { useApp } from "@/contexts/AppContext";
 import { isTauri } from "@/lib/platform";
 import { Logo } from "@/components/ui/Logo";
 
+type AuthMode = "login" | "signup" | "reset";
+
 export function AuthScreen() {
-  const { signIn, signUp, configured } = useApp();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const { signIn, signUp, requestPasswordReset, configured } = useApp();
+  const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -42,6 +44,15 @@ export function AuthScreen() {
     if (mode === "login") {
       const err = await signIn(email, password);
       if (err) setError(err);
+    } else if (mode === "reset") {
+      const err = await requestPasswordReset(email);
+      if (err) {
+        setError(err);
+      } else {
+        setSuccess(
+          `If an account exists for ${email.trim()}, we sent a password reset link. Check your inbox and spam folder.`,
+        );
+      }
     } else {
       const result = await signUp(email, password, username);
       if (result.error) {
@@ -57,11 +68,31 @@ export function AuthScreen() {
     submittingRef.current = false;
   }
 
-  function switchMode(next: "login" | "signup") {
+  function switchMode(next: AuthMode) {
     setMode(next);
     setError(null);
     setSuccess(null);
   }
+
+  const title =
+    success
+      ? "Check your email"
+      : mode === "login"
+        ? "Welcome back!"
+        : mode === "reset"
+          ? "Reset your password"
+          : "Create an account";
+
+  const subtitle =
+    success
+      ? mode === "reset"
+        ? "Use the link in your email to choose a new password"
+        : "Verify your email to finish signing up"
+      : mode === "login"
+        ? "We're so excited to see you again!"
+        : mode === "reset"
+          ? "We'll email you a link to choose a new password"
+          : "Join Disband today";
 
   return (
     <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
@@ -70,16 +101,8 @@ export function AuthScreen() {
           <div className="mx-auto mb-3 flex justify-center">
             <Logo size={56} className="h-14 w-14" priority />
           </div>
-          <h1 className="text-2xl font-bold text-text-normal">
-            {success ? "Check your email" : mode === "login" ? "Welcome back!" : "Create an account"}
-          </h1>
-          <p className="mt-1 text-sm text-text-muted">
-            {success
-              ? "Verify your email to finish signing up"
-              : mode === "login"
-                ? "We're so excited to see you again!"
-                : "Join Disband today"}
-          </p>
+          <h1 className="text-2xl font-bold text-text-normal">{title}</h1>
+          <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
         </div>
 
         {success ? (
@@ -87,9 +110,11 @@ export function AuthScreen() {
             <p className="rounded-lg border border-status-online/30 bg-status-online/10 px-3 py-3 text-sm leading-relaxed text-text-normal">
               {success}
             </p>
-            <p className="text-center text-xs text-text-muted">
-              After verifying, come back here and log in with your email and password.
-            </p>
+            {mode !== "reset" && (
+              <p className="text-center text-xs text-text-muted">
+                After verifying, come back here and log in with your email and password.
+              </p>
+            )}
           </div>
         ) : (
           <>
@@ -117,17 +142,31 @@ export function AuthScreen() {
               />
             </label>
 
-            <label className="mb-4 block">
-              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Password</span>
-              <input
-                required
-                type="password"
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-              />
-            </label>
+            {mode !== "reset" && (
+              <label className="mb-4 block">
+                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Password</span>
+                <input
+                  required
+                  type="password"
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                />
+              </label>
+            )}
+
+            {mode === "login" && (
+              <div className="mb-4 text-right">
+                <button
+                  type="button"
+                  onClick={() => switchMode("reset")}
+                  className="text-sm text-text-link hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -139,7 +178,13 @@ export function AuthScreen() {
             disabled={loading}
             className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
           >
-            {loading ? "..." : mode === "login" ? "Log In" : "Continue"}
+            {loading
+              ? "..."
+              : mode === "login"
+                ? "Log In"
+                : mode === "reset"
+                  ? "Send reset link"
+                  : "Continue"}
           </button>
         )}
 
@@ -151,6 +196,13 @@ export function AuthScreen() {
           >
             Back to log in
           </button>
+        ) : mode === "reset" ? (
+          <p className="mt-4 text-center text-sm text-text-muted">
+            Remember your password?{" "}
+            <button type="button" onClick={() => switchMode("login")} className="text-text-link hover:underline">
+              Log in
+            </button>
+          </p>
         ) : (
           <p className="mt-4 text-center text-sm text-text-muted">
             {mode === "login" ? "Need an account? " : "Already have an account? "}
