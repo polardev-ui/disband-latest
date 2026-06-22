@@ -1,5 +1,6 @@
 import { isTauri } from "@/lib/platform";
 import { buildAudioConstraints, buildVideoConstraints } from "@/lib/audio-settings";
+import { formatMediaPermissionError, requestNativeMediaPermissions } from "@/lib/media-permissions";
 
 type LegacyGetUserMedia = (
   constraints: MediaStreamConstraints,
@@ -49,6 +50,11 @@ export async function getDisbandUserMedia(
     video: constraints.video === true ? buildVideoConstraints() : constraints.video,
   };
 
+  await requestNativeMediaPermissions({
+    audio: merged.audio != null && merged.audio !== false,
+    video: merged.video != null && merged.video !== false,
+  });
+
   if (navigator.mediaDevices?.getUserMedia) {
     try {
       return await navigator.mediaDevices.getUserMedia(merged);
@@ -88,7 +94,7 @@ export async function getDisbandUserMedia(
           video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         });
       }
-      throw err instanceof Error ? err : new Error("Could not access microphone.");
+      throw formatMediaAccessError(err, merged);
     }
   }
 
@@ -103,15 +109,23 @@ export async function getDisbandUserMedia(
   try {
     return await legacyGetUserMedia(merged);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Could not access microphone.";
-    if (/denied|permission/i.test(message)) {
-      throw new Error(
-        isTauri()
-          ? "Microphone permission denied. Open System Settings → Privacy & Security → Microphone and enable Disband."
-          : "Microphone permission denied.",
-      );
-    }
-    throw new Error(message);
+    throw formatMediaAccessError(err, merged);
   }
+}
+
+function formatMediaAccessError(err: unknown, constraints: MediaStreamConstraints): Error {
+  const domErr = err instanceof DOMException ? err : null;
+  const raw = err instanceof Error ? err.message : String(err);
+  const notAllowed =
+    domErr?.name === "NotAllowedError" ||
+    /not allowed|permission denied|denied/i.test(raw);
+
+  if (notAllowed) {
+    const wantsVideo = constraints.video != null && constraints.video !== false;
+    const wantsAudio = constraints.audio != null && constraints.audio !== false;
+    const kind = wantsVideo && wantsAudio ? "media" : wantsVideo ? "camera" : "microphone";
+    return new Error(formatMediaPermissionError(err, kind));
+  }
+
+  return err instanceof Error ? err : new Error(raw || "Could not access media devices.");
 }
