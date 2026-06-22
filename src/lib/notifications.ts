@@ -1,4 +1,4 @@
-import type { ViewMode } from "@/lib/supabase/types";
+import type { UserStatus, ViewMode } from "@/lib/supabase/types";
 
 export type NotificationTarget =
   | { kind: "channel"; channelId: string }
@@ -60,7 +60,20 @@ export function shouldShowNotification(
   }
 }
 
-/** Play Discord-style mention ping via Web Audio API. */
+/** True when the tab/window is not actively focused (background tab, minimized, another app on top). */
+export function isAppInBackground(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.visibilityState === "hidden" || !document.hasFocus();
+}
+
+export function isRecipientDoNotDisturb(
+  profile: { status?: UserStatus; preferred_status?: UserStatus | null } | null | undefined,
+): boolean {
+  if (!profile) return false;
+  return profile.status === "dnd" || profile.preferred_status === "dnd";
+}
+
+/** Discord-style mention ping via Web Audio API. */
 export function playMentionPing() {
   try {
     const ctx = new AudioContext();
@@ -79,6 +92,46 @@ export function playMentionPing() {
   } catch {
     // Audio not available
   }
+}
+
+/** Two-tone bing for incoming DMs. */
+export function playDmPing() {
+  try {
+    const ctx = new AudioContext();
+    const playTone = (freq: number, start: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.12, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+      osc.start(start);
+      osc.stop(start + duration);
+    };
+    const t = ctx.currentTime;
+    playTone(880, t, 0.1);
+    playTone(1174.66, t + 0.08, 0.22);
+    setTimeout(() => void ctx.close(), 500);
+  } catch {
+    // Audio not available
+  }
+}
+
+/**
+ * DM alert when the app is in the background — plays even if that DM is already open.
+ * Skipped when the recipient is on DND or the app/window is focused.
+ */
+export function alertIncomingDm(
+  title: string,
+  body: string | undefined,
+  recipient: { status?: UserStatus; preferred_status?: UserStatus | null } | null | undefined,
+) {
+  if (isRecipientDoNotDisturb(recipient)) return;
+  if (!isAppInBackground()) return;
+  playDmPing();
+  showSystemNotification(title, body);
 }
 
 /** Only call from a click/tap handler — browsers reject permission prompts otherwise. */
