@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { getDisbandUserMedia } from "@/lib/media";
+import { broadcastOnChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
 import { attachRemoteTrack, createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
@@ -86,11 +87,7 @@ export function useGroupCallManager(
   }, []);
 
   const sendToUser = useCallback(async (targetId: string, payload: Record<string, unknown>) => {
-    const supabase = getSupabaseClient();
-    const ch = supabase.channel(`call-user:${targetId}`, { config: { broadcast: { self: false } } });
-    await ch.subscribe();
-    await ch.send({ type: "broadcast", event: "group-call", payload });
-    await ch.unsubscribe();
+    await broadcastOnChannel(getSupabaseClient(), `call-user:${targetId}`, "group-call", payload);
   }, []);
 
   const broadcast = useCallback((payload: SignalPayload) => {

@@ -1292,11 +1292,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeGroupChatId, loadGroupMessages]);
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
-    const { data, error } = await getSupabaseClient().rpc("get_or_create_dm_thread", { p_friend_id: friendId });
+    if (!userId) return;
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
     if (error) throw new Error(error.message);
-    if (userId) await loadDmThreads(userId);
-    await selectDmThread(data as string);
-  }, [selectDmThread, loadDmThreads, userId]);
+    const threadId = data as string;
+
+    let friendProfile = friends.find((f) => f.id === friendId);
+    if (!friendProfile) {
+      const { data: fp } = await supabase.from("profiles").select("*").eq("id", friendId).maybeSingle();
+      friendProfile = fp as Profile | undefined;
+    }
+
+    if (friendProfile) {
+      const userA = userId < friendId ? userId : friendId;
+      const userB = userId < friendId ? friendId : userId;
+      setDmThreads((prev) => {
+        const existing = prev.find((t) => t.id === threadId);
+        if (existing) {
+          return prev.map((t) => (t.id === threadId ? { ...t, friend: friendProfile! } : t));
+        }
+        return [
+          ...prev,
+          {
+            id: threadId,
+            user_a: userA,
+            user_b: userB,
+            created_at: new Date().toISOString(),
+            friend: friendProfile!,
+          },
+        ];
+      });
+    }
+
+    await selectDmThread(threadId);
+    void loadDmThreads(userId);
+  }, [userId, friends, selectDmThread, loadDmThreads]);
 
   const sendFriendRequest = useCallback(async (username: string) => {
     if (!userId) return "Not signed in";
