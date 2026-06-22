@@ -34,6 +34,10 @@ export function mapAuthError(message: string): string {
     return "That authentication code is incorrect or expired. Try again.";
   }
 
+  if (lower.includes("too many") && lower.includes("factor")) {
+    return "You have the maximum number of security methods. Remove one before adding another.";
+  }
+
   if (lower.includes("webauthn") || lower.includes("passkey")) {
     return "Passkey verification failed. Try again or use your authenticator app.";
   }
