@@ -30,6 +30,16 @@ const PLATFORM_PATTERNS: { platform: DownloadPlatform; test: RegExp; label: stri
   { platform: "linux", test: /\.(deb|AppImage|rpm)$/i, label: "Linux" },
 ];
 
+interface NavigatorUAData {
+  getHighEntropyValues(
+    hints: string[],
+  ): Promise<{ architecture?: string; platform?: string }>;
+}
+
+function getNavigatorUAData(): NavigatorUAData | undefined {
+  return (navigator as Navigator & { userAgentData?: NavigatorUAData }).userAgentData;
+}
+
 function isArmMacAsset(name: string): boolean {
   return /aarch64|arm64|apple[-_]?silicon/i.test(name);
 }
@@ -78,8 +88,9 @@ export async function detectMacArchAsync(): Promise<MacArch> {
   if (typeof navigator === "undefined") return "unknown";
 
   try {
-    if (navigator.userAgentData?.getHighEntropyValues) {
-      const { architecture, platform } = await navigator.userAgentData.getHighEntropyValues([
+    const uaData = getNavigatorUAData();
+    if (uaData?.getHighEntropyValues) {
+      const { architecture, platform } = await uaData.getHighEntropyValues([
         "architecture",
         "platform",
       ]);
