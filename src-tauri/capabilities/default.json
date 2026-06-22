@@ -3,10 +3,5 @@
   "identifier": "default",
   "description": "Default capabilities granted to the main Disband window.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "notification:default",
-    "macos-permissions:default"
-  ]
+  "permissions": ["core:default", "opener:default", "notification:default"]
 }

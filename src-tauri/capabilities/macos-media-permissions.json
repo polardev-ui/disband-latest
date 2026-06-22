@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos-media-permissions",
+  "description": "macOS system permission prompts for microphone and camera.",
+  "platforms": ["macOS"],
+  "windows": ["main"],
+  "permissions": ["macos-permissions:default"]
+}
