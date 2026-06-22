@@ -19,7 +19,11 @@ interface UserProfileModalProps {
   onDeclineFriend?: () => void;
   onVoiceCall?: () => void;
   onOpenSettings?: () => void;
+  onRemoveFriend?: () => void;
+  onBlock?: () => void;
+  onUnblock?: () => void;
   isFriend?: boolean;
+  isBlocked?: boolean;
   pendingIncoming?: boolean;
   pendingOutgoing?: boolean;
   isSelf?: boolean;
@@ -35,7 +39,11 @@ export function UserProfileModal({
   onDeclineFriend,
   onVoiceCall,
   onOpenSettings,
+  onRemoveFriend,
+  onBlock,
+  onUnblock,
   isFriend,
+  isBlocked,
   pendingIncoming,
   pendingOutgoing,
   isSelf,
@@ -94,6 +102,15 @@ export function UserProfileModal({
                 <IconSettings size={16} /> Edit Profile
               </button>
             )
+          ) : isBlocked ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="rounded border border-current/20 px-3 py-2 text-sm text-text-muted">Blocked</span>
+              {onUnblock && (
+                <button type="button" onClick={onUnblock} className="rounded bg-black/25 px-3 py-2 text-sm font-semibold backdrop-blur-sm hover:bg-black/35">
+                  Unblock
+                </button>
+              )}
+            </div>
           ) : (
             <div className="mt-4 flex flex-wrap gap-2">
               {(isFriend || friend) && onMessage && (
@@ -125,6 +142,16 @@ export function UserProfileModal({
                 <span className="rounded border border-current/20 px-3 py-2 text-sm text-text-muted">
                   Friend request sent
                 </span>
+              )}
+              {(isFriend || friend) && onRemoveFriend && (
+                <button type="button" onClick={onRemoveFriend} className="rounded border border-current/30 px-3 py-2 text-sm font-semibold hover:bg-black/10">
+                  Remove Friend
+                </button>
+              )}
+              {onBlock && (
+                <button type="button" onClick={onBlock} className="rounded border border-status-dnd/40 px-3 py-2 text-sm font-semibold text-status-dnd hover:bg-status-dnd/10">
+                  Block
+                </button>
               )}
             </div>
           )}

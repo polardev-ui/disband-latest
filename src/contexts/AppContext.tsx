@@ -16,7 +16,8 @@ import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
-import { mapProfileError, mapGroupChatError } from "@/lib/profileErrors";
+import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profileErrors";
+import { messageWordLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
@@ -112,6 +113,11 @@ interface AppContextValue {
   sendFriendRequest: (username: string) => Promise<string | null>;
   respondFriendRequest: (id: string, accept: boolean) => Promise<void>;
   removeFriend: (friendId: string) => Promise<void>;
+  blockUser: (userId: string) => Promise<string | null>;
+  unblockUser: (userId: string) => Promise<string | null>;
+  blockedUserIds: Set<string>;
+  isBlocked: (userId: string) => boolean;
+  isBlockedEitherWay: (userId: string) => boolean;
   createServer: (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => Promise<string | null>;
   updateServer: (serverId: string, patch: Partial<Server>) => Promise<string | null>;
   deleteServer: (serverId: string) => Promise<string | null>;
@@ -119,7 +125,7 @@ interface AppContextValue {
   joinServerByInvite: (code: string) => Promise<string | null>;
   kickMember: (userId: string) => Promise<string | null>;
   banMember: (userId: string, reason?: string) => Promise<string | null>;
-  createRole: (data: { name: string; color: string }) => Promise<string | null>;
+  createRole: (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => Promise<string | null>;
   assignMemberRole: (userId: string, roleId: string | null) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
   sendChannelMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -153,6 +159,16 @@ interface AppContextValue {
   loadMoreChannelMessages: () => Promise<void>;
   loadMoreDmMessages: () => Promise<void>;
   loadMoreGroupMessages: () => Promise<void>;
+  platformBan: { banned: boolean; reason?: string; vpnBlocked?: boolean } | null;
+  refreshPlatformAccess: () => Promise<void>;
+  serverPermissions: { kick: boolean; ban: boolean; manage_roles: boolean; manage_server: boolean };
+  hasServerPermission: (permission: "kick" | "ban" | "manage_roles" | "manage_server") => boolean;
+  updateRole: (
+    roleId: string,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions">>,
+  ) => Promise<string | null>;
+  platformBanUser: (opts: { username?: string; userId?: string; password: string; reason?: string }) => Promise<string | null>;
+  platformUnbanUser: (opts: { userId: string; password: string }) => Promise<string | null>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -176,6 +192,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [channelHasMore, setChannelHasMore] = useState(false);
   const [dmHasMore, setDmHasMore] = useState(false);
   const [groupHasMore, setGroupHasMore] = useState(false);
+  const [platformBan, setPlatformBan] = useState<{ banned: boolean; reason?: string; vpnBlocked?: boolean } | null>(null);
+  const [serverPermissions, setServerPermissions] = useState({
+    kick: false,
+    ban: false,
+    manage_roles: false,
+    manage_server: false,
+  });
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -265,6 +288,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [friendships, userId],
   );
 
+  const blockedUserIds = useMemo(() => {
+    if (!userId) return new Set<string>();
+    return new Set(
+      friendships
+        .filter((f) => f.status === "blocked" && f.requester_id === userId)
+        .map((f) => f.addressee_id),
+    );
+  }, [friendships, userId]);
+
+  const blockRelatedIds = useMemo(() => {
+    if (!userId) return new Set<string>();
+    const ids = new Set<string>();
+    for (const f of friendships) {
+      if (f.status !== "blocked") continue;
+      if (f.requester_id === userId) ids.add(f.addressee_id);
+      if (f.addressee_id === userId) ids.add(f.requester_id);
+    }
+    return ids;
+  }, [friendships, userId]);
+
+  const isBlocked = useCallback((id: string) => blockedUserIds.has(id), [blockedUserIds]);
+  const isBlockedEitherWay = useCallback((id: string) => blockRelatedIds.has(id), [blockRelatedIds]);
+
   const dmUnreads = useMemo((): { threadId: string; friend: Profile; count: number }[] => {
     return [...dmUnreadMap.entries()]
       .filter(([, entry]) => entry.count > 0)
@@ -282,12 +328,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const sortedDmThreads = useMemo(() => {
-    return [...dmThreads].sort((a, b) => {
-      const ta = dmThreadActivity[a.id] ?? a.created_at;
-      const tb = dmThreadActivity[b.id] ?? b.created_at;
-      return tb.localeCompare(ta);
-    });
-  }, [dmThreads, dmThreadActivity]);
+    return [...dmThreads]
+      .filter((t) => !blockRelatedIds.has(t.friend.id))
+      .sort((a, b) => {
+        const ta = dmThreadActivity[a.id] ?? a.created_at;
+        const tb = dmThreadActivity[b.id] ?? b.created_at;
+        return tb.localeCompare(ta);
+      });
+  }, [dmThreads, dmThreadActivity, blockRelatedIds]);
 
   const dmListEntries = useMemo(() => {
     const threadByFriend = new Map(sortedDmThreads.map((t) => [t.friend.id, t]));
@@ -455,6 +503,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .filter((m) => map.has(m.user_id))
         .map((m) => ({ ...m, profile: map.get(m.user_id)! })),
     );
+    if (userId) {
+      const { data: perms } = await supabase.rpc("my_server_permissions", { p_server_id: serverId });
+      if (perms && typeof perms === "object") {
+        setServerPermissions({
+          kick: !!(perms as { kick?: boolean }).kick,
+          ban: !!(perms as { ban?: boolean }).ban,
+          manage_roles: !!(perms as { manage_roles?: boolean }).manage_roles,
+          manage_server: !!(perms as { manage_server?: boolean }).manage_server,
+        });
+      }
+    }
     return channelRows;
   }, []);
 
@@ -764,13 +823,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMfaRequired(assurance.mfaRequired);
   }, [configured]);
 
+  const refreshPlatformAccess = useCallback(async () => {
+    const { data: { session: s } } = await getSupabaseClient().auth.getSession();
+    if (!s) {
+      setPlatformBan(null);
+      return;
+    }
+    try {
+      const res = await fetch("/api/moderation/access", {
+        headers: { Authorization: `Bearer ${s.access_token}` },
+      });
+      if (!res.ok) {
+        setPlatformBan(null);
+        return;
+      }
+      const json = (await res.json()) as { banned?: boolean; reason?: string; vpnBlocked?: boolean };
+      setPlatformBan(json.banned ? { banned: true, reason: json.reason, vpnBlocked: json.vpnBlocked } : null);
+    } catch {
+      setPlatformBan(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (!session) {
       setMfaRequired(false);
+      setPlatformBan(null);
       return;
     }
     void refreshMfaStatus();
-  }, [session, refreshMfaStatus]);
+    void refreshPlatformAccess();
+  }, [session, refreshMfaStatus, refreshPlatformAccess]);
+
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel(`platform-ban:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "platform_bans", filter: `user_id=eq.${userId}` },
+        () => { void refreshPlatformAccess(); },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [userId, configured, refreshPlatformAccess]);
 
   useEffect(() => {
     if (!userId) {
@@ -1356,6 +1452,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const displayNameVal = username.trim();
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
 
+    try {
+      const checkRes = await fetch("/api/auth/signup-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), username: normalized }),
+      });
+      if (!checkRes.ok) {
+        const json = (await checkRes.json()) as { error?: string };
+        return { error: json.error ?? "Account creation is not allowed right now." };
+      }
+    } catch {
+      // If the pre-check is unavailable, fall through to Supabase signup (DB triggers still enforce blocks).
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -1421,6 +1531,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     delete payload.show_staff_badge;
     if (payload.username) payload.username = payload.username.trim().toLowerCase();
     if (payload.display_name) payload.display_name = payload.display_name.trim();
+    if (typeof payload.bio === "string") {
+      const bioErr = bioLengthError(payload.bio);
+      if (bioErr) return bioErr;
+    }
     if (payload.status !== undefined) {
       payload.preferred_status = payload.status;
       preferredStatusRef.current = payload.status;
@@ -1689,6 +1803,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadFriendships(userId);
   }, [userId, loadFriendships]);
 
+  const blockUser = useCallback(async (targetUserId: string) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient().rpc("block_user", { p_user_id: targetUserId });
+    if (error) return error.message;
+    if (activeDmThreadId) {
+      const thread = dmThreads.find((t) => t.id === activeDmThreadId);
+      if (thread && thread.friend.id === targetUserId) {
+        setActiveDmThreadId(null);
+        setViewMode("home");
+      }
+    }
+    await loadFriendships(userId);
+    return null;
+  }, [userId, activeDmThreadId, dmThreads, loadFriendships]);
+
+  const unblockUser = useCallback(async (targetUserId: string) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient().rpc("unblock_user", { p_user_id: targetUserId });
+    if (error) return error.message;
+    await loadFriendships(userId);
+    return null;
+  }, [userId, loadFriendships]);
+
   const createServer = useCallback(async (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => {
     if (!userId) return "Not signed in";
     await ensureProfile(userId, user?.email);
@@ -1761,18 +1898,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails]);
 
-  const createRole = useCallback(async (data: { name: string; color: string }) => {
+  const createRole = useCallback(async (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().from("server_roles").insert({
       server_id: activeServerId,
       name: data.name.trim(),
       color: data.color,
       position: serverRoles.length,
+      ...(data.permissions ? { permissions: data.permissions } : {}),
     });
     if (error) return error.message;
     await loadServerDetails(activeServerId);
     return null;
   }, [activeServerId, serverRoles.length, loadServerDetails]);
+
+  const updateRole = useCallback(async (
+    roleId: string,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions">>,
+  ) => {
+    if (!activeServerId) return "No server selected";
+    const update: Record<string, unknown> = {};
+    if (patch.name !== undefined) update.name = patch.name.trim();
+    if (patch.color !== undefined) update.color = patch.color;
+    if (patch.permissions !== undefined) update.permissions = patch.permissions;
+    const { error } = await getSupabaseClient()
+      .from("server_roles")
+      .update(update)
+      .eq("id", roleId)
+      .eq("server_id", activeServerId);
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
 
   const assignMemberRole = useCallback(async (targetUserId: string, roleId: string | null) => {
     if (!activeServerId) return "No server selected";
@@ -1785,6 +1942,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadServerDetails(activeServerId);
     return null;
   }, [activeServerId, loadServerDetails]);
+
+  const hasServerPermission = useCallback(
+    (permission: "kick" | "ban" | "manage_roles" | "manage_server") => serverPermissions[permission],
+    [serverPermissions],
+  );
+
+  const platformBanUser = useCallback(async (opts: { username?: string; userId?: string; password: string; reason?: string }) => {
+    const { data: { session: s } } = await getSupabaseClient().auth.getSession();
+    if (!s) return "Not signed in";
+    try {
+      const res = await fetch("/api/moderation/platform-ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.access_token}` },
+        body: JSON.stringify({ action: "ban", ...opts }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) return json.error ?? "Failed to ban user.";
+      return null;
+    } catch {
+      return "Failed to reach moderation service.";
+    }
+  }, []);
+
+  const platformUnbanUser = useCallback(async (opts: { userId: string; password: string }) => {
+    const { data: { session: s } } = await getSupabaseClient().auth.getSession();
+    if (!s) return "Not signed in";
+    try {
+      const res = await fetch("/api/moderation/platform-ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.access_token}` },
+        body: JSON.stringify({ action: "unban", ...opts }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) return json.error ?? "Failed to unban user.";
+      return null;
+    } catch {
+      return "Failed to reach moderation service.";
+    }
+  }, []);
 
   const getMemberColor = useCallback(
     (member: ServerMember) => {
@@ -1802,6 +1998,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { attachment, replyToId } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment) return "Empty message";
+    const wordErr = messageWordLimitError(normalized);
+    if (wordErr) return wordErr;
 
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: Message & { author: Profile } = {
@@ -1847,7 +2045,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      return error.message;
+      return mapMessageError(error.message);
     }
     const saved = data as Message & { author: Profile };
     setMessages((prev) => {
@@ -1865,6 +2063,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { attachment, replyToId } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment) return "Empty message";
+    const wordErr = messageWordLimitError(normalized);
+    if (wordErr) return wordErr;
 
     const thread = dmThreads.find((t) => t.id === activeDmThreadId);
     const other = thread ? [thread.friend] : [];
@@ -1913,7 +2113,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setDmMessages((prev) => prev.filter((m) => m.id !== tempId));
-      return error.message;
+      return mapMessageError(error.message);
     }
     const saved = data as DmMessage & { author: Profile };
     setDmMessages((prev) => {
@@ -1932,6 +2132,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { attachment, replyToId } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment) return "Empty message";
+    const wordErr = messageWordLimitError(normalized);
+    if (wordErr) return wordErr;
 
     const group = groupChats.find((g) => g.id === activeGroupChatId);
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -2007,6 +2209,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !activeChannelId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     if (!normalized) return "Message cannot be empty";
+    const editWordErr = messageWordLimitError(normalized);
+    if (editWordErr) return editWordErr;
     const editedAt = new Date().toISOString();
     setMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, content: normalized, edited_at: editedAt } : m)),
@@ -2027,6 +2231,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !activeDmThreadId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     if (!normalized) return "Message cannot be empty";
+    const editWordErr = messageWordLimitError(normalized);
+    if (editWordErr) return editWordErr;
     const editedAt = new Date().toISOString();
     setDmMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, content: normalized, edited_at: editedAt } : m)),
@@ -2047,6 +2253,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !activeGroupChatId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     if (!normalized) return "Message cannot be empty";
+    const editWordErr = messageWordLimitError(normalized);
+    if (editWordErr) return editWordErr;
     const editedAt = new Date().toISOString();
     setGroupMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, content: normalized, edited_at: editedAt } : m)),
@@ -2165,6 +2373,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sendFriendRequest,
     respondFriendRequest,
     removeFriend,
+    blockUser,
+    unblockUser,
+    blockedUserIds,
+    isBlocked,
+    isBlockedEitherWay,
     createServer,
     updateServer,
     deleteServer,
@@ -2173,6 +2386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     kickMember,
     banMember,
     createRole,
+    updateRole,
     assignMemberRole,
     getMemberColor,
     sendChannelMessage,
@@ -2200,6 +2414,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadMoreChannelMessages,
     loadMoreDmMessages,
     loadMoreGroupMessages,
+    platformBan,
+    refreshPlatformAccess,
+    serverPermissions,
+    hasServerPermission,
+    platformBanUser,
+    platformUnbanUser,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

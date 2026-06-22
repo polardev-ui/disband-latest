@@ -39,7 +39,10 @@ export function useCallManager(
   profile: Profile | null,
   micMuted: boolean,
   deafened: boolean,
+  isBlocked?: (id: string) => boolean,
 ) {
+  const isBlockedRef = useRef(isBlocked);
+  isBlockedRef.current = isBlocked;
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [incoming, setIncoming] = useState<IncomingCallInfo | null>(null);
   const [activePeer, setActivePeer] = useState<Profile | null>(null);
@@ -322,6 +325,7 @@ export function useCallManager(
 
       void (async () => {
         if (p.type === "ring" && p.callId) {
+          if (isBlockedRef.current?.(p.from)) return;
           if (phaseRef.current !== "idle") {
             await sendToUser(p.from, {
               type: "reject",

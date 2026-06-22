@@ -72,6 +72,7 @@ export function DiscordApp() {
     app.profile,
     app.micMuted,
     app.deafened,
+    app.isBlockedEitherWay,
   );
 
   useEffect(() => {
@@ -135,9 +136,9 @@ export function DiscordApp() {
     else void groupCall.watchGroup(null);
   }, [activeGroup?.id, activeGroup?.name, groupCall.watchGroup]);
 
-  const canModerate =
-    app.activeServer?.owner_id === app.user?.id ||
-    app.members.find((m) => m.user_id === app.user?.id)?.role === "admin";
+  const canKick = app.serverPermissions.kick;
+  const canBan = app.serverPermissions.ban;
+  const canManageRoles = app.serverPermissions.manage_roles;
 
   const getAuthorColor = useCallback(
     (authorId: string) => {
@@ -398,29 +399,35 @@ export function DiscordApp() {
         },
       ];
 
-      if (canModerate && !isOwnerMember && member.user_id !== app.user?.id) {
-        items.push(
-          {
+      if (!isOwnerMember && member.user_id !== app.user?.id) {
+        if (canKick) {
+          items.push({
             id: "kick",
             label: "Kick",
             icon: <IconLeave size={16} />,
             onClick: () => {
-              if (confirm(`Kick ${displayName(member.profile)}?`)) void app.kickMember(member.user_id);
+              if (confirm(`Kick ${displayName(member.profile)}?`)) {
+                void app.kickMember(member.user_id).then((err) => { if (err) alert(err); });
+              }
             },
-          },
-          {
+          });
+        }
+        if (canBan) {
+          items.push({
             id: "ban",
             label: "Ban",
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
-              if (confirm(`Ban ${displayName(member.profile)}?`)) void app.banMember(member.user_id);
+              if (confirm(`Ban ${displayName(member.profile)}? This deletes all their messages and prevents them from rejoining.`)) {
+                void app.banMember(member.user_id).then((err) => { if (err) alert(err); });
+              }
             },
-          },
-        );
+          });
+        }
       }
 
-      if (canModerate && app.serverRoles.length > 0) {
+      if (canManageRoles && app.serverRoles.length > 0) {
         app.serverRoles.forEach((role) => {
           items.push({
             id: `role-${role.id}`,
@@ -433,7 +440,7 @@ export function DiscordApp() {
 
       openMenu(x, y, items);
     },
-    [app, canModerate, openMenu, openProfile],
+    [app, canKick, canBan, canManageRoles, openMenu, openProfile],
   );
 
   const mapChatMessage = (m: {
@@ -797,6 +804,7 @@ export function DiscordApp() {
         onClose={() => setProfileTarget(null)}
         isSelf={profileTarget?.id === app.user?.id}
         isFriend={profileFriend}
+        isBlocked={profileTarget ? app.isBlocked(profileTarget.id) : false}
         pendingIncoming={profilePendingIncoming}
         pendingOutgoing={profilePendingOutgoing}
         onMessage={
@@ -832,9 +840,37 @@ export function DiscordApp() {
             : undefined
         }
         onVoiceCall={
-          profileTarget && profileFriend
+          profileTarget && profileFriend && !app.isBlockedEitherWay(profileTarget.id)
             ? () => {
                 void startVoiceCall(profileTarget);
+                setProfileTarget(null);
+              }
+            : undefined
+        }
+        onRemoveFriend={
+          profileTarget && profileFriend
+            ? () => {
+                if (confirm(`Remove ${displayName(profileTarget)} as a friend?`)) {
+                  void app.removeFriend(profileTarget.id);
+                  setProfileTarget(null);
+                }
+              }
+            : undefined
+        }
+        onBlock={
+          profileTarget && profileTarget.id !== app.user?.id && !app.isBlocked(profileTarget.id)
+            ? () => {
+                if (confirm(`Block ${displayName(profileTarget)}? They won't be able to message or call you.`)) {
+                  void app.blockUser(profileTarget.id).then((err) => { if (err) alert(err); });
+                  setProfileTarget(null);
+                }
+              }
+            : undefined
+        }
+        onUnblock={
+          profileTarget && app.isBlocked(profileTarget.id)
+            ? () => {
+                void app.unblockUser(profileTarget.id);
                 setProfileTarget(null);
               }
             : undefined

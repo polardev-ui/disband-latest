@@ -124,9 +124,10 @@ export function AuthScreen() {
                 <input
                   required
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => setUsername(e.target.value.slice(0, 25))}
+                  maxLength={25}
                   className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-                  pattern="[a-zA-Z0-9_]{2,32}"
+                  pattern="[a-zA-Z0-9_]{2,25}"
                 />
               </label>
             )}
