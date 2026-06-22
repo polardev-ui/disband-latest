@@ -1,9 +1,16 @@
 name: Prepare Release
 
-# Bumps the semver, commits version files, and pushes a new v* tag.
-# That tag triggers "Release Desktop" to build and publish installers.
+# On every push to main: bump patch semver, commit version files, push a unique v* tag.
+# That tag automatically triggers "Release Desktop" to build and publish installers.
+# Use "Run workflow" manually when you want a minor or major bump instead.
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
   workflow_dispatch:
     inputs:
       bump:
@@ -18,38 +25,68 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: prepare-release
+  cancel-in-progress: true
+
 jobs:
   bump:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Compute next version
+      - name: Compute next unique version
         id: ver
         env:
-          BUMP: ${{ inputs.bump }}
+          BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           VERSION=$(node scripts/next-release-version.mjs)
+          TAG="v${VERSION}"
+          node scripts/validate-release-tag.mjs "${TAG}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Next release: v${VERSION}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Next release: ${TAG}"
+
+      - name: Refuse duplicate tags
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          if git ls-remote --quiet --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists on origin. Each release must have a unique semver tag."
+            exit 1
+          fi
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists locally."
+            exit 1
+          fi
 
       - name: Update version files
         run: node scripts/set-version.mjs "${{ steps.ver.outputs.version }}"
 
       - name: Commit, tag, and push
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
-          git commit -m "chore(release): ${{ steps.ver.outputs.tag }}"
-          git tag "${{ steps.ver.outputs.tag }}"
-          git push origin HEAD
-          git push origin "${{ steps.ver.outputs.tag }}"
+          if git diff --staged --quiet; then
+            echo "Version files already at ${{ steps.ver.outputs.version }} — skipping."
+            exit 0
+          fi
+          git commit -m "chore(release): ${TAG}"
+          git tag -a "${TAG}" -m "Disband ${TAG}"
+          git push origin "refs/tags/${TAG}"
+          git push origin HEAD:refs/heads/main
