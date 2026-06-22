@@ -46,6 +46,11 @@ jobs:
             name: Windows
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Resolve build target
         id: build
         env:
@@ -55,7 +60,9 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: node scripts/resolve-release-build.mjs --phase=pre
 
-      - uses: actions/checkout@v4
+      - name: Checkout build ref
+        if: steps.build.outputs.checkout_ref != github.ref_name
+        uses: actions/checkout@v4
         with:
           ref: ${{ steps.build.outputs.checkout_ref }}
           fetch-depth: 0
