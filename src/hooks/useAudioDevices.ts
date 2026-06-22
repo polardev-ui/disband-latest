@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { warmUpMediaDevices } from "@/lib/media";
 
-export interface AudioDeviceOption {
+export interface MediaDeviceOption {
   deviceId: string;
   label: string;
 }
 
 export function useAudioDevices() {
-  const [inputs, setInputs] = useState<AudioDeviceOption[]>([]);
-  const [outputs, setOutputs] = useState<AudioDeviceOption[]>([]);
+  const [inputs, setInputs] = useState<MediaDeviceOption[]>([]);
+  const [outputs, setOutputs] = useState<MediaDeviceOption[]>([]);
+  const [cameras, setCameras] = useState<MediaDeviceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +23,7 @@ export function useAudioDevices() {
       if (!navigator.mediaDevices?.enumerateDevices) {
         setInputs([]);
         setOutputs([]);
+        setCameras([]);
         return;
       }
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -41,8 +43,16 @@ export function useAudioDevices() {
             label: d.label || `Speaker ${i + 1}`,
           })),
       );
+      setCameras(
+        devices
+          .filter((d) => d.kind === "videoinput")
+          .map((d, i) => ({
+            deviceId: d.deviceId,
+            label: d.label || `Camera ${i + 1}`,
+          })),
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not list audio devices.");
+      setError(err instanceof Error ? err.message : "Could not list media devices.");
     } finally {
       setLoading(false);
     }
@@ -54,5 +64,5 @@ export function useAudioDevices() {
     return () => navigator.mediaDevices?.removeEventListener("devicechange", refresh);
   }, [refresh]);
 
-  return { inputs, outputs, loading, error, refresh };
+  return { inputs, outputs, cameras, loading, error, refresh };
 }

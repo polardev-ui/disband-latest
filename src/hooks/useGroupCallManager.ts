@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
+import { buildVideoConstraints } from "@/lib/audio-settings";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
-import { attachRemoteTrack, createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
+import { attachRemoteTrack, createOfferForPeer, setPeerVideoTrack } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -146,7 +147,14 @@ export function useGroupCallManager(
       if (local) local.getTracks().forEach((t) => pc.addTrack(t, local));
 
       pc.ontrack = (ev) => {
-        setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, ev.track, ev.streams[0]));
+        const track = ev.track;
+        const sync = () => {
+          setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, ev.streams[0]));
+        };
+        track.addEventListener("ended", sync);
+        track.addEventListener("mute", sync);
+        track.addEventListener("unmute", sync);
+        sync();
       };
       pc.onicecandidate = (ev) => {
         if (ev.candidate) {
@@ -245,7 +253,7 @@ export function useGroupCallManager(
     await warmUpMediaDevices();
     const stream = await getDisbandUserMedia({
       audio: true,
-      video: cameraRef.current ? { facingMode: "user" } : false,
+      video: cameraRef.current ? buildVideoConstraints() : false,
     });
     localRef.current = stream;
     setLocalStream(stream);
@@ -371,7 +379,7 @@ export function useGroupCallManager(
         track.enabled = true;
       } else {
         const cam = await getDisbandUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          video: buildVideoConstraints(),
         });
         track = cam.getVideoTracks()[0];
         stream.addTrack(track);
