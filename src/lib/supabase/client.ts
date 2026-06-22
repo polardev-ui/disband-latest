@@ -1,10 +1,37 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { isTauri } from "@/lib/platform";
 
 let browserClient: SupabaseClient | null = null;
+
+function clearSupabaseAuthCookies() {
+  if (typeof document === "undefined") return;
+  for (const cookie of document.cookie.split(";")) {
+    const name = cookie.split("=")[0]?.trim();
+    if (name?.startsWith("sb-")) {
+      document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+    }
+  }
+}
+
+function createTauriClient(url: string, anonKey: string): SupabaseClient {
+  clearSupabaseAuthCookies();
+  return createClient(url, anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      storage: window.localStorage,
+    },
+  });
+}
+
+export function resetSupabaseClient() {
+  browserClient = null;
+}
 
 export function getSupabaseClient(): SupabaseClient {
   if (browserClient) return browserClient;
@@ -16,7 +43,11 @@ export function getSupabaseClient(): SupabaseClient {
     throw new Error("Missing Supabase configuration.");
   }
 
-  browserClient = createBrowserClient(url, anonKey);
+  browserClient =
+    typeof window !== "undefined" && isTauri()
+      ? createTauriClient(url, anonKey)
+      : createBrowserClient(url, anonKey);
+
   return browserClient;
 }
 

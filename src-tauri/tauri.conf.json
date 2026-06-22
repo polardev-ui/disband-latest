@@ -21,7 +21,8 @@
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "devtools": true
       }
     ],
     "security": {
@@ -35,7 +36,8 @@
     "shortDescription": "One codebase, every platform.",
     "longDescription": "Disband — a cross-platform app for macOS, Windows, Linux and the Web, built from a single Next.js codebase.",
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
     },
     "icon": [
       "icons/32x32.png",
