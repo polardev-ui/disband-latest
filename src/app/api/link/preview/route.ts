@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertSafeUrl } from "@/lib/ssrf-guard";
+import { getClientIp } from "@/lib/request-ip";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const MEDIA_API =
   process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1";
@@ -28,10 +31,15 @@ async function scrapeOpenGraph(url: string) {
       "User-Agent": "DisbandLinkPreview/1.0 (+https://disband.wsgpolar.me)",
       Accept: "text/html,application/xhtml+xml",
     },
-    redirect: "follow",
+    // Do not follow redirects: a redirect could point at an internal host and
+    // bypass the SSRF pre-check performed on the original URL.
+    redirect: "manual",
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) return null;
+
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("html")) return null;
 
   const html = await res.text();
   const title =
@@ -64,15 +72,20 @@ async function scrapeOpenGraph(url: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const ip = getClientIp(req) || "unknown";
+  const limit = rateLimit(`link-preview:${ip}`, 30, 60_000);
+  if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
   const target = req.nextUrl.searchParams.get("url");
   if (!target) {
     return NextResponse.json({ error: "Missing url parameter." }, { status: 400 });
   }
 
+  // SSRF guard: reject internal/private/metadata targets and non-http(s) schemes.
   try {
-    new URL(target);
+    await assertSafeUrl(target);
   } catch {
-    return NextResponse.json({ error: "Invalid url." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid or disallowed url." }, { status: 400 });
   }
 
   try {
