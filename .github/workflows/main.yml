@@ -47,12 +47,16 @@ jobs:
         env:
           INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          node scripts/validate-release-tag.mjs "${INPUT_TAG}"
+          if ! [[ "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag \"${INPUT_TAG}\". Expected format v1.2.3 (not branch names like \"main\")." >&2
+            exit 1
+          fi
           echo "name=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.tag.outputs.name }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
