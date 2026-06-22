@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { getDisbandUserMedia } from "@/lib/media";
-import { broadcastOnChannel } from "@/lib/realtime";
+import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
+import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
 import { attachRemoteTrack, createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
@@ -226,19 +226,23 @@ export function useGroupCallManager(
   );
 
   const subscribeSignal = useCallback(
-    (gid: string) => {
+    async (gid: string) => {
       const supabase = getSupabaseClient();
-      if (signalRef.current) void signalRef.current.unsubscribe();
+      if (signalRef.current) {
+        await signalRef.current.unsubscribe();
+        signalRef.current = null;
+      }
       const ch = supabase.channel(`group-call:${gid}`, { config: { broadcast: { self: false } } });
       ch.on("broadcast", { event: "group-call" }, ({ payload }) => {
         void handleSignal(payload as SignalPayload);
-      }).subscribe();
-      signalRef.current = ch;
+      });
+      signalRef.current = await subscribeChannel(ch);
     },
     [handleSignal],
   );
 
   const joinCallMedia = useCallback(async () => {
+    await warmUpMediaDevices();
     const stream = await getDisbandUserMedia({
       audio: true,
       video: cameraRef.current ? { facingMode: "user" } : false,
@@ -271,7 +275,7 @@ export function useGroupCallManager(
 
       try {
         await joinCallMedia();
-        subscribeSignal(gid);
+        await subscribeSignal(gid);
         const supabase = getSupabaseClient();
         await supabase.from("group_call_presence").upsert({ group_id: gid, user_id: userId });
         setJoined(true);
@@ -396,6 +400,7 @@ export function useGroupCallManager(
   // Listen for incoming rings
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
     const supabase = getSupabaseClient();
     const ch = supabase.channel(`call-user:${userId}`, { config: { broadcast: { self: false } } });
     ch.on("broadcast", { event: "group-call" }, ({ payload }) => {
@@ -406,9 +411,22 @@ export function useGroupCallManager(
         setPhase("ringing");
         startRingtone();
       }
-    }).subscribe();
-    listenRef.current = ch;
-    return () => { void ch.unsubscribe(); };
+    });
+
+    void subscribeChannel(ch)
+      .then((subscribed) => {
+        if (!cancelled) listenRef.current = subscribed;
+        else void subscribed.unsubscribe();
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not connect group call signaling");
+      });
+
+    return () => {
+      cancelled = true;
+      void ch.unsubscribe();
+      listenRef.current = null;
+    };
   }, [userId]);
 
   // Realtime presence for active group

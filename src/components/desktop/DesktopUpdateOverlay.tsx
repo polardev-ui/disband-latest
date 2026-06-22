@@ -13,6 +13,7 @@ import {
   type ReleaseAsset,
 } from "@/lib/github-releases";
 import { isNewerVersion, parseSemverTag, semverToString } from "@/lib/version";
+import { Logo } from "@/components/ui/Logo";
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -86,6 +87,9 @@ export function DesktopUpdateOverlay() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-bg-tertiary px-6 text-center">
       <div className="max-w-md rounded-2xl border border-divider bg-bg-secondary p-8 shadow-2xl">
+        <div className="mx-auto mb-4 flex justify-center">
+          <Logo size={56} className="h-14 w-14" />
+        </div>
         <p className="text-xs font-bold uppercase tracking-wider text-brand">Update available</p>
         <h1 className="mt-3 text-2xl font-bold text-text-normal">A new version of Disband is ready</h1>
         <p className="mt-3 text-sm leading-relaxed text-text-muted">

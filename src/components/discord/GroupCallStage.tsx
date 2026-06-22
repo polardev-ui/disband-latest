@@ -7,6 +7,7 @@ import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
+import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 
 interface GroupCallStageProps {
   groupName: string;
@@ -176,6 +177,7 @@ export function GroupCallStage({
             if (el) {
               el.srcObject = stream;
               el.muted = deafened;
+              void applyAudioOutputToElement(el, getPreferredAudioOutputId());
               void el.play().catch(() => {});
             }
           }}

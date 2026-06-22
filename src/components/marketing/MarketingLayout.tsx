@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Logo } from "@/components/ui/Logo";
 
 const links = [
   { href: "/home", label: "Home" },
@@ -15,8 +16,8 @@ export function MarketingNav() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#1e1f22]/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-6">
-        <Link href="/home" className="flex items-center gap-2 font-bold text-white">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-sm font-black">D</span>
+        <Link href="/home" className="flex items-center gap-2.5 font-bold text-white">
+          <Logo size={32} className="h-8 w-8" priority />
           Disband
         </Link>
         <nav className="hidden items-center gap-5 sm:flex">
@@ -49,9 +50,12 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-white/5 bg-[#1e1f22] px-6 py-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="font-semibold text-white">Disband</p>
-          <p className="mt-1 text-sm text-[#949ba4]">Chat, voice, and communities — built for privacy.</p>
+        <div className="flex items-center gap-2.5">
+          <Logo size={28} className="h-7 w-7" />
+          <div>
+            <p className="font-semibold text-white">Disband</p>
+            <p className="mt-1 text-sm text-[#949ba4]">Chat, voice, and communities — built for privacy.</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-[#b5bac1]">
           <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>

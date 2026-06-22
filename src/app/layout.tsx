@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Disband",
   description: "Disband — one codebase, every platform.",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/logo-app.png",
+  },
 };
 
 export const viewport: Viewport = {

@@ -217,8 +217,8 @@ function showWebNotification(
 
   const icon =
     window.location.origin.startsWith("http")
-      ? `${window.location.origin}/favicon.ico`
-      : "/favicon.ico";
+      ? `${window.location.origin}/favicon.png`
+      : "/favicon.png";
 
   const n = new Notification(title, {
     body,
