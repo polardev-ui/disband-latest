@@ -1,1 +1,0 @@
-(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,25780,i=>{"use strict";i.s(["isTauri",0,function(){return"__TAURI_INTERNALS__"in window||"__TAURI__"in window||"isTauri"in window}])},28400,i=>{i.v(i=>Promise.resolve().then(()=>i(11795)))}]);

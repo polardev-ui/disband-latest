@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
 import { playMentionPing, requestNotificationPermission, showSystemNotification } from "@/lib/notifications";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
@@ -959,7 +959,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId, configured]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await getSupabaseClient().auth.signInWithPassword({ email, password });
+    const supabase = getSupabaseClient();
+    await supabase.auth.signOut({ scope: "local" });
+    resetSupabaseClient();
+    setProfile(null);
+
+    const { error } = await getSupabaseClient().auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
     return error ? mapAuthError(error.message) : null;
   }, []);
 
@@ -1002,7 +1010,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (userId) {
       await getSupabaseClient().from("profiles").update({ status: "offline" }).eq("id", userId);
     }
-    await getSupabaseClient().auth.signOut();
+    await getSupabaseClient().auth.signOut({ scope: "local" });
+    resetSupabaseClient();
+    setProfile(null);
     setViewMode("home");
     setActiveServerId(null);
     setActiveChannelId(null);
