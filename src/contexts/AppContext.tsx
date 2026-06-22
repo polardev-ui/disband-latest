@@ -16,6 +16,7 @@ import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
+import { mapProfileError, mapGroupChatError } from "@/lib/profileErrors";
 import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
@@ -1368,7 +1369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      return { error: mapAuthError(error.message) };
+      return { error: mapProfileError(mapAuthError(error.message), error.code) };
     }
 
     if (data.session) {
@@ -1376,7 +1377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         p_username: normalized,
         p_display_name: displayNameVal,
       });
-      if (profileError) return { error: profileError.message };
+      if (profileError) return { error: mapProfileError(profileError.message, profileError.code) };
       return { error: null, needsEmailConfirmation: false };
     }
 
@@ -1429,7 +1430,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { error } = await getSupabaseClient().from("profiles").update(payload).eq("id", userId);
     if (error) {
       await loadProfile(userId);
-      return error.message;
+      return mapProfileError(error.message, error.code);
     }
     await loadProfile(userId);
     return null;
@@ -1508,7 +1509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_name: name,
       p_member_ids: memberIds,
     });
-    if (error) return error.message;
+    if (error) return mapGroupChatError(error.message);
     await loadGroupChats(userId);
     await selectGroupChat(id as string);
     return null;
@@ -1977,7 +1978,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setGroupMessages((prev) => prev.filter((m) => m.id !== tempId));
-      return error.message;
+      return mapGroupChatError(error.message);
     }
     const saved = data as GroupMessage & { author: Profile };
     setGroupMessages((prev) => {
