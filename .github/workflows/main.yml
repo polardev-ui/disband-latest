@@ -1,18 +1,24 @@
 name: Release Desktop
 
 # Builds and uploads installers when Prepare Release pushes a semver tag (v1.2.3).
-# Never run this manually without a semver tag — use Prepare Release instead.
+# Can also be run manually — pick an existing semver tag to rebuild.
 
 on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing semver tag to build (e.g. v0.2.1)"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,14 +42,21 @@ jobs:
             name: Windows
 
     steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          node scripts/validate-release-tag.mjs "${INPUT_TAG}"
+          echo "name=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.name }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Require semver release tag
-        run: node scripts/validate-release-tag.mjs "${{ github.ref_name }}"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -55,7 +68,9 @@ jobs:
           cache: pnpm
 
       - name: Sync version from tag
-        run: node scripts/set-version.mjs "${GITHUB_REF_NAME#v}"
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        run: node scripts/set-version.mjs "${TAG#v}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -80,10 +95,10 @@ jobs:
           NEXT_PUBLIC_MEDIA_API_URL: https://api.wsgpolar.me/v1
           NEXT_PUBLIC_APP_URL: https://disband.wsgpolar.me
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Disband ${{ github.ref_name }}
+          tagName: ${{ steps.tag.outputs.name }}
+          releaseName: Disband ${{ steps.tag.outputs.name }}
           releaseBody: |
-            ## Disband ${{ github.ref_name }}
+            ## Disband ${{ steps.tag.outputs.name }}
 
             Desktop builds for macOS, Windows, and Linux.
 
