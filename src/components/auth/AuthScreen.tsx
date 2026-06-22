@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { isTauri } from "@/lib/platform";
+import { Logo } from "@/components/ui/Logo";
 
 export function AuthScreen() {
   const { signIn, signUp, configured } = useApp();
@@ -66,8 +67,8 @@ export function AuthScreen() {
     <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
       <form onSubmit={submit} className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-xl">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[30%] bg-brand text-2xl font-black text-white">
-            D
+          <div className="mx-auto mb-3 flex justify-center">
+            <Logo size={56} className="h-14 w-14" priority />
           </div>
           <h1 className="text-2xl font-bold text-text-normal">
             {success ? "Check your email" : mode === "login" ? "Welcome back!" : "Create an account"}
