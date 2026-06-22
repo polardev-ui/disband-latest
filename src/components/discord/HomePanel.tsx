@@ -23,19 +23,26 @@ interface HomePanelProps {
   onGroupContext?: (group: GroupChatWithMembers, x: number, y: number) => void;
 }
 
-export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, onGroupContext }: HomePanelProps) {
+function DmUnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const label = count > 99 ? "99+" : String(count);
+  return (
+    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white">
+      {label}
+    </span>
+  );
+}
+
+export function HomePanel({ onOpenSettings, onUserPanelContext, onGroupContext }: HomePanelProps) {
   const {
-    friends,
     pendingIncoming,
     pendingOutgoing,
-    dmThreads,
+    dmListEntries,
     groupChats,
     groupCallCounts,
     activeGroupChatId,
     activeDmThreadId,
     viewMode,
-    notifications,
-    markNotificationsRead,
     sendFriendRequest,
     respondFriendRequest,
     openDmWithFriend,
@@ -46,7 +53,6 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"friends" | "pending">("friends");
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
-  const unreadNotifs = notifications.filter((n) => !n.read).length;
 
   async function addFriend(e: React.FormEvent) {
     e.preventDefault();
@@ -56,21 +62,19 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
     else setUsername("");
   }
 
+  async function openDmEntry(entry: (typeof dmListEntries)[number]) {
+    if (entry.threadId) {
+      await selectDmThread(entry.threadId);
+      return;
+    }
+    await openDmWithFriend(entry.friend.id);
+  }
+
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden bg-bg-secondary">
       <header className="flex h-12 items-center border-b border-black/20 px-4 shadow-sm">
         <IconFriends className="mr-2 text-text-muted" />
         <span className="flex-1 font-semibold text-text-normal">Friends</span>
-        {unreadNotifs > 0 && (
-          <button
-            type="button"
-            onClick={() => void markNotificationsRead()}
-            className="text-[11px] font-medium text-brand hover:underline"
-            title="Mark all notifications read"
-          >
-            {unreadNotifs} new
-          </button>
-        )}
       </header>
 
       <div className="flex gap-1 px-2 pt-2">
@@ -151,45 +155,33 @@ export function HomePanel({ onOpenSettings, onUserPanelContext, onFriendClick, o
             })}
 
             <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
-              Direct Messages — {dmThreads.length}
+              Direct Messages — {dmListEntries.length}
             </p>
-            {dmThreads.map((t) => {
-              const active = viewMode === "dm" && activeDmThreadId === t.id;
+            {dmListEntries.map((entry) => {
+              const active = viewMode === "dm" && entry.threadId && activeDmThreadId === entry.threadId;
               return (
                 <button
-                  key={t.id}
+                  key={entry.key}
                   type="button"
-                  onClick={() => void selectDmThread(t.id)}
+                  onClick={() => void openDmEntry(entry)}
                   className={`mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover ${
                     active ? "bg-interactive-selected" : ""
                   }`}
                 >
-                <div className="relative">
-                  <Avatar profile={t.friend} size="sm" />
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[t.friend.status]}`} />
-                </div>
-                <span className="truncate text-sm">{displayName(t.friend)}</span>
+                  <div className="relative">
+                    <Avatar profile={entry.friend} size="sm" />
+                    {entry.unreadCount <= 0 && (
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[entry.friend.status]}`} />
+                    )}
+                    <DmUnreadBadge count={entry.unreadCount} />
+                  </div>
+                  <span className="truncate text-sm">{displayName(entry.friend)}</span>
                 </button>
               );
             })}
-
-            <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
-              All Friends — {friends.length}
-            </p>
-            {friends.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => (onFriendClick ? onFriendClick(f.id) : void openDmWithFriend(f.id))}
-                className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
-              >
-                <div className="relative">
-                  <Avatar profile={f} size="sm" />
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[f.status]}`} />
-                </div>
-                <span className="truncate text-sm">{displayName(f)}</span>
-              </button>
-            ))}
+            {dmListEntries.length === 0 && (
+              <p className="px-2 py-2 text-sm text-text-muted">Add friends to start chatting.</p>
+            )}
           </>
         )}
 

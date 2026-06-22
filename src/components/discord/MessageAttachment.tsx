@@ -4,7 +4,9 @@ import { useState } from "react";
 import { giphyMp4Url } from "@/lib/giphy";
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
 import { DangerousDownloadModal } from "./DangerousDownloadModal";
+import { ImageLightbox } from "./ImageLightbox";
 import { VideoPlayer } from "./VideoPlayer";
+import type { Profile } from "@/lib/supabase/types";
 
 interface MessageAttachmentProps {
   url: string;
@@ -12,6 +14,10 @@ interface MessageAttachmentProps {
   name?: string | null;
   size?: number | null;
   onLoad?: () => void;
+  author?: Profile;
+  authorColor?: string | null;
+  isOwn?: boolean;
+  createdAt?: string;
 }
 
 const mediaClass =
@@ -28,12 +34,23 @@ function triggerDownload(url: string, fileName: string) {
   a.remove();
 }
 
-export function MessageAttachment({ url, type, name, size, onLoad }: MessageAttachmentProps) {
+export function MessageAttachment({
+  url,
+  type,
+  name,
+  size,
+  onLoad,
+  author,
+  authorColor,
+  isOwn,
+  createdAt,
+}: MessageAttachmentProps) {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const mp4 = type === "gif" ? giphyMp4Url(url) : null;
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
+  const lightboxSrc = type === "gif" && mp4 ? mp4 : url;
 
   if (type === "file") {
     return (
@@ -72,7 +89,31 @@ export function MessageAttachment({ url, type, name, size, onLoad }: MessageAtta
       {type === "video" ? (
         <VideoPlayer src={url} onLoad={onLoad} />
       ) : type === "gif" && mp4 ? (
-        <video src={mp4} autoPlay loop muted playsInline className={mediaClass} onLoadedData={onLoad} />
+        <>
+          <button type="button" onClick={() => setLightbox(true)} className="block text-left">
+            <video
+              src={mp4}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className={`${mediaClass} cursor-zoom-in`}
+              onLoadedData={onLoad}
+            />
+          </button>
+          <ImageLightbox
+            open={lightbox}
+            onClose={() => setLightbox(false)}
+            src={lightboxSrc}
+            alt="GIF"
+            fileName={fileName}
+            animated
+            author={author}
+            authorColor={authorColor}
+            isOwn={isOwn}
+            createdAt={createdAt}
+          />
+        </>
       ) : (
         <>
           <button type="button" onClick={() => setLightbox(true)} className="block text-left">
@@ -85,21 +126,18 @@ export function MessageAttachment({ url, type, name, size, onLoad }: MessageAtta
               onLoad={onLoad}
             />
           </button>
-          {lightbox && (
-            <div
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 p-4"
-              onClick={() => setLightbox(false)}
-              role="presentation"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt=""
-                className="max-h-full max-w-full object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
+          <ImageLightbox
+            open={lightbox}
+            onClose={() => setLightbox(false)}
+            src={lightboxSrc}
+            alt={type === "gif" ? "GIF" : "Attachment"}
+            fileName={fileName}
+            animated={type === "gif" && !!mp4}
+            author={author}
+            authorColor={authorColor}
+            isOwn={isOwn}
+            createdAt={createdAt}
+          />
         </>
       )}
     </div>

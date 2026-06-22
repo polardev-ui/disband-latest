@@ -31,6 +31,10 @@ import {
   Video,
   VideoOff,
   UsersRound,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  ExternalLink,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -70,6 +74,10 @@ export const IconAlert = icon(AlertTriangle);
 export const IconVideo = icon(Video);
 export const IconVideoOff = icon(VideoOff);
 export const IconGroup = icon(UsersRound);
+export const IconDownload = icon(Download);
+export const IconZoomIn = icon(ZoomIn);
+export const IconZoomOut = icon(ZoomOut);
+export const IconExternalLink = icon(ExternalLink);
 
 export function IconStatus(props: IconProps & { status: "online" | "idle" | "dnd" | "offline" }) {
   const colors = {
