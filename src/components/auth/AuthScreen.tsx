@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { isTauri } from "@/lib/platform";
 
 export function AuthScreen() {
   const { signIn, signUp, configured } = useApp();
@@ -20,8 +21,9 @@ export function AuthScreen() {
         <div className="max-w-md rounded-lg bg-bg-secondary p-8 text-center">
           <h1 className="text-2xl font-bold text-text-normal">Disband</h1>
           <p className="mt-3 text-sm text-text-muted">
-            Copy <code className="text-brand">.env.example</code> to{" "}
-            <code className="text-brand">.env.local</code> and add your Supabase URL + anon key, then restart the dev server.
+            {isTauri()
+              ? "This build is missing Supabase configuration. Rebuild the desktop app with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY set."
+              : "Copy .env.example to .env.local and add your Supabase URL + anon key, then restart the dev server."}
           </p>
         </div>
       </div>

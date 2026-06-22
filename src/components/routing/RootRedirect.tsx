@@ -3,15 +3,22 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isTauri } from "@/lib/platform";
 
 export function RootRedirect() {
   const router = useRouter();
 
   useEffect(() => {
+    if (isTauri()) {
+      router.replace("/app");
+      return;
+    }
+
     if (!isSupabaseConfigured()) {
       router.replace("/home");
       return;
     }
+
     void getSupabaseClient()
       .auth.getSession()
       .then(({ data }) => {
