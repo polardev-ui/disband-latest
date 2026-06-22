@@ -36,6 +36,15 @@ export function parseMentions(
   return [...ids];
 }
 
+/** Whether @token should render as a mention (member exists, or @everyone with members). */
+export function isValidMentionToken(
+  token: string,
+  members: { username: string | null }[],
+): boolean {
+  if (token.toLowerCase() === "everyone") return members.length > 0;
+  return members.some((m) => m.username?.toLowerCase() === token.toLowerCase());
+}
+
 /** Remove trailing blank lines; collapse accidental double line breaks. */
 export function normalizeMessageContent(content: string): string {
   let text = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");

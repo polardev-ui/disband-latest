@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
+import { formatMessageTime, displayName, extractInviteCodes, isValidMentionToken, normalizeMessageContent } from "@/lib/utils";
 import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage } from "@/lib/emoji";
@@ -27,6 +27,7 @@ export interface ChatMessageData {
   reply_to?: ReplyPreview | null;
   edited_at?: string | null;
   created_at: string;
+  mentions?: string[];
   author?: Profile;
 }
 
@@ -53,10 +54,12 @@ function renderContent(content: string, members: Profile[] = []) {
     if (!part) return null;
     if (part.startsWith("@")) {
       const uname = part.slice(1);
+      if (!isValidMentionToken(uname, members)) return part;
       const user = members.find((m) => m.username?.toLowerCase() === uname.toLowerCase());
+      const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
       return (
         <span key={i} className="rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40">
-          @{user?.username ?? uname}
+          @{label}
         </span>
       );
     }
@@ -205,12 +208,16 @@ export function ChatMessage({
   ) : null;
 
   const highlightClass = highlight ? "bg-brand/10 ring-1 ring-brand/30" : "";
+  const pingedYou = !!(currentUserId && message.mentions?.includes(currentUserId));
+  const rowBgClass = pingedYou
+    ? "bg-[#fee75c]/10 hover:bg-[#fee75c]/15"
+    : "hover:bg-interactive-hover/30";
 
   if (compact) {
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative ${COMPACT_INDENT} pr-4 py-0 hover:bg-interactive-hover/30 ${highlightClass}`}
+        className={`group relative ${COMPACT_INDENT} pr-4 py-0 ${rowBgClass} ${highlightClass}`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -233,7 +240,7 @@ export function ChatMessage({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`message-enter group mt-[18px] flex items-start gap-4 px-4 hover:bg-interactive-hover/30 ${highlightClass}`}
+      className={`message-enter group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >

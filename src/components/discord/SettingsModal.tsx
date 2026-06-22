@@ -7,6 +7,8 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell } from "@/components/icons";
+import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
+import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { getDisbandUserMedia } from "@/lib/media";
@@ -37,6 +39,7 @@ interface SettingsModalProps {
 
 const TABS = [
   { id: "profile" as const, label: "Profile" },
+  { id: "account" as const, label: "Account" },
   { id: "appearance" as const, label: "Appearance" },
   { id: "notifications" as const, label: "Notifications" },
   { id: "voice" as const, label: "Voice & Video" },
@@ -84,7 +87,7 @@ type SettingsTab = (typeof TABS)[number]["id"];
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
-  const { profile, updateProfile, signOut } = useApp();
+  const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut } = useApp();
   const { upload, isUploading } = useMediaUpload();
   const [tab, setTab] = useState<SettingsTab>("profile");
   const [displayName, setDisplayName] = useState("");
@@ -108,6 +111,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
   useEffect(() => {
@@ -436,6 +440,56 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <button type="button" onClick={() => void saveProfile()} className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
                     Save Changes
                   </button>
+                </div>
+              )}
+
+              {tab === "account" && (
+                <div className="space-y-6">
+                  <div>
+                    <span className="text-xs font-bold uppercase text-text-muted">Email</span>
+                    <p className="mt-1 text-sm text-text-normal">{user?.email ?? "Not available"}</p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-text-normal">Change password</h3>
+                    <p className="mt-1 text-sm text-text-muted">
+                      Set a new password while you are logged in.
+                    </p>
+                    <div className="mt-4">
+                      <NewPasswordForm submitLabel="Update password" onSubmit={updatePassword} />
+                    </div>
+                  </div>
+
+                  {user?.email && (
+                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                      <h3 className="text-sm font-semibold text-text-normal">Email reset link</h3>
+                      <p className="mt-1 text-sm text-text-muted">
+                        Prefer to reset from your inbox? We can send a link to {user.email}.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsError(null);
+                          setResetEmailSent(false);
+                          void (async () => {
+                            const err = await requestPasswordReset(user.email!);
+                            if (err) setSettingsError(err);
+                            else setResetEmailSent(true);
+                          })();
+                        }}
+                        className="mt-3 rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected"
+                      >
+                        Send reset email
+                      </button>
+                      {resetEmailSent && (
+                        <p className="mt-2 text-sm text-status-online">Reset link sent. Check your inbox.</p>
+                      )}
+                    </div>
+                  )}
+
+                  <MfaSettingsPanel />
+
+                  {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
 

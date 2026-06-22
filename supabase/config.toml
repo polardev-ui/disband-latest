@@ -6,7 +6,12 @@ project_id = "disband"
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000", "https://disband-latest.vercel.app"]
+additional_redirect_urls = [
+  "http://localhost:3000",
+  "http://localhost:3000/reset-password",
+  "https://disband-latest.vercel.app",
+  "https://disband-latest.vercel.app/reset-password",
+]
 jwt_expiry = 3600
 enable_signup = true
 
@@ -19,6 +24,17 @@ secure_password_change = false
 max_frequency = "60s"
 otp_length = 6
 otp_expiry = 3600
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.mfa.webauthn]
+enroll_enabled = true
+verify_enabled = true
 
 [auth.email.template.confirmation]
 subject = "Confirm your Disband account"

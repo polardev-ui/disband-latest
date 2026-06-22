@@ -447,6 +447,7 @@ export function DiscordApp() {
     reply_to_id?: string | null;
     edited_at?: string | null;
     created_at: string;
+    mentions?: string[];
     author?: Profile;
   }): ChatMessageData => ({
     id: m.id,
@@ -459,6 +460,7 @@ export function DiscordApp() {
     reply_to_id: m.reply_to_id ?? null,
     edited_at: m.edited_at ?? null,
     created_at: m.created_at,
+    mentions: m.mentions ?? [],
     author: m.author,
   });
 
