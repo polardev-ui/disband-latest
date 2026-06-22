@@ -96,6 +96,7 @@ export function getInviteUrl(code: string): string {
 }
 
 const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/server\/([a-zA-Z0-9]{7})\b/g;
+export const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
 
 export function extractInviteCodes(text: string): string[] {
   const codes = new Set<string>();

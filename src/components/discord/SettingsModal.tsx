@@ -6,7 +6,8 @@ import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose } from "@/components/icons";
+import { IconClose, IconBell } from "@/components/icons";
+import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import {
   DEFAULT_ACCENT,
   getAvatarStyle,
@@ -17,11 +18,48 @@ import {
   type ProfileAccentFields,
 } from "@/lib/profileColor";
 import type { AvatarCrop } from "@/lib/utils";
-import type { UserStatus } from "@/lib/supabase/types";
+import type { UserStatus, Profile } from "@/lib/supabase/types";
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+}
+
+const TABS = [
+  { id: "profile" as const, label: "Profile" },
+  { id: "appearance" as const, label: "Appearance" },
+  { id: "notifications" as const, label: "Notifications" },
+  { id: "textMedia" as const, label: "Text & Media" },
+];
+
+function SettingRow({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-divider bg-bg-secondary p-4 hover:bg-interactive-hover/40">
+      <div>
+        <p className="font-medium">{label}</p>
+        {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
+      </div>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0 accent-brand"
+      />
+    </label>
+  );
 }
 
 const STATUSES: { id: UserStatus; label: string }[] = [
@@ -31,11 +69,13 @@ const STATUSES: { id: UserStatus; label: string }[] = [
   { id: "offline", label: "Invisible" },
 ];
 
+type SettingsTab = (typeof TABS)[number]["id"];
+
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
   const { profile, updateProfile, signOut } = useApp();
   const { upload, isUploading } = useMediaUpload();
-  const [tab, setTab] = useState<"profile" | "appearance">("profile");
+  const [tab, setTab] = useState<SettingsTab>("profile");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -48,6 +88,19 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [desktopNotifications, setDesktopNotifications] = useState(true);
+  const [linkPreviews, setLinkPreviews] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotifPermission(Notification.permission);
+    } else {
+      setNotifPermission("unsupported");
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!profile) return;
@@ -59,6 +112,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setAccent1(profile.accent_color ?? DEFAULT_ACCENT);
     setAccent2(profile.accent_color_2 ?? profile.accent_color ?? "#eb459e");
     setStatus(profile.preferred_status ?? profile.status);
+    setSoundEnabled(profile.sound_enabled ?? true);
+    setDesktopNotifications(profile.desktop_notifications_enabled ?? true);
+    setLinkPreviews(profile.link_previews_enabled ?? true);
   }, [profile]);
 
   useEffect(() => {
@@ -119,6 +175,25 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     if (res) await updateProfile({ banner_url: res.url });
   }
 
+  async function savePreference(
+    patch: Partial<Pick<Profile, "sound_enabled" | "desktop_notifications_enabled" | "link_previews_enabled" | "theme">>,
+  ) {
+    setSettingsError(null);
+    const err = await updateProfile(patch);
+    if (err) setSettingsError(err);
+  }
+
+  async function enableDesktopNotifications() {
+    const granted = await requestNotificationPermissionFromGesture();
+    setNotifPermission(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
+    if (granted) {
+      setDesktopNotifications(true);
+      await savePreference({ desktop_notifications_enabled: true });
+    }
+  }
+
+  const activeTab = TABS.find((t) => t.id === tab);
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -126,16 +201,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <div className="relative flex max-h-[85vh] w-full max-w-[720px] overflow-hidden rounded-md bg-bg-primary shadow-2xl">
           <nav className="hidden w-56 shrink-0 flex-col bg-bg-secondary p-4 sm:flex">
             <h2 className="mb-4 px-2 text-xs font-bold uppercase text-text-muted">User Settings</h2>
-            {(["profile", "appearance"] as const).map((t) => (
+            {TABS.map((t) => (
               <button
-                key={t}
+                key={t.id}
                 type="button"
-                onClick={() => setTab(t)}
-                className={`rounded px-2 py-1.5 text-left text-[15px] capitalize transition-all duration-150 ease-in-out ${
-                  tab === t ? "bg-interactive-selected text-text-normal" : "text-text-muted hover:bg-interactive-hover"
+                onClick={() => setTab(t.id)}
+                className={`rounded px-2 py-1.5 text-left text-[15px] transition-all duration-150 ease-in-out ${
+                  tab === t.id ? "bg-interactive-selected text-text-normal" : "text-text-muted hover:bg-interactive-hover"
                 }`}
               >
-                {t}
+                {t.label}
               </button>
             ))}
             <button
@@ -149,7 +224,18 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="flex items-center justify-between border-b border-divider px-6 py-4">
-              <h1 className="text-xl font-semibold capitalize">{tab}</h1>
+              <div className="min-w-0">
+                <select
+                  value={tab}
+                  onChange={(e) => setTab(e.target.value as SettingsTab)}
+                  className="w-full rounded bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:ring-2 focus:ring-brand sm:hidden"
+                >
+                  {TABS.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+                <h1 className="hidden text-xl font-semibold sm:block">{activeTab?.label ?? "Settings"}</h1>
+              </div>
               <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">
                 <IconClose size={24} />
               </button>
@@ -318,13 +404,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
               {tab === "appearance" && (
                 <div>
-                  <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly across web and desktop.</p>
+                  <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {themes.map((t) => (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => setTheme(t.id)}
+                        onClick={() => {
+                          setTheme(t.id);
+                          void savePreference({ theme: t.id });
+                        }}
                         className={`overflow-hidden rounded-lg border-2 text-left transition-all duration-150 ${
                           theme === t.id ? "border-brand" : "border-transparent hover:border-interactive-hover"
                         }`}
@@ -341,6 +430,62 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {tab === "notifications" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-muted">Control sounds and desktop alerts when you are away from Disband.</p>
+                  <SettingRow
+                    label="Message sounds"
+                    description="Play a ping for @mentions and incoming DMs when the app is in the background."
+                    checked={soundEnabled}
+                    onChange={(next) => {
+                      setSoundEnabled(next);
+                      void savePreference({ sound_enabled: next });
+                    }}
+                  />
+                  <SettingRow
+                    label="Desktop notifications"
+                    description="Show OS notifications for mentions, messages, and calls when Disband is not focused."
+                    checked={desktopNotifications}
+                    onChange={(next) => {
+                      setDesktopNotifications(next);
+                      void savePreference({ desktop_notifications_enabled: next });
+                    }}
+                  />
+                  {notifPermission !== "granted" && notifPermission !== "unsupported" && (
+                    <button
+                      type="button"
+                      onClick={() => void enableDesktopNotifications()}
+                      className="flex items-center gap-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                    >
+                      <IconBell size={16} />
+                      Enable browser notifications
+                    </button>
+                  )}
+                  {notifPermission === "denied" && (
+                    <p className="text-xs text-text-muted">
+                      Notifications are blocked in your browser. Allow them in site settings to receive desktop alerts.
+                    </p>
+                  )}
+                  {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
+                </div>
+              )}
+
+              {tab === "textMedia" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-muted">Choose how links and media appear in chat.</p>
+                  <SettingRow
+                    label="Link previews"
+                    description="Show rich embeds with title, description, and image for URLs in messages."
+                    checked={linkPreviews}
+                    onChange={(next) => {
+                      setLinkPreviews(next);
+                      void savePreference({ link_previews_enabled: next });
+                    }}
+                  />
+                  {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
             </div>

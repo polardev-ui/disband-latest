@@ -14,6 +14,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
 import { playMentionPing, notifyUser, alertIncomingDm, setNotificationFocusState, parseNotificationLink } from "@/lib/notifications";
+import { syncUserSettings } from "@/lib/user-settings";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
@@ -91,6 +92,7 @@ interface AppContextValue {
   deleteGroupMessage: (messageId: string) => Promise<void>;
   groupCallCounts: Map<string, number>;
   openDmWithFriend: (friendId: string) => Promise<void>;
+  sendInviteToFriend: (friendId: string, inviteUrl: string, serverName: string) => Promise<string | null>;
   sendFriendRequest: (username: string) => Promise<string | null>;
   respondFriendRequest: (id: string, accept: boolean) => Promise<void>;
   removeFriend: (friendId: string) => Promise<void>;
@@ -167,6 +169,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const profileRef = useRef<Profile | null>(null);
   const preferredStatusRef = useRef<UserStatus>("online");
   profileRef.current = profile;
+  syncUserSettings(profile);
   channelsRef.current = channels;
   groupChatsRef.current = groupChats;
   useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
@@ -1329,6 +1332,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void loadDmThreads(userId);
   }, [userId, friends, selectDmThread, loadDmThreads]);
 
+  const sendInviteToFriend = useCallback(async (friendId: string, inviteUrl: string, serverName: string) => {
+    if (!userId || !profile) return "Not signed in";
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
+    if (error) return error.message;
+    const threadId = data as string;
+    const content = `You're invited to join **${serverName}**!\n${inviteUrl}`;
+    const { error: insertError } = await supabase.from("dm_messages").insert({
+      thread_id: threadId,
+      author_id: userId,
+      content: normalizeMessageContent(content),
+      mentions: [],
+    });
+    if (insertError) return insertError.message;
+    bumpDmThreadActivity(threadId, new Date().toISOString());
+    void loadDmThreads(userId);
+    return null;
+  }, [userId, profile, bumpDmThreadActivity, loadDmThreads]);
+
   const sendFriendRequest = useCallback(async (username: string) => {
     if (!userId) return "Not signed in";
     const normalized = username.trim().toLowerCase();
@@ -1844,6 +1866,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteGroupMessage,
     groupCallCounts,
     openDmWithFriend,
+    sendInviteToFriend,
     sendFriendRequest,
     respondFriendRequest,
     removeFriend,

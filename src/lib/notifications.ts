@@ -1,4 +1,5 @@
 import type { UserStatus, ViewMode } from "@/lib/supabase/types";
+import { getUserSettings } from "@/lib/user-settings";
 
 export type NotificationTarget =
   | { kind: "channel"; channelId: string }
@@ -75,6 +76,7 @@ export function isRecipientDoNotDisturb(
 
 /** Discord-style mention ping via Web Audio API. */
 export function playMentionPing() {
+  if (!getUserSettings().soundEnabled) return;
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
@@ -96,6 +98,7 @@ export function playMentionPing() {
 
 /** Two-tone bing for incoming DMs. */
 export function playDmPing() {
+  if (!getUserSettings().soundEnabled) return;
   try {
     const ctx = new AudioContext();
     const playTone = (freq: number, start: number, duration: number) => {
@@ -149,6 +152,7 @@ export async function requestNotificationPermissionFromGesture(): Promise<boolea
 
 export function showSystemNotification(title: string, body?: string, onClick?: () => void) {
   if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (!getUserSettings().desktopNotificationsEnabled) return;
   if (Notification.permission !== "granted") return;
 
   const n = new Notification(title, {
