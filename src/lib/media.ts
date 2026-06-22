@@ -53,6 +53,24 @@ export async function getDisbandUserMedia(
     try {
       return await navigator.mediaDevices.getUserMedia(merged);
     } catch (err) {
+      const domErr = err instanceof DOMException ? err : null;
+      const pinnedInput =
+        merged.audio &&
+        typeof merged.audio === "object" &&
+        "deviceId" in merged.audio &&
+        merged.audio.deviceId;
+      if (
+        pinnedInput &&
+        domErr &&
+        (domErr.name === "OverconstrainedError" ||
+          domErr.name === "NotFoundError" ||
+          domErr.name === "NotReadableError")
+      ) {
+        return await navigator.mediaDevices.getUserMedia({
+          ...merged,
+          audio: true,
+        });
+      }
       throw err instanceof Error ? err : new Error("Could not access microphone.");
     }
   }

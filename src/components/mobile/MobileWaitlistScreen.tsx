@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Logo } from "@/components/ui/Logo";
 
 export function MobileWaitlistScreen() {
   const [email, setEmail] = useState("");
@@ -39,8 +40,8 @@ export function MobileWaitlistScreen() {
     <div className="flex min-h-[100dvh] flex-col bg-bg-tertiary px-6 py-10 text-text-normal">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand text-2xl font-black text-white">
-            D
+          <div className="mx-auto mb-4 flex justify-center">
+            <Logo size={64} className="h-16 w-16" priority />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Disband is desktop-only for now</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-text-muted">

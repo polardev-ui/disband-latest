@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "./MarketingLayout";
 import { DownloadSection } from "./DownloadSection";
+import { Logo } from "@/components/ui/Logo";
 
 const features = [
   {
@@ -69,7 +70,7 @@ export function MarketingHomePage() {
               </div>
               <div className="grid gap-px bg-black/20 sm:grid-cols-[72px_1fr_200px]">
                 <div className="hidden bg-[#1e1f22] p-3 sm:block">
-                  <div className="mb-2 h-10 w-10 rounded-2xl bg-brand" />
+                  <Logo size={40} className="mb-2 h-10 w-10" />
                   <div className="space-y-2">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="h-10 w-10 rounded-2xl bg-[#313338]" />
