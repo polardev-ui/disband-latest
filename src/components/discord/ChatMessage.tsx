@@ -204,7 +204,7 @@ export function ChatMessage({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative ${COMPACT_INDENT} pr-4 py-[1px] hover:bg-interactive-hover/30 ${highlightClass}`}
+        className={`group relative ${COMPACT_INDENT} pr-4 py-1 hover:bg-interactive-hover/30 ${highlightClass}`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -227,7 +227,7 @@ export function ChatMessage({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`message-enter group mt-[17px] flex items-start gap-4 px-4 first:mt-0 hover:bg-interactive-hover/30 ${highlightClass}`}
+      className={`message-enter group mt-6 flex items-start gap-4 px-4 pb-0.5 hover:bg-interactive-hover/30 ${highlightClass}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
