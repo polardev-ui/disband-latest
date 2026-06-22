@@ -22,6 +22,26 @@ export function mapAuthError(message: string): string {
     return "Confirm your email first — check your inbox for the Disband verification link.";
   }
 
+  if (lower.includes("same password")) {
+    return "Choose a different password than your current one.";
+  }
+
+  if (lower.includes("password") && lower.includes("weak")) {
+    return "Password is too weak. Use at least 6 characters.";
+  }
+
+  if (lower.includes("invalid totp") || lower.includes("invalid verification code")) {
+    return "That authentication code is incorrect or expired. Try again.";
+  }
+
+  if (lower.includes("webauthn") || lower.includes("passkey")) {
+    return "Passkey verification failed. Try again or use your authenticator app.";
+  }
+
+  if (lower.includes("factor") && lower.includes("already")) {
+    return "That security method is already set up.";
+  }
+
   return message;
 }
 

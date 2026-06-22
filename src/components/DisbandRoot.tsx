@@ -4,6 +4,7 @@ import { AppProvider, useApp } from "@/contexts/AppContext";
 import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
 import { MobileGateLoading, useMobileWebGate } from "@/components/mobile/MobileWebGate";
@@ -27,11 +28,12 @@ function InviteBootstrap() {
 }
 
 function AppShell() {
-  const { ready, session } = useApp();
+  const { ready, session, mfaRequired } = useApp();
   if (!ready) {
     return <div className="flex h-screen items-center justify-center bg-bg-tertiary text-text-muted">Loading...</div>;
   }
   if (!session) return <AuthScreen />;
+  if (mfaRequired) return <MfaChallengeScreen />;
   return (
     <>
       <InviteBootstrap />

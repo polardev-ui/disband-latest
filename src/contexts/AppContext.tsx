@@ -15,6 +15,8 @@ import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
+import { getAuthRedirectUrl } from "@/lib/auth-redirect";
+import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
@@ -86,6 +88,10 @@ interface AppContextValue {
   setDeafened: (v: boolean) => void;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
+  requestPasswordReset: (email: string) => Promise<string | null>;
+  updatePassword: (password: string) => Promise<string | null>;
+  mfaRequired: boolean;
+  refreshMfaStatus: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshAll: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<string | null>;
@@ -182,6 +188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [deafened, setDeafened] = useState(false);
   const [voiceJoinedChannelId, setVoiceJoinedChannelId] = useState<string | null>(null);
   const [callPhase, setCallPhase] = useState<"idle" | "outgoing" | "incoming" | "active">("idle");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [dmUnreadMap, setDmUnreadMap] = useState<
     Map<string, { friend: Profile; count: number; latestAt: string }>
   >(new Map());
@@ -741,6 +748,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => sub.subscription.unsubscribe();
   }, [configured]);
+
+  const refreshMfaStatus = useCallback(async () => {
+    if (!configured) {
+      setMfaRequired(false);
+      return;
+    }
+    const { data: { session } } = await getSupabaseClient().auth.getSession();
+    if (!session) {
+      setMfaRequired(false);
+      return;
+    }
+    const assurance = await getMfaAssurance();
+    setMfaRequired(assurance.mfaRequired);
+  }, [configured]);
+
+  useEffect(() => {
+    if (!session) {
+      setMfaRequired(false);
+      return;
+    }
+    void refreshMfaStatus();
+  }, [session, refreshMfaStatus]);
 
   useEffect(() => {
     if (!userId) {
@@ -1315,8 +1344,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       email: email.trim(),
       password,
     });
-    return error ? mapAuthError(error.message) : null;
-  }, []);
+    if (error) return mapAuthError(error.message);
+    await refreshMfaStatus();
+    return null;
+  }, [refreshMfaStatus]);
 
   const signUp = useCallback(async (email: string, password: string, username: string): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
@@ -1351,6 +1382,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // No session — email confirmation required (or anti-enumeration response)
     return { error: null, needsEmailConfirmation: true };
+  }, []);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: getAuthRedirectUrl("/reset-password"),
+    });
+    return error ? mapAuthError(error.message) : null;
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await getSupabaseClient().auth.updateUser({ password });
+    return error ? mapAuthError(error.message) : null;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -2098,6 +2141,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDeafened,
     signIn,
     signUp,
+    requestPasswordReset,
+    updatePassword,
+    mfaRequired,
+    refreshMfaStatus,
     signOut,
     refreshAll,
     updateProfile,
