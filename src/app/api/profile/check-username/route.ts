@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getClientIp } from "@/lib/request-ip";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
+  const ip = getClientIp(request) || "unknown";
+  const limit = rateLimit(`check-username:${ip}`, 40, 60_000);
+  if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
   const url = new URL(request.url);
   const username = url.searchParams.get("username")?.trim() ?? "";
 
