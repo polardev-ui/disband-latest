@@ -5,6 +5,7 @@ import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
+import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
 import { MobileGateLoading, useMobileWebGate } from "@/components/mobile/MobileWebGate";
 import { useEffect, useRef } from "react";
 
@@ -50,6 +51,7 @@ export function DisbandRoot() {
     <ThemeProvider>
       <AppProvider>
         <ContextMenuProvider>
+          <DesktopUpdateOverlay />
           <AppShell />
         </ContextMenuProvider>
       </AppProvider>

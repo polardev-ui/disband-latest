@@ -73,6 +73,10 @@ export function DiscordApp() {
     app.deafened,
   );
 
+  useEffect(() => {
+    app.setCallPhase(call.phase);
+  }, [call.phase, app.setCallPhase]);
+
   const groupCall = useGroupCallManager(
     app.user?.id ?? null,
     app.profile,
@@ -444,6 +448,19 @@ export function DiscordApp() {
   const groupMessages: ChatMessageData[] = app.groupMessages.map(mapChatMessage);
 
   const profileFriend = profileTarget ? app.friends.some((f) => f.id === profileTarget.id) : false;
+  const profileFriendship = profileTarget
+    ? app.friendships.find(
+        (f) =>
+          (f.requester_id === app.user?.id && f.addressee_id === profileTarget.id) ||
+          (f.requester_id === profileTarget.id && f.addressee_id === app.user?.id),
+      )
+    : undefined;
+  const profilePendingIncoming =
+    profileFriendship?.status === "pending" && profileFriendship.requester_id === profileTarget?.id;
+  const profilePendingOutgoing =
+    profileFriendship?.status === "pending" && profileFriendship.requester_id === app.user?.id;
+  const profileIncomingRequestId =
+    profilePendingIncoming && profileFriendship ? profileFriendship.id : null;
 
   const startVoiceCall = useCallback(
     (peer: Profile) => {
@@ -585,8 +602,10 @@ export function DiscordApp() {
           messages={dmMessages}
           members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
           currentUserId={app.user?.id}
+          currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="dm"
           reactions={app.messageReactions}
+          typingScope={{ kind: "dm", id: app.activeDmThreadId! }}
           headerTrailing={
             !dmCallActive ? (
               <HeaderCallButton
@@ -721,8 +740,10 @@ export function DiscordApp() {
           members={app.members.map((m) => m.profile)}
           roles={app.serverRoles}
           currentUserId={app.user?.id}
+          currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="channel"
           reactions={app.messageReactions}
+          typingScope={{ kind: "channel", id: activeChannel.id }}
           getAuthorColor={getAuthorColor}
           onSend={app.sendChannelMessage}
           onEdit={app.editChannelMessage}
@@ -747,6 +768,8 @@ export function DiscordApp() {
         onClose={() => setProfileTarget(null)}
         isSelf={profileTarget?.id === app.user?.id}
         isFriend={profileFriend}
+        pendingIncoming={profilePendingIncoming}
+        pendingOutgoing={profilePendingOutgoing}
         onMessage={
           profileTarget
             ? () => {
@@ -756,9 +779,25 @@ export function DiscordApp() {
             : undefined
         }
         onAddFriend={
-          profileTarget && !profileFriend && profileTarget.username
+          profileTarget && !profileFriend && !profilePendingIncoming && !profilePendingOutgoing && profileTarget.username
             ? () => {
                 void app.sendFriendRequest(profileTarget.username!);
+                setProfileTarget(null);
+              }
+            : undefined
+        }
+        onAcceptFriend={
+          profileIncomingRequestId
+            ? () => {
+                void app.respondFriendRequest(profileIncomingRequestId, true);
+                setProfileTarget(null);
+              }
+            : undefined
+        }
+        onDeclineFriend={
+          profileIncomingRequestId
+            ? () => {
+                void app.respondFriendRequest(profileIncomingRequestId, false);
                 setProfileTarget(null);
               }
             : undefined

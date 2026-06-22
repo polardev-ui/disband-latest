@@ -13,4 +13,7 @@ export const PUBLIC_ENV = {
     process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1",
   githubRepo:
     process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest",
+  /** Public web app origin for shareable links (invites, etc.) */
+  webAppUrl:
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://disband.wsgpolar.me",
 } as const;

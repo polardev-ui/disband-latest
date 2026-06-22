@@ -47,6 +47,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [saved, setSaved] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<string | null>(null);
+  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -95,20 +96,22 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   }
 
   function pickAvatar(file: File) {
-    const url = URL.createObjectURL(file);
-    setCropSource(url);
+    if (cropSource) URL.revokeObjectURL(cropSource);
+    setCropSourceFile(file);
+    setCropSource(URL.createObjectURL(file));
     setCropOpen(true);
   }
 
-  async function saveAvatarCrop(crop: AvatarCrop, blob: Blob) {
-    const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
-    const res = await upload(file);
+  async function saveAvatarCrop(crop: AvatarCrop) {
+    if (!cropSourceFile) return;
+    const res = await upload(cropSourceFile);
     if (res) {
       await updateProfile({ avatar_url: res.url, avatar_crop: crop });
     }
     setCropOpen(false);
     if (cropSource) URL.revokeObjectURL(cropSource);
     setCropSource(null);
+    setCropSourceFile(null);
   }
 
   async function handleBanner(file: File) {
@@ -354,7 +357,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             URL.revokeObjectURL(cropSource);
             setCropSource(null);
           }}
-          onSave={(crop, blob) => void saveAvatarCrop(crop, blob)}
+          onSave={(crop) => void saveAvatarCrop(crop)}
         />
       )}
     </>

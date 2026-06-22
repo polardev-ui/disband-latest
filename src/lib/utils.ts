@@ -1,3 +1,5 @@
+import { PUBLIC_ENV } from "./public-env";
+
 export function formatMessageTime(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -80,11 +82,17 @@ export function normalizeChannelName(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function shareableAppOrigin(): string {
+  const web = PUBLIC_ENV.webAppUrl.replace(/\/$/, "");
+  if (typeof window === "undefined") return web;
+  const origin = window.location.origin;
+  // Tauri (tauri://localhost) and other non-http origins can't produce shareable links.
+  if (!/^https?:\/\//i.test(origin)) return web;
+  return origin;
+}
+
 export function getInviteUrl(code: string): string {
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/server/${code}`;
-  }
-  return `https://disband-latest.vercel.app/server/${code}`;
+  return `${shareableAppOrigin()}/server/${code}`;
 }
 
 const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/server\/([a-zA-Z0-9]{7})\b/g;

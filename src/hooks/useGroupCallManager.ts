@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getDisbandUserMedia } from "@/lib/media";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
 import { attachRemoteTrack, createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
@@ -241,7 +242,7 @@ export function useGroupCallManager(
   );
 
   const joinCallMedia = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await getDisbandUserMedia({
       audio: true,
       video: cameraRef.current ? { facingMode: "user" } : false,
     });
@@ -368,7 +369,7 @@ export function useGroupCallManager(
       if (track) {
         track.enabled = true;
       } else {
-        const cam = await navigator.mediaDevices.getUserMedia({
+        const cam = await getDisbandUserMedia({
           video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         });
         track = cam.getVideoTracks()[0];

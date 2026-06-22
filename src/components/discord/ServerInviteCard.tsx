@@ -6,9 +6,10 @@ import { getInviteUrl } from "@/lib/utils";
 
 interface ServerInviteCardProps {
   code: string;
+  onLoad?: () => void;
 }
 
-export function ServerInviteCard({ code }: ServerInviteCardProps) {
+export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
   const { joinServerByInvite, selectServer, servers, user } = useApp();
   const [info, setInfo] = useState<{
     id: string;
@@ -47,6 +48,10 @@ export function ServerInviteCard({ code }: ServerInviteCardProps) {
     return () => { cancelled = true; };
   }, [code]);
 
+  useEffect(() => {
+    if (!loading && info) onLoad?.();
+  }, [loading, info, onLoad]);
+
   async function handleJoin() {
     if (!user) return;
     setJoining(true);
@@ -68,12 +73,12 @@ export function ServerInviteCard({ code }: ServerInviteCardProps) {
     <div className="mt-1 max-w-sm overflow-hidden rounded-lg border border-divider bg-bg-secondary">
       {info.banner_url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={info.banner_url} alt="" className="h-16 w-full object-cover" />
+        <img src={info.banner_url} alt="" className="h-16 w-full object-cover" onLoad={onLoad} />
       )}
       <div className="flex gap-3 p-3">
         {info.icon_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={info.icon_url} alt="" className="h-12 w-12 rounded-[30%] object-cover" />
+          <img src={info.icon_url} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-[30%] bg-brand text-lg font-bold text-white">
             {info.name.charAt(0)}

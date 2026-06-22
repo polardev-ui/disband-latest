@@ -11,6 +11,7 @@ interface MessageAttachmentProps {
   type?: AttachmentType | null;
   name?: string | null;
   size?: number | null;
+  onLoad?: () => void;
 }
 
 const mediaClass =
@@ -27,7 +28,7 @@ function triggerDownload(url: string, fileName: string) {
   a.remove();
 }
 
-export function MessageAttachment({ url, type, name, size }: MessageAttachmentProps) {
+export function MessageAttachment({ url, type, name, size, onLoad }: MessageAttachmentProps) {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const mp4 = type === "gif" ? giphyMp4Url(url) : null;
@@ -69,9 +70,9 @@ export function MessageAttachment({ url, type, name, size }: MessageAttachmentPr
   return (
     <div className="mt-0.5 max-w-md overflow-hidden">
       {type === "video" ? (
-        <VideoPlayer src={url} />
+        <VideoPlayer src={url} onLoad={onLoad} />
       ) : type === "gif" && mp4 ? (
-        <video src={mp4} autoPlay loop muted playsInline className={mediaClass} />
+        <video src={mp4} autoPlay loop muted playsInline className={mediaClass} onLoadedData={onLoad} />
       ) : (
         <>
           <button type="button" onClick={() => setLightbox(true)} className="block text-left">
@@ -81,6 +82,7 @@ export function MessageAttachment({ url, type, name, size }: MessageAttachmentPr
               alt={type === "gif" ? "GIF" : "Attachment"}
               className={`${mediaClass} cursor-zoom-in`}
               loading="eager"
+              onLoad={onLoad}
             />
           </button>
           {lightbox && (
