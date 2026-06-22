@@ -45,62 +45,53 @@ jobs:
         with:
           node-version: 22
 
-      - name: Compute next unique version
-        id: ver
+      - name: Commit, tag, and push
         env:
           BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          VERSION=$(node scripts/next-release-version.mjs)
-          TAG="v${VERSION}"
-          node scripts/validate-release-tag.mjs "${TAG}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Next release: ${TAG}"
-
-      - name: Refuse duplicate tags
-        env:
-          TAG: ${{ steps.ver.outputs.tag }}
-        run: |
-          if git ls-remote --quiet --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "::error::Tag ${TAG} already exists on origin. Each release must have a unique semver tag."
-            exit 1
-          fi
-          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "::error::Tag ${TAG} already exists locally."
-            exit 1
-          fi
-
-      - name: Update version files
-        run: node scripts/set-version.mjs "${{ steps.ver.outputs.version }}"
-
-      - name: Commit, tag, and push
-        env:
-          TAG: ${{ steps.ver.outputs.tag }}
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
-          if git diff --staged --quiet; then
-            echo "Version files already at ${{ steps.ver.outputs.version }} — skipping."
-            exit 0
-          fi
-          git commit -m "chore(release): ${TAG}"
-          git tag -a "${TAG}" -m "Disband ${TAG}"
-          git pull --rebase origin main
+
           for attempt in 1 2 3 4 5; do
-            if git push origin HEAD:refs/heads/main; then
-              break
-            fi
-            echo "Push to main rejected (attempt ${attempt}), rebasing and retrying..."
             git fetch origin main
-            git rebase origin/main
+            git checkout -B main origin/main
+
+            VERSION=$(node scripts/next-release-version.mjs)
+            TAG="v${VERSION}"
+            node scripts/validate-release-tag.mjs "${TAG}"
+            echo "Attempt ${attempt}: preparing ${TAG}"
+
+            if git ls-remote --quiet --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+              echo "Tag ${TAG} already exists on origin — refreshing base and retrying..."
+              sleep 2
+              continue
+            fi
+
+            node scripts/set-version.mjs "${VERSION}"
+
+            git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+            if git diff --staged --quiet; then
+              echo "Version files already at ${VERSION} on main — nothing to do."
+              exit 0
+            fi
+
+            git commit -m "chore(release): ${TAG}"
+            git tag -a "${TAG}" -m "Disband ${TAG}"
+
+            if git push origin HEAD:refs/heads/main && git push origin "refs/tags/${TAG}"; then
+              echo "Released ${TAG}"
+              exit 0
+            fi
+
+            echo "Push rejected (attempt ${attempt}), resetting and retrying..."
+            git tag -d "${TAG}" 2>/dev/null || true
+            git reset --hard origin/main
+
             if [ "${attempt}" -eq 5 ]; then
-              echo "::error::Failed to push release commit to main after ${attempt} attempts."
+              echo "::error::Failed to push release after ${attempt} attempts."
               exit 1
             fi
             sleep 2
           done
-          git push origin "refs/tags/${TAG}"
