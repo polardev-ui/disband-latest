@@ -1,4 +1,5 @@
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { isNewerVersion, parseSemverTag, semverToString } from "@/lib/version";
 
 export type DownloadPlatform = "macos" | "windows" | "linux" | "unknown";
 export type MacArch = "aarch64" | "x64" | "unknown";
@@ -6,7 +7,11 @@ export type MacArch = "aarch64" | "x64" | "unknown";
 /** owner/repo slug for GitHub Releases (not a URL). */
 export const GITHUB_REPO_SLUG = PUBLIC_ENV.githubRepo;
 
-export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO_SLUG}/releases/latest`;
+export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO_SLUG}/releases`;
+
+export function releasePageUrl(tag: string): string {
+  return `https://github.com/${GITHUB_REPO_SLUG}/releases/tag/${encodeURIComponent(tag)}`;
+}
 
 export interface ReleaseAsset {
   name: string;
@@ -180,22 +185,59 @@ export function parseGitHubRelease(json: {
   };
 }
 
+type GitHubReleaseJson = {
+  tag_name: string;
+  name: string;
+  published_at: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  assets: { name: string; browser_download_url: string; size: number }[];
+};
+
+function githubFetchHeaders(): HeadersInit {
+  return {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "Disband-Release-Fetcher",
+  };
+}
+
+/** Pick the newest non-draft, non-prerelease release with a semver tag (ignores tags like `main`). */
+export function pickLatestSemverRelease(rows: GitHubReleaseJson[]): GitHubRelease | null {
+  let best: { release: GitHubRelease; semver: string } | null = null;
+
+  for (const row of rows) {
+    if (row.draft || row.prerelease) continue;
+    const parsed = parseSemverTag(row.tag_name);
+    if (!parsed) continue;
+    const release = parseGitHubRelease(row);
+    const semver = semverToString(parsed);
+    if (!best || isNewerVersion(semver, best.semver)) {
+      best = { release, semver };
+    }
+  }
+
+  return best?.release ?? null;
+}
+
+async function fetchGitHubReleaseRows(): Promise<GitHubReleaseJson[]> {
+  const repo = GITHUB_REPO_SLUG;
+  const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=30`, {
+    headers: githubFetchHeaders(),
+  });
+  if (res.status === 404) return [];
+  if (!res.ok) {
+    throw new Error("Could not load releases.");
+  }
+  const json = await res.json();
+  return Array.isArray(json) ? json : [];
+}
+
 /** Client-side fetch for static export (Tauri) where `/api/releases` is unavailable. */
 export async function fetchLatestReleaseFromGitHub(): Promise<{
   release: GitHubRelease | null;
   assets: ReleaseAsset[];
 }> {
-  const repo = GITHUB_REPO_SLUG;
-  const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json" },
-  });
-  if (res.status === 404) {
-    return { release: null, assets: [] };
-  }
-  if (!res.ok) {
-    throw new Error("Could not load releases.");
-  }
-  const json = await res.json();
-  const release = parseGitHubRelease(json);
-  return { release, assets: release.assets };
+  const rows = await fetchGitHubReleaseRows();
+  const release = pickLatestSemverRelease(rows);
+  return { release, assets: release?.assets ?? [] };
 }

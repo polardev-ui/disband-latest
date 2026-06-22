@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GITHUB_REPO_SLUG, parseGitHubRelease } from "@/lib/github-releases";
+import { GITHUB_REPO_SLUG, pickLatestSemverRelease } from "@/lib/github-releases";
 
 export async function GET() {
   const repo = GITHUB_REPO_SLUG;
@@ -11,7 +11,7 @@ export async function GET() {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
 
-  const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+  const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=30`, {
     headers,
     next: { revalidate: 300 },
   });
@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json({ error: "Could not load releases." }, { status: 502 });
   }
 
-  const json = await res.json();
-  const release = parseGitHubRelease(json);
-  return NextResponse.json({ release, assets: release.assets });
+  const rows = await res.json();
+  const release = pickLatestSemverRelease(Array.isArray(rows) ? rows : []);
+  return NextResponse.json({ release, assets: release?.assets ?? [] });
 }

@@ -1,11 +1,14 @@
 "use client";
 
 import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
+import { extractPreviewUrls } from "@/lib/link-preview";
+import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { summarizeReactions, type ReactionSummary, type ReplyPreview } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
+import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageAttachment } from "./MessageAttachment";
 import { MessageReactions } from "./MessageReactions";
 import type { Profile } from "@/lib/supabase/types";
@@ -44,8 +47,9 @@ interface ChatMessageProps {
 }
 
 function renderContent(content: string, members: Profile[] = []) {
-  const parts = content.split(/(@[a-zA-Z0-9_]{2,32}|\*\*[^*]+\*\*)/g);
+  const parts = content.split(/(@[a-zA-Z0-9_]{2,32}|\*\*[^*]+\*\*|https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/g);
   return parts.map((part, i) => {
+    if (!part) return null;
     if (part.startsWith("@")) {
       const uname = part.slice(1);
       const user = members.find((m) => m.username?.toLowerCase() === uname.toLowerCase());
@@ -57,6 +61,19 @@ function renderContent(content: string, members: Profile[] = []) {
     }
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    if (/^https?:\/\//i.test(part)) {
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all text-brand hover:underline"
+        >
+          {part}
+        </a>
+      );
     }
     return part;
   });
@@ -72,6 +89,7 @@ function MessageBody({
   onContentResize?: () => void;
 }) {
   const codes = extractInviteCodes(content);
+  const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
   const textOnly = content.replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "").trim();
 
   return (
@@ -83,6 +101,9 @@ function MessageBody({
       )}
       {codes.map((code) => (
         <ServerInviteCard key={code} code={code} onLoad={onContentResize} />
+      ))}
+      {previewUrls.map((url) => (
+        <LinkPreviewCard key={url} url={url} onLoad={onContentResize} />
       ))}
     </>
   );
