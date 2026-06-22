@@ -704,8 +704,8 @@ export function DiscordApp() {
       )}
 
       {dmCallActive && app.viewMode !== "dm" && (
-        <div className="fixed left-[4.5rem] right-0 top-0 z-50 max-w-xl">
-          {renderCallPanel()}
+        <div className="pointer-events-none fixed bottom-4 left-[88px] z-40 w-[min(22rem,calc(100vw-7rem))]">
+          <div className="pointer-events-auto">{renderCallPanel()}</div>
         </div>
       )}
 
@@ -713,7 +713,8 @@ export function DiscordApp() {
         const callGroup = app.groupChats.find((g) => g.id === groupCall.groupId);
         if (!callGroup) return null;
         return (
-        <div className="fixed left-[4.5rem] right-0 top-0 z-50 max-w-2xl shadow-2xl">
+        <div className="pointer-events-none fixed bottom-4 left-[88px] z-40 w-[min(28rem,calc(100vw-7rem))]">
+          <div className="pointer-events-auto shadow-2xl">
           <GroupCallStage
             groupName={callGroup.name}
             members={callGroup.members}
@@ -732,6 +733,7 @@ export function DiscordApp() {
             onToggleCamera={() => void groupCall.toggleCamera()}
             onToggleMic={toggleMic}
           />
+          </div>
         </div>
         );
       })()}

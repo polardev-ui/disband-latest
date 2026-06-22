@@ -5,9 +5,10 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { directCallId, startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
+import { buildVideoConstraints } from "@/lib/audio-settings";
 import { notifyUser, requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
-import { createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
+import { bindRemoteTrack, createOfferForPeer, setPeerVideoTrack, streamWithoutEndedTracks } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -57,6 +58,7 @@ export function useCallManager(
   const activePeerIdRef = useRef<string | null>(null);
   const phaseRef = useRef<CallPhase>("idle");
   const cameraRef = useRef(false);
+  const trackCleanupsRef = useRef<Array<() => void>>([]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { cameraRef.current = cameraEnabled; }, [cameraEnabled]);
 
@@ -72,6 +74,8 @@ export function useCallManager(
   useEffect(() => { applyDeafen(deafened); }, [deafened, applyDeafen]);
 
   const cleanupRtc = useCallback(async () => {
+    trackCleanupsRef.current.forEach((cleanup) => cleanup());
+    trackCleanupsRef.current = [];
     pcRef.current?.close();
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
@@ -91,6 +95,8 @@ export function useCallManager(
     setIncoming(null);
     setActivePeer(null);
     setError(null);
+    setCameraEnabled(false);
+    cameraRef.current = false;
     activeCallIdRef.current = null;
     activePeerIdRef.current = null;
   }, [cleanupRtc]);
@@ -114,7 +120,7 @@ export function useCallManager(
       await warmUpMediaDevices();
       const stream = await getDisbandUserMedia({
         audio: true,
-        video: cameraRef.current ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false,
+        video: cameraRef.current ? buildVideoConstraints() : false,
       });
       localRef.current = stream;
       setLocalStream(stream);
@@ -127,7 +133,8 @@ export function useCallManager(
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
       pc.ontrack = (ev) => {
-        setRemoteStream((prev) => mergeTrackIntoStream(prev, ev.track));
+        const cleanup = bindRemoteTrack(setRemoteStream, ev.track);
+        trackCleanupsRef.current.push(cleanup);
       };
       pc.onicecandidate = (ev) => {
         if (ev.candidate) {
@@ -153,9 +160,11 @@ export function useCallManager(
             await pc.setRemoteDescription(p.sdp);
             const ans = await pc.createAnswer();
             await pc.setLocalDescription(ans);
+            setRemoteStream((prev) => streamWithoutEndedTracks(prev));
             void ch.send({ type: "broadcast", event: "call", payload: { type: "answer", from: userId, to: p.from, sdp: ans } });
           } else if (p.type === "answer" && p.sdp) {
             await pc.setRemoteDescription(p.sdp);
+            setRemoteStream((prev) => streamWithoutEndedTracks(prev));
           } else if (p.type === "ice" && p.candidate) {
             await pc.addIceCandidate(p.candidate);
           } else if (p.type === "leave") {
@@ -197,7 +206,7 @@ export function useCallManager(
         track.enabled = true;
       } else {
         const cam = await getDisbandUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          video: buildVideoConstraints(),
         });
         track = cam.getVideoTracks()[0];
         stream.addTrack(track);
