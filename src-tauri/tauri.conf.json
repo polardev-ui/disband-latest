@@ -34,6 +34,9 @@
     "category": "SocialNetworking",
     "shortDescription": "One codebase, every platform.",
     "longDescription": "Disband — a cross-platform app for macOS, Windows, Linux and the Web, built from a single Next.js codebase.",
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

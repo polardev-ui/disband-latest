@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isTauri } from "@/lib/platform";
 import { playMentionPing, requestNotificationPermission, showSystemNotification } from "@/lib/notifications";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { parseMentions, normalizeMessageContent } from "@/lib/utils";
@@ -1008,7 +1009,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
     if (typeof window !== "undefined") {
-      window.location.href = "/home";
+      window.location.href = isTauri() ? "/app" : "/home";
     }
   }, [userId]);
 

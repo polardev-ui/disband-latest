@@ -1,8 +1,10 @@
+import { PUBLIC_ENV } from "@/lib/public-env";
+
 export type DownloadPlatform = "macos" | "windows" | "linux" | "unknown";
+export type MacArch = "aarch64" | "x64" | "unknown";
 
 /** owner/repo slug for GitHub Releases (not a URL). */
-export const GITHUB_REPO_SLUG =
-  process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest";
+export const GITHUB_REPO_SLUG = PUBLIC_ENV.githubRepo;
 
 export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO_SLUG}/releases/latest`;
 
@@ -12,6 +14,7 @@ export interface ReleaseAsset {
   size: number;
   platform: DownloadPlatform;
   label: string;
+  macArch?: MacArch;
 }
 
 export interface GitHubRelease {
@@ -27,6 +30,71 @@ const PLATFORM_PATTERNS: { platform: DownloadPlatform; test: RegExp; label: stri
   { platform: "linux", test: /\.(deb|AppImage|rpm)$/i, label: "Linux" },
 ];
 
+function isArmMacAsset(name: string): boolean {
+  return /aarch64|arm64|apple[-_]?silicon/i.test(name);
+}
+
+function isIntelMacAsset(name: string): boolean {
+  if (isArmMacAsset(name)) return false;
+  return /(?:^|[_\-.])x64(?:[_\-.]|$)|x86_64|intel/i.test(name);
+}
+
+function macArchFromName(name: string): MacArch | undefined {
+  if (isArmMacAsset(name)) return "aarch64";
+  if (isIntelMacAsset(name)) return "x64";
+  return undefined;
+}
+
+function macLabelFromArch(arch: MacArch | undefined): string {
+  if (arch === "aarch64") return "macOS (Apple Silicon)";
+  if (arch === "x64") return "macOS (Intel)";
+  return "macOS";
+}
+
+/** Sync Apple Silicon detection — `navigator.platform` is often "MacIntel" on M-series Macs. */
+export function detectMacArchSync(): MacArch {
+  if (typeof navigator === "undefined") return "unknown";
+  if (!/Mac/i.test(navigator.platform) && !/Macintosh/i.test(navigator.userAgent)) {
+    return "unknown";
+  }
+
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl");
+    const ext = gl?.getExtension("WEBGL_debug_renderer_info");
+    if (ext && gl) {
+      const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) as string;
+      if (/Apple M\d/i.test(renderer)) return "aarch64";
+    }
+  } catch {
+    // ignore
+  }
+
+  return "unknown";
+}
+
+/** Preferred async detection via User-Agent Client Hints (Chrome/Edge). */
+export async function detectMacArchAsync(): Promise<MacArch> {
+  if (typeof navigator === "undefined") return "unknown";
+
+  try {
+    if (navigator.userAgentData?.getHighEntropyValues) {
+      const { architecture, platform } = await navigator.userAgentData.getHighEntropyValues([
+        "architecture",
+        "platform",
+      ]);
+      if (platform === "macOS" || /Mac/i.test(navigator.userAgent)) {
+        if (architecture === "arm") return "aarch64";
+        if (architecture === "x86") return "x64";
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return detectMacArchSync();
+}
+
 export function detectClientPlatform(): DownloadPlatform {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent;
@@ -38,23 +106,44 @@ export function detectClientPlatform(): DownloadPlatform {
 }
 
 export function classifyAsset(name: string, downloadUrl: string): ReleaseAsset | null {
-  for (const { platform, test, label } of PLATFORM_PATTERNS) {
+  for (const { platform, test } of PLATFORM_PATTERNS) {
     if (test.test(name)) {
-      return { name, url: downloadUrl, size: 0, platform, label };
+      const macArch = platform === "macos" ? macArchFromName(name) : undefined;
+      return {
+        name,
+        url: downloadUrl,
+        size: 0,
+        platform,
+        macArch,
+        label: platform === "macos" ? macLabelFromArch(macArch) : PLATFORM_PATTERNS.find((p) => p.platform === platform)!.label,
+      };
     }
   }
   return null;
 }
 
-export function pickAssetForPlatform(assets: ReleaseAsset[], platform: DownloadPlatform): ReleaseAsset | null {
+export function pickAssetForPlatform(
+  assets: ReleaseAsset[],
+  platform: DownloadPlatform,
+  macArch: MacArch = "unknown",
+): ReleaseAsset | null {
   const matches = assets.filter((a) => a.platform === platform);
   if (matches.length === 0) return null;
-  if (platform === "macos" && typeof navigator !== "undefined") {
-    const arm = matches.find((a) => /aarch64|arm64/i.test(a.name));
-    if (arm && /arm/i.test(navigator.userAgent)) return arm;
-    const intel = matches.find((a) => /x64|x86_64|intel/i.test(a.name));
-    return intel ?? arm ?? matches[0];
+
+  if (platform === "macos") {
+    const arm = matches.find((a) => a.macArch === "aarch64" || isArmMacAsset(a.name));
+    const intel = matches.find((a) => a.macArch === "x64" || isIntelMacAsset(a.name));
+
+    if (macArch === "aarch64" && arm) return arm;
+    if (macArch === "x64" && intel) return intel;
+
+    const syncArch = detectMacArchSync();
+    if (syncArch === "aarch64" && arm) return arm;
+    if (syncArch === "x64" && intel) return intel;
+
+    return arm ?? intel ?? matches[0];
   }
+
   return matches[0];
 }
 
