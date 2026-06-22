@@ -46,12 +46,8 @@ jobs:
         id: tag
         env:
           INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-        run: |
-          if ! [[ "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release tag \"${INPUT_TAG}\". Expected format v1.2.3 (not branch names like \"main\")." >&2
-            exit 1
-          fi
-          echo "name=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+        run: >-
+          node -e "const t=process.env.INPUT_TAG; if (!/^v\d+\.\d+\.\d+$/.test(t)) { console.error('Invalid release tag \"' + t + '\". Expected vMAJOR.MINOR.PATCH (e.g. v1.2.3).'); process.exit(1); } require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'name=' + t + '\n');"
 
       - uses: actions/checkout@v4
         with:
@@ -72,13 +68,15 @@ jobs:
           cache: pnpm
 
       - name: Sync version from tag
-        env:
-          TAG: ${{ steps.tag.outputs.name }}
-        run: node scripts/set-version.mjs "${TAG#v}"
+        run: node scripts/set-version.mjs "${{ steps.tag.outputs.name }}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      - name: Pin time crate (0.3.50 breaks against time-macros on crates.io)
+        working-directory: src-tauri
+        run: cargo update -p time --precise 0.3.49
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
