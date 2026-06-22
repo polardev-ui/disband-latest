@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { parseGitHubRelease } from "@/lib/github-releases";
+import { GITHUB_REPO_SLUG, parseGitHubRelease } from "@/lib/github-releases";
 
 export async function GET() {
-  const repo = process.env.NEXT_PUBLIC_GITHUB_REPO ?? "wsgpolar/disband";
+  const repo = GITHUB_REPO_SLUG;
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
     "User-Agent": "Disband-Release-Fetcher",
