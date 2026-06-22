@@ -83,10 +83,12 @@ function renderContent(content: string, members: Profile[] = []) {
 function MessageBody({
   content,
   members,
+  compact,
   onContentResize,
 }: {
   content: string;
   members: Profile[];
+  compact?: boolean;
   onContentResize?: () => void;
 }) {
   const codes = extractInviteCodes(content);
@@ -99,7 +101,11 @@ function MessageBody({
       {textOnly && (
         <span
           className={`whitespace-pre-wrap break-words text-text-normal ${
-            emojiOnly ? "text-[2.75rem] leading-[3rem]" : "text-[15px] leading-[1.375rem]"
+            emojiOnly
+              ? "text-[2.75rem] leading-[3rem]"
+              : compact
+                ? "text-[15px] leading-[1.25rem]"
+                : "text-[15px] leading-[1.375rem]"
           }`}
         >
           {emojiOnly ? textOnly : renderContent(textOnly, members)}
@@ -204,7 +210,7 @@ export function ChatMessage({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative ${COMPACT_INDENT} pr-4 py-1 hover:bg-interactive-hover/30 ${highlightClass}`}
+        className={`group relative ${COMPACT_INDENT} pr-4 py-0 hover:bg-interactive-hover/30 ${highlightClass}`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -214,7 +220,7 @@ export function ChatMessage({
         {replyBlock}
         {body && (
           <span className="inline">
-            <MessageBody content={body} members={members} onContentResize={onContentResize} />
+            <MessageBody content={body} members={members} compact onContentResize={onContentResize} />
             {editedTag}
           </span>
         )}
@@ -227,7 +233,7 @@ export function ChatMessage({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`message-enter group mt-6 flex items-start gap-4 px-4 pb-0.5 hover:bg-interactive-hover/30 ${highlightClass}`}
+      className={`message-enter group mt-[18px] flex items-start gap-4 px-4 hover:bg-interactive-hover/30 ${highlightClass}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >

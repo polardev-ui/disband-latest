@@ -40,9 +40,16 @@ fn show_macos_notification(_title: String, _body: Option<String>) -> Result<(), 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_plugin_macos_permissions::init());
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![greet, show_macos_notification])
         .run(tauri::generate_context!())
         .expect("error while running the Disband desktop application");
