@@ -1,4 +1,5 @@
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { isTauri } from "@/lib/platform";
 import { extractInviteCodes } from "@/lib/utils";
 
 export interface LinkPreview {
@@ -34,6 +35,47 @@ export function extractPreviewUrls(text: string, max = 3): string[] {
   return urls;
 }
 
+function previewEndpoints(): string[] {
+  if (isTauri()) {
+    return [
+      `${PUBLIC_ENV.mediaApiUrl}/link/preview`,
+      `${PUBLIC_ENV.webAppUrl}/api/link/preview`,
+    ];
+  }
+  return ["/api/link/preview", `${PUBLIC_ENV.mediaApiUrl}/link/preview`];
+}
+
+function parsePreviewPayload(url: string, data: {
+  title?: string;
+  description?: string;
+  image?: string;
+}): LinkPreview {
+  let hostname = url;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // keep raw url
+  }
+  return {
+    url,
+    title: data.title?.trim() || hostname,
+    description: data.description?.trim() || undefined,
+    image: data.image?.trim() || undefined,
+  };
+}
+
+async function fetchFromEndpoint(base: string, url: string): Promise<LinkPreview | null> {
+  const endpoint =
+    base.startsWith("http") || base.startsWith("/")
+      ? `${base}${base.includes("?") ? "&" : "?"}url=${encodeURIComponent(url)}`
+      : `${base}?url=${encodeURIComponent(url)}`;
+
+  const res = await fetch(endpoint);
+  if (!res.ok) return null;
+  const data = (await res.json()) as { title?: string; description?: string; image?: string };
+  return parsePreviewPayload(url, data);
+}
+
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   if (cache.has(url)) return cache.get(url) ?? null;
   const pending = inflight.get(url);
@@ -41,23 +83,17 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
 
   const promise = (async () => {
     try {
-      const res = await fetch(
-        `${PUBLIC_ENV.mediaApiUrl}/link/preview?url=${encodeURIComponent(url)}`,
-      );
-      if (!res.ok) {
-        cache.set(url, null);
-        return null;
+      for (const base of previewEndpoints()) {
+        try {
+          const preview = await fetchFromEndpoint(base, url);
+          if (preview) {
+            cache.set(url, preview);
+            return preview;
+          }
+        } catch {
+          // try next endpoint
+        }
       }
-      const data = (await res.json()) as { title?: string; description?: string; image?: string };
-      const preview: LinkPreview = {
-        url,
-        title: data.title?.trim() || new URL(url).hostname,
-        description: data.description?.trim() || undefined,
-        image: data.image?.trim() || undefined,
-      };
-      cache.set(url, preview);
-      return preview;
-    } catch {
       cache.set(url, null);
       return null;
     } finally {
