@@ -16,7 +16,28 @@ import { ReactionPicker } from "./MessageReactions";
 import { IconHash } from "@/components/icons";
 import { formatTypingLabel, useTypingPresence } from "@/hooks/useTypingPresence";
 import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
+import {
+  findNewMessagesDividerId,
+  markChatReadNow,
+  setReadCursor,
+  type ReadCursorScope,
+} from "@/lib/read-cursors";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
+
+function NewMessagesDivider() {
+  return (
+    <div
+      className="relative my-3 flex items-center px-4"
+      role="separator"
+      aria-label="New messages"
+    >
+      <div className="h-px flex-1 bg-status-dnd" />
+      <span className="ml-2 shrink-0 rounded bg-status-dnd px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+        New
+      </span>
+    </div>
+  );
+}
 
 export interface ChatCanvasHandle {
   setReplyTo: (reply: ReplyPreview | null) => void;
@@ -39,6 +60,7 @@ interface ChatCanvasProps {
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
   typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
+  readCursorScope?: ReadCursorScope | null;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   onEdit?: (messageId: string, content: string) => Promise<string | null>;
   onToggleReaction?: (messageId: string, emoji: string) => void;
@@ -64,6 +86,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     callPanel,
     channelIcon,
     typingScope = null,
+    readCursorScope = null,
     onSend,
     onEdit,
     onToggleReaction,
@@ -85,6 +108,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
+  const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
+  const readScopeRef = useRef<ReadCursorScope | null>(null);
+  const dividerLockedRef = useRef(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   const typingSelf = useMemo(
     () => (currentUserId && currentUserName ? { id: currentUserId, name: currentUserName } : null),
@@ -124,7 +152,39 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     prevFirstIdRef.current = null;
     prevMessageCountRef.current = 0;
     scrollRestoreRef.current = null;
-  }, [channelName, messageContext, typingScope?.id]);
+  }, [channelName, messageContext, typingScope?.id, readCursorScope?.kind, readCursorScope?.id]);
+
+  useEffect(() => {
+    const prevScope = readScopeRef.current;
+    const nextScope = readCursorScope ?? null;
+
+    if (
+      prevScope
+      && (!nextScope || prevScope.kind !== nextScope.kind || prevScope.id !== nextScope.id)
+      && messagesRef.current.length > 0
+    ) {
+      setReadCursor(prevScope, messagesRef.current);
+    }
+
+    readScopeRef.current = nextScope;
+    dividerLockedRef.current = false;
+    setNewMessagesDividerId(null);
+  }, [readCursorScope?.kind, readCursorScope?.id]);
+
+  useEffect(() => {
+    if (!readCursorScope || dividerLockedRef.current || messages.length === 0) return;
+    setNewMessagesDividerId(findNewMessagesDividerId(messages, readCursorScope));
+    dividerLockedRef.current = true;
+  }, [messages, readCursorScope]);
+
+  useEffect(() => {
+    return () => {
+      const scope = readScopeRef.current;
+      if (scope && messagesRef.current.length > 0) {
+        setReadCursor(scope, messagesRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -187,7 +247,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       if (!err) setEditing(null);
       return err;
     }
-    return onSend(content, options);
+    setNewMessagesDividerId(null);
+    const err = await onSend(content, options);
+    if (!err && readCursorScope) {
+      markChatReadNow(readCursorScope);
+    }
+    return err;
   }
 
   return (
@@ -229,32 +294,34 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
               (r) => r.context_type === messageContext && r.message_id === msg.id,
             );
             return (
-              <ChatMessage
-                key={msg.id}
-                message={msg}
-                showHeader={showHeader}
-                compact={grouped}
-                currentUserId={currentUserId}
-                authorColor={getAuthorColor?.(msg.author_id)}
-                reactions={msgReactions}
-                onAuthorClick={onAuthorClick}
-                members={members}
-                highlight={highlightId === msg.id}
-                onJumpToReply={jumpToMessage}
-                onToggleReaction={
-                  onToggleReaction ? (emoji) => onToggleReaction(msg.id, emoji) : undefined
-                }
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onMessageContext(msg, e.clientX, e.clientY);
-                }}
-                onDoubleClick={
-                  onToggleReaction
-                    ? () => onToggleReaction(msg.id, "👍")
-                    : undefined
-                }
-                onContentResize={() => scrollToBottom()}
-              />
+              <div key={msg.id}>
+                {newMessagesDividerId === msg.id && <NewMessagesDivider />}
+                <ChatMessage
+                  message={msg}
+                  showHeader={showHeader}
+                  compact={grouped}
+                  currentUserId={currentUserId}
+                  authorColor={getAuthorColor?.(msg.author_id)}
+                  reactions={msgReactions}
+                  onAuthorClick={onAuthorClick}
+                  members={members}
+                  highlight={highlightId === msg.id}
+                  onJumpToReply={jumpToMessage}
+                  onToggleReaction={
+                    onToggleReaction ? (emoji) => onToggleReaction(msg.id, emoji) : undefined
+                  }
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onMessageContext(msg, e.clientX, e.clientY);
+                  }}
+                  onDoubleClick={
+                    onToggleReaction
+                      ? () => onToggleReaction(msg.id, "👍")
+                      : undefined
+                  }
+                  onContentResize={() => scrollToBottom()}
+                />
+              </div>
             );
           })}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
 import type { Profile, ServerMember, ServerRole } from "@/lib/supabase/types";
 
@@ -64,10 +65,11 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
           )}
         </div>
         <span
-          className={`truncate text-[15px] ${p.status === "offline" ? "text-text-muted" : "text-text-normal"}`}
+          className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] ${p.status === "offline" ? "text-text-muted" : "text-text-normal"}`}
           style={color ? { color } : undefined}
         >
-          {displayName(p)}
+          <span className="truncate">{displayName(p)}</span>
+          <PlatformBadge profile={p} />
         </span>
       </button>
     );

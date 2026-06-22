@@ -12,19 +12,26 @@ export function formatMessageTime(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) + ` ${time}`;
 }
 
-/** Parse @username mentions and return matched user IDs. */
+/** Parse @username and @everyone mentions; return matched user IDs. */
 export function parseMentions(
   content: string,
   members: { id: string; username: string | null }[],
+  authorId?: string,
 ): string[] {
   const ids = new Set<string>();
   const re = /@([a-zA-Z0-9_]{2,32})/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
-    const user = members.find(
-      (u) => u.username?.toLowerCase() === m![1].toLowerCase(),
-    );
+    const token = m[1].toLowerCase();
+    if (token === "everyone") continue;
+    const user = members.find((u) => u.username?.toLowerCase() === token);
     if (user) ids.add(user.id);
+  }
+  if (/@everyone\b/i.test(content)) {
+    for (const member of members) {
+      if (authorId && member.id === authorId) continue;
+      ids.add(member.id);
+    }
   }
   return [...ids];
 }

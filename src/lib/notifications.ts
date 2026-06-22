@@ -68,6 +68,12 @@ export function isAppInBackground(): boolean {
   return document.visibilityState === "hidden" || !document.hasFocus();
 }
 
+function shouldDeliverOsNotification(target?: NotificationTarget): boolean {
+  if (!target) return true;
+  if (shouldShowNotification(focusState, target)) return true;
+  return isAppInBackground();
+}
+
 export function isRecipientDoNotDisturb(
   profile: { status?: UserStatus; preferred_status?: UserStatus | null } | null | undefined,
 ): boolean {
@@ -123,6 +129,20 @@ export function playDmPing() {
   }
 }
 
+function notificationTag(target?: NotificationTarget, prefix = "disband"): string | undefined {
+  if (!target) return undefined;
+  switch (target.kind) {
+    case "channel":
+      return `${prefix}-channel-${target.channelId}`;
+    case "dm":
+      return `${prefix}-dm-${target.threadId}`;
+    case "group":
+      return `${prefix}-group-${target.groupId}`;
+    case "call":
+      return `${prefix}-call-${target.peerId}`;
+  }
+}
+
 /**
  * DM alert when you're not viewing that conversation.
  * Shows macOS/browser notifications even when Disband is focused on another view.
@@ -134,9 +154,21 @@ export function alertIncomingDm(
   threadId: string,
 ) {
   if (isRecipientDoNotDisturb(recipient)) return;
-  if (!shouldShowNotification(focusState, { kind: "dm", threadId })) return;
+  const target = { kind: "dm" as const, threadId };
+  if (!shouldDeliverOsNotification(target)) return;
   if (getUserSettings().soundEnabled) playDmPing();
-  showSystemNotification(title, body, undefined, `dm-${threadId}`);
+  showSystemNotification(title, body, undefined, notificationTag(target));
+}
+
+/** Mention / @everyone alert with ping sound and OS notification. */
+export function alertMention(
+  title: string,
+  body: string | undefined,
+  target: NotificationTarget,
+) {
+  if (!shouldDeliverOsNotification(target)) return;
+  playMentionPing();
+  showSystemNotification(title, body, undefined, notificationTag(target, "mention"));
 }
 
 async function ensureNativeNotificationPermission(): Promise<boolean> {
@@ -157,9 +189,30 @@ async function ensureNativeNotificationPermission(): Promise<boolean> {
   }
 }
 
+function isMacOsDesktop(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Mac/i.test(navigator.platform || navigator.userAgent);
+}
+
+async function sendMacOsNativeNotification(title: string, body?: string): Promise<boolean> {
+  if (!isTauri() || !isMacOsDesktop()) return false;
+  try {
+    const granted = await ensureNativeNotificationPermission();
+    if (!granted) return false;
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("show_macos_notification", { title, body: body ?? null });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function sendNativeNotification(title: string, body?: string): Promise<boolean> {
   if (!isTauri()) return false;
   try {
+    const macSent = await sendMacOsNativeNotification(title, body);
+    if (macSent) return true;
+
     const granted = await ensureNativeNotificationPermission();
     if (!granted) return false;
     const { sendNotification } = await import("@tauri-apps/plugin-notification");
@@ -184,6 +237,13 @@ export async function requestNotificationPermissionFromGesture(): Promise<boolea
   } catch {
     return false;
   }
+}
+
+/** Request notification permission as soon as the user is signed in (desktop + web). */
+export async function primeNotificationPermission(): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (Notification.permission === "denied") return;
+  await requestNotificationPermissionFromGesture();
 }
 
 export function showSystemNotification(
@@ -236,6 +296,6 @@ function showWebNotification(
 }
 
 export function notifyUser(title: string, body?: string, target?: NotificationTarget) {
-  if (target && !shouldShowNotification(focusState, target)) return;
-  showSystemNotification(title, body);
+  if (target && !shouldDeliverOsNotification(target)) return;
+  showSystemNotification(title, body, undefined, notificationTag(target));
 }

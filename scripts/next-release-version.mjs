@@ -58,18 +58,19 @@ async function fetchReleaseTags() {
     page++;
   }
 
-  // Also consider git tags (releases may have been deleted while tags remain).
+  // Git tags API — only semver v* tags (ignore branch tags like `main`).
   page = 1;
   while (page <= 5) {
     const res = await fetch(
-      `https://api.github.com/repos/${repo}/tags?per_page=100&page=${page}`,
+      `https://api.github.com/repos/${repo}/git/refs/tags?per_page=100&page=${page}`,
       { headers },
     );
     if (!res.ok) break;
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length === 0) break;
     for (const row of rows) {
-      if (row.name?.startsWith("v")) tags.add(row.name);
+      const name = row.ref?.replace(/^refs\/tags\//, "");
+      if (name?.startsWith("v")) tags.add(name);
     }
     if (rows.length < 100) break;
     page++;
@@ -78,11 +79,21 @@ async function fetchReleaseTags() {
   return [...tags];
 }
 
+function occupiedSemvers(tagNames) {
+  const set = new Set();
+  for (const tag of tagNames) {
+    const parsed = parseSemver(tag);
+    if (parsed) set.add(semverToString(parsed));
+  }
+  return set;
+}
+
 const pkgVersion = parseSemver(JSON.parse(readFileSync("package.json", "utf8")).version);
 let latest = pkgVersion;
+let tagNames = [];
 
 try {
-  const tagNames = await fetchReleaseTags();
+  tagNames = await fetchReleaseTags();
   for (const tag of tagNames) {
     const parsed = parseSemver(tag);
     if (parsed) latest = maxSemver(latest ?? parsed, parsed);
@@ -97,4 +108,9 @@ if (!latest) {
 }
 
 const next = bumpSemver(latest, bumpType);
-process.stdout.write(semverToString(next));
+const taken = occupiedSemvers(tagNames);
+let candidate = next;
+while (taken.has(semverToString(candidate))) {
+  candidate = bumpSemver(candidate, "patch");
+}
+process.stdout.write(semverToString(candidate));

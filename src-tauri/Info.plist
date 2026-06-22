@@ -6,5 +6,7 @@
   <string>Disband uses your microphone for voice channels and calls.</string>
   <key>NSCameraUsageDescription</key>
   <string>Disband uses your camera for video calls.</string>
+  <key>NSUserNotificationsUsageDescription</key>
+  <string>Disband sends notifications for mentions, messages, and calls.</string>
 </dict>
 </plist>

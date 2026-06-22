@@ -13,9 +13,10 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
-import { playMentionPing, notifyUser, alertIncomingDm, setNotificationFocusState, parseNotificationLink } from "@/lib/notifications";
+import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
+import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   matchesOptimisticRow,
@@ -427,13 +428,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from("server_members").select("*").eq("server_id", serverId),
       supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
     ]);
+    const channelRows = (chs as Channel[]) ?? [];
     setCategories((cats as ChannelCategory[]) ?? []);
-    setChannels((chs as Channel[]) ?? []);
+    setChannels(channelRows);
     setServerRoles((roles as ServerRole[]) ?? []);
     const memberRows = (mems as ServerMember[]) ?? [];
     if (memberRows.length === 0) {
       setMembers([]);
-      return;
+      return channelRows;
     }
     const { data: profiles } = await supabase
       .from("profiles")
@@ -445,6 +447,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .filter((m) => map.has(m.user_id))
         .map((m) => ({ ...m, profile: map.get(m.user_id)! })),
     );
+    return channelRows;
   }, []);
 
   const loadMessages = useCallback(async (channelId: string) => {
@@ -748,6 +751,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void (async () => {
       await ensureProfile(userId, user?.email);
       await refreshAll();
+      void primeNotificationPermission();
     })();
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -762,8 +766,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const n = payload.new as AppNotification;
         setNotifications((prev) => [n, ...prev]);
         const target = parseNotificationLink(n.link);
-        if (n.type === "mention") playMentionPing();
-        notifyUser(n.title, n.body ?? undefined, target ?? undefined);
+        if (target?.kind === "channel") {
+          const channel = channelsRef.current.find((c) => c.id === target.channelId);
+          if (channel) {
+            setServerIndicators((prev) => new Set(prev).add(channel.server_id));
+          }
+        }
+        if (n.type === "mention" && target) {
+          alertMention(n.title, n.body ?? undefined, target);
+        } else {
+          notifyUser(n.title, n.body ?? undefined, target ?? undefined);
+        }
       })
       .subscribe();
 
@@ -1205,6 +1218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as Message;
           if (msg.author_id === userId) return;
+          if (msg.mentions?.includes(userId)) return;
           const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
           if (!channel) return;
           const viewingChannel =
@@ -1269,6 +1283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as GroupMessage;
           if (msg.author_id === userId) return;
+          if (msg.mentions?.includes(userId)) return;
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
           void (async () => {
@@ -1377,35 +1392,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [userId, profile, patchProfileInState, loadProfile]);
 
+  const persistActiveServerChannel = useCallback(() => {
+    const serverId = activeServerRef.current;
+    const channelId = activeChannelRef.current;
+    if (serverId && channelId) {
+      setLastChannelId(serverId, channelId);
+    }
+  }, []);
+
   const setViewHome = useCallback(() => {
+    persistActiveServerChannel();
     setViewMode("home");
     setActiveServerId(null);
     setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
-  }, []);
+  }, [persistActiveServerChannel]);
 
   const selectServer = useCallback(async (serverId: string) => {
+    persistActiveServerChannel();
     setViewMode("server");
     setActiveServerId(serverId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
     clearServerIndicator(serverId);
-    await loadServerDetails(serverId);
-    const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("channels")
-      .select("*")
-      .eq("server_id", serverId)
-      .eq("type", "text")
-      .order("position")
-      .limit(1);
-    const first = (data as Channel[])?.[0];
-    if (first) {
-      setActiveChannelId(first.id);
-      await loadMessages(first.id);
+    const channelRows = await loadServerDetails(serverId);
+    const savedId = getLastChannelId(serverId);
+    const saved = savedId ? channelRows.find((c) => c.id === savedId) : null;
+    const target = saved ?? channelRows.find((c) => c.type === "text") ?? channelRows[0];
+    if (target) {
+      setActiveChannelId(target.id);
+      await loadMessages(target.id);
+    } else {
+      setActiveChannelId(null);
     }
-  }, [loadServerDetails, loadMessages, clearServerIndicator]);
+  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel]);
 
   const selectChannel = useCallback((channelId: string) => {
     setActiveChannelId(channelId);
@@ -1413,25 +1434,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveGroupChatId(null);
     if (viewMode !== "server") setViewMode("server");
     const channel = channelsRef.current.find((c) => c.id === channelId);
-    if (channel) clearServerIndicator(channel.server_id);
+    if (channel) {
+      clearServerIndicator(channel.server_id);
+      setLastChannelId(channel.server_id, channelId);
+    }
   }, [viewMode, clearServerIndicator]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
+    persistActiveServerChannel();
     setViewMode("dm");
     setActiveDmThreadId(threadId);
     setActiveGroupChatId(null);
     setActiveChannelId(null);
     clearDmUnread(threadId);
     await loadDmMessages(threadId);
-  }, [loadDmMessages, clearDmUnread]);
+  }, [loadDmMessages, clearDmUnread, persistActiveServerChannel]);
 
   const selectGroupChat = useCallback(async (groupId: string) => {
+    persistActiveServerChannel();
     setViewMode("group");
     setActiveGroupChatId(groupId);
     setActiveDmThreadId(null);
     setActiveChannelId(null);
     await loadGroupMessages(groupId);
-  }, [loadGroupMessages]);
+  }, [loadGroupMessages, persistActiveServerChannel]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
@@ -1745,7 +1771,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_name: attachment?.name ?? null,
       attachment_size: attachment?.size ?? null,
       reply_to_id: replyToId ?? null,
-      mentions: parseMentions(normalized, members.map((m) => m.profile)),
+      mentions: parseMentions(normalized, members.map((m) => m.profile), userId),
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
@@ -1757,7 +1783,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
-    const mentionIds = parseMentions(normalized, members.map((m) => m.profile));
+    const mentionIds = parseMentions(normalized, members.map((m) => m.profile), userId);
     const { data, error } = await getSupabaseClient()
       .from("messages")
       .insert({
@@ -1810,7 +1836,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_name: attachment?.name ?? null,
       attachment_size: attachment?.size ?? null,
       reply_to_id: replyToId ?? null,
-      mentions: parseMentions(normalized, other),
+      mentions: parseMentions(normalized, other, userId),
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
@@ -1823,7 +1849,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     bumpDmThreadActivity(activeDmThreadId, optimistic.created_at);
 
-    const mentionIds = parseMentions(normalized, other);
+    const mentionIds = parseMentions(normalized, other, userId);
     const { data, error } = await getSupabaseClient()
       .from("dm_messages")
       .insert({
@@ -1876,7 +1902,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_name: attachment?.name ?? null,
       attachment_size: attachment?.size ?? null,
       reply_to_id: replyToId ?? null,
-      mentions: parseMentions(normalized, group?.members ?? []),
+      mentions: parseMentions(normalized, group?.members ?? [], userId),
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
@@ -1888,7 +1914,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
-    const mentionIds = parseMentions(normalized, group?.members ?? []);
+    const mentionIds = parseMentions(normalized, group?.members ?? [], userId);
     const { data, error } = await getSupabaseClient()
       .from("group_messages")
       .insert({
