@@ -5,6 +5,7 @@ import {
   completeTotpEnrollment,
   factorLabel,
   listAllMfaFactors,
+  passkeySetupHint,
   registerPasskeyFactor,
   startTotpEnrollment,
   totpQrSrc,
@@ -12,6 +13,7 @@ import {
   type MfaFactor,
   type TotpEnrollment,
 } from "@/lib/mfa";
+import { getMfaWebAuthnConfig } from "@/lib/mfa-config";
 
 export function MfaSettingsPanel() {
   const [factors, setFactors] = useState<MfaFactor[]>([]);
@@ -21,10 +23,13 @@ export function MfaSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [totpSetup, setTotpSetup] = useState<TotpEnrollment | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const webauthn = getMfaWebAuthnConfig();
 
   const reload = useCallback(async () => {
     setLoading(true);
-    setFactors(await listAllMfaFactors());
+    const result = await listAllMfaFactors();
+    setFactors(result.factors);
+    if (result.error) setError(result.error);
     setLoading(false);
   }, []);
 
@@ -143,23 +148,33 @@ export function MfaSettingsPanel() {
       )}
 
       {!totpSetup ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void beginTotpSetup()}
-            className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
-          >
-            Add authenticator app
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void addPasskey()}
-            className="rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected disabled:opacity-50"
-          >
-            Add passkey
-          </button>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void beginTotpSetup()}
+              className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+            >
+              Add authenticator app
+            </button>
+            <button
+              type="button"
+              disabled={busy || !webauthn.originAllowed}
+              onClick={() => void addPasskey()}
+              className="rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected disabled:opacity-50"
+            >
+              Add passkey
+            </button>
+          </div>
+          <p className="text-xs text-text-muted">{passkeySetupHint()}</p>
+          {!webauthn.originAllowed && (
+            <p className="text-xs text-status-dnd">
+              Passkeys are disabled on this URL. Open Disband at {webauthn.appOrigin} to register a passkey, or add{" "}
+              {typeof window !== "undefined" ? window.location.origin : "your URL"} to Supabase Passkeys → Relying Party
+              Origins.
+            </p>
+          )}
         </div>
       ) : (
         <form onSubmit={confirmTotpSetup} className="space-y-4 rounded-lg border border-divider bg-bg-secondary p-4">
