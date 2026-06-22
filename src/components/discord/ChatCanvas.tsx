@@ -112,7 +112,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   useEffect(() => {
     const target = contentRef.current;
     if (!target) return;
-    const ro = new ResizeObserver(() => scrollToBottom());
+    const ro = new ResizeObserver(() => {
+      scrollToBottom();
+    });
     ro.observe(target);
     return () => ro.disconnect();
   }, [scrollToBottom]);
@@ -199,7 +201,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     ? () => onToggleReaction(msg.id, "👍")
                     : undefined
                 }
-                onContentResize={scrollToBottom}
+                onContentResize={() => scrollToBottom()}
               />
             );
           })}

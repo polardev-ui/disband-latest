@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { directCallId, startRingtone, stopRingtone } from "@/lib/ringtone";
 import { displayName } from "@/lib/utils";
-import { getDisbandUserMedia } from "@/lib/media";
+import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
 import { notifyUser, requestNotificationPermissionFromGesture } from "@/lib/notifications";
+import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { createOfferForPeer, mergeTrackIntoStream, setPeerVideoTrack } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -95,11 +96,7 @@ export function useCallManager(
   }, [cleanupRtc]);
 
   const sendToUser = useCallback(async (targetId: string, payload: CallSignal) => {
-    const supabase = getSupabaseClient();
-    const ch = supabase.channel(`call-user:${targetId}`, { config: { broadcast: { self: false } } });
-    await ch.subscribe();
-    await ch.send({ type: "broadcast", event: "call", payload });
-    await ch.unsubscribe();
+    await broadcastOnChannel(getSupabaseClient(), `call-user:${targetId}`, "call", payload);
   }, []);
 
   const notifyPeerLeave = useCallback(async (peerId: string, callId: string | null) => {
@@ -113,64 +110,73 @@ export function useCallManager(
 
   const setupRtc = useCallback(async (callId: string, peerId: string, asCaller: boolean) => {
     if (!userId) return;
-    const stream = await getDisbandUserMedia({
-      audio: true,
-      video: cameraRef.current ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false,
-    });
-    localRef.current = stream;
-    setLocalStream(stream);
-    applyMic(micMuted);
+    try {
+      await warmUpMediaDevices();
+      const stream = await getDisbandUserMedia({
+        audio: true,
+        video: cameraRef.current ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false,
+      });
+      localRef.current = stream;
+      setLocalStream(stream);
+      applyMic(micMuted);
 
-    const supabase = getSupabaseClient();
-    const ch = supabase.channel(`call:${callId}`, { config: { broadcast: { self: false } } });
-    const pc = new RTCPeerConnection({ iceServers: ICE });
-    pcRef.current = pc;
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+      const supabase = getSupabaseClient();
+      const ch = supabase.channel(`call:${callId}`, { config: { broadcast: { self: false } } });
+      const pc = new RTCPeerConnection({ iceServers: ICE });
+      pcRef.current = pc;
+      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
-    pc.ontrack = (ev) => {
-      setRemoteStream((prev) => mergeTrackIntoStream(prev, ev.track));
-    };
-    pc.onicecandidate = (ev) => {
-      if (ev.candidate) {
-        void ch.send({
-          type: "broadcast",
-          event: "call",
-          payload: { type: "ice", from: userId, to: peerId, candidate: ev.candidate.toJSON() } satisfies CallSignal,
-        });
-      }
-    };
-    pc.onconnectionstatechange = () => {
-      const state = pc.connectionState;
-      if (state === "disconnected" || state === "failed" || state === "closed") {
-        void reset();
-      }
-    };
-
-    ch.on("broadcast", { event: "call" }, ({ payload }) => {
-      const p = payload as CallSignal;
-      if (p.from === userId || (p.to && p.to !== userId)) return;
-      void (async () => {
-        if (p.type === "offer" && p.sdp) {
-          await pc.setRemoteDescription(p.sdp);
-          const ans = await pc.createAnswer();
-          await pc.setLocalDescription(ans);
-          void ch.send({ type: "broadcast", event: "call", payload: { type: "answer", from: userId, to: p.from, sdp: ans } });
-        } else if (p.type === "answer" && p.sdp) {
-          await pc.setRemoteDescription(p.sdp);
-        } else if (p.type === "ice" && p.candidate) {
-          await pc.addIceCandidate(p.candidate);
-        } else if (p.type === "leave") {
-          await reset();
+      pc.ontrack = (ev) => {
+        setRemoteStream((prev) => mergeTrackIntoStream(prev, ev.track));
+      };
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate) {
+          void ch.send({
+            type: "broadcast",
+            event: "call",
+            payload: { type: "ice", from: userId, to: peerId, candidate: ev.candidate.toJSON() } satisfies CallSignal,
+          });
         }
-      })();
-    }).subscribe();
+      };
+      pc.onconnectionstatechange = () => {
+        const state = pc.connectionState;
+        if (state === "disconnected" || state === "failed" || state === "closed") {
+          void reset();
+        }
+      };
 
-    signalRef.current = ch;
+      ch.on("broadcast", { event: "call" }, ({ payload }) => {
+        const p = payload as CallSignal;
+        if (p.from === userId || (p.to && p.to !== userId)) return;
+        void (async () => {
+          if (p.type === "offer" && p.sdp) {
+            await pc.setRemoteDescription(p.sdp);
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            void ch.send({ type: "broadcast", event: "call", payload: { type: "answer", from: userId, to: p.from, sdp: ans } });
+          } else if (p.type === "answer" && p.sdp) {
+            await pc.setRemoteDescription(p.sdp);
+          } else if (p.type === "ice" && p.candidate) {
+            await pc.addIceCandidate(p.candidate);
+          } else if (p.type === "leave") {
+            await reset();
+          }
+        })();
+      });
 
-    if (asCaller) {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      void ch.send({ type: "broadcast", event: "call", payload: { type: "offer", from: userId, to: peerId, sdp: offer } });
+      await subscribeChannel(ch);
+      signalRef.current = ch;
+
+      if (asCaller) {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await ch.send({ type: "broadcast", event: "call", payload: { type: "offer", from: userId, to: peerId, sdp: offer } });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not start call";
+      setError(message);
+      await reset();
+      throw err;
     }
   }, [userId, micMuted, applyMic, reset]);
 
@@ -225,24 +231,31 @@ export function useCallManager(
     if (!userId || !profile) return;
     setError(null);
     void requestNotificationPermissionFromGesture();
+    await warmUpMediaDevices();
     const callId = directCallId(userId, peer.id);
     activeCallIdRef.current = callId;
     activePeerIdRef.current = peer.id;
     setActivePeer(peer);
     setPhase("outgoing");
-    await sendToUser(peer.id, {
-      type: "ring",
-      from: userId,
-      to: peer.id,
-      callId,
-      callerName: displayName(profile),
-    });
-  }, [userId, profile, sendToUser]);
+    try {
+      await sendToUser(peer.id, {
+        type: "ring",
+        from: userId,
+        to: peer.id,
+        callId,
+        callerName: displayName(profile),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reach caller");
+      await reset();
+    }
+  }, [userId, profile, sendToUser, reset]);
 
   const acceptCall = useCallback(async () => {
     if (!incoming || !userId) return;
     stopRingtone();
     void requestNotificationPermissionFromGesture();
+    await warmUpMediaDevices();
     const supabase = getSupabaseClient();
     const { data: fp } = await supabase.from("profiles").select("*").eq("id", incoming.fromId).maybeSingle();
     if (fp) setActivePeer(fp as Profile);
@@ -250,8 +263,12 @@ export function useCallManager(
     activePeerIdRef.current = incoming.fromId;
     setPhase("active");
     setIncoming(null);
-    await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
-    await setupRtc(incoming.callId, incoming.fromId, false);
+    try {
+      await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
+      await setupRtc(incoming.callId, incoming.fromId, false);
+    } catch {
+      // setupRtc already sets error and resets
+    }
   }, [incoming, userId, sendToUser, setupRtc]);
 
   const rejectCall = useCallback(async () => {
@@ -288,6 +305,7 @@ export function useCallManager(
     if (!userId) return;
     const supabase = getSupabaseClient();
     const ch = supabase.channel(`call-user:${userId}`, { config: { broadcast: { self: false } } });
+    let cancelled = false;
 
     ch.on("broadcast", { event: "call" }, ({ payload }) => {
       const p = payload as CallSignal;
@@ -322,7 +340,11 @@ export function useCallManager(
         } else if (p.type === "accept" && p.callId && phaseRef.current === "outgoing") {
           stopRingtone();
           setPhase("active");
-          await setupRtc(p.callId, p.from, true);
+          try {
+            await setupRtc(p.callId, p.from, true);
+          } catch {
+            // setupRtc already sets error and resets
+          }
         } else if (p.type === "reject") {
           if (phaseRef.current === "outgoing") {
             setCallNotice(`${p.rejecterName ?? "They"} declined your call`);
@@ -337,10 +359,22 @@ export function useCallManager(
           }
         }
       })();
-    }).subscribe();
+    });
 
-    listenRef.current = ch;
-    return () => { void ch.unsubscribe(); };
+    void subscribeChannel(ch)
+      .then(() => {
+        if (!cancelled) listenRef.current = ch;
+        else void ch.unsubscribe();
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not connect call signaling");
+      });
+
+    return () => {
+      cancelled = true;
+      void ch.unsubscribe();
+      listenRef.current = null;
+    };
   }, [userId, profile, sendToUser, setupRtc, reset]);
 
   useEffect(() => () => { void reset(); }, [reset]);

@@ -95,7 +95,14 @@ export function DiscordApp() {
 
   const activeChannel = app.channels.find((c) => c.id === app.activeChannelId);
   const isVoice = activeChannel?.type === "voice";
-  const dmFriend = app.dmThreads.find((t) => t.id === app.activeDmThreadId)?.friend;
+  const dmFriend =
+    app.dmThreads.find((t) => t.id === app.activeDmThreadId)?.friend ??
+    (() => {
+      const thread = app.dmThreads.find((t) => t.id === app.activeDmThreadId);
+      if (!thread || !app.user?.id) return undefined;
+      const peerId = thread.user_a === app.user.id ? thread.user_b : thread.user_a;
+      return app.friends.find((f) => f.id === peerId);
+    })();
   const activeGroup = app.groupChats.find((g) => g.id === app.activeGroupChatId);
 
   const toggleMic = () => app.setMicMuted(!app.micMuted);
