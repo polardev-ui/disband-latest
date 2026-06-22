@@ -1,16 +1,23 @@
 name: Release Desktop
 
+# Builds and uploads installers when Prepare Release pushes a semver tag (v1.2.3).
+# Never run this manually without a semver tag — use Prepare Release instead.
+
 on:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
+      - "v*.*.*"
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,10 +35,15 @@ jobs:
             target: x86_64-pc-windows-msvc
             name: Windows
 
-    runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Require semver release tag
+        run: node scripts/validate-release-tag.mjs "${{ github.ref_name }}"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -41,6 +53,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Sync version from tag
+        run: node scripts/set-version.mjs "${GITHUB_REF_NAME#v}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -58,10 +73,18 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: "-"
+          NEXT_PUBLIC_SUPABASE_URL: https://mjqbrcabargylrimlafw.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM
+          NEXT_PUBLIC_GITHUB_REPO: polardev-ui/disband-latest
+          NEXT_PUBLIC_MEDIA_API_URL: https://api.wsgpolar.me/v1
+          NEXT_PUBLIC_APP_URL: https://disband.wsgpolar.me
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Disband ${{ github.ref_name }}
           releaseBody: |
+            ## Disband ${{ github.ref_name }}
+
             Desktop builds for macOS, Windows, and Linux.
 
             | Platform | File |
@@ -70,6 +93,8 @@ jobs:
             | macOS (Intel) | `.dmg` (x64) |
             | Windows | `.exe` / `.msi` |
             | Linux | `.deb` / `.AppImage` |
+
+            [All releases](https://github.com/${{ github.repository }}/releases)
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
