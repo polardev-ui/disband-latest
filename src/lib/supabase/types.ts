@@ -19,6 +19,9 @@ export interface Profile {
   avatar_crop: { zoom: number; x: number; y: number } | null;
   show_owner_badge: boolean;
   show_staff_badge: boolean;
+  sound_enabled?: boolean;
+  desktop_notifications_enabled?: boolean;
+  link_previews_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -218,6 +221,9 @@ export interface Database {
           accent_color?: string | null;
           accent_color_2?: string | null;
           theme?: ThemePreference;
+          sound_enabled?: boolean;
+          desktop_notifications_enabled?: boolean;
+          link_previews_enabled?: boolean;
         };
         Update: {
           username?: string | null;
@@ -230,6 +236,9 @@ export interface Database {
           accent_color?: string | null;
           accent_color_2?: string | null;
           theme?: ThemePreference;
+          sound_enabled?: boolean;
+          desktop_notifications_enabled?: boolean;
+          link_previews_enabled?: boolean;
         };
         Relationships: [];
       };

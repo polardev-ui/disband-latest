@@ -23,6 +23,7 @@ import {
   PhoneOff,
   Bell,
   Upload,
+  Send,
   Shield,
   Link,
   Palette,
@@ -56,6 +57,7 @@ export const IconFriends = icon(Users);
 export const IconTrash = icon(Trash2);
 export const IconEdit = icon(Pencil);
 export const IconCopy = icon(Copy);
+export const IconSend = icon(Send);
 export const IconLeave = icon(LogOut);
 export const IconPhone = icon(Phone);
 export const IconPhoneOff = icon(PhoneOff);

@@ -14,6 +14,7 @@ import {
   IconAlert,
 } from "@/components/icons";
 import { getInviteUrl, serverInitials } from "@/lib/utils";
+import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
 
 interface ServerSettingsModalProps {
   open: boolean;
@@ -210,19 +211,25 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                 <h2 className="text-xl font-bold">Invites</h2>
                 <p className="text-sm text-text-muted">Share this link to invite people to your server.</p>
                 {inviteUrl ? (
-                  <div className="rounded-lg border border-divider bg-bg-secondary p-5">
-                    <p className="break-all font-mono text-sm">{inviteUrl}</p>
-                    <button
-                      type="button"
-                      onClick={copyInvite}
-                      className="mt-4 flex items-center gap-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
-                    >
-                      <IconCopy size={16} /> {copied ? "Copied!" : "Copy Invite Link"}
-                    </button>
-                    <p className="mt-3 text-xs text-text-muted">
-                      Paste this link in chat to show a rich invite preview with Join Server button.
-                    </p>
-                  </div>
+                  <>
+                    <div className="rounded-lg border border-divider bg-bg-secondary p-5">
+                      <p className="break-all font-mono text-sm">{inviteUrl}</p>
+                      <button
+                        type="button"
+                        onClick={copyInvite}
+                        className="mt-4 flex items-center gap-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                      >
+                        <IconCopy size={16} /> {copied ? "Copied!" : "Copy Invite Link"}
+                      </button>
+                      <p className="mt-3 text-xs text-text-muted">
+                        Paste this link in chat to show a rich invite preview with Join Server button.
+                      </p>
+                    </div>
+                    <div>
+                      <h3 className="mb-3 text-sm font-bold uppercase text-text-muted">Send to friends</h3>
+                      <SendInvitePanel inviteUrl={inviteUrl} serverName={activeServer.name} />
+                    </div>
+                  </>
                 ) : (
                   <p className="text-sm text-text-muted">Invite code not available — run migration 0004.</p>
                 )}
