@@ -39,9 +39,13 @@ create policy "platform_bans_select_owner" on public.platform_bans
   );
 
 -- Bio length (120 chars; line breaks count)
+-- Truncate any legacy bios first, then add the constraint as NOT VALID so the
+-- creation never fails scanning pre-existing rows. It is still enforced on all
+-- future inserts/updates (and by the enforce_bio_length trigger below).
+update public.profiles set bio = left(bio, 120) where bio is not null and char_length(bio) > 120;
 alter table public.profiles drop constraint if exists profiles_bio_length;
 alter table public.profiles add constraint profiles_bio_length
-  check (bio is null or char_length(bio) <= 120);
+  check (bio is null or char_length(bio) <= 120) not valid;
 
 -- ---------------------------------------------------------------------------
 -- Word counting & message limits (500 words max)

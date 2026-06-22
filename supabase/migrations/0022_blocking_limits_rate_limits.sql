@@ -8,7 +8,7 @@ update public.profiles set display_name = left(display_name, 25) where display_n
 
 alter table public.profiles drop constraint if exists profiles_display_name_length;
 alter table public.profiles add constraint profiles_display_name_length
-  check (display_name is null or char_length(display_name) <= 25);
+  check (display_name is null or char_length(display_name) <= 25) not valid;
 
 create or replace function public.assert_username_available(p_username text, p_user_id uuid)
 returns void

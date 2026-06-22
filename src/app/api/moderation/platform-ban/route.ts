@@ -5,12 +5,21 @@ import {
   requirePlatformOwner,
   verifyOwnerPassword,
 } from "@/lib/server-auth";
+import { getClientIp } from "@/lib/request-ip";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   const user = await getUserFromRequest(request as import("next/server").NextRequest);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
+
+  // Throttle owner-password attempts to prevent brute force (per user + per IP).
+  const ip = getClientIp(request) || "unknown";
+  const ipLimit = rateLimit(`platform-ban:ip:${ip}`, 10, 60_000);
+  if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfterSeconds);
+  const userLimit = rateLimit(`platform-ban:user:${user.id}`, 10, 60_000);
+  if (!userLimit.allowed) return tooManyRequests(userLimit.retryAfterSeconds);
 
   const isOwner = await requirePlatformOwner(user.id);
   if (!isOwner) {

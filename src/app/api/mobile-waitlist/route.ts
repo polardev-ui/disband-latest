@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { addMobileWaitlistContact, getMobileWaitlistSegmentId } from "@/lib/resend";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { getClientIp } from "@/lib/request-ip";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request) || "unknown";
+  const limit = rateLimit(`mobile-waitlist:${ip}`, 5, 60_000);
+  if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
   let body: { email?: string };
   try {
     body = (await request.json()) as { email?: string };

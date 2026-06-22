@@ -3,8 +3,13 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { getClientIp, hashIp } from "@/lib/request-ip";
 import { isVpnOrProxy } from "@/lib/vpn-check";
 import { usernameContainsBlockedWord, usernameFormatError } from "@/lib/username-policy";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const checkIp = getClientIp(request) || "unknown";
+  const checkLimit = rateLimit(`signup-check:${checkIp}`, 15, 60_000);
+  if (!checkLimit.allowed) return tooManyRequests(checkLimit.retryAfterSeconds);
+
   let body: { email?: string; username?: string };
   try {
     body = (await request.json()) as { email?: string; username?: string };
