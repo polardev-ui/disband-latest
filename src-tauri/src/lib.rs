@@ -17,7 +17,7 @@ fn greet(name: &str) -> String {
 #[cfg(target_os = "macos")]
 #[tauri::command]
 fn show_macos_notification(title: String, body: Option<String>) -> Result<(), String> {
-    use mac_notification_sys::{Notification, NotificationResponse};
+    use mac_notification_sys::Notification;
 
     let mut notification = Notification::new();
     notification.title(&title);
@@ -26,10 +26,10 @@ fn show_macos_notification(title: String, body: Option<String>) -> Result<(), St
     }
     notification.sound("Ping");
 
-    match notification.send() {
-        NotificationResponse::Success | NotificationResponse::Click => Ok(()),
-        NotificationResponse::Failure(err) => Err(err),
-    }
+    notification
+        .send()
+        .map(|_response| ())
+        .map_err(|err| err.to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
