@@ -81,6 +81,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
           git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
           if git diff --staged --quiet; then
             echo "Version files already at ${{ steps.ver.outputs.version }} — skipping."
@@ -88,5 +89,18 @@ jobs:
           fi
           git commit -m "chore(release): ${TAG}"
           git tag -a "${TAG}" -m "Disband ${TAG}"
+          git pull --rebase origin main
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:refs/heads/main; then
+              break
+            fi
+            echo "Push to main rejected (attempt ${attempt}), rebasing and retrying..."
+            git fetch origin main
+            git rebase origin/main
+            if [ "${attempt}" -eq 5 ]; then
+              echo "::error::Failed to push release commit to main after ${attempt} attempts."
+              exit 1
+            fi
+            sleep 2
+          done
           git push origin "refs/tags/${TAG}"
-          git push origin HEAD:refs/heads/main
