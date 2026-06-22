@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 import { useApp } from "@/contexts/AppContext";
+import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useCallManager } from "@/hooks/useCallManager";
 import { useGroupCallManager } from "@/hooks/useGroupCallManager";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
@@ -11,7 +13,6 @@ import { HomePanel } from "./HomePanel";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
-import { DmUnreadBadge } from "./DmUnreadBadge";
 import {
   CallPanel,
   GroupRingOverlay,
@@ -77,6 +78,16 @@ export function DiscordApp() {
     app.setCallPhase(call.phase);
   }, [call.phase, app.setCallPhase]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "default") return;
+    const ask = () => {
+      void requestNotificationPermissionFromGesture();
+    };
+    window.addEventListener("pointerdown", ask, { once: true });
+    return () => window.removeEventListener("pointerdown", ask);
+  }, []);
+
   const groupCall = useGroupCallManager(
     app.user?.id ?? null,
     app.profile,
@@ -89,6 +100,7 @@ export function DiscordApp() {
     if (el && call.remoteStream) {
       el.srcObject = call.remoteStream;
       el.muted = app.deafened;
+      void applyAudioOutputToElement(el, getPreferredAudioOutputId());
       void el.play().catch(() => {});
     }
   }, [call.remoteStream, app.deafened]);
@@ -534,13 +546,6 @@ export function DiscordApp() {
           You are offline. Messages will send when your connection returns.
         </div>
       )}
-      {app.dmUnread && !(app.viewMode === "dm" && app.activeDmThreadId === app.dmUnread.threadId) && (
-        <DmUnreadBadge
-          friend={app.dmUnread.friend}
-          count={app.dmUnread.count}
-          onClick={() => void app.selectDmThread(app.dmUnread!.threadId)}
-        />
-      )}
 
       {call.phase === "incoming" && call.incoming && (
         <IncomingCallOverlay
@@ -572,8 +577,12 @@ export function DiscordApp() {
         servers={app.servers}
         activeServerId={app.activeServerId}
         viewMode={app.viewMode}
+        dmUnreads={app.dmUnreads}
+        activeDmThreadId={app.activeDmThreadId}
+        serverUnreadIds={app.serverUnreadIds}
         onSelectHome={app.setViewHome}
         onSelectServer={(id) => void app.selectServer(id)}
+        onSelectDmThread={(id) => void app.selectDmThread(id)}
         onCreateServer={() => setCreateServerOpen(true)}
         onServerContext={handleServerContext}
       />
@@ -627,6 +636,8 @@ export function DiscordApp() {
           onToggleReaction={(id, emoji) => void app.toggleReaction("dm", id, emoji)}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "dm")}
           onAuthorClick={handleAuthorClick}
+          hasMore={app.dmHasMore}
+          onLoadMore={app.loadMoreDmMessages}
         />
       )}
 
@@ -676,6 +687,8 @@ export function DiscordApp() {
               onToggleReaction={(id, emoji) => void app.toggleReaction("group", id, emoji)}
               onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "group")}
               onAuthorClick={handleAuthorClick}
+              hasMore={app.groupHasMore}
+              onLoadMore={app.loadMoreGroupMessages}
             />
           </div>
           <GroupMemberList
@@ -750,13 +763,15 @@ export function DiscordApp() {
           currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="channel"
           reactions={app.messageReactions}
-          typingScope={{ kind: "channel", id: activeChannel.id }}
+          typingScope={{ kind: "channel", id: activeChannel.id, serverId: activeChannel.server_id }}
           getAuthorColor={getAuthorColor}
           onSend={app.sendChannelMessage}
           onEdit={app.editChannelMessage}
           onToggleReaction={(id, emoji) => void app.toggleReaction("channel", id, emoji)}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "channel")}
           onAuthorClick={handleAuthorClick}
+          hasMore={app.channelHasMore}
+          onLoadMore={app.loadMoreChannelMessages}
         />
       )}
 

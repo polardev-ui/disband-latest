@@ -9,6 +9,7 @@ import { inferAttachmentType } from "@/lib/media/uploadMedia";
 import { formatFileSize, type AttachmentType, type MessageSendOptions, type ReplyPreview } from "@/lib/messages";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import { GifPicker } from "./GifPicker";
+import { EmojiPicker } from "./EmojiPicker";
 
 export interface PendingAttachment {
   id: string;
@@ -72,6 +73,13 @@ export function ChatInput({
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [editingMessageId, editingContent]);
+
+  useEffect(() => {
+    if (!onTypingActivity || !text.trim()) return;
+    onTypingActivity();
+    const id = window.setInterval(() => onTypingActivity(), 2000);
+    return () => window.clearInterval(id);
+  }, [text, onTypingActivity]);
 
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
@@ -142,6 +150,24 @@ export function ChatInput({
       const pos = before.length + item.insert.length + 1;
       textareaRef.current?.setSelectionRange(pos, pos);
       textareaRef.current?.focus();
+    });
+  }
+
+  function insertEmoji(emoji: string) {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setText((prev) => prev + emoji);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      const pos = start + emoji.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+      onTypingActivity?.();
     });
   }
 
@@ -385,7 +411,7 @@ export function ChatInput({
               setText(e.target.value);
               setCursor(e.target.selectionStart);
               setMentionIdx(0);
-              if (e.target.value.trim()) onTypingActivity?.();
+              onTypingActivity?.();
             }}
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
             onClick={(e) => setCursor(e.currentTarget.selectionStart)}
@@ -396,6 +422,7 @@ export function ChatInput({
             rows={1}
             className="max-h-40 min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
           />
+          <EmojiPicker onSelect={insertEmoji} />
           <GifPicker
             onSelect={(url) => {
               void onSend("", { attachment: { url, type: "gif" }, replyToId: replyTo?.id });

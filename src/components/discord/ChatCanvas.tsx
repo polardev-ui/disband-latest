@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef,
+} from "react";
 import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ReactionPicker } from "./MessageReactions";
@@ -29,13 +38,13 @@ interface ChatCanvasProps {
   headerTrailing?: React.ReactNode;
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
-  typingScope?: { kind: "channel" | "dm"; id: string } | null;
+  typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   onEdit?: (messageId: string, content: string) => Promise<string | null>;
   onToggleReaction?: (messageId: string, emoji: string) => void;
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
   onAuthorClick?: (profile: Profile) => void;
-  onLoadMore?: () => void;
+  onLoadMore?: () => void | Promise<void>;
   hasMore?: boolean;
 }
 
@@ -68,15 +77,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const scrollRestoreRef = useRef<number | null>(null);
+  const prevFirstIdRef = useRef<string | null>(null);
+  const prevMessageCountRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const [replyTo, setReplyTo] = useState<ReplyPreview | null>(null);
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
 
-  const typingSelf =
-    currentUserId && currentUserName
-      ? { id: currentUserId, name: currentUserName }
-      : null;
+  const typingSelf = useMemo(
+    () => (currentUserId && currentUserName ? { id: currentUserId, name: currentUserName } : null),
+    [currentUserId, currentUserName],
+  );
   const { typers, notifyTyping } = useTypingPresence(typingScope, typingSelf);
   const typingLabel = formatTypingLabel(typers, typingScope?.kind === "channel");
 
@@ -94,18 +107,57 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
+  const requestLoadMore = useCallback(async () => {
+    if (!hasMore || !onLoadMore || loadingMoreRef.current) return;
+    const el = scrollRef.current;
+    if (el) scrollRestoreRef.current = el.scrollHeight - el.scrollTop;
+    loadingMoreRef.current = true;
+    try {
+      await onLoadMore();
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [hasMore, onLoadMore]);
+
+  useEffect(() => {
+    stickToBottomRef.current = true;
+    prevFirstIdRef.current = null;
+    prevMessageCountRef.current = 0;
+    scrollRestoreRef.current = null;
+  }, [channelName, messageContext, typingScope?.id]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = () => {
       stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      if (el.scrollTop < 96) void requestLoadMore();
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [requestLoadMore]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const firstId = messages[0]?.id ?? null;
+    const count = messages.length;
+    const prevFirst = prevFirstIdRef.current;
+    const prevCount = prevMessageCountRef.current;
+    const loadedOlder =
+      count > prevCount && prevFirst !== null && firstId !== prevFirst;
+    prevFirstIdRef.current = firstId;
+    prevMessageCountRef.current = count;
+
+    if (scrollRestoreRef.current !== null) {
+      el.scrollTop = el.scrollHeight - scrollRestoreRef.current;
+      scrollRestoreRef.current = null;
+      return;
+    }
+
+    if (loadedOlder) return;
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
@@ -113,7 +165,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     const target = contentRef.current;
     if (!target) return;
     const ro = new ResizeObserver(() => {
-      scrollToBottom();
+      if (stickToBottomRef.current) scrollToBottom();
     });
     ro.observe(target);
     return () => ro.disconnect();
@@ -129,6 +181,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   async function handleSend(content: string, options?: MessageSendOptions) {
+    stickToBottomRef.current = true;
     if (editing && onEdit) {
       const err = await onEdit(editing.id, content);
       if (!err) setEditing(null);
@@ -142,7 +195,6 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         {channelIcon ?? <IconHash size={24} className="text-text-muted" />}
         <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{channelName}</h1>
-        <span className="hidden text-xs text-text-muted sm:inline">{messages.length} messages</span>
         {headerExtra}
         {headerTrailing}
       </header>
@@ -155,7 +207,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
             <div className="mb-4 flex justify-center px-4">
               <button
                 type="button"
-                onClick={onLoadMore}
+                onClick={() => void requestLoadMore()}
                 className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
               >
                 Load earlier messages

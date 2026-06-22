@@ -8,6 +8,14 @@ import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell } from "@/components/icons";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
+import { useAudioDevices } from "@/hooks/useAudioDevices";
+import { getDisbandUserMedia } from "@/lib/media";
+import {
+  getPreferredAudioInputId,
+  getPreferredAudioOutputId,
+  setPreferredAudioInputId,
+  setPreferredAudioOutputId,
+} from "@/lib/audio-settings";
 import {
   DEFAULT_ACCENT,
   getAvatarStyle,
@@ -29,6 +37,7 @@ const TABS = [
   { id: "profile" as const, label: "Profile" },
   { id: "appearance" as const, label: "Appearance" },
   { id: "notifications" as const, label: "Notifications" },
+  { id: "voice" as const, label: "Voice & Video" },
   { id: "textMedia" as const, label: "Text & Media" },
 ];
 
@@ -93,6 +102,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [linkPreviews, setLinkPreviews] = useState(true);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [audioInput, setAudioInput] = useState("");
+  const [audioOutput, setAudioOutput] = useState("");
+  const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
+  const { inputs, outputs, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
+
+  useEffect(() => {
+    if (!open) return;
+    setAudioInput(getPreferredAudioInputId() ?? "");
+    setAudioOutput(getPreferredAudioOutputId() ?? "");
+    void refreshDevices();
+  }, [open, refreshDevices]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -189,6 +209,19 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     if (granted) {
       setDesktopNotifications(true);
       await savePreference({ desktop_notifications_enabled: true });
+    }
+  }
+
+  async function testMediaAccess() {
+    setMediaTestMessage(null);
+    setSettingsError(null);
+    try {
+      const stream = await getDisbandUserMedia({ audio: true, video: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMediaTestMessage("Microphone and camera access granted.");
+      await refreshDevices();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : "Could not access microphone or camera.");
     }
   }
 
@@ -469,6 +502,57 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       Notifications are blocked in your browser. Allow them in site settings to receive desktop alerts.
                     </p>
                   )}
+                  {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
+                </div>
+              )}
+
+              {tab === "voice" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-muted">
+                    Choose your microphone and speaker for voice channels and calls. Device lists populate after permission is granted.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void testMediaAccess()}
+                    className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                  >
+                    Allow microphone & camera
+                  </button>
+                  {mediaTestMessage && <p className="text-sm text-status-online">{mediaTestMessage}</p>}
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase text-text-muted">Input device</span>
+                    <select
+                      value={audioInput}
+                      disabled={devicesLoading}
+                      onChange={(e) => {
+                        setAudioInput(e.target.value);
+                        setPreferredAudioInputId(e.target.value);
+                      }}
+                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                    >
+                      <option value="">System default</option>
+                      {inputs.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold uppercase text-text-muted">Output device</span>
+                    <select
+                      value={audioOutput}
+                      disabled={devicesLoading}
+                      onChange={(e) => {
+                        setAudioOutput(e.target.value);
+                        setPreferredAudioOutputId(e.target.value);
+                      }}
+                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                    >
+                      <option value="">System default</option>
+                      {outputs.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
+                      ))}
+                    </select>
+                  </label>
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
