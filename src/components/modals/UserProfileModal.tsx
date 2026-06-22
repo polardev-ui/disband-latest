@@ -15,9 +15,13 @@ interface UserProfileModalProps {
   onClose: () => void;
   onMessage?: () => void;
   onAddFriend?: () => void;
+  onAcceptFriend?: () => void;
+  onDeclineFriend?: () => void;
   onVoiceCall?: () => void;
   onOpenSettings?: () => void;
   isFriend?: boolean;
+  pendingIncoming?: boolean;
+  pendingOutgoing?: boolean;
   isSelf?: boolean;
 }
 
@@ -27,9 +31,13 @@ export function UserProfileModal({
   onClose,
   onMessage,
   onAddFriend,
+  onAcceptFriend,
+  onDeclineFriend,
   onVoiceCall,
   onOpenSettings,
   isFriend,
+  pendingIncoming,
+  pendingOutgoing,
   isSelf,
 }: UserProfileModalProps) {
   const { friends } = useApp();
@@ -98,10 +106,25 @@ export function UserProfileModal({
                   <IconPhone size={16} /> Voice Call
                 </button>
               )}
-              {!friend && onAddFriend && (
+              {!friend && pendingIncoming && onAcceptFriend && onDeclineFriend && (
+                <>
+                  <button type="button" onClick={onAcceptFriend} className="rounded bg-brand px-3 py-2 text-sm font-semibold text-white">
+                    Accept Friend Request
+                  </button>
+                  <button type="button" onClick={onDeclineFriend} className="rounded border border-current/30 px-3 py-2 text-sm font-semibold hover:bg-black/10">
+                    Decline
+                  </button>
+                </>
+              )}
+              {!friend && !pendingIncoming && !pendingOutgoing && onAddFriend && (
                 <button type="button" onClick={onAddFriend} className="rounded border border-current/30 px-3 py-2 text-sm font-semibold hover:bg-black/10">
                   Add Friend
                 </button>
+              )}
+              {!friend && pendingOutgoing && (
+                <span className="rounded border border-current/20 px-3 py-2 text-sm text-text-muted">
+                  Friend request sent
+                </span>
               )}
             </div>
           )}

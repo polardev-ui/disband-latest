@@ -30,6 +30,7 @@ interface ChatInputProps {
   editingContent?: string;
   onCancelEdit?: () => void;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
+  onTypingActivity?: () => void;
 }
 
 interface MentionItem {
@@ -52,6 +53,7 @@ export function ChatInput({
   editingContent,
   onCancelEdit,
   onSend,
+  onTypingActivity,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -186,6 +188,20 @@ export function ChatInput({
     }
   }
 
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+    if (files.length === 0) return;
+    e.preventDefault();
+    void addFiles(files);
+  }
+
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Escape") {
       if (replyTo) {
@@ -224,7 +240,7 @@ export function ChatInput({
   }
 
   return (
-    <div className="relative shrink-0 px-4 pb-6 pt-2">
+    <div className="relative shrink-0 px-4 pb-6">
       {showMentions && mentionItems.length > 0 && (
         <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
           {(() => {
@@ -341,18 +357,18 @@ export function ChatInput({
           </div>
         )}
 
-        <div className="flex items-end gap-2 px-4 py-2.5">
+        <div className="flex items-center gap-2 px-3 py-2">
           <button
             type="button"
             aria-label="Upload file"
             disabled={isUploading}
             onClick={() => fileRef.current?.click()}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal disabled:opacity-50"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal disabled:opacity-50"
           >
             {isUploading ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
             ) : (
-              <IconPlus size={24} />
+              <IconPlus size={22} />
             )}
           </button>
           <input
@@ -369,14 +385,16 @@ export function ChatInput({
               setText(e.target.value);
               setCursor(e.target.selectionStart);
               setMentionIdx(0);
+              if (e.target.value.trim()) onTypingActivity?.();
             }}
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
             onClick={(e) => setCursor(e.currentTarget.selectionStart)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             disabled={isUploading}
             rows={1}
-            className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none bg-transparent text-[15px] leading-snug text-text-normal placeholder:text-text-muted focus:outline-none"
+            className="max-h-40 min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
           />
           <GifPicker
             onSelect={(url) => {

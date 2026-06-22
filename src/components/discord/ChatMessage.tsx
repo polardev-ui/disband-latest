@@ -40,6 +40,7 @@ interface ChatMessageProps {
   onJumpToReply?: (messageId: string) => void;
   onDoubleClick?: () => void;
   highlight?: boolean;
+  onContentResize?: () => void;
 }
 
 function renderContent(content: string, members: Profile[] = []) {
@@ -61,7 +62,15 @@ function renderContent(content: string, members: Profile[] = []) {
   });
 }
 
-function MessageBody({ content, members }: { content: string; members: Profile[] }) {
+function MessageBody({
+  content,
+  members,
+  onContentResize,
+}: {
+  content: string;
+  members: Profile[];
+  onContentResize?: () => void;
+}) {
   const codes = extractInviteCodes(content);
   const textOnly = content.replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "").trim();
 
@@ -73,7 +82,7 @@ function MessageBody({ content, members }: { content: string; members: Profile[]
         </span>
       )}
       {codes.map((code) => (
-        <ServerInviteCard key={code} code={code} />
+        <ServerInviteCard key={code} code={code} onLoad={onContentResize} />
       ))}
     </>
   );
@@ -119,6 +128,7 @@ export function ChatMessage({
   onDoubleClick,
   highlight,
   members = [],
+  onContentResize,
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const isOwn = message.author_id === currentUserId;
@@ -141,6 +151,7 @@ export function ChatMessage({
       type={message.attachment_type}
       name={message.attachment_name}
       size={message.attachment_size}
+      onLoad={onContentResize}
     />
   ) : null;
 
@@ -172,7 +183,7 @@ export function ChatMessage({
         {replyBlock}
         {body && (
           <span className="inline">
-            <MessageBody content={body} members={members} />
+            <MessageBody content={body} members={members} onContentResize={onContentResize} />
             {editedTag}
           </span>
         )}
@@ -223,7 +234,7 @@ export function ChatMessage({
           </header>
         )}
         {replyBlock}
-        {body && <MessageBody content={body} members={members} />}
+        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} />}
         {attachment}
         {reactionBlock}
       </div>

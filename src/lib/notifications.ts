@@ -1,3 +1,65 @@
+import type { ViewMode } from "@/lib/supabase/types";
+
+export type NotificationTarget =
+  | { kind: "channel"; channelId: string }
+  | { kind: "dm"; threadId: string }
+  | { kind: "group"; groupId: string }
+  | { kind: "call"; peerId: string };
+
+export interface NotificationFocusState {
+  viewMode: ViewMode;
+  activeServerId: string | null;
+  activeChannelId: string | null;
+  activeDmThreadId: string | null;
+  activeGroupChatId: string | null;
+  voiceJoinedChannelId: string | null;
+  callPhase: "idle" | "outgoing" | "incoming" | "active";
+}
+
+const defaultFocus: NotificationFocusState = {
+  viewMode: "home",
+  activeServerId: null,
+  activeChannelId: null,
+  activeDmThreadId: null,
+  activeGroupChatId: null,
+  voiceJoinedChannelId: null,
+  callPhase: "idle",
+};
+
+let focusState: NotificationFocusState = defaultFocus;
+
+export function setNotificationFocusState(state: NotificationFocusState) {
+  focusState = state;
+}
+
+export function parseNotificationLink(link: string | null): NotificationTarget | null {
+  if (!link) return null;
+  if (link.startsWith("channel:")) return { kind: "channel", channelId: link.slice(8) };
+  if (link.startsWith("dm:")) return { kind: "dm", threadId: link.slice(3) };
+  if (link.startsWith("group:")) return { kind: "group", groupId: link.slice(6) };
+  return null;
+}
+
+export function shouldShowNotification(
+  focus: NotificationFocusState,
+  target: NotificationTarget,
+): boolean {
+  switch (target.kind) {
+    case "channel":
+      if (focus.voiceJoinedChannelId === target.channelId) return false;
+      if (focus.viewMode === "server" && focus.activeChannelId === target.channelId) {
+        return false;
+      }
+      return true;
+    case "dm":
+      return !(focus.viewMode === "dm" && focus.activeDmThreadId === target.threadId);
+    case "group":
+      return !(focus.viewMode === "group" && focus.activeGroupChatId === target.groupId);
+    case "call":
+      return focus.callPhase === "idle";
+  }
+}
+
 /** Play Discord-style mention ping via Web Audio API. */
 export function playMentionPing() {
   try {
@@ -19,23 +81,27 @@ export function playMentionPing() {
   }
 }
 
-export async function requestNotificationPermission(): Promise<boolean> {
+/** Only call from a click/tap handler — browsers reject permission prompts otherwise. */
+export async function requestNotificationPermissionFromGesture(): Promise<boolean> {
   if (typeof window === "undefined" || !("Notification" in window)) return false;
   if (Notification.permission === "granted") return true;
   if (Notification.permission === "denied") return false;
-  const result = await Notification.requestPermission();
-  return result === "granted";
+  try {
+    const result = await Notification.requestPermission();
+    return result === "granted";
+  } catch {
+    return false;
+  }
 }
 
 export function showSystemNotification(title: string, body?: string, onClick?: () => void) {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
-  if (document.hasFocus()) return;
 
   const n = new Notification(title, {
     body,
     icon: "/favicon.ico",
-    tag: title,
+    tag: `${title}:${body ?? ""}`,
   });
   if (onClick) {
     n.onclick = () => {
@@ -44,4 +110,9 @@ export function showSystemNotification(title: string, body?: string, onClick?: (
       n.close();
     };
   }
+}
+
+export function notifyUser(title: string, body?: string, target?: NotificationTarget) {
+  if (target && !shouldShowNotification(focusState, target)) return;
+  showSystemNotification(title, body);
 }
