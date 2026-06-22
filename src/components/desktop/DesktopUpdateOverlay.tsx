@@ -6,6 +6,7 @@ import {
   detectClientPlatform,
   detectMacArchAsync,
   fetchLatestReleaseFromGitHub,
+  inferVersionFromAssets,
   pickAssetForPlatform,
   releasePageUrl,
   type GitHubRelease,
@@ -38,9 +39,9 @@ export function DesktopUpdateOverlay() {
       if (!release?.tag) return;
 
       const parsed = parseSemverTag(release.tag);
-      if (!parsed) return;
-
-      const latestSemver = semverToString(parsed);
+      const latestSemver =
+        (parsed ? semverToString(parsed) : null) ?? inferVersionFromAssets(release.assets);
+      if (!latestSemver) return;
       if (!isNewerVersion(latestSemver, current)) return;
 
       const platform = detectClientPlatform();

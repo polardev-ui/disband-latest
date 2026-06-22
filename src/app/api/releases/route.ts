@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GITHUB_REPO_SLUG, pickLatestSemverRelease } from "@/lib/github-releases";
+import { GITHUB_REPO_SLUG, pickLatestDownloadRelease } from "@/lib/github-releases";
 
 export async function GET() {
   const repo = GITHUB_REPO_SLUG;
@@ -25,6 +25,6 @@ export async function GET() {
   }
 
   const rows = await res.json();
-  const release = pickLatestSemverRelease(Array.isArray(rows) ? rows : []);
+  const release = pickLatestDownloadRelease(Array.isArray(rows) ? rows : []);
   return NextResponse.json({ release, assets: release?.assets ?? [] });
 }
