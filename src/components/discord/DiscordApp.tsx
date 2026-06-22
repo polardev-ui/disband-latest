@@ -622,6 +622,7 @@ export function DiscordApp() {
           messageContext="dm"
           reactions={app.messageReactions}
           typingScope={{ kind: "dm", id: app.activeDmThreadId! }}
+          readCursorScope={{ kind: "dm", id: app.activeDmThreadId! }}
           headerTrailing={
             !dmCallActive ? (
               <HeaderCallButton
@@ -671,6 +672,7 @@ export function DiscordApp() {
               currentUserId={app.user?.id}
               messageContext="group"
               reactions={app.messageReactions}
+              readCursorScope={{ kind: "group", id: activeGroup.id }}
               headerTrailing={
                 !groupCall.joined ? (
                   <HeaderCallButton
@@ -764,6 +766,7 @@ export function DiscordApp() {
           messageContext="channel"
           reactions={app.messageReactions}
           typingScope={{ kind: "channel", id: activeChannel.id, serverId: activeChannel.server_id }}
+          readCursorScope={{ kind: "channel", id: activeChannel.id }}
           getAuthorColor={getAuthorColor}
           onSend={app.sendChannelMessage}
           onEdit={app.editChannelMessage}
