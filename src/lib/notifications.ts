@@ -1,5 +1,6 @@
 import type { UserStatus, ViewMode } from "@/lib/supabase/types";
 import { getUserSettings } from "@/lib/user-settings";
+import { isTauri } from "@/lib/platform";
 
 export type NotificationTarget =
   | { kind: "channel"; channelId: string }
@@ -123,22 +124,57 @@ export function playDmPing() {
 }
 
 /**
- * DM alert when the app is in the background — plays even if that DM is already open.
- * Skipped when the recipient is on DND or the app/window is focused.
+ * DM alert when you're not viewing that conversation.
+ * Shows macOS/browser notifications even when Disband is focused on another view.
  */
 export function alertIncomingDm(
   title: string,
   body: string | undefined,
   recipient: { status?: UserStatus; preferred_status?: UserStatus | null } | null | undefined,
+  threadId: string,
 ) {
   if (isRecipientDoNotDisturb(recipient)) return;
-  if (!isAppInBackground()) return;
-  playDmPing();
-  showSystemNotification(title, body);
+  if (!shouldShowNotification(focusState, { kind: "dm", threadId })) return;
+  if (getUserSettings().soundEnabled) playDmPing();
+  showSystemNotification(title, body, undefined, `dm-${threadId}`);
+}
+
+async function ensureNativeNotificationPermission(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    const {
+      isPermissionGranted,
+      requestPermission,
+    } = await import("@tauri-apps/plugin-notification");
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const result = await requestPermission();
+      granted = result === "granted";
+    }
+    return granted;
+  } catch {
+    return false;
+  }
+}
+
+async function sendNativeNotification(title: string, body?: string): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    const granted = await ensureNativeNotificationPermission();
+    if (!granted) return false;
+    const { sendNotification } = await import("@tauri-apps/plugin-notification");
+    sendNotification({ title, body });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Only call from a click/tap handler — browsers reject permission prompts otherwise. */
 export async function requestNotificationPermissionFromGesture(): Promise<boolean> {
+  if (isTauri()) {
+    return ensureNativeNotificationPermission();
+  }
   if (typeof window === "undefined" || !("Notification" in window)) return false;
   if (Notification.permission === "granted") return true;
   if (Notification.permission === "denied") return false;
@@ -150,15 +186,45 @@ export async function requestNotificationPermissionFromGesture(): Promise<boolea
   }
 }
 
-export function showSystemNotification(title: string, body?: string, onClick?: () => void) {
-  if (typeof window === "undefined" || !("Notification" in window)) return;
+export function showSystemNotification(
+  title: string,
+  body?: string,
+  onClick?: () => void,
+  tag?: string,
+) {
+  if (typeof window === "undefined") return;
   if (!getUserSettings().desktopNotificationsEnabled) return;
+
+  if (isTauri()) {
+    void sendNativeNotification(title, body).then((sent) => {
+      if (sent) return;
+      showWebNotification(title, body, onClick, tag);
+    });
+    return;
+  }
+
+  showWebNotification(title, body, onClick, tag);
+}
+
+function showWebNotification(
+  title: string,
+  body?: string,
+  onClick?: () => void,
+  tag?: string,
+) {
+  if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
+
+  const icon =
+    window.location.origin.startsWith("http")
+      ? `${window.location.origin}/favicon.ico`
+      : "/favicon.ico";
 
   const n = new Notification(title, {
     body,
-    icon: "/favicon.ico",
-    tag: `${title}:${body ?? ""}`,
+    icon,
+    tag: tag ?? `disband:${title}:${body ?? ""}`,
+    silent: false,
   });
   if (onClick) {
     n.onclick = () => {

@@ -1,4 +1,5 @@
 import { isTauri } from "@/lib/platform";
+import { buildAudioConstraints, buildVideoConstraints } from "@/lib/audio-settings";
 
 type LegacyGetUserMedia = (
   constraints: MediaStreamConstraints,
@@ -42,9 +43,15 @@ export async function getDisbandUserMedia(
 
   await warmUpMediaDevices();
 
+  const merged: MediaStreamConstraints = {
+    ...constraints,
+    audio: constraints.audio === true ? buildAudioConstraints() : constraints.audio ?? buildAudioConstraints(),
+    video: constraints.video === true ? buildVideoConstraints() : constraints.video,
+  };
+
   if (navigator.mediaDevices?.getUserMedia) {
     try {
-      return await navigator.mediaDevices.getUserMedia(constraints);
+      return await navigator.mediaDevices.getUserMedia(merged);
     } catch (err) {
       throw err instanceof Error ? err : new Error("Could not access microphone.");
     }
@@ -59,7 +66,7 @@ export async function getDisbandUserMedia(
   }
 
   try {
-    return await legacyGetUserMedia(constraints);
+    return await legacyGetUserMedia(merged);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not access microphone.";

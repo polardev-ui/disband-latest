@@ -85,7 +85,17 @@ export function CallControls({
   );
 }
 
-function VideoTile({ stream, label, mirrored }: { stream: MediaStream | null; label: string; mirrored?: boolean }) {
+function VideoTile({
+  stream,
+  label,
+  mirrored,
+  placeholder,
+}: {
+  stream: MediaStream | null;
+  label: string;
+  mirrored?: boolean;
+  placeholder?: string;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(stream);
 
@@ -96,13 +106,25 @@ function VideoTile({ stream, label, mirrored }: { stream: MediaStream | null; la
     }
   }, [stream, hasVideo]);
 
-  if (!hasVideo) return null;
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
-      <video ref={ref} autoPlay playsInline muted={mirrored} className={`aspect-video max-h-40 w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`} />
-      <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">{label}</span>
-    </div>
-  );
+  if (hasVideo) {
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
+        <video ref={ref} autoPlay playsInline muted={mirrored} className={`aspect-video max-h-52 w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`} />
+        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">{label}</span>
+      </div>
+    );
+  }
+
+  if (placeholder) {
+    return (
+      <div className="relative flex aspect-video max-h-52 w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/50">
+        <span className="text-xs text-text-muted">{placeholder}</span>
+        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">{label}</span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 interface IncomingCallOverlayProps {
@@ -229,9 +251,16 @@ export function CallPanel({
             </div>
           </div>
 
-          {(localStream || remoteStream || (remoteStreams && remoteStreams.size > 0)) && (
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <VideoTile stream={localStream ?? null} label="You" mirrored />
+          {(localStream || remoteStream || cameraEnabled || (remoteStreams && remoteStreams.size > 0)) && (
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {(localStream || cameraEnabled) && (
+                <VideoTile
+                  stream={localStream ?? null}
+                  label="You"
+                  mirrored
+                  placeholder={cameraEnabled ? "Starting your camera…" : undefined}
+                />
+              )}
               {remoteStream && <VideoTile stream={remoteStream} label={peer ? displayName(peer) : "Remote"} />}
               {remoteStreams && [...remoteStreams.entries()].map(([id, stream]) => (
                 <VideoTile key={id} stream={stream} label={remoteLabels?.get(id) ?? "Member"} />

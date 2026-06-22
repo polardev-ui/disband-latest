@@ -23,6 +23,14 @@ import {
   type MessageReaction,
   type MessageSendOptions,
 } from "@/lib/messages";
+import {
+  MESSAGE_PAGE_SIZE,
+  loadReactionsForMessages,
+  mergeReactions,
+  paginateDescendingRows,
+  replaceReactionsForContext,
+  trimToLatestWindow,
+} from "@/lib/message-pagination";
 import type {
   AppNotification,
   Channel,
@@ -120,8 +128,23 @@ interface AppContextValue {
   loadVoicePresence: (channelId: string) => Promise<void>;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
   setCallPhase: (phase: "idle" | "outgoing" | "incoming" | "active") => void;
-  dmUnread: { threadId: string; friend: Profile; count: number } | null;
+  dmUnreads: { threadId: string; friend: Profile; count: number }[];
+  dmListEntries: {
+    key: string;
+    friend: Profile;
+    threadId: string | null;
+    unreadCount: number;
+    sortAt: string;
+  }[];
+  serverUnreadIds: string[];
+  getDmUnreadCount: (threadId: string) => number;
   clearDmUnread: (threadId: string) => void;
+  channelHasMore: boolean;
+  dmHasMore: boolean;
+  groupHasMore: boolean;
+  loadMoreChannelMessages: () => Promise<void>;
+  loadMoreDmMessages: () => Promise<void>;
+  loadMoreGroupMessages: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -142,6 +165,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [groupChats, setGroupChats] = useState<GroupChatWithMembers[]>([]);
   const [groupCallCounts, setGroupCallCounts] = useState<Map<string, number>>(new Map());
   const [groupMessages, setGroupMessages] = useState<(GroupMessage & { author: Profile })[]>([]);
+  const [channelHasMore, setChannelHasMore] = useState(false);
+  const [dmHasMore, setDmHasMore] = useState(false);
+  const [groupHasMore, setGroupHasMore] = useState(false);
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -159,9 +185,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     Map<string, { friend: Profile; count: number; latestAt: string }>
   >(new Map());
   const [dmThreadActivity, setDmThreadActivity] = useState<Record<string, string>>({});
+  const [serverIndicators, setServerIndicators] = useState<Set<string>>(new Set());
 
   const activeDmRef = useRef<string | null>(null);
   const activeChannelRef = useRef<string | null>(null);
+  const activeServerRef = useRef<string | null>(null);
   const activeGroupRef = useRef<string | null>(null);
   const channelsRef = useRef<Channel[]>([]);
   const groupChatsRef = useRef<GroupChatWithMembers[]>([]);
@@ -174,6 +202,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   groupChatsRef.current = groupChats;
   useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
   useEffect(() => { activeChannelRef.current = activeChannelId; }, [activeChannelId]);
+  useEffect(() => { activeServerRef.current = activeServerId; }, [activeServerId]);
   useEffect(() => { activeGroupRef.current = activeGroupChatId; }, [activeGroupChatId]);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
 
@@ -227,13 +256,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [friendships, userId],
   );
 
-  const dmUnread = useMemo((): { threadId: string; friend: Profile; count: number } | null => {
-    const entries = [...dmUnreadMap.entries()];
-    if (entries.length === 0) return null;
-    entries.sort((a, b) => b[1].latestAt.localeCompare(a[1].latestAt));
-    const [threadId, entry] = entries[0];
-    return { threadId, friend: entry.friend, count: entry.count };
+  const dmUnreads = useMemo((): { threadId: string; friend: Profile; count: number }[] => {
+    return [...dmUnreadMap.entries()]
+      .filter(([, entry]) => entry.count > 0)
+      .sort((a, b) => b[1].latestAt.localeCompare(a[1].latestAt))
+      .map(([threadId, entry]) => ({
+        threadId,
+        friend: entry.friend,
+        count: entry.count,
+      }));
   }, [dmUnreadMap]);
+
+  const getDmUnreadCount = useCallback(
+    (threadId: string) => dmUnreadMap.get(threadId)?.count ?? 0,
+    [dmUnreadMap],
+  );
 
   const sortedDmThreads = useMemo(() => {
     return [...dmThreads].sort((a, b) => {
@@ -242,6 +279,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return tb.localeCompare(ta);
     });
   }, [dmThreads, dmThreadActivity]);
+
+  const dmListEntries = useMemo(() => {
+    const threadByFriend = new Map(sortedDmThreads.map((t) => [t.friend.id, t]));
+    const entries: {
+      key: string;
+      friend: Profile;
+      threadId: string | null;
+      unreadCount: number;
+      sortAt: string;
+    }[] = [];
+
+    for (const thread of sortedDmThreads) {
+      entries.push({
+        key: thread.id,
+        friend: thread.friend,
+        threadId: thread.id,
+        unreadCount: dmUnreadMap.get(thread.id)?.count ?? 0,
+        sortAt: dmThreadActivity[thread.id] ?? thread.created_at,
+      });
+    }
+
+    for (const friend of friends) {
+      if (threadByFriend.has(friend.id)) continue;
+      entries.push({
+        key: `friend-${friend.id}`,
+        friend,
+        threadId: null,
+        unreadCount: 0,
+        sortAt: dmThreadActivity[`friend:${friend.id}`] ?? friend.created_at,
+      });
+    }
+
+    return entries.sort((a, b) => b.sortAt.localeCompare(a.sortAt));
+  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity]);
+
+  const serverUnreadIds = useMemo(() => [...serverIndicators], [serverIndicators]);
+
+  const clearServerIndicator = useCallback((serverId: string) => {
+    setServerIndicators((prev) => {
+      if (!prev.has(serverId)) return prev;
+      const next = new Set(prev);
+      next.delete(serverId);
+      return next;
+    });
+  }, []);
 
   const clearDmUnread = useCallback((threadId: string) => {
     setDmUnreadMap((prev) => {
@@ -371,25 +453,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .from("messages")
       .select("*, author:profiles(*)")
       .eq("channel_id", channelId)
-      .order("created_at", { ascending: true })
-      .limit(100);
-    const rows = (data as (Message & { author: Profile })[]) ?? [];
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
     setMessages(rows);
+    setChannelHasMore(hasMore);
     const ids = rows.map((m) => m.id);
-    if (ids.length) {
-      const { data: rxn } = await supabase
-        .from("message_reactions")
-        .select("*")
-        .eq("context_type", "channel")
-        .in("message_id", ids);
-      setMessageReactions((prev) => [
-        ...prev.filter((r) => r.context_type !== "channel"),
-        ...((rxn ?? []) as MessageReaction[]),
-      ]);
-    } else {
-      setMessageReactions((prev) => prev.filter((r) => r.context_type !== "channel"));
-    }
+    const rxn = await loadReactionsForMessages(supabase, "channel", ids);
+    setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
   }, []);
+
+  const loadMoreChannelMessages = useCallback(async () => {
+    if (!activeChannelId || !channelHasMore || messages.length === 0) return;
+    const supabase = getSupabaseClient();
+    const oldest = messages[0];
+    const { data } = await supabase
+      .from("messages")
+      .select("*, author:profiles(*)")
+      .eq("channel_id", activeChannelId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows: older, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
+    if (!older.length) {
+      setChannelHasMore(false);
+      return;
+    }
+    setMessages((prev) => [...older, ...prev]);
+    setChannelHasMore(hasMore);
+    const rxn = await loadReactionsForMessages(
+      supabase,
+      "channel",
+      older.map((m) => m.id),
+    );
+    setMessageReactions((prev) =>
+      mergeReactions(
+        prev,
+        "channel",
+        rxn,
+        older.map((m) => m.id),
+      ),
+    );
+  }, [activeChannelId, channelHasMore, messages]);
 
   const loadFriendships = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
@@ -447,6 +552,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const bumpFriendActivity = useCallback((friendId: string, at?: string) => {
+    const ts = at ?? new Date().toISOString();
+    setDmThreadActivity((prev) => ({ ...prev, [`friend:${friendId}`]: ts }));
+  }, []);
+
   const bumpDmThreadActivity = useCallback((threadId: string, at?: string) => {
     const ts = at ?? new Date().toISOString();
     setDmThreadActivity((prev) => {
@@ -461,25 +571,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .from("dm_messages")
       .select("*, author:profiles(*)")
       .eq("thread_id", threadId)
-      .order("created_at", { ascending: true })
-      .limit(100);
-    const rows = (data as (DmMessage & { author: Profile })[]) ?? [];
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
     setDmMessages(rows);
+    setDmHasMore(hasMore);
     const ids = rows.map((m) => m.id);
-    if (ids.length) {
-      const { data: rxn } = await supabase
-        .from("message_reactions")
-        .select("*")
-        .eq("context_type", "dm")
-        .in("message_id", ids);
-      setMessageReactions((prev) => [
-        ...prev.filter((r) => r.context_type !== "dm"),
-        ...((rxn ?? []) as MessageReaction[]),
-      ]);
-    } else {
-      setMessageReactions((prev) => prev.filter((r) => r.context_type !== "dm"));
-    }
+    const rxn = await loadReactionsForMessages(supabase, "dm", ids);
+    setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", rxn));
   }, []);
+
+  const loadMoreDmMessages = useCallback(async () => {
+    if (!activeDmThreadId || !dmHasMore || dmMessages.length === 0) return;
+    const supabase = getSupabaseClient();
+    const oldest = dmMessages[0];
+    const { data } = await supabase
+      .from("dm_messages")
+      .select("*, author:profiles(*)")
+      .eq("thread_id", activeDmThreadId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows: older, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
+    if (!older.length) {
+      setDmHasMore(false);
+      return;
+    }
+    setDmMessages((prev) => [...older, ...prev]);
+    setDmHasMore(hasMore);
+    const rxn = await loadReactionsForMessages(
+      supabase,
+      "dm",
+      older.map((m) => m.id),
+    );
+    setMessageReactions((prev) =>
+      mergeReactions(
+        prev,
+        "dm",
+        rxn,
+        older.map((m) => m.id),
+      ),
+    );
+  }, [activeDmThreadId, dmHasMore, dmMessages]);
 
   const loadGroupChats = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
@@ -517,25 +650,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .from("group_messages")
       .select("*, author:profiles(*)")
       .eq("group_id", groupId)
-      .order("created_at", { ascending: true })
-      .limit(100);
-    const rows = (data as (GroupMessage & { author: Profile })[]) ?? [];
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author: Profile })[] | null);
     setGroupMessages(rows);
+    setGroupHasMore(hasMore);
     const ids = rows.map((m) => m.id);
-    if (ids.length) {
-      const { data: rxn } = await supabase
-        .from("message_reactions")
-        .select("*")
-        .eq("context_type", "group")
-        .in("message_id", ids);
-      setMessageReactions((prev) => [
-        ...prev.filter((r) => r.context_type !== "group"),
-        ...((rxn ?? []) as MessageReaction[]),
-      ]);
-    } else {
-      setMessageReactions((prev) => prev.filter((r) => r.context_type !== "group"));
-    }
+    const rxn = await loadReactionsForMessages(supabase, "group", ids);
+    setMessageReactions((prev) => replaceReactionsForContext(prev, "group", rxn));
   }, []);
+
+  const loadMoreGroupMessages = useCallback(async () => {
+    if (!activeGroupChatId || !groupHasMore || groupMessages.length === 0) return;
+    const supabase = getSupabaseClient();
+    const oldest = groupMessages[0];
+    const { data } = await supabase
+      .from("group_messages")
+      .select("*, author:profiles(*)")
+      .eq("group_id", activeGroupChatId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows: older, hasMore } = paginateDescendingRows(data as (GroupMessage & { author: Profile })[] | null);
+    if (!older.length) {
+      setGroupHasMore(false);
+      return;
+    }
+    setGroupMessages((prev) => [...older, ...prev]);
+    setGroupHasMore(hasMore);
+    const rxn = await loadReactionsForMessages(
+      supabase,
+      "group",
+      older.map((m) => m.id),
+    );
+    setMessageReactions((prev) =>
+      mergeReactions(
+        prev,
+        "group",
+        rxn,
+        older.map((m) => m.id),
+      ),
+    );
+  }, [activeGroupChatId, groupHasMore, groupMessages]);
 
   const loadNotifications = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
@@ -705,6 +861,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 displayName(author),
                 msg.content.slice(0, 120) || undefined,
                 profileRef.current,
+                msg.thread_id,
               );
             }
           })();
@@ -1027,6 +1184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               displayName(author as Profile),
               msg.content.slice(0, 120) || undefined,
               profileRef.current,
+              msg.thread_id,
             );
           })();
         },
@@ -1049,6 +1207,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (msg.author_id === userId) return;
           const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
           if (!channel) return;
+          const viewingChannel =
+            viewModeRef.current === "server" && activeChannelRef.current === msg.channel_id;
+          if (!viewingChannel) {
+            setServerIndicators((prev) => new Set(prev).add(channel.server_id));
+          }
           void (async () => {
             const { data: author } = await supabase
               .from("profiles")
@@ -1067,6 +1230,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe();
     return () => { void sub.unsubscribe(); };
   }, [userId, configured]);
+
+  // Server typing indicators (white dot on server icon)
+  useEffect(() => {
+    if (!userId || !configured || servers.length === 0) return;
+    const supabase = getSupabaseClient();
+    const subs = servers.map((server) => {
+      const ch = supabase.channel(`typing:server:${server.id}`, {
+        config: { broadcast: { self: false } },
+      });
+      ch.on("broadcast", { event: "typing" }, ({ payload }) => {
+        const p = payload as { userId?: string; channelId?: string };
+        if (!p.userId || p.userId === userId) return;
+        const viewing =
+          viewModeRef.current === "server"
+          && activeServerRef.current === server.id
+          && activeChannelRef.current === p.channelId;
+        if (viewing) return;
+        setServerIndicators((prev) => new Set(prev).add(server.id));
+      });
+      void ch.subscribe();
+      return ch;
+    });
+    return () => {
+      subs.forEach((sub) => void sub.unsubscribe());
+    };
+  }, [userId, configured, servers.map((s) => s.id).join(",")]);
 
   // Group message notifications (when not viewing that group)
   useEffect(() => {
@@ -1201,6 +1390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveServerId(serverId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
+    clearServerIndicator(serverId);
     await loadServerDetails(serverId);
     const supabase = getSupabaseClient();
     const { data } = await supabase
@@ -1215,14 +1405,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveChannelId(first.id);
       await loadMessages(first.id);
     }
-  }, [loadServerDetails, loadMessages]);
+  }, [loadServerDetails, loadMessages, clearServerIndicator]);
 
   const selectChannel = useCallback((channelId: string) => {
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
     if (viewMode !== "server") setViewMode("server");
-  }, [viewMode]);
+    const channel = channelsRef.current.find((c) => c.id === channelId);
+    if (channel) clearServerIndicator(channel.server_id);
+  }, [viewMode, clearServerIndicator]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
     setViewMode("dm");
@@ -1404,13 +1596,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const respondFriendRequest = useCallback(async (id: string, accept: boolean) => {
     if (!userId) return;
     const supabase = getSupabaseClient();
+    const pending = friendships.find((f) => f.id === id);
     if (accept) {
       await supabase.from("friendships").update({ status: "accepted" }).eq("id", id);
+      if (pending) {
+        const friendId = pending.requester_id === userId ? pending.addressee_id : pending.requester_id;
+        bumpFriendActivity(friendId);
+      }
     } else {
       await supabase.from("friendships").delete().eq("id", id);
     }
     await loadFriendships(userId);
-  }, [userId, loadFriendships]);
+  }, [userId, friendships, loadFriendships, bumpFriendActivity]);
 
   const removeFriend = useCallback(async (friendId: string) => {
     if (!userId) return;
@@ -1553,7 +1750,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
     };
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev) => {
+      const next = [...prev, optimistic];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setChannelHasMore(true);
+      return windowed;
+    });
 
     const mentionIds = parseMentions(normalized, members.map((m) => m.profile));
     const { data, error } = await getSupabaseClient()
@@ -1580,7 +1782,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const saved = data as Message & { author: Profile };
     setMessages((prev) => {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
-      return [...without, saved];
+      const next = [...without, saved];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setChannelHasMore(true);
+      return windowed;
     });
     return null;
   }, [userId, activeChannelId, profile, members]);
@@ -1610,7 +1815,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
     };
-    setDmMessages((prev) => [...prev, optimistic]);
+    setDmMessages((prev) => {
+      const next = [...prev, optimistic];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setDmHasMore(true);
+      return windowed;
+    });
     bumpDmThreadActivity(activeDmThreadId, optimistic.created_at);
 
     const mentionIds = parseMentions(normalized, other);
@@ -1638,7 +1848,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const saved = data as DmMessage & { author: Profile };
     setDmMessages((prev) => {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
-      return [...without, saved];
+      const next = [...without, saved];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setDmHasMore(true);
+      return windowed;
     });
     bumpDmThreadActivity(activeDmThreadId, saved.created_at);
     return null;
@@ -1668,7 +1881,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
     };
-    setGroupMessages((prev) => [...prev, optimistic]);
+    setGroupMessages((prev) => {
+      const next = [...prev, optimistic];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setGroupHasMore(true);
+      return windowed;
+    });
 
     const mentionIds = parseMentions(normalized, group?.members ?? []);
     const { data, error } = await getSupabaseClient()
@@ -1695,7 +1913,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const saved = data as GroupMessage & { author: Profile };
     setGroupMessages((prev) => {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
-      return [...without, saved];
+      const next = [...without, saved];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setGroupHasMore(true);
+      return windowed;
     });
     return null;
   }, [userId, activeGroupChatId, profile, groupChats]);
@@ -1894,8 +2115,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadVoicePresence,
     setVoiceJoinedChannelId,
     setCallPhase,
-    dmUnread,
+    dmUnreads,
+    dmListEntries,
+    serverUnreadIds,
+    getDmUnreadCount,
     clearDmUnread,
+    channelHasMore,
+    dmHasMore,
+    groupHasMore,
+    loadMoreChannelMessages,
+    loadMoreDmMessages,
+    loadMoreGroupMessages,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -3,6 +3,7 @@
 import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
 import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
+import { isEmojiOnlyMessage } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { summarizeReactions, type ReactionSummary, type ReplyPreview } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
@@ -91,12 +92,17 @@ function MessageBody({
   const codes = extractInviteCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
   const textOnly = content.replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "").trim();
+  const emojiOnly = isEmojiOnlyMessage(textOnly);
 
   return (
     <>
       {textOnly && (
-        <span className="whitespace-pre-wrap break-words text-[15px] leading-[1.375rem] text-text-normal">
-          {renderContent(textOnly, members)}
+        <span
+          className={`whitespace-pre-wrap break-words text-text-normal ${
+            emojiOnly ? "text-[2.75rem] leading-[3rem]" : "text-[15px] leading-[1.375rem]"
+          }`}
+        >
+          {emojiOnly ? textOnly : renderContent(textOnly, members)}
         </span>
       )}
       {codes.map((code) => (
@@ -173,6 +179,10 @@ export function ChatMessage({
       name={message.attachment_name}
       size={message.attachment_size}
       onLoad={onContentResize}
+      author={author}
+      authorColor={authorColor}
+      isOwn={isOwn}
+      createdAt={message.created_at}
     />
   ) : null;
 
