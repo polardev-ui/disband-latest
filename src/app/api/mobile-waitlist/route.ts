@@ -3,6 +3,7 @@ import { addMobileWaitlistContact, getMobileWaitlistSegmentId } from "@/lib/rese
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -11,11 +12,18 @@ export async function POST(request: Request) {
   const limit = rateLimit(`mobile-waitlist:${ip}`, 5, 60_000);
   if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
 
-  let body: { email?: string };
+  let body: { email?: string; turnstileToken?: string };
   try {
-    body = (await request.json()) as { email?: string };
+    body = (await request.json()) as { email?: string; turnstileToken?: string };
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  if (body.turnstileToken) {
+    const ok = await verifyTurnstileToken(body.turnstileToken, ip);
+    if (!ok) {
+      return NextResponse.json({ error: "Human verification failed. Please try again." }, { status: 403 });
+    }
   }
 
   const email = body.email?.trim().toLowerCase();
