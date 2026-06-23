@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { Logo } from "@/components/ui/Logo";
+import { Turnstile } from "@/components/ui/Turnstile";
+import { PUBLIC_ENV } from "@/lib/public-env";
 
 export function MobileWaitlistScreen() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function subscribe(e: React.FormEvent) {
     e.preventDefault();
@@ -17,7 +20,7 @@ export function MobileWaitlistScreen() {
       const res = await fetch("/api/mobile-waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), turnstileToken }),
       });
       const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
 
@@ -76,9 +79,14 @@ export function MobileWaitlistScreen() {
                   className="w-full rounded-lg border border-black/20 bg-bg-accent px-4 py-3 text-[16px] text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
                 />
               </label>
+              <Turnstile
+                siteKey={PUBLIC_ENV.turnstileSiteKey}
+                onToken={setTurnstileToken}
+                onExpire={() => setTurnstileToken(null)}
+              />
               <button
                 type="submit"
-                disabled={status === "loading" || !email.trim()}
+                disabled={status === "loading" || !email.trim() || !turnstileToken}
                 className="w-full rounded-lg bg-brand py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {status === "loading" ? "Subscribing…" : "Notify me when it is ready"}
