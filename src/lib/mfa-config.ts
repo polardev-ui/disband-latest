@@ -15,17 +15,14 @@ export function getMfaWebAuthnConfig(): MfaWebAuthnConfig {
   const appOrigin = appUrl.origin;
   const rpOrigins = [appOrigin];
 
-  if (typeof window !== "undefined") {
-    const current = window.location.origin;
-    if (current !== appOrigin) {
-      rpOrigins.push(current);
-    }
-  }
-
+  // rpId must be a registrable domain suffix of the effective domain — check that
+  // the current hostname equals rpId or is a subdomain of it. Adding the current
+  // origin to rpOrigins would make the check tautologically true and let callers
+  // attempt WebAuthn from an incompatible origin, causing a browser SyntaxError.
   const originAllowed =
     typeof window === "undefined" ||
     window.location.hostname === rpId ||
-    rpOrigins.includes(window.location.origin);
+    window.location.hostname.endsWith(`.${rpId}`);
 
   return { rpId, rpOrigins, originAllowed, appOrigin };
 }
