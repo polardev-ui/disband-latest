@@ -95,15 +95,21 @@ export function PlatformModerationPanel() {
     setError(null);
     setSuccess(null);
     setLoading(true);
-    const err = await platformBanUser({ userId: selected.id, password, reason: reason.trim() || undefined });
-    if (err) setError(err);
-    else {
-      setSuccess(`Banned ${selected.username ? `@${selected.username}` : displayName(selected)}`);
-      setSelected(null);
-      setReason("");
-      await loadBans();
+    try {
+      const err = await platformBanUser({ userId: selected.id, password, reason: reason.trim() || undefined });
+      if (err) {
+        setError(err);
+      } else {
+        setSuccess(`Banned ${selected.username ? `@${selected.username}` : displayName(selected)}`);
+        setSelected(null);
+        setReason("");
+        await loadBans();
+      }
+    } catch {
+      setError("An unexpected error occurred.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function handleUnban(userId: string, uname: string | null) {
@@ -114,13 +120,19 @@ export function PlatformModerationPanel() {
       return;
     }
     setLoading(true);
-    const err = await platformUnbanUser({ userId, password });
-    if (err) setError(err);
-    else {
-      setSuccess(`Unbanned ${uname ? `@${uname}` : "user"}`);
-      await loadBans();
+    try {
+      const err = await platformUnbanUser({ userId, password });
+      if (err) {
+        setError(err);
+      } else {
+        setSuccess(`Unbanned ${uname ? `@${uname}` : "user"}`);
+        await loadBans();
+      }
+    } catch {
+      setError("An unexpected error occurred.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
