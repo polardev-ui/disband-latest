@@ -213,6 +213,7 @@ export function PlatformModerationPanel() {
         <span className="text-xs font-bold uppercase text-text-muted">Owner password</span>
         <input
           type="password"
+          autoComplete="off"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
