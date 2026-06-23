@@ -16,4 +16,7 @@ export const PUBLIC_ENV = {
   /** Public web app origin for shareable links (invites, etc.) */
   webAppUrl:
     process.env.NEXT_PUBLIC_APP_URL ?? "https://disband.wsgpolar.me",
+  /** Cloudflare Turnstile site key — website-only forms. */
+  turnstileSiteKey:
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "0x4AAAAAADpTEU6IzBC_YVIF",
 } as const;

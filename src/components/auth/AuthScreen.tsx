@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { isTauri } from "@/lib/platform";
+import { PUBLIC_ENV } from "@/lib/public-env";
 import { Logo } from "@/components/ui/Logo";
+import { Turnstile } from "@/components/ui/Turnstile";
 
 type AuthMode = "login" | "signup" | "reset";
 
@@ -16,7 +18,9 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const submittingRef = useRef(false);
+  const webOnly = !isTauri();
 
   if (!configured) {
     return (
@@ -41,11 +45,13 @@ export function AuthScreen() {
     setError(null);
     setSuccess(null);
 
+    const token = turnstileToken ?? undefined;
+
     if (mode === "login") {
-      const err = await signIn(email, password);
+      const err = await signIn(email, password, token);
       if (err) setError(err);
     } else if (mode === "reset") {
-      const err = await requestPasswordReset(email);
+      const err = await requestPasswordReset(email, token);
       if (err) {
         setError(err);
       } else {
@@ -54,7 +60,7 @@ export function AuthScreen() {
         );
       }
     } else {
-      const result = await signUp(email, password, username);
+      const result = await signUp(email, password, username, token);
       if (result.error) {
         setError(result.error);
       } else if (result.needsEmailConfirmation !== false) {
@@ -72,6 +78,7 @@ export function AuthScreen() {
     setMode(next);
     setError(null);
     setSuccess(null);
+    setTurnstileToken(null);
   }
 
   const title =
@@ -171,12 +178,21 @@ export function AuthScreen() {
           </>
         )}
 
+        {!success && webOnly && (
+          <Turnstile
+            siteKey={PUBLIC_ENV.turnstileSiteKey}
+            onToken={setTurnstileToken}
+            onExpire={() => setTurnstileToken(null)}
+            className="mb-3"
+          />
+        )}
+
         {error && <p className="mb-3 text-sm text-status-dnd">{error}</p>}
 
         {!success && (
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (webOnly && !turnstileToken)}
             className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
           >
             {loading
