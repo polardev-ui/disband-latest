@@ -14,6 +14,7 @@ import {
   type TotpEnrollment,
 } from "@/lib/mfa";
 import { getMfaWebAuthnConfig } from "@/lib/mfa-config";
+import { isTauri } from "@/lib/platform";
 
 export function MfaSettingsPanel() {
   const [factors, setFactors] = useState<MfaFactor[]>([]);
@@ -158,21 +159,21 @@ export function MfaSettingsPanel() {
             >
               Add authenticator app
             </button>
-            <button
-              type="button"
-              disabled={busy || !webauthn.originAllowed}
-              onClick={() => void addPasskey()}
-              className="rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected disabled:opacity-50"
-            >
-              Add passkey
-            </button>
+            {!isTauri() && (
+              <button
+                type="button"
+                disabled={busy || !webauthn.originAllowed}
+                onClick={() => void addPasskey()}
+                className="rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected disabled:opacity-50"
+              >
+                Add passkey
+              </button>
+            )}
           </div>
-          <p className="text-xs text-text-muted">{passkeySetupHint()}</p>
-          {!webauthn.originAllowed && (
+          {!isTauri() && <p className="text-xs text-text-muted">{passkeySetupHint()}</p>}
+          {!isTauri() && !webauthn.originAllowed && (
             <p className="text-xs text-status-dnd">
-              Passkeys are disabled on this URL. Open Disband at {webauthn.appOrigin} to register a passkey, or add{" "}
-              {typeof window !== "undefined" ? window.location.origin : "your URL"} to Supabase Passkeys → Relying Party
-              Origins.
+              Passkeys must be registered from {webauthn.appOrigin}. Open Disband in a browser to add a passkey.
             </p>
           )}
         </div>

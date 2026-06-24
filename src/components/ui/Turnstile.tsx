@@ -7,6 +7,7 @@ interface TurnstileProps {
   siteKey: string;
   onToken: (token: string) => void;
   onExpire?: () => void;
+  onError?: () => void;
   className?: string;
 }
 
@@ -28,22 +29,34 @@ declare global {
   }
 }
 
-export function Turnstile({ siteKey, onToken, onExpire, className }: TurnstileProps) {
+export function Turnstile({ siteKey, onToken, onExpire, onError, className }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  function renderWidget() {
+  // Always call the latest prop versions — avoid stale closures registered with the widget.
+  const onTokenRef = useRef(onToken);
+  const onExpireRef = useRef(onExpire);
+  const onErrorRef = useRef(onError);
+  onTokenRef.current = onToken;
+  onExpireRef.current = onExpire;
+  onErrorRef.current = onError;
+
+  const render = () => {
     if (!containerRef.current || !window.turnstile || widgetIdRef.current !== null) return;
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: siteKey,
       theme: "dark",
-      callback: onToken,
-      "expired-callback": onExpire,
+      callback: (token) => onTokenRef.current(token),
+      "expired-callback": () => onExpireRef.current?.(),
+      "error-callback": () => { onExpireRef.current?.(); onErrorRef.current?.(); },
     });
-  }
+  };
 
   useEffect(() => {
-    renderWidget();
+    // If the Turnstile script was already loaded (e.g. cached from a prior navigation),
+    // window.turnstile exists immediately — render now without waiting for onLoad.
+    render();
+
     return () => {
       if (widgetIdRef.current !== null && window.turnstile) {
         window.turnstile.remove(widgetIdRef.current);
@@ -58,7 +71,7 @@ export function Turnstile({ siteKey, onToken, onExpire, className }: TurnstilePr
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
-        onLoad={renderWidget}
+        onLoad={render}
       />
       <div ref={containerRef} className={className} />
     </>
