@@ -32,8 +32,8 @@ function supabase() {
 function formatAuthError(error: { message?: string; status?: number } | null | undefined, fallback: string): string {
   if (!error) return fallback;
   const msg = mapAuthError(error.message ?? fallback);
-  if (error.status === 422 && msg === (error.message ?? fallback)) {
-    return `${msg} Check Supabase Auth → MFA (TOTP enabled) and Passkeys (RP ID ${getMfaWebAuthnConfig().rpId}).`;
+  if (error.status === 422) {
+    return `${fallback} (Supabase rejected the request — check that Passkeys are enabled in your Supabase project under Authentication → MFA, and that the RP ID is set to ${getMfaWebAuthnConfig().rpId}.)`;
   }
   return msg;
 }
@@ -67,9 +67,10 @@ export async function listVerifiedMfaFactors(): Promise<MfaFactor[]> {
 /** Remove stale unverified factors left over from cancelled setup attempts. */
 async function cleanupUnverifiedFactors(): Promise<void> {
   const { factors } = await listAllMfaFactors();
-  for (const factor of factors.filter((f) => f.status !== "verified")) {
-    await supabase().auth.mfa.unenroll({ factorId: factor.id });
-  }
+  const pending = factors.filter((f) => f.status !== "verified");
+  await Promise.allSettled(
+    pending.map((f) => supabase().auth.mfa.unenroll({ factorId: f.id })),
+  );
 }
 
 export async function startTotpEnrollment(friendlyName = "Authenticator app"): Promise<
@@ -114,17 +115,17 @@ export async function completeTotpEnrollment(factorId: string, code: string): Pr
 }
 
 export async function registerPasskeyFactor(friendlyName = "Passkey"): Promise<string | null> {
-  const { rpId, rpOrigins, originAllowed, appOrigin } = getMfaWebAuthnConfig();
+  const { originAllowed, appOrigin } = getMfaWebAuthnConfig();
   if (!originAllowed) {
-    return `Passkeys must be registered on ${appOrigin}. Add ${typeof window !== "undefined" ? window.location.origin : "your dev URL"} to Supabase Passkeys → Relying Party Origins if you need local testing.`;
+    return `Passkeys can only be registered on ${appOrigin}. Open Disband in a browser to add a passkey.`;
   }
 
   await cleanupUnverifiedFactors();
 
-  const { error } = await supabase().auth.mfa.webauthn.register({
-    friendlyName,
-    webauthn: { rpId, rpOrigins },
-  });
+  // Let the SDK derive rpId/rpOrigins from window.location so they always match
+  // the page origin exactly — passing our config values explicitly can cause a
+  // mismatch if the env var differs from the actual deployment URL.
+  const { error } = await supabase().auth.mfa.webauthn.register({ friendlyName });
   if (error) return formatAuthError(error, "Could not register passkey.");
   await supabase().auth.refreshSession();
   return null;
@@ -138,12 +139,10 @@ export async function verifyTotpChallenge(factorId: string, code: string): Promi
 }
 
 export async function verifyPasskeyChallenge(factorId: string): Promise<string | null> {
-  const { rpId, rpOrigins } = getMfaWebAuthnConfig();
-  const { error } = await supabase().auth.mfa.webauthn.authenticate({
-    factorId,
-    webauthn: { rpId, rpOrigins },
-  });
-  if (error) return formatAuthError(error, "Passkey verification failed.");
+  // Let the SDK derive rpId/rpOrigins from window.location — must match the
+  // origin the passkey was registered on.
+  const { error } = await supabase().auth.mfa.webauthn.authenticate({ factorId });
+  if (error) return formatAuthError(error, "Passkey verification failed. Try again or use your authenticator app.");
   await supabase().auth.refreshSession();
   return null;
 }
