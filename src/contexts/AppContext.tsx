@@ -88,9 +88,9 @@ interface AppContextValue {
   deafened: boolean;
   setMicMuted: (v: boolean) => void;
   setDeafened: (v: boolean) => void;
-  signIn: (email: string, password: string, captchaToken?: string) => Promise<string | null>;
-  signUp: (email: string, password: string, username: string, captchaToken?: string) => Promise<SignUpResult>;
-  requestPasswordReset: (email: string, captchaToken?: string) => Promise<string | null>;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
+  requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
   mfaRequired: boolean;
   refreshMfaStatus: () => Promise<void>;
@@ -1431,7 +1431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured]);
 
-  const signIn = useCallback(async (email: string, password: string, captchaToken?: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const supabase = getSupabaseClient();
     await supabase.auth.signOut({ scope: "local" });
     resetSupabaseClient();
@@ -1440,14 +1440,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { error } = await getSupabaseClient().auth.signInWithPassword({
       email: email.trim(),
       password,
-      options: captchaToken ? { captchaToken } : undefined,
     });
     if (error) return mapAuthError(error.message);
     await refreshMfaStatus();
     return null;
   }, [refreshMfaStatus]);
 
-  const signUp = useCallback(async (email: string, password: string, username: string, captchaToken?: string): Promise<SignUpResult> => {
+  const signUp = useCallback(async (email: string, password: string, username: string): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
     const normalized = username.trim().toLowerCase();
     const displayNameVal = username.trim();
@@ -1472,7 +1471,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         emailRedirectTo: redirectTo,
-        captchaToken,
         data: {
           username: normalized,
           display_name: displayNameVal,
@@ -1497,10 +1495,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { error: null, needsEmailConfirmation: true };
   }, []);
 
-  const requestPasswordReset = useCallback(async (email: string, captchaToken?: string) => {
+  const requestPasswordReset = useCallback(async (email: string) => {
     const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: getAuthRedirectUrl("/reset-password"),
-      captchaToken,
     });
     return error ? mapAuthError(error.message) : null;
   }, []);

@@ -19,6 +19,8 @@ export function AuthScreen() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
+  const [turnstileFailed, setTurnstileFailed] = useState(false);
   const submittingRef = useRef(false);
   const webOnly = !isTauri();
 
@@ -45,13 +47,11 @@ export function AuthScreen() {
     setError(null);
     setSuccess(null);
 
-    const token = turnstileToken ?? undefined;
-
     if (mode === "login") {
-      const err = await signIn(email, password, token);
+      const err = await signIn(email, password);
       if (err) setError(err);
     } else if (mode === "reset") {
-      const err = await requestPasswordReset(email, token);
+      const err = await requestPasswordReset(email);
       if (err) {
         setError(err);
       } else {
@@ -60,7 +60,7 @@ export function AuthScreen() {
         );
       }
     } else {
-      const result = await signUp(email, password, username, token);
+      const result = await signUp(email, password, username);
       if (result.error) {
         setError(result.error);
       } else if (result.needsEmailConfirmation !== false) {
@@ -70,6 +70,10 @@ export function AuthScreen() {
       }
     }
 
+    // Turnstile tokens are single-use — remount the widget after every attempt.
+    setTurnstileToken(null);
+    setTurnstileFailed(false);
+    setTurnstileKey((k) => k + 1);
     setLoading(false);
     submittingRef.current = false;
   }
@@ -79,6 +83,8 @@ export function AuthScreen() {
     setError(null);
     setSuccess(null);
     setTurnstileToken(null);
+    setTurnstileFailed(false);
+    setTurnstileKey((k) => k + 1);
   }
 
   const title =
@@ -178,11 +184,13 @@ export function AuthScreen() {
           </>
         )}
 
-        {!success && webOnly && (
+        {!success && webOnly && !turnstileFailed && (
           <Turnstile
+            key={turnstileKey}
             siteKey={PUBLIC_ENV.turnstileSiteKey}
             onToken={setTurnstileToken}
             onExpire={() => setTurnstileToken(null)}
+            onError={() => { setTurnstileToken(null); setTurnstileFailed(true); }}
             className="mb-3"
           />
         )}
@@ -192,7 +200,7 @@ export function AuthScreen() {
         {!success && (
           <button
             type="submit"
-            disabled={loading || (webOnly && !turnstileToken)}
+            disabled={loading || (webOnly && !turnstileToken && !turnstileFailed)}
             className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
           >
             {loading
