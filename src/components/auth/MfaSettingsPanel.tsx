@@ -5,16 +5,12 @@ import {
   completeTotpEnrollment,
   factorLabel,
   listAllMfaFactors,
-  passkeySetupHint,
-  registerPasskeyFactor,
   startTotpEnrollment,
   totpQrSrc,
   unenrollMfaFactor,
   type MfaFactor,
   type TotpEnrollment,
 } from "@/lib/mfa";
-import { getMfaWebAuthnConfig } from "@/lib/mfa-config";
-import { isTauri } from "@/lib/platform";
 
 export function MfaSettingsPanel() {
   const [factors, setFactors] = useState<MfaFactor[]>([]);
@@ -24,7 +20,6 @@ export function MfaSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [totpSetup, setTotpSetup] = useState<TotpEnrollment | null>(null);
   const [totpCode, setTotpCode] = useState("");
-  const webauthn = getMfaWebAuthnConfig();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -67,20 +62,6 @@ export function MfaSettingsPanel() {
     setTotpSetup(null);
     setTotpCode("");
     setMessage("Authenticator app enabled.");
-    void reload();
-  }
-
-  async function addPasskey() {
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    const err = await registerPasskeyFactor();
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    setMessage("Passkey added.");
     void reload();
   }
 
@@ -159,23 +140,7 @@ export function MfaSettingsPanel() {
             >
               Add authenticator app
             </button>
-            {!isTauri() && (
-              <button
-                type="button"
-                disabled={busy || !webauthn.originAllowed}
-                onClick={() => void addPasskey()}
-                className="rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected disabled:opacity-50"
-              >
-                Add passkey
-              </button>
-            )}
           </div>
-          {!isTauri() && <p className="text-xs text-text-muted">{passkeySetupHint()}</p>}
-          {!isTauri() && !webauthn.originAllowed && (
-            <p className="text-xs text-status-dnd">
-              Passkeys must be registered from {webauthn.appOrigin}. Open Disband in a browser to add a passkey.
-            </p>
-          )}
         </div>
       ) : (
         <form onSubmit={confirmTotpSetup} className="space-y-4 rounded-lg border border-divider bg-bg-secondary p-4">
