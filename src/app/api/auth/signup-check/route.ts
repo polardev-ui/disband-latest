@@ -69,6 +69,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ allowed: false, error: formatErr }, { status: 400 });
   }
 
+  if (username) {
+    const { data: availability } = await service.rpc("check_username_available", {
+      p_username: username,
+    });
+    if (availability && availability.available === false) {
+      return NextResponse.json({
+        allowed: false,
+        error: (availability.reason as string | undefined) ?? "That username is not available.",
+      }, { status: 400 });
+    }
+  }
+
   if (process.env.BLOCK_VPN_SIGNUP === "true" && ip) {
     const vpn = await isVpnOrProxy(ip);
     if (vpn) {

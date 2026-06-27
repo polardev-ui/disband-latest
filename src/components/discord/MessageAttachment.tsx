@@ -6,6 +6,7 @@ import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messag
 import { DangerousDownloadModal } from "./DangerousDownloadModal";
 import { ImageLightbox } from "./ImageLightbox";
 import { VideoPlayer } from "./VideoPlayer";
+import { safeDownload, safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
 
 interface MessageAttachmentProps {
@@ -22,17 +23,6 @@ interface MessageAttachmentProps {
 
 const mediaClass =
   "block max-h-[min(20rem,35vh)] max-w-full w-auto rounded-lg border border-black/20 object-contain";
-
-function triggerDownload(url: string, fileName: string) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.rel = "noopener noreferrer";
-  a.target = "_blank";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
 
 export function MessageAttachment({
   url,
@@ -76,7 +66,7 @@ export function MessageAttachment({
           fileName={fileName}
           onClose={() => setDownloadOpen(false)}
           onContinue={() => {
-            triggerDownload(url, fileName);
+            safeDownload(url, fileName);
             setDownloadOpen(false);
           }}
         />
@@ -87,12 +77,12 @@ export function MessageAttachment({
   return (
     <div className="mt-0.5 max-w-md overflow-hidden">
       {type === "video" ? (
-        <VideoPlayer src={url} onLoad={onLoad} />
+        <VideoPlayer src={safeImageUrl(url) ?? ""} onLoad={onLoad} />
       ) : type === "gif" && mp4 ? (
         <>
           <button type="button" onClick={() => setLightbox(true)} className="block text-left">
             <video
-              src={mp4}
+              src={safeImageUrl(mp4) ?? ""}
               autoPlay
               loop
               muted
@@ -119,7 +109,7 @@ export function MessageAttachment({
           <button type="button" onClick={() => setLightbox(true)} className="block text-left">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={url}
+              src={safeImageUrl(url) ?? ""}
               alt={type === "gif" ? "GIF" : "Attachment"}
               className={`${mediaClass} cursor-zoom-in`}
               loading="eager"

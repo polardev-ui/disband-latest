@@ -2,24 +2,14 @@
 
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconPlus } from "@/components/icons";
 import { displayName, getMentionQuery, normalizeMessageContent } from "@/lib/utils";
-import { inferAttachmentType } from "@/lib/media/uploadMedia";
 import { formatFileSize, type AttachmentType, type MessageSendOptions, type ReplyPreview } from "@/lib/messages";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import { GifPicker } from "./GifPicker";
 import { EmojiPicker } from "./EmojiPicker";
-
-export interface PendingAttachment {
-  id: string;
-  url: string;
-  type: AttachmentType;
-  key?: string;
-  previewUrl: string;
-  name: string;
-  size: number;
-}
 
 interface ChatInputProps {
   placeholder: string;
@@ -44,6 +34,50 @@ interface MentionItem {
   profile?: Profile;
 }
 
+function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: string) => void }) {
+  const type = entry.file.type.startsWith("video/") ? "video" : entry.file.type.startsWith("image/") ? "image" : "file";
+
+  return (
+    <div className="group relative">
+      {type === "video" ? (
+        <video src={entry.localUrl} className="h-20 w-20 rounded object-cover" />
+      ) : type === "file" ? (
+        <div className="flex h-20 w-36 flex-col justify-center rounded border border-divider bg-bg-secondary px-2">
+          <p className="truncate text-xs font-medium">{entry.file.name}</p>
+          <p className="text-[10px] text-text-muted">{formatFileSize(entry.file.size)}</p>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={entry.localUrl} alt="" className="h-20 w-20 rounded object-cover" />
+      )}
+      {entry.status === "uploading" && entry.progress && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center rounded bg-black/50">
+          <p className="text-xs font-medium text-white">{entry.progress.percent}%</p>
+          <div className="mt-1 h-1 w-12 overflow-hidden rounded-full bg-white/30">
+            <div className="h-full rounded-full bg-white transition-all duration-300" style={{ width: `${entry.progress.percent}%` }} />
+          </div>
+          <p className="mt-0.5 text-[10px] text-white/80">{formatFileSize(entry.progress.loaded)} / {formatFileSize(entry.progress.total)}</p>
+        </div>
+      )}
+      {entry.status === "error" && (
+        <div className="absolute inset-0 flex items-center justify-center rounded bg-black/60">
+          <p className="px-1 text-center text-[10px] text-status-dnd">{entry.error || "Upload failed"}</p>
+        </div>
+      )}
+      {entry.status !== "uploading" && (
+        <button
+          type="button"
+          onClick={() => onRemove(entry.id)}
+          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-status-dnd text-white opacity-90 hover:opacity-100"
+          aria-label="Remove attachment"
+        >
+          <IconClose size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function ChatInput({
   placeholder,
   members = [],
@@ -59,17 +93,19 @@ export function ChatInput({
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingAttachment[]>([]);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
+  const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { upload, isUploading } = useMediaUpload();
+  const { entries, isUploading, add, remove, clearCompleted } = useMediaUpload();
+
+  const uploadingEntries = entries.filter((e) => e.status === "uploading");
+  const completedEntries = entries.filter((e) => e.status === "success");
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
       setText(editingContent);
-      setPending([]);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [editingMessageId, editingContent]);
@@ -80,6 +116,13 @@ export function ChatInput({
     const id = window.setInterval(() => onTypingActivity(), 2000);
     return () => window.clearInterval(id);
   }, [text, onTypingActivity]);
+
+  useEffect(() => {
+    if (!sending && completedEntries.length > 0) {
+      const timer = setTimeout(() => clearCompleted(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [sending, completedEntries.length, clearCompleted]);
 
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
@@ -110,33 +153,20 @@ export function ChatInput({
     return [...memberItems, ...roleItems].slice(0, 8);
   }, [mentionCtx, members, roles]);
 
-  const addFiles = useCallback(async (files: FileList | File[]) => {
+  const addFiles = useCallback((files: FileList | File[]) => {
     setError(null);
     for (const file of Array.from(files)) {
-      const result = await upload(file);
-      if (!result) {
-        setError((prev) => prev ?? "Upload failed. Try a smaller file or different format.");
-        continue;
-      }
-      const type = inferAttachmentType(file);
-      const previewUrl = type === "file" ? "" : result.url;
-      setPending((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-${Math.random()}`,
-          url: result.url,
-          type,
-          key: result.key,
-          previewUrl,
-          name: file.name,
-          size: file.size,
-        },
-      ]);
+      add(file);
     }
-  }, [upload]);
+  }, [add]);
 
-  function removePending(id: string) {
-    setPending((prev) => prev.filter((p) => p.id !== id));
+  function removeFile(id: string) {
+    const entry = entries.find((e) => e.id === id);
+    if (entry && (entry.status === "uploading" || entry.status === "error")) {
+      remove(id);
+    } else {
+      remove(id);
+    }
   }
 
   function insertMention(item: MentionItem) {
@@ -174,42 +204,72 @@ export function ChatInput({
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
     const content = normalizeMessageContent(text);
-    if (!content && pending.length === 0 && !editingMessageId) return;
+    if (!content && entries.length === 0 && !editingMessageId) return;
 
     setError(null);
-    const attachments = [...pending];
-    const replyToId = editingMessageId ? undefined : replyTo?.id;
-    setPending([]);
-    setText("");
-    onClearReply?.();
-    onCancelEdit?.();
+    setSending(true);
 
-    if (attachments.length === 0) {
-      const err = await onSend(content, { replyToId });
-      if (err) {
-        setError(err);
-        setText(content);
-      }
+    if (editingMessageId) {
+      const err = await onSend(content, { replyToId: undefined });
+      if (err) setError(err);
+      setSending(false);
       return;
     }
 
-    for (let i = 0; i < attachments.length; i++) {
-      const att = attachments[i];
+    const successEntries = entries.filter((e) => e.status === "success");
+    const pendingUploads = entries.filter((e) => e.status === "uploading");
+
+    // Wait for pending uploads to finish
+    if (pendingUploads.length > 0) {
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          const stillPending = entries.some((e) => e.status === "uploading");
+          if (!stillPending) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 200);
+      });
+    }
+
+    const allEntries = entries.filter((e) => e.status === "success");
+    const replyToId = replyTo?.id;
+
+    setText("");
+    onClearReply?.();
+    setSending(false);
+    clearCompleted();
+
+    let hasError = false;
+    for (let i = 0; i < allEntries.length; i++) {
+      const att = allEntries[i];
+      if (!att.result) continue;
+      const type = att.file.type.startsWith("video/") ? "video" as const
+        : att.file.type.startsWith("image/") ? "image" as const
+        : "file" as AttachmentType;
       const err = await onSend(i === 0 ? content : "", {
         attachment: {
-          url: att.url,
-          type: att.type,
-          key: att.key,
-          name: att.name,
-          size: att.size,
+          url: att.result.url,
+          type,
+          key: att.result.key,
+          name: att.file.name,
+          size: att.file.size,
         },
         replyToId: i === 0 ? replyToId : undefined,
       });
       if (err) {
         setError(err);
-        setPending(attachments.slice(i));
         if (i === 0) setText(content);
-        return;
+        hasError = true;
+        break;
+      }
+    }
+
+    if (!hasError && allEntries.length === 0 && content) {
+      const err = await onSend(content, { replyToId });
+      if (err) {
+        setError(err);
+        setText(content);
       }
     }
   }
@@ -264,6 +324,8 @@ export function ChatInput({
       void submit();
     }
   }
+
+  const showUploadSpinner = isUploading && entries.length > 0;
 
   return (
     <div className="relative shrink-0 px-4 pb-6">
@@ -355,30 +417,10 @@ export function ChatInput({
         }}
         className={`relative rounded-lg bg-bg-accent transition-all duration-150 ease-in-out ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
-        {pending.length > 0 && (
+        {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
-            {pending.map((att) => (
-              <div key={att.id} className="group relative">
-                {att.type === "video" ? (
-                  <video src={att.previewUrl} className="h-20 w-20 rounded object-cover" />
-                ) : att.type === "file" ? (
-                  <div className="flex h-20 w-36 flex-col justify-center rounded border border-divider bg-bg-secondary px-2">
-                    <p className="truncate text-xs font-medium">{att.name}</p>
-                    <p className="text-[10px] text-text-muted">{formatFileSize(att.size)}</p>
-                  </div>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={att.previewUrl} alt="" className="h-20 w-20 rounded object-cover" />
-                )}
-                <button
-                  type="button"
-                  onClick={() => removePending(att.id)}
-                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-status-dnd text-white opacity-90 hover:opacity-100"
-                  aria-label="Remove attachment"
-                >
-                  <IconClose size={12} />
-                </button>
-              </div>
+            {entries.map((entry) => (
+              <PreviewThumb key={entry.id} entry={entry} onRemove={removeFile} />
             ))}
           </div>
         )}
@@ -387,14 +429,19 @@ export function ChatInput({
           <button
             type="button"
             aria-label="Upload file"
-            disabled={isUploading}
+            disabled={sending}
             onClick={() => fileRef.current?.click()}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal disabled:opacity-50"
+            className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal disabled:opacity-50"
           >
-            {isUploading ? (
+            {showUploadSpinner ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand border-t-transparent" />
             ) : (
               <IconPlus size={22} />
+            )}
+            {uploadingEntries.length > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[14px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
+                {uploadingEntries.length}
+              </span>
             )}
           </button>
           <input
@@ -418,7 +465,7 @@ export function ChatInput({
             onKeyDown={onKeyDown}
             onPaste={onPaste}
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
-            disabled={isUploading}
+            disabled={sending}
             rows={1}
             className="max-h-40 min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
           />

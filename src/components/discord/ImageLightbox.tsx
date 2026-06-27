@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
+import { safeDownload, safeImageUrl, safeWindowOpen } from "@/lib/safe-url";
 import {
   IconClose,
   IconDownload,
@@ -28,17 +29,6 @@ interface ImageLightboxProps {
   authorColor?: string | null;
   isOwn?: boolean;
   createdAt?: string;
-}
-
-function triggerDownload(url: string, fileName: string) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.rel = "noopener noreferrer";
-  a.target = "_blank";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
 }
 
 export function ImageLightbox({
@@ -120,10 +110,10 @@ export function ImageLightbox({
           >
             <IconZoomIn size={22} />
           </ToolbarButton>
-          <ToolbarButton label="Download" onClick={() => triggerDownload(src, fileName)}>
+          <ToolbarButton label="Download" onClick={() => safeDownload(src, fileName)}>
             <IconDownload size={22} />
           </ToolbarButton>
-          <ToolbarButton label="Open in browser" onClick={() => window.open(src, "_blank", "noopener,noreferrer")}>
+          <ToolbarButton label="Open in browser" onClick={() => safeWindowOpen(src)}>
             <IconExternalLink size={22} />
           </ToolbarButton>
           <ToolbarButton label="Close" onClick={onClose}>
@@ -158,7 +148,7 @@ export function ImageLightbox({
               <div className="flex justify-center">
                 {animated ? (
                   <video
-                    src={src}
+                    src={safeImageUrl(src) ?? ""}
                     autoPlay
                     loop
                     muted
@@ -169,7 +159,7 @@ export function ImageLightbox({
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={src}
+                    src={safeImageUrl(src) ?? ""}
                     alt={alt}
                     className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
                     style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}

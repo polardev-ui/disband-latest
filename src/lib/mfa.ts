@@ -1,6 +1,7 @@
 import { mapAuthError } from "@/lib/authErrors";
 import { getMfaWebAuthnConfig } from "@/lib/mfa-config";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { rateLimit } from "@/lib/rate-limit";
 import type { Factor } from "@supabase/supabase-js";
 
 export type MfaFactor = Factor;
@@ -41,7 +42,9 @@ function formatAuthError(error: { message?: string; status?: number } | null | u
 export async function getMfaAssurance(): Promise<MfaAssurance> {
   const { data, error } = await supabase().auth.mfa.getAuthenticatorAssuranceLevel();
   if (error || !data) {
-    return { currentLevel: null, nextLevel: null, mfaRequired: false };
+    // Fail-secure: when the assurance level cannot be determined, require MFA
+    // rather than skipping it (the API may be degraded or under attack).
+    return { currentLevel: null, nextLevel: null, mfaRequired: true };
   }
   const mfaRequired = data.currentLevel !== "aal2" && data.nextLevel === "aal2";
   return {
@@ -132,6 +135,13 @@ export async function registerPasskeyFactor(friendlyName = "Passkey"): Promise<s
 }
 
 export async function verifyTotpChallenge(factorId: string, code: string): Promise<string | null> {
+  const { data: user } = await supabase().auth.getUser();
+  const rateKey = `totp:${user?.user?.id ?? factorId}`;
+  const limited = rateLimit(rateKey, 5, 30_000);
+  if (!limited.allowed) {
+    return "Too many attempts. Try again in 30 seconds.";
+  }
+
   const { error } = await supabase().auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
   if (error) return formatAuthError(error, "Incorrect authentication code.");
   await supabase().auth.refreshSession();

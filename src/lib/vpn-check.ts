@@ -22,7 +22,7 @@ export async function isVpnOrProxy(ip: string): Promise<boolean> {
 
   try {
     const res = await fetch(
-      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
+      `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
       { cache: "no-store" },
     );
     if (!res.ok) return false;

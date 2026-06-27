@@ -4,7 +4,14 @@ import net from "node:net";
 /** Hostnames that must never be fetched server-side. */
 const BLOCKED_HOSTNAMES = new Set([
   "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "[::]",
+  "[::1]",
   "metadata.google.internal",
+  "metadata.internal",
+  "metadata.aws.internal",
+  "169.254.169.254",
 ]);
 
 function isPrivateIpv4(ip: string): boolean {
@@ -58,7 +65,7 @@ export async function assertSafeUrl(rawUrl: string): Promise<URL> {
   }
 
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
-  if (BLOCKED_HOSTNAMES.has(host) || host.endsWith(".local") || host.endsWith(".internal")) {
+  if (BLOCKED_HOSTNAMES.has(host) || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) {
     throw new Error("Blocked host");
   }
 

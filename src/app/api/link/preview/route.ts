@@ -66,7 +66,7 @@ async function scrapeOpenGraph(url: string) {
   return {
     title: decodeHtml(title ?? hostname),
     description: description ? decodeHtml(description) : undefined,
-    image: image ? decodeHtml(image) : undefined,
+    image: image && /^https:\/\//i.test(image) ? decodeHtml(image) : undefined,
     site: hostname,
   };
 }
