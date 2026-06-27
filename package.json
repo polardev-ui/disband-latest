@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "Josh Clark <joshclark@wsgpolar.me>",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
