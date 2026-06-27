@@ -2,6 +2,7 @@
 
 import { displayName, avatarStyle, type AvatarCrop } from "@/lib/utils";
 import { getAvatarStyle, type ProfileAccentFields } from "@/lib/profileColor";
+import { safeImageUrl } from "@/lib/safe-url";
 
 interface AvatarProps {
   profile: ProfileAccentFields & {
@@ -29,7 +30,7 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
     >
       {profile.avatar_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={profile.avatar_url} alt="" className="h-full w-full" style={style} />
+        <img src={safeImageUrl(profile.avatar_url) ?? ""} alt="" className="h-full w-full" style={style} />
       ) : (
         name.charAt(0).toUpperCase()
       )}

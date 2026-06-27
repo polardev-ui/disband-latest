@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { IconClose, IconUpload } from "@/components/icons";
+import { safeImageUrl } from "@/lib/safe-url";
 
 interface CreateServerModalProps {
   open: boolean;
@@ -84,13 +85,13 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
               <IconUpload className="text-text-muted" />
               <span className="text-xs text-text-muted">Server icon</span>
               <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
-              {iconUrl && <img src={iconUrl} alt="" className="mt-1 h-10 w-10 rounded-[30%] object-cover" />}
+              {safeImageUrl(iconUrl) && <img src={safeImageUrl(iconUrl)!} alt="" className="mt-1 h-10 w-10 rounded-[30%] object-cover" />}
             </label>
             <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-divider p-3 text-center transition-all duration-150 hover:border-brand">
               <IconUpload className="text-text-muted" />
               <span className="text-xs text-text-muted">Banner</span>
               <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
-              {bannerUrl && <img src={bannerUrl} alt="" className="mt-1 h-10 w-full rounded object-cover" />}
+              {safeImageUrl(bannerUrl) && <img src={safeImageUrl(bannerUrl)!} alt="" className="mt-1 h-10 w-full rounded object-cover" />}
             </label>
           </div>
         </div>

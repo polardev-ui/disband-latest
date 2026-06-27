@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { gifPreviewUrl, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose } from "@/components/icons";
+import { safeImageUrl } from "@/lib/safe-url";
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
@@ -126,7 +127,7 @@ export function GifPicker({ onSelect }: GifPickerProps) {
                         title={gif.title}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={preview} alt={gif.title ?? "GIF"} className="h-24 w-full object-cover" loading="lazy" />
+                        <img src={safeImageUrl(preview) ?? ""} alt={gif.title ?? "GIF"} className="h-24 w-full object-cover" loading="lazy" />
                       </button>
                     );
                   })}

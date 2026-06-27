@@ -29,6 +29,8 @@ export interface ChatMessageData {
   created_at: string;
   mentions?: string[];
   author?: Profile;
+  sending?: boolean;
+  uploadProgress?: number;
 }
 
 interface ChatMessageProps {
@@ -88,11 +90,13 @@ function MessageBody({
   members,
   compact,
   onContentResize,
+  sending,
 }: {
   content: string;
   members: Profile[];
   compact?: boolean;
   onContentResize?: () => void;
+  sending?: boolean;
 }) {
   const codes = extractInviteCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
@@ -103,7 +107,7 @@ function MessageBody({
     <>
       {textOnly && (
         <span
-          className={`whitespace-pre-wrap break-words text-text-normal ${
+          className={`whitespace-pre-wrap break-words ${sending ? "text-text-muted" : "text-text-normal"} ${
             emojiOnly
               ? "text-[2.75rem] leading-[3rem]"
               : compact
@@ -224,14 +228,27 @@ export function ChatMessage({
         <time className="pointer-events-none absolute left-1 top-1/2 w-14 -translate-y-1/2 text-right text-[10px] text-text-muted opacity-0 group-hover:opacity-100">
           {formatMessageTime(message.created_at).split(" at ").pop()}
         </time>
+        {message.sending && (
+          <span className="mr-1 inline-flex items-center">
+            <svg className="h-3 w-3 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+          </span>
+        )}
         {replyBlock}
         {body && (
           <span className="inline">
-            <MessageBody content={body} members={members} compact onContentResize={onContentResize} />
+            <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} />
             {editedTag}
           </span>
         )}
         {attachment}
+        {message.uploadProgress != null && message.uploadProgress < 100 && (
+          <div className="mt-1 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-bg-accent">
+            <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${message.uploadProgress}%` }} />
+          </div>
+        )}
         {reactionBlock}
       </article>
     );
@@ -274,12 +291,23 @@ export function ChatMessage({
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
             {author && <PlatformBadge profile={author} />}
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
+            {message.sending && (
+              <svg className="h-3 w-3 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            )}
             {editedTag}
           </header>
         )}
         {replyBlock}
-        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} />}
+        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} />}
         {attachment}
+        {message.uploadProgress != null && message.uploadProgress < 100 && (
+          <div className="mt-1 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-bg-accent">
+            <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${message.uploadProgress}%` }} />
+          </div>
+        )}
         {reactionBlock}
       </div>
     </article>

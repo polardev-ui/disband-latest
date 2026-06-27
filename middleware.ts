@@ -4,20 +4,23 @@ import { isMobileGateDisabled, isMobileUserAgent } from "@/lib/mobile-detect";
 
 export function middleware(request: NextRequest) {
   if (isMobileGateDisabled()) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    addSecurityHeaders(res);
+    return res;
   }
 
   const pathname = request.nextUrl.pathname;
 
   if (
     pathname.startsWith("/mobile")
-    || pathname.startsWith("/api/")
     || pathname.startsWith("/_next")
     || pathname === "/favicon.ico"
     || pathname.startsWith("/privacy")
     || pathname.startsWith("/terms")
   ) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    addSecurityHeaders(res);
+    return res;
   }
 
   const ua = request.headers.get("user-agent");
@@ -28,13 +31,23 @@ export function middleware(request: NextRequest) {
     || isMobileUserAgent(ua);
 
   if (!mobile) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    addSecurityHeaders(res);
+    return res;
   }
 
   const url = request.nextUrl.clone();
   url.pathname = "/mobile";
   url.search = "";
-  return NextResponse.redirect(url);
+  const redirect = NextResponse.redirect(url);
+  addSecurityHeaders(redirect);
+  return redirect;
+}
+
+function addSecurityHeaders(response: NextResponse) {
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
 }
 
 export const config = {

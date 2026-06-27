@@ -21,6 +21,7 @@ import { messageWordLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
+import { getCached, setCache } from "@/lib/app-cache";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   matchesOptimisticRow,
@@ -445,10 +446,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId, patchProfileInState]);
 
   const loadProfile = useCallback(async (uid: string) => {
+    const cacheKey = `profile:${uid}`;
+    const cached = getCached<Profile>(cacheKey);
+    if (cached) {
+      setProfile(cached);
+      patchProfileInState(cached);
+    }
     const supabase = getSupabaseClient();
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
     if (data) {
       const p = data as Profile;
+      setCache(cacheKey, p);
       setProfile(p);
       patchProfileInState(p);
     }
@@ -462,6 +470,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadServers = useCallback(async (uid: string) => {
+    const cacheKey = `servers:${uid}`;
+    const cached = getCached<Server[]>(cacheKey);
+    if (cached) {
+      setServers(cached);
+    }
     const supabase = getSupabaseClient();
     const { data: memberships } = await supabase
       .from("server_members")
@@ -470,13 +483,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const ids = ((memberships ?? []) as { server_id: string }[]).map((m) => m.server_id);
     if (ids.length === 0) {
       setServers([]);
+      setCache(cacheKey, []);
       return;
     }
     const { data } = await supabase.from("servers").select("*").in("id", ids).order("created_at");
-    setServers((data as Server[]) ?? []);
+    const servers = (data as Server[]) ?? [];
+    setCache(cacheKey, servers);
+    setServers(servers);
   }, []);
 
   const loadServerDetails = useCallback(async (serverId: string) => {
+    const cacheKey = `server-details:${serverId}`;
+    const cached = getCached<{ categories: ChannelCategory[]; channels: Channel[]; members: (ServerMember & { profile: Profile })[]; roles: ServerRole[] }>(cacheKey);
+    if (cached) {
+      setCategories(cached.categories);
+      setChannels(cached.channels);
+      setMembers(cached.members);
+      setServerRoles(cached.roles);
+    }
     const supabase = getSupabaseClient();
     const [{ data: cats }, { data: chs }, { data: mems }, { data: roles }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
@@ -498,11 +522,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .select("*")
       .in("id", memberRows.map((m) => m.user_id));
     const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
-    setMembers(
-      memberRows
-        .filter((m) => map.has(m.user_id))
-        .map((m) => ({ ...m, profile: map.get(m.user_id)! })),
-    );
+    const enrichedMembers = memberRows
+      .filter((m) => map.has(m.user_id))
+      .map((m) => ({ ...m, profile: map.get(m.user_id)! }));
+    setMembers(enrichedMembers);
     if (userId) {
       const { data: perms } = await supabase.rpc("my_server_permissions", { p_server_id: serverId });
       if (perms && typeof perms === "object") {
@@ -514,6 +537,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
     }
+    const memForCache = memberRows.length > 0
+      ? enrichedMembers
+      : [];
+    setCache(cacheKey, {
+      categories: (cats as ChannelCategory[]) ?? [],
+      channels: channelRows,
+      members: memForCache,
+      roles: (roles as ServerRole[]) ?? [],
+    });
     return channelRows;
   }, []);
 
@@ -2017,6 +2049,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
+      sending: true,
     };
     setMessages((prev) => {
       const next = [...prev, optimistic];
@@ -2048,6 +2081,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return mapMessageError(error.message);
     }
     const saved = data as Message & { author: Profile };
+    saved.sending = false;
     setMessages((prev) => {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       const next = [...without, saved];
@@ -2084,6 +2118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
+      sending: true,
     };
     setDmMessages((prev) => {
       const next = [...prev, optimistic];
@@ -2116,6 +2151,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return mapMessageError(error.message);
     }
     const saved = data as DmMessage & { author: Profile };
+    saved.sending = false;
     setDmMessages((prev) => {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       const next = [...without, saved];
@@ -2152,6 +2188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
+      sending: true,
     };
     setGroupMessages((prev) => {
       const next = [...prev, optimistic];
@@ -2183,6 +2220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return mapGroupChatError(error.message);
     }
     const saved = data as GroupMessage & { author: Profile };
+    saved.sending = false;
     setGroupMessages((prev) => {
       const without = prev.filter((m) => m.id !== tempId && m.id !== saved.id && !(m.id.startsWith("opt-") && matchesOptimisticRow(m, saved)));
       const next = [...without, saved];

@@ -1,6 +1,13 @@
 /** Maps Supabase Auth errors to user-friendly copy. */
-export function mapAuthError(message: string): string {
+export function mapAuthError(message: string | undefined | null): string {
+  if (!message || message === "{}" || message === "{}") {
+    return "Something went wrong. Please try again.";
+  }
   const lower = message.toLowerCase();
+
+  if (lower.includes("database error saving new user") || lower.includes("unexpected_failure")) {
+    return "Account creation failed. Please try again later.";
+  }
 
   if (
     lower.includes("rate limit") ||
@@ -11,7 +18,7 @@ export function mapAuthError(message: string): string {
   }
 
   if (lower.includes("user already registered")) {
-    return "An account with this email already exists. Try logging in instead.";
+    return "An account with this email already exists. Try logging in instead (or check your inbox for a verification link).";
   }
 
   if (lower.includes("invalid login credentials")) {
@@ -19,7 +26,7 @@ export function mapAuthError(message: string): string {
   }
 
   if (lower.includes("email not confirmed")) {
-    return "Confirm your email first — check your inbox for the Disband verification link.";
+    return "Please confirm your email address before signing in. Check your inbox for the verification link.";
   }
 
   if (lower.includes("same password")) {

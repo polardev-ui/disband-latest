@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getInviteUrl } from "@/lib/utils";
+import { safeImageUrl } from "@/lib/safe-url";
 
 interface ServerInviteCardProps {
   code: string;
@@ -73,12 +74,12 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     <div className="mt-1 max-w-sm overflow-hidden rounded-lg border border-divider bg-bg-secondary">
       {info.banner_url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={info.banner_url} alt="" className="h-16 w-full object-cover" onLoad={onLoad} />
+        <img src={safeImageUrl(info.banner_url) ?? ""} alt="" className="h-16 w-full object-cover" onLoad={onLoad} />
       )}
       <div className="flex gap-3 p-3">
         {info.icon_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={info.icon_url} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
+          <img src={safeImageUrl(info.icon_url) ?? ""} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-[30%] bg-brand text-lg font-bold text-white">
             {info.name.charAt(0)}

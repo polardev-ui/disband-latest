@@ -1,10 +1,3 @@
-/**
- * Custom media API client.
- *
- * Image/video uploads use POST {MEDIA_API_URL}/images
- * Generic files use POST {MEDIA_API_URL}/files
- */
-
 import type { AttachmentType } from "@/lib/messages";
 
 const MEDIA_API_URL =
@@ -15,6 +8,12 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export interface MediaUploadResult {
   url: string;
   key: string;
+}
+
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
 }
 
 interface MediaApiResponse {
@@ -38,6 +37,7 @@ export class MediaUploadError extends Error {
 export interface UploadMediaOptions {
   signal?: AbortSignal;
   endpoint?: "images" | "files";
+  onProgress?: (progress: UploadProgress) => void;
 }
 
 export function inferAttachmentType(file: File): AttachmentType {
@@ -55,7 +55,7 @@ export async function uploadMedia(
   file: File,
   options: UploadMediaOptions = {},
 ): Promise<MediaUploadResult> {
-  const { signal, endpoint: endpointOverride } = options;
+  const { signal, endpoint: endpointOverride, onProgress } = options;
 
   if (!file) {
     throw new MediaUploadError("No file provided to uploadMedia().");
@@ -65,42 +65,60 @@ export async function uploadMedia(
   }
 
   const endpoint = endpointForFile(file, endpointOverride);
-  const formData = new FormData();
-  formData.append("file", file);
 
-  let response: Response;
-  try {
-    response = await fetch(`${MEDIA_API_URL}/${endpoint}`, {
-      method: "POST",
-      body: formData,
-      signal,
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw err;
+  return new Promise<MediaUploadResult>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress({
+          loaded: event.loaded,
+          total: event.total,
+          percent: Math.round((event.loaded / event.total) * 100),
+        });
+      }
+    };
+
+    xhr.onload = () => {
+      let data: MediaApiResponse | null = null;
+      try {
+        data = JSON.parse(xhr.responseText) as MediaApiResponse;
+      } catch {
+        // Non-JSON response
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300 && data?.success && data.url) {
+        if (!data.url.startsWith("https://")) {
+          reject(new MediaUploadError("Upload returned an invalid URL (only https:// is allowed)."));
+          return;
+        }
+        resolve({ url: data.url, key: data.key ?? "" });
+      } else {
+        const detail =
+          data?.message || data?.error || `Upload failed (HTTP ${xhr.status})`;
+        reject(new MediaUploadError(detail, xhr.status));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new MediaUploadError("Network error while uploading."));
+    };
+
+    xhr.onabort = () => {
+      reject(new DOMException("Upload aborted", "AbortError"));
+    };
+
+    if (signal) {
+      signal.addEventListener("abort", () => xhr.abort());
     }
-    throw new MediaUploadError(
-      `Network error while uploading: ${(err as Error).message}`,
-    );
-  }
 
-  let data: MediaApiResponse | null = null;
-  try {
-    data = (await response.json()) as MediaApiResponse;
-  } catch {
-    // Non-JSON body
-  }
-
-  if (!response.ok || !data?.success || !data.url) {
-    const detail =
-      data?.message || data?.error || `Upload failed (HTTP ${response.status})`;
-    throw new MediaUploadError(detail, response.status);
-  }
-
-  return { url: data.url, key: data.key ?? "" };
+    xhr.open("POST", `${MEDIA_API_URL}/${endpoint}`);
+    xhr.send(formData);
+  });
 }
 
-/** @deprecated use inferAttachmentType */
 export function inferMediaType(file: File): "image" | "video" {
   return file.type.startsWith("video/") ? "video" : "image";
 }
