@@ -1,13 +1,103 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/logo.png">
+  <img alt="Disband" src="public/logo-app.png" width="96" height="96">
+</picture>
+
 # Disband
 
-**One codebase. macOS, Windows, Linux & the Web.**
+**Your space to talk, hang out, and belong.**
 
-Disband is a cross-platform application built from a single
-[Next.js](https://nextjs.org) (App Router + TypeScript) codebase. The same UI
-runs as a hosted web app and as a native desktop binary via
-[Tauri v2](https://v2.tauri.app), with data & auth powered by
-[Supabase](https://supabase.com) and a fully themeable
-[Tailwind CSS v4](https://tailwindcss.com) design system.
+Disband is a modern, open-source communication platform for friends and communities — with text chat, voice, video, and encryption built in from the ground up. It runs natively on **macOS, Windows, and Linux**, and is also available directly in your browser.
+
+Created by **Josh Clark** · Started 2023 · Current version **0.4.4**
+
+---
+
+## Features
+
+### Servers & Channels
+Organize your communities with **servers**, **text channels**, and **voice channels**. Create custom categories, invite members via 7-character invite codes, and manage everything with role-based permissions.
+
+### Direct Messages & Group Chats
+Private 1-on-1 conversations and **group chats** with the people who matter. Share emoji reactions, GIFs, images, videos, and files. Reply to specific messages, edit your messages, and express yourself with a full emoji picker.
+
+### Voice & Video Calls
+Make **peer-to-peer voice and video calls** with WebRTC — no third-party services required. Group calls are supported too, with mute, deafen, and camera toggle controls.
+
+### End-to-End Encrypted Messaging
+Your conversations stay between you and the people you trust. Messages and media are protected so that only participants in a conversation can read them.
+
+### Cross-Platform
+One account, everywhere you are. Download the **native desktop app** for macOS (Apple Silicon & Intel), Windows, or Linux, or open Disband in any modern browser.
+
+### Rich Media Support
+Share images, videos, and **animated GIFs** via integrated GIPHY support. Drag and drop media into conversations, with previews and lightbox viewing.
+
+### Themes
+Choose from **four handcrafted themes** — Dark, Light, Midnight (AMOLED-optimized), and Sunset — that instantly restyle the entire app.
+
+### Friends & Presence
+Build your network with friend requests, see who's online (Online, Idle, Do Not Disturb, Offline), and view rich user profiles with avatars, banners, bios, and accent colors.
+
+### Security & Moderation
+MFA (TOTP + WebAuthn), Cloudflare Turnstile bot protection, VPN detection, rate limiting, server moderation tools (kick, ban, role management), and platform-level banning.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | [Next.js](https://nextjs.org) (App Router, React 19, TypeScript) |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com) with CSS variable theming |
+| Backend & Auth | [Supabase](https://supabase.com) (PostgreSQL, Realtime, Auth, Edge Functions) |
+| Desktop | [Tauri v2](https://v2.tauri.app) (Rust) — native macOS, Windows, Linux |
+| Mobile | Native SwiftUI (iOS) |
+| Voice / Video | WebRTC (peer-to-peer, mesh group calls) |
+| Media Uploads | Custom media API |
+| Push Notifications | APNs via Supabase Edge Functions |
+| Icons | [Lucide](https://lucide.dev) + custom SVGs |
+
+---
+
+## Desktop Downloads
+
+Disband publishes native installers for every platform via **GitHub Releases**:
+
+- **macOS** — Apple Silicon & Intel (DMG)
+- **Windows** — x64 (EXE/MSI)
+- **Linux** — x64 (DEB/AppImage)
+
+Check the [Releases page](https://github.com/anomalyco/disband/releases) for the latest version.
+
+---
+
+## Building from Source
+
+### Prerequisites
+- **Node.js** 18.18+ and **pnpm**
+- For desktop builds: **Rust toolchain** (`rustup`) and [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/)
+
+### Setup
+
+```bash
+pnpm install
+cp .env.example .env.local   # fill in your Supabase values
+```
+
+### Run in browser
+
+```bash
+pnpm dev          # http://localhost:3000
+pnpm build        # static export -> ./out
+```
+
+### Run as native desktop app
+
+```bash
+pnpm desktop:dev      # launches a native window connected to the dev server
+pnpm desktop:build    # produces installers in src-tauri/target/release/bundle
+```
 
 ---
 
@@ -15,126 +105,31 @@ runs as a hosted web app and as a native desktop binary via
 
 ```
 disband/
-├── src/                      # Shared web application (web + desktop)
-│   ├── app/                  # Next.js App Router (layout, dashboard page, globals.css)
-│   ├── components/
-│   │   ├── theme/            # ThemeProvider, ThemeSwitcher, ThemeToggleButton
-│   │   └── dashboard/        # Sidebar, Topbar, StatCard, MediaUploader, ActivityFeed
-│   ├── hooks/
-│   │   └── useMediaUpload.ts # React hook around the custom media API
-│   └── lib/
-│       ├── media/            # uploadMedia() — custom media API client
-│       ├── supabase/         # Browser client + DB types
-│       ├── theme/            # Theme registry
-│       └── platform.ts       # Desktop vs Web runtime detection
-│
-├── src-tauri/                # Native desktop bridge (Rust) — kept separate from web views
-│   ├── src/                  # main.rs / lib.rs (Tauri commands live here)
-│   ├── capabilities/         # Window permission grants
-│   ├── icons/                # Generated app icons (all platforms)
-│   ├── Cargo.toml
-│   └── tauri.conf.json       # Points frontendDist -> ../out, devUrl -> :3000
-│
-├── supabase/
-│   └── migrations/0001_init.sql   # profiles (+ theme) & media_posts tables w/ RLS
-│
-├── next.config.ts            # output: "export" for static, path-safe desktop builds
-└── package.json
+├── src/                      # Shared web application (runs in browser + desktop)
+│   ├── app/                  # Next.js App Router pages & API routes
+│   ├── components/           # UI components (discord, auth, marketing, modals, theme, etc.)
+│   ├── contexts/             # AppContext — app-wide state management
+│   ├── hooks/                # React hooks (WebRTC calls, media upload, typing, etc.)
+│   └── lib/                  # Utilities (Supabase, WebRTC, notifications, themes, etc.)
+├── src-tauri/                # Native desktop shell (Rust + Tauri v2)
+├── supabase/                 # Database migrations, Edge Functions, auth templates
+├── ios/                      # Native iOS SwiftUI client
+├── public/                   # Static assets (logo, favicon)
+└── scripts/                  # Build, release & automation scripts
 ```
 
-The web views in `src/` know nothing about the desktop shell, and the native
-bridge in `src-tauri/` is fully isolated. Components adapt at runtime via
-`isTauri()` in `src/lib/platform.ts` rather than through separate codepaths.
+The web UI knows nothing about the desktop shell, and the native Rust bridge is fully isolated. Components adapt at runtime by detecting whether they're running in a browser or a Tauri window.
 
 ---
 
-## Prerequisites
+## Project Links
 
-- **Node.js** 18.18+ and **pnpm**
-- For desktop builds: the **Rust toolchain** (`rustup`) and the platform
-  [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/)
-
-## Setup
-
-```bash
-pnpm install
-cp .env.example .env.local   # fill in your Supabase + (optional) media API values
-```
-
-## Run — Web
-
-```bash
-pnpm dev          # http://localhost:3000
-pnpm build        # static export -> ./out  (deploy this folder to any host)
-```
-
-Because `next.config.ts` uses `output: "export"`, `pnpm build` produces a fully
-static `out/` directory that works on any static host **and** is what the
-desktop app loads — so paths never break between targets.
-
-## Run — Desktop
-
-```bash
-pnpm desktop:dev      # launches a native window pointed at the dev server
-pnpm desktop:build    # produces installers/binaries in src-tauri/target/release/bundle
-```
-
-`tauri dev` runs `pnpm dev` and loads `http://localhost:3000`; `tauri build`
-runs `pnpm build` and packages the static `out/` directory.
+- **Web App:** [disband.chat](https://disband.chat)
+- **Source Code:** [github.com/anomalyco/disband](https://github.com/anomalyco/disband)
+- **Desktop Releases:** [github.com/anomalyco/disband/releases](https://github.com/anomalyco/disband/releases)
 
 ---
 
-## Database (Supabase)
-
-Apply the schema in `supabase/migrations/0001_init.sql`:
-
-```bash
-pnpm dlx supabase db push        # against a linked project
-# — or — paste the SQL into Supabase Dashboard > SQL Editor
-```
-
-It creates:
-
-- **`profiles`** — one row per auth user, including a `theme` preference column.
-  A trigger auto-creates a profile on sign-up. RLS lets users edit only their own.
-- **`media_posts`** — stores `asset_url` / `asset_key` returned by the custom
-  media API, linked to the owning user. RLS scopes rows to their owner.
-
----
-
-## Custom media API
-
-All image/video uploads bypass Supabase Storage and go to a custom endpoint:
-
-- `POST https://api.wsgpolar.me/v1/images` with `FormData { file }`
-- Response: `{ "success": true, "url": "...", "key": "..." }`
-
-Use the hook anywhere in the app:
-
-```tsx
-import { useMediaUpload } from "@/hooks/useMediaUpload";
-
-const { upload, isUploading, error, result } = useMediaUpload();
-const res = await upload(file);          // handles loading + error state
-if (res) await saveToSupabase(res.url, res.key);
-```
-
-The low-level client (`src/lib/media/uploadMedia.ts`) supports cancellation via
-`AbortSignal` and throws a typed `MediaUploadError`. The dashboard's
-**Quick upload** card demonstrates the full pipeline end to end.
-
----
-
-## Theming
-
-The theme engine is pure CSS variables scoped to `[data-theme="..."]` on
-`<html>`, mapped into Tailwind tokens (`bg-background`, `text-foreground`,
-`bg-primary`, …). Switching themes updates one attribute and instantly restyles
-both the web UI and the desktop window — no flash on load (handled by an inline
-script in `app/layout.tsx`).
-
-Ships with **Light**, **Dark**, **Midnight**, and **Sunset**. Add a new theme by:
-
-1. Adding a `[data-theme="yourtheme"] { ... }` block in `src/app/globals.css`.
-2. Registering it in `src/lib/theme/themes.ts`.
-3. (Optional) Persisting the chosen id to `profiles.theme` for signed-in users.
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/anomalyco">Josh Clark</a></sub>
+</p>
