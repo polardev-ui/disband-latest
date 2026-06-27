@@ -35,6 +35,7 @@ import {
   ZoomIn,
   ZoomOut,
   ExternalLink,
+  Star,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -78,6 +79,7 @@ export const IconDownload = icon(Download);
 export const IconZoomIn = icon(ZoomIn);
 export const IconZoomOut = icon(ZoomOut);
 export const IconExternalLink = icon(ExternalLink);
+export const IconStar = icon(Star);
 
 export function IconStatus(props: IconProps & { status: "online" | "idle" | "dnd" | "offline" }) {
   const colors = {
