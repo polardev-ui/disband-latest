@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,14 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-const themeInitScript = `
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`
 (function () {
   try {
     var stored = localStorage.getItem('disband:theme');
@@ -26,15 +34,8 @@ const themeInitScript = `
     document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
   } catch (e) {}
 })();
-`;
-
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+          `}
+        </Script>
       </head>
       <body>{children}</body>
     </html>

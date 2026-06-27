@@ -14,6 +14,7 @@ import {
   IconAlert,
 } from "@/components/icons";
 import { getInviteUrl, serverInitials } from "@/lib/utils";
+import { safeImageUrl } from "@/lib/safe-url";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
 
 interface ServerSettingsModalProps {
@@ -130,7 +131,7 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
         <div className="flex items-center gap-3">
           {activeServer.icon_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={activeServer.icon_url} alt="" className="h-8 w-8 rounded-[30%] object-cover" />
+            <img src={safeImageUrl(activeServer.icon_url) ?? ""} alt="" className="h-8 w-8 rounded-[30%] object-cover" />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-[30%] bg-brand text-xs font-bold text-white">
               {serverInitials(activeServer.name)}

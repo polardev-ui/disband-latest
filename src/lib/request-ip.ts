@@ -17,6 +17,6 @@ export function getClientIp(request: Request | NextRequest): string {
 }
 
 export function hashIp(ip: string): string {
-  const salt = process.env.IP_HASH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || "disband-ip-salt";
+  const salt = process.env.IP_HASH_SALT || "disband-ip-salt";
   return createHash("sha256").update(`${salt}:${ip}`).digest("hex");
 }

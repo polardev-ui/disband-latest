@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/link-preview";
 import { IconLink } from "@/components/icons";
+import { safeImageUrl } from "@/lib/safe-url";
 
 interface LinkPreviewCardProps {
   url: string;
@@ -60,10 +61,10 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
       rel="noopener noreferrer"
       className="mt-1 block max-w-md overflow-hidden rounded-lg border border-divider bg-bg-secondary transition-colors hover:border-brand/40 hover:bg-interactive-hover/30"
     >
-      {preview.image && (
+      {safeImageUrl(preview.image) && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={preview.image}
+          src={safeImageUrl(preview.image)!}
           alt=""
           className="max-h-48 w-full object-cover"
           onLoad={onLoad}

@@ -113,6 +113,8 @@ export interface DbMessage {
 
 export interface Message extends DbMessage {
   author?: Profile;
+  /** Client-side only: tracks optimistic send state */
+  sending?: boolean;
 }
 
 export interface DbDmMessage {
@@ -133,6 +135,7 @@ export interface DbDmMessage {
 
 export interface DmMessage extends DbDmMessage {
   author?: Profile;
+  sending?: boolean;
 }
 
 export interface DbDmThread {
@@ -175,6 +178,7 @@ export interface GroupMessage {
   created_at: string;
   edited_at: string | null;
   author?: Profile;
+  sending?: boolean;
 }
 
 export interface GroupChatWithMembers extends GroupChat {
