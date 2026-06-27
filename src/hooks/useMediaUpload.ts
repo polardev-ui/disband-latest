@@ -8,7 +8,7 @@ import {
   type UploadProgress,
 } from "@/lib/media/uploadMedia";
 
-export type UploadStatus = "idle" | "uploading" | "success" | "error";
+export type UploadStatus = "queued" | "uploading" | "success" | "error";
 
 export interface UploadEntry {
   id: string;
@@ -20,18 +20,15 @@ export interface UploadEntry {
   error: string | null;
 }
 
-export interface MediaUploadPromise {
-  id: string;
-  result: Promise<MediaUploadResult | null>;
-}
-
 export interface UseMediaUploadReturn {
   entries: UploadEntry[];
   isUploading: boolean;
+  queuedCount: number;
   add: (file: File) => string;
   upload: (file: File) => Promise<MediaUploadResult | null>;
   remove: (id: string) => void;
-  clearCompleted: () => void;
+  clear: () => void;
+  uploadAll: () => Promise<Map<string, MediaUploadResult>>;
   cancelAll: () => void;
 }
 
@@ -39,10 +36,111 @@ let nextId = 0;
 
 export function useMediaUpload(): UseMediaUploadReturn {
   const [entries, setEntries] = useState<UploadEntry[]>([]);
-  const pendingRef = useRef<Map<string, boolean>>(new Map());
-  const resolversRef = useRef<Map<string, { resolve: (r: MediaUploadResult | null) => void }>>(new Map());
+  const abortsRef = useRef<Map<string, AbortController>>(new Map());
 
   const add = useCallback((file: File): string => {
+    const id = `up-${++nextId}`;
+    const localUrl = URL.createObjectURL(file);
+
+    setEntries((prev) => [
+      ...prev,
+      { id, file, localUrl, status: "queued", progress: null, result: null, error: null },
+    ]);
+
+    return id;
+  }, []);
+
+  const remove = useCallback((id: string) => {
+    setEntries((prev) => {
+      const entry = prev.find((e) => e.id === id);
+      if (entry) URL.revokeObjectURL(entry.localUrl);
+      return prev.filter((e) => e.id !== id);
+    });
+    abortsRef.current.get(id)?.abort();
+    abortsRef.current.delete(id);
+  }, []);
+
+  const clear = useCallback(() => {
+    for (const e of entries) {
+      URL.revokeObjectURL(e.localUrl);
+    }
+    for (const [id, ctrl] of abortsRef.current) {
+      ctrl.abort();
+    }
+    abortsRef.current.clear();
+    setEntries([]);
+  }, [entries]);
+
+  const uploadAll = useCallback(async (): Promise<Map<string, MediaUploadResult>> => {
+    const results = new Map<string, MediaUploadResult>();
+
+    const pending = entries.filter((e) => e.status === "queued");
+    if (pending.length === 0) return results;
+
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.status === "queued" ? { ...e, status: "uploading" as const } : e,
+      ),
+    );
+
+    const uploads = pending.map((entry) => {
+      const ctrl = new AbortController();
+      abortsRef.current.set(entry.id, ctrl);
+
+      return uploadMedia(entry.file, {
+        signal: ctrl.signal,
+        onProgress: (progress) => {
+          setEntries((prev) =>
+            prev.map((e) => (e.id === entry.id ? { ...e, progress } : e)),
+          );
+        },
+      })
+        .then((result) => {
+          abortsRef.current.delete(entry.id);
+          results.set(entry.id, result);
+          setEntries((prev) =>
+            prev.map((e) =>
+              e.id === entry.id ? { ...e, status: "success" as const, result, progress: null } : e,
+            ),
+          );
+        })
+        .catch((err) => {
+          abortsRef.current.delete(entry.id);
+          if (err instanceof DOMException && err.name === "AbortError") {
+            setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+            return;
+          }
+          const message =
+            err instanceof MediaUploadError
+              ? err.message
+              : "Unexpected error during upload.";
+          setEntries((prev) =>
+            prev.map((e) =>
+              e.id === entry.id ? { ...e, status: "error" as const, error: message, progress: null } : e,
+            ),
+          );
+        });
+    });
+
+    await Promise.allSettled(uploads);
+    return results;
+  }, [entries]);
+
+  const cancelAll = useCallback(() => {
+    for (const [id, ctrl] of abortsRef.current) {
+      ctrl.abort();
+    }
+    abortsRef.current.clear();
+    for (const e of entries) {
+      URL.revokeObjectURL(e.localUrl);
+    }
+    setEntries([]);
+  }, [entries]);
+
+  const isUploading = entries.some((e) => e.status === "uploading");
+  const queuedCount = entries.filter((e) => e.status === "queued").length;
+
+  const upload = useCallback(async (file: File): Promise<MediaUploadResult | null> => {
     const id = `up-${++nextId}`;
     const localUrl = URL.createObjectURL(file);
 
@@ -51,77 +149,44 @@ export function useMediaUpload(): UseMediaUploadReturn {
       { id, file, localUrl, status: "uploading", progress: null, result: null, error: null },
     ]);
 
-    pendingRef.current.set(id, true);
+    try {
+      const ctrl = new AbortController();
+      abortsRef.current.set(id, ctrl);
 
-    uploadMedia(file, {
-      onProgress: (progress) => {
-        setEntries((prev) =>
-          prev.map((e) => (e.id === id ? { ...e, progress } : e)),
-        );
-      },
-    })
-      .then((result) => {
-        pendingRef.current.delete(id);
-        setEntries((prev) =>
-          prev.map((e) =>
-            e.id === id ? { ...e, status: "success", result, progress: null } : e,
-          ),
-        );
-        resolversRef.current.get(id)?.resolve(result);
-        resolversRef.current.delete(id);
-      })
-      .catch((err) => {
-        pendingRef.current.delete(id);
-        if (err instanceof DOMException && err.name === "AbortError") {
-          setEntries((prev) => prev.filter((e) => e.id !== id));
-          resolversRef.current.get(id)?.resolve(null);
-          resolversRef.current.delete(id);
-          return;
-        }
-        const message =
-          err instanceof MediaUploadError
-            ? err.message
-            : "Unexpected error during upload.";
-        setEntries((prev) =>
-          prev.map((e) =>
-            e.id === id ? { ...e, status: "error", error: message, progress: null } : e,
-          ),
-        );
-        resolversRef.current.get(id)?.resolve(null);
-        resolversRef.current.delete(id);
+      const result = await uploadMedia(file, {
+        signal: ctrl.signal,
+        onProgress: (progress) => {
+          setEntries((prev) =>
+            prev.map((e) => (e.id === id ? { ...e, progress } : e)),
+          );
+        },
       });
 
-    return id;
+      abortsRef.current.delete(id);
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === id ? { ...e, status: "success", result, progress: null } : e,
+        ),
+      );
+      return result;
+    } catch (err) {
+      abortsRef.current.delete(id);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setEntries((prev) => prev.filter((e) => e.id !== id));
+        return null;
+      }
+      const message =
+        err instanceof MediaUploadError
+          ? err.message
+          : "Unexpected error during upload.";
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === id ? { ...e, status: "error", error: message, progress: null } : e,
+        ),
+      );
+      return null;
+    }
   }, []);
 
-  const upload = useCallback((file: File): Promise<MediaUploadResult | null> => {
-    return new Promise((resolve) => {
-      const id = add(file);
-      resolversRef.current.set(id, { resolve });
-    });
-  }, [add]);
-
-  const remove = useCallback((id: string) => {
-    const entry = entries.find((e) => e.id === id);
-    if (entry) URL.revokeObjectURL(entry.localUrl);
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-  }, [entries]);
-
-  const clearCompleted = useCallback(() => {
-    for (const e of entries) {
-      if (e.status !== "uploading") URL.revokeObjectURL(e.localUrl);
-    }
-    setEntries((prev) => prev.filter((e) => e.status === "uploading"));
-  }, [entries]);
-
-  const cancelAll = useCallback(() => {
-    for (const e of entries) {
-      URL.revokeObjectURL(e.localUrl);
-    }
-    setEntries([]);
-  }, [entries]);
-
-  const isUploading = entries.some((e) => e.status === "uploading");
-
-  return { entries, isUploading, add, upload, remove, clearCompleted, cancelAll };
+  return { entries, isUploading, queuedCount, add, upload, remove, clear, uploadAll, cancelAll };
 }

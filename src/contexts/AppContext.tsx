@@ -20,6 +20,7 @@ import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profi
 import { messageWordLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
+import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
@@ -2027,23 +2028,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
-    const { attachment, replyToId } = options;
+    const { attachment, replyToId, pendingFile } = options;
     const normalized = normalizeMessageContent(content);
-    if (!normalized && !attachment) return "Empty message";
+    if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageWordLimitError(normalized);
     if (wordErr) return wordErr;
 
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const optimistic: Message & { author: Profile } = {
+
+    let blobUrl: string | null = null;
+    let attUrl = attachment?.url ?? null;
+    let attType = attachment?.type ?? null;
+    let attName = attachment?.name ?? null;
+    let attSize = attachment?.size ?? null;
+    let attKey = attachment?.key ?? null;
+
+    if (pendingFile) {
+      blobUrl = URL.createObjectURL(pendingFile);
+      attUrl = blobUrl;
+      if (pendingFile.type.startsWith("video/")) attType = "video";
+      else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else attType = "file";
+      attName = pendingFile.name;
+      attSize = pendingFile.size;
+    }
+
+    const optimistic: Message & { author: Profile } & { uploadProgress?: number } = {
       id: tempId,
       channel_id: activeChannelId,
       author_id: userId,
       content: normalized,
-      attachment_url: attachment?.url ?? null,
-      attachment_type: attachment?.type ?? null,
-      attachment_key: attachment?.key ?? null,
-      attachment_name: attachment?.name ?? null,
-      attachment_size: attachment?.size ?? null,
+      attachment_url: attUrl,
+      attachment_type: attType,
+      attachment_key: attKey,
+      attachment_name: attName,
+      attachment_size: attSize,
       reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, members.map((m) => m.profile), userId),
       created_at: new Date().toISOString(),
@@ -2058,6 +2077,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
+    if (pendingFile && blobUrl) {
+      try {
+        const result = await uploadMedia(pendingFile, {
+          onProgress: (progress) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempId ? { ...m, uploadProgress: progress.percent } : m,
+              ),
+            );
+          },
+        });
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? { ...m, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              : m,
+          ),
+        );
+        attUrl = result.url;
+        attKey = result.key;
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        return "Upload failed. Try a smaller file or different format.";
+      }
+    }
+
     const mentionIds = parseMentions(normalized, members.map((m) => m.profile), userId);
     const { data, error } = await getSupabaseClient()
       .from("messages")
@@ -2065,11 +2112,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         channel_id: activeChannelId,
         author_id: userId,
         content: normalized,
-        attachment_url: attachment?.url ?? null,
-        attachment_type: attachment?.type ?? null,
-        attachment_key: attachment?.key ?? null,
-        attachment_name: attachment?.name ?? null,
-        attachment_size: attachment?.size ?? null,
+        attachment_url: attUrl,
+        attachment_type: attType,
+        attachment_key: attKey,
+        attachment_name: attName,
+        attachment_size: attSize,
         reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
@@ -2094,25 +2141,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
-    const { attachment, replyToId } = options;
+    const { attachment, replyToId, pendingFile } = options;
     const normalized = normalizeMessageContent(content);
-    if (!normalized && !attachment) return "Empty message";
+    if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageWordLimitError(normalized);
     if (wordErr) return wordErr;
 
     const thread = dmThreads.find((t) => t.id === activeDmThreadId);
     const other = thread ? [thread.friend] : [];
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const optimistic: DmMessage & { author: Profile } = {
+
+    let blobUrl: string | null = null;
+    let attUrl = attachment?.url ?? null;
+    let attType = attachment?.type ?? null;
+    let attName = attachment?.name ?? null;
+    let attSize = attachment?.size ?? null;
+    let attKey = attachment?.key ?? null;
+
+    if (pendingFile) {
+      blobUrl = URL.createObjectURL(pendingFile);
+      attUrl = blobUrl;
+      if (pendingFile.type.startsWith("video/")) attType = "video";
+      else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else attType = "file";
+      attName = pendingFile.name;
+      attSize = pendingFile.size;
+    }
+
+    const optimistic: DmMessage & { author: Profile } & { uploadProgress?: number } = {
       id: tempId,
       thread_id: activeDmThreadId,
       author_id: userId,
       content: normalized,
-      attachment_url: attachment?.url ?? null,
-      attachment_type: attachment?.type ?? null,
-      attachment_key: attachment?.key ?? null,
-      attachment_name: attachment?.name ?? null,
-      attachment_size: attachment?.size ?? null,
+      attachment_url: attUrl,
+      attachment_type: attType,
+      attachment_key: attKey,
+      attachment_name: attName,
+      attachment_size: attSize,
       reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, other, userId),
       created_at: new Date().toISOString(),
@@ -2128,6 +2193,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     bumpDmThreadActivity(activeDmThreadId, optimistic.created_at);
 
+    if (pendingFile && blobUrl) {
+      try {
+        const result = await uploadMedia(pendingFile, {
+          onProgress: (progress) => {
+            setDmMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempId ? { ...m, uploadProgress: progress.percent } : m,
+              ),
+            );
+          },
+        });
+        setDmMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? { ...m, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              : m,
+          ),
+        );
+        attUrl = result.url;
+        attKey = result.key;
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        setDmMessages((prev) => prev.filter((m) => m.id !== tempId));
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        return "Upload failed. Try a smaller file or different format.";
+      }
+    }
+
     const mentionIds = parseMentions(normalized, other, userId);
     const { data, error } = await getSupabaseClient()
       .from("dm_messages")
@@ -2135,11 +2228,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         thread_id: activeDmThreadId,
         author_id: userId,
         content: normalized,
-        attachment_url: attachment?.url ?? null,
-        attachment_type: attachment?.type ?? null,
-        attachment_key: attachment?.key ?? null,
-        attachment_name: attachment?.name ?? null,
-        attachment_size: attachment?.size ?? null,
+        attachment_url: attUrl,
+        attachment_type: attType,
+        attachment_key: attKey,
+        attachment_name: attName,
+        attachment_size: attSize,
         reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
@@ -2165,24 +2258,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
-    const { attachment, replyToId } = options;
+    const { attachment, replyToId, pendingFile } = options;
     const normalized = normalizeMessageContent(content);
-    if (!normalized && !attachment) return "Empty message";
+    if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageWordLimitError(normalized);
     if (wordErr) return wordErr;
 
     const group = groupChats.find((g) => g.id === activeGroupChatId);
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const optimistic: GroupMessage & { author: Profile } = {
+
+    let blobUrl: string | null = null;
+    let attUrl = attachment?.url ?? null;
+    let attType = attachment?.type ?? null;
+    let attName = attachment?.name ?? null;
+    let attSize = attachment?.size ?? null;
+    let attKey = attachment?.key ?? null;
+
+    if (pendingFile) {
+      blobUrl = URL.createObjectURL(pendingFile);
+      attUrl = blobUrl;
+      if (pendingFile.type.startsWith("video/")) attType = "video";
+      else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else attType = "file";
+      attName = pendingFile.name;
+      attSize = pendingFile.size;
+    }
+
+    const optimistic: GroupMessage & { author: Profile } & { uploadProgress?: number } = {
       id: tempId,
       group_id: activeGroupChatId,
       author_id: userId,
       content: normalized,
-      attachment_url: attachment?.url ?? null,
-      attachment_type: attachment?.type ?? null,
-      attachment_key: attachment?.key ?? null,
-      attachment_name: attachment?.name ?? null,
-      attachment_size: attachment?.size ?? null,
+      attachment_url: attUrl,
+      attachment_type: attType,
+      attachment_key: attKey,
+      attachment_name: attName,
+      attachment_size: attSize,
       reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, group?.members ?? [], userId),
       created_at: new Date().toISOString(),
@@ -2197,6 +2308,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
+    if (pendingFile && blobUrl) {
+      try {
+        const result = await uploadMedia(pendingFile, {
+          onProgress: (progress) => {
+            setGroupMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempId ? { ...m, uploadProgress: progress.percent } : m,
+              ),
+            );
+          },
+        });
+        setGroupMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? { ...m, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              : m,
+          ),
+        );
+        attUrl = result.url;
+        attKey = result.key;
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        setGroupMessages((prev) => prev.filter((m) => m.id !== tempId));
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        return "Upload failed. Try a smaller file or different format.";
+      }
+    }
+
     const mentionIds = parseMentions(normalized, group?.members ?? [], userId);
     const { data, error } = await getSupabaseClient()
       .from("group_messages")
@@ -2204,11 +2343,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         group_id: activeGroupChatId,
         author_id: userId,
         content: normalized,
-        attachment_url: attachment?.url ?? null,
-        attachment_type: attachment?.type ?? null,
-        attachment_key: attachment?.key ?? null,
-        attachment_name: attachment?.name ?? null,
-        attachment_size: attachment?.size ?? null,
+        attachment_url: attUrl,
+        attachment_type: attType,
+        attachment_key: attKey,
+        attachment_name: attName,
+        attachment_size: attSize,
         reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })

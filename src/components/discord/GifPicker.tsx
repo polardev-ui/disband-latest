@@ -2,12 +2,60 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { gifPreviewUrl, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
-import { IconClose } from "@/components/icons";
+import { gifPreviewUrl, gifUrl, giphyMp4Url, searchGifs, type GiphyImage } from "@/lib/giphy";
+import { IconClose, IconStar } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
+import { useGifFavorites } from "@/hooks/useGifFavorites";
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
+}
+
+function GifThumb({ gif, onSelect, isFavorite, onToggleFavorite }: {
+  gif: GiphyImage;
+  onSelect: (url: string) => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+}) {
+  const preview = gifPreviewUrl(gif);
+  const full = gifUrl(gif);
+  if (!preview || !full) return null;
+
+  const mp4 = giphyMp4Url(preview);
+  const useVideo = mp4 && safeImageUrl(mp4);
+
+  return (
+    <div className="group relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
+      <button
+        type="button"
+        onClick={() => { onSelect(full); }}
+        className="block w-full"
+        title={gif.title}
+      >
+        {useVideo ? (
+          <video
+            src={safeImageUrl(mp4) ?? ""}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="h-24 w-full object-cover"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={safeImageUrl(preview) ?? ""} alt={gif.title ?? "GIF"} className="h-24 w-full object-cover" loading="lazy" />
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+        className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/60"
+        title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+      >
+        <IconStar size={14} className={isFavorite ? "text-yellow-400" : "text-white"} />
+      </button>
+    </div>
+  );
 }
 
 export function GifPicker({ onSelect }: GifPickerProps) {
@@ -18,9 +66,11 @@ export function GifPicker({ onSelect }: GifPickerProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panelPos, setPanelPos] = useState({ left: 0, bottom: 0, width: 320 });
+  const [showFavorites, setShowFavorites] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const { favorites, isFavorite, toggleFavorite } = useGifFavorites();
 
   useEffect(() => setMounted(true), []);
 
@@ -40,8 +90,14 @@ export function GifPicker({ onSelect }: GifPickerProps) {
   const load = useCallback(async (q: string) => {
     setLoading(true);
     setError(null);
+    setShowFavorites(false);
     try {
-      setGifs(await searchGifs(q || "funny"));
+      if (!q.trim()) {
+        setShowFavorites(true);
+        setGifs([]);
+      } else {
+        setGifs(await searchGifs(q));
+      }
     } catch {
       setError("Could not load GIFs");
     } finally {
@@ -79,6 +135,11 @@ export function GifPicker({ onSelect }: GifPickerProps) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  function handleSelect(url: string) {
+    onSelect(url);
+    setOpen(false);
+  }
+
   const panel =
     open && mounted
       ? createPortal(
@@ -103,35 +164,61 @@ export function GifPicker({ onSelect }: GifPickerProps) {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-              <div className="grid grid-cols-2 gap-1">
-                {loading && <p className="col-span-2 py-4 text-center text-sm text-text-muted">Loading…</p>}
-                {error && <p className="col-span-2 py-4 text-center text-sm text-status-dnd">{error}</p>}
-                {!loading && !error && gifs.length === 0 && (
-                  <p className="col-span-2 py-4 text-center text-sm text-text-muted">No GIFs found</p>
-                )}
-                {!loading &&
-                  !error &&
-                  gifs.map((gif) => {
-                    const preview = gifPreviewUrl(gif);
-                    const full = gifUrl(gif);
-                    if (!preview || !full) return null;
-                    return (
-                      <button
-                        key={gif.id}
-                        type="button"
-                        onClick={() => {
-                          onSelect(full);
-                          setOpen(false);
-                        }}
-                        className="overflow-hidden rounded hover:ring-2 hover:ring-brand"
-                        title={gif.title}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={safeImageUrl(preview) ?? ""} alt={gif.title ?? "GIF"} className="h-24 w-full object-cover" loading="lazy" />
-                      </button>
-                    );
-                  })}
-              </div>
+              {loading && <p className="py-4 text-center text-sm text-text-muted">Loading…</p>}
+              {error && <p className="py-4 text-center text-sm text-status-dnd">{error}</p>}
+              {showFavorites && favorites.length === 0 && !loading && (
+                <p className="py-4 text-center text-sm text-text-muted">No favorites yet. Tap the star on any GIF to save it.</p>
+              )}
+              {showFavorites && favorites.length > 0 && (
+                <>
+                  <p className="mb-1 text-[11px] font-bold uppercase text-text-muted">Favorites</p>
+                  <div className="mb-3 grid grid-cols-2 gap-1">
+                    {favorites.map((fav) => (
+                      <div key={fav.id} className="group relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
+                        <button
+                          type="button"
+                          onClick={() => handleSelect(fav.url)}
+                          className="block w-full"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={safeImageUrl(fav.previewUrl) ?? ""} alt={fav.title || "Favorite GIF"} className="h-24 w-full object-cover" loading="lazy" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite({ id: fav.id, title: fav.title, url: fav.url, previewUrl: fav.previewUrl });
+                          }}
+                          className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/60"
+                          title="Remove from favorites"
+                        >
+                          <IconStar size={14} className="text-yellow-400" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {!loading && !error && !showFavorites && gifs.length === 0 && query.trim() && (
+                <p className="py-4 text-center text-sm text-text-muted">No GIFs found</p>
+              )}
+              {!loading && !error && !showFavorites && (
+                <div className="grid grid-cols-2 gap-1">
+                  {gifs.map((gif) => (
+                    <GifThumb
+                      key={gif.id}
+                      gif={gif}
+                      onSelect={handleSelect}
+                      isFavorite={isFavorite(gif.id)}
+                      onToggleFavorite={() => {
+                        const pUrl = gifPreviewUrl(gif);
+                        const fUrl = gifUrl(gif);
+                        toggleFavorite({ id: gif.id, title: gif.title, url: fUrl ?? undefined, previewUrl: pUrl ?? undefined });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>,
           document.body,

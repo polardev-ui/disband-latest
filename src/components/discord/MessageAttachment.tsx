@@ -7,6 +7,8 @@ import { DangerousDownloadModal } from "./DangerousDownloadModal";
 import { ImageLightbox } from "./ImageLightbox";
 import { VideoPlayer } from "./VideoPlayer";
 import { safeDownload, safeImageUrl } from "@/lib/safe-url";
+import { IconStar } from "@/components/icons";
+import { useGifFavorites } from "@/hooks/useGifFavorites";
 import type { Profile } from "@/lib/supabase/types";
 
 interface MessageAttachmentProps {
@@ -41,6 +43,9 @@ export function MessageAttachment({
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
   const lightboxSrc = type === "gif" && mp4 ? mp4 : url;
+  const { isFavorite, toggleFavorite } = useGifFavorites();
+
+  const gifId = type === "gif" ? url.split("/").pop()?.split(".")[0] || url : null;
 
   if (type === "file") {
     return (
@@ -80,17 +85,32 @@ export function MessageAttachment({
         <VideoPlayer src={safeImageUrl(url) ?? ""} onLoad={onLoad} />
       ) : type === "gif" && mp4 ? (
         <>
-          <button type="button" onClick={() => setLightbox(true)} className="block text-left">
-            <video
-              src={safeImageUrl(mp4) ?? ""}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className={`${mediaClass} cursor-zoom-in`}
-              onLoadedData={onLoad}
-            />
-          </button>
+          <div className="group relative">
+            <button type="button" onClick={() => setLightbox(true)} className="block text-left">
+              <video
+                src={safeImageUrl(mp4) ?? ""}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className={`${mediaClass} cursor-zoom-in`}
+                onLoadedData={onLoad}
+              />
+            </button>
+            {gifId && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavorite({ id: gifId, title: fileName, url, previewUrl: url });
+                }}
+                className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100"
+                title={isFavorite(gifId) ? "Remove from favorites" : "Add to favorites"}
+              >
+                <IconStar size={14} className={isFavorite(gifId) ? "text-yellow-400" : "text-white"} />
+              </button>
+            )}
+          </div>
           <ImageLightbox
             open={lightbox}
             onClose={() => setLightbox(false)}
