@@ -14,6 +14,7 @@ export interface MessageAttachmentPayload {
 export interface MessageSendOptions {
   attachment?: MessageAttachmentPayload;
   replyToId?: string | null;
+  pendingFile?: File;
 }
 
 export interface MessageReaction {
