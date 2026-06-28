@@ -112,7 +112,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
   const [showSubscription, setShowSubscription] = useState(false);
-  const { subscription, plan: subPlan, entitlements } = useSubscription(profile?.id);
+  const { subscription, plan: subPlan, entitlements, reload: reloadSubscription } = useSubscription(profile?.id);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [desktopNotifications, setDesktopNotifications] = useState(true);
   const [linkPreviews, setLinkPreviews] = useState(true);
@@ -746,6 +746,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => void reloadSubscription()}
+                    className="text-xs text-text-muted hover:text-text-normal underline underline-offset-2"
+                  >
+                    Refresh subscription
+                  </button>
                   {entitlements.historyExport && (
                     <button
                       type="button"

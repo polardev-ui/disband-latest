@@ -8,6 +8,8 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 let idCounter = 0;
 
+let redirectPolled = false;
+
 export function useSubscription(userId: string | undefined) {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +36,23 @@ export function useSubscription(userId: string | undefined) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Poll after a Stripe checkout redirect until the subscription appears
+  useEffect(() => {
+    if (!userId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("redirect_status") !== "succeeded") return;
+    if (redirectPolled) return;
+    redirectPolled = true;
+
+    const tryLoad = async (attempts = 0) => {
+      await load();
+      if (attempts < 15) {
+        setTimeout(() => void tryLoad(attempts + 1), 1500 * (attempts + 1));
+      }
+    };
+    void tryLoad();
+  }, [userId, load]);
 
   useEffect(() => {
     if (!userId) return;
