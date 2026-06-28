@@ -20,8 +20,10 @@ interface ChatInputProps {
   editingMessageId?: string | null;
   editingContent?: string;
   onCancelEdit?: () => void;
-  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" }; replyToId?: string | null; pendingFile?: File }) => Promise<string | null>;
+  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" }; replyToId?: string | null; pendingFile?: File; maxUploadBytes?: number }) => Promise<string | null>;
   onTypingActivity?: () => void;
+  maxUploadBytes?: number;
+  serverId?: string | null;
 }
 
 interface MentionItem {
@@ -73,6 +75,8 @@ export function ChatInput({
   onCancelEdit,
   onSend,
   onTypingActivity,
+  maxUploadBytes = 50 * 1024 * 1024,
+  serverId,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -199,6 +203,7 @@ export function ChatInput({
       const entry = pendingEntries[i];
       const err = await onSend(i === 0 ? content : "", {
         pendingFile: entry.file,
+        maxUploadBytes,
         replyToId: i === 0 ? replyToId : undefined,
       });
       if (err) {
@@ -399,7 +404,7 @@ export function ChatInput({
             rows={1}
             className="max-h-40 min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
           />
-          <EmojiPicker onSelect={insertEmoji} />
+          <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
             onSelect={(url) => {
               void onSend("", { attachment: { url, type: "gif" }, replyToId: replyTo?.id });

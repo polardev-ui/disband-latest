@@ -2028,7 +2028,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
-    const { attachment, replyToId, pendingFile } = options;
+    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageWordLimitError(normalized);
@@ -2080,6 +2080,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (pendingFile && blobUrl) {
       try {
         const result = await uploadMedia(pendingFile, {
+          maxUploadBytes,
           onProgress: (progress) => {
             setMessages((prev) =>
               prev.map((m) =>
@@ -2141,7 +2142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
-    const { attachment, replyToId, pendingFile } = options;
+    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageWordLimitError(normalized);
@@ -2196,6 +2197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (pendingFile && blobUrl) {
       try {
         const result = await uploadMedia(pendingFile, {
+          maxUploadBytes,
           onProgress: (progress) => {
             setDmMessages((prev) =>
               prev.map((m) =>
@@ -2258,7 +2260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
-    const { attachment, replyToId, pendingFile } = options;
+    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageWordLimitError(normalized);
@@ -2311,6 +2313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (pendingFile && blobUrl) {
       try {
         const result = await uploadMedia(pendingFile, {
+          maxUploadBytes,
           onProgress: (progress) => {
             setGroupMessages((prev) =>
               prev.map((m) =>

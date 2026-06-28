@@ -2,7 +2,7 @@
  * Theme registry for Disband.
  * Each entry maps to a `[data-theme="id"]` block in globals.css.
  */
-export type ThemeId = "light" | "dark" | "midnight" | "sunset";
+export type ThemeId = "light" | "dark" | "midnight" | "sunset" | "ocean" | "rose-gold" | "plasma" | "nord";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -10,6 +10,8 @@ export interface ThemeDefinition {
   description: string;
   /** Preview swatches: [tertiary, secondary, primary canvas, brand]. */
   swatch: [string, string, string, string];
+  /** Minimum plan required to use this theme (undefined = free). */
+  plan?: "basic" | "super";
 }
 
 export const THEMES: ThemeDefinition[] = [
@@ -36,6 +38,34 @@ export const THEMES: ThemeDefinition[] = [
     label: "Sunset",
     description: "Warm tones, pink accent",
     swatch: ["#181214", "#231c1e", "#2a2224", "#eb459e"],
+  },
+  {
+    id: "ocean",
+    label: "Ocean",
+    description: "Cool blues, teal accent (Basic)",
+    swatch: ["#0d1b2a", "#1b2838", "#1b2a3a", "#2dd4bf"],
+    plan: "basic",
+  },
+  {
+    id: "rose-gold",
+    label: "Rose Gold",
+    description: "Elegant rose tones, gold accent (Super)",
+    swatch: ["#1c1415", "#2c1d1f", "#332224", "#f5a0b8"],
+    plan: "super",
+  },
+  {
+    id: "plasma",
+    label: "Plasma",
+    description: "Deep purple with vibrant magenta (Super)",
+    swatch: ["#0e0a16", "#1a0f2e", "#1f1137", "#c77dff"],
+    plan: "super",
+  },
+  {
+    id: "nord",
+    label: "Nord",
+    description: "Arctic blues, frost accent (Super)",
+    swatch: ["#2e3440", "#3b4252", "#434c5e", "#88c0d0"],
+    plan: "super",
   },
 ];
 

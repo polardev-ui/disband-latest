@@ -1,33 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import {
-  IconClose,
-  IconCopy,
-  IconTrash,
-  IconSettings,
-  IconLink,
-  IconShield,
-  IconPalette,
-  IconAlert,
-} from "@/components/icons";
+import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji } from "@/components/icons";
 import { getInviteUrl, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface ServerSettingsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-type Section = "overview" | "invite" | "roles" | "appearance" | "danger";
+type Section = "overview" | "invite" | "roles" | "emoji" | "appearance" | "danger";
 
 const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean }[] = [
   { id: "overview", label: "Overview", icon: IconSettings },
   { id: "invite", label: "Invites", icon: IconLink },
   { id: "roles", label: "Roles", icon: IconShield, ownerOnly: true },
+  { id: "emoji", label: "Emoji", icon: IconEmoji, ownerOnly: true },
   { id: "appearance", label: "Appearance", icon: IconPalette, ownerOnly: true },
   { id: "danger", label: "Danger Zone", icon: IconAlert, ownerOnly: true },
 ];
@@ -44,12 +37,31 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [customEmoji, setCustomEmoji] = useState<
+    { id: number; name: string; url: string; uploader_id: string | null }[]
+  >([]);
+  const [emojiName, setEmojiName] = useState("");
+  const [emojiFile, setEmojiFile] = useState<File | null>(null);
+  const [emojiUploading, setEmojiUploading] = useState(false);
+  const { plan, entitlements } = useSubscription(user?.id);
 
   useEffect(() => {
     if (!activeServer) return;
     setName(activeServer.name);
     setDescription(activeServer.description ?? "");
     setSection("overview");
+  }, [activeServer, open]);
+
+  useEffect(() => {
+    if (!open || !activeServer) return;
+    import("@/lib/supabase/client").then((mod) => {
+      mod.getSupabaseClient()
+        .from("custom_emoji")
+        .select("id, name, url, uploader_id")
+        .eq("server_id", activeServer.id)
+        .order("name")
+        .then(({ data }) => setCustomEmoji(data ?? []));
+    });
   }, [activeServer, open]);
 
   useEffect(() => {
@@ -93,6 +105,40 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
   async function handleBanner(file: File) {
     const res = await upload(file);
     if (res) await updateServer(activeServer!.id, { banner_url: res.url });
+  }
+
+  async function handleEmojiUpload() {
+    if (!emojiFile || !emojiName.trim() || !activeServer) return;
+    const slotLimit = entitlements.customEmojiSlots;
+    if (typeof slotLimit === "number" && customEmoji.length >= slotLimit) {
+      setError(`Your plan allows up to ${slotLimit} custom emoji. Delete one first or upgrade.`);
+      return;
+    }
+    setEmojiUploading(true);
+    setError(null);
+    try {
+      const res = await upload(emojiFile);
+      if (!res) { setError("Upload failed"); return; }
+      const supabase = (await import("@/lib/supabase/client")).getSupabaseClient();
+      const { error: dbErr } = await supabase.from("custom_emoji").insert({
+        server_id: activeServer.id,
+        name: emojiName.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+        url: res.url,
+        uploader_id: user?.id ?? null,
+      });
+      if (dbErr) { setError(dbErr.message); return; }
+      setCustomEmoji((prev) => [...prev, { id: Date.now(), name: emojiName.trim(), url: res.url, uploader_id: user?.id ?? null }]);
+      setEmojiName("");
+      setEmojiFile(null);
+    } finally {
+      setEmojiUploading(false);
+    }
+  }
+
+  async function handleDeleteEmoji(id: number) {
+    const supabase = (await import("@/lib/supabase/client")).getSupabaseClient();
+    await supabase.from("custom_emoji").delete().eq("id", id);
+    setCustomEmoji((prev) => prev.filter((e) => e.id !== id));
   }
 
   async function handleCreateRole() {
@@ -304,6 +350,66 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                     Create Role
                   </button>
                 </div>
+              </div>
+            )}
+
+            {section === "emoji" && isOwner && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Custom Emoji</h2>
+                <p className="text-sm text-text-muted">
+                  Add custom emoji for members to use in chat.
+                  {typeof entitlements.customEmojiSlots === "number"
+                    ? ` Your plan: ${customEmoji.length}/${entitlements.customEmojiSlots} slots used.`
+                    : " Your plan: unlimited slots."}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {customEmoji.map((e) => (
+                    <div key={e.id} className="group relative flex items-center gap-2 rounded-lg border border-divider bg-bg-secondary px-3 py-2 text-sm">
+                      <img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-6 w-6 object-contain" />
+                      <span>:{e.name}:</span>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteEmoji(e.id)}
+                        className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-status-dnd text-white text-xs group-hover:flex"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {(typeof entitlements.customEmojiSlots !== "number" || customEmoji.length < entitlements.customEmojiSlots) && (
+                  <div className="flex flex-wrap items-end gap-3 rounded-lg border border-divider bg-bg-secondary p-4">
+                    <label className="flex-1">
+                      <span className="text-xs font-bold uppercase text-text-muted">Name</span>
+                      <input
+                        value={emojiName}
+                        onChange={(e) => setEmojiName(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 32))}
+                        placeholder="my_emoji"
+                        className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                      />
+                    </label>
+                    <label className="max-w-40">
+                      <span className="text-xs font-bold uppercase text-text-muted">Image</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/gif,image/webp,image/jpeg"
+                        onChange={(e) => setEmojiFile(e.target.files?.[0] ?? null)}
+                        className="mt-1 block w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-brand file:px-2 file:py-1 file:text-xs file:text-white"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void handleEmojiUpload()}
+                      disabled={emojiUploading || !emojiName.trim() || !emojiFile}
+                      className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                    >
+                      {emojiUploading ? "Uploading..." : "Upload"}
+                    </button>
+                  </div>
+                )}
+                {plan === "free" && (
+                  <p className="text-sm text-text-muted">Upgrade to a paid plan to add custom emoji.</p>
+                )}
               </div>
             )}
 

@@ -12,6 +12,7 @@ import { ServerInviteCard } from "./ServerInviteCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageAttachment } from "./MessageAttachment";
 import { MessageReactions } from "./MessageReactions";
+import { Twemoji } from "@/components/ui/Twemoji";
 import type { Profile } from "@/lib/supabase/types";
 import type { MessageReaction } from "@/lib/messages";
 
@@ -115,7 +116,11 @@ function MessageBody({
                 : "text-[15px] leading-[1.375rem]"
           }`}
         >
-          {emojiOnly ? textOnly : renderContent(textOnly, members)}
+          {emojiOnly ? (
+            <Twemoji>{textOnly}</Twemoji>
+          ) : (
+            <Twemoji>{renderContent(textOnly, members)}</Twemoji>
+          )}
         </span>
       )}
       {codes.map((code) => (
