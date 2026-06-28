@@ -1,6 +1,8 @@
 "use client";
 
 import { useApp } from "@/contexts/AppContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { Tooltip } from "./Tooltip";
 import {
   IconHeadphones,
@@ -28,6 +30,7 @@ interface UserPanelProps {
 /** Discord-style pinned user bar at the bottom of the channel/friends sidebar. */
 export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
   const { profile, user, micMuted, deafened, setMicMuted, setDeafened } = useApp();
+  const { plan } = useSubscription(profile?.id);
 
   const name = profile
     ? displayName(profile)
@@ -53,7 +56,10 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-tight text-text-normal">{name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-semibold leading-tight text-text-normal">{name}</p>
+            <SubscriptionBadge plan={plan} tooltip />
+          </div>
           <p className="truncate text-xs leading-tight text-text-muted">{statusLabel}</p>
         </div>
       </button>
