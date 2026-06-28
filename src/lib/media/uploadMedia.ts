@@ -38,6 +38,7 @@ export interface UploadMediaOptions {
   signal?: AbortSignal;
   endpoint?: "images" | "files";
   onProgress?: (progress: UploadProgress) => void;
+  maxUploadBytes?: number;
 }
 
 export function inferAttachmentType(file: File): AttachmentType {
@@ -55,13 +56,13 @@ export async function uploadMedia(
   file: File,
   options: UploadMediaOptions = {},
 ): Promise<MediaUploadResult> {
-  const { signal, endpoint: endpointOverride, onProgress } = options;
+  const { signal, endpoint: endpointOverride, onProgress, maxUploadBytes = 50 * 1024 * 1024 } = options;
 
   if (!file) {
     throw new MediaUploadError("No file provided to uploadMedia().");
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    throw new MediaUploadError(`File is too large (max ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB).`);
+  if (file.size > maxUploadBytes) {
+    throw new MediaUploadError(`File is too large (max ${maxUploadBytes / (1024 * 1024)} MB).`);
   }
 
   const endpoint = endpointForFile(file, endpointOverride);

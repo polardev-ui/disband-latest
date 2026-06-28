@@ -109,6 +109,86 @@
   --divider: #3f3538;
 }
 
+/* ---- Ocean (Basic) ---- */
+[data-theme="ocean"] {
+  --bg-primary: #1b2a3a;
+  --bg-secondary: #1b2838;
+  --bg-tertiary: #0d1b2a;
+  --bg-accent: #0d1b2a;
+  --interactive-hover: #1f3042;
+  --interactive-selected: #24364a;
+  --brand: #2dd4bf;
+  --brand-hover: #14b8a6;
+  --text-normal: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-link: #22d3ee;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #334155;
+}
+
+/* ---- Rose Gold (Super) ---- */
+[data-theme="rose-gold"] {
+  --bg-primary: #332224;
+  --bg-secondary: #2c1d1f;
+  --bg-tertiary: #1c1415;
+  --bg-accent: #1c1415;
+  --interactive-hover: #3d282b;
+  --interactive-selected: #462f32;
+  --brand: #f5a0b8;
+  --brand-hover: #e8849f;
+  --text-normal: #fce7f0;
+  --text-muted: #c9a0b0;
+  --text-link: #fcd34d;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #4a3035;
+}
+
+/* ---- Plasma (Super) ---- */
+[data-theme="plasma"] {
+  --bg-primary: #1f1137;
+  --bg-secondary: #1a0f2e;
+  --bg-tertiary: #0e0a16;
+  --bg-accent: #0e0a16;
+  --interactive-hover: #281a40;
+  --interactive-selected: #30224a;
+  --brand: #c77dff;
+  --brand-hover: #b25fff;
+  --text-normal: #eadaff;
+  --text-muted: #9d7cbf;
+  --text-link: #80e9ff;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #2d1b45;
+}
+
+/* ---- Nord (Super) ---- */
+[data-theme="nord"] {
+  --bg-primary: #434c5e;
+  --bg-secondary: #3b4252;
+  --bg-tertiary: #2e3440;
+  --bg-accent: #2e3440;
+  --interactive-hover: #4c566a;
+  --interactive-selected: #566177;
+  --brand: #88c0d0;
+  --brand-hover: #6ba7bb;
+  --text-normal: #eceff4;
+  --text-muted: #a5abb6;
+  --text-link: #8fbcbb;
+  --status-online: #23a559;
+  --status-idle: #f0b232;
+  --status-dnd: #f23f43;
+  --status-offline: #80848e;
+  --divider: #4c566a;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -218,4 +298,12 @@ body {
 
 .marketing-glow {
   animation: marketing-float 8s ease-in-out infinite;
+}
+
+img.twemoji {
+  height: 1.2em;
+  width: 1.2em;
+  margin: 0 0.05em 0 0.1em;
+  vertical-align: -0.2em;
+  display: inline-block;
 }

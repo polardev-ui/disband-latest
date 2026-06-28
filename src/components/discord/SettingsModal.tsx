@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell } from "@/components/icons";
+import { IconClose, IconBell, IconDownload } from "@/components/icons";
 import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
@@ -34,6 +34,11 @@ import {
 } from "@/lib/profileColor";
 import type { AvatarCrop } from "@/lib/utils";
 import type { UserStatus, Profile } from "@/lib/supabase/types";
+import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
+import { SubscriptionModal } from "@/components/subscription/SubscriptionModal";
+import { PLANS } from "@/lib/subscription";
+import { useSubscription } from "@/hooks/useSubscription";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface SettingsModalProps {
   open: boolean;
@@ -43,6 +48,7 @@ interface SettingsModalProps {
 const TABS = [
   { id: "profile" as const, label: "Profile" },
   { id: "account" as const, label: "Account" },
+  { id: "subscriptions" as const, label: "Subscriptions" },
   { id: "appearance" as const, label: "Appearance" },
   { id: "notifications" as const, label: "Notifications" },
   { id: "voice" as const, label: "Voice & Video" },
@@ -105,6 +111,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
+  const [showSubscription, setShowSubscription] = useState(false);
+  const { plan: subPlan, entitlements } = useSubscription(profile?.id);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [desktopNotifications, setDesktopNotifications] = useState(true);
   const [linkPreviews, setLinkPreviews] = useState(true);
@@ -115,6 +123,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
   useEffect(() => {
@@ -154,6 +163,37 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  const exportHistory = useCallback(async () => {
+    if (!profile?.id) return;
+    setExporting(true);
+    try {
+      const supabase = getSupabaseClient();
+      const [messages, dmMessages, groupMessages] = await Promise.all([
+        supabase.from("messages").select("*, author:profiles(*)").eq("author_id", profile.id).order("created_at"),
+        supabase.from("dm_messages").select("*, author:profiles(*)").eq("author_id", profile.id).order("created_at"),
+        supabase.from("group_messages").select("*, author:profiles(*)").eq("author_id", profile.id).order("created_at"),
+      ]);
+      const data = {
+        exported_at: new Date().toISOString(),
+        user_id: profile.id,
+        channel_messages: messages.data ?? [],
+        dm_messages: dmMessages.data ?? [],
+        group_messages: groupMessages.data ?? [],
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `disband-history-${profile.username ?? profile.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }, [profile]);
 
   if (!open) return null;
 
@@ -296,11 +336,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         {isUploading ? "Uploading..." : "Change avatar"}
                         <input
                           type="file"
-                          accept="image/*"
+                          accept={subPlan !== "free" ? "image/*,.gif" : "image/*"}
                           className="hidden"
                           onChange={(e) => e.target.files?.[0] && pickAvatar(e.target.files[0])}
                         />
                       </label>
+                      {subPlan !== "free" && (
+                        <p className="mt-0.5 text-xs text-text-muted">GIF supported for animated avatar</p>
+                      )}
                     </div>
                   </div>
 
@@ -514,29 +557,40 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <div>
                   <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {themes.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => {
-                          setTheme(t.id);
-                          void savePreference({ theme: t.id });
-                        }}
-                        className={`overflow-hidden rounded-lg border-2 text-left transition-all duration-150 ${
-                          theme === t.id ? "border-brand" : "border-transparent hover:border-interactive-hover"
-                        }`}
-                      >
-                        <div className="flex h-16">
-                          {t.swatch.map((c, i) => (
-                            <div key={i} className="flex-1" style={{ backgroundColor: c }} />
-                          ))}
-                        </div>
-                        <div className="bg-bg-secondary px-3 py-2">
-                          <p className="text-sm font-semibold">{t.label}</p>
-                          <p className="text-xs text-text-muted">{t.description}</p>
-                        </div>
-                      </button>
-                    ))}
+                    {themes.map((t) => {
+                      const isLocked = t.plan && t.plan !== subPlan && subPlan !== "super";
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          disabled={isLocked}
+                          onClick={() => {
+                            if (isLocked) return;
+                            setTheme(t.id);
+                            void savePreference({ theme: t.id });
+                          }}
+                          className={`overflow-hidden rounded-lg border-2 text-left transition-all duration-150 ${
+                            theme === t.id ? "border-brand" : "border-transparent hover:border-interactive-hover"
+                          } ${isLocked ? "cursor-not-allowed opacity-50" : ""}`}
+                        >
+                          <div className="flex h-16">
+                            {t.swatch.map((c, i) => (
+                              <div key={i} className="flex-1" style={{ backgroundColor: c }} />
+                            ))}
+                          </div>
+                          <div className="bg-bg-secondary px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold">{t.label}</p>
+                              {t.plan && <SubscriptionBadge plan={t.plan} />}
+                              {isLocked && (
+                                <span className="ml-auto text-xs text-text-muted">Locked</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-text-muted">{t.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -649,6 +703,40 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 </div>
               )}
 
+              {tab === "subscriptions" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-muted">
+                    Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
+                  </p>
+                  <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-text-muted">Current Plan</p>
+                        <SubscriptionBadge plan={subPlan as "basic" | "super" | "free"} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSubscription(true)}
+                        className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover"
+                      >
+                        {subPlan === "free" ? "Upgrade" : "Manage"}
+                      </button>
+                    </div>
+                  </div>
+                  {entitlements.historyExport && (
+                    <button
+                      type="button"
+                      onClick={exportHistory}
+                      disabled={exporting}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-divider bg-bg-secondary p-4 text-sm text-text-muted hover:bg-bg-accent disabled:opacity-50"
+                    >
+                      <IconDownload size={16} />
+                      {exporting ? "Exporting..." : "Export Message History (JSON)"}
+                    </button>
+                  )}
+                </div>
+              )}
+
               {tab === "textMedia" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">Choose how links and media appear in chat.</p>
@@ -681,6 +769,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           onSave={(crop) => void saveAvatarCrop(crop)}
         />
       )}
+
+      <SubscriptionModal
+        open={showSubscription}
+        onClose={() => setShowSubscription(false)}
+        userId={profile?.id}
+      />
     </>
   );
 }

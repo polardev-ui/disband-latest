@@ -28,7 +28,7 @@ export default function RootLayout({
 (function () {
   try {
     var stored = localStorage.getItem('disband:theme');
-    var valid = ['light','dark','midnight','sunset'];
+    var valid = ['light','dark','midnight','sunset','ocean','rose-gold','plasma','nord'];
     var theme = valid.indexOf(stored) !== -1 ? stored : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';

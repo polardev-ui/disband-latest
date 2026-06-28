@@ -68,6 +68,7 @@ interface ChatCanvasProps {
   onAuthorClick?: (profile: Profile) => void;
   onLoadMore?: () => void | Promise<void>;
   hasMore?: boolean;
+  maxUploadBytes?: number;
 }
 
 export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function ChatCanvas(
@@ -94,6 +95,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     onAuthorClick,
     onLoadMore,
     hasMore,
+    maxUploadBytes,
   },
   ref,
 ) {
@@ -350,6 +352,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           onCancelEdit={() => setEditing(null)}
           onSend={handleSend}
           onTypingActivity={notifyTyping}
+          maxUploadBytes={maxUploadBytes}
+          serverId={typingScope?.serverId}
         />
       </div>
     </main>

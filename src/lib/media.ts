@@ -37,6 +37,7 @@ export async function warmUpMediaDevices(): Promise<void> {
 
 export async function getDisbandUserMedia(
   constraints: MediaStreamConstraints,
+  plan?: string,
 ): Promise<MediaStream> {
   if (typeof navigator === "undefined") {
     throw new Error("Media devices are not available.");
@@ -47,7 +48,7 @@ export async function getDisbandUserMedia(
   const merged: MediaStreamConstraints = {
     ...constraints,
     audio: constraints.audio === true ? buildAudioConstraints() : constraints.audio ?? buildAudioConstraints(),
-    video: constraints.video === true ? buildVideoConstraints() : constraints.video,
+    video: constraints.video === true ? buildVideoConstraints(plan) : constraints.video,
   };
 
   await requestNativeMediaPermissions({

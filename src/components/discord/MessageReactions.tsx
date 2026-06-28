@@ -1,11 +1,24 @@
 "use client";
 
 import { QUICK_REACTIONS, type ReactionSummary } from "@/lib/messages";
+import { twemojiUrl } from "@/components/ui/Twemoji";
 
 interface MessageReactionsProps {
   reactions: ReactionSummary[];
   onToggle: (emoji: string) => void;
   onOpenPicker?: () => void;
+}
+
+function EmojiImg({ emoji, size = "1.1em" }: { emoji: string; size?: string }) {
+  return (
+    <img
+      src={twemojiUrl(emoji)}
+      alt={emoji}
+      className="twemoji"
+      draggable={false}
+      style={{ height: size, width: size }}
+    />
+  );
 }
 
 export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageReactionsProps) {
@@ -25,7 +38,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
           }`}
           title={r.count === 1 ? "1 reaction" : `${r.count} reactions`}
         >
-          <span>{r.emoji}</span>
+          <EmojiImg emoji={r.emoji} />
           <span className="font-semibold tabular-nums">{r.count}</span>
         </button>
       ))}
@@ -70,9 +83,9 @@ export function ReactionPicker({
             key={emoji}
             type="button"
             onClick={() => { onSelect(emoji); onClose(); }}
-            className="flex h-8 w-8 items-center justify-center rounded text-lg hover:bg-interactive-hover"
+            className="flex h-8 w-8 items-center justify-center rounded hover:bg-interactive-hover"
           >
-            {emoji}
+            <EmojiImg emoji={emoji} />
           </button>
         ))}
       </div>

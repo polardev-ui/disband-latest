@@ -6,6 +6,7 @@ import { useApp } from "@/contexts/AppContext";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useCallManager } from "@/hooks/useCallManager";
 import { useGroupCallManager } from "@/hooks/useGroupCallManager";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
@@ -34,6 +35,7 @@ import {
   IconFriends,
   IconGroup,
   IconPhone,
+  IconStar,
 } from "@/components/icons";
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import type { Channel, Profile, Server } from "@/lib/supabase/types";
@@ -49,6 +51,7 @@ export function DiscordApp() {
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
+  const { plan: subPlan } = useSubscription(app.user?.id);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const channelChatRef = useRef<ChatCanvasHandle>(null);
   const dmChatRef = useRef<ChatCanvasHandle>(null);
@@ -169,7 +172,7 @@ export function DiscordApp() {
   const handleServerContext = useCallback(
     (server: Server, x: number, y: number) => {
       const isOwner = server.owner_id === app.user?.id;
-      openMenu(x, y, [
+      const items: ContextMenuItem[] = [
         {
           id: "settings",
           label: "Server Settings",
@@ -184,6 +187,16 @@ export function DiscordApp() {
                 icon: <IconCopy size={16} />,
                 onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.invite_code!)),
               },
+            ]
+          : []),
+        ...(subPlan === "super" && app.user?.id
+          ? [
+              {
+                id: "boost",
+                label: "Boost Server",
+                icon: <IconStar size={16} />,
+                onClick: () => void boostServer(server.id),
+              } as ContextMenuItem,
             ]
           : []),
         {
@@ -205,9 +218,30 @@ export function DiscordApp() {
               },
             ]
           : []),
-      ]);
+      ];
+      openMenu(x, y, items);
     },
-    [app, openMenu],
+    [app, openMenu, subPlan],
+  );
+
+  const boostServer = useCallback(
+    async (serverId: string) => {
+      if (!app.user?.id) return;
+      const supabase = (await import("@/lib/supabase/client")).getSupabaseClient();
+      // Check if already boosted
+      const { data: existing } = await supabase
+        .from("server_boosts")
+        .select("id")
+        .eq("server_id", serverId)
+        .eq("user_id", app.user.id)
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("server_boosts").delete().eq("id", existing.id);
+      } else {
+        await supabase.from("server_boosts").insert({ server_id: serverId, user_id: app.user.id });
+      }
+    },
+    [app],
   );
 
   const handleChannelContext = useCallback(
@@ -517,9 +551,11 @@ export function DiscordApp() {
           micMuted={app.micMuted}
           deafened={app.deafened}
           cameraEnabled={call.cameraEnabled}
+          screenShareEnabled={call.screenShareEnabled}
           onToggleMic={toggleMic}
           onToggleDeafen={toggleDeafen}
           onToggleCamera={() => void call.toggleCamera()}
+          onToggleScreenShare={subPlan === "super" ? () => void call.toggleScreenShare() : undefined}
           onEnd={() => void call.endCall()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -537,9 +573,11 @@ export function DiscordApp() {
           micMuted={app.micMuted}
           deafened={app.deafened}
           cameraEnabled={groupCall.cameraEnabled}
+          screenShareEnabled={groupCall.screenShareEnabled}
           onToggleMic={toggleMic}
           onToggleDeafen={toggleDeafen}
           onToggleCamera={() => void groupCall.toggleCamera()}
+          onToggleScreenShare={subPlan === "super" ? () => void groupCall.toggleScreenShare() : undefined}
           onEnd={() => void groupCall.endGroupCall()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
