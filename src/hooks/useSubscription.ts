@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { getStripe } from "@/lib/stripe-client";
 import { ENTITLEMENTS, type SubscriptionPlan, type Subscription } from "@/lib/subscription";
-import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 export function useSubscription(userId: string | undefined) {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -30,33 +30,50 @@ export function useSubscription(userId: string | undefined) {
     void load();
   }, [load]);
 
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
   useEffect(() => {
     if (!userId) return;
+
+    const supabase = getSupabaseClient();
+    const channelName = `subscription-changes:${userId}`;
+
+    // Clean up any existing channel before creating a new one
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     let cancelled = false;
-    const channelName = `subscription-changes:${userId}:${Date.now()}`;
-    const channel = getSupabaseClient()
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "subscriptions",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<Subscription>) => {
-          if (cancelled) return;
-          if (payload.eventType === "DELETE") {
-            setSubscription(null);
-          } else {
-            setSubscription(payload.new as Subscription);
-          }
-        },
-      )
-      .subscribe();
+    const channel = supabase.channel(channelName);
+
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "subscriptions",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload: RealtimePostgresChangesPayload<Subscription>) => {
+        if (cancelled) return;
+        if (payload.eventType === "DELETE") {
+          setSubscription(null);
+        } else {
+          setSubscription(payload.new as Subscription);
+        }
+      },
+    );
+
+    channel.subscribe();
+    channelRef.current = channel;
+
     return () => {
       cancelled = true;
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
+      if (channelRef.current === channel) {
+        channelRef.current = null;
+      }
     };
   }, [userId]);
 
