@@ -32,8 +32,10 @@ export function useSubscription(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
+    const channelName = `subscription-changes:${userId}:${Date.now()}`;
     const channel = getSupabaseClient()
-      .channel("subscription-changes")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -43,6 +45,7 @@ export function useSubscription(userId: string | undefined) {
           filter: `user_id=eq.${userId}`,
         },
         (payload: RealtimePostgresChangesPayload<Subscription>) => {
+          if (cancelled) return;
           if (payload.eventType === "DELETE") {
             setSubscription(null);
           } else {
@@ -51,7 +54,10 @@ export function useSubscription(userId: string | undefined) {
         },
       )
       .subscribe();
-    return () => { void getSupabaseClient().removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      channel.unsubscribe();
+    };
   }, [userId]);
 
   const plan: SubscriptionPlan = subscription?.status === "active" ? (subscription.plan as SubscriptionPlan) : "free";
