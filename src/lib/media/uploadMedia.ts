@@ -17,7 +17,6 @@ export interface UploadProgress {
 }
 
 interface MediaApiResponse {
-  success: boolean;
   url?: string;
   key?: string;
   message?: string;
@@ -36,7 +35,6 @@ export class MediaUploadError extends Error {
 
 export interface UploadMediaOptions {
   signal?: AbortSignal;
-  endpoint?: "images" | "files";
   onProgress?: (progress: UploadProgress) => void;
   maxUploadBytes?: number;
 }
@@ -47,16 +45,11 @@ export function inferAttachmentType(file: File): AttachmentType {
   return "file";
 }
 
-function endpointForFile(file: File, override?: "images" | "files"): "images" | "files" {
-  if (override) return override;
-  return inferAttachmentType(file) === "file" ? "files" : "images";
-}
-
 export async function uploadMedia(
   file: File,
   options: UploadMediaOptions = {},
 ): Promise<MediaUploadResult> {
-  const { signal, endpoint: endpointOverride, onProgress, maxUploadBytes = 50 * 1024 * 1024 } = options;
+  const { signal, onProgress, maxUploadBytes = 50 * 1024 * 1024 } = options;
 
   if (!file) {
     throw new MediaUploadError("No file provided to uploadMedia().");
@@ -64,8 +57,6 @@ export async function uploadMedia(
   if (file.size > maxUploadBytes) {
     throw new MediaUploadError(`File is too large (max ${maxUploadBytes / (1024 * 1024)} MB).`);
   }
-
-  const endpoint = endpointForFile(file, endpointOverride);
 
   return new Promise<MediaUploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -90,7 +81,7 @@ export async function uploadMedia(
         // Non-JSON response
       }
 
-      if (xhr.status >= 200 && xhr.status < 300 && data?.success && data.url) {
+      if (xhr.status >= 200 && xhr.status < 300 && data?.url) {
         if (!data.url.startsWith("https://")) {
           reject(new MediaUploadError("Upload returned an invalid URL (only https:// is allowed)."));
           return;
@@ -115,7 +106,7 @@ export async function uploadMedia(
       signal.addEventListener("abort", () => xhr.abort());
     }
 
-    xhr.open("POST", `${MEDIA_API_URL}/${endpoint}`);
+    xhr.open("POST", `${MEDIA_API_URL}/images`);
     xhr.send(formData);
   });
 }
