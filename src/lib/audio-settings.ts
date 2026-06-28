@@ -58,13 +58,13 @@ export function buildAudioConstraints(): boolean | MediaTrackConstraints {
   return { deviceId: { ideal: deviceId } };
 }
 
-export function buildVideoConstraints(): boolean | MediaTrackConstraints {
+export function buildVideoConstraints(plan?: string): boolean | MediaTrackConstraints {
   const deviceId = getPreferredVideoInputId();
-  const base: MediaTrackConstraints = {
-    facingMode: "user",
-    width: { ideal: 640 },
-    height: { ideal: 480 },
-  };
-  if (!deviceId) return base;
-  return { ...base, deviceId: { ideal: deviceId } };
+  const resolution = plan === "super"
+    ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
+    : plan === "basic"
+      ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+      : { width: { ideal: 640 }, height: { ideal: 480 } };
+  if (!deviceId) return resolution;
+  return { ...resolution, deviceId: { ideal: deviceId } };
 }

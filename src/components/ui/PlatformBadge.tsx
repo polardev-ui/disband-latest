@@ -1,7 +1,8 @@
 import type { Profile } from "@/lib/supabase/types";
+import { SubscriptionBadge } from "./SubscriptionBadge";
 
 interface PlatformBadgeProps {
-  profile: Pick<Profile, "show_owner_badge" | "show_staff_badge">;
+  profile: Pick<Profile, "show_owner_badge" | "show_staff_badge"> & { subscription_plan?: string };
   className?: string;
 }
 
@@ -23,6 +24,9 @@ export function PlatformBadge({ profile, className = "" }: PlatformBadgeProps) {
         Staff
       </span>
     );
+  }
+  if (profile.subscription_plan && profile.subscription_plan !== "free") {
+    return <SubscriptionBadge plan={profile.subscription_plan as "basic" | "super"} className={className} />;
   }
   return null;
 }

@@ -12,6 +12,8 @@ import {
   IconSettings,
   IconVideo,
   IconVideoOff,
+  IconScreenShare,
+  IconScreenShareOff,
 } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
 import { useEffect, useRef } from "react";
@@ -21,9 +23,11 @@ interface CallControlsProps {
   micMuted: boolean;
   deafened: boolean;
   cameraEnabled?: boolean;
+  screenShareEnabled?: boolean;
   onToggleMic: () => void;
   onToggleDeafen: () => void;
   onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
   onEnd: () => void;
   onOpenSettings?: () => void;
   size?: "compact" | "prominent";
@@ -33,9 +37,11 @@ export function CallControls({
   micMuted,
   deafened,
   cameraEnabled,
+  screenShareEnabled,
   onToggleMic,
   onToggleDeafen,
   onToggleCamera,
+  onToggleScreenShare,
   onEnd,
   onOpenSettings,
   size = "compact",
@@ -48,6 +54,7 @@ export function CallControls({
     { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff, label: micMuted ? "Unmute" : "Mute" },
     { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff, label: deafened ? "Undeafen" : "Deafen" },
     ...(onToggleCamera ? [{ onClick: onToggleCamera, title: cameraEnabled ? "Stop video" : "Start video", active: !!cameraEnabled, on: IconVideo, off: IconVideoOff, label: cameraEnabled ? "Video off" : "Video" }] : []),
+    ...(onToggleScreenShare ? [{ onClick: onToggleScreenShare, title: screenShareEnabled ? "Stop sharing" : "Share screen", active: !!screenShareEnabled, on: IconScreenShare, off: IconScreenShareOff, label: screenShareEnabled ? "Stop share" : "Share" }] : []),
     { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, label: "End", danger: true },
     ...(onOpenSettings ? [{ onClick: onOpenSettings, title: "Settings", active: false, on: IconSettings, off: IconSettings, label: "Settings" }] : []),
   ];
@@ -198,9 +205,11 @@ interface CallPanelProps {
   micMuted: boolean;
   deafened: boolean;
   cameraEnabled?: boolean;
+  screenShareEnabled?: boolean;
   onToggleMic: () => void;
   onToggleDeafen: () => void;
   onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
   onEnd: () => void;
   onOpenSettings?: () => void;
 }
@@ -217,9 +226,11 @@ export function CallPanel({
   micMuted,
   deafened,
   cameraEnabled,
+  screenShareEnabled,
   onToggleMic,
   onToggleDeafen,
   onToggleCamera,
+  onToggleScreenShare,
   onEnd,
   onOpenSettings,
 }: CallPanelProps) {
@@ -276,9 +287,11 @@ export function CallPanel({
               micMuted={micMuted}
               deafened={deafened}
               cameraEnabled={cameraEnabled}
+              screenShareEnabled={screenShareEnabled}
               onToggleMic={onToggleMic}
               onToggleDeafen={onToggleDeafen}
               onToggleCamera={onToggleCamera}
+              onToggleScreenShare={onToggleScreenShare}
               onEnd={onEnd}
               onOpenSettings={onOpenSettings}
             />

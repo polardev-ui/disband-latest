@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "1.0.3",
+  "version": "0.4.4",
   "author": "Josh Clark <joshclark@wsgpolar.me>",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
@@ -24,14 +24,18 @@
     "git:fix-main-ref": "node scripts/fix-main-ref-conflict.mjs --delete-tag"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.6.0",
+    "@stripe/stripe-js": "^9.8.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-notification": "^2.3.3",
+    "@twemoji/api": "^17.0.3",
     "lucide-react": "^1.21.0",
     "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "stripe": "^22.3.0",
     "tauri-plugin-macos-permissions-api": "2.3.0"
   },
   "devDependencies": {

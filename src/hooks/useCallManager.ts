@@ -49,6 +49,7 @@ export function useCallManager(
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [callNotice, setCallNotice] = useState<string | null>(null);
 
@@ -61,9 +62,11 @@ export function useCallManager(
   const activePeerIdRef = useRef<string | null>(null);
   const phaseRef = useRef<CallPhase>("idle");
   const cameraRef = useRef(false);
+  const screenShareRef = useRef(false);
   const trackCleanupsRef = useRef<Array<() => void>>([]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { cameraRef.current = cameraEnabled; }, [cameraEnabled]);
+  useEffect(() => { screenShareRef.current = screenShareEnabled; }, [screenShareEnabled]);
 
   const applyMic = useCallback((muted: boolean) => {
     localRef.current?.getAudioTracks().forEach((t) => { t.enabled = !muted; });
@@ -239,6 +242,43 @@ export function useCallManager(
     setLocalStream(new MediaStream(stream.getTracks()));
   }, [userId]);
 
+  const toggleScreenShare = useCallback(async () => {
+    const next = !screenShareRef.current;
+    setScreenShareEnabled(next);
+    screenShareRef.current = next;
+    const pc = pcRef.current;
+    const stream = localRef.current;
+    if (!pc || !stream || phaseRef.current !== "active") return;
+
+    const peerId = activePeerIdRef.current;
+    const existing = stream.getVideoTracks()[0];
+    const screenTrack = stream.getVideoTracks().find((t) => t.label?.includes("screen") || t.label?.includes("Screen"));
+
+    if (next) {
+      if (existing) { existing.stop(); stream.removeTrack(existing); }
+      try {
+        const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const track = display.getVideoTracks()[0];
+        track.addEventListener("ended", () => { void toggleScreenShare(); });
+        stream.addTrack(track);
+        await setPeerVideoTrack(pc, stream, track);
+      } catch { setScreenShareEnabled(false); screenShareRef.current = false; return; }
+    } else if (screenTrack) {
+      screenTrack.stop();
+      stream.removeTrack(screenTrack);
+      await setPeerVideoTrack(pc, stream, null);
+    }
+    const offer = await createOfferForPeer(pc);
+    if (peerId && signalRef.current) {
+      void signalRef.current.send({
+        type: "broadcast",
+        event: "call",
+        payload: { type: "offer", from: userId!, to: peerId, sdp: offer },
+      });
+    }
+    setLocalStream(new MediaStream(stream.getTracks()));
+  }, [userId]);
+
   const startCall = useCallback(async (peer: Profile) => {
     if (!userId || !profile) return;
     setError(null);
@@ -399,6 +439,7 @@ export function useCallManager(
     localStream,
     remoteStream,
     cameraEnabled,
+    screenShareEnabled,
     remoteAudioRef,
     error,
     callNotice,
@@ -407,5 +448,6 @@ export function useCallManager(
     rejectCall,
     endCall,
     toggleCamera,
+    toggleScreenShare,
   };
 }

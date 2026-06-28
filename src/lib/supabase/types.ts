@@ -19,6 +19,7 @@ export interface Profile {
   avatar_crop: { zoom: number; x: number; y: number } | null;
   show_owner_badge: boolean;
   show_staff_badge: boolean;
+  subscription_plan?: string;
   sound_enabled?: boolean;
   desktop_notifications_enabled?: boolean;
   link_previews_enabled?: boolean;
@@ -76,6 +77,13 @@ export interface DbServerMember {
 
 export interface ServerMember extends DbServerMember {
   profile?: Profile;
+}
+
+export interface DbServerBoost {
+  id: number;
+  server_id: string;
+  user_id: string;
+  created_at: string;
 }
 
 export interface ChannelCategory {
@@ -206,6 +214,15 @@ export interface AppNotification {
   created_at: string;
 }
 
+export interface CustomEmoji {
+  id: number;
+  server_id: string;
+  name: string;
+  url: string;
+  uploader_id: string | null;
+  created_at: string;
+}
+
 export type ViewMode = "home" | "server" | "dm" | "group";
 
 export interface Database {
@@ -271,6 +288,12 @@ export interface Database {
           banner_url?: string | null;
           description?: string | null;
         };
+        Relationships: [];
+      };
+      server_boosts: {
+        Row: DbServerBoost;
+        Insert: { server_id: string; user_id: string };
+        Update: Record<string, never>;
         Relationships: [];
       };
       server_members: {
@@ -380,6 +403,12 @@ export interface Database {
           asset_key?: string | null;
           title?: string | null;
         };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      custom_emoji: {
+        Row: CustomEmoji;
+        Insert: { server_id: string; name: string; url: string; uploader_id: string | null };
         Update: Record<string, never>;
         Relationships: [];
       };

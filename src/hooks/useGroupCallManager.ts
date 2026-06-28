@@ -47,6 +47,7 @@ export function useGroupCallManager(
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,12 +59,14 @@ export function useGroupCallManager(
   const phaseRef = useRef<GroupCallPhase>("idle");
   const joinedRef = useRef(false);
   const cameraRef = useRef(false);
+  const screenShareRef = useRef(false);
   const iceQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
   useEffect(() => { groupIdRef.current = groupId; }, [groupId]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { joinedRef.current = joined; }, [joined]);
   useEffect(() => { cameraRef.current = cameraEnabled; }, [cameraEnabled]);
+  useEffect(() => { screenShareRef.current = screenShareEnabled; }, [screenShareEnabled]);
 
   useEffect(() => {
     localRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
@@ -399,6 +402,39 @@ export function useGroupCallManager(
     setLocalStream(new MediaStream(stream.getTracks()));
   }, [renegotiatePeer]);
 
+  const toggleScreenShare = useCallback(async () => {
+    const next = !screenShareRef.current;
+    setScreenShareEnabled(next);
+    screenShareRef.current = next;
+    const stream = localRef.current;
+    if (!stream || !joinedRef.current) return;
+
+    const screenTrack = stream.getVideoTracks().find((t) => t.label?.includes("screen") || t.label?.includes("Screen"));
+
+    if (next) {
+      const existing = stream.getVideoTracks()[0];
+      if (existing) { existing.stop(); stream.removeTrack(existing); }
+      try {
+        const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const track = display.getVideoTracks()[0];
+        track.addEventListener("ended", () => { void toggleScreenShare(); });
+        stream.addTrack(track);
+        for (const [remoteId, pc] of peersRef.current) {
+          await setPeerVideoTrack(pc, stream, track);
+          await renegotiatePeer(remoteId, pc);
+        }
+      } catch { setScreenShareEnabled(false); screenShareRef.current = false; return; }
+    } else if (screenTrack) {
+      screenTrack.stop();
+      stream.removeTrack(screenTrack);
+      for (const [remoteId, pc] of peersRef.current) {
+        await setPeerVideoTrack(pc, stream, null);
+        await renegotiatePeer(remoteId, pc);
+      }
+    }
+    setLocalStream(new MediaStream(stream.getTracks()));
+  }, [renegotiatePeer]);
+
   const dismissRing = useCallback(() => {
     stopRingtone();
     setIncomingRing(null);
@@ -482,6 +518,7 @@ export function useGroupCallManager(
     localStream,
     remoteStreams,
     cameraEnabled,
+    screenShareEnabled,
     incomingRing,
     error,
     loadPresence,
@@ -490,6 +527,7 @@ export function useGroupCallManager(
     joinGroupCall,
     endGroupCall,
     toggleCamera,
+    toggleScreenShare,
     dismissRing,
   };
 };
