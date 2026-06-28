@@ -3,6 +3,7 @@
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { getProfilePanelMutedColor, getProfilePanelStyle } from "@/lib/profileColor";
 import { displayName } from "@/lib/utils";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
@@ -27,6 +28,7 @@ interface UserProfileModalProps {
   pendingIncoming?: boolean;
   pendingOutgoing?: boolean;
   isSelf?: boolean;
+  plan?: "free" | "basic" | "super";
 }
 
 export function UserProfileModal({
@@ -47,6 +49,7 @@ export function UserProfileModal({
   pendingIncoming,
   pendingOutgoing,
   isSelf,
+  plan,
 }: UserProfileModalProps) {
   const { friends } = useApp();
   if (!open || !profile) return null;
@@ -84,6 +87,7 @@ export function UserProfileModal({
               </p>
             )}
             <PlatformBadge profile={profile} />
+            {plan && <SubscriptionBadge plan={plan} />}
           </div>
           {profile.bio && (
             <p className="mt-2 text-sm leading-snug opacity-90">{profile.bio}</p>

@@ -52,15 +52,24 @@ export function DiscordApp() {
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
-  const { plan: subPlan } = useSubscription(app.user?.id);
+  const { plan: subPlan, reload: reloadSubscription } = useSubscription(app.user?.id);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("redirect_status") === "succeeded") {
       setCheckoutSuccess(true);
       window.history.replaceState({}, "", window.location.pathname);
+      // Reload subscription data — the webhook may not have processed yet
+      const tryLoad = async (attempts = 0) => {
+        await reloadSubscription();
+        // Check if subscription was found; if not, retry a few times
+        if (attempts < 5) {
+          setTimeout(() => void tryLoad(attempts + 1), 1000 * (attempts + 1));
+        }
+      };
+      void tryLoad();
     }
-  }, []);
+  }, [reloadSubscription]);
 
   useEffect(() => {
     if (!checkoutSuccess) return;
@@ -861,6 +870,7 @@ export function DiscordApp() {
         open={!!profileTarget}
         onClose={() => setProfileTarget(null)}
         isSelf={profileTarget?.id === app.user?.id}
+        plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
         isFriend={profileFriend}
         isBlocked={profileTarget ? app.isBlocked(profileTarget.id) : false}
         pendingIncoming={profilePendingIncoming}

@@ -1,6 +1,7 @@
 interface SubscriptionBadgeProps {
   plan: "free" | "basic" | "super";
   className?: string;
+  tooltip?: boolean;
 }
 
 const STYLES: Record<string, { label: string; className: string }> = {
@@ -14,12 +15,13 @@ const STYLES: Record<string, { label: string; className: string }> = {
   },
 };
 
-export function SubscriptionBadge({ plan, className = "" }: SubscriptionBadgeProps) {
+export function SubscriptionBadge({ plan, className = "", tooltip }: SubscriptionBadgeProps) {
   if (plan === "free") return null;
 
   const style = STYLES[plan];
   return (
     <span
+      title={tooltip ? `${style.label} subscriber` : undefined}
       className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style.className} ${className}`}
     >
       {style.label}
