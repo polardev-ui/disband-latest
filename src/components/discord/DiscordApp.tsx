@@ -51,7 +51,22 @@ export function DiscordApp() {
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const { plan: subPlan } = useSubscription(app.user?.id);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("redirect_status") === "succeeded") {
+      setCheckoutSuccess(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!checkoutSuccess) return;
+    const timer = setTimeout(() => setCheckoutSuccess(false), 6000);
+    return () => clearTimeout(timer);
+  }, [checkoutSuccess]);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const channelChatRef = useRef<ChatCanvasHandle>(null);
   const dmChatRef = useRef<ChatCanvasHandle>(null);
@@ -591,6 +606,11 @@ export function DiscordApp() {
       {!online && (
         <div className="fixed left-0 right-0 top-0 z-[100] bg-status-dnd px-4 py-2 text-center text-sm font-medium text-white">
           You are offline. Messages will send when your connection returns.
+        </div>
+      )}
+      {checkoutSuccess && (
+        <div className="fixed left-0 right-0 top-0 z-[100] bg-[#57f287] px-4 py-2 text-center text-sm font-medium text-black">
+          Subscription activated successfully!
         </div>
       )}
 

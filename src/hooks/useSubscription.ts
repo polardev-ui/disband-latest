@@ -19,11 +19,14 @@ export function useSubscription(userId: string | undefined) {
       return;
     }
     setLoading(true);
-    const { data } = await getSupabaseClient()
+    const { data, error } = await getSupabaseClient()
       .from("subscriptions")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
+    if (error && error.code !== "PGRST116") {
+      console.error("Failed to load subscription:", error);
+    }
     setSubscription(data as Subscription | null);
     setLoading(false);
   }, [userId]);
