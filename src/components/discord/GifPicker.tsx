@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { gifPreviewUrl, gifUrl, giphyMp4Url, proxyGiphyUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
-import { safeImageUrl } from "@/lib/safe-url";
 import { useGifFavorites } from "@/hooks/useGifFavorites";
 
 interface GifPickerProps {
@@ -21,8 +20,7 @@ function GifThumb({ gif, onSelect, isFavorite, onToggleFavorite }: {
   const full = gifUrl(gif);
   if (!preview || !full) return null;
 
-  const displaySrc = proxyGiphyUrl(giphyMp4Url(preview) ?? preview);
-  const useVideo = displaySrc && safeImageUrl(displaySrc);
+  const src = proxyGiphyUrl(giphyMp4Url(preview) ?? preview);
 
   return (
     <div className="group relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
@@ -32,19 +30,14 @@ function GifThumb({ gif, onSelect, isFavorite, onToggleFavorite }: {
         className="block w-full"
         title={gif.title}
       >
-        {useVideo ? (
-          <video
-            src={displaySrc ?? ""}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-24 w-full object-cover"
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={safeImageUrl(preview) ?? ""} alt={gif.title ?? "GIF"} className="h-24 w-full object-cover" loading="lazy" />
-        )}
+        <video
+          src={src ?? ""}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="h-24 w-full object-cover"
+        />
       </button>
       <button
         type="button"
@@ -180,8 +173,14 @@ export function GifPicker({ onSelect }: GifPickerProps) {
                           onClick={() => handleSelect(fav.url)}
                           className="block w-full"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={safeImageUrl(fav.previewUrl) ?? ""} alt={fav.title || "Favorite GIF"} className="h-24 w-full object-cover" loading="lazy" />
+                          <video
+                            src={proxyGiphyUrl(giphyMp4Url(fav.previewUrl) ?? fav.previewUrl)}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="h-24 w-full object-cover"
+                          />
                         </button>
                         <button
                           type="button"
