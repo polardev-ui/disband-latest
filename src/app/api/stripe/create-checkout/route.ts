@@ -1,11 +1,26 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { getStripe, getPriceId } from "@/lib/stripe";
-import { getSupabaseClient } from "@/lib/supabase/client";
+import { PUBLIC_ENV } from "@/lib/public-env";
 
 export async function POST(req: Request) {
   try {
-    const { data: { session: s } } = await getSupabaseClient().auth.getSession();
-    if (!s?.user) {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      PUBLIC_ENV.supabaseUrl,
+      PUBLIC_ENV.supabaseAnonKey,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          },
+        },
+      },
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
@@ -19,14 +34,14 @@ export async function POST(req: Request) {
 
     const session = await getStripe().checkout.sessions.create({
       ui_mode: "elements",
-      customer_email: s.user.email,
+      customer_email: user.email,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
       return_url: `${origin}/app`,
-      metadata: { user_id: s.user.id, plan },
-      client_reference_id: s.user.id,
+      metadata: { user_id: user.id, plan },
+      client_reference_id: user.id,
       subscription_data: {
-        metadata: { user_id: s.user.id, plan },
+        metadata: { user_id: user.id, plan },
       },
     });
 

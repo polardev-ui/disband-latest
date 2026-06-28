@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { getSupabaseClient } from "@/lib/supabase/client";
+import { getServiceSupabase } from "@/lib/supabase/server";
 import type Stripe from "stripe";
 
 interface SubscriptionFields {
@@ -19,7 +19,8 @@ async function upsertSubscription(
   periodEnd: number,
   canceledAt: number | null,
 ) {
-  const supabase = getSupabaseClient();
+  const supabase = getServiceSupabase();
+  if (!supabase) return;
   await supabase.from("subscriptions").upsert(
     {
       user_id: userId,
@@ -37,7 +38,8 @@ async function upsertSubscription(
 }
 
 async function cancelSubscription(subscriptionId: string) {
-  const supabase = getSupabaseClient();
+  const supabase = getServiceSupabase();
+  if (!supabase) return;
   await supabase
     .from("subscriptions")
     .update({ plan: "free", status: "canceled", updated_at: new Date().toISOString() })
