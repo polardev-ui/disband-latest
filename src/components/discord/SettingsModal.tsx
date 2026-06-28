@@ -112,7 +112,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
   const [showSubscription, setShowSubscription] = useState(false);
-  const { plan: subPlan, entitlements } = useSubscription(profile?.id);
+  const { subscription, plan: subPlan, entitlements } = useSubscription(profile?.id);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [desktopNotifications, setDesktopNotifications] = useState(true);
   const [linkPreviews, setLinkPreviews] = useState(true);
@@ -710,17 +710,40 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </p>
                   <div className="rounded-lg border border-divider bg-bg-secondary p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-text-muted">Current Plan</p>
-                        <SubscriptionBadge plan={subPlan as "basic" | "super" | "free"} />
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold uppercase text-text-muted">Current Plan</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-bold capitalize">{subPlan}</span>
+                          <SubscriptionBadge plan={subPlan as "basic" | "super" | "free"} />
+                        </div>
+                        {subscription?.status === "active" && (
+                          <div className="space-y-0.5 pt-1">
+                            {subscription.current_period_end && (
+                              <p className="text-xs text-text-muted">
+                                Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", {
+                                  year: "numeric", month: "long", day: "numeric",
+                                })}
+                              </p>
+                            )}
+                            <p className="text-xs text-[#57f287]">Active</p>
+                          </div>
+                        )}
+                        {subscription?.status === "past_due" && (
+                          <p className="text-xs text-status-dnd">Payment failed</p>
+                        )}
+                        {subscription?.status === "canceled" && (
+                          <p className="text-xs text-text-muted">Canceled</p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowSubscription(true)}
-                        className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover"
-                      >
-                        {subPlan === "free" ? "Upgrade" : "Manage"}
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowSubscription(true)}
+                          className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover"
+                        >
+                          {subPlan === "free" ? "Upgrade" : "Manage"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {entitlements.historyExport && (
