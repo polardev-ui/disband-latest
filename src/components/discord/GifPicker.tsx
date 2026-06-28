@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { gifPreviewUrl, gifUrl, giphyMp4Url, searchGifs, type GiphyImage } from "@/lib/giphy";
+import { gifPreviewUrl, gifUrl, giphyMp4Url, proxyGiphyUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
 import { useGifFavorites } from "@/hooks/useGifFavorites";
@@ -21,8 +21,8 @@ function GifThumb({ gif, onSelect, isFavorite, onToggleFavorite }: {
   const full = gifUrl(gif);
   if (!preview || !full) return null;
 
-  const mp4 = giphyMp4Url(preview);
-  const useVideo = mp4 && safeImageUrl(mp4);
+  const displaySrc = proxyGiphyUrl(giphyMp4Url(preview) ?? preview);
+  const useVideo = displaySrc && safeImageUrl(displaySrc);
 
   return (
     <div className="group relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
@@ -34,7 +34,7 @@ function GifThumb({ gif, onSelect, isFavorite, onToggleFavorite }: {
       >
         {useVideo ? (
           <video
-            src={safeImageUrl(mp4) ?? ""}
+            src={displaySrc ?? ""}
             autoPlay
             loop
             muted

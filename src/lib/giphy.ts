@@ -45,6 +45,12 @@ function isSafeGifUrl(url: string): boolean {
   }
 }
 
+/** Proxy a Giphy CDN URL through our server to bypass hotlink protection. */
+export function proxyGiphyUrl(url: string): string {
+  if (!isSafeGifUrl(url)) return url;
+  return `/api/giphy/media?url=${encodeURIComponent(url)}`;
+}
+
 /** Giphy CDN GIF URL → MP4 for reliable autoplay in chat */
 export function giphyMp4Url(gifUrl: string): string | null {
   if (!isSafeGifUrl(gifUrl)) return null;
