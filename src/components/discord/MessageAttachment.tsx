@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { giphyMp4Url, proxyGiphyUrl } from "@/lib/giphy";
+import { giphyDisplayUrl, giphyMp4Url } from "@/lib/giphy";
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
 import { DangerousDownloadModal } from "./DangerousDownloadModal";
 import { ImageLightbox } from "./ImageLightbox";
@@ -40,10 +40,10 @@ export function MessageAttachment({
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const mp4 = type === "gif" ? giphyMp4Url(url) : null;
-  const displaySrc = mp4 ? proxyGiphyUrl(mp4) : null;
+  const displaySrc = mp4 ? giphyDisplayUrl(mp4) : null;
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
-  const lightboxSrc = type === "gif" && mp4 ? proxyGiphyUrl(mp4) : url;
+  const lightboxSrc = type === "gif" && mp4 ? giphyDisplayUrl(mp4) : url;
   const { isFavorite, toggleFavorite } = useGifFavorites();
 
   const gifId = type === "gif" ? url.split("/").pop()?.split(".")[0] || url : null;
