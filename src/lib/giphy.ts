@@ -45,11 +45,19 @@ function isSafeGifUrl(url: string): boolean {
   }
 }
 
-/** Proxy a Giphy CDN URL through our server to bypass hotlink protection. */
-export function proxyGiphyUrl(url: string): string {
+const GIPHY_MEDIA_RE = /\/media\/(?:v1\.[^/]+\/)?([^/]+)\/([^/]+)$/;
+
+/** Strip the signed v1.* prefix from a Giphy CDN URL, returning a classic-format URL. */
+export function giphyMediaUrl(url: string): string {
   if (!isSafeGifUrl(url)) return url;
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/api/giphy/media?url=${encodeURIComponent(url)}`;
+  try {
+    const match = url.match(GIPHY_MEDIA_RE);
+    if (match) {
+      const [, id, rendition] = match;
+      return `https://media.giphy.com/media/${id}/${rendition}`;
+    }
+  } catch {}
+  return url;
 }
 
 /** Giphy CDN GIF URL → MP4 for reliable autoplay in chat */
@@ -67,11 +75,17 @@ export function gifUrl(gif: GiphyImage): string | null {
     ?? gif.images?.fixed_width?.url
     ?? gif.preview
     ?? null;
-  return url && HTTPS_RE.test(url) ? url : null;
+  return url && HTTPS_RE.test(url) ? giphyMediaUrl(url) : null;
 }
 
 /** Smaller URL for the picker thumbnail grid */
 export function gifPreviewUrl(gif: GiphyImage): string | null {
-  const url = gif.preview ?? gif.images?.fixed_width?.url ?? gifUrl(gif);
-  return url && HTTPS_RE.test(url) ? url : null;
+  const url = gif.preview ?? gif.images?.fixed_width?.url ?? gif.url ?? null;
+  return url && HTTPS_RE.test(url) ? giphyMediaUrl(url) : null;
+}
+
+/** MP4 display URL for a Giphy CDN URL (strips signed prefix, converts to MP4). */
+export function giphyDisplayUrl(url: string): string {
+  const mp4 = giphyMp4Url(url);
+  return giphyMediaUrl(mp4 ?? url);
 }

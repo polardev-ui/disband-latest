@@ -104,9 +104,10 @@ function isMobileBrowser(): boolean {
 }
 
 export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalProps) {
-  const { plan, loading, startCheckout, subscription, openPortal } = useSubscription(userId);
+  const { plan, loading, startCheckout, subscription, openPortal, reload } = useSubscription(userId);
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const mobile = isMobileBrowser();
 
   const handleSubscribe = useCallback(async (planId: "basic" | "super") => {
@@ -121,8 +122,16 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
 
   const handleCheckoutSuccess = useCallback(() => {
     setCheckoutClientSecret(null);
-    onClose();
-  }, [onClose]);
+    setSuccessMsg("Loading subscription…");
+    // Reload immediately and retry a few times for webhook delay
+    const poll = async (attempts = 0) => {
+      await reload();
+      if (attempts < 8) {
+        setTimeout(() => void poll(attempts + 1), 1500 * (attempts + 1));
+      }
+    };
+    void poll();
+  }, [reload]);
 
   const handleCheckoutCancel = useCallback(() => {
     setCheckoutClientSecret(null);
@@ -155,6 +164,38 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
 
         {mobile ? (
           <MobileNotice />
+        ) : successMsg ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+            <div className="h-12 w-12 rounded-full bg-[#57f287]/20 flex items-center justify-center">
+              <svg className="h-6 w-6 text-[#57f287]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p className="text-base font-semibold">Payment successful!</p>
+            {subscription?.status === "active" ? (
+              <div className="space-y-0.5">
+                <p className="text-sm text-text-muted">
+                  You&apos;re now on the <span className="font-semibold text-text-normal capitalize">{plan}</span> plan.
+                </p>
+                {subscription.current_period_end && (
+                  <p className="text-sm text-text-muted">
+                    Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", {
+                      year: "numeric", month: "long", day: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted">{successMsg}</p>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            >
+              Done
+            </button>
+          </div>
         ) : checkoutClientSecret ? (
           <StripeEmbeddedCheckout
             clientSecret={checkoutClientSecret}
