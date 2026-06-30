@@ -11,7 +11,6 @@ import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
-import { MAX_BIO_LENGTH } from "@/lib/word-limit";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { getDisbandUserMedia } from "@/lib/media";
@@ -363,13 +362,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <span className="text-xs font-bold uppercase text-text-muted">Bio</span>
                     <textarea
                       value={bio}
-                      onChange={(e) => setBio(e.target.value.slice(0, MAX_BIO_LENGTH))}
+                      onChange={(e) => setBio(e.target.value.slice(0, entitlements.maxBioLength))}
                       rows={3}
-                      maxLength={MAX_BIO_LENGTH}
+                      maxLength={entitlements.maxBioLength}
                       placeholder="Tell people about yourself. Line breaks are allowed."
                       className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
                     />
-                    <p className="mt-1 text-right text-xs text-text-muted">{bio.length}/{MAX_BIO_LENGTH}</p>
+                    <p className="mt-1 text-right text-xs text-text-muted">{bio.length}/{entitlements.maxBioLength}</p>
                   </label>
                   <div className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Profile color</span>

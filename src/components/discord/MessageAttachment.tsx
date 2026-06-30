@@ -115,7 +115,6 @@ export function MessageAttachment({
               src={safeImageUrl(url) ?? ""}
               alt={type === "gif" ? "GIF" : "Attachment"}
               className={`${mediaClass} cursor-zoom-in ${imgError ? "hidden" : ""}`}
-              crossOrigin="anonymous"
               loading="eager"
               onLoad={onLoad}
               onError={() => setImgError(true)}
