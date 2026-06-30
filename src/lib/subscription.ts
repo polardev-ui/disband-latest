@@ -32,6 +32,8 @@ const BASE_RATE = { burst: 7, minute: 40 };
 
 export const ENTITLEMENTS: Record<SubscriptionPlan, {
   maxUploadBytes: number;
+  maxMessageChars: number;
+  maxBioLength: number;
   videoQuality: "480p" | "720p" | "1080p";
   animatedAvatar: boolean;
   animatedBanner: boolean;
@@ -49,6 +51,8 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
 }> = {
   free: {
     maxUploadBytes: 50 * 1024 * 1024,
+    maxMessageChars: 2000,
+    maxBioLength: 190,
     videoQuality: "480p",
     animatedAvatar: false,
     animatedBanner: false,
@@ -66,6 +70,8 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
   },
   basic: {
     maxUploadBytes: 150 * 1024 * 1024,
+    maxMessageChars: 4000,
+    maxBioLength: 230,
     videoQuality: "720p",
     animatedAvatar: true,
     animatedBanner: false,
@@ -83,6 +89,8 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
   },
   super: {
     maxUploadBytes: 500 * 1024 * 1024,
+    maxMessageChars: 4000,
+    maxBioLength: 230,
     videoQuality: "1080p",
     animatedAvatar: true,
     animatedBanner: true,
