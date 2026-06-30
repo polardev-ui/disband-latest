@@ -52,7 +52,7 @@ export function DiscordApp() {
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
-  const { plan: subPlan } = useSubscription(app.user?.id);
+  const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -67,6 +67,14 @@ export function DiscordApp() {
     const timer = setTimeout(() => setCheckoutSuccess(false), 6000);
     return () => clearTimeout(timer);
   }, [checkoutSuccess]);
+
+  useEffect(() => {
+    if (entitlements) {
+      app.setMaxMessageChars(entitlements.maxMessageChars);
+      app.setMaxBioLength(entitlements.maxBioLength);
+    }
+  }, [entitlements, app.setMaxMessageChars, app.setMaxBioLength]);
+
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const channelChatRef = useRef<ChatCanvasHandle>(null);
   const dmChatRef = useRef<ChatCanvasHandle>(null);

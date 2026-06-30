@@ -17,7 +17,7 @@ import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, p
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profileErrors";
-import { messageWordLimitError, bioLengthError } from "@/lib/word-limit";
+import { messageCharLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { uploadMedia } from "@/lib/media/uploadMedia";
@@ -144,6 +144,8 @@ interface AppContextValue {
   loadVoicePresence: (channelId: string) => Promise<void>;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
   setCallPhase: (phase: "idle" | "outgoing" | "incoming" | "active") => void;
+  setMaxMessageChars: (n: number) => void;
+  setMaxBioLength: (n: number) => void;
   dmUnreads: { threadId: string; friend: Profile; count: number }[];
   dmListEntries: {
     key: string;
@@ -230,6 +232,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const viewModeRef = useRef<ViewMode>("home");
   const profileRef = useRef<Profile | null>(null);
   const preferredStatusRef = useRef<UserStatus>("online");
+  const maxMessageCharsRef = useRef(2000);
+  const maxBioLengthRef = useRef(190);
   profileRef.current = profile;
   syncUserSettings(profile);
   channelsRef.current = channels;
@@ -1565,7 +1569,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (payload.username) payload.username = payload.username.trim().toLowerCase();
     if (payload.display_name) payload.display_name = payload.display_name.trim();
     if (typeof payload.bio === "string") {
-      const bioErr = bioLengthError(payload.bio);
+      const bioErr = bioLengthError(payload.bio, maxBioLengthRef.current);
       if (bioErr) return bioErr;
     }
     if (payload.status !== undefined) {
@@ -1794,6 +1798,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return "Friend request already sent";
       }
+      if (existing.status === "blocked") {
+        if (existing.requester_id === userId) {
+          return "You have blocked this user. Unblock them first to send a friend request.";
+        }
+        return "This user has blocked you. You cannot send a friend request.";
+      }
     }
 
     const { error } = await supabase.from("friendships").insert({
@@ -1802,6 +1812,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (error) {
       if (error.code === "23505") {
+        const { data: conflict } = await supabase
+          .from("friendships")
+          .select("status, requester_id, addressee_id")
+          .or(
+            `and(requester_id.eq.${userId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${userId})`,
+          )
+          .maybeSingle();
+        if (conflict?.status === "blocked") {
+          if (conflict.requester_id === userId) {
+            return "You have blocked this user. Unblock them first to send a friend request.";
+          }
+          return "This user has blocked you. You cannot send a friend request.";
+        }
+        if (conflict?.status === "pending") {
+          if (conflict.requester_id === target.id) {
+            return "This user already sent you a friend request — check Pending to accept or decline";
+          }
+          return "Friend request already sent";
+        }
+        if (conflict?.status === "accepted") return "You are already friends";
         return "A friend request already exists with this user";
       }
       return error.message;
@@ -2031,7 +2061,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
-    const wordErr = messageWordLimitError(normalized);
+    const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
 
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -2145,7 +2175,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
-    const wordErr = messageWordLimitError(normalized);
+    const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
 
     const thread = dmThreads.find((t) => t.id === activeDmThreadId);
@@ -2263,7 +2293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
-    const wordErr = messageWordLimitError(normalized);
+    const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
 
     const group = groupChats.find((g) => g.id === activeGroupChatId);
@@ -2389,7 +2419,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !activeChannelId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     if (!normalized) return "Message cannot be empty";
-    const editWordErr = messageWordLimitError(normalized);
+    const editWordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (editWordErr) return editWordErr;
     const editedAt = new Date().toISOString();
     setMessages((prev) =>
@@ -2411,7 +2441,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !activeDmThreadId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     if (!normalized) return "Message cannot be empty";
-    const editWordErr = messageWordLimitError(normalized);
+    const editWordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (editWordErr) return editWordErr;
     const editedAt = new Date().toISOString();
     setDmMessages((prev) =>
@@ -2433,7 +2463,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !activeGroupChatId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     if (!normalized) return "Message cannot be empty";
-    const editWordErr = messageWordLimitError(normalized);
+    const editWordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (editWordErr) return editWordErr;
     const editedAt = new Date().toISOString();
     setGroupMessages((prev) =>
@@ -2494,6 +2524,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       rows.map((r) => ({ ...r, profile: map.get(r.user_id)! })).filter((r) => r.profile),
     );
   }, []);
+
+  const setMaxMessageChars = useCallback((n: number) => { maxMessageCharsRef.current = n; }, []);
+  const setMaxBioLength = useCallback((n: number) => { maxBioLengthRef.current = n; }, []);
 
   const value: AppContextValue = {
     ready,
@@ -2583,6 +2616,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadVoicePresence,
     setVoiceJoinedChannelId,
     setCallPhase,
+    setMaxMessageChars,
+    setMaxBioLength,
     dmUnreads,
     dmListEntries,
     serverUnreadIds,

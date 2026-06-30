@@ -45,22 +45,11 @@ function isSafeGifUrl(url: string): boolean {
   }
 }
 
-const GIPHY_MEDIA_RE = /\/media\/(?:v1\.[^/]+\/)?([^/]+)\/([^/]+)$/;
-
-/** Strip the signed v1.* prefix from a Giphy CDN URL, returning a classic-format URL. */
-export function giphyMediaUrl(url: string): string {
-  if (!isSafeGifUrl(url)) return url;
-  try {
-    const match = url.match(GIPHY_MEDIA_RE);
-    if (match) {
-      const [, id, rendition] = match;
-      return `https://media.giphy.com/media/${id}/${rendition}`;
-    }
-  } catch {}
-  return url;
-}
-
-/** Giphy CDN GIF URL → MP4 for reliable autoplay in chat */
+/** 
+ * Giphy CDN URL → MP4 for reliable autoplay in chat.
+ * Converts `.gif` → `.mp4` while preserving the signed URL prefix
+ * so Giphy's CDN accepts the request.
+ */
 export function giphyMp4Url(gifUrl: string): string | null {
   if (!isSafeGifUrl(gifUrl)) return null;
   if (/\.mp4(\?|$)/i.test(gifUrl)) return gifUrl;
@@ -68,24 +57,26 @@ export function giphyMp4Url(gifUrl: string): string | null {
   return null;
 }
 
-/** URL for sending in chat (full GIF) */
+/** Return the best URL for sending in chat (full GIF). Passes through as-is. */
 export function gifUrl(gif: GiphyImage): string | null {
   const url = gif.url
     ?? gif.images?.original?.url
     ?? gif.images?.fixed_width?.url
     ?? gif.preview
     ?? null;
-  return url && HTTPS_RE.test(url) ? giphyMediaUrl(url) : null;
+  return url && HTTPS_RE.test(url) ? url : null;
 }
 
-/** Smaller URL for the picker thumbnail grid */
+/** Return the preview URL for the picker thumbnail grid. Passes through as-is. */
 export function gifPreviewUrl(gif: GiphyImage): string | null {
   const url = gif.preview ?? gif.images?.fixed_width?.url ?? gif.url ?? null;
-  return url && HTTPS_RE.test(url) ? giphyMediaUrl(url) : null;
+  return url && HTTPS_RE.test(url) ? url : null;
 }
 
-/** MP4 display URL for a Giphy CDN URL (strips signed prefix, converts to MP4). */
+/** 
+ * Convert a Giphy URL to MP4 display URL. 
+ * Preserves the signed `v1.Y2lkPT...` prefix — Giphy's CDN requires it.
+ */
 export function giphyDisplayUrl(url: string): string {
-  const mp4 = giphyMp4Url(url);
-  return giphyMediaUrl(mp4 ?? url);
+  return giphyMp4Url(url) ?? url;
 }

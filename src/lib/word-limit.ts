@@ -1,23 +1,18 @@
-export const MAX_MESSAGE_WORDS = 500;
-export const MAX_BIO_LENGTH = 120;
+export const MAX_MESSAGE_CHARS_FREE = 2000;
+export const MAX_MESSAGE_CHARS_PAID = 4000;
+export const MAX_BIO_LENGTH_FREE = 190;
+export const MAX_BIO_LENGTH_PAID = 230;
 
-export function countWords(text: string): number {
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  if (!normalized) return 0;
-  return normalized.split(/\s+/).filter(Boolean).length;
-}
-
-export function messageWordLimitError(text: string): string | null {
-  const words = countWords(text);
-  if (words > MAX_MESSAGE_WORDS) {
-    return `Messages cannot exceed ${MAX_MESSAGE_WORDS} words (currently ${words}).`;
+export function messageCharLimitError(text: string, maxChars: number): string | null {
+  if (text.length > maxChars) {
+    return `Messages cannot exceed ${maxChars} characters (${text.length}/${maxChars}).`;
   }
   return null;
 }
 
-export function bioLengthError(bio: string): string | null {
-  if (bio.length > MAX_BIO_LENGTH) {
-    return `Bio cannot exceed ${MAX_BIO_LENGTH} characters (${bio.length}/${MAX_BIO_LENGTH}).`;
+export function bioLengthError(bio: string, maxLength: number): string | null {
+  if (bio.length > maxLength) {
+    return `Bio cannot exceed ${maxLength} characters (${bio.length}/${maxLength}).`;
   }
   return null;
 }
