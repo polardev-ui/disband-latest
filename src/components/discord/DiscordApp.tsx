@@ -36,7 +36,11 @@ import {
   IconGroup,
   IconPhone,
   IconStar,
+  IconNotes,
+  IconPin,
+  IconPinOff,
 } from "@/components/icons";
+import { SubscriptionModal } from "@/components/subscription/SubscriptionModal";
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import type { Channel, Profile, Server } from "@/lib/supabase/types";
 import type { MessageContext } from "@/lib/messages";
@@ -46,6 +50,7 @@ export function DiscordApp() {
   const app = useApp();
   const { openMenu } = useContextMenu();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
@@ -79,6 +84,7 @@ export function DiscordApp() {
   const channelChatRef = useRef<ChatCanvasHandle>(null);
   const dmChatRef = useRef<ChatCanvasHandle>(null);
   const groupChatRef = useRef<ChatCanvasHandle>(null);
+  const notesChatRef = useRef<ChatCanvasHandle>(null);
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
@@ -286,6 +292,59 @@ export function DiscordApp() {
     const memberIds = activeGroup.members.map((m) => m.id);
     void groupCall.startGroupCall(activeGroup.id, activeGroup.name, memberIds);
   }, [activeGroup, app.user, groupCall]);
+
+  const handleNoteContext = useCallback(
+    (message: ChatMessageData, x: number, y: number) => {
+      const isPinned = app.notes.find((n) => n.id === message.id)?.pinned ?? false;
+      openMenu(x, y, [
+        {
+          id: "pin",
+          label: isPinned ? "Unpin note" : "Pin note",
+          icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
+          onClick: () => void app.toggleNotePinned(message.id),
+        },
+        {
+          id: "reply",
+          label: "Reply to note",
+          icon: <IconNotes size={16} />,
+          onClick: () =>
+            notesChatRef.current?.setReplyTo({
+              id: message.id,
+              author_id: message.author_id,
+              content: message.content,
+              attachment_type: message.attachment_type,
+            }),
+        },
+        ...(normalizeMessageContent(message.content)
+          ? [
+              {
+                id: "edit",
+                label: "Edit note",
+                icon: <IconSettings size={16} />,
+                onClick: () =>
+                  notesChatRef.current?.setEditing({ id: message.id, content: message.content }),
+              },
+              {
+                id: "copy",
+                label: "Copy text",
+                icon: <IconCopy size={16} />,
+                onClick: () => void navigator.clipboard.writeText(message.content),
+              },
+            ]
+          : []),
+        {
+          id: "delete",
+          label: "Delete note",
+          icon: <IconTrash size={16} />,
+          danger: true,
+          onClick: () => {
+            if (confirm("Delete this note? This cannot be undone.")) void app.deleteNote(message.id);
+          },
+        },
+      ]);
+    },
+    [app, openMenu],
+  );
 
   const handleMessageContext = useCallback(
     (message: ChatMessageData, x: number, y: number, context: MessageContext) => {
@@ -532,6 +591,27 @@ export function DiscordApp() {
   const dmMessages: ChatMessageData[] = app.dmMessages.map(mapChatMessage);
   const groupMessages: ChatMessageData[] = app.groupMessages.map(mapChatMessage);
 
+  // Notes have no author column — they are all yours — so the current profile is
+  // attached here to satisfy the shared message renderer.
+  const noteMessages: ChatMessageData[] = app.profile
+    ? app.notes.map((n) =>
+        mapChatMessage({
+          id: n.id,
+          author_id: n.user_id,
+          content: n.content,
+          attachment_url: n.attachment_url,
+          attachment_type: n.attachment_type,
+          attachment_name: n.attachment_name,
+          attachment_size: n.attachment_size,
+          reply_to_id: n.reply_to_id,
+          edited_at: n.edited_at,
+          created_at: n.created_at,
+          author: app.profile!,
+        }),
+      )
+    : [];
+  const pinnedNoteIds = new Set(app.notes.filter((n) => n.pinned).map((n) => n.id));
+
   const profileFriend = profileTarget ? app.friends.some((f) => f.id === profileTarget.id) : false;
   const profileFriendship = profileTarget
     ? app.friendships.find(
@@ -662,7 +742,7 @@ export function DiscordApp() {
         onServerContext={handleServerContext}
       />
 
-      {app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" ? (
+      {app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
         <HomePanel
           onOpenSettings={() => setSettingsOpen(true)}
           onUserPanelContext={handleUserPanelContext}
@@ -671,6 +751,7 @@ export function DiscordApp() {
             if (f) openProfile(f);
           }}
           onGroupContext={handleGroupContext}
+          onOpenSubscription={() => setSubscriptionOpen(true)}
         />
       ) : (
         <ChannelList
@@ -813,6 +894,34 @@ export function DiscordApp() {
         );
       })()}
 
+      {app.viewMode === "notes" && (
+        <ChatCanvas
+          ref={notesChatRef}
+          channelName="Notes"
+          channelIcon={<IconNotes size={22} className="text-text-muted" />}
+          introText="Your private Notes — only you can see this"
+          placeholder="Write a note, or drop in an image, video or file…"
+          messages={noteMessages}
+          members={app.profile ? [app.profile] : []}
+          currentUserId={app.user?.id}
+          messageContext="notes"
+          headerTrailing={
+            pinnedNoteIds.size > 0 ? (
+              <span className="flex items-center gap-1 rounded-full bg-bg-accent px-2 py-0.5 text-[11px] font-medium text-text-muted">
+                <IconPin size={12} />
+                {pinnedNoteIds.size} pinned
+              </span>
+            ) : null
+          }
+          onSend={app.sendNote}
+          onEdit={app.editNote}
+          onMessageContext={handleNoteContext}
+          onAuthorClick={handleAuthorClick}
+          hasMore={app.notesHasMore}
+          onLoadMore={app.loadMoreNotes}
+        />
+      )}
+
       {app.viewMode === "home" && (
         <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-bg-primary p-8 text-center">
           <IconFriends size={64} className="mb-4 text-text-muted" />
@@ -946,6 +1055,11 @@ export function DiscordApp() {
       />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SubscriptionModal
+        open={subscriptionOpen}
+        onClose={() => setSubscriptionOpen(false)}
+        userId={app.user?.id}
+      />
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
       <ServerSettingsModal open={serverSettingsOpen} onClose={() => setServerSettingsOpen(false)} />
       <InviteGroupModal

@@ -146,6 +146,27 @@ export interface DmMessage extends DbDmMessage {
   sending?: boolean;
 }
 
+/** A single entry in the user's private Notes space. */
+export interface DbNote {
+  id: string;
+  user_id: string;
+  content: string;
+  attachment_url: string | null;
+  attachment_type: "image" | "video" | "gif" | "file" | null;
+  attachment_key: string | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  reply_to_id: string | null;
+  pinned: boolean;
+  created_at: string;
+  edited_at: string | null;
+}
+
+export interface Note extends DbNote {
+  sending?: boolean;
+  uploadProgress?: number;
+}
+
 export interface DbDmThread {
   id: string;
   user_a: string;
@@ -223,7 +244,7 @@ export interface CustomEmoji {
   created_at: string;
 }
 
-export type ViewMode = "home" | "server" | "dm" | "group";
+export type ViewMode = "home" | "server" | "dm" | "group" | "notes";
 
 export interface Database {
   public: {
@@ -364,6 +385,32 @@ export interface Database {
           attachment_type?: "image" | "video" | null;
           attachment_key?: string | null;
           mentions?: string[];
+        };
+        Relationships: [];
+      };
+      notes: {
+        Row: DbNote;
+        Insert: {
+          user_id: string;
+          content?: string;
+          attachment_url?: string | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | null;
+          attachment_key?: string | null;
+          attachment_name?: string | null;
+          attachment_size?: number | null;
+          reply_to_id?: string | null;
+          pinned?: boolean;
+        };
+        Update: {
+          content?: string;
+          attachment_url?: string | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | null;
+          attachment_key?: string | null;
+          attachment_name?: string | null;
+          attachment_size?: number | null;
+          reply_to_id?: string | null;
+          pinned?: boolean;
+          edited_at?: string | null;
         };
         Relationships: [];
       };
