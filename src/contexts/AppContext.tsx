@@ -48,6 +48,7 @@ import type {
   GroupChatWithMembers,
   GroupMessage,
   Message,
+  Note,
   Profile,
   Server,
   ServerMember,
@@ -71,6 +72,7 @@ interface AppContextValue {
   messages: (Message & { author: Profile })[];
   dmThreads: (DmThread & { friend: Profile })[];
   dmMessages: (DmMessage & { author: Profile })[];
+  notes: Note[];
   groupChats: GroupChatWithMembers[];
   groupMessages: (GroupMessage & { author: Profile })[];
   friendships: Friendship[];
@@ -100,6 +102,7 @@ interface AppContextValue {
   refreshAll: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<string | null>;
   setViewHome: () => void;
+  setViewNotes: () => Promise<void>;
   selectServer: (serverId: string) => Promise<void>;
   selectChannel: (channelId: string) => void;
   selectDmThread: (threadId: string) => Promise<void>;
@@ -140,6 +143,10 @@ interface AppContextValue {
   messageReactions: MessageReaction[];
   deleteMessage: (messageId: string) => Promise<void>;
   deleteDmMessage: (messageId: string) => Promise<void>;
+  sendNote: (content: string, options?: MessageSendOptions) => Promise<string | null>;
+  editNote: (noteId: string, content: string) => Promise<string | null>;
+  deleteNote: (noteId: string) => Promise<void>;
+  toggleNotePinned: (noteId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
   loadVoicePresence: (channelId: string) => Promise<void>;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
@@ -160,9 +167,11 @@ interface AppContextValue {
   channelHasMore: boolean;
   dmHasMore: boolean;
   groupHasMore: boolean;
+  notesHasMore: boolean;
   loadMoreChannelMessages: () => Promise<void>;
   loadMoreDmMessages: () => Promise<void>;
   loadMoreGroupMessages: () => Promise<void>;
+  loadMoreNotes: () => Promise<void>;
   platformBan: { banned: boolean; reason?: string; vpnBlocked?: boolean } | null;
   refreshPlatformAccess: () => Promise<void>;
   serverPermissions: { kick: boolean; ban: boolean; manage_roles: boolean; manage_server: boolean };
@@ -195,6 +204,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [groupMessages, setGroupMessages] = useState<(GroupMessage & { author: Profile })[]>([]);
   const [channelHasMore, setChannelHasMore] = useState(false);
   const [dmHasMore, setDmHasMore] = useState(false);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [notesHasMore, setNotesHasMore] = useState(false);
   const [groupHasMore, setGroupHasMore] = useState(false);
   const [platformBan, setPlatformBan] = useState<{ banned: boolean; reason?: string; vpnBlocked?: boolean } | null>(null);
   const [serverPermissions, setServerPermissions] = useState({
@@ -672,6 +683,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // --- Notes -----------------------------------------------------------------
+  // Private to the signed-in user, so these queries filter on user_id rather
+  // than a thread/channel id. RLS enforces the same thing server-side.
+  const loadNotes = useCallback(async (uid: string) => {
+    const { data } = await getSupabaseClient()
+      .from("notes")
+      .select("*")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows, hasMore } = paginateDescendingRows(data as Note[] | null);
+    setNotes(rows);
+    setNotesHasMore(hasMore);
+  }, []);
+
+  const loadMoreNotes = useCallback(async () => {
+    if (!userId || !notesHasMore || notes.length === 0) return;
+    const oldest = notes[0];
+    const { data } = await getSupabaseClient()
+      .from("notes")
+      .select("*")
+      .eq("user_id", userId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE + 1);
+    const { rows: older, hasMore } = paginateDescendingRows(data as Note[] | null);
+    if (!older.length) {
+      setNotesHasMore(false);
+      return;
+    }
+    setNotes((prev) => {
+      const seen = new Set(prev.map((n) => n.id));
+      return [...older.filter((n) => !seen.has(n.id)), ...prev];
+    });
+    setNotesHasMore(hasMore);
+  }, [userId, notesHasMore, notes]);
+
   const loadDmMessages = useCallback(async (threadId: string) => {
     const supabase = getSupabaseClient();
     const { data } = await supabase
@@ -948,9 +996,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, () => void loadFriendships(userId))
       .subscribe();
 
+    // Notes are private, but the same account can be open on several devices —
+    // keep them converged. Rows arrive already filtered to this user by RLS.
+    const notesSub = supabase
+      .channel(`notes:${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notes", filter: `user_id=eq.${userId}` }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const gone = payload.old as { id: string };
+          setNotes((prev) => prev.filter((n) => n.id !== gone.id));
+          return;
+        }
+        const row = payload.new as Note;
+        setNotes((prev) => {
+          // Drop the optimistic twin this echo corresponds to, if it is still around.
+          const without = prev.filter(
+            (n) => n.id !== row.id && !(n.id.startsWith("opt-") && n.content === row.content && (n.attachment_url ?? null) === (row.attachment_url ?? null)),
+          );
+          const next = [...without, row].sort((a, b) => a.created_at.localeCompare(b.created_at));
+          const { messages: windowed, trimmed } = trimToLatestWindow(next);
+          if (trimmed) setNotesHasMore(true);
+          return windowed;
+        });
+      })
+      .subscribe();
+
     return () => {
       void notifSub.unsubscribe();
       void friendSub.unsubscribe();
+      void notesSub.unsubscribe();
     };
   }, [userId, configured, loadFriendships]);
 
@@ -1556,6 +1629,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
+    setNotes([]);
+    setNotesHasMore(false);
     if (typeof window !== "undefined") {
       window.location.href = isTauri() ? "/app" : "/home";
     }
@@ -1603,6 +1678,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
   }, [persistActiveServerChannel]);
+
+  const setViewNotes = useCallback(async () => {
+    persistActiveServerChannel();
+    setViewMode("notes");
+    setActiveServerId(null);
+    setActiveChannelId(null);
+    setActiveDmThreadId(null);
+    setActiveGroupChatId(null);
+    if (userId) await loadNotes(userId);
+  }, [persistActiveServerChannel, userId, loadNotes]);
 
   const selectServer = useCallback(async (serverId: string) => {
     persistActiveServerChannel();
@@ -2409,6 +2494,160 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error && activeChannelId) await loadMessages(activeChannelId);
   }, [activeChannelId, loadMessages]);
 
+  const sendNote = useCallback(async (content: string, options: MessageSendOptions = {}) => {
+    if (!userId) return "Not signed in";
+    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
+    const normalized = normalizeMessageContent(content);
+    if (!normalized && !attachment && !pendingFile) return "Empty note";
+    const charErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
+    if (charErr) return charErr;
+
+    const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    let blobUrl: string | null = null;
+    let attUrl = attachment?.url ?? null;
+    let attType = attachment?.type ?? null;
+    let attName = attachment?.name ?? null;
+    let attSize = attachment?.size ?? null;
+    let attKey = attachment?.key ?? null;
+
+    // Show the local file immediately, then swap in the hosted URL once uploaded.
+    if (pendingFile) {
+      blobUrl = URL.createObjectURL(pendingFile);
+      attUrl = blobUrl;
+      if (pendingFile.type.startsWith("video/")) attType = "video";
+      else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else attType = "file";
+      attName = pendingFile.name;
+      attSize = pendingFile.size;
+    }
+
+    const optimistic: Note = {
+      id: tempId,
+      user_id: userId,
+      content: normalized,
+      attachment_url: attUrl,
+      attachment_type: attType,
+      attachment_key: attKey,
+      attachment_name: attName,
+      attachment_size: attSize,
+      reply_to_id: replyToId ?? null,
+      pinned: false,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      sending: true,
+    };
+    setNotes((prev) => {
+      const next = [...prev, optimistic];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setNotesHasMore(true);
+      return windowed;
+    });
+
+    if (pendingFile && blobUrl) {
+      try {
+        const result = await uploadMedia(pendingFile, {
+          maxUploadBytes,
+          onProgress: (progress) => {
+            setNotes((prev) =>
+              prev.map((n) => (n.id === tempId ? { ...n, uploadProgress: progress.percent } : n)),
+            );
+          },
+        });
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === tempId
+              ? { ...n, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              : n,
+          ),
+        );
+        attUrl = result.url;
+        attKey = result.key;
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        setNotes((prev) => prev.filter((n) => n.id !== tempId));
+        URL.revokeObjectURL(blobUrl);
+        return "Upload failed. Try a smaller file or different format.";
+      }
+    }
+
+    const { data, error } = await getSupabaseClient()
+      .from("notes")
+      .insert({
+        user_id: userId,
+        content: normalized,
+        attachment_url: attUrl,
+        attachment_type: attType,
+        attachment_key: attKey,
+        attachment_name: attName,
+        attachment_size: attSize,
+        reply_to_id: replyToId ?? null,
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      setNotes((prev) => prev.filter((n) => n.id !== tempId));
+      return error.message;
+    }
+    const saved = data as Note;
+    setNotes((prev) => {
+      const without = prev.filter((n) => n.id !== tempId && n.id !== saved.id);
+      const next = [...without, saved];
+      const { messages: windowed, trimmed } = trimToLatestWindow(next);
+      if (trimmed) setNotesHasMore(true);
+      return windowed;
+    });
+    return null;
+  }, [userId]);
+
+  const editNote = useCallback(async (noteId: string, content: string) => {
+    if (!userId) return "Not signed in";
+    const normalized = normalizeMessageContent(content);
+    const target = notes.find((n) => n.id === noteId);
+    // An attachment-only note may legitimately have empty text.
+    if (!normalized && !target?.attachment_url) return "Note cannot be empty";
+    const editedAt = new Date().toISOString();
+    setNotes((prev) =>
+      prev.map((n) => (n.id === noteId ? { ...n, content: normalized, edited_at: editedAt } : n)),
+    );
+    const { error } = await getSupabaseClient()
+      .from("notes")
+      .update({ content: normalized, edited_at: editedAt })
+      .eq("id", noteId)
+      .eq("user_id", userId);
+    if (error) {
+      await loadNotes(userId);
+      return error.message;
+    }
+    return null;
+  }, [userId, notes, loadNotes]);
+
+  const deleteNote = useCallback(async (noteId: string) => {
+    if (!userId) return;
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    const { error } = await getSupabaseClient()
+      .from("notes")
+      .delete()
+      .eq("id", noteId)
+      .eq("user_id", userId);
+    if (error) await loadNotes(userId);
+  }, [userId, loadNotes]);
+
+  const toggleNotePinned = useCallback(async (noteId: string) => {
+    if (!userId) return;
+    const target = notes.find((n) => n.id === noteId);
+    if (!target) return;
+    const next = !target.pinned;
+    setNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, pinned: next } : n)));
+    const { error } = await getSupabaseClient()
+      .from("notes")
+      .update({ pinned: next })
+      .eq("id", noteId)
+      .eq("user_id", userId);
+    if (error) await loadNotes(userId);
+  }, [userId, notes, loadNotes]);
+
   const deleteDmMessage = useCallback(async (messageId: string) => {
     setDmMessages((prev) => prev.filter((m) => m.id !== messageId));
     const { error } = await getSupabaseClient().from("dm_messages").delete().eq("id", messageId);
@@ -2542,6 +2781,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     messages,
     dmThreads: sortedDmThreads,
     dmMessages,
+    notes,
     groupChats,
     groupMessages,
     friendships,
@@ -2571,6 +2811,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshAll,
     updateProfile,
     setViewHome,
+    setViewNotes,
     selectServer,
     selectChannel,
     selectDmThread,
@@ -2612,6 +2853,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     messageReactions,
     deleteMessage,
     deleteDmMessage,
+    sendNote,
+    editNote,
+    deleteNote,
+    toggleNotePinned,
     markNotificationsRead,
     loadVoicePresence,
     setVoiceJoinedChannelId,
@@ -2626,9 +2871,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     channelHasMore,
     dmHasMore,
     groupHasMore,
+    notesHasMore,
     loadMoreChannelMessages,
     loadMoreDmMessages,
     loadMoreGroupMessages,
+    loadMoreNotes,
     platformBan,
     refreshPlatformAccess,
     serverPermissions,

@@ -59,6 +59,10 @@ interface ChatCanvasProps {
   headerTrailing?: React.ReactNode;
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
+  /** Divider text at the top of the history. Defaults to "Welcome to #<name>". */
+  introText?: string;
+  /** Composer placeholder. Defaults to "Message #<name>". */
+  placeholder?: string;
   typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
   readCursorScope?: ReadCursorScope | null;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -86,6 +90,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     headerTrailing,
     callPanel,
     channelIcon,
+    introText,
+    placeholder,
     typingScope = null,
     readCursorScope = null,
     onSend,
@@ -284,7 +290,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
           <div className="mb-4 flex items-center px-4">
             <div className="h-px flex-1 bg-divider" />
-            <span className="mx-4 text-xs font-semibold text-text-muted">Welcome to #{channelName}</span>
+            <span className="mx-4 text-xs font-semibold text-text-muted">
+              {introText ?? `Welcome to #${channelName}`}
+            </span>
             <div className="h-px flex-1 bg-divider" />
           </div>
 
@@ -342,7 +350,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           <p className="truncate px-4 pb-1 text-xs font-medium text-text-muted">{typingLabel}</p>
         )}
         <ChatInput
-          placeholder={`Message #${channelName}`}
+          placeholder={placeholder ?? `Message #${channelName}`}
           members={members}
           roles={roles}
           replyTo={replyTo}
