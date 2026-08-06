@@ -39,6 +39,10 @@ import {
   SmilePlus,
   ScreenShare,
   ScreenShareOff,
+  SquarePen,
+  Crown,
+  Pin,
+  PinOff,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -86,6 +90,10 @@ export const IconStar = icon(Star);
 export const IconEmoji = icon(SmilePlus);
 export const IconScreenShare = icon(ScreenShare);
 export const IconScreenShareOff = icon(ScreenShareOff);
+export const IconNotes = icon(SquarePen);
+export const IconCrown = icon(Crown);
+export const IconPin = icon(Pin);
+export const IconPinOff = icon(PinOff);
 
 export function IconStatus(props: IconProps & { status: "online" | "idle" | "dnd" | "offline" }) {
   const colors = {

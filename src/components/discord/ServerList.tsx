@@ -4,7 +4,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
 import { IconHome, IconPlus } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
-import type { Profile, Server } from "@/lib/supabase/types";
+import type { Profile, Server, ViewMode } from "@/lib/supabase/types";
 
 export interface DmRailUnread {
   threadId: string;
@@ -15,7 +15,7 @@ export interface DmRailUnread {
 interface ServerListProps {
   servers: Server[];
   activeServerId: string | null;
-  viewMode: "home" | "server" | "dm" | "group";
+  viewMode: ViewMode;
   dmUnreads: DmRailUnread[];
   activeDmThreadId: string | null;
   serverUnreadIds: string[];
@@ -49,7 +49,8 @@ export function ServerList({
   onCreateServer,
   onServerContext,
 }: ServerListProps) {
-  const homeActive = viewMode === "home" || viewMode === "dm" || viewMode === "group";
+  const homeActive =
+    viewMode === "home" || viewMode === "dm" || viewMode === "group" || viewMode === "notes";
   const visibleDmUnreads = dmUnreads.filter(
     (entry) => !(viewMode === "dm" && activeDmThreadId === entry.threadId),
   );
