@@ -996,16 +996,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession();
       let session = data.session;
 
-      // A persisted session whose access token already lapsed is unusable:
-      // supabase-js only auto-refreshes while the token is still inside its
-      // expiry margin, so an expired token at boot would let every initial
-      // request 401 with "JWT expired" forever (and realtime channels keep
-      // failing with PGRST303). Force a refresh now so the app only boots on
-      // a live session. Transient network failures keep the session (supabase
-      // would also preserve it); any real auth failure signs out cleanly.
-      if (session && isAccessTokenExpired(session)) {
-        const { data: refreshed, error } = await supabase.auth.refreshSession();
-        session = error?.name === "AuthRetryableFetchError" ? session : (refreshed.session ?? null);
+      // Verify the persisted session is actually accepted by the server before
+      // booting the app. supabase-js only auto-refreshes while a token is still
+      // inside its expiry margin, so a dead token at boot — expired JWT, or one
+      // whose `exp` looks fine but is rejected server-side (revoked session,
+      // changed JWT secret) — would otherwise let every initial request 401
+      // with "JWT expired" forever while realtime channels fail with PGRST303.
+      if (session) {
+        if (isAccessTokenExpired(session)) {
+          const { data: refreshed, error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.warn("Session token was expired and could not be refreshed.", error);
+          }
+          session = error?.name === "AuthRetryableFetchError" ? session : (refreshed.session ?? null);
+        } else {
+          const { error: verifyError } = await supabase.auth.getUser();
+          if (verifyError) {
+            if (verifyError.name === "AuthRetryableFetchError") {
+              console.warn("Could not reach Supabase to verify the session; continuing with the cached session.", verifyError);
+            } else {
+              const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+              if (refreshError) {
+                console.warn("Session is rejected by Supabase and could not be refreshed; signing out.", refreshError);
+                await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+                session = null;
+              } else {
+                session = refreshed.session;
+              }
+            }
+          }
+        }
       }
 
       setSession(session);
