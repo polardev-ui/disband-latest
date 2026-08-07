@@ -10,7 +10,7 @@ export function PlatformBanScreen() {
     <div className="flex min-h-screen items-center justify-center bg-bg-tertiary p-6">
       <div className="w-full max-w-md rounded-xl border border-status-danger/40 bg-bg-secondary p-8 text-center shadow-2xl">
         <div className="mb-4 flex justify-center">
-          <Logo size={48} />
+          <Logo adaptive size={48} />
         </div>
         <h1 className="text-xl font-bold text-status-danger">You have been banned from Disband</h1>
         <p className="mt-3 text-sm text-text-muted">

@@ -58,7 +58,7 @@ function ResetPasswordGate() {
         <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-xl">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3 flex justify-center">
-              <Logo size={56} className="h-14 w-14" priority />
+              <Logo adaptive size={56} className="h-14 w-14" priority />
             </div>
             <h1 className="text-2xl font-bold text-text-normal">Choose a new password</h1>
             <p className="mt-1 text-sm text-text-muted">

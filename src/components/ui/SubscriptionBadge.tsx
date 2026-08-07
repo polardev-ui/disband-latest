@@ -11,7 +11,7 @@ const STYLES: Record<string, { label: string; className: string }> = {
   },
   super: {
     label: "Super",
-    className: "bg-[#fee75c]/20 text-[#fee75c]",
+    className: "bg-super/20 text-super",
   },
 };
 

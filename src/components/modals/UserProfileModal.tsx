@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { getProfilePanelMutedColor, getProfilePanelStyle } from "@/lib/profileColor";
 import { displayName } from "@/lib/utils";
+import { safeImageUrl } from "@/lib/safe-url";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import type { Profile } from "@/lib/supabase/types";
@@ -66,7 +67,7 @@ export function UserProfileModal({
         {profile.banner_url && (
           <div
             className="h-24 bg-cover bg-center"
-            style={{ backgroundImage: `url(${profile.banner_url})` }}
+            style={{ backgroundImage: safeImageUrl(profile.banner_url) ? `url(${safeImageUrl(profile.banner_url)})` : undefined }}
           />
         )}
         <button type="button" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60">

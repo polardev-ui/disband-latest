@@ -41,7 +41,7 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
 
   return (
     <div
-      className="flex h-[52px] shrink-0 items-center gap-1 border-t border-black/20 bg-[#232428] px-2"
+      className="flex h-[52px] shrink-0 items-center gap-1 border-t border-divider bg-bg-tertiary px-2"
       onContextMenu={onContextMenu}
     >
       <button
@@ -52,7 +52,7 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
         <div className="relative shrink-0">
           <Avatar profile={profile ?? { display_name: name }} size="sm" />
           <span
-            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[#232428] ${STATUS_BG[status]}`}
+            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-tertiary ${STATUS_BG[status]}`}
           />
         </div>
         <div className="min-w-0 flex-1">

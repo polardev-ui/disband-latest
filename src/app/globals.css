@@ -22,6 +22,7 @@
   --color-status-dnd: var(--status-dnd);
   --color-status-offline: var(--status-offline);
   --color-divider: var(--divider);
+  --color-super: var(--super);
 
   --font-sans: var(--font-discord);
 }
@@ -306,4 +307,50 @@ img.twemoji {
   margin: 0 0.05em 0 0.1em;
   vertical-align: -0.2em;
   display: inline-block;
+}
+
+/* Indeterminate progress bar for the app splash (LoadingScreen). */
+@keyframes loading-bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.loading-bar {
+  animation: loading-bar-slide 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
+/*
+ * Premium ("Disband SUPER") accent.
+ * #fee75c is only legible on dark chrome — light theme needs a darker amber
+ * or the badge reads as blank space.
+ */
+:root,
+[data-theme] {
+  --super: #fee75c;
+}
+
+[data-theme="light"] {
+  --super: #8a6407;
+}
+
+/*
+ * The Disband mark is a white glyph on transparency, so it vanishes on the
+ * light theme. brightness(0) flattens it to black while preserving the alpha
+ * shape. Opt-in via <Logo adaptive /> so marketing pages — which have a
+ * hardcoded dark background regardless of the stored theme — keep the white mark.
+ */
+[data-theme="light"] .logo-adaptive {
+  filter: brightness(0);
 }

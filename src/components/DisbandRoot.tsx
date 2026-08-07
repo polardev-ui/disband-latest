@@ -9,6 +9,7 @@ import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
 import { MobileGateLoading, useMobileWebGate } from "@/components/mobile/MobileWebGate";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
 
 function InviteBootstrap() {
@@ -29,13 +30,19 @@ function InviteBootstrap() {
 }
 
 function AppShell() {
-  const { ready, session, mfaRequired, platformBan } = useApp();
-  if (!ready) {
-    return <div className="flex h-screen items-center justify-center bg-bg-tertiary text-text-muted">Loading...</div>;
-  }
+  const { ready, session, hydrated, mfaRequired, platformBan } = useApp();
+
+  if (!ready) return <LoadingScreen />;
   if (!session) return <AuthScreen />;
   if (mfaRequired) return <MfaChallengeScreen />;
   if (platformBan?.banned) return <PlatformBanScreen />;
+
+  // `ready` only means the session is known. Hold the splash until the first
+  // data load settles too, otherwise the shell paints with a null profile and
+  // empty friend/DM/server lists for a few seconds — which reads as the account
+  // being wrong rather than merely unloaded.
+  if (!hydrated) return <LoadingScreen />;
+
   return (
     <>
       <InviteBootstrap />

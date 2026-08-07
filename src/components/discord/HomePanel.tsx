@@ -50,7 +50,7 @@ function NavRow({
     >
       <span
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-          accent ? "bg-[#fee75c]/15 text-[#fee75c]" : "bg-brand/20 text-brand"
+          accent ? "bg-super/15 text-super" : "bg-brand/20 text-brand"
         }`}
       >
         {icon}
@@ -79,38 +79,23 @@ export function HomePanel({
 }: HomePanelProps) {
   const {
     pendingIncoming,
-    pendingOutgoing,
     dmListEntries,
     groupChats,
     groupCallCounts,
     activeGroupChatId,
     activeDmThreadId,
     viewMode,
-    sendFriendRequest,
-    respondFriendRequest,
     openDmWithFriend,
     selectDmThread,
     selectGroupChat,
     setViewHome,
     setViewNotes,
   } = useApp();
-  const [username, setUsername] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"friends" | "pending">("friends");
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
-  // The friends tabs and add-by-username form belong to the Friends destination;
-  // the group/DM lists stay visible from every destination, as in the mock.
+  // Friends browsing (tabs, search, add-by-username) lives in the main pane —
+  // the sidebar only routes to it and lists conversations.
   const onFriends = viewMode === "home";
-  const showPending = onFriends && tab === "pending";
-
-  async function addFriend(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const err = await sendFriendRequest(username.trim());
-    if (err) setError(err);
-    else setUsername("");
-  }
 
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
@@ -157,42 +142,8 @@ export function HomePanel({
 
       <div className="mx-4 my-2 h-px bg-divider" />
 
-      {onFriends && (
-        <>
-          <div className="flex gap-1 px-2">
-            {(["friends", "pending"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={`flex-1 rounded px-2 py-1 text-sm capitalize transition-all duration-150 ${
-                  tab === t ? "bg-interactive-selected text-text-normal" : "text-text-muted hover:bg-interactive-hover"
-                }`}
-              >
-                {t}
-                {t === "pending" && pendingIncoming.length > 0 && (
-                  <span className="ml-1 rounded-full bg-status-dnd px-1.5 text-[10px] text-white">
-                    {pendingIncoming.length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={addFriend} className="px-2 py-2">
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Add by username"
-              className="w-full rounded bg-bg-accent px-2 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
-            />
-            {error && <p className="mt-1 text-xs text-status-dnd">{error}</p>}
-          </form>
-        </>
-      )}
-
       <div className="min-h-0 flex-1 overflow-y-auto px-2">
-        {!showPending && (
+        {(
           <>
             <div className="flex items-center justify-between px-2 py-1">
               <p className="text-xs font-bold uppercase text-text-muted">Group Chats — {groupChats.length}</p>
@@ -265,36 +216,6 @@ export function HomePanel({
             })}
             {dmListEntries.length === 0 && (
               <p className="px-2 py-2 text-sm text-text-muted">Add friends to start chatting.</p>
-            )}
-          </>
-        )}
-
-        {showPending && (
-          <>
-            {pendingIncoming.map((f) => (
-              <div key={f.id} className="mb-2 rounded bg-bg-accent p-2">
-                <div className="flex items-center gap-2">
-                  {f.requester && <Avatar profile={f.requester} size="sm" />}
-                  <p className="text-sm">{f.requester ? displayName(f.requester) : "Unknown"}</p>
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => void respondFriendRequest(f.id, true)} className="rounded bg-brand px-2 py-1 text-xs text-white">
-                    Accept
-                  </button>
-                  <button type="button" onClick={() => void respondFriendRequest(f.id, false)} className="rounded bg-interactive-hover px-2 py-1 text-xs">
-                    Ignore
-                  </button>
-                </div>
-              </div>
-            ))}
-            {pendingOutgoing.map((f) => (
-              <div key={f.id} className="mb-2 flex items-center gap-2 rounded bg-bg-accent p-2 text-sm text-text-muted">
-                {f.addressee && <Avatar profile={f.addressee} size="sm" />}
-                Outgoing to {f.addressee ? displayName(f.addressee) : "..."}
-              </div>
-            ))}
-            {pendingIncoming.length === 0 && pendingOutgoing.length === 0 && (
-              <p className="px-2 text-sm text-text-muted">No pending requests</p>
             )}
           </>
         )}

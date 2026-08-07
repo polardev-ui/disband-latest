@@ -9,6 +9,32 @@ import { Turnstile } from "@/components/ui/Turnstile";
 
 type AuthMode = "login" | "signup" | "reset";
 
+/** Shared input chrome — a quiet field that lights up on focus. */
+const fieldClass =
+  "w-full rounded-md border border-divider bg-bg-accent px-3.5 py-2.5 text-[15px] text-text-normal " +
+  "outline-none transition-colors placeholder:text-text-muted " +
+  "focus:border-brand/60 focus:bg-bg-accent";
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-[13px] font-medium text-text-normal">{label}</span>
+        {hint}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 export function AuthScreen() {
   const { signIn, signUp, requestPasswordReset, configured } = useApp();
   const [mode, setMode] = useState<AuthMode>("login");
@@ -27,9 +53,9 @@ export function AuthScreen() {
   if (!configured) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
-        <div className="max-w-md rounded-lg bg-bg-secondary p-8 text-center">
-          <h1 className="text-2xl font-bold text-text-normal">Disband</h1>
-          <p className="mt-3 text-sm text-text-muted">
+        <div className="max-w-md rounded-lg border border-divider bg-bg-secondary p-8 text-center">
+          <h1 className="text-xl font-semibold text-text-normal">Disband</h1>
+          <p className="mt-3 text-sm leading-relaxed text-text-muted">
             {isTauri()
               ? "This build is missing Supabase configuration. Rebuild the desktop app with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY set."
               : "Copy .env.example to .env.local and add your Supabase URL + anon key, then restart the dev server."}
@@ -87,160 +113,192 @@ export function AuthScreen() {
     setTurnstileKey((k) => k + 1);
   }
 
-  const title =
-    success
-      ? "Check your email"
-      : mode === "login"
-        ? "Welcome back!"
-        : mode === "reset"
-          ? "Reset your password"
-          : "Create an account";
+  const title = success
+    ? "Check your email"
+    : mode === "login"
+      ? "Sign in to Disband"
+      : mode === "reset"
+        ? "Reset your password"
+        : "Create your account";
 
-  const subtitle =
-    success
-      ? mode === "reset"
-        ? "Use the link in your email to choose a new password"
-        : "Verify your email to finish signing up"
-      : mode === "login"
-        ? "We're so excited to see you again!"
-        : mode === "reset"
-          ? "We'll email you a link to choose a new password"
-          : "Join Disband today";
+  const subtitle = success
+    ? mode === "reset"
+      ? "Use the link we sent to choose a new password."
+      : "Verify your email address to finish signing up."
+    : mode === "login"
+      ? "Your servers, messages, and calls — on every device."
+      : mode === "reset"
+        ? "We'll email you a link to choose a new one."
+        : "Free to join. No card required.";
+
+  const submitLabel =
+    mode === "login" ? "Sign in" : mode === "reset" ? "Send reset link" : "Create account";
 
   return (
-    <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-xl">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex justify-center">
-            <Logo size={56} className="h-14 w-14" priority />
-          </div>
-          <h1 className="text-2xl font-bold text-text-normal">{title}</h1>
-          <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
+    <div className="flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12">
+      <div className="w-full max-w-[400px]">
+        {/* Mark sits outside the card so the card reads as a single input surface. */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Logo adaptive size={44} className="h-11 w-11" priority />
+          <h1 className="mt-5 text-[26px] font-semibold tracking-[-0.02em] text-text-normal">{title}</h1>
+          <p className="mt-2 max-w-[19rem] text-[15px] leading-relaxed text-text-muted">{subtitle}</p>
         </div>
 
-        {success ? (
-          <div className="mb-4 space-y-3">
-            <p className="rounded-lg border border-status-online/30 bg-status-online/10 px-3 py-3 text-sm leading-relaxed text-text-normal">
-              {success}
-            </p>
-            {mode !== "reset" && (
-              <p className="text-center text-xs text-text-muted">
-                After verifying, come back here and log in with your email and password.
+        <form
+          onSubmit={submit}
+          className="rounded-xl border border-divider bg-bg-secondary p-6 shadow-[0_16px_50px_-20px_rgba(0,0,0,0.8)]"
+        >
+          {success ? (
+            <div className="space-y-4">
+              <p className="rounded-md border border-status-online/25 bg-status-online/[0.08] px-3.5 py-3 text-[14px] leading-relaxed text-text-normal">
+                {success}
               </p>
-            )}
-          </div>
-        ) : (
-          <>
-            {mode === "signup" && (
-              <label className="mb-3 block">
-                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Username</span>
+              {mode !== "reset" && (
+                <p className="text-[13px] leading-relaxed text-text-muted">
+                  Once verified, come back here and sign in with your email and password.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                className="w-full rounded-md border border-divider py-2.5 text-[15px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
+              >
+                Back to sign in
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {mode === "signup" && (
+                <Field label="Username">
+                  <input
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.slice(0, 25))}
+                    maxLength={25}
+                    autoComplete="username"
+                    placeholder="nova_reyes"
+                    className={fieldClass}
+                    pattern="[a-zA-Z0-9_]{2,25}"
+                  />
+                </Field>
+              )}
+
+              <Field label="Email">
                 <input
                   required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.slice(0, 25))}
-                  maxLength={25}
-                  className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-                  pattern="[a-zA-Z0-9_]{2,25}"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  className={fieldClass}
                 />
-              </label>
-            )}
+              </Field>
 
-            <label className="mb-3 block">
-              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Email</span>
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-              />
-            </label>
-
-            {mode !== "reset" && (
-              <label className="mb-4 block">
-                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Password</span>
-                <input
-                  required
-                  type="password"
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded bg-bg-accent px-3 py-2.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-                />
-              </label>
-            )}
-
-            {mode === "login" && (
-              <div className="mb-4 text-right">
-                <button
-                  type="button"
-                  onClick={() => switchMode("reset")}
-                  className="text-sm text-text-link hover:underline"
+              {mode !== "reset" && (
+                <Field
+                  label="Password"
+                  hint={
+                    mode === "login" ? (
+                      <button
+                        type="button"
+                        onClick={() => switchMode("reset")}
+                        className="text-[13px] text-text-muted transition-colors hover:text-text-normal"
+                      >
+                        Forgot?
+                      </button>
+                    ) : undefined
+                  }
                 >
-                  Forgot password?
-                </button>
-              </div>
-            )}
-          </>
-        )}
+                  <input
+                    required
+                    type="password"
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    placeholder={mode === "signup" ? "At least 6 characters" : "••••••••"}
+                    className={fieldClass}
+                  />
+                </Field>
+              )}
 
-        {!success && webOnly && !turnstileFailed && (
-          <Turnstile
-            key={turnstileKey}
-            siteKey={PUBLIC_ENV.turnstileSiteKey}
-            onToken={setTurnstileToken}
-            onExpire={() => setTurnstileToken(null)}
-            onError={() => { setTurnstileToken(null); setTurnstileFailed(true); }}
-            className="mb-3"
-          />
-        )}
+              {webOnly && !turnstileFailed && (
+                <Turnstile
+                  key={turnstileKey}
+                  siteKey={PUBLIC_ENV.turnstileSiteKey}
+                  onToken={setTurnstileToken}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => {
+                    setTurnstileToken(null);
+                    setTurnstileFailed(true);
+                  }}
+                />
+              )}
 
-        {error && <p className="mb-3 text-sm text-status-dnd">{error}</p>}
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-md border border-status-dnd/30 bg-status-dnd/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-dnd"
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || (webOnly && !turnstileToken && !turnstileFailed)}
+                className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                ) : (
+                  submitLabel
+                )}
+              </button>
+            </div>
+          )}
+        </form>
 
         {!success && (
-          <button
-            type="submit"
-            disabled={loading || (webOnly && !turnstileToken && !turnstileFailed)}
-            className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
-          >
-            {loading
-              ? "..."
-              : mode === "login"
-                ? "Log In"
-                : mode === "reset"
-                  ? "Send reset link"
-                  : "Continue"}
-          </button>
-        )}
-
-        {success ? (
-          <button
-            type="button"
-            onClick={() => switchMode("login")}
-            className="mt-4 w-full rounded bg-interactive-hover py-2.5 text-sm font-semibold text-text-normal"
-          >
-            Back to log in
-          </button>
-        ) : mode === "reset" ? (
-          <p className="mt-4 text-center text-sm text-text-muted">
-            Remember your password?{" "}
-            <button type="button" onClick={() => switchMode("login")} className="text-text-link hover:underline">
-              Log in
-            </button>
-          </p>
-        ) : (
-          <p className="mt-4 text-center text-sm text-text-muted">
-            {mode === "login" ? "Need an account? " : "Already have an account? "}
-            <button
-              type="button"
-              onClick={() => switchMode(mode === "login" ? "signup" : "login")}
-              className="text-text-link hover:underline"
-            >
-              {mode === "login" ? "Register" : "Log in"}
-            </button>
+          <p className="mt-6 text-center text-[14px] text-text-muted">
+            {mode === "reset" ? (
+              <>
+                Remembered it?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="font-medium text-text-normal transition-colors hover:text-brand"
+                >
+                  Sign in
+                </button>
+              </>
+            ) : mode === "login" ? (
+              <>
+                New to Disband?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("signup")}
+                  className="font-medium text-text-normal transition-colors hover:text-brand"
+                >
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="font-medium text-text-normal transition-colors hover:text-brand"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
           </p>
         )}
-      </form>
+      </div>
     </div>
   );
 }

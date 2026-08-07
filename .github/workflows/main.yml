@@ -118,7 +118,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM
           NEXT_PUBLIC_GITHUB_REPO: polardev-ui/disband-latest
           NEXT_PUBLIC_MEDIA_API_URL: https://api.wsgpolar.me/v1
-          NEXT_PUBLIC_APP_URL: https://disband.wsgpolar.me
+          NEXT_PUBLIC_APP_URL: https://www.disband.dev
         with:
           tagName: ${{ steps.build.outputs.mode == 'branch' && steps.tag.outputs.name || steps.build.outputs.release_tag }}
           releaseName: Disband ${{ steps.build.outputs.mode == 'branch' && steps.tag.outputs.name || steps.build.outputs.release_tag }}

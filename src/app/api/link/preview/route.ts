@@ -28,7 +28,7 @@ function metaContent(html: string, key: string): string | undefined {
 async function scrapeOpenGraph(url: string) {
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "DisbandLinkPreview/1.0 (+https://disband.wsgpolar.me)",
+      "User-Agent": "DisbandLinkPreview/1.0 (+https://www.disband.dev)",
       Accept: "text/html,application/xhtml+xml",
     },
     // Do not follow redirects: a redirect could point at an internal host and
