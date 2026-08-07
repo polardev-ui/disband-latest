@@ -3,7 +3,8 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
-import type { Profile, ServerMember, ServerRole } from "@/lib/supabase/types";
+import { useApp } from "@/contexts/AppContext";
+import type { Profile, ServerMember, ServerRole, UserStatus } from "@/lib/supabase/types";
 
 interface MemberListProps {
   members: (ServerMember & { profile: Profile })[];
@@ -12,12 +13,12 @@ interface MemberListProps {
   onMemberContext?: (member: ServerMember & { profile: Profile }, x: number, y: number) => void;
 }
 
-const STATUS_BG = {
+const STATUS_BG: Record<UserStatus, string> = {
   online: "bg-status-online",
   idle: "bg-status-idle",
   dnd: "bg-status-dnd",
   offline: "bg-status-offline",
-} as const;
+};
 
 function roleLabel(member: ServerMember, roles: ServerRole[]): string {
   if (member.role === "owner") return "Owner";
@@ -36,8 +37,10 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
 }
 
 export function MemberList({ members, roles, onMemberClick, onMemberContext }: MemberListProps) {
-  const online = members.filter((m) => m.profile.status !== "offline");
-  const offline = members.filter((m) => m.profile.status === "offline");
+  const { presenceMap } = useApp();
+  const liveStatus = (p: Profile): UserStatus => presenceMap.get(p.id) ?? "offline";
+  const online = members.filter((m) => liveStatus(m.profile) !== "offline");
+  const offline = members.filter((m) => liveStatus(m.profile) === "offline");
 
   const grouped = online.reduce<Record<string, (ServerMember & { profile: Profile })[]>>((acc, m) => {
     const key = roleLabel(m, roles);
@@ -48,6 +51,7 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   function Row({ m }: { m: ServerMember & { profile: Profile } }) {
     const p = m.profile;
     const color = roleColor(m, roles);
+    const live = liveStatus(p);
     return (
       <button
         type="button"
@@ -60,12 +64,12 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
       >
         <div className="relative shrink-0">
           <Avatar profile={p} size="sm" />
-          {p.status !== "offline" && (
-            <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-secondary ${STATUS_BG[p.status]}`} />
+          {live !== "offline" && (
+            <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-secondary ${STATUS_BG[live]}`} />
           )}
         </div>
         <span
-          className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] ${p.status === "offline" ? "text-text-muted" : "text-text-normal"}`}
+          className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] ${live === "offline" ? "text-text-muted" : "text-text-normal"}`}
           style={color ? { color } : undefined}
         >
           <span className="truncate">{displayName(p)}</span>
