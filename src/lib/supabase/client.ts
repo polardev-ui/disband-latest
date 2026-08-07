@@ -29,6 +29,70 @@ function createTauriClient(url: string, anonKey: string): SupabaseClient {
   });
 }
 
+const JWT_EXPIRED_PATTERN = /JWT expired|PGRST303|Invalid JWT/i;
+
+function isJwtExpiredError(error: { code?: string; message?: string } | null | undefined): boolean {
+  return Boolean(
+    error &&
+      (error.code === "PGRST303" ||
+        (typeof error.message === "string" && JWT_EXPIRED_PATTERN.test(error.message))),
+  );
+}
+
+/**
+ * Wraps a Postgrest builder so that a single "JWT expired" (or PGRST303)
+ * response refreshes the session once and transparently re-runs the same
+ * query, instead of surfacing the error to the caller. A 401 means the
+ * server rejected the request before executing it, so retrying a read (or a
+ * failed write) is safe. Each terminal `await`/`.then` on a wrapped builder
+ * retries at most once.
+ */
+function wrapQueryBuilder(builder: object): unknown {
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      if (prop === "then") {
+        return (onFulfilled?: (value: unknown) => unknown, onRejected?: (reason?: unknown) => unknown) => {
+          const run = () =>
+            (target as { then: (cb: (value: unknown) => unknown) => Promise<unknown> }).then((res) => res);
+          return (async () => {
+            const first = await run();
+            const error = (first as { error?: { code?: string; message?: string } | null })?.error;
+            if (!isJwtExpiredError(error)) return first;
+            const supabase = getSupabaseClient();
+            const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+            if (refreshError || !refreshed.session) return first;
+            return run();
+          })().then(onFulfilled, onRejected);
+        };
+      }
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === "function") {
+        return (...args: unknown[]) => wrapQueryBuilder(value.apply(target, args));
+      }
+      return value;
+    },
+  });
+}
+
+/**
+ * Global safety net: every `.from(...)` / `.rpc(...)` query automatically
+ * refreshes the session and retries once when the server reports the access
+ * token as expired. This keeps data fetches from silently 401ing (or the
+ * desktop app showing "JWT expired" errors) after the token lapses while the
+ * app was closed or suspended.
+ */
+function wrapSupabaseClient(client: SupabaseClient): SupabaseClient {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (prop === "from" || prop === "rpc") {
+        return (...args: unknown[]) => wrapQueryBuilder(value.apply(target, args));
+      }
+      return value;
+    },
+  });
+}
+
 export function resetSupabaseClient() {
   browserClient = null;
 }
@@ -43,10 +107,12 @@ export function getSupabaseClient(): SupabaseClient {
     throw new Error("Missing Supabase configuration.");
   }
 
-  browserClient =
+  const raw =
     typeof window !== "undefined" && isTauri()
       ? createTauriClient(url, anonKey)
       : createBrowserClient(url, anonKey);
+
+  browserClient = wrapSupabaseClient(raw);
 
   return browserClient;
 }
