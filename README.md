@@ -75,5 +75,5 @@ Check the [Releases page](https://github.com/polardev-ui/disband-latest/releases
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/polardev-ui">Josh Clark</a></sub>
+  <sub>Built with ❤️ by <a href="https://joshclark.xyz">Josh Clark</a></sub>
 </p>
