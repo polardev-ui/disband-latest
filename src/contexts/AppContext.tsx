@@ -1046,6 +1046,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     void refreshMfaStatus();
     void refreshPlatformAccess();
+    const interval = setInterval(() => { void refreshPlatformAccess(); }, 60_000);
+    return () => clearInterval(interval);
   }, [session, refreshMfaStatus, refreshPlatformAccess]);
 
   useEffect(() => {
@@ -1702,7 +1704,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, username: string): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
-    const normalized = username.trim().toLowerCase();
+    const normalized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
     const displayNameVal = username.trim();
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
 

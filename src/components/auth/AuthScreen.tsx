@@ -86,13 +86,18 @@ export function AuthScreen() {
         );
       }
     } else {
-      const result = await signUp(email, password, username);
-      if (result.error) {
-        setError(result.error);
-      } else if (result.needsEmailConfirmation !== false) {
-        setSuccess(
-          `Check your email to verify your account. We sent a link to ${email.trim()} — then log in at /login.`,
-        );
+      const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+      if (sanitized.length < 2) {
+        setError("Username must be at least 2 characters (letters, numbers, and underscores).");
+      } else {
+        const result = await signUp(email, password, username);
+        if (result.error) {
+          setError(result.error);
+        } else if (result.needsEmailConfirmation !== false) {
+          setSuccess(
+            `Check your email to verify your account. We sent a link to ${email.trim()} — then log in at /login.`,
+          );
+        }
       }
     }
 
@@ -178,7 +183,6 @@ export function AuthScreen() {
                     autoComplete="username"
                     placeholder="nova_reyes"
                     className={fieldClass}
-                    pattern="[a-zA-Z0-9_]{2,25}"
                   />
                 </Field>
               )}
