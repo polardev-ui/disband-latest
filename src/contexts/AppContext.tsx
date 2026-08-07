@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
+import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
@@ -992,16 +992,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const supabase = getSupabaseClient();
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      let session = data.session;
+
+      // A persisted session whose access token already lapsed is unusable:
+      // supabase-js only auto-refreshes while the token is still inside its
+      // expiry margin, so an expired token at boot would let every initial
+      // request 401 with "JWT expired" forever (and realtime channels keep
+      // failing with PGRST303). Force a refresh now so the app only boots on
+      // a live session. Transient network failures keep the session (supabase
+      // would also preserve it); any real auth failure signs out cleanly.
+      if (session && isAccessTokenExpired(session)) {
+        const { data: refreshed, error } = await supabase.auth.refreshSession();
+        session = error?.name === "AuthRetryableFetchError" ? session : (refreshed.session ?? null);
+      }
+
+      setSession(session);
       setReady(true);
-    });
+    })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
   }, [configured]);
+
+  // Recover a session that expired while the tab was backgrounded. supabase's
+  // auto-refresh ticker only runs while the page is visible, so returning to a
+  // tab whose token lapsed can otherwise leave realtime channels and fetches
+  // stuck on an expired JWT until a manual reload.
+  useEffect(() => {
+    if (!configured) return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void (async () => {
+        const supabase = getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || !isAccessTokenExpired(session)) return;
+        const { data: refreshed, error } = await supabase.auth.refreshSession();
+        if (!error && refreshed.session) {
+          await refreshAll();
+        }
+      })();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [configured, refreshAll]);
 
   const refreshMfaStatus = useCallback(async () => {
     if (!configured) {
