@@ -21,11 +21,30 @@ export function useSubscription(userId: string | undefined) {
       return;
     }
     setLoading(true);
-    const { data, error } = await getSupabaseClient()
-      .from("subscriptions")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const supabase = getSupabaseClient();
+
+    const fetchOnce = async () => {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      return { data, error };
+    };
+
+    let { data, error } = await fetchOnce();
+
+    // The access token lapsed (e.g. the app sat closed past the token
+    // lifetime). Refresh once and retry instead of spamming failed loads.
+    if (error && (error.code === "PGRST303" || /JWT expired/i.test(error.message ?? ""))) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session) {
+        const retry = await fetchOnce();
+        data = retry.data;
+        error = retry.error;
+      }
+    }
+
     if (error && error.code !== "PGRST116") {
       console.error("Failed to load subscription:", error);
     }
