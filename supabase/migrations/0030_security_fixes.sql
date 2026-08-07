@@ -75,12 +75,12 @@ begin
       raise exception 'Friend requests can only be accepted or declined while pending.'
         using errcode = 'P0001';
     end if;
-    if auth.uid() = requester_id then
+    if auth.uid() = new.requester_id then
       if new.status <> 'declined' then
         raise exception 'Only the recipient can accept a friend request.'
           using errcode = 'P0001';
       end if;
-    elsif auth.uid() = addressee_id then
+    elsif auth.uid() = new.addressee_id then
       if new.status not in ('accepted', 'declined') then
         raise exception 'The recipient can only accept or decline a request.'
           using errcode = 'P0001';

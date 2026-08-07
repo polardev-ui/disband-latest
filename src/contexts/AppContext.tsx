@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
@@ -25,6 +26,13 @@ import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
+import {
+  AWAY_AFTER_MS,
+  flattenPresenceState,
+  PRESENCE_CHANNEL,
+  type PresenceMap,
+  type PresencePayload,
+} from "@/lib/presence";
 import {
   matchesOptimisticRow,
   type MessageContext,
@@ -167,6 +175,9 @@ interface AppContextValue {
   serverUnreadIds: string[];
   getDmUnreadCount: (threadId: string) => number;
   clearDmUnread: (threadId: string) => void;
+  channelUnreadMap: Map<string, number>;
+  getChannelUnreadCount: (channelId: string) => number;
+  presenceMap: PresenceMap;
   channelHasMore: boolean;
   dmHasMore: boolean;
   groupHasMore: boolean;
@@ -248,6 +259,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   >(new Map());
   const [dmThreadActivity, setDmThreadActivity] = useState<Record<string, string>>({});
   const [serverIndicators, setServerIndicators] = useState<Set<string>>(new Set());
+  const [channelUnreadMap, setChannelUnreadMap] = useState<Map<string, number>>(new Map());
+  const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
 
   const activeDmRef = useRef<string | null>(null);
   const activeChannelRef = useRef<string | null>(null);
@@ -260,6 +273,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const preferredStatusRef = useRef<UserStatus>("online");
   const maxMessageCharsRef = useRef(2000);
   const maxBioLengthRef = useRef(190);
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
+  const lastActivityRef = useRef<number>(typeof window !== "undefined" ? Date.now() : 0);
+  const autoAwayRef = useRef(false);
+  const inCallRef = useRef(false);
   profileRef.current = profile;
   syncUserSettings(profile);
   channelsRef.current = channels;
@@ -474,7 +491,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
       patchProfileInState({ ...current, status, updated_at: new Date().toISOString() });
     }
     await getSupabaseClient().from("profiles").update({ status }).eq("id", userId);
+    const payload: PresencePayload = { userId, status };
+    void presenceChannelRef.current?.track(payload).then();
   }, [userId, patchProfileInState]);
+
+  /** Track own live presence on the shared presence channel. */
+  const trackPresence = useCallback(async (status: UserStatus) => {
+    if (!userId) return;
+    const payload: PresencePayload = { userId, status };
+    void presenceChannelRef.current?.track(payload).then();
+  }, [userId]);
+
+  const markActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    if (autoAwayRef.current) {
+      autoAwayRef.current = false;
+      const current = profileRef.current;
+      const preferred = preferredStatusRef.current;
+      if (current && current.status === "idle" && preferred === "online") {
+        void setLiveStatus("online");
+      }
+    }
+  }, [setLiveStatus]);
+
+  // Treat being in a voice channel or call as "active": you are using the app.
+  useEffect(() => {
+    inCallRef.current = !!voiceJoinedChannelId || callPhase !== "idle";
+  }, [voiceJoinedChannelId, callPhase]);
+
+  // Auto-away: an "online" user who goes idle flips to away, and comes back
+  // automatically on the next activity. Never fires for manual away/DND/offline.
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const check = () => {
+      if (inCallRef.current) return;
+      const idleMs = Date.now() - lastActivityRef.current;
+      if (idleMs < AWAY_AFTER_MS) return;
+      const current = profileRef.current;
+      if (!current || current.status !== "online") return;
+      if (preferredStatusRef.current !== "online") return;
+      autoAwayRef.current = true;
+      void setLiveStatus("idle");
+    };
+    const id = window.setInterval(check, 30_000);
+    const onActivity = () => markActivity();
+    window.addEventListener("mousedown", onActivity);
+    window.addEventListener("keydown", onActivity);
+    window.addEventListener("touchstart", onActivity);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("mousedown", onActivity);
+      window.removeEventListener("keydown", onActivity);
+      window.removeEventListener("touchstart", onActivity);
+    };
+  }, [userId, configured, setLiveStatus, markActivity]);
+
+  // Live presence: join the shared channel, publish our status, and mirror the
+  // whole room into presenceMap. The server removes us the moment the socket
+  // drops, so closed apps can never linger as "online".
+  useEffect(() => {
+    if (!userId || !configured || !profile) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase.channel(PRESENCE_CHANNEL);
+    channel.on("presence", { event: "sync" }, () => {
+      setPresenceMap(flattenPresenceState(channel.presenceState() as Record<string, PresencePayload[]>));
+    });
+    void channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        presenceChannelRef.current = channel;
+        const preferred = profileRef.current?.preferred_status ?? "online";
+        const live = profileRef.current?.status ?? "online";
+        await channel.track({ userId, status: live === "offline" && preferred !== "offline" ? preferred : live } satisfies PresencePayload);
+      }
+    });
+    return () => {
+      if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [userId, configured, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfile = useCallback(async (uid: string) => {
     const cacheKey = `profile:${uid}`;
@@ -1399,7 +1493,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchProfileInState,
   ]);
 
-  // Presence: offline when tab closes/hidden, restore preferred status when visible
+  // Presence: remember the user's chosen status; restore from a stale "offline"
+  // column when the app is actually open. Closed apps are handled by the live
+  // presence channel (see below), not by best-effort pagehide writes.
   useEffect(() => {
     if (!profile) return;
     preferredStatusRef.current = profile.preferred_status ?? profile.status;
@@ -1409,33 +1505,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !profile || !configured) return;
     const preferred = profile.preferred_status ?? profile.status;
     preferredStatusRef.current = preferred;
-    if (document.visibilityState === "visible" && profile.status === "offline" && preferred !== "offline") {
+    if (profile.status === "offline" && preferred !== "offline") {
       void setLiveStatus(preferred);
     }
   }, [userId, profile?.id, configured, setLiveStatus]);
-
-  useEffect(() => {
-    if (!userId || !configured) return;
-
-    const goOffline = () => { void setLiveStatus("offline"); };
-    const restore = () => { void setLiveStatus(preferredStatusRef.current); };
-
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") goOffline();
-      else restore();
-    };
-
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pagehide", goOffline);
-    window.addEventListener("pageshow", restore);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pagehide", goOffline);
-      window.removeEventListener("pageshow", restore);
-      goOffline();
-    };
-  }, [userId, configured, setLiveStatus]);
 
   // Live reaction updates
   useEffect(() => {
@@ -1520,14 +1593,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as Message;
           if (msg.author_id === userId) return;
-          if (msg.mentions?.includes(userId)) return;
           const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
-          if (!channel) return;
           const viewingChannel =
             viewModeRef.current === "server" && activeChannelRef.current === msg.channel_id;
-          if (!viewingChannel) {
+          if (channel && !viewingChannel) {
+            setChannelUnreadMap((prev) => {
+              const next = new Map(prev);
+              next.set(msg.channel_id, (next.get(msg.channel_id) ?? 0) + 1);
+              return next;
+            });
             setServerIndicators((prev) => new Set(prev).add(channel.server_id));
           }
+          if (msg.mentions?.includes(userId)) return;
+          if (!channel) return;
           void (async () => {
             const { data: author } = await supabase
               .from("profiles")
@@ -1716,9 +1794,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (payload.status !== undefined) {
       payload.preferred_status = payload.status;
       preferredStatusRef.current = payload.status;
+      autoAwayRef.current = false;
     }
     const optimistic = { ...profile, ...payload, updated_at: new Date().toISOString() };
     patchProfileInState(optimistic);
+    if (typeof payload.status === "string") {
+      void trackPresence(payload.status);
+    }
     const { error } = await getSupabaseClient().from("profiles").update(payload).eq("id", userId);
     if (error) {
       await loadProfile(userId);
@@ -1726,7 +1808,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     await loadProfile(userId);
     return null;
-  }, [userId, profile, patchProfileInState, loadProfile]);
+  }, [userId, profile, patchProfileInState, loadProfile, trackPresence]);
 
   const persistActiveServerChannel = useCallback(() => {
     const serverId = activeServerRef.current;
@@ -1756,6 +1838,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [persistActiveServerChannel, userId, loadNotes]);
 
   const selectServer = useCallback(async (serverId: string) => {
+    markActivity();
     persistActiveServerChannel();
     setViewMode("server");
     setActiveServerId(serverId);
@@ -1772,9 +1855,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       setActiveChannelId(null);
     }
-  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel]);
+  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity]);
 
   const selectChannel = useCallback((channelId: string) => {
+    markActivity();
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
@@ -1784,9 +1868,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearServerIndicator(channel.server_id);
       setLastChannelId(channel.server_id, channelId);
     }
-  }, [viewMode, clearServerIndicator]);
+    setChannelUnreadMap((prev) => {
+      if (!prev.has(channelId)) return prev;
+      const next = new Map(prev);
+      next.delete(channelId);
+      return next;
+    });
+  }, [viewMode, clearServerIndicator, markActivity]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
+    markActivity();
     persistActiveServerChannel();
     setViewMode("dm");
     setActiveDmThreadId(threadId);
@@ -1794,16 +1885,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveChannelId(null);
     clearDmUnread(threadId);
     await loadDmMessages(threadId);
-  }, [loadDmMessages, clearDmUnread, persistActiveServerChannel]);
+  }, [loadDmMessages, clearDmUnread, persistActiveServerChannel, markActivity]);
 
   const selectGroupChat = useCallback(async (groupId: string) => {
+    markActivity();
     persistActiveServerChannel();
     setViewMode("group");
     setActiveGroupChatId(groupId);
     setActiveDmThreadId(null);
     setActiveChannelId(null);
     await loadGroupMessages(groupId);
-  }, [loadGroupMessages, persistActiveServerChannel]);
+  }, [loadGroupMessages, persistActiveServerChannel, markActivity]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
@@ -2209,6 +2301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
+    markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
@@ -2319,10 +2412,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
     return null;
-  }, [userId, activeChannelId, profile, members]);
+  }, [userId, activeChannelId, profile, members, markActivity]);
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
+    markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
@@ -2437,10 +2531,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     bumpDmThreadActivity(activeDmThreadId, saved.created_at);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
+    markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty message";
@@ -2552,7 +2647,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
     return null;
-  }, [userId, activeGroupChatId, profile, groupChats]);
+  }, [userId, activeGroupChatId, profile, groupChats, markActivity]);
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
@@ -2562,6 +2657,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendNote = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId) return "Not signed in";
+    markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty note";
@@ -2665,7 +2761,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
     return null;
-  }, [userId]);
+  }, [userId, markActivity]);
 
   const editNote = useCallback(async (noteId: string, content: string) => {
     if (!userId) return "Not signed in";
@@ -2833,6 +2929,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setMaxMessageChars = useCallback((n: number) => { maxMessageCharsRef.current = n; }, []);
   const setMaxBioLength = useCallback((n: number) => { maxBioLengthRef.current = n; }, []);
 
+  const getChannelUnreadCount = useCallback(
+    (channelId: string) => channelUnreadMap.get(channelId) ?? 0,
+    [channelUnreadMap],
+  );
+
+  const handleVoiceJoinedChannel = useCallback((channelId: string | null) => {
+    markActivity();
+    setVoiceJoinedChannelId(channelId);
+  }, [markActivity]);
+
+  const handleCallPhase = useCallback((phase: "idle" | "outgoing" | "incoming" | "active") => {
+    markActivity();
+    setCallPhase(phase);
+  }, [markActivity]);
+
   const value: AppContextValue = {
     ready,
     hydrated,
@@ -2926,8 +3037,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleNotePinned,
     markNotificationsRead,
     loadVoicePresence,
-    setVoiceJoinedChannelId,
-    setCallPhase,
+    setVoiceJoinedChannelId: handleVoiceJoinedChannel,
+    setCallPhase: handleCallPhase,
     setMaxMessageChars,
     setMaxBioLength,
     dmUnreads,
@@ -2935,6 +3046,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     serverUnreadIds,
     getDmUnreadCount,
     clearDmUnread,
+    channelUnreadMap,
+    getChannelUnreadCount,
+    presenceMap,
     channelHasMore,
     dmHasMore,
     groupHasMore,

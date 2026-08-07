@@ -7,6 +7,7 @@ import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { getProfilePanelMutedColor, getProfilePanelStyle } from "@/lib/profileColor";
 import { displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
+import { presenceStatusFor } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import type { Profile } from "@/lib/supabase/types";
@@ -52,13 +53,14 @@ export function UserProfileModal({
   isSelf,
   plan,
 }: UserProfileModalProps) {
-  const { friends } = useApp();
+  const { friends, presenceMap } = useApp();
   if (!open || !profile) return null;
 
   const friend = friends.some((f) => f.id === profile.id);
   const panelStyle = getProfilePanelStyle(profile);
   const mutedColor = getProfilePanelMutedColor(profile);
   const title = profile.display_name?.trim() || displayName(profile);
+  const live = presenceStatusFor(profile, presenceMap);
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
@@ -77,7 +79,7 @@ export function UserProfileModal({
           <div className={`relative mb-3 inline-block ${profile.banner_url ? "-mt-12" : ""}`}>
             <Avatar profile={profile} size="lg" className="ring-4 ring-black/20" />
             <span className="absolute -bottom-0.5 -right-0.5 rounded-full p-0.5" style={{ background: panelStyle.background }}>
-              <StatusIndicator status={profile.status} size="md" />
+              <StatusIndicator status={live} size="md" />
             </span>
           </div>
           <h2 className="text-xl font-bold leading-tight">{title}</h2>
@@ -94,7 +96,7 @@ export function UserProfileModal({
             <p className="mt-2 text-sm leading-snug opacity-90">{profile.bio}</p>
           )}
           <div className="mt-2">
-            <StatusIndicator status={profile.status} size="sm" showLabel />
+            <StatusIndicator status={live} size="sm" showLabel />
           </div>
 
           {isSelf ? (

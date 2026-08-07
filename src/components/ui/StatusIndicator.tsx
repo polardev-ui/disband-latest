@@ -1,13 +1,7 @@
 "use client";
 
+import { statusLabel } from "@/lib/presence";
 import type { UserStatus } from "@/lib/supabase/types";
-
-const LABELS: Record<UserStatus, string> = {
-  online: "Online",
-  idle: "Idle",
-  dnd: "Do Not Disturb",
-  offline: "Invisible",
-};
 
 interface StatusIndicatorProps {
   status: UserStatus;
@@ -49,11 +43,7 @@ export function StatusIndicator({ status, size = "md", showLabel = false, classN
           <span className="h-full w-full rounded-full border-[3px] border-status-offline bg-transparent" style={{ borderWidth: size === "sm" ? 2 : 3 }} />
         )}
       </span>
-      {showLabel && <span className="text-sm text-text-muted">{LABELS[status]}</span>}
+      {showLabel && <span className="text-sm text-text-muted">{statusLabel(status)}</span>}
     </span>
   );
-}
-
-export function statusLabel(status: UserStatus): string {
-  return LABELS[status];
 }

@@ -13,6 +13,7 @@ import {
 } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
+import { statusLabel } from "@/lib/presence";
 import type { UserStatus } from "@/lib/supabase/types";
 
 const STATUS_BG: Record<UserStatus, string> = {
@@ -36,8 +37,7 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
     ? displayName(profile)
     : user?.email?.split("@")[0] ?? "You";
   const status: UserStatus = profile?.status ?? "online";
-  const statusLabel =
-    status === "dnd" ? "Do Not Disturb" : status.charAt(0).toUpperCase() + status.slice(1);
+  const statusLabelText = statusLabel(status);
 
   return (
     <div
@@ -60,7 +60,7 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
             <p className="truncate text-sm font-semibold leading-tight text-text-normal">{name}</p>
             <SubscriptionBadge plan={plan} tooltip />
           </div>
-          <p className="truncate text-xs leading-tight text-text-muted">{statusLabel}</p>
+          <p className="truncate text-xs leading-tight text-text-muted">{statusLabelText}</p>
         </div>
       </button>
 
