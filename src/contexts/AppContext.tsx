@@ -1017,9 +1017,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
             } else {
               const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
               if (refreshError) {
-                console.warn("Session is rejected by Supabase and could not be refreshed; signing out.", refreshError);
-                await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
-                session = null;
+                // Only a definitive auth failure (revoked/invalid refresh token)
+                // means the session is truly dead. A transient failure — network
+                // blip, 5xx, or supabase-js's 60s refresh-failure cooldown cache —
+                // must NOT destroy the persisted session, or a single hiccup at
+                // boot force-logs the user out. supabase-js already removes the
+                // session itself when the refresh token is genuinely rejected, so
+                // we only need to clear it here for the edge case where the access
+                // token was still "valid" but the server rejected it.
+                if (refreshError.name === "AuthRetryableFetchError") {
+                  console.warn("Could not refresh the session due to a transient error; continuing with the cached session.", refreshError);
+                } else {
+                  console.warn("Session is rejected by Supabase and could not be refreshed; signing out.", refreshError);
+                  await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+                  session = null;
+                }
               } else {
                 session = refreshed.session;
               }

@@ -1,46 +1,40 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="public/logo.png">
-  <img alt="Disband" src="public/logo-app.png" width="96" height="96">
-</picture>
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo.png">
+    <img alt="Disband" src="public/logo-app.png" width="128" height="128">
+  </picture>
+</div>
 
-# Disband
+<h1 align="center">Disband</h1>
 
-**Your space to talk, hang out, and belong.**
+<p align="center"><strong>Your space to talk, hang out, and belong.</strong></p>
 
-Disband is a modern, open-source communication platform for friends and communities — with text chat, voice, video, and encryption built in from the ground up. It runs natively on **macOS, Windows, and Linux**, and is also available directly in your browser.
+<p align="center">
+  A modern, cross-platform communication platform for friends and communities — with text chat, voice, video,
+  and end-to-end encrypted messaging built in from the ground up. Runs natively on <strong>macOS, Windows, and
+  Linux</strong>, and in any modern browser.
+</p>
 
-Created by **Josh Clark** · Started 2023 · Current version **0.4.4**
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.22-6b5bd2?style=flat-square">
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js%2016-000000?style=flat-square&logo=nextdotjs&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React%2019-61DAFB?style=flat-square&logo=react&logoColor=black">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri%20v2-FFC131?style=flat-square&logo=tauri&logoColor=black">
+  <img alt="Supabase" src="https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white">
+  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white">
+</p>
 
 ---
 
 ## Features
 
-### Servers & Channels
-Organize your communities with **servers**, **text channels**, and **voice channels**. Create custom categories, invite members via 7-character invite codes, and manage everything with role-based permissions.
-
-### Direct Messages & Group Chats
-Private 1-on-1 conversations and **group chats** with the people who matter. Share emoji reactions, GIFs, images, videos, and files. Reply to specific messages, edit your messages, and express yourself with a full emoji picker.
-
-### Voice & Video Calls
-Make **peer-to-peer voice and video calls** with WebRTC — no third-party services required. Group calls are supported too, with mute, deafen, and camera toggle controls.
-
-### End-to-End Encrypted Messaging
-Your conversations stay between you and the people you trust. Messages and media are protected so that only participants in a conversation can read them.
-
-### Cross-Platform
-One account, everywhere you are. Download the **native desktop app** for macOS (Apple Silicon & Intel), Windows, or Linux, or open Disband in any modern browser.
-
-### Rich Media Support
-Share images, videos, and **animated GIFs** via integrated GIPHY support. Drag and drop media into conversations, with previews and lightbox viewing.
-
-### Themes
-Choose from **four handcrafted themes** — Dark, Light, Midnight (AMOLED-optimized), and Sunset — that instantly restyle the entire app.
-
-### Friends & Presence
-Build your network with friend requests, see who's online (Online, Idle, Do Not Disturb, Offline), and view rich user profiles with avatars, banners, bios, and accent colors.
-
-### Security & Moderation
-MFA (TOTP + WebAuthn), Cloudflare Turnstile bot protection, VPN detection, rate limiting, server moderation tools (kick, ban, role management), and platform-level banning.
+| | |
+|---|---|
+| **Servers & Channels** — Organize communities into servers with text and voice channels, custom categories, 7-character invite codes, and role-based permissions. | **Direct Messages & Group Chats** — Private 1-on-1 conversations and group chats with emoji reactions, GIFs, images, videos, files, replies, message editing, and a full emoji picker. |
+| **Voice & Video Calls** — Peer-to-peer voice and video calls over WebRTC with mesh group calls — no third-party services required. Mute, deafen, and camera controls built in. | **End-to-End Encrypted Messaging** — Conversations and media stay protected so only the people in a conversation can read them. |
+| **Friends & Presence** — Friend requests, a rich presence system (Online, Idle, Do Not Disturb, Offline), and profiles with avatars, banners, bios, and accent colors. | **Rich Media** — Drag-and-drop images, videos, and animated GIFs (via GIPHY) with inline previews and a lightbox viewer. |
+| **Themes** — Four handcrafted themes — Dark, Light, Midnight (AMOLED-optimized), and Sunset — that restyle the entire app instantly. | **Security & Moderation** — MFA (TOTP + WebAuthn), Cloudflare Turnstile bot protection, VPN detection, rate limiting, server moderation tools, and platform-level bans. |
 
 ---
 
@@ -48,8 +42,8 @@ MFA (TOTP + WebAuthn), Cloudflare Turnstile bot protection, VPN detection, rate 
 
 | Layer | Technology |
 |---|---|
-| Frontend | [Next.js](https://nextjs.org) (App Router, React 19, TypeScript) |
-| Styling | [Tailwind CSS v4](https://tailwindcss.com) with CSS variable theming |
+| Frontend | [Next.js 16](https://nextjs.org) (App Router, React 19, TypeScript) |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com) with CSS-variable theming |
 | Backend & Auth | [Supabase](https://supabase.com) (PostgreSQL, Realtime, Auth, Edge Functions) |
 | Desktop | [Tauri v2](https://v2.tauri.app) (Rust) — native macOS, Windows, Linux |
 | Mobile | Native SwiftUI (iOS) |
@@ -60,76 +54,26 @@ MFA (TOTP + WebAuthn), Cloudflare Turnstile bot protection, VPN detection, rate 
 
 ---
 
-## Desktop Downloads
+## Desktop Apps
 
-Disband publishes native installers for every platform via **GitHub Releases**:
+Disband ships native installers for every platform via **GitHub Releases**:
 
 - **macOS** — Apple Silicon & Intel (DMG)
 - **Windows** — x64 (EXE/MSI)
 - **Linux** — x64 (DEB/AppImage)
 
-Check the [Releases page](https://github.com/anomalyco/disband/releases) for the latest version.
-
----
-
-## Building from Source
-
-### Prerequisites
-- **Node.js** 18.18+ and **pnpm**
-- For desktop builds: **Rust toolchain** (`rustup`) and [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/)
-
-### Setup
-
-```bash
-pnpm install
-cp .env.example .env.local   # fill in your Supabase values
-```
-
-### Run in browser
-
-```bash
-pnpm dev          # http://localhost:3000
-pnpm build        # static export -> ./out
-```
-
-### Run as native desktop app
-
-```bash
-pnpm desktop:dev      # launches a native window connected to the dev server
-pnpm desktop:build    # produces installers in src-tauri/target/release/bundle
-```
-
----
-
-## Architecture
-
-```
-disband/
-├── src/                      # Shared web application (runs in browser + desktop)
-│   ├── app/                  # Next.js App Router pages & API routes
-│   ├── components/           # UI components (discord, auth, marketing, modals, theme, etc.)
-│   ├── contexts/             # AppContext — app-wide state management
-│   ├── hooks/                # React hooks (WebRTC calls, media upload, typing, etc.)
-│   └── lib/                  # Utilities (Supabase, WebRTC, notifications, themes, etc.)
-├── src-tauri/                # Native desktop shell (Rust + Tauri v2)
-├── supabase/                 # Database migrations, Edge Functions, auth templates
-├── ios/                      # Native iOS SwiftUI client
-├── public/                   # Static assets (logo, favicon)
-└── scripts/                  # Build, release & automation scripts
-```
-
-The web UI knows nothing about the desktop shell, and the native Rust bridge is fully isolated. Components adapt at runtime by detecting whether they're running in a browser or a Tauri window.
+Check the [Releases page](https://github.com/polardev-ui/disband-latest/releases) for the latest version.
 
 ---
 
 ## Project Links
 
-- **Web App:** [disband.chat](https://disband.chat)
-- **Source Code:** [github.com/anomalyco/disband](https://github.com/anomalyco/disband)
-- **Desktop Releases:** [github.com/anomalyco/disband/releases](https://github.com/anomalyco/disband/releases)
+- **Web App:** [www.disband.dev](https://www.disband.dev)
+- **Source Code:** [github.com/polardev-ui/disband-latest](https://github.com/polardev-ui/disband-latest)
+- **Desktop Releases:** [github.com/polardev-ui/disband-latest/releases](https://github.com/polardev-ui/disband-latest/releases)
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/anomalyco">Josh Clark</a></sub>
+  <sub>Built with ❤️ by <a href="https://github.com/polardev-ui">Josh Clark</a></sub>
 </p>
