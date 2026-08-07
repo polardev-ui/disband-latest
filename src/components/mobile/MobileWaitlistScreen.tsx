@@ -44,7 +44,7 @@ export function MobileWaitlistScreen() {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex justify-center">
-            <Logo size={64} className="h-16 w-16" priority />
+            <Logo adaptive size={64} className="h-16 w-16" priority />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Disband is desktop-only for now</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-text-muted">

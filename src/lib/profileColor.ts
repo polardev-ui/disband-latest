@@ -19,6 +19,14 @@ export function usesCustomAccent(profile: ProfileAccentFields): boolean {
   return !!(profile.accent_color && profile.accent_color_2);
 }
 
+const HEX_COLOR = /^#[0-9a-f]{6}$/;
+
+export function sanitizeHex(color: string | null | undefined, fallback = DEFAULT_ACCENT): string {
+  if (!color) return fallback;
+  const n = normalizeHex(color);
+  return HEX_COLOR.test(n) ? n : fallback;
+}
+
 export function isProfileGradient(profile: ProfileAccentFields): boolean {
   if (!usesCustomAccent(profile)) return false;
   return normalizeHex(profile.accent_color!) !== normalizeHex(profile.accent_color_2!);
@@ -75,7 +83,7 @@ function lightenHex(hex: string, targetLuminance = 0.55): string {
 function getAccentSampleColor(profile: ProfileAccentFields): string {
   if (!usesCustomAccent(profile)) return DEFAULT_ACCENT;
   if (isProfileGradient(profile)) return mixHex(profile.accent_color!, profile.accent_color_2!, 0.5);
-  return profile.accent_color!;
+  return sanitizeHex(profile.accent_color);
 }
 
 export function getProfilePanelStyle(profile: ProfileAccentFields): CSSProperties {
@@ -93,8 +101,8 @@ export function getProfilePanelMutedColor(profile: ProfileAccentFields): string 
 
 export function getAccentBackground(profile: ProfileAccentFields): string {
   if (!usesCustomAccent(profile)) return DEFAULT_ACCENT;
-  const c1 = profile.accent_color!;
-  const c2 = profile.accent_color_2!;
+  const c1 = sanitizeHex(profile.accent_color);
+  const c2 = sanitizeHex(profile.accent_color_2);
   if (!isProfileGradient(profile)) return c1;
   return `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
 }
@@ -104,7 +112,7 @@ export function getAvatarStyle(profile: ProfileAccentFields): CSSProperties {
   const sample = isProfileGradient(profile)
     ? mixHex(profile.accent_color!, profile.accent_color_2!, 0.5)
     : usesCustomAccent(profile)
-      ? profile.accent_color!
+      ? sanitizeHex(profile.accent_color)
       : DEFAULT_ACCENT;
   return {
     background: bg,
@@ -118,13 +126,13 @@ export function getUsernameStyle(profile: ProfileAccentFields, onDarkBackground 
   }
   if (isProfileGradient(profile)) {
     return {
-      backgroundImage: `linear-gradient(135deg, ${profile.accent_color} 0%, ${profile.accent_color_2} 100%)`,
+      backgroundImage: `linear-gradient(135deg, ${sanitizeHex(profile.accent_color)} 0%, ${sanitizeHex(profile.accent_color_2)} 100%)`,
       WebkitBackgroundClip: "text",
       backgroundClip: "text",
       color: "transparent",
     };
   }
-  const solid = profile.accent_color!;
+  const solid = sanitizeHex(profile.accent_color);
   const color = onDarkBackground && relativeLuminance(solid) < 0.45 ? lightenHex(solid) : solid;
   return { color };
 }

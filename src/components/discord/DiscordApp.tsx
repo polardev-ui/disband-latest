@@ -11,6 +11,7 @@ import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMen
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
+import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
@@ -559,6 +560,55 @@ export function DiscordApp() {
     [app, canKick, canBan, canManageRoles, openMenu, openProfile],
   );
 
+  const handleFriendContext = useCallback(
+    (friend: Profile, x: number, y: number) => {
+      const items: ContextMenuItem[] = [
+        {
+          id: "profile",
+          label: "View Profile",
+          icon: <IconFriends size={16} />,
+          onClick: () => openProfile(friend),
+        },
+        {
+          id: "dm",
+          label: "Message",
+          icon: <IconFriends size={16} />,
+          onClick: () => void app.openDmWithFriend(friend.id),
+        },
+        {
+          id: "copy",
+          label: "Copy User ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(friend.id),
+        },
+        {
+          id: "remove",
+          label: "Remove Friend",
+          icon: <IconLeave size={16} />,
+          danger: true,
+          onClick: () => {
+            if (confirm(`Remove ${displayName(friend)} from your friends?`)) {
+              void app.removeFriend(friend.id);
+            }
+          },
+        },
+        {
+          id: "block",
+          label: "Block",
+          icon: <IconTrash size={16} />,
+          danger: true,
+          onClick: () => {
+            if (confirm(`Block ${displayName(friend)}? They won't be able to message you.`)) {
+              void app.blockUser(friend.id);
+            }
+          },
+        },
+      ];
+      openMenu(x, y, items);
+    },
+    [app, openMenu, openProfile],
+  );
+
   const mapChatMessage = (m: {
     id: string;
     author_id: string;
@@ -923,13 +973,10 @@ export function DiscordApp() {
       )}
 
       {app.viewMode === "home" && (
-        <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-bg-primary p-8 text-center">
-          <IconFriends size={64} className="mb-4 text-text-muted" />
-          <h2 className="text-xl font-semibold">Select a friend to start chatting</h2>
-          <p className="mt-2 max-w-sm text-sm text-text-muted">
-            Add friends by username, accept pending requests, or create a server with the + button.
-          </p>
-        </main>
+        <>
+          <FriendsPanel onOpenProfile={openProfile} onFriendContext={handleFriendContext} />
+          <ActiveNowPanel />
+        </>
       )}
 
       {app.viewMode === "server" && activeChannel && isVoice && (

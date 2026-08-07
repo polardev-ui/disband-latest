@@ -2,27 +2,37 @@ import type { DownloadPlatform } from "@/lib/github-releases";
 
 const className = "h-5 w-5 shrink-0";
 
+/**
+ * Brand marks for each download target.
+ *
+ * Windows and Apple are single-path and inlined. Windows keeps its brand blue;
+ * Apple uses currentColor so it stays legible on both dark and light surfaces
+ * (the official mark is solid black, which disappears on our dark chrome).
+ *
+ * Tux is served from /platform-linux.svg rather than inlined — it is a
+ * multi-kilobyte, gradient-heavy illustration and inlining it would ship that
+ * weight into every bundle that imports this component.
+ */
 export function PlatformIcon({ platform }: { platform: DownloadPlatform | "apple" | "intel" }) {
   if (platform === "windows") {
     return (
-      <svg className={className} viewBox="0 0 24 24" aria-hidden fill="currentColor">
-        <path d="M3 5.5 10.5 4.6V11H3V5.5Zm0 7.5h7.5V19.4L3 18.5V13Zm9-8.4L21 3.5V11h-9V4.6Zm0 7.4h9v7.5l-9-1.1V12Z" />
+      <svg className={className} viewBox="0 0 128 128" aria-hidden fill="#0078d4">
+        <path d="M67.328 67.331h60.669V128H67.328zm-67.325 0h60.669V128H.003zM67.328 0h60.669v60.669H67.328zM.003 0h60.669v60.669H.003z" />
       </svg>
     );
   }
 
   if (platform === "linux") {
     return (
-      <svg className={className} viewBox="0 0 24 24" aria-hidden fill="currentColor">
-        <path d="M12.5 2c-2.2.2-3.9 1.8-4.2 4-.3 1.8.4 3.4 1.6 4.4-1 .5-1.8 1.4-2.2 2.5-.8 2.1.2 4.5 2.2 5.5-.3.8-.5 1.6-.5 2.5 0 2.5 2 4.5 4.5 4.5h.5c.3 1.2 1.3 2 2.5 2s2.2-.8 2.5-2h3c2.5 0 4.5-2 4.5-4.5 0-.9-.2-1.7-.5-2.5 2-.9 3.1-3.4 2.2-5.5-.4-1.1-1.2-2-2.2-2.5 1.2-1 1.9-2.6 1.6-4.4-.3-2.2-2-3.8-4.2-4-.2 0-.5-.1-.8-.1s-.6 0-.8.1Zm-1 4.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5-.7 1.5-1.5 1.5-1.5-.7-1.5-1.5Zm4 0c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5-.7 1.5-1.5 1.5-1.5-.7-1.5-1.5Z" />
-      </svg>
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src="/platform-linux.svg" alt="" aria-hidden className={className} />
     );
   }
 
   // macOS / Apple
   return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden fill="currentColor">
-      <path d="M16.13 12.73c-.02-2.41 1.97-3.57 2.06-3.63-1.12-1.63-2.86-1.85-3.48-1.88-1.48-.15-2.89.87-3.64.87-.76 0-1.93-.85-3.18-.83-1.64.03-3.15.95-3.99 2.41-1.7 2.95-.44 7.32 1.22 9.72.81 1.17 1.78 2.48 3.05 2.43 1.23-.05 1.69-.79 3.18-.79 1.49 0 1.91.79 3.18.76 1.31-.02 2.14-1.18 2.94-2.36.93-1.36 1.31-2.68 1.33-2.75-.03-.01-2.55-.98-2.57-3.89ZM14.04 4.07c.68-.82 1.14-1.96 1.01-3.1-.98.04-2.17.65-2.87 1.47-.63.73-1.18 1.9-1.03 3.02 1.09.08 2.2-.55 2.89-1.39Z" />
+    <svg className={className} viewBox="0 0 128 128" aria-hidden fill="currentColor">
+      <path d="M97.905 67.885c.174 18.8 16.494 25.057 16.674 25.137-.138.44-2.607 8.916-8.597 17.669-5.178 7.568-10.553 15.108-19.018 15.266-8.318.152-10.993-4.934-20.504-4.934-9.508 0-12.479 4.776-20.354 5.086-8.172.31-14.395-8.185-19.616-15.724C15.822 94.961 7.669 66.8 18.616 47.791c5.438-9.44 15.158-15.417 25.707-15.571 8.024-.153 15.598 5.398 20.503 5.398 4.902 0 14.106-6.676 23.782-5.696 4.051.169 15.421 1.636 22.722 12.324-.587.365-13.566 7.921-13.425 23.639M82.272 21.719c4.338-5.251 7.258-12.563 6.462-19.836-6.254.251-13.816 4.167-18.301 9.416-4.02 4.647-7.54 12.087-6.591 19.216 6.971.54 14.091-3.542 18.43-8.796" />
     </svg>
   );
 }

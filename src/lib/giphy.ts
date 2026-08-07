@@ -23,8 +23,11 @@ interface GiphySearchResponse {
 const GIPHY_SEARCH = "https://api.wsgpolar.me/v1/giphy/search";
 
 export async function searchGifs(query: string, limit = 20): Promise<GiphyImage[]> {
-  const q = encodeURIComponent(query.trim() || "funny");
-  const res = await fetch(`${GIPHY_SEARCH}?q=${q}&limit=${limit}`);
+  const trimmed = query.trim();
+  const q = trimmed ? encodeURIComponent(trimmed) : "";
+  const res = await fetch(
+    trimmed ? `${GIPHY_SEARCH}?q=${q}&limit=${limit}` : `${GIPHY_SEARCH}?limit=${limit}`,
+  );
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(body || `Failed to load GIFs (${res.status})`);
@@ -79,4 +82,16 @@ export function gifPreviewUrl(gif: GiphyImage): string | null {
  */
 export function giphyDisplayUrl(url: string): string {
   return giphyMp4Url(url) ?? url;
+}
+
+/** 
+ * Animated thumbnail MP4 for the picker grid.
+ * Giphy's `_s` preview stills (e.g. `100w_s.gif`) have no MP4 counterpart
+ * (they 403), so rewrite to the always-available `200w.mp4` variant.
+ */
+export function giphyThumbUrl(previewUrl: string): string {
+  if (isSafeGifUrl(previewUrl) && /\.gif(\?|$)/i.test(previewUrl)) {
+    return previewUrl.replace(/[^/]+$/i, "200w.mp4");
+  }
+  return previewUrl;
 }

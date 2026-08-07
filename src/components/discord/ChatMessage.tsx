@@ -219,7 +219,7 @@ export function ChatMessage({
   const highlightClass = highlight ? "bg-brand/10 ring-1 ring-brand/30" : "";
   const pingedYou = !!(currentUserId && message.mentions?.includes(currentUserId));
   const rowBgClass = pingedYou
-    ? "bg-[#fee75c]/10 hover:bg-[#fee75c]/15"
+    ? "bg-super/10 hover:bg-super/15"
     : "hover:bg-interactive-hover/30";
 
   if (compact) {

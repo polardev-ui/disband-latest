@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { twemojiUrl } from "@/components/ui/Twemoji";
+import { safeImageUrl } from "@/lib/safe-url";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -114,7 +115,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
                         className="flex h-9 w-9 items-center justify-center rounded hover:bg-interactive-hover"
                         title={`:${e.name}:`}
                       >
-                        <img src={e.url} alt={e.name} className="h-5 w-5 object-contain" />
+                        <img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-5 w-5 object-contain" />
                       </button>
                     ))}
                   </div>

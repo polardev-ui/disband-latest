@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { gifPreviewUrl, gifUrl, giphyDisplayUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
+import { gifPreviewUrl, gifUrl, giphyThumbUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose } from "@/components/icons";
 
 interface GifPickerProps {
@@ -17,8 +17,6 @@ function GifThumb({ gif, onSelect }: {
   const full = gifUrl(gif);
   if (!preview || !full) return null;
 
-  const src = giphyDisplayUrl(preview);
-
   return (
     <div className="overflow-hidden rounded hover:ring-2 hover:ring-brand">
       <button
@@ -28,7 +26,7 @@ function GifThumb({ gif, onSelect }: {
         title={gif.title}
       >
         <video
-          src={src ?? ""}
+          src={giphyThumbUrl(preview)}
           autoPlay
           loop
           muted
@@ -72,11 +70,7 @@ export function GifPicker({ onSelect }: GifPickerProps) {
     setLoading(true);
     setError(null);
     try {
-      if (!q.trim()) {
-        setGifs([]);
-      } else {
-        setGifs(await searchGifs(q));
-      }
+      setGifs(await searchGifs(q));
     } catch {
       setError("Could not load GIFs");
     } finally {
