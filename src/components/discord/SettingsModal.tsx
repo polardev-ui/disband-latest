@@ -87,9 +87,9 @@ function SettingRow({
 
 const STATUSES: { id: UserStatus; label: string }[] = [
   { id: "online", label: "Online" },
-  { id: "idle", label: "Idle" },
+  { id: "idle", label: "Away" },
   { id: "dnd", label: "Do Not Disturb" },
-  { id: "offline", label: "Invisible" },
+  { id: "offline", label: "Offline" },
 ];
 
 type SettingsTab = (typeof TABS)[number]["id"];

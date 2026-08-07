@@ -90,6 +90,7 @@ export function HomePanel({
     selectGroupChat,
     setViewHome,
     setViewNotes,
+    presenceMap,
   } = useApp();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
@@ -206,7 +207,7 @@ export function HomePanel({
                   <div className="relative">
                     <Avatar profile={entry.friend} size="sm" />
                     {entry.unreadCount <= 0 && (
-                      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[entry.friend.status]}`} />
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[presenceMap.get(entry.friend.id) ?? "offline"]}`} />
                     )}
                     <DmUnreadBadge count={entry.unreadCount} />
                   </div>

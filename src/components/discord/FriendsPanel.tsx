@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { IconFriends, IconSearch, IconClose } from "@/components/icons";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
+import type { PresenceMap } from "@/lib/presence";
 
 type FriendsTab = "online" | "all" | "pending" | "blocked";
 
@@ -18,18 +19,19 @@ const STATUS_DOT: Record<UserStatus, string> = {
 
 const STATUS_LABEL: Record<UserStatus, string> = {
   online: "Online",
-  idle: "Idle",
+  idle: "Away",
   dnd: "Do Not Disturb",
   offline: "Offline",
 };
 
-function StatusAvatar({ profile }: { profile: Profile }) {
+function StatusAvatar({ profile, presence }: { profile: Profile; presence: PresenceMap }) {
+  const live = presence.get(profile.id) ?? "offline";
   return (
     <div className="relative shrink-0">
       <Avatar profile={profile} size="md" />
       <span
         className={`absolute -bottom-0.5 -right-0.5 h-[13px] w-[13px] rounded-full border-[3px] border-bg-primary ${
-          STATUS_DOT[profile.status]
+          STATUS_DOT[live]
         }`}
       />
     </div>
@@ -96,6 +98,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
     respondFriendRequest,
     unblockUser,
     openDmWithFriend,
+    presenceMap,
   } = useApp();
 
   const [tab, setTab] = useState<FriendsTab>("online");
@@ -120,7 +123,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
   );
 
   const visible = useMemo(() => {
-    const base = tab === "online" ? friends.filter((f) => f.status !== "offline") : friends;
+    const base = tab === "online" ? friends.filter((f) => (presenceMap.get(f.id) ?? "offline") !== "offline") : friends;
     const q = query.trim().toLowerCase();
     const filtered = q
       ? base.filter(
@@ -129,7 +132,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
         )
       : base;
     return [...filtered].sort((a, b) => displayName(a).localeCompare(displayName(b)));
-  }, [friends, tab, query]);
+  }, [friends, tab, query, presenceMap]);
 
   async function submitAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -335,7 +338,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                     }}
                     className="group -mx-3 flex cursor-pointer items-center gap-3 rounded-lg border-b border-divider px-3 py-2.5 transition-colors hover:bg-interactive-hover"
                   >
-                    <StatusAvatar profile={friend} />
+                    <StatusAvatar profile={friend} presence={presenceMap} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-semibold text-text-normal">
                         {displayName(friend)}
@@ -346,7 +349,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                         )}
                       </p>
                       <p className="truncate text-[13px] text-text-muted">
-                        {STATUS_LABEL[friend.status]}
+                        {STATUS_LABEL[presenceMap.get(friend.id) ?? "offline"]}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -431,6 +434,7 @@ function PendingList({
   onRespond: (id: string, accept: boolean) => Promise<void>;
   onOpenProfile: (profile: Profile) => void;
 }) {
+  const { presenceMap } = useApp();
   if (incoming.length === 0 && outgoing.length === 0) {
     return (
       <p className="py-10 text-sm text-text-muted">There are no pending friend requests.</p>
@@ -444,7 +448,7 @@ function PendingList({
           key={f.id}
           className="flex items-center gap-3 border-b border-divider py-2.5"
         >
-          {f.requester && <StatusAvatar profile={f.requester} />}
+          {f.requester && <StatusAvatar profile={f.requester} presence={presenceMap} />}
           <div className="min-w-0 flex-1">
             <button
               type="button"
@@ -473,7 +477,7 @@ function PendingList({
           key={f.id}
           className="flex items-center gap-3 border-b border-divider py-2.5"
         >
-          {f.addressee && <StatusAvatar profile={f.addressee} />}
+          {f.addressee && <StatusAvatar profile={f.addressee} presence={presenceMap} />}
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold text-text-normal">
               {f.addressee ? displayName(f.addressee) : "…"}
@@ -488,15 +492,18 @@ function PendingList({
 
 /** Right rail — mirrors the "Active Now" column in the reference layout. */
 export function ActiveNowPanel() {
-  const { friends, dmListEntries } = useApp();
+  const { friends, dmListEntries, presenceMap } = useApp();
 
   const active = useMemo(() => {
     const inDm = new Set(dmListEntries.map((e) => e.friend.id));
     return friends
-      .filter((f) => f.status === "online" || f.status === "idle" || f.status === "dnd")
+      .filter((f) => {
+        const live = presenceMap.get(f.id) ?? "offline";
+        return live === "online" || live === "idle" || live === "dnd";
+      })
       .sort((a, b) => Number(inDm.has(b.id)) - Number(inDm.has(a.id)))
       .slice(0, 12);
-  }, [friends, dmListEntries]);
+  }, [friends, dmListEntries, presenceMap]);
 
   return (
     <aside className="hidden w-[22rem] shrink-0 flex-col overflow-hidden border-l border-black/20 bg-bg-primary xl:flex">
@@ -515,12 +522,12 @@ export function ActiveNowPanel() {
           <ul className="space-y-1 pt-1">
             {active.map((f) => (
               <li key={f.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
-                <StatusAvatar profile={f} />
+                <StatusAvatar profile={f} presence={presenceMap} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-text-normal">
                     {displayName(f)}
                   </p>
-                  <p className="truncate text-[13px] text-text-muted">{STATUS_LABEL[f.status]}</p>
+                  <p className="truncate text-[13px] text-text-muted">{STATUS_LABEL[presenceMap.get(f.id) ?? "offline"]}</p>
                 </div>
               </li>
             ))}
