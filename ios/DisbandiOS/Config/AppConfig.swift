@@ -14,7 +14,7 @@ enum AppConfig {
     static let mediaAPIURL = URL(string: "https://api.wsgpolar.me/v1")!
 
     /// Public web origin for shareable links / invites.
-    static let webAppURL = URL(string: "https://disband.wsgpolar.me")!
+    static let webAppURL = URL(string: "https://www.disband.dev")!
 }
 
 /// Process-wide shared Supabase client. Auth tokens are persisted in the

@@ -47,8 +47,8 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold text-white">Contact</h2>
           <p>
             Legal inquiries:{" "}
-            <a href="mailto:legal@disband.wsgpolar.me" className="text-[#00a8fc] hover:underline">
-              legal@disband.wsgpolar.me
+            <a href="mailto:legal@disband.dev" className="text-[#00a8fc] hover:underline">
+              legal@disband.dev
             </a>
           </p>
         </div>

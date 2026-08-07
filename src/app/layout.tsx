@@ -6,7 +6,10 @@ export const metadata: Metadata = {
   title: "Disband",
   description: "Disband — one codebase, every platform.",
   icons: {
-    icon: "/favicon.png",
+    // Transparent mark — sits cleanly on light and dark browser chrome.
+    icon: "/logo.png",
+    // Apple touch icons must stay opaque: iOS composites transparency onto
+    // black, so the transparent mark would render as a dark square.
     apple: "/logo-app.png",
   },
 };
@@ -23,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
+        <meta name="referrer" content="no-referrer" />
         <Script id="theme-init" strategy="beforeInteractive">
           {`
 (function () {

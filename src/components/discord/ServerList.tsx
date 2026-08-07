@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
 import { IconHome, IconPlus } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
+import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, Server, ViewMode } from "@/lib/supabase/types";
 
 export interface DmRailUnread {
@@ -138,10 +139,10 @@ export function ServerList({
                   active ? "h-10 w-1" : hasUnread ? "h-2 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
                 }`}
               />
-              {server.icon_url ? (
+              {safeImageUrl(server.icon_url) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={server.icon_url}
+                  src={safeImageUrl(server.icon_url)!}
                   alt=""
                   className={`h-12 w-12 object-cover transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
                     active ? "rounded-[30%]" : "rounded-[50%]"

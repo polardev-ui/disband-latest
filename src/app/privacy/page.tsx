@@ -50,8 +50,8 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-white">Contact</h2>
           <p>
             Questions about this policy? Reach us at{" "}
-            <a href="mailto:privacy@disband.wsgpolar.me" className="text-[#00a8fc] hover:underline">
-              privacy@disband.wsgpolar.me
+            <a href="mailto:privacy@disband.dev" className="text-[#00a8fc] hover:underline">
+              privacy@disband.dev
             </a>
             .
           </p>

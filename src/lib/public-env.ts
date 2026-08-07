@@ -15,7 +15,7 @@ export const PUBLIC_ENV = {
     process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest",
   /** Public web app origin for shareable links (invites, etc.) */
   webAppUrl:
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://disband.wsgpolar.me",
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://www.disband.dev",
   /** Cloudflare Turnstile site key — website-only forms. */
   turnstileSiteKey:
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "0x4AAAAAADpTEU6IzBC_YVIF",

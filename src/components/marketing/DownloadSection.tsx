@@ -87,54 +87,67 @@ export function DownloadSection() {
   const versionLabel = displayVersion(release, assets);
 
   return (
-    <section id="download" className="marketing-fade-up relative px-6 py-20">
-      <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#2b2d31]/80 p-8 text-center shadow-2xl backdrop-blur-sm">
-        <h2 className="text-2xl font-bold text-white sm:text-3xl">Download Disband</h2>
-        <p className="mt-3 text-[#b5bac1]">
-          Native apps for macOS, Windows, and Linux — or use Disband in your desktop browser.
+    <section id="download" className="border-t border-white/[0.06] px-6 py-20 sm:py-24">
+      <div className="mx-auto max-w-6xl">
+        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-[2rem]">
+          Download Disband
+        </h2>
+        <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
+          Native builds for macOS, Windows, and Linux — or skip the install and use Disband in your
+          browser.
         </p>
 
         {loading ? (
-          <p className="mt-8 text-sm text-[#949ba4]">Loading releases…</p>
+          <p className="mt-10 text-sm text-[#6e727a]">Loading releases…</p>
         ) : downloadOptions.length > 0 ? (
-          <div className="mt-8 space-y-6">
+          <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]">
             {recommended && (
               <div>
                 <a
                   href={recommended.url}
-                  className="inline-flex items-center gap-2 rounded-xl bg-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-brand/25 transition-transform hover:scale-[1.02]"
+                  className="inline-flex items-center gap-2 rounded-md bg-brand px-6 py-3 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover"
                 >
                   <PlatformIcon platform={platformIconKey(recommended.platform)} />
                   Download for {recommended.label}
                 </a>
+                {versionLabel && (
+                  <p className="mt-3 font-mono text-[11px] tracking-[0.1em] text-[#6e727a]">
+                    {versionLabel}
+                  </p>
+                )}
                 {platform === "macos" && (
-                  <p className="mx-auto mt-4 max-w-md text-xs leading-relaxed text-[#72767d]">
+                  <p className="mt-5 max-w-sm text-[13px] leading-relaxed text-[#6e727a]">
                     First launch blocked by macOS? Right-click the app and choose Open, or run{" "}
-                    <code className="text-[#949ba4]">xattr -cr /Applications/Disband.app</code> in Terminal.
+                    <code className="text-[#9aa0a8]">xattr -cr /Applications/Disband.app</code> in
+                    Terminal.
                   </p>
                 )}
               </div>
             )}
 
-            <div className="text-left">
-              <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-[#949ba4]">
-                {versionLabel ? `${versionLabel} · All platforms` : "All platforms"}
+            <div>
+              <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+                All platforms
               </p>
-              <ul className="space-y-2">
+              <ul className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
                 {downloadOptions.map((asset) => (
                   <li key={asset.url}>
                     <a
                       href={asset.url}
-                      className="flex items-center justify-between rounded-lg border border-white/5 bg-[#1e1f22] px-4 py-3 transition-colors hover:border-brand/40 hover:bg-[#313338]"
+                      className="group flex items-center justify-between gap-4 py-3.5 transition-colors hover:bg-white/[0.02]"
                     >
-                      <span className="flex items-center gap-3">
+                      <span className="flex min-w-0 items-center gap-3">
                         <PlatformIcon platform={platformIconKey(asset.platform)} />
-                        <span>
-                          <span className="block text-sm font-medium text-white">{asset.label}</span>
-                          <span className="font-mono text-xs text-[#949ba4]">{asset.name}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm text-white">{asset.label}</span>
+                          <span className="block truncate font-mono text-[11px] text-[#6e727a]">
+                            {asset.name}
+                          </span>
                         </span>
                       </span>
-                      <span className="text-xs text-brand">Download</span>
+                      <span className="shrink-0 text-[13px] text-[#6e727a] transition-colors group-hover:text-white">
+                        Download
+                      </span>
                     </a>
                   </li>
                 ))}
@@ -142,13 +155,13 @@ export function DownloadSection() {
             </div>
           </div>
         ) : (
-          <div className="mt-8 space-y-3">
-            <p className="text-sm text-[#949ba4]">
-              Desktop builds are published on GitHub Releases. Check back soon or browse all downloads below.
+          <div className="mt-10 space-y-4">
+            <p className="max-w-md text-[15px] leading-relaxed text-[#9aa0a8]">
+              Desktop builds are published on GitHub Releases.
             </p>
             <a
               href={GITHUB_RELEASES_URL}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-[#1e1f22] px-6 py-3 text-sm font-semibold text-white transition-colors hover:border-brand/40 hover:bg-[#313338]"
+              className="inline-flex items-center gap-2 rounded-md border border-white/15 px-6 py-3 text-[15px] font-medium text-white transition-colors hover:border-white/30 hover:bg-white/[0.04]"
             >
               View downloads on GitHub
             </a>

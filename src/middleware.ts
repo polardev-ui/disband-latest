@@ -31,5 +31,6 @@ export function middleware(_request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/:path*",
+  // Exclude API routes (JSON) and static assets — headers only matter on HTML.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };

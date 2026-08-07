@@ -16,6 +16,7 @@ import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
+import { preloadImages } from "@/lib/preload-images";
 import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profileErrors";
 import { messageCharLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
@@ -60,6 +61,8 @@ import type {
 
 interface AppContextValue {
   ready: boolean;
+  /** First full data load for the signed-in user has settled. */
+  hydrated: boolean;
   configured: boolean;
   session: Session | null;
   user: User | null;
@@ -189,6 +192,18 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [ready, setReady] = useState(false);
+  /**
+   * True once the first full data load for the signed-in user has settled.
+   *
+   * `ready` only means the auth session is known. Rendering the app on `ready`
+   * alone paints a shell with a null profile and empty lists for as long as the
+   * initial fetches take — which reads as "my username is my email and all my
+   * friends vanished". The shell waits on this instead.
+   */
+  const [hydrated, setHydrated] = useState(false);
+  /** First data load has settled; avatars may still be warming. */
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const imagesWarmedRef = useRef(false);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
@@ -957,14 +972,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId) {
       setProfile(null);
       setServers([]);
+      setDataLoaded(false);
+      setHydrated(false);
+      imagesWarmedRef.current = false;
       return;
     }
+
+    let cancelled = false;
+    setDataLoaded(false);
+    setHydrated(false);
+    imagesWarmedRef.current = false;
+
     void (async () => {
-      await ensureProfile(userId, user?.email);
-      await refreshAll();
+      try {
+        await ensureProfile(userId, user?.email);
+        await refreshAll();
+      } catch (err) {
+        // A failed bootstrap must not strand the user on the splash forever —
+        // fall through and let the app render whatever did load.
+        console.error("Initial load failed:", err);
+      } finally {
+        if (!cancelled) setDataLoaded(true);
+      }
       void primeNotificationPermission();
     })();
+
+    // Safety valve: if a request hangs rather than rejecting, show the app
+    // anyway rather than spinning indefinitely.
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) {
+        setDataLoaded(true);
+        setHydrated(true);
+      }
+    }, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Second startup phase: once the data is in, warm every avatar and icon that
+   * the first screen will render before lifting the splash. Without this the
+   * app appears, then avatars pop in one by one a moment later.
+   */
+  useEffect(() => {
+    if (!dataLoaded || hydrated || imagesWarmedRef.current) return;
+    imagesWarmedRef.current = true;
+
+    const urls: (string | null | undefined)[] = [
+      profile?.avatar_url,
+      ...friends.map((f) => f.avatar_url),
+      ...dmThreads.map((t) => t.friend?.avatar_url),
+      ...servers.map((s) => s.icon_url),
+      ...groupChats.flatMap((g) => [g.icon_url, ...g.members.map((m) => m.avatar_url)]),
+    ];
+
+    void preloadImages(urls).finally(() => setHydrated(true));
+  }, [dataLoaded, hydrated, profile, friends, dmThreads, servers, groupChats]);
 
   // Realtime subscriptions
   useEffect(() => {
@@ -2769,6 +2835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     ready,
+    hydrated,
     configured,
     session,
     user,

@@ -12,6 +12,7 @@ import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
+import { safeImageUrl } from "@/lib/safe-url";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { getDisbandUserMedia } from "@/lib/media";
 import {
@@ -429,7 +430,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       {profile?.banner_url && (
                         <div
                           className="h-16 bg-cover bg-center"
-                          style={{ backgroundImage: `url(${profile.banner_url})` }}
+                          style={{ backgroundImage: safeImageUrl(profile.banner_url) ? `url(${safeImageUrl(profile.banner_url)})` : undefined }}
                         />
                       )}
                       <div className="p-3" style={getProfilePanelStyle(previewAccent)}>
@@ -467,7 +468,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     {profile?.banner_url && (
                       <div
                         className="mt-2 h-20 rounded-lg bg-cover bg-center ring-1 ring-divider"
-                        style={{ backgroundImage: `url(${profile.banner_url})` }}
+                        style={{ backgroundImage: safeImageUrl(profile.banner_url) ? `url(${safeImageUrl(profile.banner_url)})` : undefined }}
                       />
                     )}
                     <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm text-brand hover:bg-interactive-hover">
