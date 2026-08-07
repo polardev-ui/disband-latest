@@ -19,6 +19,9 @@ export async function POST(request: Request) {
 
   const email = body.email?.trim().toLowerCase() ?? "";
   const username = body.username?.trim().toLowerCase() ?? "";
+  // The DB derives a username from the display name when none is usable, so a
+  // blank or non-ASCII name is fine here — only sanitized names are validated.
+  const sanitized = username.replace(/[^a-z0-9_]/g, "");
   const ip = getClientIp(request);
   const ipHash = ip ? hashIp(ip) : null;
 
@@ -52,9 +55,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const formatErr = usernameFormatError(username);
+  const formatErr = usernameFormatError(sanitized);
   if (formatErr) {
-    if (usernameContainsBlockedWord(username) && ipHash) {
+    if (usernameContainsBlockedWord(sanitized) && ipHash) {
       await service.rpc("record_signup_ip_block", {
         p_ip_hash: ipHash,
         p_hours: 24,
@@ -69,16 +72,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ allowed: false, error: formatErr }, { status: 400 });
   }
 
-  if (username) {
-    const { data: availability } = await service.rpc("check_username_available", {
-      p_username: username,
-    });
-    if (availability && availability.available === false) {
-      return NextResponse.json({
-        allowed: false,
-        error: (availability.reason as string | undefined) ?? "That username is not available.",
-      }, { status: 400 });
-    }
+  const { data: availability } = await service.rpc("check_username_available", {
+    p_username: sanitized,
+  });
+  if (availability && availability.available === false) {
+    return NextResponse.json({
+      allowed: false,
+      error: (availability.reason as string | undefined) ?? "That username is not available.",
+    }, { status: 400 });
   }
 
   if (process.env.BLOCK_VPN_SIGNUP === "true" && ip) {

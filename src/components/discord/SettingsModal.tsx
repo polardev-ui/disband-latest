@@ -207,9 +207,18 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setError("Pick both profile colors, or use the default style.");
       return;
     }
+    const sanitizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (sanitizedUsername.length < 2) {
+      setError("Username must be at least 2 characters (letters, numbers, and underscores).");
+      return;
+    }
+    if (!displayName.trim()) {
+      setError("Enter a display name.");
+      return;
+    }
     const err = await updateProfile({
-      display_name: displayName.trim() || null,
-      username: username.trim() || null,
+      display_name: displayName.trim(),
+      username: sanitizedUsername,
       bio: bio.trim() || null,
       accent_color: useDefaultAccent ? null : accent1,
       accent_color_2: useDefaultAccent ? null : accent2,

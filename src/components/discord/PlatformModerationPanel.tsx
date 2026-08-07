@@ -33,12 +33,16 @@ export function PlatformModerationPanel() {
   const loadBans = useCallback(async () => {
     const { data: { session } } = await getSupabaseClient().auth.getSession();
     if (!session) return;
-    const res = await fetch("/api/moderation/platform-ban", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (!res.ok) return;
-    const json = (await res.json()) as { bans?: PlatformBanRow[] };
-    setBans(json.bans ?? []);
+    try {
+      const res = await fetch("/api/moderation/platform-ban", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as { bans?: PlatformBanRow[] };
+      setBans(json.bans ?? []);
+    } catch {
+      // Ignore transient failures; the list is best-effort.
+    }
   }, []);
 
   useEffect(() => {
@@ -56,14 +60,23 @@ export function PlatformModerationPanel() {
     setSearching(true);
     const handle = setTimeout(async () => {
       const escaped = term.replace(/[%_,]/g, (m) => `\\${m}`);
-      const { data } = await getSupabaseClient()
-        .from("profiles")
-        .select("*")
-        .or(`username.ilike.%${escaped}%,display_name.ilike.%${escaped}%`)
-        .limit(8);
-      setResults((data as Profile[]) ?? []);
-      setSearching(false);
-      setDropdownOpen(true);
+      const like = `%${escaped}%`;
+      try {
+        const [byUsername, byDisplayName] = await Promise.all([
+          getSupabaseClient().from("profiles").select("*").ilike("username", like).limit(8),
+          getSupabaseClient().from("profiles").select("*").ilike("display_name", like).limit(8),
+        ]);
+        const seen = new Map<string, Profile>();
+        for (const row of [...(byUsername.data ?? []), ...(byDisplayName.data ?? [])]) {
+          if (!seen.has(row.id)) seen.set(row.id, row as Profile);
+        }
+        setResults([...seen.values()].slice(0, 8));
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+        setDropdownOpen(true);
+      }
     }, 250);
     return () => clearTimeout(handle);
   }, [query, selected]);

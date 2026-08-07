@@ -10,7 +10,9 @@ export function mapProfileError(message: string, code?: string): string {
   if (lower.includes("username is not allowed")) return "That username is not allowed.";
   if (lower.includes("bio cannot exceed")) return "Bio cannot exceed 190 characters.";
   if (lower.includes("cannot exceed")) return "Messages cannot exceed 4000 characters.";
-  if (lower.includes("username twice per day")) return "You can only change your username twice per day.";
+  if (lower.includes("username 10 times")) return "You can only change your username 10 times per day.";
+  if (lower.includes("username is required")) return "Enter a username.";
+  if (lower.includes("display name cannot be empty")) return "Enter a display name.";
   if (lower.includes("display name 10 times")) return "You can only change your display name 10 times per day.";
   if (lower.includes("wait 20 seconds")) return "Wait 20 seconds before changing your display name again.";
   if (lower.includes("profile picture")) return message;
