@@ -1,7 +1,9 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="public/logo.png">
-  <img alt="Disband" src="public/logo-app.png" width="96" height="96">
-</picture>
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo.png">
+    <img alt="Disband" src="public/logo-app.png" width="128" height="128">
+  </picture>
+</div>
 
 <h1 align="center">Disband</h1>
 
