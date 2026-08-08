@@ -5,11 +5,13 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconPlus } from "@/components/icons";
-import { displayName, getMentionQuery, normalizeMessageContent } from "@/lib/utils";
+import { displayName, getMentionQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
+import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import { GifPicker } from "./GifPicker";
-import { EmojiPicker } from "./EmojiPicker";
+import { EmojiPicker, EmojiImg } from "./EmojiPicker";
+import { PollCreateModal } from "./PollCreateModal";
 
 interface ChatInputProps {
   placeholder: string;
@@ -20,10 +22,14 @@ interface ChatInputProps {
   editingMessageId?: string | null;
   editingContent?: string;
   onCancelEdit?: () => void;
-  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" }; replyToId?: string | null; pendingFile?: File; maxUploadBytes?: number }) => Promise<string | null>;
+  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" | "poll" }; replyToId?: string | null; pendingFile?: File; maxUploadBytes?: number }) => Promise<string | null>;
   onTypingActivity?: () => void;
   maxUploadBytes?: number;
   serverId?: string | null;
+  /** When false, the "+" button only uploads files (polls are disabled). */
+  allowPolls?: boolean;
+  /** Incrementing value that triggers a focus of the composer textarea. */
+  focusSignal?: number;
 }
 
 interface MentionItem {
@@ -77,14 +83,20 @@ export function ChatInput({
   onTypingActivity,
   maxUploadBytes = 50 * 1024 * 1024,
   serverId,
+  allowPolls = false,
+  focusSignal,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
+  const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
 
   useEffect(() => {
@@ -95,6 +107,20 @@ export function ChatInput({
   }, [editingMessageId, editingContent]);
 
   useEffect(() => {
+    if (!focusSignal || focusSignal <= 0) return;
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLInputElement
+      || active instanceof HTMLTextAreaElement
+      || active instanceof HTMLSelectElement
+      || (active instanceof HTMLElement && active.isContentEditable)
+    ) {
+      return;
+    }
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [focusSignal]);
+
+  useEffect(() => {
     if (!onTypingActivity || !text.trim()) return;
     onTypingActivity();
     const id = window.setInterval(() => onTypingActivity(), 2000);
@@ -103,6 +129,31 @@ export function ChatInput({
 
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
+
+  const emojiCtx = getEmojiQuery(text, cursor);
+  const showEmoji = !!emojiCtx && !showMentions;
+
+  const emojiItems = useMemo((): EmojiMatch[] => {
+    if (!emojiCtx) return [];
+    return searchEmojis(emojiCtx.query);
+  }, [emojiCtx]);
+
+  useEffect(() => {
+    if (!plusMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (plusMenuRef.current?.contains(e.target as Node)) return;
+      setPlusMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [plusMenuOpen]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 84)}px`;
+  }, [text, editingMessageId]);
 
   const mentionItems = useMemo((): MentionItem[] => {
     if (!mentionCtx) return [];
@@ -150,6 +201,21 @@ export function ChatInput({
     setMentionIdx(0);
     requestAnimationFrame(() => {
       const pos = before.length + item.insert.length + 1;
+      textareaRef.current?.setSelectionRange(pos, pos);
+      textareaRef.current?.focus();
+    });
+  }
+
+  function insertEmojiFromPicker(item: EmojiMatch) {
+    if (!emojiCtx || !textareaRef.current) return;
+    const before = text.slice(0, emojiCtx.start);
+    const after = text.slice(textareaRef.current.selectionStart);
+    const spacer = after && !after.startsWith(" ") ? " " : "";
+    const next = `${before}${item.emoji}${spacer}${after}`;
+    setText(next);
+    setEmojiIdx(0);
+    requestAnimationFrame(() => {
+      const pos = before.length + item.emoji.length + spacer.length;
       textareaRef.current?.setSelectionRange(pos, pos);
       textareaRef.current?.focus();
     });
@@ -267,6 +333,23 @@ export function ChatInput({
         return;
       }
     }
+    if (showEmoji && emojiItems.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setEmojiIdx((i) => (i + 1) % emojiItems.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setEmojiIdx((i) => (i - 1 + emojiItems.length) % emojiItems.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertEmojiFromPicker(emojiItems[emojiIdx] ?? emojiItems[0]);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void submit();
@@ -329,6 +412,26 @@ export function ChatInput({
         </div>
       )}
 
+      {showEmoji && emojiItems.length > 0 && (
+        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
+          <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Emoji</p>
+          {emojiItems.map((item, i) => (
+            <button
+              key={`e-${item.shortcode}`}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); insertEmojiFromPicker(item); }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
+                emojiIdx === i ? "bg-interactive-selected" : ""
+              }`}
+            >
+              <EmojiImg emoji={item.emoji} />
+              <span className="truncate font-medium">:{item.shortcode}:</span>
+              <span className="ml-auto shrink-0 text-xs text-text-muted">{item.emoji}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {(replyTo || editingMessageId) && (
         <div className="mb-1 flex items-center gap-2 rounded-t-lg border border-b-0 border-divider bg-bg-secondary px-3 py-2 text-sm">
           <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
@@ -372,14 +475,38 @@ export function ChatInput({
         )}
 
         <div className="flex items-center gap-2 px-3 py-2">
-          <button
-            type="button"
-            aria-label="Upload file"
-            onClick={() => fileRef.current?.click()}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal"
-          >
-            <IconPlus size={22} />
-          </button>
+          <div ref={plusMenuRef} className="relative shrink-0">
+            <button
+              type="button"
+              aria-label="Upload file"
+              aria-expanded={plusMenuOpen}
+              onClick={() => {
+                if (allowPolls) setPlusMenuOpen((v) => !v);
+                else fileRef.current?.click();
+              }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal"
+            >
+              <IconPlus size={22} />
+            </button>
+            {allowPolls && plusMenuOpen && (
+              <div className="absolute bottom-full left-0 z-20 mb-1 w-48 overflow-hidden rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => { setPlusMenuOpen(false); fileRef.current?.click(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-interactive-hover"
+                >
+                  Upload Files
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPlusMenuOpen(false); setPollOpen(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-interactive-hover"
+                >
+                  Create a poll
+                </button>
+              </div>
+            )}
+          </div>
           <input
             ref={fileRef}
             type="file"
@@ -391,9 +518,29 @@ export function ChatInput({
             ref={textareaRef}
             value={text}
             onChange={(e) => {
-              setText(e.target.value);
-              setCursor(e.target.selectionStart);
+              const next = e.target.value;
+              const selStart = e.target.selectionStart;
+              const token = getCompletedEmojiToken(next, selStart);
+              if (token) {
+                const emoji = lookupShortcode(token.code);
+                if (emoji) {
+                  const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
+                  const pos = token.start + emoji.length;
+                  setText(replaced);
+                  setCursor(pos);
+                  setMentionIdx(0);
+                  setEmojiIdx(0);
+                  requestAnimationFrame(() => {
+                    textareaRef.current?.setSelectionRange(pos, pos);
+                  });
+                  onTypingActivity?.();
+                  return;
+                }
+              }
+              setText(next);
+              setCursor(selStart);
               setMentionIdx(0);
+              setEmojiIdx(0);
               onTypingActivity?.();
             }}
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
@@ -402,7 +549,7 @@ export function ChatInput({
             onPaste={onPaste}
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             rows={1}
-            className="max-h-40 min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
+            className="max-h-[84px] min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
           />
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
@@ -414,6 +561,17 @@ export function ChatInput({
         </div>
         {error && <p className="px-4 pb-2 text-xs text-status-dnd">{error}</p>}
       </form>
+
+      <PollCreateModal
+        open={pollOpen}
+        onClose={() => setPollOpen(false)}
+        onCreated={(pollId) => {
+          setPollOpen(false);
+          void onSend("", { attachment: { url: pollId, type: "poll" } }).then((err) => {
+            if (err) setError(err);
+          });
+        }}
+      />
     </div>
   );
 }

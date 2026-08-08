@@ -25,11 +25,12 @@ const STATUS_BG: Record<UserStatus, string> = {
 
 interface UserPanelProps {
   onOpenSettings: () => void;
+  onOpenProfile?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
 /** Discord-style pinned user bar at the bottom of the channel/friends sidebar. */
-export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
+export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: UserPanelProps) {
   const { profile, user, micMuted, deafened, setMicMuted, setDeafened } = useApp();
   const { plan } = useSubscription(profile?.id);
 
@@ -46,7 +47,8 @@ export function UserPanel({ onOpenSettings, onContextMenu }: UserPanelProps) {
     >
       <button
         type="button"
-        onClick={onOpenSettings}
+        onClick={onOpenProfile ?? onOpenSettings}
+        title={onOpenProfile ? "View your profile" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 rounded p-1 text-left transition-all duration-150 ease-in-out hover:bg-interactive-hover"
       >
         <div className="relative shrink-0">

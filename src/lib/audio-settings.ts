@@ -60,11 +60,20 @@ export function buildAudioConstraints(): boolean | MediaTrackConstraints {
 
 export function buildVideoConstraints(plan?: string): boolean | MediaTrackConstraints {
   const deviceId = getPreferredVideoInputId();
-  const resolution = plan === "super"
-    ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
-    : plan === "basic"
-      ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
-      : { width: { ideal: 640 }, height: { ideal: 480 } };
+  const resolution = videoTierConstraints(plan);
   if (!deviceId) return resolution;
   return { ...resolution, deviceId: { ideal: deviceId } };
+}
+
+/** Best-effort fallback resolution when a pinned device can't satisfy the tier. */
+export function buildVideoFallbackConstraints(plan?: string): MediaTrackConstraints {
+  return { facingMode: "user", ...videoTierConstraints(plan) };
+}
+
+function videoTierConstraints(plan?: string): MediaTrackConstraints {
+  return plan === "super"
+    ? { width: { ideal: 2560 }, height: { ideal: 1440 }, frameRate: { ideal: 120 } }
+    : plan === "basic"
+      ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
+      : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
 }

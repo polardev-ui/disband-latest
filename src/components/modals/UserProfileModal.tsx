@@ -4,13 +4,13 @@ import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
-import { getProfilePanelMutedColor, getProfilePanelStyle } from "@/lib/profileColor";
+import { getProfilePanelMutedColor, getProfilePanelStyle, getAccentBackground } from "@/lib/profileColor";
 import { displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
-import { PlatformBadge } from "@/components/ui/PlatformBadge";
-import type { Profile } from "@/lib/supabase/types";
+import { UserBadges } from "@/components/ui/UserBadges";
+import type { Profile, ServerRole } from "@/lib/supabase/types";
 
 interface UserProfileModalProps {
   profile: Profile | null;
@@ -31,6 +31,12 @@ interface UserProfileModalProps {
   pendingOutgoing?: boolean;
   isSelf?: boolean;
   plan?: "free" | "basic" | "super";
+  isServerMember?: boolean;
+  serverRoles?: ServerRole[];
+  canManageRoles?: boolean;
+  memberRoleId?: string | null;
+  memberIsOwner?: boolean;
+  onAssignRole?: (roleId: string | null) => void;
 }
 
 export function UserProfileModal({
@@ -52,6 +58,12 @@ export function UserProfileModal({
   pendingOutgoing,
   isSelf,
   plan,
+  isServerMember,
+  serverRoles,
+  canManageRoles,
+  memberRoleId,
+  memberIsOwner,
+  onAssignRole,
 }: UserProfileModalProps) {
   const { friends, presenceMap } = useApp();
   if (!open || !profile) return null;
@@ -66,37 +78,45 @@ export function UserProfileModal({
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
       <div className="relative w-full max-w-sm overflow-hidden rounded-lg shadow-2xl">
-        {profile.banner_url && (
+        {profile.banner_url ? (
           <div
-            className="h-24 bg-cover bg-center"
+            className="h-28 bg-cover bg-center"
             style={{ backgroundImage: safeImageUrl(profile.banner_url) ? `url(${safeImageUrl(profile.banner_url)})` : undefined }}
           />
+        ) : (
+          <div className="h-20" style={{ background: getAccentBackground(profile) }} />
         )}
-        <button type="button" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60">
+        <button type="button" onClick={onClose} className="absolute right-3 top-3 z-10 rounded-full bg-black/40 p-1.5 text-white hover:bg-black/60">
           <IconClose size={20} />
         </button>
-        <div className={`px-4 pb-4 ${profile.banner_url ? "pt-0" : "pt-3"}`} style={panelStyle}>
-          <div className={`relative mb-3 inline-block ${profile.banner_url ? "-mt-12" : ""}`}>
+        <div className={`px-4 pb-4 ${profile.banner_url ? "pt-0" : "pt-0"}`} style={panelStyle}>
+          <div className="relative mb-3 inline-block -mt-12">
             <Avatar profile={profile} size="lg" className="ring-4 ring-black/20" />
             <span className="absolute -bottom-0.5 -right-0.5 rounded-full p-0.5" style={{ background: panelStyle.background }}>
               <StatusIndicator status={live} size="md" />
             </span>
           </div>
-          <h2 className="text-xl font-bold leading-tight">{title}</h2>
+          <h2 className="text-xl font-bold leading-tight">
+            {title}
+            {isSelf && <span className="ml-2 rounded bg-black/25 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide">You</span>}
+          </h2>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {profile.username && (
               <p className="text-sm" style={{ color: mutedColor }}>
                 @{profile.username}
               </p>
             )}
-            <PlatformBadge profile={profile} />
             {plan && <SubscriptionBadge plan={plan} />}
+          </div>
+          <div className="mt-2">
+            <UserBadges profile={profile} size={17} />
           </div>
           {profile.bio && (
             <p className="mt-2 text-sm leading-snug opacity-90">{profile.bio}</p>
           )}
-          <div className="mt-2">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: mutedColor }}>
             <StatusIndicator status={live} size="sm" showLabel />
+            <span>Member since {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
           </div>
 
           {isSelf ? (
@@ -104,7 +124,7 @@ export function UserProfileModal({
               <button
                 type="button"
                 onClick={() => { onClose(); onOpenSettings(); }}
-                className="mt-4 flex items-center gap-1 rounded bg-black/25 px-3 py-2 text-sm font-semibold backdrop-blur-sm hover:bg-black/35"
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded bg-black/25 px-3 py-2 text-sm font-semibold backdrop-blur-sm transition-colors hover:bg-black/35"
               >
                 <IconSettings size={16} /> Edit Profile
               </button>
@@ -159,6 +179,32 @@ export function UserProfileModal({
                 <button type="button" onClick={onBlock} className="rounded border border-status-dnd/40 px-3 py-2 text-sm font-semibold text-status-dnd hover:bg-status-dnd/10">
                   Block
                 </button>
+              )}
+            </div>
+          )}
+
+          {canManageRoles && onAssignRole && !isSelf && isServerMember && (
+            <div className="mt-4 border-t border-black/15 pt-3">
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
+                Server Role
+              </p>
+              {memberIsOwner ? (
+                <p className="text-sm font-semibold">Server Owner</p>
+              ) : (
+                <select
+                  value={memberRoleId ?? ""}
+                  onChange={(e) => onAssignRole(e.target.value || null)}
+                  className="w-full rounded bg-black/20 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand"
+                >
+                  <option value="">No role</option>
+                  {(serverRoles ?? [])
+                    .filter((r) => !r.is_default)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                </select>
               )}
             </div>
           )}

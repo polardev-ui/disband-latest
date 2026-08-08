@@ -1,6 +1,6 @@
 import type { Profile } from "@/lib/supabase/types";
 
-export type AttachmentType = "image" | "video" | "gif" | "file";
+export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio";
 export type MessageContext = "channel" | "dm" | "group" | "notes";
 
 export interface MessageAttachmentPayload {
@@ -36,7 +36,7 @@ export interface ReactionSummary {
 
 export interface ReplyPreview {
   id: string;
-  author_id: string;
+  author_id: string | null;
   content: string;
   attachment_type?: AttachmentType | null;
   author?: Pick<Profile, "id" | "username" | "display_name">;
@@ -68,13 +68,13 @@ export function summarizeReactions(
 /** Match optimistic rows to realtime inserts (content + attachment aware). */
 export function matchesOptimisticRow(
   opt: {
-    author_id: string;
+    author_id: string | null;
     content: string;
     attachment_url?: string | null;
     reply_to_id?: string | null;
   },
   real: {
-    author_id: string;
+    author_id: string | null;
     content: string;
     attachment_url?: string | null;
     reply_to_id?: string | null;

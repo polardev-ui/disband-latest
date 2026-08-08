@@ -2,7 +2,7 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
-import { IconHome, IconPlus } from "@/components/icons";
+import { IconHome, IconPlus, IconCompass } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, Server, ViewMode } from "@/lib/supabase/types";
@@ -24,6 +24,7 @@ interface ServerListProps {
   onSelectServer: (id: string) => void;
   onSelectDmThread: (threadId: string) => void;
   onCreateServer: () => void;
+  onDiscover: () => void;
   onServerContext: (server: Server, x: number, y: number) => void;
 }
 
@@ -48,6 +49,7 @@ export function ServerList({
   onSelectServer,
   onSelectDmThread,
   onCreateServer,
+  onDiscover,
   onServerContext,
 }: ServerListProps) {
   const homeActive =
@@ -170,6 +172,17 @@ export function ServerList({
           className="group flex h-12 w-12 items-center justify-center rounded-[50%] bg-bg-primary text-status-online transition-all duration-150 ease-in-out hover:rounded-[30%] hover:bg-status-online hover:text-white"
         >
           <IconPlus size={24} />
+        </button>
+      </Tooltip>
+
+      <Tooltip label="Discover">
+        <button
+          type="button"
+          aria-label="Discover servers"
+          onClick={onDiscover}
+          className="group flex h-12 w-12 items-center justify-center rounded-[50%] bg-bg-primary text-text-muted transition-all duration-150 ease-in-out hover:rounded-[30%] hover:bg-brand hover:text-white"
+        >
+          <IconCompass size={22} />
         </button>
       </Tooltip>
     </nav>

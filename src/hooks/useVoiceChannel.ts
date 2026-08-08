@@ -44,6 +44,15 @@ export function useVoiceChannel(
     audioRefsRef.current.forEach((el) => { el.muted = deafened; });
   }, [deafened]);
 
+  useEffect(() => {
+    if (!channelId || !userId || !joined) return;
+    void getSupabaseClient()
+      .from("voice_presence")
+      .update({ muted: micMuted, deafened })
+      .eq("channel_id", channelId)
+      .eq("user_id", userId);
+  }, [channelId, userId, joined, micMuted, deafened]);
+
   const loadPresence = useCallback(async () => {
     if (!channelId) return;
     const supabase = getSupabaseClient();
@@ -180,7 +189,12 @@ export function useVoiceChannel(
       localStreamRef.current = stream;
 
       const supabase = getSupabaseClient();
-      await supabase.from("voice_presence").upsert({ channel_id: channelId, user_id: userId });
+      await supabase.from("voice_presence").upsert({
+        channel_id: channelId,
+        user_id: userId,
+        muted: micMuted,
+        deafened,
+      });
 
       const ch = supabase.channel(`voice:${channelId}`, {
         config: { broadcast: { self: false } },
@@ -203,7 +217,7 @@ export function useVoiceChannel(
       setError((e as Error).message || "Could not access microphone");
       await cleanup();
     }
-  }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, participants]);
+  }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, participants, micMuted, deafened]);
 
   const leave = useCallback(async () => {
     if (userId && signalRef.current) {

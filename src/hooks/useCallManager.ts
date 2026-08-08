@@ -40,9 +40,12 @@ export function useCallManager(
   micMuted: boolean,
   deafened: boolean,
   isBlocked?: (id: string) => boolean,
+  plan?: string,
 ) {
   const isBlockedRef = useRef(isBlocked);
   isBlockedRef.current = isBlocked;
+  const planRef = useRef(plan);
+  useEffect(() => { planRef.current = plan; }, [plan]);
   const [phase, setPhase] = useState<CallPhase>("idle");
   const [incoming, setIncoming] = useState<IncomingCallInfo | null>(null);
   const [activePeer, setActivePeer] = useState<Profile | null>(null);
@@ -126,7 +129,7 @@ export function useCallManager(
       await warmUpMediaDevices();
       const stream = await getDisbandUserMedia({
         audio: true,
-        video: cameraRef.current ? buildVideoConstraints() : false,
+        video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
       });
       localRef.current = stream;
       setLocalStream(stream);
@@ -212,7 +215,7 @@ export function useCallManager(
         track.enabled = true;
       } else {
         const cam = await getDisbandUserMedia({
-          video: buildVideoConstraints(),
+          video: buildVideoConstraints(planRef.current),
         });
         track = cam.getVideoTracks()[0];
         stream.addTrack(track);
@@ -241,6 +244,45 @@ export function useCallManager(
     }
     setLocalStream(new MediaStream(stream.getTracks()));
   }, [userId]);
+
+  const reapplyCameraConstraints = useCallback(async (nextPlan: string | undefined) => {
+    const pc = pcRef.current;
+    const stream = localRef.current;
+    if (!pc || !stream || phaseRef.current !== "active" || !cameraRef.current) return;
+    const peerId = activePeerIdRef.current;
+    try {
+      const cam = await getDisbandUserMedia({
+        video: buildVideoConstraints(nextPlan),
+      });
+      const track = cam.getVideoTracks()[0];
+      const existing = stream.getVideoTracks()[0];
+      if (existing) {
+        existing.stop();
+        stream.removeTrack(existing);
+      }
+      stream.addTrack(track);
+      await setPeerVideoTrack(pc, stream, track);
+      const offer = await createOfferForPeer(pc);
+      if (peerId && signalRef.current) {
+        void signalRef.current.send({
+          type: "broadcast",
+          event: "call",
+          payload: { type: "offer", from: userId!, to: peerId, sdp: offer },
+        });
+      }
+      setLocalStream(new MediaStream(stream.getTracks()));
+    } catch {
+      // Keep the existing camera track if re-acquisition fails.
+    }
+  }, [userId]);
+
+  const prevPlanRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (plan && plan !== prevPlanRef.current) {
+      prevPlanRef.current = plan;
+      void reapplyCameraConstraints(plan);
+    }
+  }, [plan, reapplyCameraConstraints]);
 
   const toggleScreenShare = useCallback(async () => {
     const next = !screenShareRef.current;

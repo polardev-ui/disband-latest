@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
+import { searchEmojis } from "@/lib/emoji-shortcodes";
 import { twemojiUrl } from "@/components/ui/Twemoji";
 import { safeImageUrl } from "@/lib/safe-url";
 
@@ -11,7 +12,7 @@ interface EmojiPickerProps {
   serverId?: string | null;
 }
 
-function EmojiImg({ emoji }: { emoji: string }) {
+export function EmojiImg({ emoji, size = "1.4em" }: { emoji: string; size?: string }) {
   return (
     <img
       src={twemojiUrl(emoji)}
@@ -19,7 +20,7 @@ function EmojiImg({ emoji }: { emoji: string }) {
       className="twemoji"
       draggable={false}
       loading="lazy"
-      style={{ height: "1.4em", width: "1.4em" }}
+      style={{ height: size, width: size }}
     />
   );
 }
@@ -27,12 +28,20 @@ function EmojiImg({ emoji }: { emoji: string }) {
 export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [search, setSearch] = useState("");
   const [panelPos, setPanelPos] = useState({ left: 0, bottom: 0, width: 320 });
   const [customEmoji, setCustomEmoji] = useState<{ id: number; name: string; url: string }[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
+  const q = search.trim().toLowerCase();
+  const searched = useMemo(() => (q ? searchEmojis(q, 100) : []), [q]);
+
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) setSearch("");
+  }, [open]);
 
   useEffect(() => {
     if (!serverId) { setCustomEmoji([]); return; }
@@ -100,7 +109,38 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
             style={{ left: panelPos.left, bottom: panelPos.bottom, width: panelPos.width }}
           >
             <div className="max-h-80 overflow-y-auto p-2">
-              {customEmoji.length > 0 && (
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search emoji…"
+                className="mb-2 w-full rounded-md border border-black/20 bg-bg-accent px-2.5 py-1.5 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+              />
+              {q && (
+                <div className="mb-2">
+                  <p className="mb-1 px-1 text-[11px] font-bold uppercase text-text-muted">Results</p>
+                  <div className="grid grid-cols-8 gap-0.5">
+                    {searched.map((m) => (
+                      <button
+                        key={`s-${m.shortcode}`}
+                        type="button"
+                        onClick={() => {
+                          onSelect(m.emoji);
+                          setOpen(false);
+                          setSearch("");
+                        }}
+                        className="flex h-9 w-9 items-center justify-center rounded hover:bg-interactive-hover"
+                        title={`:${m.shortcode}:`}
+                      >
+                        <EmojiImg emoji={m.emoji} />
+                      </button>
+                    ))}
+                  </div>
+                  {searched.length === 0 && (
+                    <p className="px-1 py-2 text-center text-xs text-text-muted">No emoji found</p>
+                  )}
+                </div>
+              )}
+              {!q && customEmoji.length > 0 && (
                 <div className="mb-2">
                   <p className="mb-1 px-1 text-[11px] font-bold uppercase text-text-muted">Server Emoji</p>
                   <div className="grid grid-cols-8 gap-0.5">
@@ -121,7 +161,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
                   </div>
                 </div>
               )}
-              {EMOJI_CATEGORIES.map((cat) => (
+              {!q && EMOJI_CATEGORIES.map((cat) => (
                 <div key={cat.name} className="mb-2">
                   <p className="mb-1 px-1 text-[11px] font-bold uppercase text-text-muted">{cat.name}</p>
                   <div className="grid grid-cols-8 gap-0.5">

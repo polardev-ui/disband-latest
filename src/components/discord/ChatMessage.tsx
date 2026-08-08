@@ -3,7 +3,7 @@
 import { formatMessageTime, displayName, extractInviteCodes, isValidMentionToken, normalizeMessageContent } from "@/lib/utils";
 import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
-import { isEmojiOnlyMessage } from "@/lib/emoji";
+import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { summarizeReactions, type ReactionSummary, type ReplyPreview } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
@@ -18,10 +18,10 @@ import type { MessageReaction } from "@/lib/messages";
 
 export interface ChatMessageData {
   id: string;
-  author_id: string;
+  author_id: string | null;
   content: string;
   attachment_url?: string | null;
-  attachment_type?: "image" | "video" | "gif" | "file" | null;
+  attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
   reply_to_id?: string | null;
@@ -103,17 +103,15 @@ function MessageBody({
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
   const textOnly = content.replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "").trim();
   const emojiOnly = isEmojiOnlyMessage(textOnly);
+  const emojiSizeClass = emojiOnly ? emojiOnlySizeClass(textOnly) : "";
+  const normalClass = compact ? "text-[15px] leading-[1.25rem]" : "text-[15px] leading-[1.375rem]";
 
   return (
     <>
       {textOnly && (
         <span
           className={`whitespace-pre-wrap break-words ${sending ? "text-text-muted" : "text-text-normal"} ${
-            emojiOnly
-              ? "text-[2.75rem] leading-[3rem]"
-              : compact
-                ? "text-[15px] leading-[1.25rem]"
-                : "text-[15px] leading-[1.375rem]"
+            emojiOnly ? emojiSizeClass || normalClass : normalClass
           }`}
         >
           {emojiOnly ? (
@@ -177,6 +175,7 @@ export function ChatMessage({
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const isOwn = message.author_id === currentUserId;
+  const isSystem = !message.author_id;
   const nameStyle = authorColor
     ? { color: authorColor }
     : author
@@ -221,6 +220,20 @@ export function ChatMessage({
   const rowBgClass = pingedYou
     ? "bg-super/10 hover:bg-super/15"
     : "hover:bg-interactive-hover/30";
+
+  if (isSystem) {
+    const sysText = normalizeMessageContent(message.content);
+    if (!sysText) return null;
+    return (
+      <article id={`msg-${message.id}`} className="my-2 px-4">
+        <div className="flex items-center gap-2 text-text-muted">
+          <span className="h-px flex-1 bg-divider" />
+          <p className="shrink-0 text-center text-[13px] italic leading-snug">{sysText}</p>
+          <span className="h-px flex-1 bg-divider" />
+        </div>
+      </article>
+    );
+  }
 
   if (compact) {
     return (
@@ -320,7 +333,8 @@ export function ChatMessage({
 }
 
 export function shouldGroupMessages(prev: ChatMessageData | undefined, msg: ChatMessageData): boolean {
-  if (!prev || prev.author_id !== msg.author_id) return false;
+  if (!prev || !prev.author_id || !msg.author_id) return false;
+  if (prev.author_id !== msg.author_id) return false;
   if (msg.reply_to_id) return false;
   const gap = new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime();
   return gap <= 7 * 60 * 1000;

@@ -19,6 +19,8 @@ export interface Profile {
   avatar_crop: { zoom: number; x: number; y: number } | null;
   show_owner_badge: boolean;
   show_staff_badge: boolean;
+  show_og_badge: boolean;
+  show_bounty_badge: boolean;
   subscription_plan?: string;
   sound_enabled?: boolean;
   desktop_notifications_enabled?: boolean;
@@ -48,6 +50,7 @@ export interface Server {
   description: string | null;
   owner_id: string;
   invite_code?: string;
+  discoverable?: boolean;
   created_at: string;
 }
 
@@ -61,6 +64,10 @@ export interface ServerRole {
     ban?: boolean;
     manage_roles?: boolean;
     manage_server?: boolean;
+    manage_channels?: boolean;
+    manage_messages?: boolean;
+    manage_emojis?: boolean;
+    mention_everyone?: boolean;
   };
   position: number;
   is_default: boolean;
@@ -109,7 +116,7 @@ export interface DbMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -131,7 +138,7 @@ export interface DbDmMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -152,7 +159,7 @@ export interface DbNote {
   user_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -195,10 +202,10 @@ export interface GroupChatMember {
 export interface GroupMessage {
   id: string;
   group_id: string;
-  author_id: string;
+  author_id: string | null;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -218,6 +225,8 @@ export interface DbVoicePresence {
   channel_id: string;
   user_id: string;
   joined_at: string;
+  muted: boolean;
+  deafened: boolean;
 }
 
 export interface VoicePresence extends DbVoicePresence {
@@ -244,7 +253,7 @@ export interface CustomEmoji {
   created_at: string;
 }
 
-export type ViewMode = "home" | "server" | "dm" | "group" | "notes";
+export type ViewMode = "home" | "server" | "dm" | "group" | "notes" | "discover";
 
 export interface Database {
   public: {
@@ -348,14 +357,14 @@ export interface Database {
           author_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
           attachment_key?: string | null;
           mentions?: string[];
           edited_at?: string | null;
@@ -375,14 +384,14 @@ export interface Database {
           author_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
@@ -394,7 +403,7 @@ export interface Database {
           user_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
@@ -404,7 +413,7 @@ export interface Database {
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
@@ -416,8 +425,8 @@ export interface Database {
       };
       voice_presence: {
         Row: DbVoicePresence;
-        Insert: { channel_id: string; user_id: string };
-        Update: Record<string, never>;
+        Insert: { channel_id: string; user_id: string; muted?: boolean; deafened?: boolean };
+        Update: { muted?: boolean; deafened?: boolean };
         Relationships: [];
       };
       notifications: {
@@ -495,6 +504,43 @@ export interface Database {
       create_group_chat: {
         Args: { p_name: string; p_member_ids: string[] };
         Returns: string;
+      };
+      create_channel: {
+        Args: {
+          p_server_id: string;
+          p_name: string;
+          p_type?: "text" | "voice";
+          p_category_id?: string | null;
+        };
+        Returns: string;
+      };
+      rename_channel: {
+        Args: { p_channel_id: string; p_name: string };
+        Returns: undefined;
+      };
+      delete_channel: {
+        Args: { p_channel_id: string };
+        Returns: undefined;
+      };
+      delete_server_role: {
+        Args: { p_role_id: string };
+        Returns: undefined;
+      };
+      create_category: {
+        Args: { p_server_id: string; p_name: string };
+        Returns: string;
+      };
+      rename_category: {
+        Args: { p_category_id: string; p_name: string };
+        Returns: undefined;
+      };
+      delete_category: {
+        Args: { p_category_id: string };
+        Returns: undefined;
+      };
+      move_channel: {
+        Args: { p_channel_id: string; p_category_id: string | null; p_index: number };
+        Returns: undefined;
       };
     };
     Enums: {

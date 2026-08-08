@@ -18,6 +18,7 @@ const STATUS_BG = {
 
 interface HomePanelProps {
   onOpenSettings: () => void;
+  onOpenProfile?: () => void;
   onUserPanelContext?: (e: React.MouseEvent) => void;
   onFriendClick?: (friendId: string) => void;
   onGroupContext?: (group: GroupChatWithMembers, x: number, y: number) => void;
@@ -73,6 +74,7 @@ function DmUnreadBadge({ count }: { count: number }) {
 
 export function HomePanel({
   onOpenSettings,
+  onOpenProfile,
   onUserPanelContext,
   onGroupContext,
   onOpenSubscription,
@@ -222,7 +224,7 @@ export function HomePanel({
         )}
       </div>
 
-      <UserPanel onOpenSettings={onOpenSettings} onContextMenu={onUserPanelContext} />
+      <UserPanel onOpenSettings={onOpenSettings} onOpenProfile={onOpenProfile} onContextMenu={onUserPanelContext} />
       <CreateGroupChatModal open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </aside>
   );
