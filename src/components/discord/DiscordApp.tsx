@@ -3,14 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 import { useApp } from "@/contexts/AppContext";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useZoom, ZOOM_STEP } from "@/hooks/useZoom";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useCallManager } from "@/hooks/useCallManager";
 import { useGroupCallManager } from "@/hooks/useGroupCallManager";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useServerVoicePresence } from "@/hooks/useServerVoicePresence";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
+import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPanel";
 import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
@@ -30,6 +34,7 @@ import { ServerSettingsModal } from "@/components/modals/ServerSettingsModal";
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
 import {
   IconCopy,
+  IconClose,
   IconLeave,
   IconSettings,
   IconTrash,
@@ -40,10 +45,13 @@ import {
   IconNotes,
   IconPin,
   IconPinOff,
+  IconMenu,
+  IconPlus,
+  IconEdit,
 } from "@/components/icons";
 import { SubscriptionModal } from "@/components/subscription/SubscriptionModal";
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
-import type { Channel, Profile, Server } from "@/lib/supabase/types";
+import type { Channel, ChannelCategory, Profile, Server } from "@/lib/supabase/types";
 import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 
@@ -51,6 +59,8 @@ export function DiscordApp() {
   const app = useApp();
   const { openMenu } = useContextMenu();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("popular");
+  const [discoverQuery, setDiscoverQuery] = useState("");
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
@@ -87,6 +97,39 @@ export function DiscordApp() {
   const groupChatRef = useRef<ChatCanvasHandle>(null);
   const notesChatRef = useRef<ChatCanvasHandle>(null);
   const [online, setOnline] = useState(true);
+  const isMobile = useIsMobile();
+  const [zoom, setZoom] = useZoom();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "=" || key === "+") {
+        e.preventDefault();
+        setZoom((z) => z + ZOOM_STEP);
+      } else if (key === "-") {
+        e.preventDefault();
+        setZoom((z) => z - ZOOM_STEP);
+      } else if (key === "0") {
+        e.preventDefault();
+        setZoom(1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setZoom]);
+
+  useEffect(() => {
+    if (isMobile) setMobileMenuOpen(false);
+  }, [
+    isMobile,
+    app.viewMode,
+    app.activeChannelId,
+    app.activeServerId,
+    app.activeDmThreadId,
+    app.activeGroupChatId,
+  ]);
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -106,6 +149,7 @@ export function DiscordApp() {
     app.micMuted,
     app.deafened,
     app.isBlockedEitherWay,
+    subPlan,
   );
 
   useEffect(() => {
@@ -127,6 +171,7 @@ export function DiscordApp() {
     app.profile,
     app.micMuted,
     app.deafened,
+    subPlan,
   );
 
   useEffect(() => {
@@ -151,6 +196,23 @@ export function DiscordApp() {
     })();
   const activeGroup = app.groupChats.find((g) => g.id === app.activeGroupChatId);
 
+  const mobileTitle = useMemo(() => {
+    switch (app.viewMode) {
+      case "home":
+        return "Home";
+      case "notes":
+        return "Notes";
+      case "dm":
+        return dmFriend ? displayName(dmFriend) : "Messages";
+      case "group":
+        return activeGroup?.name ?? "Group";
+      case "server":
+        return activeChannel ? `#${activeChannel.name}` : (app.activeServer?.name ?? "Server");
+      default:
+        return "Disband";
+    }
+  }, [app.viewMode, dmFriend, activeGroup, activeChannel, app.activeServer?.name]);
+
   const toggleMic = () => app.setMicMuted(!app.micMuted);
   const toggleDeafen = () => {
     const next = !app.deafened;
@@ -169,9 +231,18 @@ export function DiscordApp() {
     else void groupCall.watchGroup(null);
   }, [activeGroup?.id, activeGroup?.name, groupCall.watchGroup]);
 
+  const serverVoicePresence = useServerVoicePresence(app.activeServerId);
+
   const canKick = app.serverPermissions.kick;
   const canBan = app.serverPermissions.ban;
   const canManageRoles = app.serverPermissions.manage_roles;
+  const canManageChannels = app.serverPermissions.manage_channels;
+  const isServerOwner = app.activeServer?.owner_id === app.user?.id;
+  const profileServerMember = profileTarget
+    ? app.members.find((m) => m.user_id === profileTarget.id)
+    : undefined;
+  const profileCanManageRoles =
+    app.viewMode === "server" && (isServerOwner || app.serverPermissions.manage_roles);
 
   const getAuthorColor = useCallback(
     (authorId: string) => {
@@ -276,16 +347,79 @@ export function DiscordApp() {
 
   const handleChannelContext = useCallback(
     (channel: Channel, x: number, y: number) => {
-      openMenu(x, y, [
+      const items: ContextMenuItem[] = [
         {
           id: "copy",
           label: "Copy Channel ID",
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(channel.id),
         },
+      ];
+      if (canManageChannels) {
+        items.push(
+          {
+            id: "rename",
+            label: "Rename Channel",
+            icon: <IconEdit size={16} />,
+            onClick: () => {
+              const name = prompt("Rename channel", channel.name);
+              if (name && name.trim()) void app.renameChannel(channel.id, name.trim());
+            },
+          },
+          {
+            id: "delete",
+            label: "Delete Channel",
+            icon: <IconTrash size={16} />,
+            danger: true,
+            onClick: () => {
+              if (confirm(`Delete #${channel.name}? This cannot be undone.`)) {
+                void app.deleteChannel(channel.id);
+              }
+            },
+          },
+        );
+      }
+      openMenu(x, y, items);
+    },
+    [openMenu, canManageChannels, app],
+  );
+
+  const handleCategoryContext = useCallback(
+    (category: ChannelCategory, x: number, y: number) => {
+      if (!canManageChannels) return;
+      openMenu(x, y, [
+        {
+          id: "add-channel",
+          label: "Create Channel",
+          icon: <IconPlus size={16} />,
+          onClick: () => {
+            const name = prompt(`Channel name in ${category.name}`, "");
+            if (name && name.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
+          },
+        },
+        {
+          id: "rename",
+          label: "Rename Category",
+          icon: <IconEdit size={16} />,
+          onClick: () => {
+            const name = prompt("Rename category", category.name);
+            if (name && name.trim()) void app.renameCategory(category.id, name.trim());
+          },
+        },
+        {
+          id: "delete",
+          label: "Delete Category",
+          icon: <IconTrash size={16} />,
+          danger: true,
+          onClick: () => {
+            if (confirm(`Delete category ${category.name}? Channels inside will be moved out.`)) {
+              void app.deleteCategory(category.id);
+            }
+          },
+        },
       ]);
     },
-    [openMenu],
+    [openMenu, canManageChannels, app],
   );
 
   const startGroupVoiceCall = useCallback(() => {
@@ -546,13 +680,22 @@ export function DiscordApp() {
 
       if (canManageRoles && app.serverRoles.length > 0) {
         app.serverRoles.forEach((role) => {
+          const isCurrent = role.id === member.role_id;
           items.push({
             id: `role-${role.id}`,
-            label: `Assign ${role.name}`,
+            label: `${isCurrent ? "✓ " : ""}Assign ${role.name}`,
             icon: <IconSettings size={16} />,
             onClick: () => void app.assignMemberRole(member.user_id, role.id),
           });
         });
+        if (member.role_id) {
+          items.push({
+            id: "role-clear",
+            label: "Remove Role",
+            icon: <IconClose size={16} />,
+            onClick: () => void app.assignMemberRole(member.user_id, null),
+          });
+        }
       }
 
       openMenu(x, y, items);
@@ -611,7 +754,7 @@ export function DiscordApp() {
 
   const mapChatMessage = (m: {
     id: string;
-    author_id: string;
+    author_id: string | null;
     content: string;
     attachment_url: string | null;
     attachment_type: ChatMessageData["attachment_type"];
@@ -621,7 +764,7 @@ export function DiscordApp() {
     edited_at?: string | null;
     created_at: string;
     mentions?: string[];
-    author?: Profile;
+    author?: Profile | null;
   }): ChatMessageData => ({
     id: m.id,
     author_id: m.author_id,
@@ -634,7 +777,7 @@ export function DiscordApp() {
     edited_at: m.edited_at ?? null,
     created_at: m.created_at,
     mentions: m.mentions ?? [],
-    author: m.author,
+    author: m.author ?? undefined,
   });
 
   const channelMessages: ChatMessageData[] = app.messages.map(mapChatMessage);
@@ -740,7 +883,36 @@ export function DiscordApp() {
   };
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden">
+    <div className="h-screen w-screen overflow-hidden bg-bg-primary">
+      <div
+        className="h-full w-full origin-top-left"
+        style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
+      >
+        <div className={`relative flex h-full w-full overflow-hidden ${isMobile ? "pt-10" : ""}`}>
+      {isMobile && (
+        <div className="absolute inset-x-0 top-0 z-[60] flex h-10 items-center gap-2 border-b border-divider bg-bg-tertiary px-2">
+          <button
+            type="button"
+            aria-label="Open navigation"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-normal hover:bg-interactive-hover"
+          >
+            <IconMenu size={22} />
+          </button>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text-normal">
+            {mobileTitle}
+          </span>
+          <button
+            type="button"
+            aria-label="Settings"
+            onClick={() => setSettingsOpen(true)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+          >
+            <IconSettings size={20} />
+          </button>
+        </div>
+      )}
+
       {!online && (
         <div className="fixed left-0 right-0 top-0 z-[100] bg-status-dnd px-4 py-2 text-center text-sm font-medium text-white">
           You are offline. Messages will send when your connection returns.
@@ -778,43 +950,134 @@ export function DiscordApp() {
           {call.callNotice}
         </div>
       )}
-      <ServerList
-        servers={app.servers}
-        activeServerId={app.activeServerId}
-        viewMode={app.viewMode}
-        dmUnreads={app.dmUnreads}
-        activeDmThreadId={app.activeDmThreadId}
-        serverUnreadIds={app.serverUnreadIds}
-        onSelectHome={app.setViewHome}
-        onSelectServer={(id) => void app.selectServer(id)}
-        onSelectDmThread={(id) => void app.selectDmThread(id)}
-        onCreateServer={() => setCreateServerOpen(true)}
-        onServerContext={handleServerContext}
-      />
+      {isMobile ? (
+        mobileMenuOpen && (
+          <div className="absolute inset-0 z-40">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div className="relative flex h-full w-[min(86vw,22rem)] shadow-2xl">
+              <ServerList
+                servers={app.servers}
+                activeServerId={app.activeServerId}
+                viewMode={app.viewMode}
+                dmUnreads={app.dmUnreads}
+                activeDmThreadId={app.activeDmThreadId}
+                serverUnreadIds={app.serverUnreadIds}
+                onSelectHome={app.setViewHome}
+                onSelectServer={(id) => void app.selectServer(id)}
+                onSelectDmThread={(id) => void app.selectDmThread(id)}
+                onCreateServer={() => setCreateServerOpen(true)}
+                onDiscover={app.setViewDiscover}
+                onServerContext={handleServerContext}
+              />
 
-      {app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
-        <HomePanel
-          onOpenSettings={() => setSettingsOpen(true)}
-          onUserPanelContext={handleUserPanelContext}
-          onFriendClick={(id) => {
-            const f = app.friends.find((x) => x.id === id);
-            if (f) openProfile(f);
-          }}
-          onGroupContext={handleGroupContext}
-          onOpenSubscription={() => setSubscriptionOpen(true)}
-        />
+              {app.viewMode === "discover" ? (
+                <DiscoverSidebar
+                  tab={discoverTab}
+                  onTabChange={setDiscoverTab}
+                  query={discoverQuery}
+                  onQueryChange={setDiscoverQuery}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  onUserPanelContext={handleUserPanelContext}
+                />
+              ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
+                <HomePanel
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  onUserPanelContext={handleUserPanelContext}
+                  onFriendClick={(id) => {
+                    const f = app.friends.find((x) => x.id === id);
+                    if (f) openProfile(f);
+                  }}
+                  onGroupContext={handleGroupContext}
+                  onOpenSubscription={() => setSubscriptionOpen(true)}
+                />
+              ) : (
+                <ChannelList
+                  title={app.activeServer?.name ?? "Server"}
+                  categories={app.categories}
+                  channels={app.channels}
+                  activeChannelId={app.activeChannelId}
+                  canManageChannels={canManageChannels}
+                  voicePresence={serverVoicePresence}
+                  onSelectChannel={handleSelectChannel}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  onOpenServerSettings={() => setServerSettingsOpen(true)}
+                  onChannelContext={handleChannelContext}
+                  onCategoryContext={handleCategoryContext}
+                  onUserPanelContext={handleUserPanelContext}
+                  onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
+                  onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
+                  onCreateCategory={(name) => app.createCategory(name)}
+                />
+              )}
+            </div>
+          </div>
+        )
       ) : (
-        <ChannelList
-          title={app.activeServer?.name ?? "Server"}
-          categories={app.categories}
-          channels={app.channels}
-          activeChannelId={app.activeChannelId}
-          onSelectChannel={handleSelectChannel}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenServerSettings={() => setServerSettingsOpen(true)}
-          onChannelContext={handleChannelContext}
-          onUserPanelContext={handleUserPanelContext}
-        />
+        <>
+          <ServerList
+            servers={app.servers}
+            activeServerId={app.activeServerId}
+            viewMode={app.viewMode}
+            dmUnreads={app.dmUnreads}
+            activeDmThreadId={app.activeDmThreadId}
+            serverUnreadIds={app.serverUnreadIds}
+            onSelectHome={app.setViewHome}
+            onSelectServer={(id) => void app.selectServer(id)}
+            onSelectDmThread={(id) => void app.selectDmThread(id)}
+            onCreateServer={() => setCreateServerOpen(true)}
+            onDiscover={app.setViewDiscover}
+            onServerContext={handleServerContext}
+          />
+
+          {app.viewMode === "discover" ? (
+                <DiscoverSidebar
+                  tab={discoverTab}
+                  onTabChange={setDiscoverTab}
+                  query={discoverQuery}
+                  onQueryChange={setDiscoverQuery}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  onUserPanelContext={handleUserPanelContext}
+                />
+              ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
+            <HomePanel
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+              onUserPanelContext={handleUserPanelContext}
+              onFriendClick={(id) => {
+                const f = app.friends.find((x) => x.id === id);
+                if (f) openProfile(f);
+              }}
+              onGroupContext={handleGroupContext}
+              onOpenSubscription={() => setSubscriptionOpen(true)}
+            />
+          ) : (
+            <ChannelList
+              title={app.activeServer?.name ?? "Server"}
+              categories={app.categories}
+              channels={app.channels}
+              activeChannelId={app.activeChannelId}
+              canManageChannels={canManageChannels}
+              voicePresence={serverVoicePresence}
+              onSelectChannel={handleSelectChannel}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+              onOpenServerSettings={() => setServerSettingsOpen(true)}
+              onChannelContext={handleChannelContext}
+              onCategoryContext={handleCategoryContext}
+              onUserPanelContext={handleUserPanelContext}
+              onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
+              onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
+              onCreateCategory={(name) => app.createCategory(name)}
+            />
+          )}
+        </>
       )}
 
       {app.viewMode === "dm" && dmFriend && (
@@ -899,13 +1162,15 @@ export function DiscordApp() {
               onLoadMore={app.loadMoreGroupMessages}
             />
           </div>
-          <GroupMemberList
-            members={activeGroup.members}
-            ownerId={activeGroup.owner_id}
-            inCallUserIds={groupCall.inCallUserIds}
-            currentUserId={app.user?.id}
-            onMemberClick={openProfile}
-          />
+          {!isMobile && (
+            <GroupMemberList
+              members={activeGroup.members}
+              ownerId={activeGroup.owner_id}
+              inCallUserIds={groupCall.inCallUserIds}
+              currentUserId={app.user?.id}
+              onMemberClick={openProfile}
+            />
+          )}
         </>
       )}
 
@@ -979,6 +1244,8 @@ export function DiscordApp() {
         </>
       )}
 
+      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} />}
+
       {app.viewMode === "server" && activeChannel && isVoice && (
         <VoicePanel
           channelId={activeChannel.id}
@@ -1011,7 +1278,7 @@ export function DiscordApp() {
         />
       )}
 
-      {app.viewMode === "server" && (
+      {app.viewMode === "server" && !isMobile && (
         <MemberList
           members={app.members}
           roles={app.serverRoles}
@@ -1099,6 +1366,20 @@ export function DiscordApp() {
             : undefined
         }
         onOpenSettings={() => setSettingsOpen(true)}
+        isServerMember={!!profileServerMember}
+        serverRoles={profileCanManageRoles ? app.serverRoles : undefined}
+        canManageRoles={profileCanManageRoles}
+        memberRoleId={profileServerMember?.role_id ?? null}
+        memberIsOwner={profileServerMember?.role === "owner"}
+        onAssignRole={
+          profileTarget && profileCanManageRoles
+            ? (roleId) => {
+                void app.assignMemberRole(profileTarget.id, roleId).then((err) => {
+                  if (err) alert(err);
+                });
+              }
+            : undefined
+        }
       />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
@@ -1118,6 +1399,8 @@ export function DiscordApp() {
           setInviteGroupId(null);
         }}
       />
+        </div>
+      </div>
     </div>
   );
 }

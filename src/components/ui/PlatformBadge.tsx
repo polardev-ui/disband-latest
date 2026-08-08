@@ -1,32 +1,34 @@
 import type { Profile } from "@/lib/supabase/types";
 import { SubscriptionBadge } from "./SubscriptionBadge";
+import { UserBadges } from "./UserBadges";
 
 interface PlatformBadgeProps {
-  profile: Pick<Profile, "show_owner_badge" | "show_staff_badge"> & { subscription_plan?: string };
+  profile: Pick<
+    Profile,
+    "show_owner_badge" | "show_staff_badge" | "show_og_badge" | "show_bounty_badge"
+  > & { subscription_plan?: string };
   className?: string;
 }
 
 export function PlatformBadge({ profile, className = "" }: PlatformBadgeProps) {
-  if (profile.show_owner_badge) {
-    return (
-      <span
-        className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-[#faa61a]/25 text-[#faa61a] ${className}`}
-      >
-        Owner
-      </span>
-    );
-  }
-  if (profile.show_staff_badge) {
-    return (
-      <span
-        className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-brand/30 text-[#dee0fc] ${className}`}
-      >
-        Staff
-      </span>
-    );
-  }
-  if (profile.subscription_plan && profile.subscription_plan !== "free") {
-    return <SubscriptionBadge plan={profile.subscription_plan as "basic" | "super"} className={className} />;
-  }
-  return null;
+  const hasPlatform = badgeCount(profile) > 0;
+  return (
+    <>
+      <UserBadges profile={profile} className={className} />
+      {!hasPlatform && profile.subscription_plan && profile.subscription_plan !== "free" ? (
+        <SubscriptionBadge plan={profile.subscription_plan as "basic" | "super"} className={className} />
+      ) : null}
+    </>
+  );
+}
+
+function badgeCount(
+  profile: Pick<Profile, "show_owner_badge" | "show_staff_badge" | "show_og_badge" | "show_bounty_badge">,
+): number {
+  return (
+    (profile.show_owner_badge ? 1 : 0) +
+    (profile.show_staff_badge ? 1 : 0) +
+    (profile.show_og_badge ? 1 : 0) +
+    (profile.show_bounty_badge ? 1 : 0)
+  );
 }

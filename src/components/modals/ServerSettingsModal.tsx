@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji } from "@/components/icons";
-import { getInviteUrl, serverInitials } from "@/lib/utils";
+import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus } from "@/components/icons";
+import { getInviteUrl, serverInitials, displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
+import { Avatar } from "@/components/ui/Avatar";
 import { useSubscription } from "@/hooks/useSubscription";
 
 interface ServerSettingsModalProps {
@@ -14,19 +15,40 @@ interface ServerSettingsModalProps {
   onClose: () => void;
 }
 
-type Section = "overview" | "invite" | "roles" | "emoji" | "appearance" | "danger";
+type Section = "overview" | "invite" | "channels" | "members" | "roles" | "emoji" | "appearance" | "danger";
 
-const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean }[] = [
+const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean; permission?: "manage_channels" | "manage_roles" }[] = [
   { id: "overview", label: "Overview", icon: IconSettings },
   { id: "invite", label: "Invites", icon: IconLink },
-  { id: "roles", label: "Roles", icon: IconShield, ownerOnly: true },
+  { id: "channels", label: "Channels", icon: IconHash, permission: "manage_channels" },
+  { id: "members", label: "Members", icon: IconShield, permission: "manage_roles" },
+  { id: "roles", label: "Roles", icon: IconShield, permission: "manage_roles" },
   { id: "emoji", label: "Emoji", icon: IconEmoji, ownerOnly: true },
   { id: "appearance", label: "Appearance", icon: IconPalette, ownerOnly: true },
   { id: "danger", label: "Danger Zone", icon: IconAlert, ownerOnly: true },
 ];
 
 export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps) {
-  const { activeServer, updateServer, deleteServer, user, serverRoles, createRole, updateRole } = useApp();
+  const {
+    activeServer,
+    updateServer,
+    deleteServer,
+    user,
+    serverRoles,
+    createRole,
+    updateRole,
+    channels,
+    categories,
+    members,
+    serverPermissions,
+    createChannel,
+    renameChannel,
+    deleteChannel,
+    deleteRole,
+    assignMemberRole,
+    kickMember,
+    banMember,
+  } = useApp();
   const { upload } = useMediaUpload();
   const [section, setSection] = useState<Section>("overview");
   const [name, setName] = useState("");
@@ -37,6 +59,10 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [channelName, setChannelName] = useState("");
+  const [channelType, setChannelType] = useState<"text" | "voice">("text");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [customEmoji, setCustomEmoji] = useState<
     { id: number; name: string; url: string; uploader_id: string | null }[]
   >([]);
@@ -73,8 +99,15 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
 
   if (!open || !activeServer) return null;
   const isOwner = activeServer.owner_id === user?.id;
+  const canManageChannels = isOwner || serverPermissions.manage_channels;
+  const canManageRoles = isOwner || serverPermissions.manage_roles;
   const inviteUrl = activeServer.invite_code ? getInviteUrl(activeServer.invite_code) : null;
-  const navItems = NAV.filter((n) => !n.ownerOnly || isOwner);
+  const navItems = NAV.filter((n) => {
+    if (n.ownerOnly && !isOwner) return false;
+    if (n.permission === "manage_channels" && !canManageChannels) return false;
+    if (n.permission === "manage_roles" && !canManageRoles) return false;
+    return true;
+  });
 
   async function saveOverview() {
     setLoading(true);
@@ -152,8 +185,25 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
 
   async function togglePermission(
     roleId: string,
-    current: { kick?: boolean; ban?: boolean; manage_roles?: boolean; manage_server?: boolean },
-    permission: "kick" | "ban" | "manage_roles" | "manage_server",
+    current: {
+      kick?: boolean;
+      ban?: boolean;
+      manage_roles?: boolean;
+      manage_server?: boolean;
+      manage_channels?: boolean;
+      manage_messages?: boolean;
+      manage_emojis?: boolean;
+      mention_everyone?: boolean;
+    },
+    permission:
+      | "kick"
+      | "ban"
+      | "manage_roles"
+      | "manage_server"
+      | "manage_channels"
+      | "manage_messages"
+      | "manage_emojis"
+      | "mention_everyone",
   ) {
     setLoading(true);
     setError(null);
@@ -162,6 +212,147 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     });
     if (err) setError(err);
     setLoading(false);
+  }
+
+  async function handleCreateChannel() {
+    if (!channelName.trim()) return;
+    setLoading(true);
+    setError(null);
+    const err = await createChannel({ name: channelName.trim(), type: channelType });
+    if (err) setError(err);
+    else setChannelName("");
+    setLoading(false);
+  }
+
+  function startRename(channel: { id: string; name: string }) {
+    setRenamingId(channel.id);
+    setRenameValue(channel.name);
+  }
+
+  async function handleRenameChannel() {
+    if (!renamingId || !renameValue.trim()) return;
+    setLoading(true);
+    setError(null);
+    const err = await renameChannel(renamingId, renameValue.trim());
+    if (err) setError(err);
+    else setRenamingId(null);
+    setLoading(false);
+  }
+
+  async function handleDeleteChannel(channel: { id: string; name: string }) {
+    if (!confirm(`Delete #${channel.name}? All messages in this channel will be permanently removed.`)) return;
+    setLoading(true);
+    setError(null);
+    const err = await deleteChannel(channel.id);
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  async function handleRenameRole(roleId: string, currentName: string) {
+    const next = prompt("Rename role", currentName);
+    if (!next || next.trim() === currentName) return;
+    setLoading(true);
+    setError(null);
+    const err = await updateRole(roleId, { name: next.trim() });
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  async function handleDeleteRole(role: { id: string; name: string }) {
+    if (!confirm(`Delete role "${role.name}"? Members with this role will lose it.`)) return;
+    setLoading(true);
+    setError(null);
+    const err = await deleteRole(role.id);
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  async function handleAssignRole(memberUserId: string, roleId: string | null) {
+    setLoading(true);
+    setError(null);
+    const err = await assignMemberRole(memberUserId, roleId);
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  async function handleKickMember(memberUserId: string, memberName: string) {
+    if (!confirm(`Kick ${memberName} from this server?`)) return;
+    setLoading(true);
+    setError(null);
+    const err = await kickMember(memberUserId);
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  async function handleBanMember(memberUserId: string, memberName: string) {
+    const reason = prompt(`Ban ${memberName}? You can add a reason (optional).`) ?? "";
+    if (reason === null) return;
+    setLoading(true);
+    setError(null);
+    const err = await banMember(memberUserId, reason || undefined);
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  function renderChannelRow(c: { id: string; name: string; type: string }) {
+    return (
+      <li key={c.id} className="flex items-center gap-2 rounded-lg border border-divider bg-bg-secondary px-3 py-2">
+        {c.type === "voice" ? (
+          <IconVideo size={16} className="shrink-0 text-text-muted" />
+        ) : (
+          <IconHash size={16} className="shrink-0 text-text-muted" />
+        )}
+        {renamingId === c.id ? (
+          <>
+            <input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleRenameChannel();
+                if (e.key === "Escape") setRenamingId(null);
+              }}
+              autoFocus
+              className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-brand"
+            />
+            <button
+              type="button"
+              onClick={() => void handleRenameChannel()}
+              disabled={loading || !renameValue.trim()}
+              className="rounded bg-brand px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenamingId(null)}
+              className="rounded bg-bg-accent px-3 py-1 text-xs text-text-muted"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
+            <button
+              type="button"
+              onClick={() => startRename(c)}
+              className="rounded p-1 text-text-muted transition-colors hover:text-text-normal"
+              aria-label={`Rename ${c.name}`}
+            >
+              <IconEdit size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteChannel(c)}
+              className="rounded p-1 text-text-muted transition-colors hover:text-status-dnd"
+              aria-label={`Delete ${c.name}`}
+            >
+              <IconTrash size={16} />
+            </button>
+          </>
+        )}
+      </li>
+    );
   }
 
   function copyInvite() {
@@ -297,18 +488,147 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
               </div>
             )}
 
-            {section === "roles" && isOwner && (
+            {section === "channels" && canManageChannels && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Channels</h2>
+                <p className="text-sm text-text-muted">Create, rename, and delete text and voice channels.</p>
+                <div className="space-y-4">
+                  {categories.map((cat) => {
+                    const catChannels = channels.filter((c) => c.category_id === cat.id);
+                    if (catChannels.length === 0) return null;
+                    return (
+                      <div key={cat.id}>
+                        <h3 className="mb-2 text-sm font-bold uppercase text-text-muted">{cat.name}</h3>
+                        <ul className="space-y-2">{catChannels.map((c) => renderChannelRow(c))}</ul>
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const uncategorized = channels.filter((c) => !c.category_id);
+                    if (uncategorized.length === 0) return null;
+                    return (
+                      <div>
+                        <h3 className="mb-2 text-sm font-bold uppercase text-text-muted">Uncategorized</h3>
+                        <ul className="space-y-2">{uncategorized.map((c) => renderChannelRow(c))}</ul>
+                      </div>
+                    );
+                  })()}
+                  {channels.length === 0 && <p className="text-sm text-text-muted">No channels yet.</p>}
+                </div>
+                <div className="flex flex-wrap items-end gap-3 rounded-lg border border-divider bg-bg-secondary p-4">
+                  <label className="min-w-[160px] flex-1">
+                    <span className="text-xs font-bold uppercase text-text-muted">Channel name</span>
+                    <input
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value.replace(/\s+/g, "-"))}
+                      placeholder="new-channel"
+                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                    />
+                  </label>
+                  <label>
+                    <span className="text-xs font-bold uppercase text-text-muted">Type</span>
+                    <select
+                      value={channelType}
+                      onChange={(e) => setChannelType(e.target.value as "text" | "voice")}
+                      className="mt-1 block rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                    >
+                      <option value="text">Text</option>
+                      <option value="voice">Voice</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateChannel()}
+                    disabled={loading || !channelName.trim()}
+                    className="flex items-center gap-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                  >
+                    <IconPlus size={16} /> Create Channel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {section === "members" && canManageRoles && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Members</h2>
+                <p className="text-sm text-text-muted">Manage members, assign roles, and moderate the server.</p>
+                <ul className="space-y-2">
+                  {members.map((m) => {
+                    const memberRole = serverRoles.find((r) => r.id === m.role_id) ?? null;
+                    const memberName = m.profile ? displayName(m.profile) : "Unknown member";
+                    const isSelf = m.user_id === user?.id;
+                    return (
+                      <li key={m.user_id} className="flex items-center gap-3 rounded-lg border border-divider bg-bg-secondary p-3">
+                        <Avatar profile={m.profile} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium" style={memberRole?.color ? { color: memberRole.color } : undefined}>
+                            {memberName}
+                          </p>
+                          <p className="truncate text-xs text-text-muted">
+                            {m.role === "owner" ? "Owner" : memberRole?.name ?? "Member"}
+                          </p>
+                        </div>
+                        {!isSelf && (
+                          <div className="flex shrink-0 items-center gap-2">
+                            <select
+                              value={m.role_id ?? ""}
+                              disabled={loading || m.role === "owner"}
+                              onChange={(e) => void handleAssignRole(m.user_id, e.target.value || null)}
+                              className="rounded bg-bg-accent px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
+                              aria-label={`Role for ${memberName}`}
+                            >
+                              <option value="">No role</option>
+                              {serverRoles.filter((r) => !r.is_default).map((r) => (
+                                <option key={r.id} value={r.id}>{r.name}</option>
+                              ))}
+                            </select>
+                            {serverPermissions.ban && (
+                              <button
+                                type="button"
+                                onClick={() => void handleBanMember(m.user_id, memberName)}
+                                className="rounded bg-bg-accent px-2 py-1.5 text-xs font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
+                              >
+                                Ban
+                              </button>
+                            )}
+                            {serverPermissions.kick && (
+                              <button
+                                type="button"
+                                onClick={() => void handleKickMember(m.user_id, memberName)}
+                                className="rounded bg-bg-accent px-2 py-1.5 text-xs font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
+                              >
+                                Kick
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                  {members.length === 0 && <p className="text-sm text-text-muted">No members found.</p>}
+                </ul>
+              </div>
+            )}
+
+            {section === "roles" && canManageRoles && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Roles</h2>
-                <p className="text-sm text-text-muted">Create roles, set permissions, and assign them via right-click on members. Members with a role that grants Ban Members can right-click and ban people from the server.</p>
+                <p className="text-sm text-text-muted">Create roles, set permissions, and assign them from the Members tab or by right-clicking members.</p>
                 <ul className="space-y-3">
                   {serverRoles.map((r) => {
                     const perms = r.permissions ?? {};
-                    const PERMS: { key: "kick" | "ban" | "manage_roles" | "manage_server"; label: string }[] = [
+                    const PERMS: {
+                      key: "kick" | "ban" | "manage_roles" | "manage_server" | "manage_channels" | "manage_messages" | "manage_emojis" | "mention_everyone";
+                      label: string;
+                    }[] = [
                       { key: "kick", label: "Kick Members" },
                       { key: "ban", label: "Ban Members" },
                       { key: "manage_roles", label: "Manage Roles" },
                       { key: "manage_server", label: "Manage Server" },
+                      { key: "manage_channels", label: "Manage Channels" },
+                      { key: "manage_messages", label: "Manage Messages" },
+                      { key: "manage_emojis", label: "Manage Emoji" },
+                      { key: "mention_everyone", label: "Mention @everyone / @here" },
                     ];
                     return (
                       <li key={r.id} className="rounded-lg border border-divider bg-bg-secondary p-4">
@@ -316,6 +636,28 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
                           <span className="font-medium">{r.name}</span>
                           {r.is_default && <span className="text-xs text-text-muted">Default</span>}
+                          <div className="ml-auto flex shrink-0 items-center gap-1">
+                            {!r.is_default && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRenameRole(r.id, r.name)}
+                                  className="rounded p-1 text-text-muted transition-colors hover:text-text-normal"
+                                  aria-label={`Rename ${r.name}`}
+                                >
+                                  <IconEdit size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteRole(r)}
+                                  className="rounded p-1 text-text-muted transition-colors hover:text-status-dnd"
+                                  aria-label={`Delete ${r.name}`}
+                                >
+                                  <IconTrash size={16} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           {PERMS.map((p) => (

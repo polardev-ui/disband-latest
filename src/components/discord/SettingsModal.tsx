@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { AccentPresetGrid, ProfilePreview } from "./settings/ProfilePreview";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload } from "@/components/icons";
@@ -14,6 +15,7 @@ import { PlatformModerationPanel } from "@/components/discord/PlatformModeration
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { safeImageUrl } from "@/lib/safe-url";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
+import { useZoom, MIN_ZOOM, MAX_ZOOM } from "@/hooks/useZoom";
 import { getDisbandUserMedia } from "@/lib/media";
 import {
   getPreferredAudioInputId,
@@ -98,6 +100,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
   const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut } = useApp();
   const { upload, isUploading } = useMediaUpload();
+  const [zoom, setZoom] = useZoom();
   const [tab, setTab] = useState<SettingsTab>("profile");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -337,6 +340,28 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             <div className="flex-1 overflow-y-auto px-6 py-6">
               {tab === "profile" && (
                 <div className="space-y-4">
+                  {profile && (
+                    <div>
+                      <p className="mb-2 text-xs font-bold uppercase text-text-muted">Preview</p>
+                      <ProfilePreview
+                        // Reflect unsaved edits so colour and name changes are
+                        // visible before committing them.
+                        profile={{
+                          ...profile,
+                          display_name: displayName,
+                          username,
+                          bio,
+                          accent_color: useDefaultAccent ? null : accent1,
+                          accent_color_2: useDefaultAccent ? null : accent2,
+                        }}
+                        displayName={displayName}
+                        username={username}
+                        bio={bio}
+                        status={status}
+                      />
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-4">
                     {profile && <Avatar profile={profile} size="lg" />}
                     <div>
@@ -383,57 +408,56 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <div className="block">
                     <span className="text-xs font-bold uppercase text-text-muted">Profile color</span>
                     <p className="mt-0.5 text-xs text-text-muted">
-                      Use the default Disband blue, or pick two colors — same color for solid, different for a gradient.
+                      Pick a preset, or set two colors yourself — the same color twice gives a solid,
+                      two different colors give a gradient.
                     </p>
 
-                    <label className="mt-3 flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2">
-                      <input
-                        type="radio"
-                        name="accent-mode"
-                        checked={useDefaultAccent}
-                        onChange={() => setUseDefaultAccent(true)}
-                        className="accent-brand"
+                    <div className="mt-3">
+                      <AccentPresetGrid
+                        active={useDefaultAccent ? null : { from: accent1, to: accent2 }}
+                        onPick={(from, to) => {
+                          setUseDefaultAccent(false);
+                          setAccent1(from);
+                          setAccent2(to);
+                        }}
                       />
-                      <span className="text-sm">Default style</span>
-                      <span
-                        className="ml-auto h-6 w-6 rounded-full ring-1 ring-divider"
-                        style={{ backgroundColor: DEFAULT_ACCENT }}
-                      />
-                    </label>
+                    </div>
 
-                    <label className="mt-2 flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2">
-                      <input
-                        type="radio"
-                        name="accent-mode"
-                        checked={!useDefaultAccent}
-                        onChange={() => setUseDefaultAccent(false)}
-                        className="accent-brand"
-                      />
-                      <span className="text-sm">Custom colors</span>
-                    </label>
-
-                    {!useDefaultAccent && (
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <label className="block">
-                          <span className="text-xs text-text-muted">Color 1</span>
-                          <input
-                            type="color"
-                            value={accent1}
-                            onChange={(e) => setAccent1(e.target.value)}
-                            className="mt-1 h-10 w-full cursor-pointer rounded bg-bg-accent"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="text-xs text-text-muted">Color 2</span>
-                          <input
-                            type="color"
-                            value={accent2}
-                            onChange={(e) => setAccent2(e.target.value)}
-                            className="mt-1 h-10 w-full cursor-pointer rounded bg-bg-accent"
-                          />
-                        </label>
-                      </div>
-                    )}
+                    <div className="mt-3 flex flex-wrap items-end gap-3">
+                      <label className="block">
+                        <span className="text-xs text-text-muted">Color 1</span>
+                        <input
+                          type="color"
+                          value={accent1}
+                          onChange={(e) => {
+                            setUseDefaultAccent(false);
+                            setAccent1(e.target.value);
+                          }}
+                          className="mt-1 h-10 w-16 cursor-pointer rounded bg-bg-accent"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-text-muted">Color 2</span>
+                        <input
+                          type="color"
+                          value={accent2}
+                          onChange={(e) => {
+                            setUseDefaultAccent(false);
+                            setAccent2(e.target.value);
+                          }}
+                          className="mt-1 h-10 w-16 cursor-pointer rounded bg-bg-accent"
+                        />
+                      </label>
+                      {!useDefaultAccent && (
+                        <button
+                          type="button"
+                          onClick={() => setUseDefaultAccent(true)}
+                          className="mb-0.5 rounded-md border border-divider px-3 py-2 text-[13px] text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
+                        >
+                          Reset to default
+                        </button>
+                      )}
+                    </div>
 
                     <div className="mt-4 overflow-hidden rounded-lg border border-divider">
                       {profile?.banner_url && (
@@ -564,6 +588,44 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
               {tab === "appearance" && (
                 <div>
+                  <div className="mb-5">
+                    <p className="mb-3 text-sm font-semibold">Interface zoom</p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-divider text-lg text-text-normal hover:bg-interactive-hover"
+                        aria-label="Zoom out"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="range"
+                        min={MIN_ZOOM}
+                        max={MAX_ZOOM}
+                        step={0.05}
+                        value={zoom}
+                        onChange={(e) => setZoom(Number.parseFloat(e.target.value))}
+                        className="flex-1 accent-brand"
+                        aria-label="Interface zoom"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-divider text-lg text-text-normal hover:bg-interactive-hover"
+                        aria-label="Zoom in"
+                      >
+                        +
+                      </button>
+                      <span className="w-12 shrink-0 text-right text-sm tabular-nums text-text-muted">
+                        {Math.round(zoom * 100)}%
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-text-muted">
+                      Tip: use Ctrl/Cmd + and Ctrl/Cmd − (or Ctrl/Cmd 0 to reset) anywhere in the app.
+                    </p>
+                  </div>
+
                   <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {themes.map((t) => {

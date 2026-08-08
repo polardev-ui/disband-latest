@@ -1,5 +1,5 @@
 import { isTauri } from "@/lib/platform";
-import { buildAudioConstraints, buildVideoConstraints } from "@/lib/audio-settings";
+import { buildAudioConstraints, buildVideoConstraints, buildVideoFallbackConstraints } from "@/lib/audio-settings";
 import { formatMediaPermissionError, requestNativeMediaPermissions } from "@/lib/media-permissions";
 
 type LegacyGetUserMedia = (
@@ -92,7 +92,7 @@ export async function getDisbandUserMedia(
       ) {
         return await navigator.mediaDevices.getUserMedia({
           ...merged,
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          video: buildVideoFallbackConstraints(plan),
         });
       }
       throw formatMediaAccessError(err, merged);
