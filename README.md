@@ -124,12 +124,12 @@ The web UI knows nothing about the desktop shell, and the native Rust bridge is 
 
 ## Project Links
 
-- **Web App:** [disband.chat](https://disband.chat)
-- **Source Code:** [github.com/anomalyco/disband](https://github.com/anomalyco/disband)
-- **Desktop Releases:** [github.com/anomalyco/disband/releases](https://github.com/anomalyco/disband/releases)
+- **Web App:** [disband.chat](https://disband.dev)
+- **Source Code:** [github.com/anomalyco/disband](https://github.com/polardev-ui/disband)
+- **Desktop Releases:** [github.com/anomalyco/disband/releases](https://github.com/polardev-ui/disband/releases)
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/anomalyco">Josh Clark</a></sub>
+  <sub>Built with ❤️ by <a href="https://github.com/polardev-ui">Josh Clark</a></sub>
 </p>
