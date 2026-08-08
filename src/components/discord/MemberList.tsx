@@ -4,6 +4,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
+import { IconCrown, IconShield } from "@/components/icons";
+import { Tooltip } from "./Tooltip";
 import type { Profile, ServerMember, ServerRole, UserStatus } from "@/lib/supabase/types";
 
 interface MemberListProps {
@@ -74,6 +76,16 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
         >
           <span className="truncate">{displayName(p)}</span>
           <PlatformBadge profile={p} />
+          {m.role === "owner" && (
+            <Tooltip label="Owner" side="top" as="span">
+              <IconShield size={14} className="shrink-0 text-status-online" />
+            </Tooltip>
+          )}
+          {m.role === "admin" && (
+            <Tooltip label="Admin" side="top" as="span">
+              <IconCrown size={14} className="shrink-0 text-[#f0b232]" />
+            </Tooltip>
+          )}
         </span>
       </button>
     );

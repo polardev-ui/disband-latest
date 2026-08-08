@@ -31,6 +31,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@twemoji/api": "^17.0.3",
+    "emojibase-data": "^17.0.0",
     "lucide-react": "^1.21.0",
     "next": "^16.2.9",
     "react": "^19.2.7",

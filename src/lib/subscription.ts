@@ -34,7 +34,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
   maxUploadBytes: number;
   maxMessageChars: number;
   maxBioLength: number;
-  videoQuality: "480p" | "720p" | "1080p";
+  videoQuality: "720p" | "1080p" | "1440p";
   animatedAvatar: boolean;
   animatedBanner: boolean;
   customEmojiSlots: number;
@@ -53,7 +53,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     maxUploadBytes: 50 * 1024 * 1024,
     maxMessageChars: 2000,
     maxBioLength: 190,
-    videoQuality: "480p",
+    videoQuality: "720p",
     animatedAvatar: false,
     animatedBanner: false,
     customEmojiSlots: 0,
@@ -72,7 +72,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     maxUploadBytes: 150 * 1024 * 1024,
     maxMessageChars: 4000,
     maxBioLength: 230,
-    videoQuality: "720p",
+    videoQuality: "1080p",
     animatedAvatar: true,
     animatedBanner: false,
     customEmojiSlots: 5,
@@ -91,7 +91,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     maxUploadBytes: 500 * 1024 * 1024,
     maxMessageChars: 4000,
     maxBioLength: 230,
-    videoQuality: "1080p",
+    videoQuality: "1440p",
     animatedAvatar: true,
     animatedBanner: true,
     customEmojiSlots: Infinity,
@@ -118,7 +118,7 @@ export const PLANS: PlanTier[] = [
     highlighted: false,
     features: [
       { label: "50 MB file uploads", included: true },
-      { label: "Standard video (480p)", included: true },
+      { label: "HD video (720p)", included: true, detail: "30 fps" },
       { label: "Static avatar", included: true },
       { label: "Standard rate limits", included: true },
       { label: "4 themes", included: true },
@@ -133,7 +133,7 @@ export const PLANS: PlanTier[] = [
     highlighted: false,
     features: [
       { label: "150 MB file uploads", included: true, detail: "3× more than Free" },
-      { label: "HD video (720p)", included: true },
+      { label: "Full HD video (1080p)", included: true, detail: "60 fps" },
       { label: "Animated avatar", included: true },
       { label: "5 custom emoji slots", included: true },
       { label: "Faster rate limits", included: true, detail: "12 msg / 5s" },
@@ -152,7 +152,7 @@ export const PLANS: PlanTier[] = [
     highlighted: true,
     features: [
       { label: "500 MB file uploads", included: true, detail: "10× more than Free" },
-      { label: "Full HD video (1080p)", included: true, detail: "60 fps" },
+      { label: "2K video (1440p)", included: true, detail: "120 fps" },
       { label: "Animated avatar + banner", included: true },
       { label: "Unlimited custom emoji", included: true },
       { label: "2 server boosts / month", included: true },

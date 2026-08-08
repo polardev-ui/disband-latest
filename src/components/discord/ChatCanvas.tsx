@@ -117,6 +117,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
+  const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
   const dividerLockedRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -160,6 +161,10 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     prevFirstIdRef.current = null;
     prevMessageCountRef.current = 0;
     scrollRestoreRef.current = null;
+  }, [channelName, messageContext, typingScope?.id, readCursorScope?.kind, readCursorScope?.id]);
+
+  useEffect(() => {
+    setComposerFocus((c) => c + 1);
   }, [channelName, messageContext, typingScope?.id, readCursorScope?.kind, readCursorScope?.id]);
 
   useEffect(() => {
@@ -311,7 +316,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   showHeader={showHeader}
                   compact={grouped}
                   currentUserId={currentUserId}
-                  authorColor={getAuthorColor?.(msg.author_id)}
+                  authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
                   reactions={msgReactions}
                   onAuthorClick={onAuthorClick}
                   members={members}
@@ -362,6 +367,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           onTypingActivity={notifyTyping}
           maxUploadBytes={maxUploadBytes}
           serverId={typingScope?.serverId}
+          allowPolls={messageContext === "channel" || messageContext === "group"}
+          focusSignal={composerFocus}
         />
       </div>
     </main>

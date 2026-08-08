@@ -65,6 +65,7 @@ import type {
   UserStatus,
   ViewMode,
   VoicePresence,
+  ChannelType,
 } from "@/lib/supabase/types";
 
 interface AppContextValue {
@@ -85,7 +86,7 @@ interface AppContextValue {
   dmMessages: (DmMessage & { author: Profile })[];
   notes: Note[];
   groupChats: GroupChatWithMembers[];
-  groupMessages: (GroupMessage & { author: Profile })[];
+  groupMessages: (GroupMessage & { author?: Profile | null })[];
   friendships: Friendship[];
   friends: Profile[];
   pendingIncoming: Friendship[];
@@ -113,6 +114,7 @@ interface AppContextValue {
   refreshAll: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<string | null>;
   setViewHome: () => void;
+  setViewDiscover: () => void;
   setViewNotes: () => Promise<void>;
   selectServer: (serverId: string) => Promise<void>;
   selectChannel: (channelId: string) => void;
@@ -139,11 +141,20 @@ interface AppContextValue {
   deleteServer: (serverId: string) => Promise<string | null>;
   leaveServer: (serverId: string) => Promise<string | null>;
   joinServerByInvite: (code: string) => Promise<string | null>;
+  joinServerById: (serverId: string) => Promise<string | null>;
   kickMember: (userId: string) => Promise<string | null>;
   banMember: (userId: string, reason?: string) => Promise<string | null>;
   createRole: (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => Promise<string | null>;
   assignMemberRole: (userId: string, roleId: string | null) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
+  createChannel: (data: { name: string; type?: ChannelType; categoryId?: string | null }) => Promise<string | null>;
+  renameChannel: (channelId: string, name: string) => Promise<string | null>;
+  deleteChannel: (channelId: string) => Promise<string | null>;
+  createCategory: (name: string) => Promise<string | null>;
+  renameCategory: (categoryId: string, name: string) => Promise<string | null>;
+  deleteCategory: (categoryId: string) => Promise<string | null>;
+  moveChannel: (channelId: string, categoryId: string | null, index: number) => Promise<string | null>;
+  deleteRole: (roleId: string) => Promise<string | null>;
   sendChannelMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   sendDmMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   sendGroupMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -188,8 +199,19 @@ interface AppContextValue {
   loadMoreNotes: () => Promise<void>;
   platformBan: { banned: boolean; reason?: string; vpnBlocked?: boolean } | null;
   refreshPlatformAccess: () => Promise<void>;
-  serverPermissions: { kick: boolean; ban: boolean; manage_roles: boolean; manage_server: boolean };
-  hasServerPermission: (permission: "kick" | "ban" | "manage_roles" | "manage_server") => boolean;
+  serverPermissions: {
+    kick: boolean;
+    ban: boolean;
+    manage_roles: boolean;
+    manage_server: boolean;
+    manage_channels: boolean;
+    manage_messages: boolean;
+    manage_emojis: boolean;
+    mention_everyone: boolean;
+  };
+  hasServerPermission: (
+    permission: "kick" | "ban" | "manage_roles" | "manage_server" | "manage_channels" | "manage_messages" | "manage_emojis" | "mention_everyone",
+  ) => boolean;
   updateRole: (
     roleId: string,
     patch: Partial<Pick<ServerRole, "name" | "color" | "permissions">>,
@@ -227,7 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dmMessages, setDmMessages] = useState<(DmMessage & { author: Profile })[]>([]);
   const [groupChats, setGroupChats] = useState<GroupChatWithMembers[]>([]);
   const [groupCallCounts, setGroupCallCounts] = useState<Map<string, number>>(new Map());
-  const [groupMessages, setGroupMessages] = useState<(GroupMessage & { author: Profile })[]>([]);
+  const [groupMessages, setGroupMessages] = useState<(GroupMessage & { author?: Profile | null })[]>([]);
   const [channelHasMore, setChannelHasMore] = useState(false);
   const [dmHasMore, setDmHasMore] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -239,6 +261,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ban: false,
     manage_roles: false,
     manage_server: false,
+    manage_channels: false,
+    manage_messages: false,
+    manage_emojis: false,
+    mention_everyone: false,
   });
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
@@ -654,11 +680,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (userId) {
       const { data: perms } = await supabase.rpc("my_server_permissions", { p_server_id: serverId });
       if (perms && typeof perms === "object") {
+        const p = perms as Record<string, unknown>;
         setServerPermissions({
-          kick: !!(perms as { kick?: boolean }).kick,
-          ban: !!(perms as { ban?: boolean }).ban,
-          manage_roles: !!(perms as { manage_roles?: boolean }).manage_roles,
-          manage_server: !!(perms as { manage_server?: boolean }).manage_server,
+          kick: !!p.kick,
+          ban: !!p.ban,
+          manage_roles: !!p.manage_roles,
+          manage_server: !!p.manage_server,
+          manage_channels: !!p.manage_channels,
+          manage_messages: !!p.manage_messages,
+          manage_emojis: !!p.manage_emojis,
+          mention_everyone: !!p.mention_everyone,
         });
       }
     }
@@ -916,7 +947,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("group_id", groupId)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
-    const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author: Profile })[] | null);
+    const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
     setGroupMessages(rows);
     setGroupHasMore(hasMore);
     const ids = rows.map((m) => m.id);
@@ -935,7 +966,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
-    const { rows: older, hasMore } = paginateDescendingRows(data as (GroupMessage & { author: Profile })[] | null);
+    const { rows: older, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
     if (!older.length) {
       setGroupHasMore(false);
       return;
@@ -1387,6 +1418,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as GroupMessage;
           void (async () => {
+            if (msg.author_id == null) {
+              setGroupMessages((prev) =>
+                prev.some((m) => m.id === msg.id) ? prev : [...prev, { ...msg }],
+              );
+              return;
+            }
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
               const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
@@ -1902,6 +1939,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveGroupChatId(null);
   }, [persistActiveServerChannel]);
 
+  const setViewDiscover = useCallback(() => {
+    persistActiveServerChannel();
+    setViewMode("discover");
+    setActiveServerId(null);
+    setActiveChannelId(null);
+    setActiveDmThreadId(null);
+    setActiveGroupChatId(null);
+  }, [persistActiveServerChannel]);
+
   const setViewNotes = useCallback(async () => {
     persistActiveServerChannel();
     setViewMode("notes");
@@ -2256,6 +2302,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
 
+  const joinServerById = useCallback(async (serverId: string) => {
+    if (!userId) return "Not signed in";
+    await ensureProfile(userId, user?.email);
+    const { error } = await getSupabaseClient().rpc("join_server_by_id", { p_server_id: serverId });
+    if (error) return error.message;
+    await loadServers(userId);
+    await selectServer(serverId);
+    return null;
+  }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
+
   const kickMember = useCallback(async (targetUserId: string) => {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().rpc("kick_server_member", {
@@ -2325,9 +2381,109 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const hasServerPermission = useCallback(
-    (permission: "kick" | "ban" | "manage_roles" | "manage_server") => serverPermissions[permission],
+    (
+      permission:
+        | "kick"
+        | "ban"
+        | "manage_roles"
+        | "manage_server"
+        | "manage_channels"
+        | "manage_messages"
+        | "manage_emojis"
+        | "mention_everyone",
+    ) => serverPermissions[permission],
     [serverPermissions],
   );
+
+  const createChannel = useCallback(async (data: { name: string; type?: ChannelType; categoryId?: string | null }) => {
+    if (!activeServerId) return "No server selected";
+    const { data: id, error } = await getSupabaseClient().rpc("create_channel", {
+      p_server_id: activeServerId,
+      p_name: data.name.trim(),
+      p_type: data.type ?? "text",
+      p_category_id: data.categoryId ?? null,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    if (typeof id === "string") selectChannel(id);
+    return null;
+  }, [activeServerId, loadServerDetails, selectChannel]);
+
+  const renameChannel = useCallback(async (channelId: string, name: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("rename_channel", {
+      p_channel_id: channelId,
+      p_name: name.trim(),
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const deleteChannel = useCallback(async (channelId: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("delete_channel", {
+      p_channel_id: channelId,
+    });
+    if (error) return error.message;
+    if (activeChannelId === channelId) setActiveChannelId(null);
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, activeChannelId, loadServerDetails]);
+
+  const createCategory = useCallback(async (name: string) => {
+    if (!activeServerId) return "No server selected";
+    const { data: id, error } = await getSupabaseClient().rpc("create_category", {
+      p_server_id: activeServerId,
+      p_name: name.trim(),
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return typeof id === "string" ? null : "Failed to create category";
+  }, [activeServerId, loadServerDetails]);
+
+  const renameCategory = useCallback(async (categoryId: string, name: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("rename_category", {
+      p_category_id: categoryId,
+      p_name: name.trim(),
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const deleteCategory = useCallback(async (categoryId: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("delete_category", {
+      p_category_id: categoryId,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const moveChannel = useCallback(async (channelId: string, categoryId: string | null, index: number) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("move_channel", {
+      p_channel_id: channelId,
+      p_category_id: categoryId,
+      p_index: index,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const deleteRole = useCallback(async (roleId: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("delete_server_role", {
+      p_role_id: roleId,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
 
   const platformBanUser = useCallback(async (opts: { username?: string; userId?: string; password: string; reason?: string }) => {
     const { data: { session: s } } = await getSupabaseClient().auth.getSession();
@@ -2397,6 +2553,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attUrl = blobUrl;
       if (pendingFile.type.startsWith("video/")) attType = "video";
       else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
       else attType = "file";
       attName = pendingFile.name;
       attSize = pendingFile.size;
@@ -2514,6 +2671,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attUrl = blobUrl;
       if (pendingFile.type.startsWith("video/")) attType = "video";
       else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
       else attType = "file";
       attName = pendingFile.name;
       attSize = pendingFile.size;
@@ -2632,6 +2790,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attUrl = blobUrl;
       if (pendingFile.type.startsWith("video/")) attType = "video";
       else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
       else attType = "file";
       attName = pendingFile.name;
       attSize = pendingFile.size;
@@ -2754,6 +2913,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attUrl = blobUrl;
       if (pendingFile.type.startsWith("video/")) attType = "video";
       else if (pendingFile.type.startsWith("image/")) attType = "image";
+      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
       else attType = "file";
       attName = pendingFile.name;
       attSize = pendingFile.size;
@@ -3064,6 +3224,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshAll,
     updateProfile,
     setViewHome,
+
+    setViewDiscover,
     setViewNotes,
     selectServer,
     selectChannel,
@@ -3090,12 +3252,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteServer,
     leaveServer,
     joinServerByInvite,
+    joinServerById,
     kickMember,
     banMember,
     createRole,
     updateRole,
     assignMemberRole,
     getMemberColor,
+    createChannel,
+    renameChannel,
+    deleteChannel,
+    createCategory,
+    renameCategory,
+    deleteCategory,
+    moveChannel,
+    deleteRole,
     sendChannelMessage,
     sendDmMessage,
     sendGroupMessage,

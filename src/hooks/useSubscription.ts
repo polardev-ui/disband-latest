@@ -56,7 +56,25 @@ export function useSubscription(userId: string | undefined) {
     void load();
   }, [load]);
 
-  // Poll after a Stripe checkout redirect until the subscription appears
+  /**
+   * Ask the server to reconcile against Stripe directly.
+   *
+   * The webhook can silently fail (wrong endpoint or signing secret), which
+   * leaves a paying customer on the free plan. This asks Stripe what they
+   * actually have, so the purchase applies regardless.
+   */
+  const syncFromStripe = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/stripe/sync", { method: "POST" });
+      const json = (await res.json()) as { synced?: boolean };
+      if (json.synced) await load();
+      return !!json.synced;
+    } catch {
+      return false;
+    }
+  }, [load]);
+
+  // After a Stripe checkout redirect, reconcile first, then poll as a backstop.
   useEffect(() => {
     if (!userId) return;
     const params = new URLSearchParams(window.location.search);
@@ -64,14 +82,23 @@ export function useSubscription(userId: string | undefined) {
     if (redirectPolled) return;
     redirectPolled = true;
 
-    const tryLoad = async (attempts = 0) => {
-      await load();
-      if (attempts < 15) {
-        setTimeout(() => void tryLoad(attempts + 1), 1500 * (attempts + 1));
+    void (async () => {
+      // Stripe may take a moment to attach the subscription to the customer.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (await syncFromStripe()) return;
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
       }
-    };
-    void tryLoad();
-  }, [userId, load]);
+      // Reconciliation never found anything — fall back to watching for the
+      // webhook to land.
+      const tryLoad = async (attempts = 0) => {
+        await load();
+        if (attempts < 10) {
+          setTimeout(() => void tryLoad(attempts + 1), 1500 * (attempts + 1));
+        }
+      };
+      void tryLoad();
+    })();
+  }, [userId, load, syncFromStripe]);
 
   useEffect(() => {
     if (!userId) return;
@@ -127,5 +154,14 @@ export function useSubscription(userId: string | undefined) {
     return json.error ?? null;
   }, []);
 
-  return { subscription, plan, entitlements, loading, startCheckout, openPortal, reload: load };
+  return {
+    subscription,
+    plan,
+    entitlements,
+    loading,
+    startCheckout,
+    openPortal,
+    reload: load,
+    syncFromStripe,
+  };
 }

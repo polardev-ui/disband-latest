@@ -4,16 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  label: string;
+  /** Accepts nodes so callers can render a title plus a secondary line. */
+  label: React.ReactNode;
   children: React.ReactNode;
   side?: "right" | "left" | "top";
+  /** Inline triggers must not emit a <div> inside phrasing content. */
+  as?: "div" | "span";
 }
 
-export function Tooltip({ label, children, side = "right" }: TooltipProps) {
+export function Tooltip({ label, children, side = "right", as: Trigger = "div" }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
-  const triggerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -65,9 +68,9 @@ export function Tooltip({ label, children, side = "right" }: TooltipProps) {
 
   return (
     <>
-      <div
-        ref={triggerRef}
-        className="relative flex items-center justify-center"
+      <Trigger
+        ref={triggerRef as React.Ref<HTMLDivElement & HTMLSpanElement>}
+        className="relative inline-flex items-center justify-center"
         onMouseEnter={() => {
           updatePosition();
           setVisible(true);
@@ -80,13 +83,13 @@ export function Tooltip({ label, children, side = "right" }: TooltipProps) {
         onBlur={() => setVisible(false)}
       >
         {children}
-      </div>
+      </Trigger>
 
       {mounted && visible
         && createPortal(
           <div
             role="tooltip"
-            className="pointer-events-none fixed z-[200] whitespace-nowrap rounded-md bg-[#111214] px-3 py-1.5 text-sm font-semibold text-white shadow-lg"
+            className="pointer-events-none fixed z-[200] max-w-xs rounded-md bg-[#111214] px-3 py-1.5 text-sm font-semibold text-white shadow-lg"
             style={{ top: pos.top, left: pos.left, transform }}
           >
             {label}

@@ -37,7 +37,10 @@ export function useGroupCallManager(
   profile: Profile | null,
   micMuted: boolean,
   deafened: boolean,
+  plan?: string,
 ) {
+  const planRef = useRef(plan);
+  useEffect(() => { planRef.current = plan; }, [plan]);
   const [phase, setPhase] = useState<GroupCallPhase>("idle");
   const [groupId, setGroupId] = useState<string | null>(null);
   const [groupName, setGroupName] = useState("");
@@ -256,7 +259,7 @@ export function useGroupCallManager(
     await warmUpMediaDevices();
     const stream = await getDisbandUserMedia({
       audio: true,
-      video: cameraRef.current ? buildVideoConstraints() : false,
+      video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
     });
     localRef.current = stream;
     setLocalStream(stream);
@@ -382,7 +385,7 @@ export function useGroupCallManager(
         track.enabled = true;
       } else {
         const cam = await getDisbandUserMedia({
-          video: buildVideoConstraints(),
+          video: buildVideoConstraints(planRef.current),
         });
         track = cam.getVideoTracks()[0];
         stream.addTrack(track);
@@ -401,6 +404,38 @@ export function useGroupCallManager(
     }
     setLocalStream(new MediaStream(stream.getTracks()));
   }, [renegotiatePeer]);
+
+  const reapplyCameraConstraints = useCallback(async (nextPlan: string | undefined) => {
+    const stream = localRef.current;
+    if (!stream || !joinedRef.current || !cameraRef.current) return;
+    try {
+      const cam = await getDisbandUserMedia({
+        video: buildVideoConstraints(nextPlan),
+      });
+      const track = cam.getVideoTracks()[0];
+      const existing = stream.getVideoTracks()[0];
+      if (existing) {
+        existing.stop();
+        stream.removeTrack(existing);
+      }
+      stream.addTrack(track);
+      for (const [remoteId, pc] of peersRef.current) {
+        await setPeerVideoTrack(pc, stream, track);
+        await renegotiatePeer(remoteId, pc);
+      }
+      setLocalStream(new MediaStream(stream.getTracks()));
+    } catch {
+      // Keep the existing camera track if re-acquisition fails.
+    }
+  }, [renegotiatePeer]);
+
+  const prevPlanRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (plan && plan !== prevPlanRef.current) {
+      prevPlanRef.current = plan;
+      void reapplyCameraConstraints(plan);
+    }
+  }, [plan, reapplyCameraConstraints]);
 
   const toggleScreenShare = useCallback(async () => {
     const next = !screenShareRef.current;

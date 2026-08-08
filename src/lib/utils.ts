@@ -63,6 +63,22 @@ export function getMentionQuery(text: string, cursor: number): { start: number; 
   return { start: cursor - match[0].length, query: match[1] };
 }
 
+/** Emoji autocomplete: typing `:sob` (no closing colon yet) opens the picker. */
+export function getEmojiQuery(text: string, cursor: number): { start: number; query: string } | null {
+  const before = text.slice(0, cursor);
+  const match = before.match(/:([a-zA-Z0-9_+\-]*)$/);
+  if (!match) return null;
+  return { start: cursor - match[0].length, query: match[1] };
+}
+
+/** Match a completed `:sob:` token immediately before the cursor, if any. */
+export function getCompletedEmojiToken(text: string, cursor: number): { start: number; code: string } | null {
+  const before = text.slice(0, cursor);
+  const match = before.match(/:([a-zA-Z0-9_+\-]+):$/);
+  if (!match) return null;
+  return { start: cursor - match[0].length, code: match[1] };
+}
+
 export function displayName(p: {
   display_name?: string | null;
   username?: string | null;

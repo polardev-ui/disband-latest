@@ -1,6 +1,14 @@
 import type { CSSProperties } from "react";
 
-export const DEFAULT_ACCENT = "#5865f2";
+/**
+ * Neutral grey rather than the brand blurple.
+ *
+ * An un-customised profile should read as "not set yet", not as though the user
+ * deliberately picked the brand colour — and it makes any colour they later
+ * choose obviously theirs. `usesCustomAccent()` still gates on both accent
+ * fields being present, so this is purely the un-set appearance.
+ */
+export const DEFAULT_ACCENT = "#7a7d85";
 
 export interface ProfileAccentFields {
   accent_color?: string | null;
