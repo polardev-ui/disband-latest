@@ -11,6 +11,7 @@ import {
   forwardRef,
 } from "react";
 import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
+import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
 import { ReactionPicker } from "./MessageReactions";
 import { IconHash } from "@/components/icons";
@@ -68,11 +69,14 @@ interface ChatCanvasProps {
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   onEdit?: (messageId: string, content: string) => Promise<string | null>;
   onToggleReaction?: (messageId: string, emoji: string) => void;
+  onForward?: (message: ChatMessageData) => void;
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
   onAuthorClick?: (profile: Profile) => void;
   onLoadMore?: () => void | Promise<void>;
   hasMore?: boolean;
   maxUploadBytes?: number;
+  /** Show a skeleton placeholder while messages are loading (typically after switching conversations). */
+  loading?: boolean;
 }
 
 export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function ChatCanvas(
@@ -97,11 +101,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     onSend,
     onEdit,
     onToggleReaction,
+    onForward,
     onMessageContext,
     onAuthorClick,
     onLoadMore,
     hasMore,
     maxUploadBytes,
+    loading = false,
   },
   ref,
 ) {
@@ -281,27 +287,31 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
         <div ref={contentRef}>
-          {hasMore && onLoadMore && (
-            <div className="mb-4 flex justify-center px-4">
-              <button
-                type="button"
-                onClick={() => void requestLoadMore()}
-                className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-              >
-                Load earlier messages
-              </button>
-            </div>
-          )}
+          {loading && messages.length === 0 ? (
+            <MessageSkeleton />
+          ) : (
+            <>
+              {hasMore && onLoadMore && (
+                <div className="mb-4 flex justify-center px-4">
+                  <button
+                    type="button"
+                    onClick={() => void requestLoadMore()}
+                    className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                  >
+                    Load earlier messages
+                  </button>
+                </div>
+              )}
 
-          <div className="mb-4 flex items-center px-4">
-            <div className="h-px flex-1 bg-divider" />
-            <span className="mx-4 text-xs font-semibold text-text-muted">
-              {introText ?? `Welcome to #${channelName}`}
-            </span>
-            <div className="h-px flex-1 bg-divider" />
-          </div>
+              <div className="mb-4 flex items-center px-4">
+                <div className="h-px flex-1 bg-divider" />
+                <span className="mx-4 text-xs font-semibold text-text-muted">
+                  {introText ?? `Welcome to #${channelName}`}
+                </span>
+                <div className="h-px flex-1 bg-divider" />
+              </div>
 
-          {enriched.map((msg, i) => {
+              {enriched.map((msg, i) => {
             const prev = enriched[i - 1];
             const grouped = shouldGroupMessages(prev, msg);
             const showHeader = !grouped;
@@ -329,6 +339,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     e.preventDefault();
                     onMessageContext(msg, e.clientX, e.clientY);
                   }}
+                  onReply={
+                    onToggleReaction
+                      ? (reply: ReplyPreview) => {
+                          setReplyTo(reply);
+                        }
+                      : undefined
+                  }
+                  onOpenReactionPicker={
+                    onToggleReaction
+                      ? () => setPicker({ messageId: msg.id, x: 0, y: 0 })
+                      : undefined
+                  }
+                  onForward={onForward ? () => onForward(msg) : undefined}
                   onDoubleClick={
                     onToggleReaction
                       ? () => onToggleReaction(msg.id, "👍")
@@ -339,13 +362,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
               </div>
             );
           })}
+            </>
+          )}
         </div>
       </div>
 
       <ReactionPicker
         open={!!picker}
-        x={picker?.x ?? 0}
-        y={picker?.y ?? 0}
         onSelect={(emoji) => picker && onToggleReaction?.(picker.messageId, emoji)}
         onClose={() => setPicker(null)}
       />

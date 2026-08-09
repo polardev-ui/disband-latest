@@ -1,30 +1,142 @@
 "use client";
 
-import { createBrowserClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PUBLIC_ENV } from "@/lib/public-env";
-import { isTauri } from "@/lib/platform";
 
 let browserClient: SupabaseClient | null = null;
 
-function clearSupabaseAuthCookies() {
-  if (typeof document === "undefined") return;
-  for (const cookie of document.cookie.split(";")) {
-    const name = cookie.split("=")[0]?.trim();
-    if (name?.startsWith("sb-")) {
-      document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
-    }
+// Refresh deduplication: only one refresh in flight at a time, and at most
+// once every 10 seconds. Prevents a storm when multiple queries all hit
+// JWT-expired at once (e.g. on app boot), each triggering its own refresh.
+//
+// The cooldown and the serialization are shared across tabs:
+//  - The cooldown timestamp lives in localStorage, so N tabs together still
+//    refresh at most ~6×/minute instead of N× that. Exceeding Supabase's
+//    per-IP refresh rate limit (1800/hr) trips 429s that cascade into
+//    sign-outs.
+//  - Refresh calls are serialized through the Web Locks API so two tabs can
+//    never use the same (single-use, rotating) refresh token concurrently —
+//    a race that GoTrue's reuse detection punishes by revoking the session.
+type RefreshResult = { session: unknown } | { error: unknown };
+let refreshPromise: Promise<RefreshResult> | null = null;
+let lastRefreshTime = 0;
+const REFRESH_COOLDOWN_MS = 10_000;
+const REFRESH_COOLDOWN_KEY = "disband-supabase-refresh-cooldown";
+const REFRESH_LOCK_NAME = "disband-supabase-auth-refresh";
+const REFRESH_LOCK_KEY = "disband-supabase-auth-refresh-lock";
+const REFRESH_LOCK_TTL_MS = 15_000;
+
+function readSharedCooldown(): number {
+  try {
+    const raw = window.localStorage.getItem(REFRESH_COOLDOWN_KEY);
+    const ts = raw ? Number(raw) : 0;
+    return Number.isFinite(ts) ? ts : 0;
+  } catch {
+    return lastRefreshTime;
   }
 }
 
-function createTauriClient(url: string, anonKey: string): SupabaseClient {
-  clearSupabaseAuthCookies();
+function writeSharedCooldown() {
+  lastRefreshTime = Date.now();
+  try {
+    window.localStorage.setItem(REFRESH_COOLDOWN_KEY, String(lastRefreshTime));
+  } catch {
+    // storage unavailable — the in-tab value still throttles this tab
+  }
+}
+
+/**
+ * Runs `task` while holding a cross-tab exclusive lock, so that concurrent
+ * refresh attempts from multiple tabs are serialized. Uses the Web Locks API
+ * where available (Safari 15.4+), falling back to a localStorage mutex with a
+ * TTL so a crashed tab cannot wedge it.
+ */
+async function acquireRefreshLock<T>(task: () => Promise<T>): Promise<T> {
+  const locks =
+    typeof navigator !== "undefined" && "locks" in navigator
+      ? (navigator as { locks: { request: (name: string, cb: () => Promise<T>) => Promise<T> } }).locks
+      : undefined;
+  if (locks?.request) {
+    try {
+      return await locks.request(REFRESH_LOCK_NAME, task);
+    } catch {
+      // Lock manager error (rare) — fall through to the storage mutex.
+    }
+  }
+  const stamp = Date.now();
+  const token = `${stamp}-${Math.random()}`;
+  const deadline = stamp + REFRESH_LOCK_TTL_MS;
+  const mine = () => {
+    try {
+      return window.localStorage.getItem(REFRESH_LOCK_KEY) === `${stamp}|${token}`;
+    } catch {
+      return true;
+    }
+  };
+  while (Date.now() < deadline) {
+    try {
+      const held = window.localStorage.getItem(REFRESH_LOCK_KEY);
+      if (!held || Number(held.split("|")[0]) < Date.now() - REFRESH_LOCK_TTL_MS) {
+        window.localStorage.setItem(REFRESH_LOCK_KEY, `${stamp}|${token}`);
+        if (mine()) {
+          try {
+            return await task();
+          } finally {
+            if (mine()) window.localStorage.removeItem(REFRESH_LOCK_KEY);
+          }
+        }
+      }
+    } catch {
+      // storage unavailable — fall through and run without the lock
+      return task();
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return task();
+}
+
+export async function refreshSessionOnce(): Promise<RefreshResult> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+  if (Date.now() - readSharedCooldown() < REFRESH_COOLDOWN_MS) {
+    return { error: new Error("refresh cooldown") };
+  }
+  refreshPromise = acquireRefreshLock(async () => {
+    // Another tab may have refreshed while we waited for the lock.
+    if (Date.now() - readSharedCooldown() < REFRESH_COOLDOWN_MS) {
+      return { error: new Error("refresh cooldown") };
+    }
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) return { error };
+    writeSharedCooldown();
+    return { session: data.session };
+  });
+  try {
+    return await refreshPromise;
+  } catch (error) {
+    return { error };
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClient {
+  if (typeof document !== "undefined") {
+    for (const cookie of document.cookie.split(";")) {
+      const name = cookie.split("=")[0]?.trim();
+      if (name?.startsWith("sb-")) {
+        document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+      }
+    }
+  }
   return createClient(url, anonKey, {
     auth: {
       persistSession: true,
-      autoRefreshToken: true,
+      autoRefreshToken: false,
       detectSessionInUrl: false,
-      storage: window.localStorage,
+      storage: typeof window !== "undefined" ? window.localStorage : undefined,
     },
   });
 }
@@ -39,14 +151,6 @@ function isJwtExpiredError(error: { code?: string; message?: string } | null | u
   );
 }
 
-/**
- * Wraps a Postgrest builder so that a single "JWT expired" (or PGRST303)
- * response refreshes the session once and transparently re-runs the same
- * query, instead of surfacing the error to the caller. A 401 means the
- * server rejected the request before executing it, so retrying a read (or a
- * failed write) is safe. Each terminal `await`/`.then` on a wrapped builder
- * retries at most once.
- */
 function wrapQueryBuilder(builder: object): unknown {
   return new Proxy(builder, {
     get(target, prop, receiver) {
@@ -58,9 +162,8 @@ function wrapQueryBuilder(builder: object): unknown {
             const first = await run();
             const error = (first as { error?: { code?: string; message?: string } | null })?.error;
             if (!isJwtExpiredError(error)) return first;
-            const supabase = getSupabaseClient();
-            const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-            if (refreshError || !refreshed.session) return first;
+            const result = await refreshSessionOnce();
+            if ("error" in result) return first;
             return run();
           })().then(onFulfilled, onRejected);
         };
@@ -74,13 +177,6 @@ function wrapQueryBuilder(builder: object): unknown {
   });
 }
 
-/**
- * Global safety net: every `.from(...)` / `.rpc(...)` query automatically
- * refreshes the session and retries once when the server reports the access
- * token as expired. This keeps data fetches from silently 401ing (or the
- * desktop app showing "JWT expired" errors) after the token lapses while the
- * app was closed or suspended.
- */
 function wrapSupabaseClient(client: SupabaseClient): SupabaseClient {
   return new Proxy(client, {
     get(target, prop, receiver) {
@@ -95,6 +191,8 @@ function wrapSupabaseClient(client: SupabaseClient): SupabaseClient {
 
 export function resetSupabaseClient() {
   browserClient = null;
+  refreshPromise = null;
+  lastRefreshTime = 0;
 }
 
 export function getSupabaseClient(): SupabaseClient {
@@ -107,27 +205,15 @@ export function getSupabaseClient(): SupabaseClient {
     throw new Error("Missing Supabase configuration.");
   }
 
-  const raw =
-    typeof window !== "undefined" && isTauri()
-      ? createTauriClient(url, anonKey)
-      : createBrowserClient(url, anonKey);
-
+  const raw = createBrowserSupabaseClient(url, anonKey);
   browserClient = wrapSupabaseClient(raw);
-
   return browserClient;
 }
 
-/** True when Supabase env vars are present — lets the UI degrade gracefully. */
 export function isSupabaseConfigured(): boolean {
   return Boolean(PUBLIC_ENV.supabaseUrl && PUBLIC_ENV.supabaseAnonKey);
 }
 
-/**
- * True when the session's access token is already expired (or within a small
- * safety buffer). supabase-js only auto-refreshes while a token is still inside
- * its expiry margin, so an already-dead token can otherwise leave every
- * request 401ing with "JWT expired" forever.
- */
 export function isAccessTokenExpired(session: { expires_at?: number | null } | null | undefined): boolean {
   return Boolean(session && typeof session.expires_at === "number" && session.expires_at * 1000 <= Date.now() + 30_000);
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
@@ -14,6 +15,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { statusLabel } from "@/lib/presence";
+import { UserPanelPopup } from "./UserPanelPopup";
 import type { UserStatus } from "@/lib/supabase/types";
 
 const STATUS_BG: Record<UserStatus, string> = {
@@ -33,6 +35,8 @@ interface UserPanelProps {
 export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: UserPanelProps) {
   const { profile, user, micMuted, deafened, setMicMuted, setDeafened } = useApp();
   const { plan } = useSubscription(profile?.id);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const name = profile
     ? displayName(profile)
@@ -40,15 +44,27 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   const status: UserStatus = profile?.status ?? "online";
   const statusLabelText = statusLabel(status);
 
+  const handleAvatarClick = useCallback(() => {
+    setPopupOpen((prev) => !prev);
+  }, []);
+
   return (
     <div
+      ref={panelRef}
       className="flex h-[52px] shrink-0 items-center gap-1 border-t border-divider bg-bg-tertiary px-2"
       onContextMenu={onContextMenu}
     >
+      {popupOpen && (
+        <UserPanelPopup
+          anchorRef={panelRef}
+          onClose={() => setPopupOpen(false)}
+          onOpenSettings={onOpenSettings}
+        />
+      )}
       <button
         type="button"
-        onClick={onOpenProfile ?? onOpenSettings}
-        title={onOpenProfile ? "View your profile" : undefined}
+        onClick={handleAvatarClick}
+        title="View your profile"
         className="flex min-w-0 flex-1 items-center gap-2 rounded p-1 text-left transition-all duration-150 ease-in-out hover:bg-interactive-hover"
       >
         <div className="relative shrink-0">

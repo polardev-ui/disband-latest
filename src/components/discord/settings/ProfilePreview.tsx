@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { UserBadges } from "@/components/ui/UserBadges";
+import { IconUpload } from "@/components/icons";
 import { getAccentBackground, getUsernameStyle } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
@@ -33,31 +34,76 @@ export function ProfilePreview({
   username,
   bio,
   status,
+  onChangeAvatar,
+  onChangeBanner,
 }: {
   profile: Profile;
   displayName: string;
   username: string;
   bio: string;
   status: UserStatus;
+  /** When provided, hovering the avatar shows a "Change" overlay that opens a file picker. */
+  onChangeAvatar?: (file: File) => void;
+  /** When provided, hovering the banner shows a "Change banner" overlay that opens a file picker. */
+  onChangeBanner?: (file: File) => void;
 }) {
   const name = displayName.trim() || username.trim() || "Your name";
   const banner = safeImageUrl(profile.banner_url);
 
   return (
     <div className="overflow-hidden rounded-lg border border-divider bg-bg-tertiary">
-      <div className="h-16 w-full" style={{ background: getAccentBackground(profile) }}>
-        {banner && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={banner} alt="" className="h-full w-full object-cover" />
+      <label className="group relative block cursor-pointer" title={onChangeBanner ? "Change banner" : undefined}>
+        <div className="h-24 w-full" style={{ background: getAccentBackground(profile) }}>
+          {banner && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={banner} alt="" className="h-full w-full object-cover" />
+          )}
+        </div>
+        {onChangeBanner && (
+          <>
+            <span className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/50 text-[13px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <IconUpload size={16} /> Change banner
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onChangeBanner(file);
+                e.target.value = "";
+              }}
+            />
+          </>
         )}
-      </div>
+      </label>
 
       <div className="px-4 pb-4">
-        <div className="-mt-8 mb-3 flex items-end justify-between">
+        <div className="-mt-10 mb-3 flex items-end justify-between">
           <div className="relative">
-            <span className="block rounded-full border-4 border-bg-tertiary">
-              <Avatar profile={profile} size="lg" className="h-16 w-16 text-xl" />
-            </span>
+            <label className="group relative block cursor-pointer" title={onChangeAvatar ? "Change avatar" : undefined}>
+              <span className="block rounded-full border-4 border-bg-tertiary">
+                <Avatar profile={profile} size="lg" className="h-16 w-16 text-xl" />
+              </span>
+              {onChangeAvatar && (
+                <>
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    <IconUpload size={16} />
+                    <span className="text-[10px] font-semibold leading-none">Change</span>
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onChangeAvatar(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </>
+              )}
+            </label>
             <span
               className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-[3px] border-bg-tertiary ${STATUS_BG[status]}`}
               title={STATUS_LABEL[status]}

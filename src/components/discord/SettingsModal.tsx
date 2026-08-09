@@ -5,6 +5,15 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AccentPresetGrid, ProfilePreview } from "./settings/ProfilePreview";
+import {
+  SettingsSection,
+  SettingRow,
+  Toggle,
+  settingsInputClass,
+  Hint,
+} from "./settings/SettingsPrimitives";
+import { MicTest } from "./settings/MicTest";
+import { badgeDefsFor } from "@/components/ui/UserBadges";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload } from "@/components/icons";
@@ -12,8 +21,8 @@ import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
+import { AccountRestrictionsPanel } from "@/components/discord/AccountRestrictionsPanel";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
-import { safeImageUrl } from "@/lib/safe-url";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { useZoom, MIN_ZOOM, MAX_ZOOM } from "@/hooks/useZoom";
 import { getDisbandUserMedia } from "@/lib/media";
@@ -48,43 +57,20 @@ interface SettingsModalProps {
 }
 
 const TABS = [
-  { id: "profile" as const, label: "Profile" },
-  { id: "account" as const, label: "Account" },
-  { id: "subscriptions" as const, label: "Subscriptions" },
-  { id: "appearance" as const, label: "Appearance" },
-  { id: "notifications" as const, label: "Notifications" },
-  { id: "voice" as const, label: "Voice & Video" },
-  { id: "textMedia" as const, label: "Text & Media" },
+  { id: "profile" as const, label: "Profile", group: "User Settings" },
+  { id: "account" as const, label: "Account & Security", group: "User Settings" },
+  { id: "subscriptions" as const, label: "Subscription", group: "User Settings" },
+  { id: "appearance" as const, label: "Appearance", group: "App Settings" },
+  { id: "notifications" as const, label: "Notifications", group: "App Settings" },
+  { id: "voice" as const, label: "Voice & Video", group: "App Settings" },
+  { id: "textMedia" as const, label: "Text & Media", group: "App Settings" },
 ];
 
-function SettingRow({
-  label,
-  description,
-  checked,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-divider bg-bg-secondary p-4 hover:bg-interactive-hover/40">
-      <div>
-        <p className="font-medium">{label}</p>
-        {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
-      </div>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 shrink-0 accent-brand"
-      />
-    </label>
-  );
+const NAV_GROUPS = ["User Settings", "App Settings"] as const;
+
+/** Human-readable summary of what a plan actually grants right now. */
+function formatBytes(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 const STATUSES: { id: UserStatus; label: string }[] = [
@@ -127,6 +113,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [signingOutAll, setSigningOutAll] = useState(false);
+  const [saving, setSaving] = useState(false);
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
   useEffect(() => {
@@ -198,6 +187,31 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [profile]);
 
+  /**
+   * Ends every other session for this account.
+   *
+   * Previously the only recourse for a shared or lost device was changing the
+   * password and hoping tokens expired.
+   */
+  const signOutEverywhere = useCallback(async () => {
+    setSigningOutAll(true);
+    setSettingsError(null);
+    const { error: err } = await getSupabaseClient().auth.signOut({ scope: "others" });
+    if (err) setSettingsError(err.message);
+    setSigningOutAll(false);
+  }, []);
+
+  const copyUserId = useCallback(async () => {
+    if (!profile?.id) return;
+    try {
+      await navigator.clipboard.writeText(profile.id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 1500);
+    } catch {
+      setSettingsError("Could not copy to the clipboard.");
+    }
+  }, [profile?.id]);
+
   if (!open) return null;
 
   const previewAccent: ProfileAccentFields = useDefaultAccent
@@ -219,6 +233,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setError("Enter a display name.");
       return;
     }
+    setSaving(true);
     const err = await updateProfile({
       display_name: displayName.trim(),
       username: sanitizedUsername,
@@ -227,11 +242,37 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       accent_color_2: useDefaultAccent ? null : accent2,
       status,
     });
+    setSaving(false);
     if (err) setError(err);
     else {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
+  }
+
+  // Drives the save bar, so it is obvious when edits are still uncommitted.
+  const profileDirty = !!profile && (
+    displayName !== (profile.display_name ?? "") ||
+    username !== (profile.username ?? "") ||
+    bio !== (profile.bio ?? "") ||
+    status !== (profile.preferred_status ?? profile.status) ||
+    useDefaultAccent !== !usesCustomAccent(profile) ||
+    (!useDefaultAccent &&
+      (accent1 !== (profile.accent_color ?? DEFAULT_ACCENT) ||
+        accent2 !== (profile.accent_color_2 ?? profile.accent_color ?? "#eb459e")))
+  );
+
+  function resetProfileEdits() {
+    if (!profile) return;
+    setError(null);
+    setDisplayName(profile.display_name ?? "");
+    setUsername(profile.username ?? "");
+    setBio(profile.bio ?? "");
+    const custom = usesCustomAccent(profile);
+    setUseDefaultAccent(!custom);
+    setAccent1(profile.accent_color ?? DEFAULT_ACCENT);
+    setAccent2(profile.accent_color_2 ?? profile.accent_color ?? "#eb459e");
+    setStatus(profile.preferred_status ?? profile.status);
   }
 
   function pickAvatar(file: File) {
@@ -294,25 +335,56 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <button type="button" aria-label="Close" className="absolute inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative flex max-h-[85vh] w-full max-w-[720px] overflow-hidden rounded-md bg-bg-primary shadow-2xl">
-          <nav className="hidden w-56 shrink-0 flex-col bg-bg-secondary p-4 sm:flex">
-            <h2 className="mb-4 px-2 text-xs font-bold uppercase text-text-muted">User Settings</h2>
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`rounded px-2 py-1.5 text-left text-[15px] transition-all duration-150 ease-in-out ${
-                  tab === t.id ? "bg-interactive-selected text-text-normal" : "text-text-muted hover:bg-interactive-hover"
-                }`}
-              >
-                {t.label}
-              </button>
+        <div className="relative flex max-h-[88vh] w-full max-w-[920px] overflow-hidden rounded-xl bg-bg-primary shadow-2xl">
+          <nav className="hidden w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary p-3 sm:flex">
+            {profile && (
+              <div className="mb-3 flex items-center gap-2.5 rounded-lg px-2 py-2">
+                <Avatar profile={profile} size="sm" />
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold leading-tight">
+                    {profile.display_name || profile.username}
+                  </p>
+                  <p className="truncate text-[12px] text-text-muted">@{profile.username}</p>
+                </div>
+              </div>
+            )}
+
+            {NAV_GROUPS.map((group) => (
+              <div key={group} className="mb-3">
+                <h2 className="mb-1 px-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                  {group}
+                </h2>
+                {TABS.filter((t) => t.group === group).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTab(t.id)}
+                    className={`block w-full rounded px-2 py-1.5 text-left text-[15px] transition-colors duration-150 ${
+                      tab === t.id
+                        ? "bg-interactive-selected text-text-normal"
+                        : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             ))}
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                window.location.href = "/bug-report";
+              }}
+              className="mt-auto rounded px-2 py-1.5 text-left text-[15px] text-text-muted transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal"
+            >
+              Report a Bug
+            </button>
             <button
               type="button"
               onClick={() => void signOut()}
-              className="mt-auto rounded px-2 py-1.5 text-left text-[15px] text-status-dnd transition-all duration-150 hover:bg-interactive-hover"
+              className="rounded px-2 py-1.5 text-left text-[15px] text-status-dnd transition-colors duration-150 hover:bg-interactive-hover"
             >
               Log Out
             </button>
@@ -339,10 +411,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
             <div className="flex-1 overflow-y-auto px-6 py-6">
               {tab === "profile" && (
-                <div className="space-y-4">
+                <div className="pb-20">
                   {profile && (
-                    <div>
-                      <p className="mb-2 text-xs font-bold uppercase text-text-muted">Preview</p>
+                    <div className="mb-6">
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Preview
+                      </p>
                       <ProfilePreview
                         // Reflect unsaved edits so colour and name changes are
                         // visible before committing them.
@@ -358,61 +432,95 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         username={username}
                         bio={bio}
                         status={status}
+                        // Hover the preview's avatar/banner to change them.
+                        onChangeAvatar={pickAvatar}
+                        onChangeBanner={(file) => void handleBanner(file)}
                       />
                     </div>
                   )}
 
-                  <div className="flex items-center gap-4">
-                    {profile && <Avatar profile={profile} size="lg" />}
-                    <div>
-                      <p className="font-semibold">{displayName || username}</p>
-                      <label className="cursor-pointer text-sm text-brand hover:underline">
-                        {isUploading ? "Uploading..." : "Change avatar"}
-                        <input
-                          type="file"
-                          accept={subPlan !== "free" ? "image/*,.gif" : "image/*"}
-                          className="hidden"
-                          onChange={(e) => e.target.files?.[0] && pickAvatar(e.target.files[0])}
-                        />
-                      </label>
-                      {subPlan !== "free" && (
-                        <p className="mt-0.5 text-xs text-text-muted">GIF supported for animated avatar</p>
-                      )}
-                    </div>
-                  </div>
+                  <SettingsSection
+                    title="Identity"
+                    description="How your name appears across Disband."
+                  >
+                    <SettingRow label="Display name" htmlFor="settings-display-name" stacked>
+                      <input
+                        id="settings-display-name"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value.slice(0, 25))}
+                        maxLength={25}
+                        className={settingsInputClass}
+                      />
+                    </SettingRow>
 
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Display name</span>
-                    <input value={displayName} onChange={(e) => setDisplayName(e.target.value.slice(0, 25))} maxLength={25} className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand" />
-                  </label>
-                  <div className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Username</span>
-                    <UsernameAvailabilityInput
-                      value={username}
-                      onChange={setUsername}
-                      currentUsername={profile?.username}
-                    />
-                  </div>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Bio</span>
-                    <textarea
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value.slice(0, entitlements.maxBioLength))}
-                      rows={3}
-                      maxLength={entitlements.maxBioLength}
-                      placeholder="Tell people about yourself. Line breaks are allowed."
-                      className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-                    />
-                    <p className="mt-1 text-right text-xs text-text-muted">{bio.length}/{entitlements.maxBioLength}</p>
-                  </label>
-                  <div className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Profile color</span>
-                    <p className="mt-0.5 text-xs text-text-muted">
-                      Pick a preset, or set two colors yourself — the same color twice gives a solid,
-                      two different colors give a gradient.
-                    </p>
+                    <SettingRow
+                      label="Username"
+                      description="Lowercase letters, numbers, and underscores. Others use this to add you."
+                      stacked
+                    >
+                      <UsernameAvailabilityInput
+                        value={username}
+                        onChange={setUsername}
+                        currentUsername={profile?.username}
+                      />
+                    </SettingRow>
 
-                    <div className="mt-3">
+                    <SettingRow
+                      label="About me"
+                      description="Line breaks are allowed."
+                      htmlFor="settings-bio"
+                      stacked
+                    >
+                      <textarea
+                        id="settings-bio"
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value.slice(0, entitlements.maxBioLength))}
+                        rows={3}
+                        maxLength={entitlements.maxBioLength}
+                        placeholder="Tell people about yourself."
+                        className={`${settingsInputClass} resize-none`}
+                      />
+                      <p className="mt-1 text-right text-[12px] text-text-muted">
+                        {bio.length}/{entitlements.maxBioLength}
+                        {subPlan === "free" && (
+                          <>
+                            {" · "}
+                            <button
+                              type="button"
+                              onClick={() => setTab("subscriptions")}
+                              className="underline hover:text-text-normal"
+                            >
+                              more with a paid plan
+                            </button>
+                          </>
+                        )}
+                      </p>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <p className="mb-6 -mt-2 text-[12px] text-text-muted">
+                    Hover your avatar or banner in the preview to change them.{" "}
+                    {subPlan === "free"
+                      ? "Animated avatars need a paid plan."
+                      : "GIFs are supported for animated avatars on your plan."}
+                  </p>
+
+                  <SettingsSection
+                    title="Profile colour"
+                    description="Pick a preset, or set two colours yourself — the same colour twice gives a solid, two different colours give a gradient."
+                    action={
+                      !useDefaultAccent ? (
+                        <button
+                          type="button"
+                          onClick={() => setUseDefaultAccent(true)}
+                          className="rounded-md border border-divider px-2.5 py-1 text-[12px] transition-colors hover:bg-interactive-hover"
+                        >
+                          Reset to default
+                        </button>
+                      ) : undefined
+                    }
+                  >
+                    <SettingRow label="Presets" stacked>
                       <AccentPresetGrid
                         active={useDefaultAccent ? null : { from: accent1, to: accent2 }}
                         onPick={(from, to) => {
@@ -421,166 +529,238 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           setAccent2(to);
                         }}
                       />
-                    </div>
+                    </SettingRow>
 
-                    <div className="mt-3 flex flex-wrap items-end gap-3">
-                      <label className="block">
-                        <span className="text-xs text-text-muted">Color 1</span>
+                    <SettingRow
+                      label="Custom colours"
+                      description={
+                        useDefaultAccent
+                          ? "Currently using the default style."
+                          : isProfileGradient(previewAccent)
+                            ? "Gradient"
+                            : "Solid colour"
+                      }
+                    >
+                      <div className="flex items-center gap-2">
                         <input
                           type="color"
+                          aria-label="Colour 1"
                           value={accent1}
                           onChange={(e) => {
                             setUseDefaultAccent(false);
                             setAccent1(e.target.value);
                           }}
-                          className="mt-1 h-10 w-16 cursor-pointer rounded bg-bg-accent"
+                          className="h-9 w-12 cursor-pointer rounded bg-bg-tertiary"
                         />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs text-text-muted">Color 2</span>
                         <input
                           type="color"
+                          aria-label="Colour 2"
                           value={accent2}
                           onChange={(e) => {
                             setUseDefaultAccent(false);
                             setAccent2(e.target.value);
                           }}
-                          className="mt-1 h-10 w-16 cursor-pointer rounded bg-bg-accent"
+                          className="h-9 w-12 cursor-pointer rounded bg-bg-tertiary"
                         />
-                      </label>
-                      {!useDefaultAccent && (
-                        <button
-                          type="button"
-                          onClick={() => setUseDefaultAccent(true)}
-                          className="mb-0.5 rounded-md border border-divider px-3 py-2 text-[13px] text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
-                        >
-                          Reset to default
-                        </button>
-                      )}
-                    </div>
+                      </div>
+                    </SettingRow>
 
-                    <div className="mt-4 overflow-hidden rounded-lg border border-divider">
-                      {profile?.banner_url && (
-                        <div
-                          className="h-16 bg-cover bg-center"
-                          style={{ backgroundImage: safeImageUrl(profile.banner_url) ? `url(${safeImageUrl(profile.banner_url)})` : undefined }}
-                        />
-                      )}
-                      <div className="p-3" style={getProfilePanelStyle(previewAccent)}>
+                    <SettingRow label="Sidebar preview" stacked>
+                      <div
+                        className="overflow-hidden rounded-lg p-3"
+                        style={getProfilePanelStyle(previewAccent)}
+                      >
                         <div className="flex items-center gap-3">
                           <div
-                            className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold ring-2 ring-black/15"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-bold ring-2 ring-black/15"
                             style={getAvatarStyle(previewAccent)}
                           >
                             {(displayName || username || "?").charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <p className="text-base font-semibold leading-tight">
+                          <div className="min-w-0">
+                            <p className="truncate text-[15px] font-semibold leading-tight">
                               {displayName.trim() || username || "Display name"}
                             </p>
                             {username && (
-                              <p className="text-sm" style={{ color: getProfilePanelMutedColor(previewAccent) }}>
+                              <p
+                                className="truncate text-[13px]"
+                                style={{ color: getProfilePanelMutedColor(previewAccent) }}
+                              >
                                 @{username}
                               </p>
                             )}
-                            <p className="mt-0.5 text-xs opacity-75">
-                              {useDefaultAccent
-                                ? "Default"
-                                : isProfileGradient(previewAccent)
-                                  ? "Gradient"
-                                  : "Solid color"}
-                            </p>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Profile banner</span>
-                    <p className="mt-0.5 text-xs text-text-muted">Shown on your profile when others view you</p>
-                    {profile?.banner_url && (
-                      <div
-                        className="mt-2 h-20 rounded-lg bg-cover bg-center ring-1 ring-divider"
-                        style={{ backgroundImage: safeImageUrl(profile.banner_url) ? `url(${safeImageUrl(profile.banner_url)})` : undefined }}
-                      />
-                    )}
-                    <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm text-brand hover:bg-interactive-hover">
-                      {profile?.banner_url ? "Change banner" : "Upload banner"}
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
-                    </label>
-                  </label>
-                  <div>
-                    <span className="text-xs font-bold uppercase text-text-muted">Status</span>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {STATUSES.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setStatus(s.id)}
-                          className={`rounded px-3 py-1.5 text-sm transition-all duration-150 ${
-                            status === s.id ? "bg-brand text-white" : "bg-bg-accent text-text-muted hover:text-text-normal"
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title="Status"
+                    description="Sets how you appear to everyone else."
+                  >
+                    <SettingRow label="Online status" stacked>
+                      <div className="flex flex-wrap gap-2">
+                        {STATUSES.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setStatus(s.id)}
+                            aria-pressed={status === s.id}
+                            className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                              status === s.id
+                                ? "bg-brand text-white"
+                                : "bg-bg-tertiary text-text-muted hover:text-text-normal"
+                            }`}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  {profile && badgeDefsFor(profile).length > 0 && (
+                    <SettingsSection
+                      title="Badges"
+                      description="Awarded by Disband — these can't be changed from here."
+                    >
+                      <SettingRow label="Your badges" stacked>
+                        <div className="flex flex-wrap gap-2">
+                          {badgeDefsFor(profile).map((b) => (
+                            <span
+                              key={b.key}
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-semibold"
+                              style={{ backgroundColor: b.bg, color: b.color }}
+                            >
+                              <b.Icon size={14} />
+                              {b.title}
+                            </span>
+                          ))}
+                        </div>
+                      </SettingRow>
+                    </SettingsSection>
+                  )}
+
                   {error && <p className="text-sm text-status-dnd">{error}</p>}
-                  {saved && <p className="text-sm text-status-online">Saved!</p>}
-                  <button type="button" onClick={() => void saveProfile()} className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
-                    Save Changes
-                  </button>
+
+                  {(profileDirty || saving || saved) && (
+                    <div className="sticky bottom-0 -mx-6 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-bg-primary/95 px-6 py-3 backdrop-blur">
+                      <button
+                        type="button"
+                        onClick={resetProfileEdits}
+                        disabled={!profileDirty || saving}
+                        className="rounded-md border border-divider px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Revert
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void saveProfile()}
+                        disabled={saving || !profileDirty}
+                        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {saving ? "Saving…" : profileDirty ? "Save Changes" : "Saved!"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {tab === "account" && (
-                <div className="space-y-6">
-                  <div>
-                    <span className="text-xs font-bold uppercase text-text-muted">Email</span>
-                    <p className="mt-1 text-sm text-text-normal">{user?.email ?? "Not available"}</p>
-                  </div>
+                <div className="pb-20">
+                  <SettingsSection
+                    title="Account"
+                    description="Your email and user identifier on Disband."
+                  >
+                    <SettingRow label="Email" stacked>
+                      <p className="text-[14px] text-text-normal">{user?.email ?? "Not available"}</p>
+                    </SettingRow>
+                    <SettingRow
+                      label="User ID"
+                      description="Used for support requests. You can't change this."
+                      stacked
+                    >
+                      <div className="flex items-center gap-2">
+                        <code className="min-w-0 flex-1 truncate rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[12.5px] text-text-muted">
+                          {profile?.id}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => void copyUserId()}
+                          className="shrink-0 rounded-md border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                        >
+                          {copiedId ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </SettingRow>
+                  </SettingsSection>
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-text-normal">Change password</h3>
-                    <p className="mt-1 text-sm text-text-muted">
-                      Set a new password while you are logged in.
-                    </p>
-                    <div className="mt-4">
+                  <SettingsSection
+                    title="Password & security"
+                    description="Keep your account protected."
+                  >
+                    <SettingRow
+                      label="Change password"
+                      description="Set a new password while you are logged in."
+                      stacked
+                    >
                       <NewPasswordForm submitLabel="Update password" onSubmit={updatePassword} />
-                    </div>
+                    </SettingRow>
+                    {user?.email && (
+                      <SettingRow
+                        label="Email reset link"
+                        description={`Prefer to reset from your inbox? We can send a link to ${user.email}.`}
+                        stacked
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsError(null);
+                            setResetEmailSent(false);
+                            void (async () => {
+                              const err = await requestPasswordReset(user.email!);
+                              if (err) setSettingsError(err);
+                              else setResetEmailSent(true);
+                            })();
+                          }}
+                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover"
+                        >
+                          Send reset email
+                        </button>
+                        {resetEmailSent && (
+                          <p className="mt-2 text-[13px] text-status-online">Reset link sent. Check your inbox.</p>
+                        )}
+                      </SettingRow>
+                    )}
+                  </SettingsSection>
+
+                  <div className="mb-8">
+                    <MfaSettingsPanel />
                   </div>
 
-                  {user?.email && (
-                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
-                      <h3 className="text-sm font-semibold text-text-normal">Email reset link</h3>
-                      <p className="mt-1 text-sm text-text-muted">
-                        Prefer to reset from your inbox? We can send a link to {user.email}.
-                      </p>
+                  <SettingsSection
+                    title="Sessions"
+                    description="Manage where your account is signed in."
+                  >
+                    <SettingRow
+                      label="Sign out everywhere"
+                      description="Ends every other session on this account. You'll stay signed in here."
+                    >
                       <button
                         type="button"
-                        onClick={() => {
-                          setSettingsError(null);
-                          setResetEmailSent(false);
-                          void (async () => {
-                            const err = await requestPasswordReset(user.email!);
-                            if (err) setSettingsError(err);
-                            else setResetEmailSent(true);
-                          })();
-                        }}
-                        className="mt-3 rounded bg-interactive-hover px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-selected"
+                        onClick={() => void signOutEverywhere()}
+                        disabled={signingOutAll}
+                        className="rounded-md border border-status-dnd/40 px-3 py-1.5 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Send reset email
+                        {signingOutAll ? "Signing out…" : "Sign out everywhere"}
                       </button>
-                      {resetEmailSent && (
-                        <p className="mt-2 text-sm text-status-online">Reset link sent. Check your inbox.</p>
-                      )}
-                    </div>
-                  )}
-
-                  <MfaSettingsPanel />
+                    </SettingRow>
+                  </SettingsSection>
 
                   <PlatformModerationPanel />
+
+                  <AccountRestrictionsPanel />
 
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
@@ -672,21 +852,29 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <SettingRow
                     label="Message sounds"
                     description="Play a ping for @mentions and incoming DMs when the app is in the background."
-                    checked={soundEnabled}
-                    onChange={(next) => {
-                      setSoundEnabled(next);
-                      void savePreference({ sound_enabled: next });
-                    }}
-                  />
+                  >
+                    <Toggle
+                      checked={soundEnabled}
+                      onChange={(next) => {
+                        setSoundEnabled(next);
+                        void savePreference({ sound_enabled: next });
+                      }}
+                      label="Message sounds"
+                    />
+                  </SettingRow>
                   <SettingRow
                     label="Desktop notifications"
                     description="Show OS notifications for mentions, messages, and calls when Disband is not focused."
-                    checked={desktopNotifications}
-                    onChange={(next) => {
-                      setDesktopNotifications(next);
-                      void savePreference({ desktop_notifications_enabled: next });
-                    }}
-                  />
+                  >
+                    <Toggle
+                      checked={desktopNotifications}
+                      onChange={(next) => {
+                        setDesktopNotifications(next);
+                        void savePreference({ desktop_notifications_enabled: next });
+                      }}
+                      label="Desktop notifications"
+                    />
+                  </SettingRow>
                   {notifPermission !== "granted" && notifPermission !== "unsupported" && (
                     <button
                       type="button"
@@ -707,69 +895,90 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               )}
 
               {tab === "voice" && (
-                <div className="space-y-4">
-                  <p className="text-sm text-text-muted">
-                    Choose your microphone, speaker, and camera for voice channels and calls. Device lists populate after permission is granted.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void testMediaAccess()}
-                    className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                <div className="space-y-6">
+                  <SettingsSection
+                    title="Devices"
+                    description="Choose your microphone, speaker, and camera for voice channels and calls. Device lists populate after permission is granted."
                   >
-                    Allow microphone & camera
-                  </button>
+                    <SettingRow label="Input device" stacked>
+                      <select
+                        value={audioInput}
+                        disabled={devicesLoading}
+                        onChange={(e) => {
+                          setAudioInput(e.target.value);
+                          setPreferredAudioInputId(e.target.value);
+                        }}
+                        className={settingsInputClass}
+                      >
+                        <option value="">System default</option>
+                        {inputs.map((device) => (
+                          <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
+                        ))}
+                      </select>
+                    </SettingRow>
+                    <SettingRow label="Output device" stacked>
+                      <select
+                        value={audioOutput}
+                        disabled={devicesLoading}
+                        onChange={(e) => {
+                          setAudioOutput(e.target.value);
+                          setPreferredAudioOutputId(e.target.value);
+                        }}
+                        className={settingsInputClass}
+                      >
+                        <option value="">System default</option>
+                        {outputs.map((device) => (
+                          <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
+                        ))}
+                      </select>
+                    </SettingRow>
+                    <SettingRow label="Camera" stacked>
+                      <select
+                        value={videoInput}
+                        disabled={devicesLoading}
+                        onChange={(e) => {
+                          setVideoInput(e.target.value);
+                          setPreferredVideoInputId(e.target.value);
+                        }}
+                        className={settingsInputClass}
+                      >
+                        <option value="">System default</option>
+                        {cameras.map((device) => (
+                          <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
+                        ))}
+                      </select>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title="Microphone test"
+                    description="Confirm your microphone hears you before joining a call."
+                  >
+                    <SettingRow
+                      label="Live input level"
+                      description="Speak and watch the meter move."
+                      stacked
+                    >
+                      <MicTest deviceId={audioInput} />
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title="Access"
+                    description="Grant permission once so devices can be listed and tested."
+                  >
+                    <SettingRow label="Microphone & camera access">
+                      <button
+                        type="button"
+                        onClick={() => void testMediaAccess()}
+                        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                      >
+                        Allow microphone & camera
+                      </button>
+                    </SettingRow>
+                  </SettingsSection>
+
                   {mediaTestMessage && <p className="text-sm text-status-online">{mediaTestMessage}</p>}
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Input device</span>
-                    <select
-                      value={audioInput}
-                      disabled={devicesLoading}
-                      onChange={(e) => {
-                        setAudioInput(e.target.value);
-                        setPreferredAudioInputId(e.target.value);
-                      }}
-                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-                    >
-                      <option value="">System default</option>
-                      {inputs.map((device) => (
-                        <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Output device</span>
-                    <select
-                      value={audioOutput}
-                      disabled={devicesLoading}
-                      onChange={(e) => {
-                        setAudioOutput(e.target.value);
-                        setPreferredAudioOutputId(e.target.value);
-                      }}
-                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-                    >
-                      <option value="">System default</option>
-                      {outputs.map((device) => (
-                        <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase text-text-muted">Camera</span>
-                    <select
-                      value={videoInput}
-                      disabled={devicesLoading}
-                      onChange={(e) => {
-                        setVideoInput(e.target.value);
-                        setPreferredVideoInputId(e.target.value);
-                      }}
-                      className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-                    >
-                      <option value="">System default</option>
-                      {cameras.map((device) => (
-                        <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
-                      ))}
-                    </select>
-                  </label>
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
@@ -796,7 +1005,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                                 })}
                               </p>
                             )}
-                            <p className="text-xs text-[#57f287]">Active</p>
+                            <Hint tone="online">Active</Hint>
                           </div>
                         )}
                         {subscription?.status === "past_due" && (
@@ -824,6 +1033,27 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   >
                     Refresh subscription
                   </button>
+
+                  <SettingsSection
+                    title="What your plan includes"
+                    description="Limits that apply to your account right now."
+                  >
+                    <SettingRow label="Max file upload">
+                      <span className="text-[13px] font-semibold text-text-normal">
+                        {formatBytes(entitlements.maxUploadBytes)}
+                      </span>
+                    </SettingRow>
+                    <SettingRow label="Video quality">
+                      <span className="text-[13px] font-semibold text-text-normal">
+                        {entitlements.videoQuality}
+                      </span>
+                    </SettingRow>
+                    <SettingRow label="Animated avatar">
+                      <span className="text-[13px] font-semibold text-text-normal">
+                        {entitlements.animatedAvatar ? "Included" : "—"}
+                      </span>
+                    </SettingRow>
+                  </SettingsSection>
                   {entitlements.historyExport && (
                     <button
                       type="button"
@@ -844,12 +1074,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <SettingRow
                     label="Link previews"
                     description="Show rich embeds with title, description, and image for URLs in messages."
-                    checked={linkPreviews}
-                    onChange={(next) => {
-                      setLinkPreviews(next);
-                      void savePreference({ link_previews_enabled: next });
-                    }}
-                  />
+                  >
+                    <Toggle
+                      checked={linkPreviews}
+                      onChange={(next) => {
+                        setLinkPreviews(next);
+                        void savePreference({ link_previews_enabled: next });
+                      }}
+                      label="Link previews"
+                    />
+                  </SettingRow>
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}

@@ -37,4 +37,31 @@ enum RealtimeService {
         }
         return (channel, stream)
     }
+
+    /// Observe *any* change (insert, update, delete) on `table`, emitting a tick
+    /// per change. Use when the reaction is "go re-read the row" rather than
+    /// decoding the payload — an UPDATE is what carries a plan upgrade, so
+    /// insert-only subscriptions would miss it.
+    static func observeChanges(
+        table: String,
+        filter: String? = nil
+    ) async -> (channel: RealtimeChannelV2, stream: AsyncStream<Void>) {
+        let topic = "rt-any:\(table):\(filter ?? "all"):\(UUID().uuidString.prefix(8))"
+        let channel = client.channel(topic)
+        let changes = channel.postgresChange(
+            AnyAction.self, schema: "public", table: table, filter: filter
+        )
+        await channel.subscribe()
+
+        let stream = AsyncStream<Void> { continuation in
+            let task = Task {
+                for await _ in changes {
+                    continuation.yield(())
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+        return (channel, stream)
+    }
 }
