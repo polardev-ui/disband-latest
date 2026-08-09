@@ -132,14 +132,47 @@ enum DatabaseService {
             .or("user_a.eq.\(currentUserId),user_b.eq.\(currentUserId)")
             .execute().value
 
-        // Hydrate the "other" participant for each thread.
-        var hydrated: [DmThread] = []
-        for var thread in threads {
+        // Hydrate the "other" participant in a single batched query. Doing this
+        // per-thread cost one request per row, and a `try?` there meant any
+        // transient failure silently rendered the row as "Unknown" forever.
+        let friendIds = threads.map { $0.userA == currentUserId ? $0.userB : $0.userA }
+        async let profilesTask = profiles(ids: friendIds)
+        async let previewsTask = latestDmMessages(threadIds: threads.map(\.id))
+        let (byId, latest) = try await (profilesTask, previewsTask)
+
+        return threads.map { thread in
+            var thread = thread
             let friendId = thread.userA == currentUserId ? thread.userB : thread.userA
-            thread.friend = try? await profile(id: friendId)
-            hydrated.append(thread)
+            thread.friend = byId[friendId]
+            // `dm_threads` carries no cached preview, so derive it from the
+            // newest message instead of leaving every row blank.
+            if let message = latest[thread.id] {
+                thread.lastMessageAt = message.createdAt
+                thread.lastMessagePreview = DirectMessagesViewModel.previewText(for: message)
+            }
+            return thread
         }
-        return hydrated
+    }
+
+    /// Newest message per thread, fetched in one round-trip.
+    ///
+    /// Pulls a recent window across all the user's threads and keeps the first
+    /// (newest) row seen for each, which avoids a per-thread query.
+    static func latestDmMessages(threadIds: [String]) async throws -> [String: DmMessage] {
+        guard !threadIds.isEmpty else { return [:] }
+        let rows: [DmMessage] = try await client
+            .from("dm_messages")
+            .select("*")
+            .in("thread_id", values: threadIds)
+            .order("created_at", ascending: false)
+            .limit(400)
+            .execute().value
+
+        var newest: [String: DmMessage] = [:]
+        for row in rows where newest[row.threadId] == nil {
+            newest[row.threadId] = row
+        }
+        return newest
     }
 
     @discardableResult
@@ -210,6 +243,21 @@ enum DatabaseService {
 
     static func profile(id: String) async throws -> Profile {
         try await client.from("profiles").select("*").eq("id", value: id).single().execute().value
+    }
+
+    /// Fetch many profiles in one round-trip, keyed by id.
+    ///
+    /// Hydrating lists one profile at a time costs a request per row and turns a
+    /// single transient failure into a permanently "Unknown" row.
+    static func profiles(ids: [String]) async throws -> [String: Profile] {
+        let unique = Array(Set(ids))
+        guard !unique.isEmpty else { return [:] }
+        let rows: [Profile] = try await client
+            .from("profiles")
+            .select("*")
+            .in("id", values: unique)
+            .execute().value
+        return Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     static func searchProfiles(query: String) async throws -> [Profile] {

@@ -9,6 +9,8 @@ struct MainTabView: View {
                 .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right.fill") }
             FriendsTab()
                 .tabItem { Label("Friends", systemImage: "person.2.fill") }
+            NotesTab()
+                .tabItem { Label("Notes", systemImage: "note.text") }
             ProfileTab()
                 .tabItem { Label("You", systemImage: "person.crop.circle.fill") }
         }

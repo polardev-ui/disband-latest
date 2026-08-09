@@ -4,6 +4,8 @@ import PhotosUI
 /// Shared conversation screen used for channels, DMs, and group chats.
 struct ChatView: View {
     @Environment(AppState.self) private var app
+    @Environment(CallManager.self) private var call
+    @Environment(DmUnreadStore.self) private var unreadStore
     @State private var model: ChatViewModel
     @State private var draft = ""
     @State private var showGifPicker = false
@@ -16,8 +18,12 @@ struct ChatView: View {
 
     private let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"]
 
-    init(source: ChatSource) {
+    /// The DM peer, when `source` is `.dm`. Enables the header call button.
+    var callPeer: Profile?
+
+    init(source: ChatSource, callPeer: Profile? = nil) {
         _model = State(initialValue: ChatViewModel(source: source))
+        self.callPeer = callPeer
     }
 
     var body: some View {
@@ -31,9 +37,33 @@ struct ChatView: View {
         .background(Brand.surfaceRaised)
         .navigationTitle(model.source.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if case .dm = model.source {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        guard let peer = callPeer else { return }
+                        Task { await call.startCall(peer: peer) }
+                    } label: {
+                        Image(systemName: "phone.fill")
+                            .foregroundStyle(call.phase == .idle ? Brand.online : Brand.textMuted)
+                    }
+                    .disabled(call.phase != .idle || callPeer == nil)
+                }
+            }
+        }
         .overlay { reactionBar }
-        .task { await model.start(currentUserId: app.currentUserId, profile: app.profile) }
-        .onDisappear { model.stop() }
+        .task {
+            if case .dm(let threadId, _) = model.source {
+                unreadStore.markActive(threadId: threadId)
+            }
+            await model.start(currentUserId: app.currentUserId, profile: app.profile)
+        }
+        .onDisappear {
+            if case .dm = model.source {
+                unreadStore.clearActive()
+            }
+            model.stop()
+        }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
         .sheet(item: $openProfile) { ProfileDetailView(profile: $0) }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)

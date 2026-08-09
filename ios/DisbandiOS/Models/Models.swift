@@ -44,15 +44,18 @@ struct Profile: Codable, Identifiable, Hashable {
     var bannerUrl: String?
     var accentColor: String?
     var accentColor2: String?
+    var theme: String?
     var showOwnerBadge: Bool?
     var showStaffBadge: Bool?
+    var showOgBadge: Bool?
+    var showBountyBadge: Bool?
     var soundEnabled: Bool?
     var desktopNotificationsEnabled: Bool?
     var linkPreviewsEnabled: Bool?
     var createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, username, bio, status
+        case id, username, bio, status, theme
         case displayName = "display_name"
         case avatarUrl = "avatar_url"
         case preferredStatus = "preferred_status"
@@ -61,6 +64,8 @@ struct Profile: Codable, Identifiable, Hashable {
         case accentColor2 = "accent_color_2"
         case showOwnerBadge = "show_owner_badge"
         case showStaffBadge = "show_staff_badge"
+        case showOgBadge = "show_og_badge"
+        case showBountyBadge = "show_bounty_badge"
         case soundEnabled = "sound_enabled"
         case desktopNotificationsEnabled = "desktop_notifications_enabled"
         case linkPreviewsEnabled = "link_previews_enabled"
@@ -199,6 +204,8 @@ struct DmThread: Codable, Identifiable, Hashable {
     let userA: String
     let userB: String
     let createdAt: String?
+    var lastMessageAt: String?
+    var lastMessagePreview: String?
     var friend: Profile?
 
     enum CodingKeys: String, CodingKey {
@@ -206,6 +213,8 @@ struct DmThread: Codable, Identifiable, Hashable {
         case userA = "user_a"
         case userB = "user_b"
         case createdAt = "created_at"
+        case lastMessageAt = "last_message_at"
+        case lastMessagePreview = "last_message_preview"
     }
 }
 

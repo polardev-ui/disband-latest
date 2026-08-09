@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisbandUserMedia } from "@/lib/media";
+import { playCallConnected, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -52,6 +53,22 @@ export function useVoiceChannel(
       .eq("channel_id", channelId)
       .eq("user_id", userId);
   }, [channelId, userId, joined, micMuted, deafened]);
+
+  // Diff presence so join/leave blips only fire for *other* people.
+  const prevPresenceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!joined) {
+      prevPresenceRef.current = new Set();
+      return;
+    }
+    const ids = new Set(participants.map((p) => p.user_id));
+    const prev = prevPresenceRef.current;
+    const joinedIds = [...ids].filter((id) => !prev.has(id) && id !== userId);
+    const leftIds = [...prev].filter((id) => !ids.has(id) && id !== userId);
+    if (joinedIds.length > 0) playCallJoin();
+    if (leftIds.length > 0) playCallLeave();
+    prevPresenceRef.current = ids;
+  }, [participants, joined, userId]);
 
   const loadPresence = useCallback(async () => {
     if (!channelId) return;
@@ -206,6 +223,7 @@ export function useVoiceChannel(
 
       signalRef.current = ch;
       setJoined(true);
+      playCallConnected();
       await loadPresence();
 
       // Connect to existing participants
