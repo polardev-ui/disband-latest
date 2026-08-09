@@ -1,13 +1,83 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconPhone, IconPhoneOff, IconVideo, IconVideoOff } from "@/components/icons";
+import { IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
+
+/* ------------------------------------------------------------------ */
+/*  Participant circle                                                */
+/* ------------------------------------------------------------------ */
+
+function ParticipantCircle({
+  profile,
+  stream,
+  label,
+  mirrored,
+  ring,
+}: {
+  profile?: Profile;
+  stream?: MediaStream | null;
+  label: string;
+  mirrored?: boolean;
+  ring?: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const hasVideo = useLiveVideoStream(stream);
+  const ringClass = ring
+    ? "ring-[3px] ring-status-online shadow-[0_0_20px_rgba(59,165,93,0.3)]"
+    : "ring-[3px] ring-white/15";
+
+  useEffect(() => {
+    if (ref.current && stream && hasVideo) {
+      ref.current.srcObject = stream;
+      void ref.current.play().catch(() => {});
+    }
+  }, [stream, hasVideo]);
+
+  return (
+    <div className="flex flex-col items-center gap-2.5">
+      <div className={`relative h-28 w-28 overflow-hidden rounded-full bg-[#2b2d31] ${ringClass}`}>
+        {hasVideo && stream ? (
+          <video
+            ref={ref}
+            autoPlay
+            playsInline
+            muted={mirrored}
+            className={`h-full w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`}
+          />
+        ) : profile ? (
+          <Avatar profile={profile} size="lg" className="h-28 w-28 text-3xl" />
+        ) : (
+          <div className="flex h-28 w-28 items-center justify-center">
+            <span className="text-3xl font-bold text-white/40">{label.charAt(0).toUpperCase()}</span>
+          </div>
+        )}
+      </div>
+      <span className="max-w-[100px] truncate text-sm font-medium text-white/80">{label}</span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Timer                                                             */
+/* ------------------------------------------------------------------ */
+
+function formatElapsed(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(m)}:${pad(s)}`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Group call stage                                                  */
+/* ------------------------------------------------------------------ */
 
 interface GroupCallStageProps {
   groupName: string;
@@ -28,72 +98,26 @@ interface GroupCallStageProps {
   onToggleMic: () => void;
 }
 
-function VideoBubble({
-  stream,
-  label,
-  profile,
-  mirrored,
-  ring,
-}: {
-  stream?: MediaStream | null;
-  label: string;
-  profile?: Profile;
-  mirrored?: boolean;
-  ring?: boolean;
-}) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const hasVideo = useLiveVideoStream(stream);
+export function GroupCallStage({
+  groupName, members, presence, ringingIds, joined,
+  selfId, localStream, remoteStreams, cameraEnabled,
+  micMuted, deafened, onJoin, onLeave, onToggleCamera, onToggleMic,
+}: GroupCallStageProps) {
+  const [elapsed, setElapsed] = useState(0);
+  const joinedAtRef = useRef<number>(0);
 
   useEffect(() => {
-    if (ref.current && stream && hasVideo) {
-      ref.current.srcObject = stream;
-      void ref.current.play().catch(() => {});
+    if (joined) {
+      joinedAtRef.current = Date.now();
+      const tick = () => setElapsed(Math.max(0, Date.now() - joinedAtRef.current));
+      tick();
+      const id = setInterval(tick, 1000);
+      return () => clearInterval(id);
+    } else {
+      setElapsed(0);
     }
-  }, [stream, hasVideo]);
+  }, [joined]);
 
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <div
-        className={`relative flex h-36 w-36 items-center justify-center overflow-hidden rounded-full bg-[#2b2d31] ${
-          ring ? "ring-4 ring-status-online animate-pulse" : "ring-2 ring-white/10"
-        }`}
-      >
-        {hasVideo && stream ? (
-          <video
-            ref={ref}
-            autoPlay
-            playsInline
-            muted={mirrored}
-            className={`h-full w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`}
-          />
-        ) : profile ? (
-          <Avatar profile={profile} size="lg" className="h-32 w-32 text-3xl" />
-        ) : (
-          <span className="text-3xl text-text-muted">?</span>
-        )}
-      </div>
-      <span className="max-w-[120px] truncate text-sm font-medium text-white/90">{label}</span>
-    </div>
-  );
-}
-
-export function GroupCallStage({
-  groupName,
-  members,
-  presence,
-  ringingIds,
-  joined,
-  selfId,
-  localStream,
-  remoteStreams,
-  cameraEnabled,
-  micMuted,
-  deafened,
-  onJoin,
-  onLeave,
-  onToggleCamera,
-  onToggleMic,
-}: GroupCallStageProps) {
   if (presence.length === 0) return null;
 
   const displayMembers = presence.map((p) => ({
@@ -101,22 +125,25 @@ export function GroupCallStage({
     profile: p.profile ?? members.find((m) => m.id === p.user_id),
     stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
     mirrored: p.user_id === selfId,
-    ringing: false,
+    ringing: ringingIds.has(p.user_id),
   }));
 
   return (
-    <div className="flex shrink-0 flex-col items-center justify-between bg-black px-6 py-8">
-      <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-widest text-white/40">Group Call</p>
-        <h2 className="mt-1 text-lg font-semibold text-white">{groupName}</h2>
-        <p className="mt-1 text-sm text-white/50">
-          {`${presence.length} in voice${ringingIds.size ? ` · ${ringingIds.size} ringing` : ""}`}
-        </p>
-      </div>
+    <div className="flex shrink-0 flex-col items-center justify-center bg-black px-6 py-8">
+      {/* Header */}
+      <p className="text-xs font-bold uppercase tracking-widest text-white/30">
+        Group Call
+      </p>
+      <h2 className="mt-1 text-lg font-semibold text-white">{groupName}</h2>
+      <p className="mt-1 text-sm text-white/50">
+        {presence.length} in voice{joined ? ` \u00b7 ${formatElapsed(elapsed)}` : ""}
+        {ringingIds.size > 0 ? ` \u00b7 ${ringingIds.size} ringing` : ""}
+      </p>
 
-      <div className="flex flex-wrap items-center justify-center gap-8 py-6">
+      {/* Participant circles */}
+      <div className="flex flex-wrap items-center justify-center gap-8 py-8">
         {displayMembers.map((m) => (
-          <VideoBubble
+          <ParticipantCircle
             key={m.id}
             profile={m.profile}
             stream={m.stream}
@@ -127,49 +154,51 @@ export function GroupCallStage({
         ))}
       </div>
 
-      <div className="flex items-center gap-6">
+      {/* Controls */}
+      <div className="flex items-center gap-4">
         <button
           type="button"
           onClick={onToggleCamera}
           title={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-white transition-transform hover:scale-105"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
         >
-          {cameraEnabled ? <IconVideo size={24} /> : <IconVideoOff size={24} />}
+          {cameraEnabled ? <IconVideo size={20} /> : <IconVideoOff size={20} />}
         </button>
 
         {!joined ? (
           <button
             type="button"
             onClick={onJoin}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
             title="Join voice"
           >
-            <IconPhone size={24} />
+            <IconPhone size={22} />
           </button>
         ) : (
           <>
             <button
               type="button"
               onClick={onToggleMic}
-              className={`flex h-14 w-14 items-center justify-center rounded-full text-white transition-transform hover:scale-105 ${
-                micMuted ? "bg-status-dnd/80" : "bg-[#2b2d31]"
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-white/80 transition-colors ${
+                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-white/10 hover:bg-white/20"
               }`}
               title={micMuted ? "Unmute" : "Mute"}
             >
-              {micMuted ? "🔇" : "🎤"}
+              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
             </button>
             <button
               type="button"
               onClick={onLeave}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105"
               title="Leave voice"
             >
-              <IconPhoneOff size={24} />
+              <IconPhoneOff size={22} />
             </button>
           </>
         )}
       </div>
 
+      {/* Remote audio elements */}
       {[...remoteStreams.entries()].map(([uid, stream]) => (
         <audio
           key={uid}

@@ -22,20 +22,28 @@ const STATUS_BG: Record<UserStatus, string> = {
   offline: "bg-status-offline",
 };
 
+function memberRoleIds(member: ServerMember): string[] {
+  if (member.role_ids && member.role_ids.length > 0) return member.role_ids;
+  return member.role_id ? [member.role_id] : [];
+}
+
+/** Like Discord, the highest-priority role wins for grouping and colouring. */
+function topRole(member: ServerMember, roles: ServerRole[]): ServerRole | null {
+  let best: ServerRole | null = null;
+  for (const id of memberRoleIds(member)) {
+    const r = roles.find((x) => x.id === id);
+    if (r && (!best || r.position > best.position)) best = r;
+  }
+  return best;
+}
+
 function roleLabel(member: ServerMember, roles: ServerRole[]): string {
   if (member.role === "owner") return "Owner";
-  if (member.role_id) {
-    const r = roles.find((x) => x.id === member.role_id);
-    if (r) return r.name;
-  }
-  return member.role;
+  return topRole(member, roles)?.name ?? member.role;
 }
 
 function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
-  if (member.role_id) {
-    return roles.find((r) => r.id === member.role_id)?.color ?? null;
-  }
-  return null;
+  return topRole(member, roles)?.color ?? null;
 }
 
 export function MemberList({ members, roles, onMemberClick, onMemberContext }: MemberListProps) {

@@ -2,100 +2,89 @@ import SwiftUI
 
 struct DirectMessagesTab: View {
     @Environment(AppState.self) private var app
-    @State private var threads: [DmThread] = []
-    @State private var groups: [GroupChat] = []
-    @State private var loading = true
+    @Environment(DmUnreadStore.self) private var unreadStore
+    @State private var vm = DirectMessagesViewModel()
 
     var body: some View {
         NavigationStack {
-            Group {
-                if loading {
-                    StateView(kind: .loading)
-                } else if threads.isEmpty && groups.isEmpty {
-                    StateView(kind: .empty,
-                              title: "No conversations yet.\nStart one from the Friends tab.",
-                              systemImage: "bubble.left.and.bubble.right")
-                } else {
-                    List {
-                        if !threads.isEmpty {
-                            Section("Direct Messages") {
-                                ForEach(threads) { thread in
-                                    NavigationLink {
-                                        ChatView(source: .dm(threadId: thread.id,
-                                                              title: thread.friend?.name ?? "Direct Message"))
-                                    } label: {
-                                        ConversationRow(
-                                            iconUrl: thread.friend?.avatarUrl,
-                                            name: thread.friend?.name ?? "Unknown",
-                                            subtitle: "@\(thread.friend?.handle ?? "user")",
-                                            status: thread.friend?.status
-                                        )
-                                    }
-                                    .listRowBackground(Brand.surface)
-                                }
-                            }
+            content
+                .navigationTitle("Messages")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            Task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore) }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
                         }
-                        if !groups.isEmpty {
-                            Section("Group Chats") {
-                                ForEach(groups) { group in
-                                    NavigationLink {
-                                        ChatView(source: .group(id: group.id, name: group.name))
-                                    } label: {
-                                        ConversationRow(iconUrl: group.iconUrl, name: group.name,
-                                                        subtitle: "Group chat", status: nil)
-                                    }
-                                    .listRowBackground(Brand.surface)
-                                    .swipeActions {
-                                        Button(role: .destructive) { leaveGroup(group.id) } label: {
-                                            Label("Leave", systemImage: "rectangle.portrait.and.arrow.right")
-                                        }
-                                    }
-                                }
+                    }
+                }
+                .task {
+                    await vm.start(currentUserId: app.currentUserId, unread: unreadStore)
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if vm.loading {
+            StateView(kind: .loading)
+        } else if vm.threads.isEmpty && vm.groups.isEmpty {
+            StateView(kind: .empty,
+                      title: "No conversations yet.\nStart one from the Friends tab.",
+                      systemImage: "bubble.left.and.bubble.right")
+        } else {
+            List {
+                if !vm.threads.isEmpty {
+                    Section("Direct Messages") {
+                        ForEach(vm.threads) { thread in
+                            NavigationLink {
+                                ChatView(source: .dm(threadId: thread.id,
+                                                     title: thread.friend?.name ?? "Direct Message"),
+                                         callPeer: thread.friend)
+                            } label: {
+                                ConversationRow(
+                                    iconUrl: thread.friend?.avatarUrl,
+                                    name: thread.friend?.name ?? "Unknown",
+                                    status: thread.friend?.status,
+                                    preview: DirectMessagesViewModel.preview(for: thread),
+                                    time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
+                                    unread: unreadStore.count(for: thread.id)
+                                )
                             }
                         }
                     }
-                    .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
+                }
+
+                if !vm.groups.isEmpty {
+                    Section("Group Chats") {
+                        ForEach(vm.groups) { group in
+                            groupRow(group)
+                        }
+                    }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .background(Brand.background)
-            .navigationTitle("Messages")
-            .refreshable { await load() }
-            .task { await load() }
         }
     }
 
-    private func load() async {
-        guard let uid = app.currentUserId else { return }
-        async let t = DatabaseService.myDmThreads(currentUserId: uid)
-        async let g = DatabaseService.myGroups(currentUserId: uid)
-        threads = (try? await t) ?? []
-        groups = (try? await g) ?? []
-        loading = false
-    }
-
-    private func leaveGroup(_ groupId: String) {
-        Task {
-            try? await DatabaseService.leaveGroup(groupId: groupId)
-            await load()
+    private func groupRow(_ group: GroupChat) -> some View {
+        NavigationLink {
+            ChatView(source: .group(id: group.id, name: group.name), callPeer: nil)
+        } label: {
+            ConversationRow(
+                iconUrl: group.iconUrl,
+                name: group.name,
+                subtitle: "\(group.members?.count ?? 0) members"
+            )
         }
-    }
-}
-
-struct ConversationRow: View {
-    let iconUrl: String?
-    let name: String
-    let subtitle: String
-    let status: UserStatus?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(url: iconUrl, name: name, size: 44, status: status)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.headline).foregroundStyle(Brand.textPrimary)
-                Text(subtitle).font(.caption).foregroundStyle(Brand.textMuted)
+        .swipeActions {
+            Button(role: .destructive) {
+                Task { await vm.leaveGroup(group.id) }
+            } label: {
+                Label("Leave", systemImage: "rectangle.portrait.and.arrow.right")
             }
         }
-        .padding(.vertical, 4)
     }
 }

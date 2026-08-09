@@ -16,8 +16,12 @@ import {
   IconScreenShareOff,
 } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
+
+/* ------------------------------------------------------------------ */
+/*  Controls                                                          */
+/* ------------------------------------------------------------------ */
 
 interface CallControlsProps {
   micMuted: boolean;
@@ -30,126 +34,124 @@ interface CallControlsProps {
   onToggleScreenShare?: () => void;
   onEnd: () => void;
   onOpenSettings?: () => void;
-  size?: "compact" | "prominent";
 }
 
 export function CallControls({
-  micMuted,
-  deafened,
-  cameraEnabled,
-  screenShareEnabled,
-  onToggleMic,
-  onToggleDeafen,
-  onToggleCamera,
-  onToggleScreenShare,
-  onEnd,
-  onOpenSettings,
-  size = "compact",
+  micMuted, deafened, cameraEnabled, screenShareEnabled,
+  onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
+  onEnd, onOpenSettings,
 }: CallControlsProps) {
-  const prominent = size === "prominent";
-  const btn = prominent ? "h-12 w-12" : "h-9 w-9";
-  const icon = prominent ? 22 : 16;
-
   const items = [
-    { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff, label: micMuted ? "Unmute" : "Mute" },
-    { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff, label: deafened ? "Undeafen" : "Deafen" },
-    ...(onToggleCamera ? [{ onClick: onToggleCamera, title: cameraEnabled ? "Stop video" : "Start video", active: !!cameraEnabled, on: IconVideo, off: IconVideoOff, label: cameraEnabled ? "Video off" : "Video" }] : []),
-    ...(onToggleScreenShare ? [{ onClick: onToggleScreenShare, title: screenShareEnabled ? "Stop sharing" : "Share screen", active: !!screenShareEnabled, on: IconScreenShare, off: IconScreenShareOff, label: screenShareEnabled ? "Stop share" : "Share" }] : []),
-    { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, label: "End", danger: true },
-    ...(onOpenSettings ? [{ onClick: onOpenSettings, title: "Settings", active: false, on: IconSettings, off: IconSettings, label: "Settings" }] : []),
+    { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff },
+    { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff },
+    ...(onToggleCamera ? [{ onClick: onToggleCamera, title: cameraEnabled ? "Stop video" : "Start video", active: !!cameraEnabled, on: IconVideo, off: IconVideoOff }] : []),
+    ...(onToggleScreenShare ? [{ onClick: onToggleScreenShare, title: screenShareEnabled ? "Stop sharing" : "Share screen", active: !!screenShareEnabled, on: IconScreenShare, off: IconScreenShareOff }] : []),
+    { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, danger: true },
+    ...(onOpenSettings ? [{ onClick: onOpenSettings, title: "Settings", active: false, on: IconSettings, off: IconSettings }] : []),
   ];
 
   return (
-    <div className={`flex items-center ${prominent ? "justify-center gap-6" : "gap-2"}`}>
+    <div className="flex items-center gap-2">
       {items.map((item) => {
         const Icon = item.active && item.off ? item.off : item.on;
-        const inner = (
+        return (
           <button
-            key={item.label}
+            key={item.title}
             type="button"
             onClick={item.onClick}
             title={item.title}
-            className={`flex ${btn} items-center justify-center rounded-full transition-all ${
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
               "danger" in item && item.danger
                 ? "bg-status-dnd text-white shadow-lg shadow-status-dnd/30 hover:scale-105 hover:brightness-110"
                 : item.active
                   ? "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
-                  : "bg-bg-accent text-text-normal hover:bg-interactive-hover hover:scale-105"
+                  : "bg-white/10 text-white/80 hover:bg-white/20 hover:scale-105"
             }`}
           >
-            <Icon size={icon} />
+            <Icon size={16} />
           </button>
-        );
-        if (!prominent) return inner;
-        return (
-          <div key={item.label} className="flex flex-col items-center gap-1.5">
-            {inner}
-            <span className="text-[11px] font-medium text-text-muted">{item.label}</span>
-          </div>
         );
       })}
     </div>
   );
 }
 
-function VideoTile({
+/* ------------------------------------------------------------------ */
+/*  Participant circle                                                */
+/* ------------------------------------------------------------------ */
+
+function ParticipantCircle({
+  profile,
   stream,
   label,
   mirrored,
-  placeholder,
+  ring,
+  size = "md",
 }: {
-  stream: MediaStream | null;
+  profile?: Profile;
+  stream?: MediaStream | null;
   label: string;
   mirrored?: boolean;
-  placeholder?: string;
+  ring?: boolean;
+  size?: "md" | "lg";
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(stream);
+  const dim = size === "lg" ? "h-36 w-36" : "h-28 w-28";
+  const textSize = size === "lg" ? "text-4xl" : "text-3xl";
+  const ringClass = ring
+    ? "ring-[3px] ring-status-online"
+    : "ring-[3px] ring-white/15";
 
   useEffect(() => {
     if (ref.current && stream && hasVideo) {
       ref.current.srcObject = stream;
       void ref.current.play().catch(() => {});
-    } else if (ref.current) {
-      ref.current.srcObject = null;
     }
   }, [stream, hasVideo]);
 
-  if (hasVideo) {
-    return (
-      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40">
-        <video ref={ref} autoPlay playsInline muted={mirrored} className={`aspect-video max-h-52 w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`} />
-        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">{label}</span>
+  return (
+    <div className="flex flex-col items-center gap-2.5">
+      <div
+        className={`relative ${dim} overflow-hidden rounded-full bg-[#2b2d31] ${ringClass} ${
+          ring ? "shadow-[0_0_24px_rgba(59,165,93,0.3)]" : ""
+        }`}
+      >
+        {hasVideo && stream ? (
+          <video
+            ref={ref}
+            autoPlay
+            playsInline
+            muted={mirrored}
+            className={`h-full w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`}
+          />
+        ) : profile ? (
+          <Avatar profile={profile} size="lg" className={`${dim} ${textSize}`} />
+        ) : (
+          <div className={`flex ${dim} items-center justify-center`}>
+            <span className={`${textSize} font-bold text-white/40`}>{label.charAt(0).toUpperCase()}</span>
+          </div>
+        )}
       </div>
-    );
-  }
-
-  if (placeholder) {
-    return (
-      <div className="relative flex aspect-video max-h-52 w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/50">
-        <span className="text-xs text-text-muted">{placeholder}</span>
-        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">{label}</span>
-      </div>
-    );
-  }
-
-  return null;
+      <span className="max-w-[110px] truncate text-sm font-medium text-white/80">{label}</span>
+    </div>
+  );
 }
 
-interface IncomingCallOverlayProps {
-  callerName: string;
-  profile?: Profile;
-  onAccept: () => void;
-  onReject: () => void;
-}
+/* ------------------------------------------------------------------ */
+/*  Ringing overlay                                                   */
+/* ------------------------------------------------------------------ */
 
-export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }: IncomingCallOverlayProps) {
+export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }: {
+  callerName: string; profile?: Profile; onAccept: () => void; onReject: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md">
-      <div className="flex flex-col items-center px-8 text-center">
+      <div className="call-enter flex flex-col items-center px-8 text-center">
         <p className="mb-6 text-sm font-medium uppercase tracking-widest text-text-muted">Incoming voice call</p>
         <div className="relative mb-6">
           <div className="absolute inset-0 animate-ping rounded-full bg-brand/20" />
+          <div className="call-ring absolute -inset-3 rounded-full" />
           {profile ? (
             <Avatar profile={profile} size="lg" className="relative h-28 w-28 text-4xl ring-4 ring-brand/50" />
           ) : (
@@ -159,7 +161,7 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
           )}
         </div>
         <h2 className="text-2xl font-bold text-text-normal">{callerName}</h2>
-        <p className="mt-2 text-text-muted">is calling you…</p>
+        <p className="mt-2 text-text-muted">is calling you...</p>
         <div className="mt-10 flex gap-6">
           <button type="button" onClick={onReject} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105" aria-label="Decline">
             <IconPhoneOff size={24} />
@@ -173,15 +175,11 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
   );
 }
 
-interface GroupRingOverlayProps {
-  groupName: string;
-  onJoin: () => void;
-  onDismiss: () => void;
-}
-
-export function GroupRingOverlay({ groupName, onJoin, onDismiss }: GroupRingOverlayProps) {
+export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
+  groupName: string; onJoin: () => void; onDismiss: () => void;
+}) {
   return (
-    <div className="fixed bottom-6 right-6 z-[100] w-80 rounded-xl border border-status-online/40 bg-bg-secondary p-4 shadow-2xl">
+    <div className="call-enter fixed bottom-6 right-6 z-[100] w-80 rounded-xl border border-status-online/40 bg-bg-secondary p-4 shadow-2xl">
       <p className="text-xs font-bold uppercase text-status-online">Group call</p>
       <p className="mt-1 font-semibold text-text-normal">{groupName}</p>
       <p className="text-sm text-text-muted">Someone started a call in this group</p>
@@ -193,15 +191,32 @@ export function GroupRingOverlay({ groupName, onJoin, onDismiss }: GroupRingOver
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Timer                                                             */
+/* ------------------------------------------------------------------ */
+
+function formatElapsed(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Call panel (DM / 1-1)                                             */
+/* ------------------------------------------------------------------ */
+
 interface CallPanelProps {
   title: string;
   subtitle: string;
   phase: "outgoing" | "active";
   peer?: Profile;
+  selfProfile?: Profile | null;
   localStream?: MediaStream | null;
   remoteStream?: MediaStream | null;
-  remoteStreams?: Map<string, MediaStream>;
-  remoteLabels?: Map<string, string>;
+  connectedAt?: number | null;
   micMuted: boolean;
   deafened: boolean;
   cameraEnabled?: boolean;
@@ -215,94 +230,86 @@ interface CallPanelProps {
 }
 
 export function CallPanel({
-  title,
-  subtitle,
-  phase,
-  peer,
-  localStream,
-  remoteStream,
-  remoteStreams,
-  remoteLabels,
-  micMuted,
-  deafened,
-  cameraEnabled,
-  screenShareEnabled,
-  onToggleMic,
-  onToggleDeafen,
-  onToggleCamera,
-  onToggleScreenShare,
-  onEnd,
-  onOpenSettings,
+  title, subtitle, phase, peer, selfProfile, localStream, remoteStream,
+  connectedAt, micMuted, deafened, cameraEnabled, screenShareEnabled,
+  onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
+  onEnd, onOpenSettings,
 }: CallPanelProps) {
   const calling = phase === "outgoing";
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (phase !== "active" || !connectedAt) { setElapsed(0); return; }
+    const tick = () => setElapsed(Math.max(0, Date.now() - connectedAt));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [phase, connectedAt]);
+
+  if (calling) {
+    return (
+      <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black py-10">
+        <p className="mb-6 text-xs font-bold uppercase tracking-widest text-white/30">Calling</p>
+        <div className="mb-6 flex items-center gap-10">
+          {selfProfile && (
+            <ParticipantCircle profile={selfProfile} label="You" size="md" />
+          )}
+          {peer && (
+            <ParticipantCircle profile={peer} label={displayName(peer)} ring size="md" />
+          )}
+        </div>
+        <p className="mb-6 text-lg font-semibold text-white">{title}</p>
+        <p className="mb-8 text-sm text-white/40">Ringing...</p>
+        <CallControls
+          micMuted={micMuted} deafened={deafened}
+          cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+          onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+          onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+          onEnd={onEnd} onOpenSettings={onOpenSettings}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="shrink-0 border-b border-status-online/30 bg-gradient-to-b from-status-online/[0.12] to-bg-primary px-4 py-4">
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-status-online/35 bg-[#1e1f22] shadow-[0_8px_32px_rgba(0,0,0,0.45),0_0_0_1px_rgba(35,165,89,0.15)]">
-        <div className="relative px-5 pb-5 pt-5">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-status-online to-transparent opacity-80" />
+    <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black px-6 py-8">
+      <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/30">
+        Voice Connected
+      </p>
+      <p className="text-sm text-white/50">
+        {elapsed > 0 ? formatElapsed(elapsed) : subtitle}
+      </p>
 
-          <div className="flex items-center gap-4">
-            {peer && (
-              <div className="relative shrink-0">
-                {calling && (
-                  <>
-                    <span className="absolute inset-0 animate-ping rounded-full bg-status-online/25" />
-                    <span className="absolute inset-[-4px] animate-pulse rounded-full border-2 border-status-online/40" />
-                  </>
-                )}
-                <Avatar profile={peer} size="lg" className="relative h-14 w-14 text-lg ring-[3px] ring-status-online/50" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-status-online/20 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-status-online">
-                <span className={`h-1.5 w-1.5 rounded-full bg-status-online ${calling ? "animate-pulse" : ""}`} />
-                {calling ? "Calling" : "In Call"}
-              </span>
-              <p className="mt-1 truncate text-lg font-bold text-text-normal">{title}</p>
-              <p className="text-sm text-text-muted">{subtitle}</p>
-            </div>
-          </div>
-
-          {(localStream || remoteStream || cameraEnabled || (remoteStreams && remoteStreams.size > 0)) && (
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(localStream || cameraEnabled) && (
-                <VideoTile
-                  stream={localStream ?? null}
-                  label="You"
-                  mirrored
-                  placeholder={cameraEnabled ? "Starting your camera…" : undefined}
-                />
-              )}
-              {remoteStream && <VideoTile stream={remoteStream} label={peer ? displayName(peer) : "Remote"} />}
-              {remoteStreams && [...remoteStreams.entries()].map(([id, stream]) => (
-                <VideoTile key={id} stream={stream} label={remoteLabels?.get(id) ?? "Member"} />
-              ))}
-            </div>
-          )}
-
-          <div className="mt-5 border-t border-white/5 pt-4">
-            <CallControls
-              size="prominent"
-              micMuted={micMuted}
-              deafened={deafened}
-              cameraEnabled={cameraEnabled}
-              screenShareEnabled={screenShareEnabled}
-              onToggleMic={onToggleMic}
-              onToggleDeafen={onToggleDeafen}
-              onToggleCamera={onToggleCamera}
-              onToggleScreenShare={onToggleScreenShare}
-              onEnd={onEnd}
-              onOpenSettings={onOpenSettings}
-            />
-          </div>
-        </div>
+      <div className="my-8 flex items-center gap-10">
+        {selfProfile && (
+          <ParticipantCircle
+            profile={selfProfile} stream={localStream} label="You"
+            mirrored size="md"
+          />
+        )}
+        {peer && (
+          <ParticipantCircle
+            profile={peer} stream={remoteStream}
+            label={displayName(peer)} size="md"
+          />
+        )}
       </div>
+
+      <CallControls
+        micMuted={micMuted} deafened={deafened}
+        cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+        onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+        onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+        onEnd={onEnd} onOpenSettings={onOpenSettings}
+      />
     </div>
   );
 }
 
-/** @deprecated */
+/* ------------------------------------------------------------------ */
+/*  Deprecated wrapper                                                */
+/* ------------------------------------------------------------------ */
+
 export function DmCallPanel(props: Omit<CallPanelProps, "title" | "subtitle"> & { peer: Profile; phase: "outgoing" | "active" }) {
   const { peer, phase, ...rest } = props;
   return (
@@ -311,10 +318,14 @@ export function DmCallPanel(props: Omit<CallPanelProps, "title" | "subtitle"> & 
       phase={phase}
       peer={peer}
       title={displayName(peer)}
-      subtitle={phase === "outgoing" ? "Calling… waiting for answer" : "Connected — you're live"}
+      subtitle={phase === "outgoing" ? "Calling..." : "Connected"}
     />
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Header phone button                                               */
+/* ------------------------------------------------------------------ */
 
 export function HeaderCallButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
   return (
