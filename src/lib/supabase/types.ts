@@ -82,8 +82,17 @@ export interface DbServerMember {
   joined_at: string;
 }
 
+/** A row in the member_roles join table (one member can hold many roles). */
+export interface MemberRoleRow {
+  server_id: string;
+  user_id: string;
+  role_id: string;
+}
+
 export interface ServerMember extends DbServerMember {
   profile?: Profile;
+  /** All roles assigned to this member (source of truth: member_roles). */
+  role_ids?: string[];
 }
 
 export interface DbServerBoost {
@@ -124,6 +133,7 @@ export interface DbMessage {
   mentions: string[];
   created_at: string;
   edited_at: string | null;
+  display_id: number;
 }
 
 export interface Message extends DbMessage {
@@ -146,6 +156,7 @@ export interface DbDmMessage {
   mentions: string[];
   created_at: string;
   edited_at: string | null;
+  display_id: number;
 }
 
 export interface DmMessage extends DbDmMessage {
@@ -213,6 +224,7 @@ export interface GroupMessage {
   mentions: string[];
   created_at: string;
   edited_at: string | null;
+  display_id: number;
   author?: Profile;
   sending?: boolean;
 }

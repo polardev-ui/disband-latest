@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { UserPanel } from "./UserPanel";
+import { CallIndicator } from "./CallIndicator";
 import {
   IconChevron,
   IconClose,
@@ -407,6 +408,7 @@ export function ChannelList({
         )}
       </div>
 
+      <CallIndicator />
       <UserPanel onOpenSettings={onOpenSettings} onOpenProfile={onOpenProfile} onContextMenu={onUserPanelContext} />
     </aside>
   );

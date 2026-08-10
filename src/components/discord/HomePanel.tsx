@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { IconFriends, IconGroup, IconPlus, IconNotes, IconCrown } from "@/components/icons";
 import { UserPanel } from "./UserPanel";
+import { CallIndicator } from "./CallIndicator";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
@@ -224,6 +225,7 @@ export function HomePanel({
         )}
       </div>
 
+      <CallIndicator />
       <UserPanel onOpenSettings={onOpenSettings} onOpenProfile={onOpenProfile} onContextMenu={onUserPanelContext} />
       <CreateGroupChatModal open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </aside>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { directCallId, startRingtone, stopRingtone } from "@/lib/ringtone";
+import { playCallConnected, playCallEnd, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
 import { buildVideoConstraints } from "@/lib/audio-settings";
@@ -55,6 +56,7 @@ export function useCallManager(
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [callNotice, setCallNotice] = useState<string | null>(null);
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
@@ -106,6 +108,7 @@ export function useCallManager(
     setError(null);
     setCameraEnabled(false);
     cameraRef.current = false;
+    setConnectedAt(null);
     activeCallIdRef.current = null;
     activePeerIdRef.current = null;
   }, [cleanupRtc]);
@@ -331,6 +334,7 @@ export function useCallManager(
     activePeerIdRef.current = peer.id;
     setActivePeer(peer);
     setPhase("outgoing");
+    startRingtone();
     try {
       await sendToUser(peer.id, {
         type: "ring",
@@ -357,6 +361,8 @@ export function useCallManager(
     activePeerIdRef.current = incoming.fromId;
     setPhase("active");
     setIncoming(null);
+    setConnectedAt(Date.now());
+    playCallConnected();
     try {
       await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
       await setupRtc(incoming.callId, incoming.fromId, false);
@@ -435,6 +441,8 @@ export function useCallManager(
         } else if (p.type === "accept" && p.callId && phaseRef.current === "outgoing") {
           stopRingtone();
           setPhase("active");
+          setConnectedAt(Date.now());
+          playCallConnected();
           try {
             await setupRtc(p.callId, p.from, true);
           } catch {
@@ -445,11 +453,19 @@ export function useCallManager(
             setCallNotice(`${p.rejecterName ?? "They"} declined your call`);
             window.setTimeout(() => setCallNotice(null), 5000);
           }
+          playCallEnd();
           await reset();
-        } else if (p.type === "cancel") {
-          if (phaseRef.current === "incoming" || phaseRef.current === "outgoing") await reset();
-        } else if (p.type === "leave") {
-          if (phaseRef.current === "active" && activePeerIdRef.current === p.from) {
+        } else if (p.type === "cancel" || p.type === "leave") {
+          // Treat both as "the other side is gone".
+          //
+          // The two can legitimately cross: if our `accept` never reached the
+          // caller, they still believe the call is ringing and hang up with
+          // `cancel` while we are already `active`. Keying each type to one
+          // phase left us stuck in a call with nobody on the other end.
+          const fromActivePeer = activePeerIdRef.current === p.from;
+          if (phaseRef.current === "active" ? fromActivePeer : phaseRef.current !== "idle") {
+            if (phaseRef.current === "active") playCallLeave();
+            else playCallEnd();
             await reset();
           }
         }
@@ -485,6 +501,7 @@ export function useCallManager(
     remoteAudioRef,
     error,
     callNotice,
+    connectedAt,
     startCall,
     acceptCall,
     rejectCall,

@@ -2,16 +2,31 @@ import SwiftUI
 
 /// Disband mobile palette — a dark, high-contrast theme tuned for readability on
 /// small screens (larger type, generous spacing) while echoing the desktop look.
+/// Semantic colours for the whole app.
+///
+/// These resolve through `current`, which `ThemeManager` swaps when the user
+/// picks a theme. Keeping the call sites as `Brand.surface` etc. means every
+/// existing view re-themes without being touched; views rebuild because the
+/// root is keyed on the active theme id.
 enum Brand {
-    static let background = Color(hex: 0x1E1F22)
-    static let surface = Color(hex: 0x2B2D31)
-    static let surfaceRaised = Color(hex: 0x313338)
-    static let elevated = Color(hex: 0x383A40)
-    static let accent = Color(hex: 0x5865F2)       // blurple
-    static let accentSoft = Color(hex: 0x4752C4)
-    static let textPrimary = Color(hex: 0xF2F3F5)
-    static let textSecondary = Color(hex: 0xB5BAC1)
-    static let textMuted = Color(hex: 0x949BA4)
+    /// Resolving through the shared `@Observable` manager means a view that
+    /// reads `Brand.surface` in its body automatically depends on the active
+    /// theme and repaints when it changes — no view-tree reset required.
+    @MainActor static var current: Palette { ThemeManager.shared.palette }
+
+    @MainActor static var background: Color { current.background }
+    @MainActor static var surface: Color { current.surface }
+    @MainActor static var surfaceRaised: Color { current.surfaceRaised }
+    @MainActor static var elevated: Color { current.elevated }
+    @MainActor static var accent: Color { current.accent }
+    @MainActor static var accentSoft: Color { current.accentSoft }
+    @MainActor static var textPrimary: Color { current.textPrimary }
+    @MainActor static var textSecondary: Color { current.textSecondary }
+    @MainActor static var textMuted: Color { current.textMuted }
+    @MainActor static var divider: Color { current.divider }
+
+    // Presence and destructive colours are fixed: they carry meaning, so they
+    // must not drift per theme.
     static let online = Color(hex: 0x23A55A)
     static let idle = Color(hex: 0xF0B232)
     static let dnd = Color(hex: 0xF23F43)
@@ -19,7 +34,18 @@ enum Brand {
 }
 
 extension UserStatus {
-    var color: Color {
+    /// Fits a narrow segmented control — taking the first word of the full
+    /// label turned "Do Not Disturb" into a bare "Do".
+    var shortLabel: String {
+        switch self {
+        case .online: return "Online"
+        case .idle: return "Away"
+        case .dnd: return "Busy"
+        case .offline: return "Invisible"
+        }
+    }
+
+    @MainActor var color: Color {
         switch self {
         case .online: return Brand.online
         case .idle: return Brand.idle
@@ -89,5 +115,23 @@ enum RelativeTime {
             return date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
         return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    /// Ultra-compact timestamp for list rows: "now", "5m", "2h", "Yesterday",
+    /// "Mon", "Aug 5".
+    static func compact(_ string: String?) -> String {
+        guard let date = date(from: string) else { return "" }
+        let now = Date()
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 60 { return "now" }
+        if seconds < 3600 { return "\(Int(seconds / 60))m" }
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "\(Int(seconds / 3600))h" }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        let days = cal.dateComponents([.day], from: date, to: now).day ?? 0
+        if days < 7 {
+            return date.formatted(.dateTime.weekday(.abbreviated))
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 }

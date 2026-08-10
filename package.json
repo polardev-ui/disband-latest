@@ -40,11 +40,15 @@
     "tauri-plugin-macos-permissions-api": "2.3.0"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.507",
+    "@remotion/media-utils": "^4.0.507",
+    "@remotion/noise": "^4.0.507",
     "@tailwindcss/postcss": "^4.3.1",
     "@tauri-apps/cli": "^2.11.3",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "remotion": "^4.0.507",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3"
   }

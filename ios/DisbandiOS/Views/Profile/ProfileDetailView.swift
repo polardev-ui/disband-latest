@@ -75,12 +75,9 @@ struct ProfileDetailView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
                 Text(profile.name).font(.title2.bold()).foregroundStyle(Brand.textPrimary)
-                if profile.showOwnerBadge == true {
-                    Image(systemName: "crown.fill").foregroundStyle(Brand.idle).font(.caption)
-                }
-                if profile.showStaffBadge == true {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(Brand.accent).font(.caption)
-                }
+                // Full badge set, matching the desktop row (owner, staff, OG,
+                // bug bounty) rather than only the first two.
+                UserBadgesView(profile: profile, size: 15)
             }
             Text("@\(profile.handle)").font(.subheadline).foregroundStyle(Brand.textMuted)
         }

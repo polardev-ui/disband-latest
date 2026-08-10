@@ -58,6 +58,7 @@ export function MarketingFooter() {
           </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-[#b5bac1]">
+          <Link href="/bug-report" className="hover:text-white">Bug Report</Link>
           <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
           <Link href="/terms" className="hover:text-white">Terms of Service</Link>
           <Link href="/login" className="hover:text-white">Log in</Link>

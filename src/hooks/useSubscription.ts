@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getSupabaseClient } from "@/lib/supabase/client";
-import { getStripe } from "@/lib/stripe-client";
-import { ENTITLEMENTS, type SubscriptionPlan, type Subscription } from "@/lib/subscription";
+import { getSupabaseClient, refreshSessionOnce } from "@/lib/supabase/client";
+import {
+  ENTITLEMENTS,
+  planFromSubscription,
+  type SubscriptionPlan,
+  type Subscription,
+} from "@/lib/subscription";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 let idCounter = 0;
@@ -14,11 +18,11 @@ export function useSubscription(userId: string | undefined) {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Subscription | null> => {
     if (!userId) {
       setSubscription(null);
       setLoading(false);
-      return;
+      return null;
     }
     setLoading(true);
     const supabase = getSupabaseClient();
@@ -36,9 +40,11 @@ export function useSubscription(userId: string | undefined) {
 
     // The access token lapsed (e.g. the app sat closed past the token
     // lifetime). Refresh once and retry instead of spamming failed loads.
+    // Goes through the deduplicated, cross-tab-locked path so a subscription
+    // load here can't race the token against another tab.
     if (error && (error.code === "PGRST303" || /JWT expired/i.test(error.message ?? ""))) {
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-      if (!refreshError && refreshed.session) {
+      const refreshed = await refreshSessionOnce();
+      if ("session" in refreshed && refreshed.session) {
         const retry = await fetchOnce();
         data = retry.data;
         error = retry.error;
@@ -48,8 +54,10 @@ export function useSubscription(userId: string | undefined) {
     if (error && error.code !== "PGRST116") {
       console.error("Failed to load subscription:", error);
     }
-    setSubscription(data as Subscription | null);
+    const row = (data as Subscription | null) ?? null;
+    setSubscription(row);
     setLoading(false);
+    return row;
   }, [userId]);
 
   useEffect(() => {
@@ -63,16 +71,41 @@ export function useSubscription(userId: string | undefined) {
    * leaves a paying customer on the free plan. This asks Stripe what they
    * actually have, so the purchase applies regardless.
    */
-  const syncFromStripe = useCallback(async (): Promise<boolean> => {
+  const syncFromStripe = useCallback(async (): Promise<SubscriptionPlan | null> => {
     try {
       const res = await fetch("/api/stripe/sync", { method: "POST" });
-      const json = (await res.json()) as { synced?: boolean };
-      if (json.synced) await load();
-      return !!json.synced;
+      const json = (await res.json()) as { synced?: boolean; plan?: SubscriptionPlan };
+      if (!json.synced) return null;
+      const row = await load();
+      return planFromSubscription(row);
     } catch {
-      return false;
+      return null;
     }
   }, [load]);
+
+  /**
+   * Drive a just-completed purchase to a live, granted plan.
+   *
+   * Stripe confirms the payment before the subscription object is queryable, and
+   * the webhook may not fire at all, so we retry reconciliation with backoff and
+   * only report success once the stored row actually grants a paid plan.
+   * Resolves to the granted plan, or "free" if it never landed.
+   */
+  const activate = useCallback(async (): Promise<SubscriptionPlan> => {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const synced = await syncFromStripe();
+      if (synced && synced !== "free") return synced;
+
+      // The webhook may have won the race even when reconciliation could not
+      // see the subscription yet.
+      const row = await load();
+      const fromRow = planFromSubscription(row);
+      if (fromRow !== "free") return fromRow;
+
+      await new Promise((r) => setTimeout(r, Math.min(1000 * (attempt + 1), 4000)));
+    }
+    return "free";
+  }, [syncFromStripe, load]);
 
   // After a Stripe checkout redirect, reconcile first, then poll as a backstop.
   useEffect(() => {
@@ -82,23 +115,8 @@ export function useSubscription(userId: string | undefined) {
     if (redirectPolled) return;
     redirectPolled = true;
 
-    void (async () => {
-      // Stripe may take a moment to attach the subscription to the customer.
-      for (let attempt = 0; attempt < 5; attempt++) {
-        if (await syncFromStripe()) return;
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-      }
-      // Reconciliation never found anything — fall back to watching for the
-      // webhook to land.
-      const tryLoad = async (attempts = 0) => {
-        await load();
-        if (attempts < 10) {
-          setTimeout(() => void tryLoad(attempts + 1), 1500 * (attempts + 1));
-        }
-      };
-      void tryLoad();
-    })();
-  }, [userId, load, syncFromStripe]);
+    void activate();
+  }, [userId, activate]);
 
   useEffect(() => {
     if (!userId) return;
@@ -132,7 +150,7 @@ export function useSubscription(userId: string | undefined) {
     };
   }, [userId]);
 
-  const plan: SubscriptionPlan = subscription?.status === "active" ? (subscription.plan as SubscriptionPlan) : "free";
+  const plan: SubscriptionPlan = planFromSubscription(subscription);
   const entitlements = ENTITLEMENTS[plan];
 
   const startCheckout = useCallback(async (planId: "basic" | "super"): Promise<string | null> => {
@@ -163,5 +181,6 @@ export function useSubscription(userId: string | undefined) {
     openPortal,
     reload: load,
     syncFromStripe,
+    activate,
   };
 }
