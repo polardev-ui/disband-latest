@@ -370,6 +370,14 @@ export function DiscordApp() {
             },
           },
           {
+            id: "read-only",
+            label: channel.read_only ? "Allow Everyone to Post" : "Make Announcement Channel",
+            icon: <IconEdit size={16} />,
+            onClick: () => {
+              void app.setChannelReadOnly(channel.id, !channel.read_only);
+            },
+          },
+          {
             id: "delete",
             label: "Delete Channel",
             icon: <IconTrash size={16} />,
@@ -1322,6 +1330,11 @@ export function DiscordApp() {
           key={app.activeChannelId}
           ref={channelChatRef}
           channelName={activeChannel.name}
+          composerLockedReason={
+            activeChannel.read_only && !canManageChannels
+              ? "This is an announcement channel. Only people who can manage channels may post here."
+              : null
+          }
           messages={channelMessages}
           loading={app.messagesLoading}
           members={app.members.map((m) => m.profile)}

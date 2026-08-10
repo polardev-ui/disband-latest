@@ -29,13 +29,18 @@ create trigger dm_thread_last_message_insert
   for each row execute function public.set_dm_thread_last_message();
 
 -- Backfill from existing messages.
+-- `distinct on` picks the newest row per thread in one pass.
+--
+-- This cannot be a LATERAL subquery: in `update ... from`, the FROM item is not
+-- allowed to reference the update target, so `where thread_id = t.id` fails with
+-- "invalid reference to FROM-clause entry for table t".
 update public.dm_threads t
    set last_message_at = latest.created_at,
        last_message_preview = left(case when latest.content = '' then 'Attachment' else latest.content end, 200)
-  from lateral (
-    select created_at, content
+  from (
+    select distinct on (thread_id)
+           thread_id, created_at, content
       from public.dm_messages
-     where thread_id = t.id
-     order by created_at desc
-     limit 1
-  ) latest;
+     order by thread_id, created_at desc
+  ) latest
+ where latest.thread_id = t.id;

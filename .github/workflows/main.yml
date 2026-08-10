@@ -112,6 +112,12 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
+          # Publishing the release failed with "self-signed certificate" while
+          # calling the GitHub API. The bundles build fine; only the upload
+          # breaks. Node 22 validates against its own bundled CA store, so a
+          # root the OS trusts but Node does not will fail exactly like this.
+          # This tells Node to use the system trust store instead.
+          NODE_OPTIONS: --use-system-ca
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: "-"
           NEXT_PUBLIC_SUPABASE_URL: https://mjqbrcabargylrimlafw.supabase.co

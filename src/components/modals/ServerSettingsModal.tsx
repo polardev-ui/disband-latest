@@ -54,6 +54,8 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
   const [section, setSection] = useState<Section>("overview");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [discoverable, setDiscoverable] = useState(false);
+  const [discoverableError, setDiscoverableError] = useState<string | null>(null);
   const [roleName, setRoleName] = useState("");
   const [roleColor, setRoleColor] = useState("#5865f2");
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     if (!activeServer) return;
     setName(activeServer.name);
     setDescription(activeServer.description ?? "");
+    setDiscoverable(activeServer.discoverable ?? false);
     setSection("overview");
   }, [activeServer, open]);
 
@@ -109,6 +112,27 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     if (n.permission === "manage_roles" && !canManageRoles) return false;
     return true;
   });
+
+  /**
+   * Applied immediately rather than batched behind "Save Changes".
+   *
+   * Listing a server publicly is a visibility change, so it should take effect
+   * (and be revertible) with one click, not sit as an unsaved edit the owner
+   * might not realise is pending.
+   */
+  async function toggleDiscoverable() {
+    if (!activeServer || !isOwner) return;
+    const next = !discoverable;
+    setDiscoverable(next);
+    setDiscoverableError(null);
+    setLoading(true);
+    const err = await updateServer(activeServer.id, { discoverable: next });
+    setLoading(false);
+    if (err) {
+      setDiscoverable(!next);
+      setDiscoverableError(err);
+    }
+  }
 
   async function saveOverview() {
     setLoading(true);
@@ -454,6 +478,48 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                     className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
                   />
                 </label>
+                <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text-normal">Server Discovery</p>
+                      <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                        List this server publicly so anyone can find and join it from Discover.
+                        It appears under <span className="font-medium">Popular</span> by member
+                        count, and under <span className="font-medium">New</span> by when it was
+                        created.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={discoverable}
+                      aria-label="Make server discoverable"
+                      disabled={!isOwner || loading}
+                      onClick={() => void toggleDiscoverable()}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        discoverable ? "bg-status-online" : "bg-text-muted/40"
+                      }`}
+                    >
+                      <span
+                        className="inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow transition-transform"
+                        style={{ transform: `translateX(${discoverable ? 22 : 4}px)` }}
+                      />
+                    </button>
+                  </div>
+                  {discoverable && (
+                    <p className="mt-3 text-xs text-text-muted">
+                      Anyone can see this server&apos;s name, description and member count in
+                      Discover, and join without an invite.
+                    </p>
+                  )}
+                  {discoverableError && (
+                    <p className="mt-2 text-xs text-status-dnd">{discoverableError}</p>
+                  )}
+                  {!isOwner && (
+                    <p className="mt-2 text-xs text-text-muted">Only the server owner can change this.</p>
+                  )}
+                </div>
+
                 {isOwner && (
                   <button
                     type="button"
