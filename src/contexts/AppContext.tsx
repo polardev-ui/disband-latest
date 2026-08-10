@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, resetSupabaseClient } from "@/lib/supabase/client";
+import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetSupabaseClient } from "@/lib/supabase/client";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
@@ -87,6 +87,9 @@ interface AppContextValue {
   notes: Note[];
   groupChats: GroupChatWithMembers[];
   groupMessages: (GroupMessage & { author?: Profile | null })[];
+  messagesLoading: boolean;
+  dmLoading: boolean;
+  groupLoading: boolean;
   friendships: Friendship[];
   friends: Profile[];
   pendingIncoming: Friendship[];
@@ -145,7 +148,7 @@ interface AppContextValue {
   kickMember: (userId: string) => Promise<string | null>;
   banMember: (userId: string, reason?: string) => Promise<string | null>;
   createRole: (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => Promise<string | null>;
-  assignMemberRole: (userId: string, roleId: string | null) => Promise<string | null>;
+  setMemberRoles: (userId: string, roleIds: string[]) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
   createChannel: (data: { name: string; type?: ChannelType; categoryId?: string | null }) => Promise<string | null>;
   renameChannel: (channelId: string, name: string) => Promise<string | null>;
@@ -171,6 +174,7 @@ interface AppContextValue {
   toggleNotePinned: (noteId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
   loadVoicePresence: (channelId: string) => Promise<void>;
+  voiceJoinedChannelId: string | null;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
   setCallPhase: (phase: "idle" | "outgoing" | "incoming" | "active") => void;
   setMaxMessageChars: (n: number) => void;
@@ -198,6 +202,8 @@ interface AppContextValue {
   loadMoreGroupMessages: () => Promise<void>;
   loadMoreNotes: () => Promise<void>;
   platformBan: { banned: boolean; reason?: string; vpnBlocked?: boolean } | null;
+  restrictions: string[];
+  refreshRestrictions: () => Promise<void>;
   refreshPlatformAccess: () => Promise<void>;
   serverPermissions: {
     kick: boolean;
@@ -255,7 +261,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesHasMore, setNotesHasMore] = useState(false);
   const [groupHasMore, setGroupHasMore] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [dmLoading, setDmLoading] = useState(false);
+  const [groupLoading, setGroupLoading] = useState(false);
   const [platformBan, setPlatformBan] = useState<{ banned: boolean; reason?: string; vpnBlocked?: boolean } | null>(null);
+  const [restrictions, setRestrictions] = useState<string[]>([]);
   const [serverPermissions, setServerPermissions] = useState({
     kick: false,
     ban: false,
@@ -288,10 +298,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [channelUnreadMap, setChannelUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
 
+  const sessionRef = useRef<Session | null>(null);
   const activeDmRef = useRef<string | null>(null);
   const activeChannelRef = useRef<string | null>(null);
   const activeServerRef = useRef<string | null>(null);
   const activeGroupRef = useRef<string | null>(null);
+  // Monotonic token so the newest "open DM" click wins even when the
+  // get_or_create RPCs resolve out of order.
+  const dmOpenTokenRef = useRef(0);
   const channelsRef = useRef<Channel[]>([]);
   const groupChatsRef = useRef<GroupChatWithMembers[]>([]);
   const viewModeRef = useRef<ViewMode>("home");
@@ -303,6 +317,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const lastActivityRef = useRef<number>(typeof window !== "undefined" ? Date.now() : 0);
   const autoAwayRef = useRef(false);
   const inCallRef = useRef(false);
+  const signingOutRef = useRef(false);
+  sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
   channelsRef.current = channels;
@@ -653,12 +669,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setServerRoles(cached.roles);
     }
     const supabase = getSupabaseClient();
-    const [{ data: cats }, { data: chs }, { data: mems }, { data: roles }] = await Promise.all([
+    const [{ data: cats }, { data: chs }, { data: mems }, { data: roles }, { data: roleRows }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
       supabase.from("server_members").select("*").eq("server_id", serverId),
       supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
+      supabase.from("member_roles").select("server_id, user_id, role_id").eq("server_id", serverId),
     ]);
+    const roleIdsByMember = new Map<string, string[]>();
+    for (const row of (roleRows ?? []) as { user_id: string; role_id: string }[]) {
+      const list = roleIdsByMember.get(row.user_id) ?? [];
+      list.push(row.role_id);
+      roleIdsByMember.set(row.user_id, list);
+    }
     const channelRows = (chs as Channel[]) ?? [];
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
@@ -675,7 +698,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
     const enrichedMembers = memberRows
       .filter((m) => map.has(m.user_id))
-      .map((m) => ({ ...m, profile: map.get(m.user_id)! }));
+      .map((m) => ({ ...m, profile: map.get(m.user_id)!, role_ids: roleIdsByMember.get(m.user_id) ?? [] }));
     setMembers(enrichedMembers);
     if (userId) {
       const { data: perms } = await supabase.rpc("my_server_permissions", { p_server_id: serverId });
@@ -716,6 +739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
     setMessages(rows);
     setChannelHasMore(hasMore);
+    setMessagesLoading(false);
     const ids = rows.map((m) => m.id);
     const rxn = await loadReactionsForMessages(supabase, "channel", ids);
     setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
@@ -868,11 +892,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("thread_id", threadId)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
+    // The user may have switched conversations while this fetch was in flight.
+    // Committing it anyway would paint the old thread's messages under the
+    // new header, so only apply the result if this thread is still active.
+    if (activeDmRef.current !== threadId) return;
     const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
     setDmMessages(rows);
     setDmHasMore(hasMore);
+    setDmLoading(false);
     const ids = rows.map((m) => m.id);
     const rxn = await loadReactionsForMessages(supabase, "dm", ids);
+    if (activeDmRef.current !== threadId) return;
     setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", rxn));
   }, []);
 
@@ -887,6 +917,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
+    // Switched away while the older page was loading — don't prepend the
+    // previous thread's history into the conversation now on screen.
+    if (activeDmRef.current !== activeDmThreadId) return;
     const { rows: older, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
     if (!older.length) {
       setDmHasMore(false);
@@ -899,6 +932,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       "dm",
       older.map((m) => m.id),
     );
+    if (activeDmRef.current !== activeDmThreadId) return;
     setMessageReactions((prev) =>
       mergeReactions(
         prev,
@@ -947,11 +981,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("group_id", groupId)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
+    // Same stale-switch guard as loadDmMessages: a slow fetch for the group
+    // we just left must never overwrite the conversation now on screen.
+    if (activeGroupRef.current !== groupId) return;
     const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
     setGroupMessages(rows);
     setGroupHasMore(hasMore);
+    setGroupLoading(false);
     const ids = rows.map((m) => m.id);
     const rxn = await loadReactionsForMessages(supabase, "group", ids);
+    if (activeGroupRef.current !== groupId) return;
     setMessageReactions((prev) => replaceReactionsForContext(prev, "group", rxn));
   }, []);
 
@@ -966,6 +1005,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
+    // Switched away while the older page was loading — don't prepend the
+    // previous group's history into the conversation now on screen.
+    if (activeGroupRef.current !== activeGroupChatId) return;
     const { rows: older, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
     if (!older.length) {
       setGroupHasMore(false);
@@ -978,6 +1020,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       "group",
       older.map((m) => m.id),
     );
+    if (activeGroupRef.current !== activeGroupChatId) return;
     setMessageReactions((prev) =>
       mergeReactions(
         prev,
@@ -1035,11 +1078,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // with "JWT expired" forever while realtime channels fail with PGRST303.
       if (session) {
         if (isAccessTokenExpired(session)) {
-          const { data: refreshed, error } = await supabase.auth.refreshSession();
+          // Retry with exponential backoff on 429 — a single burst of refreshes
+          // on boot is the root cause of the rate-limit cascade. Refreshes go
+          // through the deduplicated, cross-tab-locked path so N tabs reloading
+          // at once never race on the same single-use refresh token.
+          let refreshed: { session: Session | null } | null = null;
+          let retryError: unknown = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const result = await refreshSessionOnce();
+            if ("session" in result) {
+              refreshed = { session: (result.session as Session | null) };
+              break;
+            }
+            retryError = result.error;
+            if ((result.error as { status?: number })?.status !== 429) break;
+            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+          }
+          const error = retryError as { name?: string; status?: number } | null;
           if (error) {
             console.warn("Session token was expired and could not be refreshed.", error);
           }
-          session = error?.name === "AuthRetryableFetchError" ? session : (refreshed.session ?? null);
+          session = refreshed?.session ?? (error?.name === "AuthRetryableFetchError" ? session : null);
         } else {
           const { error: verifyError } = await supabase.auth.getUser();
           if (verifyError) {
@@ -1076,6 +1135,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      // When supabase-js fails to refresh the token due to a transient error
+      // (network blip, 429 rate-limit, 5xx), it fires SIGNED_OUT and may also
+      // clear the session from storage. Accepting the null here would boot the
+      // user for a hiccup. Only accept a null session when we ourselves called
+      // signOut (tracked by a ref), or when the token was already expired and
+      // the new state confirms it.
+      if (!s) {
+        const current = sessionRef.current;
+        // Ignore SIGNED_OUT entirely unless we initiated a manual sign-out.
+        // The worst case is a genuinely revoked session lingers for a few
+        // seconds until the next API call 401s and triggers a real cleanup.
+        // The alternative — booting the user on every 429 burst — is far worse.
+        if (current && !signingOutRef.current) return;
+      }
+      signingOutRef.current = false;
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
@@ -1090,11 +1164,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       void (async () => {
-        const supabase = getSupabaseClient();
-        const { data: { session } } = await supabase.auth.getSession();
+        // Use the ref instead of auth.getSession() — the latter triggers an
+        // implicit token refresh inside supabase-js, and a 429 on that refresh
+        // cascades into SIGNED_OUT. If the token is already expired there is
+        // nothing to refresh; the next onAuthStateChange cycle will handle it.
+        const session = sessionRef.current;
         if (!session || !isAccessTokenExpired(session)) return;
-        const { data: refreshed, error } = await supabase.auth.refreshSession();
-        if (!error && refreshed.session) {
+        // Go through the deduplicated path so the global cooldown (shared
+        // across tabs) and the cross-tab lock apply — focus events can fire
+        // rapidly, and unthrottled refresh attempts on a stale token are what
+        // keep the per-IP rate-limit bucket drained once it trips.
+        const result = await refreshSessionOnce();
+        if ("error" in result) return;
+        if (result.session) {
           await refreshAll();
         }
       })();
@@ -1112,18 +1194,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMfaRequired(false);
       return;
     }
-    const { data: { session } } = await getSupabaseClient().auth.getSession();
-    if (!session) {
+    // Use the session from state — calling auth.getSession() here would trigger
+    // an implicit token refresh inside supabase-js, and a 429 rate-limit on that
+    // refresh cascades into SIGNED_OUT (kicking the user out).
+    const current = sessionRef.current;
+    if (!current) {
       setMfaRequired(false);
       return;
     }
-    const assurance = await getMfaAssurance();
-    setMfaRequired(assurance.mfaRequired);
+    // If the token is already expired, skip the network call too — it would
+    // just 401 or trigger another refresh. The onAuthStateChange guard will
+    // handle the eventual sign-out gracefully.
+    if (isAccessTokenExpired(current)) {
+      return;
+    }
+    try {
+      const assurance = await getMfaAssurance();
+      setMfaRequired(assurance.mfaRequired);
+    } catch {
+      // Transient error (429, network blip) — keep the previous MFA state.
+      // Better to be slightly stale than to boot the user out.
+    }
   }, [configured]);
 
   const refreshPlatformAccess = useCallback(async () => {
-    const { data: { session: s } } = await getSupabaseClient().auth.getSession();
-    if (!s) {
+    const s = sessionRef.current;
+    if (!s || isAccessTokenExpired(s)) {
       setPlatformBan(null);
       return;
     }
@@ -1142,17 +1238,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshRestrictions = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from("account_restrictions")
+      .select("restriction");
+    setRestrictions((data as { restriction: string }[] | null)?.map((r) => r.restriction) ?? []);
+  }, []);
+
+  const hasRestriction = useCallback(
+    (restriction: string) => restrictions.includes(restriction),
+    [restrictions],
+  );
+
   useEffect(() => {
     if (!session) {
       setMfaRequired(false);
       setPlatformBan(null);
+      setRestrictions([]);
       return;
     }
     void refreshMfaStatus();
     void refreshPlatformAccess();
+    void refreshRestrictions();
     const interval = setInterval(() => { void refreshPlatformAccess(); }, 60_000);
     return () => clearInterval(interval);
-  }, [session, refreshMfaStatus, refreshPlatformAccess]);
+  }, [session, refreshMfaStatus, refreshPlatformAccess, refreshRestrictions]);
 
   useEffect(() => {
     if (!userId || !configured) return;
@@ -1356,6 +1467,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
         (payload) => {
           const msg = payload.new as DmMessage;
+          // A message for the thread we just left can still arrive while the
+          // realtime channel tears down — never append it to the new view.
+          if (msg.thread_id !== activeDmRef.current) return;
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
@@ -1417,6 +1531,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
         (payload) => {
           const msg = payload.new as GroupMessage;
+          // A message for the group we just left can still arrive while the
+          // realtime channel tears down — never append it to the new view.
+          if (msg.group_id !== activeGroupRef.current) return;
           void (async () => {
             if (msg.author_id == null) {
               setGroupMessages((prev) =>
@@ -1874,6 +1991,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    signingOutRef.current = true;
     if (userId) {
       await getSupabaseClient().from("profiles").update({ status: "offline" }).eq("id", userId);
     }
@@ -1972,6 +2090,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const target = saved ?? channelRows.find((c) => c.type === "text") ?? channelRows[0];
     if (target) {
       setActiveChannelId(target.id);
+      // Clear the previous server's messages immediately so they don't flash
+      // while the new channel loads.
+      setMessages([]);
+      setMessagesLoading(true);
+      setChannelHasMore(false);
       await loadMessages(target.id);
     } else {
       setActiveChannelId(null);
@@ -1983,6 +2106,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
+    // Clear previous channel's messages immediately so they don't flash
+    // while the new channel's messages load.
+    setMessages([]);
+    setMessagesLoading(true);
+    setChannelHasMore(false);
     if (viewMode !== "server") setViewMode("server");
     const channel = channelsRef.current.find((c) => c.id === channelId);
     if (channel) {
@@ -2002,8 +2130,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     persistActiveServerChannel();
     setViewMode("dm");
     setActiveDmThreadId(threadId);
+    activeDmRef.current = threadId;
     setActiveGroupChatId(null);
+    activeGroupRef.current = null;
     setActiveChannelId(null);
+    // Drop the previous conversation immediately so a slow fetch (or a late
+    // realtime event) for the thread we just left can't flash under the new
+    // header. loadDmMessages re-populates this list for the active thread.
+    setDmMessages([]);
+    setDmHasMore(false);
+    setDmLoading(true);
     clearDmUnread(threadId);
     await loadDmMessages(threadId);
   }, [loadDmMessages, clearDmUnread, persistActiveServerChannel, markActivity]);
@@ -2013,13 +2149,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     persistActiveServerChannel();
     setViewMode("group");
     setActiveGroupChatId(groupId);
+    activeGroupRef.current = groupId;
     setActiveDmThreadId(null);
+    activeDmRef.current = null;
     setActiveChannelId(null);
+    setGroupMessages([]);
+    setGroupHasMore(false);
+    setGroupLoading(true);
     await loadGroupMessages(groupId);
   }, [loadGroupMessages, persistActiveServerChannel, markActivity]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
+    if (hasRestriction("create_groups")) return "Your account is restricted from creating group chats.";
     const { data: id, error } = await getSupabaseClient().rpc("create_group_chat", {
       p_name: name,
       p_member_ids: memberIds,
@@ -2073,10 +2215,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
     if (!userId) return;
+    const token = ++dmOpenTokenRef.current;
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
-    if (error) throw new Error(error.message);
+    let { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
+
+    // `auth.uid()` was null inside the function, so PostgREST sent the request
+    // without a usable user token. Go through the shared refresh helper rather
+    // than calling refreshSession() directly: it holds the cross-tab lock and
+    // cooldown that stop concurrent refreshes from burning the single-use
+    // refresh token and getting the session revoked.
+    if (error && /not authenticated|jwt/i.test(error.message)) {
+      const result = await refreshSessionOnce();
+      if ("session" in result && result.session) {
+        ({ data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId }));
+      }
+    }
+
+    if (error) {
+      console.error("Could not open DM thread:", error.message);
+      return;
+    }
     const threadId = data as string;
+
+    // Another friend was clicked while this RPC was in flight. The newest
+    // click wins, regardless of which request resolves first — otherwise a
+    // slow response could yank the user into a conversation they left.
+    if (token !== dmOpenTokenRef.current) return;
 
     let friendProfile = friends.find((f) => f.id === friendId);
     if (!friendProfile) {
@@ -2130,6 +2294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendFriendRequest = useCallback(async (username: string) => {
     if (!userId) return "Not signed in";
+    if (hasRestriction("send_friend_requests")) return "Your account is restricted from sending friend requests.";
     const normalized = username.trim().toLowerCase();
     if (!normalized) return "Enter a username";
 
@@ -2255,6 +2420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createServer = useCallback(async (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => {
     if (!userId) return "Not signed in";
+    if (hasRestriction("join_servers")) return "Your account is restricted from creating or joining servers.";
     await ensureProfile(userId, user?.email);
     const { data: id, error } = await getSupabaseClient().rpc("create_server", {
       p_name: data.name,
@@ -2294,6 +2460,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const joinServerByInvite = useCallback(async (code: string) => {
     if (!userId) return "Not signed in";
+    if (hasRestriction("join_servers")) return "Your account is restricted from joining servers.";
     await ensureProfile(userId, user?.email);
     const { data: id, error } = await getSupabaseClient().rpc("join_server_by_invite", { p_code: code });
     if (error) return error.message;
@@ -2304,6 +2471,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const joinServerById = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
+    if (hasRestriction("join_servers")) return "Your account is restricted from joining servers.";
     await ensureProfile(userId, user?.email);
     const { error } = await getSupabaseClient().rpc("join_server_by_id", { p_server_id: serverId });
     if (error) return error.message;
@@ -2368,13 +2536,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails]);
 
-  const assignMemberRole = useCallback(async (targetUserId: string, roleId: string | null) => {
+  /**
+   * Replace a member's whole role stack (add/remove multiple roles at once).
+   *
+   * Goes through the set_member_roles RPC so the replacement is atomic and the
+   * legacy server_members.role_id is synced to the highest-priority role.
+   */
+  const setMemberRoles = useCallback(async (targetUserId: string, roleIds: string[]) => {
     if (!activeServerId) return "No server selected";
-    const { error } = await getSupabaseClient()
-      .from("server_members")
-      .update({ role_id: roleId })
-      .eq("server_id", activeServerId)
-      .eq("user_id", targetUserId);
+    const { error } = await getSupabaseClient().rpc("set_member_roles", {
+      p_server_id: activeServerId,
+      p_user_id: targetUserId,
+      p_role_ids: roleIds,
+    });
     if (error) return error.message;
     await loadServerDetails(activeServerId);
     return null;
@@ -2521,17 +2695,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const getMemberColor = useCallback(
     (member: ServerMember) => {
-      if (member.role_id) {
-        const role = serverRoles.find((r) => r.id === member.role_id);
-        if (role?.color) return role.color;
+      // Like Discord, the name colour comes from the member's highest-priority
+      // role, regardless of how many roles they hold.
+      const roleIds = member.role_ids && member.role_ids.length > 0
+        ? member.role_ids
+        : member.role_id
+          ? [member.role_id]
+          : [];
+      let best: ServerRole | null = null;
+      for (const rid of roleIds) {
+        const role = serverRoles.find((r) => r.id === rid);
+        if (role?.color && (!best || role.position > best.position)) best = role;
       }
-      return null;
+      return best?.color ?? null;
     },
     [serverRoles],
   );
 
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
+    if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
     markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
@@ -2575,6 +2758,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
+      display_id: 0,
     };
     setMessages((prev) => {
       const next = [...prev, optimistic];
@@ -2648,6 +2832,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
+    if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
     markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
@@ -2693,6 +2878,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
+      display_id: 0,
     };
     setDmMessages((prev) => {
       const next = [...prev, optimistic];
@@ -2768,6 +2954,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
+    if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
     markActivity();
     const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
@@ -2812,6 +2999,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
+      display_id: 0,
     };
     setGroupMessages((prev) => {
       const next = [...prev, optimistic];
@@ -3197,6 +3385,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notes,
     groupChats,
     groupMessages,
+    messagesLoading,
+    dmLoading,
+    groupLoading,
     friendships,
     friends,
     pendingIncoming,
@@ -3257,7 +3448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     banMember,
     createRole,
     updateRole,
-    assignMemberRole,
+    setMemberRoles,
     getMemberColor,
     createChannel,
     renameChannel,
@@ -3283,6 +3474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleNotePinned,
     markNotificationsRead,
     loadVoicePresence,
+    voiceJoinedChannelId,
     setVoiceJoinedChannelId: handleVoiceJoinedChannel,
     setCallPhase: handleCallPhase,
     setMaxMessageChars,
@@ -3304,6 +3496,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadMoreGroupMessages,
     loadMoreNotes,
     platformBan,
+    restrictions,
+    refreshRestrictions,
     refreshPlatformAccess,
     serverPermissions,
     hasServerPermission,

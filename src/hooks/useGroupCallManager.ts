@@ -6,6 +6,7 @@ import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
 import { buildVideoConstraints } from "@/lib/audio-settings";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
+import { playCallConnected, playCallEnd, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import { attachRemoteTrack, createOfferForPeer, setPeerVideoTrack } from "@/lib/webrtc";
 import type { Profile } from "@/lib/supabase/types";
@@ -53,6 +54,7 @@ export function useGroupCallManager(
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
 
   const localRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -101,6 +103,22 @@ export function useGroupCallManager(
     void signalRef.current?.send({ type: "broadcast", event: "group-call", payload });
   }, []);
 
+  // Diff presence so join/leave blips only fire for *other* people.
+  const prevPresenceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!joined) {
+      prevPresenceRef.current = new Set();
+      return;
+    }
+    const ids = new Set(presence.map((p) => p.user_id));
+    const prev = prevPresenceRef.current;
+    const joinedIds = [...ids].filter((id) => !prev.has(id) && id !== userId);
+    const leftIds = [...prev].filter((id) => !ids.has(id) && id !== userId);
+    if (joinedIds.length > 0) playCallJoin();
+    if (leftIds.length > 0) playCallLeave();
+    prevPresenceRef.current = ids;
+  }, [presence, joined, userId]);
+
   const cleanupMedia = useCallback(async () => {
     peersRef.current.forEach((pc) => pc.close());
     peersRef.current.clear();
@@ -115,6 +133,7 @@ export function useGroupCallManager(
     }
     setJoined(false);
     setRingingIds(new Set());
+    setConnectedAt(null);
     stopRingtone();
   }, []);
 
@@ -293,6 +312,8 @@ export function useGroupCallManager(
         const supabase = getSupabaseClient();
         await supabase.from("group_call_presence").upsert({ group_id: gid, user_id: userId });
         setJoined(true);
+        setConnectedAt(Date.now());
+        playCallConnected();
         const { data: rows } = await supabase.from("group_call_presence").select("*").eq("group_id", gid);
         const { data: profiles } = await supabase
           .from("profiles")
@@ -367,6 +388,7 @@ export function useGroupCallManager(
   );
 
   const endGroupCall = useCallback(async () => {
+    playCallEnd();
     await cleanup();
   }, [cleanup]);
 
@@ -556,6 +578,7 @@ export function useGroupCallManager(
     screenShareEnabled,
     incomingRing,
     error,
+    connectedAt,
     loadPresence,
     watchGroup,
     startGroupCall,

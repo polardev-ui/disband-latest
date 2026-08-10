@@ -228,25 +228,6 @@ body {
   background-color: var(--interactive-selected);
 }
 
-/* Message entrance animation */
-@keyframes message-enter {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-    filter: blur(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-.message-enter {
-  animation: message-enter 0.4s ease-out forwards;
-  opacity: 0;
-}
-
 /* Tooltip fade-in */
 @keyframes tooltip-enter {
   from {
@@ -307,6 +288,39 @@ img.twemoji {
   margin: 0 0.05em 0 0.1em;
   vertical-align: -0.2em;
   display: inline-block;
+}
+
+/* Call UI */
+@keyframes call-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.call-enter {
+  animation: call-enter 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+/* Expanding pulse ring around the ringing avatar. */
+@keyframes call-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(35, 165, 89, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(35, 165, 89, 0);
+  }
+}
+
+.call-ring {
+  animation: call-ring 1.4s ease-out infinite;
 }
 
 /* Indeterminate progress bar for the app splash (LoadingScreen). */

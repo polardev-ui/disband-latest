@@ -5,19 +5,21 @@ import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
-import { summarizeReactions, type ReactionSummary, type ReplyPreview } from "@/lib/messages";
+import { summarizeReactions, type ReactionSummary } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageAttachment } from "./MessageAttachment";
 import { MessageReactions } from "./MessageReactions";
+import { MessageActionBar } from "./MessageActionBar";
 import { Twemoji } from "@/components/ui/Twemoji";
 import type { Profile } from "@/lib/supabase/types";
-import type { MessageReaction } from "@/lib/messages";
+import type { MessageReaction, ReplyPreview } from "@/lib/messages";
 
 export interface ChatMessageData {
   id: string;
+  display_id?: number;
   author_id: string | null;
   content: string;
   attachment_url?: string | null;
@@ -47,6 +49,9 @@ interface ChatMessageProps {
   onReplyClick?: (messageId: string) => void;
   onJumpToReply?: (messageId: string) => void;
   onDoubleClick?: () => void;
+  onReply?: (reply: ReplyPreview) => void;
+  onOpenReactionPicker?: () => void;
+  onForward?: () => void;
   highlight?: boolean;
   onContentResize?: () => void;
 }
@@ -169,6 +174,9 @@ export function ChatMessage({
   onToggleReaction,
   onJumpToReply,
   onDoubleClick,
+  onReply,
+  onOpenReactionPicker,
+  onForward,
   highlight,
   members = [],
   onContentResize,
@@ -243,6 +251,14 @@ export function ChatMessage({
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
+        <MessageActionBar
+          message={message}
+          onReply={onReply}
+          onToggleReaction={onToggleReaction}
+          onOpenReactionPicker={onOpenReactionPicker}
+          onForward={onForward}
+          onMoreActions={onContextMenu}
+        />
         <time className="pointer-events-none absolute left-1 top-1/2 w-14 -translate-y-1/2 text-right text-[10px] text-text-muted opacity-0 group-hover:opacity-100">
           {formatMessageTime(message.created_at).split(" at ").pop()}
         </time>
@@ -275,7 +291,7 @@ export function ChatMessage({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`message-enter group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass}`}
+      className={`group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
@@ -289,7 +305,15 @@ export function ChatMessage({
         )
       ) : null}
 
-      <div className="min-w-0 flex-1 pt-0.5">
+      <div className="relative min-w-0 flex-1 pt-0.5">
+        <MessageActionBar
+          message={message}
+          onReply={onReply}
+          onToggleReaction={onToggleReaction}
+          onOpenReactionPicker={onOpenReactionPicker}
+          onForward={onForward}
+          onMoreActions={onContextMenu}
+        />
         {showHeader && (
           <header className="mb-0.5 flex items-baseline gap-2 leading-none">
             {canOpenProfile ? (

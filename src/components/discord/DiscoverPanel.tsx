@@ -7,6 +7,7 @@ import { IconClose, IconFriends, IconSearch, IconCompass, IconSparkle } from "@/
 import { serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { UserPanel } from "./UserPanel";
+import { CallIndicator } from "./CallIndicator";
 
 export interface DiscoverableServer {
   id: string;
@@ -154,6 +155,7 @@ export function DiscoverSidebar({
         ))}
       </nav>
 
+      <CallIndicator />
       <UserPanel
         onOpenSettings={onOpenSettings}
         onOpenProfile={onOpenProfile}

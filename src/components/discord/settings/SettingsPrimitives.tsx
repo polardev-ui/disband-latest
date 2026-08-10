@@ -121,11 +121,15 @@ export const settingsInputClass =
   "outline-none transition-colors placeholder:text-text-muted focus:border-brand/60";
 
 /** Small pill used for plan / permission hints. */
-export function Hint({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "super" }) {
+export function Hint({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "super" | "online" }) {
   return (
     <span
       className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-        tone === "super" ? "bg-super/20 text-super" : "bg-bg-accent text-text-muted"
+        tone === "super"
+          ? "bg-super/20 text-super"
+          : tone === "online"
+            ? "bg-[#57f287]/15 text-[#57f287]"
+            : "bg-bg-accent text-text-muted"
       }`}
     >
       {children}

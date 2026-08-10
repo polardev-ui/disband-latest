@@ -11,6 +11,7 @@ import { useGroupCallManager } from "@/hooks/useGroupCallManager";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useServerVoicePresence } from "@/hooks/useServerVoicePresence";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { setCallIndicatorState } from "@/lib/call-status";
 import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
@@ -54,6 +55,7 @@ import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils"
 import type { Channel, ChannelCategory, Profile, Server } from "@/lib/supabase/types";
 import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
+import { ForwardModal, type ForwardDestination } from "./ForwardModal";
 
 export function DiscordApp() {
   const app = useApp();
@@ -68,6 +70,7 @@ export function DiscordApp() {
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<ChatMessageData | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
 
   useEffect(() => {
@@ -428,6 +431,32 @@ export function DiscordApp() {
     void groupCall.startGroupCall(activeGroup.id, activeGroup.name, memberIds);
   }, [activeGroup, app.user, groupCall]);
 
+  const handleForward = useCallback(
+    (dest: ForwardDestination) => {
+      const msg = forwardMessage;
+      if (!msg) return;
+      const prefix = msg.author
+        ? `[Forwarded from ${displayName(msg.author as any)}]\n`
+        : "[Forwarded]\n";
+      const content = prefix + (msg.content || "(attachment)");
+      if (dest.kind === "dm") {
+        void app.openDmWithFriend(dest.id).then(() => {
+          setTimeout(() => {
+            void app.sendDmMessage(content);
+          }, 300);
+        });
+      } else if (dest.kind === "group") {
+        void app.selectGroupChat(dest.id).then(() => {
+          setTimeout(() => {
+            void app.sendGroupMessage(content);
+          }, 300);
+        });
+      }
+      setForwardMessage(null);
+    },
+    [forwardMessage, app],
+  );
+
   const handleNoteContext = useCallback(
     (message: ChatMessageData, x: number, y: number) => {
       const isPinned = app.notes.find((n) => n.id === message.id)?.pinned ?? false;
@@ -521,7 +550,7 @@ export function DiscordApp() {
           id: "copy-id",
           label: "Copy Message ID",
           icon: <IconCopy size={16} />,
-          onClick: () => void navigator.clipboard.writeText(message.id),
+          onClick: () => void navigator.clipboard.writeText(String(message.display_id ?? message.id)),
         },
         ...(isOwn && normalizeMessageContent(message.content)
           ? [
@@ -679,21 +708,37 @@ export function DiscordApp() {
       }
 
       if (canManageRoles && app.serverRoles.length > 0) {
-        app.serverRoles.forEach((role) => {
-          const isCurrent = role.id === member.role_id;
+        const memberRoleIds =
+          member.role_ids && member.role_ids.length > 0
+            ? member.role_ids
+            : member.role_id
+              ? [member.role_id]
+              : [];
+        app.serverRoles.filter((r) => !r.is_default).forEach((role) => {
+          const isCurrent = memberRoleIds.includes(role.id);
           items.push({
             id: `role-${role.id}`,
-            label: `${isCurrent ? "✓ " : ""}Assign ${role.name}`,
+            label: `${isCurrent ? "✓ " : ""}${role.name}`,
             icon: <IconSettings size={16} />,
-            onClick: () => void app.assignMemberRole(member.user_id, role.id),
+            onClick: () => {
+              const next = isCurrent
+                ? memberRoleIds.filter((id) => id !== role.id)
+                : [...memberRoleIds, role.id];
+              void app.setMemberRoles(member.user_id, next).then((err) => {
+                if (err) alert(err);
+              });
+            },
           });
         });
-        if (member.role_id) {
+        if (memberRoleIds.length > 0) {
           items.push({
             id: "role-clear",
-            label: "Remove Role",
+            label: "Clear all roles",
             icon: <IconClose size={16} />,
-            onClick: () => void app.assignMemberRole(member.user_id, null),
+            onClick: () =>
+              void app.setMemberRoles(member.user_id, []).then((err) => {
+                if (err) alert(err);
+              }),
           });
         }
       }
@@ -834,16 +879,78 @@ export function DiscordApp() {
     return map;
   }, [activeGroup]);
 
+  const groupRemoteProfiles = useMemo(() => {
+    const map = new Map<string, Profile>();
+    activeGroup?.members.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [activeGroup]);
+
+  // Publish the current call to the persistent indicator above the user panel.
+  const lastCallRef = useRef<{ kind: string; startedAt: number } | null>(null);
+  useEffect(() => {
+    const activeKind = dmCallActive ? "dm" : groupCall.joined ? "group" : app.voiceJoinedChannelId ? "voice" : null;
+    if (!activeKind) {
+      lastCallRef.current = null;
+      setCallIndicatorState({ active: false, kind: null, label: "", startedAt: null, hangup: null, focus: null });
+      return;
+    }
+    if (!lastCallRef.current || lastCallRef.current.kind !== activeKind) {
+      lastCallRef.current = { kind: activeKind, startedAt: Date.now() };
+    }
+    const label =
+      activeKind === "dm" && callBannerPeer
+        ? `Call with ${displayName(callBannerPeer)}`
+        : activeKind === "group" && activeGroup
+          ? `In ${activeGroup.name}`
+          : activeKind === "voice"
+            ? `In ${activeChannel?.name ?? "voice"}`
+            : "In a call";
+    const hangup =
+      activeKind === "dm"
+        ? () => void call.endCall()
+        : activeKind === "group"
+          ? () => void groupCall.endGroupCall()
+          : null;
+    const gid = groupCall.groupId;
+    const focus =
+      activeKind === "dm" && callBannerPeer
+        ? () => void app.openDmWithFriend(callBannerPeer.id)
+        : activeKind === "group" && gid
+          ? () => void app.selectGroupChat(gid)
+          : null;
+    setCallIndicatorState({
+      active: true,
+      kind: activeKind,
+      label,
+      startedAt: lastCallRef.current.startedAt,
+      hangup,
+      focus,
+    });
+  }, [
+    dmCallActive,
+    groupCall.joined,
+    app.voiceJoinedChannelId,
+    callBannerPeer,
+    activeGroup,
+    activeChannel,
+    groupCall.groupId,
+  ]);
+
   const renderCallPanel = () => {
-    if (dmCallActive && callBannerPeer) {
+    // Only render the call UI inside the DM it actually belongs to. Switching
+    // to another DM, GC or server must not drag the call panel along — the
+    // indicator pill above the user panel handles returning to the call.
+    if (dmCallActive && callBannerPeer && dmFriend?.id === callBannerPeer.id) {
       return (
         <CallPanel
           peer={callBannerPeer}
+          selfProfile={app.profile}
           title={displayName(callBannerPeer)}
           subtitle={call.phase === "outgoing" ? "Calling… waiting for answer" : "Connected — you're live"}
           phase={call.phase === "outgoing" ? "outgoing" : "active"}
           localStream={call.localStream}
           remoteStream={call.remoteStream}
+          connectedAt={call.connectedAt}
           micMuted={app.micMuted}
           deafened={app.deafened}
           cameraEnabled={call.cameraEnabled}
@@ -853,28 +960,6 @@ export function DiscordApp() {
           onToggleCamera={() => void call.toggleCamera()}
           onToggleScreenShare={subPlan === "super" ? () => void call.toggleScreenShare() : undefined}
           onEnd={() => void call.endCall()}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      );
-    }
-    if (groupCallActive && activeGroup) {
-      return (
-        <CallPanel
-          title={activeGroup.name}
-          subtitle={`${groupCall.presence.length} in voice`}
-          phase="active"
-          localStream={groupCall.localStream}
-          remoteStreams={groupCall.remoteStreams}
-          remoteLabels={groupRemoteLabels}
-          micMuted={app.micMuted}
-          deafened={app.deafened}
-          cameraEnabled={groupCall.cameraEnabled}
-          screenShareEnabled={groupCall.screenShareEnabled}
-          onToggleMic={toggleMic}
-          onToggleDeafen={toggleDeafen}
-          onToggleCamera={() => void groupCall.toggleCamera()}
-          onToggleScreenShare={subPlan === "super" ? () => void groupCall.toggleScreenShare() : undefined}
-          onEnd={() => void groupCall.endGroupCall()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       );
@@ -1082,9 +1167,11 @@ export function DiscordApp() {
 
       {app.viewMode === "dm" && dmFriend && (
         <ChatCanvas
+          key={app.activeDmThreadId}
           ref={dmChatRef}
           channelName={displayName(dmFriend)}
           messages={dmMessages}
+          loading={app.dmLoading}
           members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
           currentUserId={app.user?.id}
           currentUserName={app.profile ? displayName(app.profile) : undefined}
@@ -1105,38 +1192,47 @@ export function DiscordApp() {
           onEdit={app.editDmMessage}
           onToggleReaction={(id, emoji) => void app.toggleReaction("dm", id, emoji)}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "dm")}
+          onForward={(m) => setForwardMessage(m)}
           onAuthorClick={handleAuthorClick}
           hasMore={app.dmHasMore}
           onLoadMore={app.loadMoreDmMessages}
         />
       )}
 
+      {/* Group chat: the call stage is conditional on the group and call matching,
+          but the chat canvas and member list persist regardless of call state.
+          Previously the entire block was gated on groupCall.groupId === activeGroup.id,
+          which nuked the chat UI when the call ended (cleanup sets groupId=null). */}
       {app.viewMode === "group" && activeGroup && (
         <>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <GroupCallStage
-              groupName={activeGroup.name}
-              members={activeGroup.members}
-              presence={groupCall.presence}
-              inCallUserIds={groupCall.inCallUserIds}
-              ringingIds={groupCall.ringingIds}
-              joined={groupCall.joined}
-              selfId={app.user?.id}
-              localStream={groupCall.localStream}
-              remoteStreams={groupCall.remoteStreams}
-              cameraEnabled={groupCall.cameraEnabled}
-              micMuted={app.micMuted}
-              deafened={app.deafened}
-              onJoin={() => void groupCall.joinGroupCall(activeGroup.id, activeGroup.name)}
-              onLeave={() => void groupCall.endGroupCall()}
-              onToggleCamera={() => void groupCall.toggleCamera()}
-              onToggleMic={toggleMic}
-            />
+            {groupCall.groupId === activeGroup.id && (
+              <GroupCallStage
+                groupName={activeGroup.name}
+                members={activeGroup.members}
+                presence={groupCall.presence}
+                inCallUserIds={groupCall.inCallUserIds}
+                ringingIds={groupCall.ringingIds}
+                joined={groupCall.joined}
+                selfId={app.user?.id}
+                localStream={groupCall.localStream}
+                remoteStreams={groupCall.remoteStreams}
+                cameraEnabled={groupCall.cameraEnabled}
+                micMuted={app.micMuted}
+                deafened={app.deafened}
+                onJoin={() => void groupCall.joinGroupCall(activeGroup.id, activeGroup.name)}
+                onLeave={() => void groupCall.endGroupCall()}
+                onToggleCamera={() => void groupCall.toggleCamera()}
+                onToggleMic={toggleMic}
+              />
+            )}
             <ChatCanvas
+              key={app.activeGroupChatId}
               ref={groupChatRef}
               channelName={activeGroup.name}
               channelIcon={<IconGroup size={22} className="text-text-muted" />}
               messages={groupMessages}
+              loading={app.groupLoading}
               members={activeGroup.members}
               currentUserId={app.user?.id}
               messageContext="group"
@@ -1157,6 +1253,7 @@ export function DiscordApp() {
               onEdit={app.editGroupMessage}
               onToggleReaction={(id, emoji) => void app.toggleReaction("group", id, emoji)}
               onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "group")}
+              onForward={(m) => setForwardMessage(m)}
               onAuthorClick={handleAuthorClick}
               hasMore={app.groupHasMore}
               onLoadMore={app.loadMoreGroupMessages}
@@ -1174,43 +1271,9 @@ export function DiscordApp() {
         </>
       )}
 
-      {dmCallActive && app.viewMode !== "dm" && (
-        <div className="pointer-events-none fixed bottom-4 left-[88px] z-40 w-[min(22rem,calc(100vw-7rem))]">
-          <div className="pointer-events-auto">{renderCallPanel()}</div>
-        </div>
-      )}
-
-      {(groupCall.joined || groupCall.presence.length > 0) && app.viewMode !== "group" && (() => {
-        const callGroup = app.groupChats.find((g) => g.id === groupCall.groupId);
-        if (!callGroup) return null;
-        return (
-        <div className="pointer-events-none fixed bottom-4 left-[88px] z-40 w-[min(28rem,calc(100vw-7rem))]">
-          <div className="pointer-events-auto shadow-2xl">
-          <GroupCallStage
-            groupName={callGroup.name}
-            members={callGroup.members}
-            presence={groupCall.presence}
-            inCallUserIds={groupCall.inCallUserIds}
-            ringingIds={groupCall.ringingIds}
-            joined={groupCall.joined}
-            selfId={app.user?.id}
-            localStream={groupCall.localStream}
-            remoteStreams={groupCall.remoteStreams}
-            cameraEnabled={groupCall.cameraEnabled}
-            micMuted={app.micMuted}
-            deafened={app.deafened}
-            onJoin={() => void groupCall.joinGroupCall(callGroup.id, callGroup.name)}
-            onLeave={() => void groupCall.endGroupCall()}
-            onToggleCamera={() => void groupCall.toggleCamera()}
-            onToggleMic={toggleMic}
-          />
-          </div>
-        </div>
-        );
-      })()}
-
       {app.viewMode === "notes" && (
         <ChatCanvas
+          key="notes"
           ref={notesChatRef}
           channelName="Notes"
           channelIcon={<IconNotes size={22} className="text-text-muted" />}
@@ -1256,9 +1319,11 @@ export function DiscordApp() {
 
       {app.viewMode === "server" && activeChannel && !isVoice && (
         <ChatCanvas
+          key={app.activeChannelId}
           ref={channelChatRef}
           channelName={activeChannel.name}
           messages={channelMessages}
+          loading={app.messagesLoading}
           members={app.members.map((m) => m.profile)}
           roles={app.serverRoles}
           currentUserId={app.user?.id}
@@ -1272,6 +1337,7 @@ export function DiscordApp() {
           onEdit={app.editChannelMessage}
           onToggleReaction={(id, emoji) => void app.toggleReaction("channel", id, emoji)}
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "channel")}
+          onForward={(m) => setForwardMessage(m)}
           onAuthorClick={handleAuthorClick}
           hasMore={app.channelHasMore}
           onLoadMore={app.loadMoreChannelMessages}
@@ -1367,14 +1433,20 @@ export function DiscordApp() {
         }
         onOpenSettings={() => setSettingsOpen(true)}
         isServerMember={!!profileServerMember}
-        serverRoles={profileCanManageRoles ? app.serverRoles : undefined}
+        serverRoles={app.serverRoles}
         canManageRoles={profileCanManageRoles}
-        memberRoleId={profileServerMember?.role_id ?? null}
+        memberRoleIds={
+          profileServerMember?.role_ids && profileServerMember.role_ids.length > 0
+            ? profileServerMember.role_ids
+            : profileServerMember?.role_id
+              ? [profileServerMember.role_id]
+              : []
+        }
         memberIsOwner={profileServerMember?.role === "owner"}
-        onAssignRole={
+        onSetRoles={
           profileTarget && profileCanManageRoles
-            ? (roleId) => {
-                void app.assignMemberRole(profileTarget.id, roleId).then((err) => {
+            ? (roleIds) => {
+                void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
                   if (err) alert(err);
                 });
               }
@@ -1398,6 +1470,12 @@ export function DiscordApp() {
           setInviteGroupOpen(false);
           setInviteGroupId(null);
         }}
+      />
+
+      <ForwardModal
+        open={!!forwardMessage}
+        onClose={() => setForwardMessage(null)}
+        onForward={handleForward}
       />
         </div>
       </div>

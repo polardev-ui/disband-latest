@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus } from "@/components/icons";
+import { RolePicker } from "@/components/ui/RolePicker";
 import { getInviteUrl, serverInitials, displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
@@ -45,7 +46,7 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     renameChannel,
     deleteChannel,
     deleteRole,
-    assignMemberRole,
+    setMemberRoles,
     kickMember,
     banMember,
   } = useApp();
@@ -267,10 +268,19 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     setLoading(false);
   }
 
-  async function handleAssignRole(memberUserId: string, roleId: string | null) {
+  async function handleToggleRole(memberUserId: string, roleId: string) {
+    const member = members.find((m) => m.user_id === memberUserId);
+    const current = member?.role_ids && member.role_ids.length > 0
+      ? member.role_ids
+      : member?.role_id
+        ? [member.role_id]
+        : [];
+    const next = current.includes(roleId)
+      ? current.filter((id) => id !== roleId)
+      : [...current, roleId];
     setLoading(true);
     setError(null);
-    const err = await assignMemberRole(memberUserId, roleId);
+    const err = await setMemberRoles(memberUserId, next);
     if (err) setError(err);
     setLoading(false);
   }
@@ -554,34 +564,45 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                 <p className="text-sm text-text-muted">Manage members, assign roles, and moderate the server.</p>
                 <ul className="space-y-2">
                   {members.map((m) => {
-                    const memberRole = serverRoles.find((r) => r.id === m.role_id) ?? null;
+                    const memberRoleIds = m.role_ids && m.role_ids.length > 0
+                      ? m.role_ids
+                      : m.role_id
+                        ? [m.role_id]
+                        : [];
+                    const topMemberRole =
+                      [...serverRoles]
+                        .filter((r) => memberRoleIds.includes(r.id))
+                        .sort((a, b) => b.position - a.position)[0] ?? null;
                     const memberName = m.profile ? displayName(m.profile) : "Unknown member";
                     const isSelf = m.user_id === user?.id;
                     return (
                       <li key={m.user_id} className="flex items-center gap-3 rounded-lg border border-divider bg-bg-secondary p-3">
                         <Avatar profile={m.profile} size="sm" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium" style={memberRole?.color ? { color: memberRole.color } : undefined}>
+                          <p className="truncate text-sm font-medium" style={topMemberRole?.color ? { color: topMemberRole.color } : undefined}>
                             {memberName}
                           </p>
                           <p className="truncate text-xs text-text-muted">
-                            {m.role === "owner" ? "Owner" : memberRole?.name ?? "Member"}
+                            {m.role === "owner"
+                              ? "Owner"
+                              : memberRoleIds.length > 0
+                                ? memberRoleIds
+                                    .map((id) => serverRoles.find((r) => r.id === id)?.name)
+                                    .filter(Boolean)
+                                    .join(", ")
+                                : "Member"}
                           </p>
                         </div>
                         {!isSelf && (
                           <div className="flex shrink-0 items-center gap-2">
-                            <select
-                              value={m.role_id ?? ""}
+                            <RolePicker
+                              roles={serverRoles.filter((r) => !r.is_default)}
+                              selected={memberRoleIds}
+                              onToggle={(roleId) => void handleToggleRole(m.user_id, roleId)}
                               disabled={loading || m.role === "owner"}
-                              onChange={(e) => void handleAssignRole(m.user_id, e.target.value || null)}
-                              className="rounded bg-bg-accent px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
-                              aria-label={`Role for ${memberName}`}
-                            >
-                              <option value="">No role</option>
-                              {serverRoles.filter((r) => !r.is_default).map((r) => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                              ))}
-                            </select>
+                              align="right"
+                              compact
+                            />
                             {serverPermissions.ban && (
                               <button
                                 type="button"

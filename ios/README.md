@@ -53,8 +53,14 @@ ios/
 - **Realtime:** `RealtimeService` subscribes to Postgres `INSERT`s (Supabase
   Realtime v2); the shared `ChatViewModel` drives channels, DMs, and groups from
   one code path via the `ChatSource` enum.
+- **Calls:** `CallManager` (app-scoped `@Observable`) mirrors the desktop
+  `useCallManager` — incoming-call listener on `call-user:<selfId>` plus WebRTC
+  offer/answer/ICE on `call:<callId>`, with full-screen ring & call UI layered
+  above the tabs in `RootView`.
 - **Dependency:** [`supabase-swift`](https://github.com/supabase/supabase-swift)
-  via SPM (resolved at 2.48.0).
+  via SPM (resolved at 2.48.0), plus
+  [`stasel/WebRTC`](https://github.com/stasel/WebRTC) (M150) for peer-to-peer
+  media.
 
 ## Feature status (phased toward full parity)
 
@@ -63,13 +69,15 @@ ios/
 - TOTP MFA challenge gate (aal1 → aal2)
 - Servers → channels (text/voice listing) → live channel chat
 - DMs and group chats with realtime message delivery
+- 1:1 DM voice/video calls (WebRTC over Supabase Realtime signaling, camera
+  toggle, mute/deafen) — mirrors the desktop `useCallManager` flow
 - Friends: list, incoming/outgoing requests, accept/decline, add-by-username,
   start a DM
 - Profile: avatar/status/bio, status switcher, edit, sign out
 - Send + receive messages live; image/file attachment rendering
 
 **Not yet ported (next phases)**
-- WebRTC voice/video calls (large subsystem)
+- Group calls / server voice-channel audio streaming
 - Sending attachments (upload via the custom media API) — currently render-only
 - Reactions / replies / mentions UI (service layer is stubbed in `DatabaseService`)
 - MFA *enrollment*, server roles/permissions management, moderation & platform-ban
