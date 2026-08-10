@@ -14,7 +14,7 @@ import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageD
 import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
 import { ReactionPicker } from "./MessageReactions";
-import { IconHash } from "@/components/icons";
+import { IconHash, IconShield } from "@/components/icons";
 import { formatTypingLabel, useTypingPresence } from "@/hooks/useTypingPresence";
 import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
 import {
@@ -64,6 +64,12 @@ interface ChatCanvasProps {
   introText?: string;
   /** Composer placeholder. Defaults to "Message #<name>". */
   placeholder?: string;
+  /**
+   * Replaces the composer with an explanation. Used for announcement channels,
+   * where posting is blocked by RLS — showing a composer that always fails
+   * would just look broken.
+   */
+  composerLockedReason?: string | null;
   typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
   readCursorScope?: ReadCursorScope | null;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -96,6 +102,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     channelIcon,
     introText,
     placeholder,
+    composerLockedReason,
     typingScope = null,
     readCursorScope = null,
     onSend,
@@ -377,6 +384,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         {typingLabel && (
           <p className="truncate px-4 pb-1 text-xs font-medium text-text-muted">{typingLabel}</p>
         )}
+        {composerLockedReason ? (
+          <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg border border-divider bg-bg-secondary px-4 py-3">
+            <IconShield size={15} className="shrink-0 text-text-muted" />
+            <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
+          </div>
+        ) : (
         <ChatInput
           placeholder={placeholder ?? `Message #${channelName}`}
           members={members}
@@ -393,6 +406,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           allowPolls={messageContext === "channel" || messageContext === "group"}
           focusSignal={composerFocus}
         />
+        )}
       </div>
     </main>
   );

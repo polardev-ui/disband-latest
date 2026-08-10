@@ -120,6 +120,60 @@ export function ChatInput({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [focusSignal]);
 
+  /**
+   * Type anywhere to start typing in the composer, like Discord.
+   *
+   * Focus happens synchronously inside the keydown handler and the event is
+   * left to run, so the character that triggered it lands in the composer
+   * instead of being swallowed. Deferring to state or rAF would lose it.
+   *
+   * Bails out whenever the keystroke plausibly belongs to something else: an
+   * open dialog, another text field, a shortcut chord, or a bare navigation
+   * key.
+   */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.isComposing) return;
+
+      // Printable characters only — a lone Tab, Escape or arrow key must not
+      // yank focus into the composer.
+      if (e.key.length !== 1) return;
+
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (target?.closest("[role='dialog']")) return;
+
+      const el = textareaRef.current;
+      if (!el || el === document.activeElement || el.disabled) return;
+
+      // Is anything covering the composer? Most modals here are plain fixed
+      // overlays without a dialog role, so asking the document what is actually
+      // on top at the composer's position catches all of them — including ones
+      // added later — rather than relying on each modal to mark itself.
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const topmost = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2,
+      );
+      if (topmost !== el && !el.contains(topmost)) return;
+
+      el.focus();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   useEffect(() => {
     if (!onTypingActivity || !text.trim()) return;
     onTypingActivity();

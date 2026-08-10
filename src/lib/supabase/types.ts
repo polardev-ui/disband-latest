@@ -116,6 +116,8 @@ export interface Channel {
   name: string;
   type: ChannelType;
   position: number;
+  /** Announcement channel: everyone reads, only manage_channels may post. */
+  read_only?: boolean;
   created_at: string;
 }
 
