@@ -152,6 +152,7 @@ interface AppContextValue {
   getMemberColor: (member: ServerMember) => string | null;
   createChannel: (data: { name: string; type?: ChannelType; categoryId?: string | null }) => Promise<string | null>;
   renameChannel: (channelId: string, name: string) => Promise<string | null>;
+  setChannelReadOnly: (channelId: string, readOnly: boolean) => Promise<string | null>;
   deleteChannel: (channelId: string) => Promise<string | null>;
   createCategory: (name: string) => Promise<string | null>;
   renameCategory: (categoryId: string, name: string) => Promise<string | null>;
@@ -2583,6 +2584,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails, selectChannel]);
 
+  /**
+   * Announcement channels. RLS is the real gate — this only flips the flag.
+   */
+  const setChannelReadOnly = useCallback(async (channelId: string, readOnly: boolean) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient()
+      .from("channels")
+      .update({ read_only: readOnly })
+      .eq("id", channelId);
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
   const renameChannel = useCallback(async (channelId: string, name: string) => {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().rpc("rename_channel", {
@@ -3452,6 +3467,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getMemberColor,
     createChannel,
     renameChannel,
+    setChannelReadOnly,
     deleteChannel,
     createCategory,
     renameCategory,

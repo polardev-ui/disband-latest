@@ -82,7 +82,12 @@ export function ChannelList({
   const [overChannelId, setOverChannelId] = useState<string | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [addChannelTarget, setAddChannelTarget] = useState<string | null>(null);
+  // `null` means "not adding". The category is wrapped so that adding an
+  // *uncategorized* channel (categoryId: null) stays distinguishable from the
+  // idle state — sharing `null` for both made the composer render permanently,
+  // for every member, regardless of permissions.
+  const [addChannelTarget, setAddChannelTarget] =
+    useState<{ categoryId: string | null } | null>(null);
   const [addChannelName, setAddChannelName] = useState("");
   const [addChannelType, setAddChannelType] = useState<ChannelType>("text");
   const [busy, setBusy] = useState(false);
@@ -111,15 +116,17 @@ export function ChannelList({
   };
 
   const startAddChannel = (catId: string | null) => {
-    setAddChannelTarget(catId);
+    if (!canManageChannels) return;
+    setAddChannelTarget({ categoryId: catId });
     setAddChannelName("");
     setAddChannelType("text");
   };
 
   const submitAddChannel = async () => {
-    if (!onCreateChannel || !addChannelName.trim()) return;
+    if (!onCreateChannel || !addChannelName.trim() || !addChannelTarget) return;
+    if (!canManageChannels) return;
     setBusy(true);
-    await onCreateChannel(addChannelName.trim(), addChannelType, addChannelTarget);
+    await onCreateChannel(addChannelName.trim(), addChannelType, addChannelTarget.categoryId);
     setBusy(false);
     setAddChannelTarget(null);
     setAddChannelName("");
@@ -310,7 +317,7 @@ export function ChannelList({
             <div key={cat.id} className="mb-1">
               {renderCategoryHeader(cat)}
               {open && items.map((ch) => renderChannel(ch))}
-              {open && addChannelTarget === cat.id && (
+              {open && canManageChannels && addChannelTarget?.categoryId === cat.id && (
                 <div className="mb-1 flex items-center gap-1 px-1">
                   <input
                     autoFocus
@@ -378,7 +385,7 @@ export function ChannelList({
               )}
             </div>
             {uncategorized.map((ch) => renderChannel(ch))}
-            {addChannelTarget === null && (
+            {canManageChannels && addChannelTarget !== null && addChannelTarget.categoryId === null && (
               <div className="mb-1 flex items-center gap-1 px-1">
                 <input
                   autoFocus
