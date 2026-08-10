@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useSubscription } from "@/hooks/useSubscription";
-import { PLANS, type PlanTier } from "@/lib/subscription";
+import { PLANS, isGranting, type PlanTier, type SubscriptionPlan } from "@/lib/subscription";
 import { IconClose } from "@/components/icons";
 import { StripeEmbeddedCheckout } from "./StripeEmbeddedCheckout";
 
@@ -103,12 +103,149 @@ function isMobileBrowser(): boolean {
   return /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
+/**
+ * Post-payment confirmation.
+ *
+ * Payment succeeding is not the same as the account being upgraded — the plan
+ * only counts as live once our own subscription row grants it. So this screen
+ * stays in an explicit "activating" state until that is true, and lists the
+ * perks that are now unlocked instead of just claiming success.
+ */
+function ActivationScreen({
+  state,
+  plan,
+  renewsAt,
+  onClose,
+  onRetry,
+}: {
+  state: "activating" | "active" | "stalled";
+  plan: SubscriptionPlan;
+  renewsAt: string | null;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  const tier = PLANS.find((p) => p.id === plan);
+
+  if (state === "activating") {
+    return (
+      <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+        <p className="text-base font-semibold">Payment received</p>
+        <p className="max-w-xs text-sm text-text-muted">
+          Activating your subscription — this usually takes a few seconds.
+        </p>
+      </div>
+    );
+  }
+
+  if (state === "stalled") {
+    return (
+      <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#fee75c]/20 text-2xl text-[#fee75c]">
+          !
+        </div>
+        <p className="text-base font-semibold">Payment received</p>
+        <p className="max-w-sm text-sm text-text-muted">
+          Your payment went through, but we haven&apos;t been able to confirm the
+          upgrade on your account yet. Your card has not been charged twice —
+          try again in a moment, and contact support if it persists.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+          >
+            Check again
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/15"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 pb-6 pt-8">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#57f287]/20">
+          <svg
+            className="h-6 w-6 text-[#57f287]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <p className="text-lg font-bold">
+          <span className="capitalize">{plan}</span> is active
+        </p>
+        <p className="text-sm text-text-muted">
+          Your perks are live on this account right now.
+          {renewsAt && (
+            <>
+              {" "}
+              Renews{" "}
+              {new Date(renewsAt).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+              .
+            </>
+          )}
+        </p>
+      </div>
+
+      {tier && (
+        <div className="mt-6 rounded-xl border border-[#57f287]/25 bg-[#57f287]/[0.04] p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Now unlocked
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {tier.features.map((f) => (
+              <div key={f.label} className="flex items-start gap-2">
+                <CheckIcon />
+                <span className="text-[13px]">{f.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-5 w-full rounded-lg bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-hover"
+      >
+        Start using {plan === "super" ? "Super" : "Basic"}
+      </button>
+    </div>
+  );
+}
+
 export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalProps) {
-  const { plan, loading, startCheckout, subscription, openPortal, reload } = useSubscription(userId);
+  const { plan, loading, startCheckout, subscription, openPortal, activate } =
+    useSubscription(userId);
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [activation, setActivation] = useState<"activating" | "active" | "stalled" | null>(null);
   const mobile = isMobileBrowser();
+
+  const runActivation = useCallback(async () => {
+    setActivation("activating");
+    const granted = await activate();
+    setActivation(granted === "free" ? "stalled" : "active");
+  }, [activate]);
 
   const handleSubscribe = useCallback(async (planId: "basic" | "super") => {
     setCheckoutError(null);
@@ -122,16 +259,8 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
 
   const handleCheckoutSuccess = useCallback(() => {
     setCheckoutClientSecret(null);
-    setSuccessMsg("Loading subscription…");
-    // Reload immediately and retry a few times for webhook delay
-    const poll = async (attempts = 0) => {
-      await reload();
-      if (attempts < 8) {
-        setTimeout(() => void poll(attempts + 1), 1500 * (attempts + 1));
-      }
-    };
-    void poll();
-  }, [reload]);
+    void runActivation();
+  }, [runActivation]);
 
   const handleCheckoutCancel = useCallback(() => {
     setCheckoutClientSecret(null);
@@ -148,10 +277,10 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
           <div>
             <h2 className="text-lg font-bold">Subscription</h2>
-            {!checkoutClientSecret && subscription?.status === "active" && (
+            {!checkoutClientSecret && !activation && isGranting(subscription?.status) && (
               <p className="mt-0.5 text-sm text-text-muted">
                 <span className="font-semibold text-text-normal capitalize">{plan}</span>
-                {subscription.current_period_end && (
+                {subscription?.current_period_end && (
                   <> &middot; renews {new Date(subscription.current_period_end).toLocaleDateString()}</>
                 )}
               </p>
@@ -164,38 +293,14 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
 
         {mobile ? (
           <MobileNotice />
-        ) : successMsg ? (
-          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-            <div className="h-12 w-12 rounded-full bg-[#57f287]/20 flex items-center justify-center">
-              <svg className="h-6 w-6 text-[#57f287]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <p className="text-base font-semibold">Payment successful!</p>
-            {subscription?.status === "active" ? (
-              <div className="space-y-0.5">
-                <p className="text-sm text-text-muted">
-                  You&apos;re now on the <span className="font-semibold text-text-normal capitalize">{plan}</span> plan.
-                </p>
-                {subscription.current_period_end && (
-                  <p className="text-sm text-text-muted">
-                    Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", {
-                      year: "numeric", month: "long", day: "numeric",
-                    })}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-text-muted">{successMsg}</p>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
-            >
-              Done
-            </button>
-          </div>
+        ) : activation ? (
+          <ActivationScreen
+            state={activation}
+            plan={plan}
+            renewsAt={subscription?.current_period_end ?? null}
+            onClose={onClose}
+            onRetry={() => void runActivation()}
+          />
         ) : checkoutClientSecret ? (
           <StripeEmbeddedCheckout
             clientSecret={checkoutClientSecret}

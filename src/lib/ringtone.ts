@@ -1,4 +1,5 @@
 /** Cinematic dual-tone ring loop via Web Audio (no external assets). */
+import { isSoundEnabled } from "@/lib/user-settings";
 
 let ctx: AudioContext | null = null;
 let ringInterval: ReturnType<typeof setInterval> | null = null;
@@ -38,6 +39,7 @@ function playPulse() {
 
 export function startRingtone() {
   stopRingtone();
+  if (!isSoundEnabled()) return;
   playPulse();
   ringInterval = setInterval(playPulse, 2200);
 }

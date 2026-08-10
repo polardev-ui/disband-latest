@@ -12,6 +12,27 @@ export interface Subscription {
   canceled_at: string | null;
 }
 
+/**
+ * Stripe statuses that should grant paid entitlements.
+ *
+ * `trialing` is a paid-intent state, and `past_due` means a renewal charge is
+ * being retried — cutting perks off mid-retry punishes people whose card simply
+ * needs updating. Kept here so the client, the webhook and the reconciliation
+ * endpoint can never disagree about who is a paying customer.
+ */
+export const GRANTING_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+export function isGranting(status: string | null | undefined): boolean {
+  return !!status && GRANTING_STATUSES.has(status);
+}
+
+/** Resolve the effective plan from a stored subscription row. */
+export function planFromSubscription(sub: Subscription | null): SubscriptionPlan {
+  if (!sub || !isGranting(sub.status)) return "free";
+  const plan = sub.plan as SubscriptionPlan;
+  return plan === "basic" || plan === "super" ? plan : "free";
+}
+
 export interface PlanTier {
   id: SubscriptionPlan;
   name: string;

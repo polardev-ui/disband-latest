@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type Stripe from "stripe";
 import { getStripe, PRICE_IDS } from "@/lib/stripe";
+import { GRANTING_STATUSES } from "@/lib/subscription";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
@@ -38,9 +39,6 @@ function planForSubscription(sub: Stripe.Subscription): "basic" | "super" | null
   }
   return null;
 }
-
-/** Statuses that should grant entitlements. */
-const GRANTING = new Set(["active", "trialing", "past_due"]);
 
 function rank(sub: Stripe.Subscription): number {
   if (sub.status === "active" || sub.status === "trialing") return 3;
@@ -122,7 +120,7 @@ export async function POST() {
 
     const plan = planForSubscription(best)!;
     const fields = best as unknown as StripePeriodFields;
-    const granting = GRANTING.has(best.status);
+    const granting = GRANTING_STATUSES.has(best.status);
 
     const { error } = await admin.from("subscriptions").upsert(
       {

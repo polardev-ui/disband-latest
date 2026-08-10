@@ -10,11 +10,14 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift.git
     from: "2.20.0"
+  WebRTC:
+    url: https://github.com/stasel/WebRTC.git
+    from: "150.0.0"
 
 settings:
   base:
     MARKETING_VERSION: "0.4.4"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "6"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "KR54WPJ24G"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -28,6 +31,8 @@ targets:
     dependencies:
       - package: Supabase
         product: Supabase
+      - package: WebRTC
+        product: WebRTC
     info:
       path: DisbandiOS/Resources/Info.plist
       properties:

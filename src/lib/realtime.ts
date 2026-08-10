@@ -22,17 +22,30 @@ export function subscribeChannel(
   });
 }
 
-/** Ephemeral broadcast on a topic (subscribe → send → unsubscribe). */
+/**
+ * Ephemeral broadcast on a topic (subscribe → send → unsubscribe).
+ *
+ * `ack` matters here: without it `send()` resolves as soon as the frame is
+ * handed to the socket, so the `unsubscribe()` below could tear the channel
+ * down before the server had actually taken the message. Dropped call signals
+ * are exactly this bug — a lost `ring` never rings, and a lost `accept` leaves
+ * the caller ringing after the other side already answered.
+ */
 export async function broadcastOnChannel(
   supabase: SupabaseClient,
   topic: string,
   event: string,
   payload: unknown,
 ): Promise<void> {
-  const channel = supabase.channel(topic, { config: { broadcast: { self: false } } });
+  const channel = supabase.channel(topic, {
+    config: { broadcast: { self: false, ack: true } },
+  });
   try {
     await subscribeChannel(channel);
-    await channel.send({ type: "broadcast", event, payload });
+    const status = await channel.send({ type: "broadcast", event, payload });
+    if (status !== "ok") {
+      throw new Error(`Realtime broadcast to ${topic} was not acknowledged (${status})`);
+    }
   } finally {
     await channel.unsubscribe();
   }
