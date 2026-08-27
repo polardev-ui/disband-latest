@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Introduction · Disband Docs</title>
+<meta name="description" content="Disband is an open chat platform — servers, channels, DMs, voice and video.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index" class="active">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Disband</h1>
+<p class="lede">An open chat platform: servers, channels, direct messages, group chats, voice and video calls, and private notes — on web, desktop and iOS.</p>
+
+<p>This site documents how Disband is built and how to work on it. It is written for two audiences: people running or contributing to the codebase, and developers who want to build on top of it.</p>
+
+<div class="note">
+<p><strong>Honest scope.</strong> These docs describe what Disband actually does today, at version 1.0.26. Where something is planned but not built — most importantly the <a href="bots.html">bot API</a> — it is labelled <span class="badge badge-planned">Planned</span> and you will not find example code implying otherwise.</p>
+</div>
+
+<div class="cards">
+  <div class="card"><h3>Running locally</h3><p>Clone, configure Supabase and Stripe, and get a dev server up.</p></div>
+  <div class="card"><h3>Architecture</h3><p>How the Next.js app, Supabase backend and native clients fit together.</p></div>
+  <div class="card"><h3>Security model</h3><p>Row Level Security is the real authorization boundary, not the UI.</p></div>
+  <div class="card"><h3>Building a bot</h3><p>The proposed design — and why you cannot build one yet.</p></div>
+</div>
+
+<h2>What Disband includes</h2>
+<table>
+<tr><th>Area</th><th>Details</th></tr>
+<tr><td>Servers</td><td>Channels grouped into categories, roles with granular permissions, invites, bans, discovery.</td></tr>
+<tr><td>Messaging</td><td>Channel messages, DMs, group chats, replies, reactions, editing, attachments, polls, link previews.</td></tr>
+<tr><td>Voice &amp; video</td><td>1:1 and group calls over WebRTC, with mute, deafen, camera and screen share.</td></tr>
+<tr><td>Notes</td><td>A private, owner-only space for text and media. No sharing path exists.</td></tr>
+<tr><td>Subscriptions</td><td>Free, Basic and Super tiers via Stripe, gating upload size, video quality and themes.</td></tr>
+</table>
+
+<h2>Clients</h2>
+<table>
+<tr><th>Client</th><th>Built with</th></tr>
+<tr><td>Web</td><td>Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS 4</td></tr>
+<tr><td>Desktop</td><td>Tauri, wrapping the exported web build</td></tr>
+<tr><td>iOS</td><td>Native Swift and SwiftUI, with WebRTC for calls</td></tr>
+</table>
+
+<p>All three talk to the same Supabase project, so a change made on one appears on the others through realtime.</p>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

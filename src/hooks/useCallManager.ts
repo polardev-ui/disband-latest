@@ -26,7 +26,7 @@ interface CallSignal {
   candidate?: RTCIceCandidateInit;
 }
 
-const ICE: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+import { getIceServers, hasTurnConfigured } from "@/lib/ice-servers";
 
 export interface IncomingCallInfo {
   fromId: string;
@@ -140,7 +140,7 @@ export function useCallManager(
 
       const supabase = getSupabaseClient();
       const ch = supabase.channel(`call:${callId}`, { config: { broadcast: { self: false } } });
-      const pc = new RTCPeerConnection({ iceServers: ICE });
+      const pc = new RTCPeerConnection({ iceServers: getIceServers() });
       pcRef.current = pc;
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
@@ -159,6 +159,18 @@ export function useCallManager(
       };
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
+        if (state === "failed") {
+          // Say why. A media path that never establishes previously just ended
+          // the call with no explanation, indistinguishable from the other side
+          // hanging up. This uses callNotice rather than error because reset()
+          // clears error on the very next line.
+          setCallNotice(
+            hasTurnConfigured()
+              ? "Lost the connection to the other person."
+              : "Couldn't connect audio. Calls between a phone and a desktop usually need a TURN relay.",
+          );
+          window.setTimeout(() => setCallNotice(null), 8000);
+        }
         if (state === "disconnected" || state === "failed" || state === "closed") {
           void reset();
         }

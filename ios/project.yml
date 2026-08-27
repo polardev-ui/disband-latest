@@ -16,8 +16,8 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.4.4"
-    CURRENT_PROJECT_VERSION: "6"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "9"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "KR54WPJ24G"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -43,10 +43,13 @@ targets:
           UIColorName: LaunchBackground
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Must match the iPhone list. The app is iPhone-only
+        # (TARGETED_DEVICE_FAMILY = 1) and its layout is portrait-only, but this
+        # key still applies when it runs on iPad in compatibility mode.
+        # Advertising landscape there had the system size the compatibility
+        # window for orientations the UI never lays out for.
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
         NSCameraUsageDescription: Disband uses the camera for video calls and sending photos.
         NSMicrophoneUsageDescription: Disband uses the microphone for voice and video calls.
         NSPhotoLibraryUsageDescription: Disband needs photo access to share images in chat.

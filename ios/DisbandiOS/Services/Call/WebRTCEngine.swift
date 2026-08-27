@@ -72,7 +72,7 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
 
         let config = RTCConfiguration()
         config.sdpSemantics = .unifiedPlan
-        config.iceServers = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"])]
+        config.iceServers = AppConfig.iceServers
         config.continualGatheringPolicy = .gatherContinually
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,

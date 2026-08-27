@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture · Disband Docs</title>
+<meta name="description" content="How the Disband clients, Next.js app and Supabase backend fit together.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture" class="active">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Architecture</h1>
+<p class="lede">Three clients, one backend, and very little bespoke server code.</p>
+
+<h2>Shape of the system</h2>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>  Web (Next.js)     Desktop (Tauri)      iOS (SwiftUI)
+        |                  |                    |
+        +--------- Supabase client SDKs --------+
+                           |
+        Postgres  +  Auth  +  Realtime  +  Storage
+                           |
+        Next.js route handlers (Stripe, moderation,
+        link previews, status) using the service role</code></pre></div>
+
+<p>Most reads and writes go straight from the client to Postgres through the Supabase SDK, with Row Level Security deciding what is allowed. Server-side route handlers exist only where something must not be trusted to the client — verifying a Stripe webhook signature, or acting with elevated privileges.</p>
+
+<div class="note">
+<p>Because clients talk to the database directly, <strong>Row Level Security is the security model</strong>. Any rule enforced only in React or Swift is a convenience, not a control. See <a href="security.html">Security &amp; RLS</a>.</p>
+</div>
+
+<h2>Web client</h2>
+<table>
+<tr><th>Path</th><th>Contains</th></tr>
+<tr><td><code>src/app/</code></td><td>App Router pages and API route handlers.</td></tr>
+<tr><td><code>src/components/discord/</code></td><td>The main chat surface — channel list, chat canvas, composer, modals.</td></tr>
+<tr><td><code>src/contexts/AppContext.tsx</code></td><td>Central store: session, servers, channels, messages, friends, notes, realtime subscriptions.</td></tr>
+<tr><td><code>src/hooks/</code></td><td>Calls (<code>useCallManager</code>), subscriptions, media devices.</td></tr>
+<tr><td><code>src/lib/</code></td><td>Supabase clients, WebRTC helpers, theming, subscription entitlements.</td></tr>
+<tr><td><code>supabase/migrations/</code></td><td>Schema, RLS policies and RPCs, applied in filename order.</td></tr>
+</table>
+
+<h2>Desktop</h2>
+<p>Tauri wraps a static export of the web app. Two consequences worth knowing:</p>
+<ul>
+<li>The origin is <code>tauri://localhost</code>, so anything deriving a URL from <code>window.location</code> needs a fallback to the configured web app URL.</li>
+<li>Every external host the app talks to must be present in the CSP <code>connect-src</code>.</li>
+</ul>
+
+<h2>iOS</h2>
+<p>A native SwiftUI app using <code>supabase-swift</code> and the same tables. It is not a web view. Themes are stored on the shared <code>profiles.theme</code> column, so a theme chosen on the phone applies on the web too.</p>
+
+<h2>Calls</h2>
+<p>Calls are peer-to-peer WebRTC. Supabase Realtime carries only signalling — <code>ring</code>, <code>accept</code>, <code>reject</code>, <code>cancel</code>, <code>offer</code>, <code>answer</code>, <code>ice</code>, <code>leave</code> — and media never passes through the server. See <a href="realtime.html">Realtime</a> for the channel layout.</p>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security &amp; RLS · Disband Docs</title>
+<meta name="description" content="Row Level Security is the authorization boundary in Disband.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security" class="active">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Security &amp; RLS</h1>
+<p class="lede">Clients hold a real Postgres session. Row Level Security, not the interface, decides what they can do.</p>
+
+<div class="danger">
+<p><strong>The UI is not a security control.</strong> Hiding a button stops an ordinary user from stumbling into an action. It stops nobody from calling the API directly. Every rule that matters must exist as an RLS policy or inside a <code>security definer</code> function.</p>
+</div>
+
+<h2>Permissions</h2>
+<p>Server permissions resolve through <code>member_has_server_permission(server_id, user_id, permission)</code>. It:</p>
+<ol>
+<li>Refuses to answer for anyone but the caller, so it cannot be used to probe other users' permissions.</li>
+<li>Returns <code>true</code> immediately if the user owns the server — owners implicitly hold every permission.</li>
+<li>Otherwise resolves the member's roles and checks the permission flag.</li>
+</ol>
+
+<table>
+<tr><th>Permission</th><th>Grants</th></tr>
+<tr><td><code>manage_channels</code></td><td>Create, rename, reorder and delete channels and categories; post in announcement channels.</td></tr>
+<tr><td><code>manage_roles</code></td><td>Create and assign roles.</td></tr>
+<tr><td><code>manage_server</code></td><td>Edit server settings.</td></tr>
+<tr><td><code>manage_messages</code></td><td>Delete other people's messages.</td></tr>
+<tr><td><code>kick</code> / <code>ban</code></td><td>Remove or ban members.</td></tr>
+<tr><td><code>manage_emojis</code></td><td>Manage custom emoji.</td></tr>
+<tr><td><code>mention_everyone</code></td><td>Use <code>@everyone</code> and <code>@here</code>.</td></tr>
+</table>
+
+<h2>Worked example: announcement channels</h2>
+<p>Marking a channel <code>read_only</code> hides the composer. That alone would be trivial to bypass, so the rule lives in the insert policy:</p>
+
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>create policy "messages_insert" on public.messages for insert to authenticated
+  with check (
+    auth.uid() = author_id
+    and exists (
+      select 1 from public.channels c
+      where c.id = messages.channel_id
+        and public.is_server_member(c.server_id)
+        and (
+          c.read_only = false
+          or public.member_has_server_permission(
+               c.server_id, auth.uid(), 'manage_channels')
+        )
+    )
+  );</code></pre></div>
+
+<div class="warn">
+<p>Postgres combines multiple permissive policies with <code>OR</code>. Adding a second policy to "tighten" a rule does the opposite — it widens access. To restrict, rewrite the existing policy or add a <code>restrictive</code> one.</p>
+</div>
+
+<h2>Privileged functions</h2>
+<p>Operations that need to read beyond the caller's own rows run as <code>security definer</code> with a pinned <code>search_path</code>. They must guard their own inputs, because RLS no longer protects them. Examples include <code>get_or_create_dm_thread</code>, <code>join_server_by_invite</code> and <code>list_discoverable_servers</code>.</p>
+
+<p>Some columns are protected by triggers rather than policies: the badge flags on <code>profiles</code> are reset to their previous values on update, so a user cannot grant themselves a staff badge by writing to their own row.</p>
+
+<h2>Keys</h2>
+<table>
+<tr><th>Key</th><th>Where it may be used</th></tr>
+<tr><td>Anon key</td><td>Client-side. Safe to ship — it grants nothing on its own, since RLS still applies.</td></tr>
+<tr><td>Service role key</td><td>Server-side only. Bypasses RLS completely. Never send it to a browser.</td></tr>
+</table>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>
