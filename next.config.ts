@@ -21,6 +21,16 @@ const securityHeaders = [
   },
 ];
 
+// Bots run self-hosted and call the API cross-origin (curl, Node, Python, …),
+// so the bot-facing endpoints allow any origin. Bot tokens are bearer secrets
+// in the Authorization header, not cookies, so `*` is safe here.
+const botApiHeaders = [
+  { key: "Access-Control-Allow-Origin", value: "*" },
+  { key: "Access-Control-Allow-Methods", value: "GET, POST, DELETE, OPTIONS" },
+  { key: "Access-Control-Allow-Headers", value: "Authorization, Content-Type" },
+  { key: "Access-Control-Max-Age", value: "86400" },
+];
+
 const nextConfig: NextConfig = {
   ...(isTauriStaticExport
     ? {
@@ -33,6 +43,14 @@ const nextConfig: NextConfig = {
             {
               source: "/:path*",
               headers: securityHeaders,
+            },
+            {
+              source: "/api/bot/:path*",
+              headers: botApiHeaders,
+            },
+            {
+              source: "/api/v1/:path*",
+              headers: botApiHeaders,
             },
           ];
         },

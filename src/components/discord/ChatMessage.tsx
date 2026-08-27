@@ -7,6 +7,7 @@ import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { summarizeReactions, type ReactionSummary } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
+import { BotTag } from "@/components/ui/BotTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
@@ -331,6 +332,7 @@ export function ChatMessage({
               </span>
             )}
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
+            <BotTag profile={author} size="sm" />
             {author && <PlatformBadge profile={author} />}
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
             {message.sending && (

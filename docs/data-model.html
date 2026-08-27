@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data model · Disband Docs</title>
+<meta name="description" content="The Postgres tables behind Disband.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model" class="active">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Data model</h1>
+<p class="lede">Every table lives in the <code>public</code> schema with Row Level Security enabled.</p>
+
+<h2>Identity</h2>
+<table>
+<tr><th>Table</th><th>Purpose</th></tr>
+<tr><td><code>profiles</code></td><td>One row per user, keyed to <code>auth.users</code>. Display name, username, avatar, banner, accent colours, status, theme, badge flags.</td></tr>
+<tr><td><code>friendships</code></td><td>Requester/addressee pair with status <code>pending</code>, <code>accepted</code> or <code>blocked</code>.</td></tr>
+<tr><td><code>profile_change_log</code></td><td>Backs per-plan rate limits on username and avatar changes.</td></tr>
+</table>
+
+<h2>Servers</h2>
+<table>
+<tr><th>Table</th><th>Purpose</th></tr>
+<tr><td><code>servers</code></td><td>Name, icon, banner, description, owner, invite code, <code>discoverable</code> flag.</td></tr>
+<tr><td><code>server_members</code></td><td>Membership, with legacy role plus a <code>role_id</code>.</td></tr>
+<tr><td><code>server_roles</code></td><td>Named roles carrying a JSON permission set.</td></tr>
+<tr><td><code>member_roles</code></td><td>Many-to-many assignment of roles to members.</td></tr>
+<tr><td><code>channel_categories</code></td><td>Ordered groupings for channels.</td></tr>
+<tr><td><code>channels</code></td><td><code>text</code> or <code>voice</code>, ordered by <code>position</code>. <code>read_only</code> marks announcement channels.</td></tr>
+<tr><td><code>server_bans</code></td><td>Per-server bans.</td></tr>
+</table>
+
+<h2>Messaging</h2>
+<table>
+<tr><th>Table</th><th>Purpose</th></tr>
+<tr><td><code>messages</code></td><td>Channel messages: content, attachment, reply target, edit timestamp.</td></tr>
+<tr><td><code>dm_threads</code> / <code>dm_messages</code></td><td>1:1 conversations. Threads are created only through an RPC.</td></tr>
+<tr><td><code>group_chats</code> / <code>group_chat_members</code> / <code>group_messages</code></td><td>Multi-person chats outside any server.</td></tr>
+<tr><td><code>message_reactions</code></td><td>Emoji reactions, keyed by context type so one table serves channels, DMs, groups and notes.</td></tr>
+<tr><td><code>notes</code></td><td>Private notes. Every policy is <code>auth.uid() = user_id</code>; there is no sharing path.</td></tr>
+</table>
+
+<h2>Presence, calls and platform</h2>
+<table>
+<tr><th>Table</th><th>Purpose</th></tr>
+<tr><td><code>voice_presence</code></td><td>Who is in which voice channel, with mute and deafen state.</td></tr>
+<tr><td><code>group_call_presence</code></td><td>Equivalent for group calls.</td></tr>
+<tr><td><code>notifications</code> / <code>device_tokens</code></td><td>In-app notifications and push registration.</td></tr>
+<tr><td><code>platform_bans</code> / <code>signup_ip_blocks</code> / <code>audit_log</code></td><td>Platform moderation and an audit trail.</td></tr>
+<tr><td><code>bug_reports</code> / <code>mobile_waitlist</code> / <code>media_posts</code></td><td>Supporting product surfaces.</td></tr>
+</table>
+
+<h2>Conventions</h2>
+<ul>
+<li>Primary keys are <code>uuid</code> with <code>gen_random_uuid()</code>.</li>
+<li>Timestamps are <code>timestamptz</code>, defaulting to <code>now()</code>.</li>
+<li>Deletes cascade from the owning row — deleting a server removes its channels and messages.</li>
+<li>Columns are <code>snake_case</code>; TypeScript and Swift models map them explicitly.</li>
+</ul>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

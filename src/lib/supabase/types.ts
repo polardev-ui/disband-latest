@@ -15,6 +15,7 @@ export interface Profile {
   banner_url: string | null;
   accent_color: string | null;
   accent_color_2: string | null;
+  is_bot?: boolean;
   theme: ThemePreference;
   avatar_crop: { zoom: number; x: number; y: number } | null;
   show_owner_badge: boolean;
