@@ -19,4 +19,17 @@ export const PUBLIC_ENV = {
   /** Cloudflare Turnstile site key — website-only forms. */
   turnstileSiteKey:
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "0x4AAAAAADpTEU6IzBC_YVIF",
+
+  /**
+   * TURN relay for calls. Comma-separated urls, e.g.
+   * "turn:turn.example.com:3478,turns:turn.example.com:5349".
+   *
+   * STUN alone only works when at least one peer is directly reachable. Mobile
+   * networks are usually behind carrier-grade NAT, so a phone calling a desktop
+   * frequently has no viable candidate pair and the call connects with no audio
+   * in either direction. TURN relays the media and fixes exactly that case.
+   */
+  turnUrls: process.env.NEXT_PUBLIC_TURN_URLS ?? "",
+  turnUsername: process.env.NEXT_PUBLIC_TURN_USERNAME ?? "",
+  turnCredential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL ?? "",
 } as const;

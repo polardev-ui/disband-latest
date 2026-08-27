@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contributing · Disband Docs</title>
+<meta name="description" content="How to work on Disband without breaking things.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing" class="active">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Contributing</h1>
+<p class="lede">Conventions that matter in this codebase, mostly learned the hard way.</p>
+
+<h2>Before you start</h2>
+<ul>
+<li>Work on a branch and open a pull request into <code>main</code>.</li>
+<li>Run <code>pnpm build</code> and the TypeScript check before pushing.</li>
+<li>Match the surrounding code — naming, comment density and structure vary by area; follow the file you are in.</li>
+</ul>
+
+<h2>Database changes</h2>
+<ul>
+<li>Add a new numbered file in <code>supabase/migrations/</code>. Never edit an applied migration.</li>
+<li>Make migrations idempotent: <code>if not exists</code>, <code>create or replace</code>, <code>drop policy if exists</code>.</li>
+<li>Enable RLS on every new table and write policies in the same migration. A table without policies is either invisible or wide open.</li>
+<li>To tighten an existing rule, rewrite the policy. Adding another permissive policy widens access, because Postgres <code>OR</code>s them.</li>
+</ul>
+
+<h2>Security</h2>
+<ul>
+<li>Enforce authorization in RLS or a <code>security definer</code> function. Treat client-side checks as cosmetic.</li>
+<li>Guard the inputs of <code>security definer</code> functions — RLS no longer protects them.</li>
+<li>Keep <code>SUPABASE_SERVICE_ROLE_KEY</code> server-side, always.</li>
+</ul>
+
+<h2>iOS</h2>
+<ul>
+<li>Run <code>xcodegen generate</code> after adding or removing files; the <code>.xcodeproj</code> is generated and not committed.</li>
+<li>Retain <code>RealtimeSubscription</code> tokens returned by <code>onBroadcast</code> and <code>onPostgresChange</code>. Dropping one silently unregisters the callback.</li>
+<li>Prefer <code>.task(id:)</code> over <code>withObservationTracking</code> for lifecycle work. The latter fires once and re-registers asynchronously, so changes in the gap are lost.</li>
+</ul>
+
+<h2>Realtime</h2>
+<ul>
+<li>Set <code>ack: true</code> and check for <code>"ok"</code> before unsubscribing after a broadcast.</li>
+<li>Design signalling so crossed messages are survivable — treat <code>cancel</code> and <code>leave</code> as equivalent rather than binding each to one state.</li>
+</ul>
+
+<h2>Verifying</h2>
+<p>Prefer evidence over inference. When a change is visible, run the app and look at it; when it is a data change, query the database. Several bugs in this codebase looked like network problems and turned out to be a discarded callback token or a state flag reused for two meanings — reading the code alone would not have settled it.</p>
+
+<h2>Documentation</h2>
+<p>These pages are static HTML in <code>disband-docs/</code>, with no build step. Edit a file, open it in a browser. If you document something that is not built, label it <span class="badge badge-planned">Planned</span> and say so plainly — docs that describe imaginary features cost developers more time than missing docs.</p>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP endpoints · Disband Docs</title>
+<meta name="description" content="The HTTP route handlers Disband exposes.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api" class="active">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>HTTP endpoints</h1>
+<p class="lede">These are internal application routes, not a public API.</p>
+
+<div class="warn">
+<p>Every route below exists to serve Disband's own clients. They are authenticated by session cookie, are not versioned, and may change without notice. There is no API token scheme — see <a href="bots.html">Building a bot</a>.</p>
+</div>
+
+<h2>Billing</h2>
+<table>
+<tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+<tr><td><code>/api/stripe/create-checkout</code></td><td>POST</td><td>Creates an embedded Checkout session for <code>basic</code> or <code>super</code>. Promotion codes enabled.</td></tr>
+<tr><td><code>/api/stripe/portal</code></td><td>GET</td><td>Returns a Stripe billing portal URL.</td></tr>
+<tr><td><code>/api/stripe/sync</code></td><td>POST</td><td>Reconciles the caller's subscription directly from Stripe.</td></tr>
+<tr><td><code>/api/stripe/webhook</code></td><td>POST</td><td>Stripe events. Verifies the signature against <code>STRIPE_WEBHOOK_SECRET</code>.</td></tr>
+</table>
+
+<div class="note">
+<p><code>/api/stripe/sync</code> exists because a webhook is a single point of failure. If its URL or signing secret is wrong, a customer is charged and the app never learns about it. Reconciling on demand means a purchase applies even when the webhook never fires.</p>
+</div>
+
+<h2>Accounts and moderation</h2>
+<table>
+<tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+<tr><td><code>/api/auth/signup-check</code></td><td>POST</td><td>Signup abuse checks.</td></tr>
+<tr><td><code>/api/profile/check-username</code></td><td>GET</td><td>Username availability.</td></tr>
+<tr><td><code>/api/moderation/access</code></td><td>GET</td><td>Whether the caller may use moderation tools.</td></tr>
+<tr><td><code>/api/moderation/platform-ban</code></td><td>POST</td><td>Platform-wide ban. Staff only.</td></tr>
+<tr><td><code>/api/moderation/restrict</code></td><td>POST</td><td>Applies an account restriction. Staff only.</td></tr>
+</table>
+
+<h2>Utility</h2>
+<table>
+<tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+<tr><td><code>/api/link/preview</code></td><td>GET</td><td>Server-side link unfurling, so clients never fetch arbitrary URLs directly.</td></tr>
+<tr><td><code>/api/status</code></td><td>GET</td><td>Live service health.</td></tr>
+<tr><td><code>/api/releases</code></td><td>GET</td><td>Desktop release metadata.</td></tr>
+<tr><td><code>/api/bug-report</code></td><td>POST</td><td>Submits a bug report.</td></tr>
+<tr><td><code>/api/mobile-waitlist</code></td><td>POST</td><td>Mobile waitlist signup.</td></tr>
+</table>
+
+<h2>Reading data</h2>
+<p>There is deliberately no REST layer over the tables. Clients query Postgres through the Supabase SDK, and RLS decides what comes back:</p>
+
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>const { data, error } = await supabase
+  .from("messages")
+  .select("*, author:profiles(*)")
+  .eq("channel_id", channelId)
+  .order("created_at", { ascending: false })
+  .limit(50);</code></pre></div>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

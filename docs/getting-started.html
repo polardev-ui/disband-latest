@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running locally · Disband Docs</title>
+<meta name="description" content="Set up a local Disband development environment.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started" class="active">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Running locally</h1>
+<p class="lede">Getting the web client running against a Supabase project.</p>
+
+<h2>Requirements</h2>
+<table>
+<tr><th>Tool</th><th>Notes</th></tr>
+<tr><td>Node.js 20+</td><td>Next.js 16 requires a modern runtime.</td></tr>
+<tr><td>pnpm</td><td>The repo ships a <code>pnpm-lock.yaml</code>; other package managers will drift.</td></tr>
+<tr><td>Supabase project</td><td>Postgres, Auth, Realtime and Storage.</td></tr>
+<tr><td>Xcode 16+</td><td>iOS client only.</td></tr>
+</table>
+
+<h2>Install</h2>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>git clone https://github.com/polardev-ui/disband-latest.git
+cd disband-latest
+pnpm install</code></pre></div>
+
+<h2>Environment</h2>
+<p>Create <code>.env.local</code>. The app reads these at boot, so restart the dev server after editing.</p>
+
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code># Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://&lt;project&gt;.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=&lt;anon key&gt;
+SUPABASE_SERVICE_ROLE_KEY=&lt;service role key&gt;   # server-side only
+
+# Stripe (billing)
+STRIPE_SECRET_KEY=sk_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
+STRIPE_BASIC_PRICE_ID=price_...
+STRIPE_SUPER_PRICE_ID=price_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000</code></pre></div>
+
+<div class="danger">
+<p><strong>Never expose the service role key to the browser.</strong> It bypasses Row Level Security entirely. It must only appear in server-side code, and must never be prefixed <code>NEXT_PUBLIC_</code>.</p>
+</div>
+
+<div class="warn">
+<p>A common setup mistake is putting a <code>sk_live_…</code> secret key in <code>STRIPE_BASIC_PRICE_ID</code>. Price IDs always start with <code>price_</code>; checkout fails with an opaque error otherwise.</p>
+</div>
+
+<h2>Database</h2>
+<p>Migrations live in <code>supabase/migrations/</code> and are applied in filename order. They are written to be idempotent (<code>if not exists</code>, <code>create or replace</code>), but check what a migration does before running it against data you care about.</p>
+
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>supabase db push</code></pre></div>
+
+<h2>Run</h2>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>pnpm dev        # http://localhost:3000
+pnpm build      # production build
+pnpm lint</code></pre></div>
+
+<h2>iOS client</h2>
+<p>The Xcode project is <strong>generated</strong> from <code>project.yml</code> by XcodeGen and is not checked in. Regenerate it whenever files are added or removed, or Xcode will not see them:</p>
+
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>cd ios
+xcodegen generate
+open DisbandiOS.xcodeproj</code></pre></div>
+
+<div class="note">
+<p>Forgetting <code>xcodegen generate</code> after adding a Swift file produces confusing <code>cannot find &lt;Type&gt; in scope</code> errors for code that plainly exists on disk.</p>
+</div>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

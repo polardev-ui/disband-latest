@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { BotTag } from "@/components/ui/BotTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
@@ -83,6 +84,7 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
           style={color ? { color } : undefined}
         >
           <span className="truncate">{displayName(p)}</span>
+          <BotTag profile={p} size="sm" />
           <PlatformBadge profile={p} />
           {m.role === "owner" && (
             <Tooltip label="Owner" side="top" as="span">

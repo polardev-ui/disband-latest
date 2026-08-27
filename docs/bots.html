@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building a bot · Disband Docs</title>
+<meta name="description" content="How Disband bots are designed to work: self-hosted, invited to a server.">
+<meta name="theme-color" content="#0e1014">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f5f8">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar"><a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Disband logo"></span><span class="brand-text">Disband <em>Docs</em></span></a>
+<button class="search-trigger" data-search-open type="button">
+  <span>Search…</span><kbd>/</kbd>
+</button>
+<div class="nav-group">
+  <h4>Start here</h4>
+  <a href="index.html" data-p="index">Introduction</a>
+  <a href="getting-started.html" data-p="getting-started">Running locally</a>
+</div>
+<div class="nav-group">
+  <h4>Platform</h4>
+  <a href="architecture.html" data-p="architecture">Architecture</a>
+  <a href="data-model.html" data-p="data-model">Data model</a>
+  <a href="security.html" data-p="security">Security &amp; RLS</a>
+  <a href="realtime.html" data-p="realtime">Realtime</a>
+</div>
+<div class="nav-group">
+  <h4>Developers</h4>
+  <a href="api.html" data-p="api">HTTP endpoints</a>
+  <a href="bots.html" data-p="bots" class="active">Building a bot</a>
+  <a href="contributing.html" data-p="contributing">Contributing</a>
+</div>
+<div class="side-foot">Documentation &middot; v1.0.26</div>
+</nav>
+  <main class="content">
+
+<h1>Building a bot <span class="badge badge-planned">Planned</span></h1>
+<p class="lede">Disband bots are self-hosted. You run the bot yourself, and a server owner invites it — the same way they invite a person.</p>
+
+<div class="danger">
+<p><strong>This is not built yet.</strong> As of v1.0.26 there are no bot accounts, no bot tokens, no invite flow and no gateway. Nothing in the codebase implements them. This page is the intended design, written down so it can be reviewed and built — not an API you can call today.</p>
+</div>
+
+<h2>The model</h2>
+<table>
+<tr><th>Step</th><th>What happens</th></tr>
+<tr><td>1. Create</td><td>A developer registers a bot in Disband and receives a bot token. The token identifies the bot; it is not tied to a human account.</td></tr>
+<tr><td>2. Self-host</td><td>The developer runs the bot on their own machine or server. Disband does not host or execute bot code.</td></tr>
+<tr><td>3. Invite</td><td>A server owner opens the bot's invite link, sees the permissions it is asking for, and approves. The bot joins as a member.</td></tr>
+<tr><td>4. Operate</td><td>The bot connects to Disband with its token and acts only inside servers it was invited to, limited by the roles it was given.</td></tr>
+</table>
+
+<h3>Why self-hosted</h3>
+<p>Running bot code on Disband's infrastructure would mean executing untrusted programs next to user data. Self-hosting keeps that boundary clean: a bot is just a client holding a token, subject to the same permission checks as anyone else.</p>
+
+<h2>Credentials</h2>
+<div class="note">
+<p><strong>Bot developers never receive database credentials.</strong> A bot authenticates with its own token against Disband's API. It does not get Supabase project details, and it does not talk to Postgres directly. That boundary is the whole point — it means a bot's reach is defined by the permissions a server owner granted, and can be revoked by removing the bot.</p>
+</div>
+
+<div class="warn">
+<p>Worth being precise about one thing: the <em>anon key</em> shipped in Disband's own web and mobile clients is public by design — it is embedded in every build and grants nothing on its own, because Row Level Security decides what any request can actually read or write. It is not a secret, but it is also not a bot credential, and building an integration on it is not the supported path. See <a href="security.html">Security &amp; RLS</a>.</p>
+</div>
+
+<div class="danger">
+<p>The <strong>service role key</strong> is a different matter entirely. It bypasses RLS and grants full read and write access to every account and message on the instance. It must never be given to a bot, committed, or shipped to any client.</p>
+</div>
+
+<h2>Proposed shape</h2>
+<p>Everything below is illustrative. These endpoints do not exist.</p>
+
+<h3>Authenticating</h3>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>Authorization: Bot &lt;your-bot-token&gt;</code></pre></div>
+
+<h3>Receiving events</h3>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>// Illustrative only.
+import { Client } from "@disband/bot";           // not published
+
+const client = new Client({ token: process.env.DISBAND_BOT_TOKEN });
+
+client.on("messageCreate", async (message) =&gt; {
+  if (message.author.bot) return;
+  if (message.content !== "!ping") return;
+  await message.reply("pong");
+});
+
+await client.connect();</code></pre></div>
+
+<h3>Sending a message</h3>
+<div class="code-wrap"><button class="copy" type="button">Copy</button><pre><code>POST /api/v1/channels/:channelId/messages
+Authorization: Bot &lt;token&gt;
+Content-Type: application/json
+
+{ "content": "Deploy finished", "reply_to_id": null }</code></pre></div>
+
+<h3>Permissions</h3>
+<p>A bot's invite link declares the scopes it wants. The effective permission is the <em>intersection</em> of its requested scopes and the roles it holds in that server — a bot can never exceed what its roles allow.</p>
+
+<table>
+<tr><th>Scope</th><th>Allows</th></tr>
+<tr><td><code>messages.read</code></td><td>Receive messages in channels it can see.</td></tr>
+<tr><td><code>messages.write</code></td><td>Post and reply.</td></tr>
+<tr><td><code>members.read</code></td><td>Read the member list.</td></tr>
+<tr><td><code>channels.manage</code></td><td>Create and edit channels.</td></tr>
+</table>
+
+<h2>What still has to be designed</h2>
+<ul>
+<li>Token issuance, rotation and revocation, and what a leaked token exposes.</li>
+<li>Whether events arrive over a persistent gateway or webhooks.</li>
+<li>How bots appear in the UI — a <code>BOT</code> tag, and a members-list grouping.</li>
+<li>Slash command registration and dispatch.</li>
+<li>Rate limits, per token and per server.</li>
+<li>Audit and removal: a server owner must be able to see what a bot did and revoke it in one action.</li>
+</ul>
+
+<div class="note">
+<p>Want to help build it? The honest starting point is schema and RLS — a bot identity that sidesteps the permission model would be worse than having no bot API at all. See <a href="contributing.html">Contributing</a>.</p>
+</div>
+
+    <footer>
+      <p>Disband documentation · Community project. Docs describe Disband v1.0.26.</p>
+    </footer>
+  </main>
+</div>
+<div id="search-overlay">
+  <div class="search-box" role="dialog" aria-modal="true" aria-label="Search documentation">
+    <input id="search-input" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search">
+    <p id="search-status"></p>
+    <div id="search-results"></div>
+  </div>
+</div>
+<script src="assets/search.js" defer></script>
+</body>
+</html>

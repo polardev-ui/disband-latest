@@ -1,5 +1,6 @@
 import Foundation
 import Supabase
+import WebRTC
 
 /// Backend configuration. These mirror the public client-side values used by the
 /// web/desktop app (`src/lib/public-env.ts`) — the anon key is intentionally
@@ -15,6 +16,40 @@ enum AppConfig {
 
     /// Public web origin for shareable links / invites.
     static let webAppURL = URL(string: "https://www.disband.dev")!
+
+    // MARK: - Calls
+
+    /// TURN relay, mirroring NEXT_PUBLIC_TURN_* on the web.
+    ///
+    /// STUN alone cannot carry media. A phone is usually behind carrier-grade
+    /// NAT, so a mobile-to-desktop call often has no direct candidate pair and
+    /// connects with no audio in either direction. Leave empty to run without a
+    /// relay; calls between a phone and a desktop will be unreliable until it
+    /// is filled in.
+    static let turnURLs: [String] = []
+    static let turnUsername = ""
+    static let turnCredential = ""
+
+    /// STUN plus TURN when configured. Must match the web app's list, or the
+    /// two ends can gather candidates that never pair up.
+    static var iceServers: [RTCIceServer] {
+        var servers = [
+            RTCIceServer(urlStrings: [
+                "stun:stun.l.google.com:19302",
+                "stun:stun1.l.google.com:19302",
+            ])
+        ]
+        if !turnURLs.isEmpty {
+            servers.append(
+                RTCIceServer(
+                    urlStrings: turnURLs,
+                    username: turnUsername,
+                    credential: turnCredential
+                )
+            )
+        }
+        return servers
+    }
 }
 
 /// Process-wide shared Supabase client. Auth tokens are persisted in the

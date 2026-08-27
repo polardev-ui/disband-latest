@@ -22,6 +22,7 @@ import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { AccountRestrictionsPanel } from "@/components/discord/AccountRestrictionsPanel";
+import { BotsPanel } from "./settings/BotsPanel";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { useZoom, MIN_ZOOM, MAX_ZOOM } from "@/hooks/useZoom";
@@ -60,6 +61,7 @@ const TABS = [
   { id: "profile" as const, label: "Profile", group: "User Settings" },
   { id: "account" as const, label: "Account & Security", group: "User Settings" },
   { id: "subscriptions" as const, label: "Subscription", group: "User Settings" },
+  { id: "bots" as const, label: "Bots", group: "User Settings" },
   { id: "appearance" as const, label: "Appearance", group: "App Settings" },
   { id: "notifications" as const, label: "Notifications", group: "App Settings" },
   { id: "voice" as const, label: "Voice & Video", group: "App Settings" },
@@ -1067,6 +1069,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   )}
                 </div>
               )}
+
+              {tab === "bots" && <BotsPanel />}
 
               {tab === "textMedia" && (
                 <div className="space-y-4">

@@ -9,6 +9,7 @@ import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { playCallConnected, playCallEnd, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import { attachRemoteTrack, createOfferForPeer, setPeerVideoTrack } from "@/lib/webrtc";
+import { getIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -26,10 +27,8 @@ export interface GroupCallParticipant {
   joined_at?: string;
 }
 
-const ICE: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-];
+// Shared with 1:1 calls so both paths pick up TURN when it is configured.
+const ICE: RTCIceServer[] = getIceServers();
 
 export type GroupCallPhase = "idle" | "ringing" | "active";
 
