@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
+import { LaunchAnnouncement } from "@/components/announcements/LaunchAnnouncement";
 
 export const metadata: Metadata = {
   title: "Disband",
@@ -41,7 +42,11 @@ export default function RootLayout({
           `}
         </Script>
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Site-wide, every route. Renders nothing once dismissed. */}
+        <LaunchAnnouncement />
+      </body>
     </html>
   );
 }

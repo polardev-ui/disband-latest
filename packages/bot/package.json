@@ -1,0 +1,29 @@
+{
+  "name": "@disband/bot",
+  "version": "0.1.0",
+  "description": "Official JavaScript client for Disband bots.",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "disband",
+    "bot",
+    "chat"
+  ],
+  "license": "MIT"
+}
