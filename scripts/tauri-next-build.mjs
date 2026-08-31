@@ -9,7 +9,15 @@ import { dirname } from "node:path";
 const stashRoot = "src/.web-only-stash";
 const moves = [
   ["src/app/api", `${stashRoot}/app-api`],
-  ["middleware.ts", `${stashRoot}/middleware.ts`],
+  // The middleware moved under src/ at some point; the old root path silently
+  // matched nothing, so this never actually stashed anything. Next disables
+  // middleware during export anyway, so it was harmless — but a stale entry
+  // that quietly does nothing is worse than no entry.
+  ["src/middleware.ts", `${stashRoot}/middleware.ts`],
+  // Dynamic route with no generateStaticParams(), which `output: export`
+  // rejects outright. Approving a bot invite is a browser flow a server owner
+  // reaches from a link, so it has no place in the desktop bundle anyway.
+  ["src/app/bot-invite", `${stashRoot}/app-bot-invite`],
 ];
 
 function moveAside(from, to) {
