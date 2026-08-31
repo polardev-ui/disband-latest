@@ -1,6 +1,6 @@
 [package]
 name = "disband"
-version = "1.0.28"
+version = "1.0.27"
 description = "Disband — one codebase, every platform."
 authors = ["Disband"]
 edition = "2021"
@@ -17,7 +17,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
-tauri-plugin-notification = "2"
+# Pinned to the same minor as @tauri-apps/plugin-notification. Tauri refuses
+# to build when the crate and NPM package differ on major/minor, and a bare
+# "2" floats to each new minor while pnpm stays frozen to the lockfile.
+tauri-plugin-notification = "2.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Pin transitive `time` — 0.3.50 fails to compile against published time-macros 0.2.29.
