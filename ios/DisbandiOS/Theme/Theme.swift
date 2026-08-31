@@ -135,3 +135,14 @@ enum RelativeTime {
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 }
+
+extension Bundle {
+    /// "1.0 (12)" — read from the bundle so the in-app version can never drift
+    /// from what was actually shipped. It was hardcoded, and still read "0.4.4"
+    /// after the app moved to 1.0.
+    var appVersionDisplay: String {
+        let short = infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "\(short) (\(build))"
+    }
+}

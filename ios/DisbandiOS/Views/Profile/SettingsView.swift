@@ -40,7 +40,7 @@ struct SettingsView: View {
             }
 
             Section("About") {
-                LabeledContent("Version", value: "0.4.4")
+                LabeledContent("Version", value: Bundle.main.appVersionDisplay)
                 Link(destination: AppConfig.webAppURL) {
                     HStack { Text("Website"); Spacer(); Image(systemName: "arrow.up.right") }
                 }

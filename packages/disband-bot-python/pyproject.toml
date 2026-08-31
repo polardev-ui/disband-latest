@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "disband-bot"
+version = "0.1.0"
+description = "Official Python client for Disband bots. Self-hosted, token-authenticated, zero dependencies."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["disband", "bot", "chat", "messaging"]
+
+[tool.setuptools]
+packages = ["disband_bot"]
