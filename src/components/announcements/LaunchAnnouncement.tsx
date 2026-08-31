@@ -67,6 +67,10 @@ export function LaunchAnnouncement() {
   const [released, setReleased] = useState(false);
   const [visible, setVisible] = useState(false);
   const [left, setLeft] = useState<Remaining>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [email, setEmail] = useState("");
+  const [subscribeState, setSubscribeState] =
+    useState<"idle" | "sending" | "done">("idle");
+  const [subscribeError, setSubscribeError] = useState<string | null>(null);
 
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -94,6 +98,30 @@ export function LaunchAnnouncement() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [visible, released]);
+
+  const subscribe = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (subscribeState === "sending") return;
+    setSubscribeState("sending");
+    setSubscribeError(null);
+    try {
+      const res = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setSubscribeError(json.error ?? "Could not subscribe. Try again.");
+        setSubscribeState("idle");
+        return;
+      }
+      setSubscribeState("done");
+    } catch {
+      setSubscribeError("Network error. Try again.");
+      setSubscribeState("idle");
+    }
+  }, [email, subscribeState]);
 
   const dismiss = useCallback(() => {
     writeFlag(released ? DISMISS_RELEASED : DISMISS_COUNTDOWN);
@@ -178,13 +206,41 @@ export function LaunchAnnouncement() {
               Get it on the App Store
             </a>
           ) : (
-            <button
-              type="button"
-              onClick={dismiss}
-              className="mt-7 block w-full rounded-xl bg-brand py-3.5 text-[15px] font-bold text-white transition-opacity hover:opacity-90"
-            >
-              Can’t wait
-            </button>
+            <div className="mt-7">
+              {subscribeState === "done" ? (
+                <p className="rounded-xl border border-status-online/30 bg-status-online/10 px-4 py-3.5 text-[14px] font-medium text-status-online">
+                  You’re subscribed — we’ll email you at launch.
+                </p>
+              ) : (
+                <form onSubmit={subscribe} className="space-y-2.5">
+                  <label htmlFor="launch-email" className="sr-only">
+                    Email address
+                  </label>
+                  <input
+                    id="launch-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border border-divider bg-bg-tertiary px-4 py-3 text-[15px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+                  />
+                  <button
+                    type="submit"
+                    disabled={subscribeState === "sending"}
+                    className="block w-full rounded-xl bg-brand py-3.5 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {subscribeState === "sending" ? "Subscribing…" : "Subscribe for updates"}
+                  </button>
+                  {subscribeError && (
+                    <p className="text-[13px] text-status-dnd" role="alert">
+                      {subscribeError}
+                    </p>
+                  )}
+                </form>
+              )}
+            </div>
           )}
 
           <button
