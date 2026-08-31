@@ -22,9 +22,35 @@ export function getMobileWaitlistSegmentId(): string | null {
   );
 }
 
+/** Segment ID for the general Disband newsletter. */
+export function getNewsletterSegmentId(): string | null {
+  return (
+    process.env.RESEND_NEWSLETTER_SEGMENT_ID
+    ?? process.env.RESEND_NEWSLETTER_AUDIENCE_ID
+    ?? null
+  );
+}
+
 /** Create a global contact and add them to the mobile waitlist segment. */
 export async function addMobileWaitlistContact(email: string): Promise<ResendContactResult | null> {
-  const segmentId = getMobileWaitlistSegmentId();
+  return addContactToSegment(email, getMobileWaitlistSegmentId());
+}
+
+/** Create a global contact and add them to the newsletter segment. */
+export async function addNewsletterContact(email: string): Promise<ResendContactResult | null> {
+  return addContactToSegment(email, getNewsletterSegmentId());
+}
+
+/**
+ * Create a contact and place them on `segmentId`.
+ *
+ * Already-subscribed is treated as success: re-submitting an address should
+ * reassure the person, not error at them.
+ */
+export async function addContactToSegment(
+  email: string,
+  segmentId: string | null,
+): Promise<ResendContactResult | null> {
   if (!segmentId || !process.env.RESEND_API_KEY) return null;
 
   const res = await fetch(`${RESEND_API}/contacts`, {

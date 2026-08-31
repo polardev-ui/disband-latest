@@ -1,9 +1,15 @@
 packages:
   - "."
 
+# Both are legitimate native builds pulled in by Next.js. Left as the literal
+# placeholder text pnpm scaffolds, these were never valid and pnpm exited
+# non-zero on every install with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
-  esbuild: set this to true or false
-  sharp: set this to true or false
+  esbuild: true
+  sharp: true
+
+minimumReleaseAgeExclude:
+  - '@tauri-apps/plugin-notification@2.4.0'
 
 # pnpm 10+ reads project settings from here instead of the package.json "pnpm" field.
 # Allow sharp to run its build script (pulled in transitively by Next.js).
