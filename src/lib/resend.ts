@@ -23,12 +23,23 @@ export function getMobileWaitlistSegmentId(): string | null {
 }
 
 /** Segment ID for the general Disband newsletter. */
+/** Env var names accepted for the newsletter segment, in priority order. */
+export const NEWSLETTER_SEGMENT_ENV_NAMES = [
+  "RESEND_NEWSLETTER_SEGMENT_ID",
+  "RESEND_NEWSLETTER_AUDIENCE_ID",
+  // Resend renamed Audiences to Segments, and its dashboard/docs use the bare
+  // names, so both generic spellings are common in the wild. Accepting them
+  // costs nothing and avoids a silent 503 from a near-miss variable name.
+  "RESEND_SEGMENT_ID",
+  "RESEND_AUDIENCE_ID",
+] as const;
+
 export function getNewsletterSegmentId(): string | null {
-  return (
-    process.env.RESEND_NEWSLETTER_SEGMENT_ID
-    ?? process.env.RESEND_NEWSLETTER_AUDIENCE_ID
-    ?? null
-  );
+  for (const name of NEWSLETTER_SEGMENT_ENV_NAMES) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return null;
 }
 
 /** Create a global contact and add them to the mobile waitlist segment. */
