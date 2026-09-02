@@ -34,7 +34,7 @@ const attachments = [];
 
 if (inline) {
   // Point the tag at the attachment instead of the network.
-  html = html.replace("https://disband.wsgpolar.me/disband.png", "cid:disband-logo");
+  html = html.replace("https://www.disband.dev/logo.png", "cid:disband-logo");
   attachments.push({
     filename: "disband.png",
     content: readFileSync(new URL("./assets/disband.png", import.meta.url)).toString("base64"),
