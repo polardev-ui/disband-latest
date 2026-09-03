@@ -25,9 +25,25 @@ final class AppState {
 
     private let client = SupabaseManager.client
     private var authTask: Task<Void, Never>?
+    private var loadingWatchdog: Task<Void, Never>?
 
     init() {
         observeAuth()
+        startLoadingWatchdog()
+    }
+
+    /// `phase` starts at `.loading` and only advances when `authStateChanges`
+    /// emits. If that stream never produces an event — a Keychain read that
+    /// fails outright, or the stream finishing early — the app used to sit on
+    /// the launch spinner forever with no way out. After a short grace period,
+    /// fall back to the sign-in screen: worst case the user signs in again,
+    /// which is strictly better than a dead launch.
+    private func startLoadingWatchdog() {
+        loadingWatchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard let self, !Task.isCancelled, self.phase == .loading else { return }
+            self.phase = .signedOut
+        }
     }
 
 
@@ -35,6 +51,7 @@ final class AppState {
         authTask = Task { [weak self] in
             guard let self else { return }
             for await change in client.auth.authStateChanges {
+                self.loadingWatchdog?.cancel()
                 switch change.event {
                 case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
                     await self.handleSession(change.session)
@@ -148,11 +165,18 @@ final class AppState {
     }
 
 
+    /// Keyboard autocomplete and paste routinely add a trailing space or an
+    /// uppercase first letter. Sent as-is, both come back as "Invalid login
+    /// credentials" for a perfectly correct password.
+    private func normalise(_ email: String) -> String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     func signIn(email: String, password: String) async {
         authError = nil
         authNotice = nil
         do {
-            _ = try await client.auth.signIn(email: email, password: password)
+            _ = try await client.auth.signIn(email: normalise(email), password: password)
         } catch {
             authError = friendlyAuthError(error)
         }
@@ -162,7 +186,18 @@ final class AppState {
         authError = nil
         authNotice = nil
         do {
-            let response = try await client.auth.signUp(email: email, password: password)
+            let response = try await client.auth.signUp(email: normalise(email), password: password)
+
+            // With user-enumeration protection on, signing up with an address
+            // that already exists is NOT an error: Supabase returns a stub user
+            // with no identities and no session. Telling that user to check
+            // their email is a dead end — no email is ever sent — which is how
+            // "I created the account but nothing happened" happened.
+            if response.user.identities?.isEmpty == true {
+                authError = "That email is already registered. Log in instead, or reset your password."
+                return
+            }
+
             if response.session == nil {
                 authNotice = "Check \(email) for a confirmation link to finish setting up your account."
             }
@@ -175,7 +210,7 @@ final class AppState {
         authError = nil
         authNotice = nil
         do {
-            try await client.auth.resetPasswordForEmail(email)
+            try await client.auth.resetPasswordForEmail(normalise(email))
             authNotice = "Password reset email sent."
         } catch {
             authError = friendlyAuthError(error)

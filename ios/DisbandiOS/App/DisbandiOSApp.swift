@@ -8,6 +8,7 @@ struct DisbandiOSApp: App {
     @State private var dmUnread: DmUnreadStore
     @State private var subscriptions: SubscriptionService
     @State private var notes: NotesService
+    @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
 
     init() {
@@ -19,6 +20,7 @@ struct DisbandiOSApp: App {
         _dmUnread = State(initialValue: DmUnreadStore())
         _subscriptions = State(initialValue: SubscriptionService())
         _notes = State(initialValue: NotesService())
+        _directMessages = State(initialValue: DirectMessagesViewModel())
         _themeManager = State(initialValue: ThemeManager.shared)
     }
 
@@ -30,6 +32,7 @@ struct DisbandiOSApp: App {
                 .environment(dmUnread)
                 .environment(subscriptions)
                 .environment(notes)
+                .environment(directMessages)
                 .environment(themeManager)
                 .preferredColorScheme(themeManager.palette.colorScheme)
                 .tint(themeManager.palette.accent)
@@ -38,6 +41,18 @@ struct DisbandiOSApp: App {
                 }
                 .task(id: appState.currentUserId) {
                     await call.start(userId: appState.currentUserId)
+                    // Relay credentials in hand before the first call, not
+                    // during the dial.
+                    if appState.currentUserId != nil { await TurnService.shared.prewarm() }
+                }
+                // Warm the Messages tab while the user is still looking at
+                // whatever they opened first. A TabView builds a tab's content
+                // lazily, so this work used to start on the tap that opened the
+                // tab — which is exactly when it is most visible.
+                .task(id: appState.currentUserId) {
+                    guard appState.currentUserId != nil else { return }
+                    await directMessages.start(currentUserId: appState.currentUserId,
+                                               unread: dmUnread)
                 }
                 .onChange(of: appState.profile?.theme) { _, _ in
                     themeManager.adopt(from: appState.profile)

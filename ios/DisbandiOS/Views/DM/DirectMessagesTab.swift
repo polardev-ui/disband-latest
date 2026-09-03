@@ -3,7 +3,9 @@ import SwiftUI
 struct DirectMessagesTab: View {
     @Environment(AppState.self) private var app
     @Environment(DmUnreadStore.self) private var unreadStore
-    @State private var vm = DirectMessagesViewModel()
+    // Shared with the app, which starts loading at sign-in rather than when
+    // this tab is first opened.
+    @Environment(DirectMessagesViewModel.self) private var vm
 
     var body: some View {
         NavigationStack {
@@ -19,6 +21,8 @@ struct DirectMessagesTab: View {
                     }
                 }
                 .task {
+                    // Usually a no-op by the time the tab is opened: `start`
+                    // is idempotent and repaints from what is already loaded.
                     await vm.start(currentUserId: app.currentUserId, unread: unreadStore)
                 }
         }

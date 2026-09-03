@@ -63,8 +63,19 @@ struct AnimatedImageView: UIViewRepresentable {
     let image: UIImage
     var contentMode: UIView.ContentMode = .scaleAspectFit
 
+    /// A `UIImageView` reports the image's pixel dimensions as its intrinsic
+    /// content size, and SwiftUI takes a representable at its word: a 1024pt
+    /// avatar made every ancestor 1024pt wide. Layout priorities do not help,
+    /// because they rank constraints rather than removing the intrinsic size —
+    /// only refusing to report one does.
+    final class SizeAgnosticImageView: UIImageView {
+        override var intrinsicContentSize: CGSize {
+            CGSize(width: UIView.noIntrinsicMetric, height: UIView.noIntrinsicMetric)
+        }
+    }
+
     func makeUIView(context: Context) -> UIImageView {
-        let view = UIImageView(image: image)
+        let view = SizeAgnosticImageView(image: image)
         view.contentMode = contentMode
         view.clipsToBounds = true
         // Let the surrounding SwiftUI frame drive the size rather than the
@@ -75,6 +86,19 @@ struct AnimatedImageView: UIViewRepresentable {
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         view.startAnimating()
         return view
+    }
+
+    /// Take the size SwiftUI proposes rather than the image's own. Without
+    /// this an unspecified proposal falls back to the intrinsic size, which is
+    /// exactly the case that broke the call screen: an animated avatar behind
+    /// the blur sized the whole layer to the source image, so the ZStack grew
+    /// past the screen and everything centred in it — the caller's name, the
+    /// call controls — was pushed off to the right and clipped.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIImageView, context: Context) -> CGSize? {
+        // Fall back to the image's own size only when nothing is proposed at
+        // all. Defaulting to SwiftUI's 10x10 would shrink a GIF that sits in a
+        // `maxWidth` frame down to nothing.
+        proposal.replacingUnspecifiedDimensions(by: image.size)
     }
 
     func updateUIView(_ view: UIImageView, context: Context) {

@@ -93,7 +93,12 @@ struct MessageRow: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
-        .padding(.top, grouped ? 1 : 8)
+        // Grouped rows are the same author continuing, so they stay tight — a
+        // run of messages from one person should read as one block. A
+        // non-grouped row is where the avatar and name reappear, i.e. the
+        // speaker changed, and that boundary gets more room so the
+        // conversation is easier to scan. iOS only; web/desktop is unchanged.
+        .padding(.top, grouped ? 1 : 18)
         .contentShape(Rectangle())
     }
 
