@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
+import { apiFetch } from "@/lib/api";
 
 interface RestrictionRow {
   user_id: string;
@@ -46,7 +47,7 @@ export function AccountRestrictionsPanel() {
     const { data: { session } } = await getSupabaseClient().auth.getSession();
     if (!session) return;
     try {
-      const res = await fetch("/api/moderation/restrict", {
+      const res = await apiFetch("/api/moderation/restrict", {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) return;
@@ -111,7 +112,7 @@ export function AccountRestrictionsPanel() {
     try {
       const { data: { session } } = await getSupabaseClient().auth.getSession();
       if (!session) { setError("Not authenticated"); return; }
-      const res = await fetch("/api/moderation/restrict", {
+      const res = await apiFetch("/api/moderation/restrict", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: "apply", userId: selected.id, restriction }),
@@ -131,7 +132,7 @@ export function AccountRestrictionsPanel() {
     try {
       const { data: { session } } = await getSupabaseClient().auth.getSession();
       if (!session) { setError("Not authenticated"); return; }
-      const res = await fetch("/api/moderation/restrict", {
+      const res = await apiFetch("/api/moderation/restrict", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: "remove", userId, restriction }),

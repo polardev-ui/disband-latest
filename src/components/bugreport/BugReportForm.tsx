@@ -5,6 +5,7 @@ import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { BUG_REPORT_EMAIL, BUG_REPORT_LIMITS } from "@/lib/bug-reports";
 import { IconBounty, IconClose, IconUpload } from "@/components/icons";
+import { apiFetch } from "@/lib/api";
 
 interface AttachmentDraft {
   id: string;
@@ -100,7 +101,7 @@ export function BugReportForm() {
           .filter((a) => a.url && !a.error)
           .map((a) => ({ url: a.url!, name: a.name, type: a.type })),
       };
-      const res = await fetch("/api/bug-report", {
+      const res = await apiFetch("/api/bug-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -11,25 +11,26 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from importlib.machinery import SourceFileLoader
 mod = SourceFileLoader("shots", str(Path(__file__).resolve().parent / "build-appstore-shots.py")).load_module()
+import device as device_mod
 
 W, H = 880, 720
 SRC = Path(__file__).resolve().parent / "source-captures"
 OUT = Path(__file__).resolve().parent.parent / "public" / "marketing"
 
 
-def phone(name, width, radius_scale=0.085):
+def phone(name, width):
+    """Shared device renderer, so the email and the App Store panels show the
+    same hardware rather than two different mockups."""
     shot = Image.open(SRC / name).convert("RGB")
     h = round(shot.height * width / shot.width)
     shot = shot.resize((width, h), Image.LANCZOS)
-    dev = mod.rounded(shot, int(width * radius_scale))
-    bez = max(6, width // 40)
-    frame = Image.new("RGBA", (width + bez * 2, h + bez * 2), (0, 0, 0, 0))
-    ImageDraw.Draw(frame).rounded_rectangle(
-        [0, 0, frame.size[0] - 1, frame.size[1] - 1],
-        radius=int(width * radius_scale) + bez, fill=(24, 26, 32, 255),
-        outline=(74, 80, 96, 255), width=2)
-    frame.alpha_composite(dev, (bez, bez))
-    return frame
+    scale = width / 840
+    return device_mod.render(
+        shot,
+        rail=max(4, round(11 * scale * 2)),
+        bezel=max(3, round(9 * scale * 2)),
+        buttons=width > 240,
+    )
 
 
 def shadow_for(img, blur, alpha):
@@ -50,7 +51,7 @@ def main():
     # chat or profile view drags Apple's trademark into our marketing.
     left = phone("05-notes.png", 250)
     right = phone("06-appearance.png", 250)
-    centre = phone("02-channels.png", 310)
+    centre = phone("01-servers.png", 310)
 
     # Side phones sit lower and behind, so the centre one reads as nearest.
     placements = [

@@ -47,6 +47,7 @@ import {
   replaceReactionsForContext,
   trimToLatestWindow,
 } from "@/lib/message-pagination";
+import { apiFetch } from "@/lib/api";
 import type {
   AppNotification,
   Channel,
@@ -1225,7 +1226,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const res = await fetch("/api/moderation/access", {
+      const res = await apiFetch("/api/moderation/access", {
         headers: { Authorization: `Bearer ${s.access_token}` },
       });
       if (!res.ok) {
@@ -1937,7 +1938,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
 
     try {
-      const checkRes = await fetch("/api/auth/signup-check", {
+      const checkRes = await apiFetch("/api/auth/signup-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), username: normalized }),
@@ -2678,7 +2679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: { session: s } } = await getSupabaseClient().auth.getSession();
     if (!s) return "Not signed in";
     try {
-      const res = await fetch("/api/moderation/platform-ban", {
+      const res = await apiFetch("/api/moderation/platform-ban", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.access_token}` },
         body: JSON.stringify({ action: "ban", ...opts }),
@@ -2695,7 +2696,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: { session: s } } = await getSupabaseClient().auth.getSession();
     if (!s) return "Not signed in";
     try {
-      const res = await fetch("/api/moderation/platform-ban", {
+      const res = await apiFetch("/api/moderation/platform-ban", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.access_token}` },
         body: JSON.stringify({ action: "unban", ...opts }),

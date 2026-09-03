@@ -11,6 +11,8 @@ struct DisbandiOSApp: App {
     @State private var themeManager: ThemeManager
 
     init() {
+        CallAudioSession.prepare()
+
         let appState = AppState()
         _appState = State(initialValue: appState)
         _call = State(initialValue: CallManager(app: appState))
@@ -31,8 +33,6 @@ struct DisbandiOSApp: App {
                 .environment(themeManager)
                 .preferredColorScheme(themeManager.palette.colorScheme)
                 .tint(themeManager.palette.accent)
-                // Follows sign-in/sign-out so perks bought on the web apply
-                // here without a restart.
                 .task(id: appState.currentUserId) {
                     await subscriptions.start(userId: appState.currentUserId)
                 }

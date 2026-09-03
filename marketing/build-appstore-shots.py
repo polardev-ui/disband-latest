@@ -14,6 +14,10 @@ import math
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import device as device_mod
+
 W, H = 1320, 2868                      # App Store 6.9" portrait
 SRC = Path(__file__).resolve().parent / "source-captures"
 OUT = Path(__file__).resolve().parent / "appstore"
@@ -27,10 +31,9 @@ ACCENT = (235, 69, 158)
 
 def font(size: int, weight: int = 700) -> ImageFont.FreeTypeFont:
     f = ImageFont.truetype(BOLD, size)
-    try:
-        f.set_variation_by_axes([weight])
-    except Exception:
-        pass
+    # SFNS axes are (Width, Optical Size, GRAD, Weight); passing one value sets
+    # Width, which stretched every headline and left it at regular weight.
+    f.set_variation_by_axes([100, min(96, max(17, size / 3)), 400, weight])
     return f
 
 
@@ -85,17 +88,26 @@ def perspective_coeffs(src, dst):
     return np.linalg.solve(A, B).reshape(8)
 
 
-def tilt(img: Image.Image, amount: float, canvas):
+def tilt(img: Image.Image, amount: float):
     """Rotate the phone slightly in 3D: the far edge is shortened and inset,
-    which reads as depth without an actual 3D renderer."""
+    which reads as depth without an actual 3D renderer.
+
+    Every destination corner stays inside the output canvas. The previous
+    version placed the far edge at `x = w * amount`, which is negative for a
+    right-leaning tilt, so that whole side of the phone fell outside the image
+    and the body was sliced off flat down its left edge.
+    """
     w, h = img.size
-    cw, ch = canvas
-    shift = int(w * amount)
-    squeeze = int(h * amount * 0.30)
+    shift = abs(amount) * w
+    squeeze = abs(amount) * h * 0.30
     src = [(0, 0), (w, 0), (w, h), (0, h)]
-    dst = [(shift, squeeze), (cw - 1, 0), (cw - 1, ch - 1), (shift, ch - 1 - squeeze)]
+    if amount >= 0:
+        # Far edge on the left: inset and vertically shortened.
+        dst = [(shift, squeeze), (w, 0), (w, h), (shift, h - squeeze)]
+    else:
+        dst = [(0, 0), (w - shift, squeeze), (w - shift, h - squeeze), (0, h)]
     coeffs = perspective_coeffs(src, dst)
-    return img.transform((cw, ch), Image.PERSPECTIVE, coeffs, Image.BICUBIC)
+    return img.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BICUBIC)
 
 
 def wrap(draw, text, fnt, max_w):
@@ -188,34 +200,27 @@ def build(panel, index):
 
     # --- device -----------------------------------------------------------
     shot = Image.open(SRC / panel["shot"]).convert("RGB")
-    target_w = int(W * 0.70)
+
+    # Fit to whatever vertical room the copy left, so a longer headline shrinks
+    # the device rather than pushing it off the canvas.
+    top = y + 92
+    # Leave real breathing room below: the device was running off the canvas.
+    avail_h = H - top - 112
+    rail, bezel = 5, 4
+    target_w = int(W * 0.74)
     target_h = round(shot.height * target_w / shot.width)
+    if target_h + (rail + bezel) * 2 > avail_h:
+        target_h = avail_h - (rail + bezel) * 2
+        target_w = round(shot.width * target_h / shot.height)
     shot = shot.resize((target_w, target_h), Image.LANCZOS)
 
-    radius = int(target_w * 0.085)
-    device = rounded(shot, radius)
-
-    # Bezel: a rim slightly larger than the screen, so the screenshot reads as
-    # hardware rather than a floating rectangle.
-    bez = 16
-    frame = Image.new("RGBA", (target_w + bez * 2, target_h + bez * 2), (0, 0, 0, 0))
-    ImageDraw.Draw(frame).rounded_rectangle(
-        [0, 0, frame.size[0] - 1, frame.size[1] - 1],
-        radius=radius + bez, fill=(26, 28, 34, 255), outline=(78, 84, 100, 255), width=3)
-    frame.alpha_composite(device, (bez, bez))
-
-    tilted = tilt(frame, panel["tilt"], (frame.size[0] + int(frame.size[0] * 0.10), frame.size[1]))
-
-    # Contact shadow, offset and blurred so the device sits on the background.
-    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    sil = Image.new("RGBA", tilted.size, (0, 0, 0, 210))
-    sil.putalpha(tilted.split()[3].point(lambda v: int(v * 0.85)))
+    frame = device_mod.render(shot, rail=rail, bezel=bezel)
+    tilted = tilt(frame, panel["tilt"])
 
     dx = (W - tilted.size[0]) // 2
-    dy = y + 96
-    shadow.alpha_composite(sil, (dx + 6, dy + 40))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(46))
-    canvas = Image.alpha_composite(canvas, shadow)
+    dy = top
+
+    canvas = Image.alpha_composite(canvas, device_mod.drop_shadow(tilted, canvas.size, (dx, dy)))
 
     # Rim light behind the device picks the panel hue back up.
     rim_t, rim_m = radial_glow((W, H), (W // 2, dy + tilted.size[1] // 2),

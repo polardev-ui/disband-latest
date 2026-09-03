@@ -3,10 +3,26 @@ import { getStripe } from "@/lib/stripe";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type Stripe from "stripe";
 
-interface SubscriptionFields {
-  current_period_start: number;
-  current_period_end: number;
-  canceled_at: number | null;
+function toISOStringSafe(timestamp: number | null | undefined): string | null {
+  if (!timestamp || typeof timestamp !== "number") return null;
+  const date = new Date(timestamp * 1000);
+  return isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function extractSubscriptionPeriods(sub: Stripe.Subscription) {
+  const item = sub.items?.data?.[0];
+  
+  // Extract period start & end from items[0] or top-level fallback
+  const startTimestamp = item?.current_period_start ?? (sub as unknown as { current_period_start?: number }).current_period_start;
+  const endTimestamp = item?.current_period_end ?? (sub as unknown as { current_period_end?: number }).current_period_end;
+  
+  const canceledAtTimestamp = sub.canceled_at ?? (sub as unknown as { canceled_at?: number }).canceled_at;
+
+  return {
+    periodStart: toISOStringSafe(startTimestamp) ?? new Date().toISOString(),
+    periodEnd: toISOStringSafe(endTimestamp) ?? new Date().toISOString(),
+    canceledAt: toISOStringSafe(canceledAtTimestamp),
+  };
 }
 
 async function upsertSubscription(
@@ -15,9 +31,9 @@ async function upsertSubscription(
   status: string,
   subscriptionId: string,
   customerId: string,
-  periodStart: number,
-  periodEnd: number,
-  canceledAt: number | null,
+  periodStartISO: string,
+  periodEndISO: string,
+  canceledAtISO: string | null,
 ) {
   const supabase = getServiceSupabase();
   if (!supabase) return;
@@ -28,9 +44,9 @@ async function upsertSubscription(
       status,
       stripe_subscription_id: subscriptionId,
       stripe_customer_id: customerId,
-      current_period_start: new Date(periodStart * 1000).toISOString(),
-      current_period_end: new Date(periodEnd * 1000).toISOString(),
-      canceled_at: canceledAt ? new Date(canceledAt * 1000).toISOString() : null,
+      current_period_start: periodStartISO,
+      current_period_end: periodEndISO,
+      canceled_at: canceledAtISO,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
@@ -46,12 +62,8 @@ async function cancelSubscription(subscriptionId: string) {
     .eq("stripe_subscription_id", subscriptionId);
 }
 
-function getSubFields(sub: Stripe.Subscription): SubscriptionFields {
-  return sub as unknown as SubscriptionFields;
-}
-
 function getMetadata(sub: Stripe.Subscription): Record<string, string> {
-  return (sub as unknown as { metadata: Record<string, string> }).metadata ?? {};
+  return sub.metadata ?? {};
 }
 
 export async function POST(req: Request) {
@@ -65,7 +77,12 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = getStripe().webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch {
+  } catch (err) {
+    console.error(
+      "Stripe webhook signature verification failed. Check that " +
+        "STRIPE_WEBHOOK_SECRET matches this endpoint's signing secret.",
+      err instanceof Error ? err.message : err,
+    );
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -80,16 +97,16 @@ export async function POST(req: Request) {
 
         if (userId && plan && subId) {
           const sub = await getStripe().subscriptions.retrieve(subId);
-          const fields = getSubFields(sub);
+          const periods = extractSubscriptionPeriods(sub);
           await upsertSubscription(
             userId,
             plan,
             sub.status,
             subId,
             customerId,
-            fields.current_period_start,
-            fields.current_period_end,
-            fields.canceled_at,
+            periods.periodStart,
+            periods.periodEnd,
+            periods.canceledAt,
           );
         }
         break;
@@ -104,16 +121,16 @@ export async function POST(req: Request) {
           const userId = meta.user_id;
           const plan = meta.plan as "basic" | "super" | undefined;
           if (userId && plan) {
-            const fields = getSubFields(sub);
+            const periods = extractSubscriptionPeriods(sub);
             await upsertSubscription(
               userId,
               plan,
               sub.status,
               invSubId,
               sub.customer as string,
-              fields.current_period_start,
-              fields.current_period_end,
-              fields.canceled_at,
+              periods.periodStart,
+              periods.periodEnd,
+              periods.canceledAt,
             );
           }
         }
@@ -129,16 +146,16 @@ export async function POST(req: Request) {
         if (updatedSub.status === "canceled" || updatedSub.status === "unpaid" || updatedSub.status === "incomplete_expired") {
           await cancelSubscription(updatedSub.id);
         } else if (userId2 && plan2) {
-          const fields = getSubFields(updatedSub);
+          const periods = extractSubscriptionPeriods(updatedSub);
           await upsertSubscription(
             userId2,
             plan2,
             updatedSub.status,
             updatedSub.id,
             updatedSub.customer as string,
-            fields.current_period_start,
-            fields.current_period_end,
-            fields.canceled_at,
+            periods.periodStart,
+            periods.periodEnd,
+            periods.canceledAt,
           );
         }
         break;

@@ -71,6 +71,8 @@ final class NotesService {
     private var hasLoadedOnce = false
     private var channel: RealtimeChannelV2?
     private var watchTask: Task<Void, Never>?
+    private var changeChannel: RealtimeChannelV2?
+    private var changeTask: Task<Void, Never>?
     private var userId: String?
 
     private var client: SupabaseClient { SupabaseManager.client }
@@ -94,9 +96,16 @@ final class NotesService {
     func stop() {
         watchTask?.cancel()
         watchTask = nil
+        changeTask?.cancel()
+        changeTask = nil
         let ch = channel
+        let changes = changeChannel
         channel = nil
-        Task { await ch?.unsubscribe() }
+        changeChannel = nil
+        Task {
+            await ch?.unsubscribe()
+            await changes?.unsubscribe()
+        }
     }
 
     func load() async {
@@ -227,6 +236,65 @@ final class NotesService {
                     self.notes.insert(note, at: 0)
                 }
             }
+        }
+
+        // Inserts alone are not enough: deleting, editing or pinning a note on
+        // the desktop produced no event here, so the phone kept showing notes
+        // that no longer existed. Any change triggers a reconcile against the
+        // server.
+        let (anyChannel, anyStream) = await RealtimeService.observeChanges(
+            table: "notes",
+            filter: "user_id=eq.\(userId)"
+        )
+        changeChannel = anyChannel
+        changeTask = Task { [weak self] in
+            for await _ in anyStream {
+                await self?.reconcile()
+            }
+        }
+    }
+
+    /// Re-read the newest page and bring local state in line with it.
+    ///
+    /// Deletions are only applied within the window the fetch actually covers —
+    /// an older note that simply falls outside the page must not be mistaken
+    /// for one that was deleted.
+    private func reconcile() async {
+        guard let userId else { return }
+        do {
+            let rows: [Note] = try await client
+                .from("notes")
+                .select("*")
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .limit(Self.pageSize)
+                .execute().value
+
+            let serverIds = Set(rows.map(\.id))
+            let windowFloor = rows.count == Self.pageSize ? rows.last?.createdAt : nil
+
+            var merged = notes.filter { note in
+                if serverIds.contains(note.id) { return true }
+                // Outside the fetched window — keep it, we cannot tell.
+                if let floor = windowFloor, let created = note.createdAt, created < floor {
+                    return true
+                }
+                return false
+            }
+
+            // Apply server values for rows we still hold, and add anything new.
+            for row in rows {
+                if let idx = merged.firstIndex(where: { $0.id == row.id }) {
+                    merged[idx] = row
+                } else {
+                    merged.append(row)
+                }
+            }
+            merged.sort { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+            notes = merged
+        } catch {
+            // A failed reconcile should not surface as a user-facing error;
+            // the next change (or a manual refresh) will try again.
         }
     }
 

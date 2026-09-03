@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
+import { apiFetch } from "@/lib/api";
 
 interface PlatformBanRow {
   user_id: string;
@@ -34,7 +35,7 @@ export function PlatformModerationPanel() {
     const { data: { session } } = await getSupabaseClient().auth.getSession();
     if (!session) return;
     try {
-      const res = await fetch("/api/moderation/platform-ban", {
+      const res = await apiFetch("/api/moderation/platform-ban", {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) return;

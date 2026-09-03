@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 /**
  * Site-wide iOS launch announcement.
@@ -105,7 +106,7 @@ export function LaunchAnnouncement() {
     setSubscribeState("sending");
     setSubscribeError(null);
     try {
-      const res = await fetch("/api/newsletter/subscribe", {
+      const res = await apiFetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
