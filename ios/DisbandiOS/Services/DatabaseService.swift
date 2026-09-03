@@ -58,6 +58,33 @@ enum DatabaseService {
             .execute().value
     }
 
+    /// Public preview of a server behind an invite code, for the join card.
+    /// Readable without being a member, which is the whole point of an invite.
+    static func serverByInvite(code: String) async throws -> InvitePreview? {
+        let rows: [InvitePreview] = try await client
+            .rpc("get_server_by_invite", params: ["p_code": code])
+            .execute().value
+        return rows.first
+    }
+
+    struct InvitePreview: Codable, Sendable, Identifiable {
+        let id: String
+        let name: String
+        let description: String?
+        let iconUrl: String?
+        let bannerUrl: String?
+        let inviteCode: String?
+        let memberCount: Int
+
+        enum CodingKeys: String, CodingKey {
+            case id, name, description
+            case iconUrl = "icon_url"
+            case bannerUrl = "banner_url"
+            case inviteCode = "invite_code"
+            case memberCount = "member_count"
+        }
+    }
+
     @discardableResult
     static func joinServer(invite: String) async throws -> String {
         try await client.rpc("join_server_by_invite", params: ["p_code": invite])

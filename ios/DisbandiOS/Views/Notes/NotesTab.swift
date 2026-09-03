@@ -158,6 +158,18 @@ struct NotesTab: View {
             .padding(.vertical, 10)
         }
         .background(Brand.surfaceRaised)
+        // Swiping down on the input bar dismisses the keyboard — otherwise a
+        // note half-typed leaves the keyboard up with no obvious way to get out.
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    if value.translation.height > 30 {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil)
+                    }
+                }
+        )
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task { await upload(item) }
@@ -247,6 +259,18 @@ private struct EditNoteSheet: View {
                     .background(Brand.surface, in: .rect(cornerRadius: 12))
                     .foregroundStyle(Brand.textPrimary)
                     .frame(maxHeight: .infinity)
+                    // Swiping down dismisses the keyboard so you can get back to
+                    // the note list without hunting for a done key.
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 12)
+                            .onEnded { value in
+                                if value.translation.height > 30 {
+                                    UIApplication.shared.sendAction(
+                                        #selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+                                }
+                            }
+                    )
             }
             .padding()
             .background(Brand.background)

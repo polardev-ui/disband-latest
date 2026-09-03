@@ -16,7 +16,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 export type CallPhase = "idle" | "outgoing" | "incoming" | "active";
 
 interface CallSignal {
-  type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave";
+  type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave" | "handled";
   from: string;
   to?: string;
   callId?: string;
@@ -377,6 +377,8 @@ export function useCallManager(
     playCallConnected();
     try {
       await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
+      // Stop this account's other sessions ringing.
+      void sendToUser(userId, { type: "handled", from: userId, to: userId, callId: incoming.callId });
       await setupRtc(incoming.callId, incoming.fromId, false);
     } catch {
       // setupRtc already sets error and resets
@@ -393,6 +395,8 @@ export function useCallManager(
       callId: incoming.callId,
       rejecterName: displayName(profile),
     });
+    // Declining on one device dismisses the ring on the rest of them.
+    void sendToUser(userId, { type: "handled", from: userId, to: userId, callId: incoming.callId });
     setIncoming(null);
     setPhase("idle");
   }, [incoming, userId, profile, sendToUser]);
@@ -421,6 +425,21 @@ export function useCallManager(
 
     ch.on("broadcast", { event: "call" }, ({ payload }) => {
       const p = payload as CallSignal;
+
+      // "handled" is the one signal a user sends to themselves: a ring goes to
+      // `call-user:<id>`, so every session that account is signed into rings,
+      // and the accept goes only to the caller. Without this the other
+      // sessions keep ringing after the call has already been picked up
+      // somewhere else.
+      if (p.type === "handled") {
+        if (phaseRef.current === "incoming") {
+          stopRingtone();
+          setIncoming(null);
+          setPhase("idle");
+        }
+        return;
+      }
+
       if (p.from === userId) return;
 
       void (async () => {

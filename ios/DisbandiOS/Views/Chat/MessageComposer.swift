@@ -23,10 +23,13 @@ struct MessageComposer: View {
                     .lineLimit(1...5)
                     .font(.body)
                     .foregroundStyle(Brand.textPrimary)
-                    .padding(.vertical, 12)
-                    .frame(minHeight: 30)
+                    // 8 + 28 + 8 = 44: a comfortable single-line pill that
+                    // matches the attach button exactly, so the two centre on
+                    // each other without padding the bar out.
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 28)
             }
-            .padding(.leading, 6)
+            .padding(.leading, 7)
             .padding(.trailing, 16)
             .background(Brand.elevated, in: .rect(cornerRadius: 24))
 
@@ -35,6 +38,18 @@ struct MessageComposer: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(Brand.surface)
+        // Swiping down on the bar dismisses the keyboard (the iOS "keyboard
+        // grab" gesture). Only when it's actually up.
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    if value.translation.height > 30 {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil)
+                    }
+                }
+        )
     }
 
     /// 44×44 is Apple's minimum comfortable touch target; the old 30pt glyph
@@ -55,6 +70,10 @@ struct MessageComposer: View {
                         .background(Brand.accent, in: .circle)
                 }
             }
+            // Same height as the single-line text field beside it. With the
+            // row bottom-aligned, equal heights are what put the two centres
+            // on one line; unequal ones left the circle floating above the
+            // text.
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }

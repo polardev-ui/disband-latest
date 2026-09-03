@@ -8,6 +8,32 @@ function otpType(raw: string | null): EmailOtpType {
   return OTP_TYPES.includes(raw as EmailOtpType) ? (raw as EmailOtpType) : "email";
 }
 
+/**
+ * True when the URL carries a password-reset (recovery) link.
+ *
+ * GoTrue delivers a reset email as either a hash-fragment redirect
+ * (`#access_token=…&type=recovery`), a PKCE `?code=…`, or the app's own
+ * `?token_hash=…` verification link. The page that consumes the link
+ * (`recoverSessionFromUrl`) accepts all three, so any of them present with the
+ * recovery type means "forward to the reset-password page".
+ *
+ * This lets the home/marketing routes hand a recovery link that GoTrue bounced
+ * to the Site URL (i.e. a reset link whose `redirectTo` was not registered in
+ * the dashboard) over to the reset page instead of dropping it on the homepage.
+ */
+export function isPasswordResetLink(): boolean {
+  if (typeof window === "undefined") return false;
+  const url = new URL(window.location.href);
+  const queryType = url.searchParams.get("type");
+  if (queryType === "recovery") {
+    return url.searchParams.has("token_hash")
+      || url.searchParams.has("token")
+      || url.searchParams.has("code");
+  }
+  const hash = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+  return hash.get("type") === "recovery" && hash.has("access_token") && hash.has("refresh_token");
+}
+
 /** Exchange auth tokens from a recovery or confirmation link in the URL. */
 export async function recoverSessionFromUrl(): Promise<{ error: string | null }> {
   if (typeof window === "undefined") return { error: null };
