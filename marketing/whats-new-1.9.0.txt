@@ -1,0 +1,31 @@
+A big update to calls, notifications and everyday chat.
+
+CALLS, REDESIGNED
+• A new full-screen call view with a blurred backdrop, a self-view you can drag into any corner and tap to enlarge, and controls that fade away until you tap.
+• Minimise a call and keep using Disband — servers, DMs and notes stay available while you talk.
+• Swipe to answer. Drag right to pick up, left to decline, with either end still tappable.
+• Answering on one device now stops your other devices ringing.
+• Calls connect through a relay, so they work on networks that previously couldn't establish a connection.
+
+NOTIFICATIONS
+• Push notifications now arrive for direct messages, group chats, mentions and friend requests — including when Disband is closed.
+• No banner for the conversation you already have open.
+
+CHAT
+• Server invites appear as a card you can join from, instead of a plain link.
+• Links show a preview with the page title and image.
+• GIFs play instead of showing a single frozen frame.
+• Emoji-only messages render large.
+• More space where a new person starts talking, so a conversation is easier to follow.
+• A bigger message box with the attachment button built into it.
+
+FRIENDS AND PROFILE
+• Search your friends list and sort it A–Z or by when you added someone, with anyone new pinned to the top.
+• Change your username from the app.
+• Redesigned server settings with a live preview of your icon, banner and name.
+• Unread conversations are marked and move to the top of the list.
+
+FIXES
+• Signing in no longer leaves an account looking empty — sessions are stored reliably and recovered rather than silently dropped.
+• Confirmation emails land on a page that tells you the address was verified.
+• Deleting a note removes it everywhere, on the phone and on the web.
