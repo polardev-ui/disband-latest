@@ -16,6 +16,13 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // Unread marker: a blue dot on the leading edge, inside the card.
+            // The count badge alone (trailing) was easy to miss when scanning
+            // the list, and reserving the slot when read keeps rows aligned.
+            Circle()
+                .fill(unread > 0 ? Brand.accent : Color.clear)
+                .frame(width: 8, height: 8)
+
             AvatarView(url: iconUrl, name: name, size: 44, status: status)
 
             VStack(alignment: .leading, spacing: 3) {

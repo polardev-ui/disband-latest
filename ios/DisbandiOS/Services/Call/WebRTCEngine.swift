@@ -39,6 +39,16 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     private let factory: RTCPeerConnectionFactory
     private let pc: RTCPeerConnection
 
+    /// ICE candidates that arrived before the remote description was set.
+    ///
+    /// WebRTC rejects `addIceCandidate` until a remote description exists, and
+    /// the signaling channel routinely delivers candidates ahead of the
+    /// offer/answer. Those candidates were being dropped on the floor, which
+    /// costs the fastest routes and can leave a call with no viable pair at
+    /// all. They are held here and flushed once the description lands.
+    private var pendingCandidates: [RTCIceCandidate] = []
+    private var hasRemoteDescription = false
+
     private(set) var audioTrack: RTCAudioTrack
     private(set) var remoteAudioTrack: RTCAudioTrack?
     private(set) var remoteVideoTrack: RTCVideoTrack?
@@ -191,6 +201,8 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
                 if let error { cont.resume(throwing: error) } else { cont.resume() }
             }
         }
+        hasRemoteDescription = true
+        await flushPendingCandidates()
     }
 
     func makeOffer() async throws -> RTCSessionDescription {
@@ -223,6 +235,23 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     }
 
     func addIceCandidate(_ candidate: RTCIceCandidate) async throws {
+        guard hasRemoteDescription else {
+            pendingCandidates.append(candidate)
+            return
+        }
+        try await add(candidate)
+    }
+
+    private func flushPendingCandidates() async {
+        let queued = pendingCandidates
+        pendingCandidates = []
+        for candidate in queued {
+            // One bad candidate must not discard the rest.
+            try? await add(candidate)
+        }
+    }
+
+    private func add(_ candidate: RTCIceCandidate) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             pc.add(candidate) { error in
                 if let error { cont.resume(throwing: error) } else { cont.resume() }

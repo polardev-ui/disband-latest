@@ -36,7 +36,7 @@ struct DirectMessagesTab: View {
             List {
                 if !vm.threads.isEmpty {
                     Section("Direct Messages") {
-                        ForEach(vm.threads) { thread in
+                        ForEach(sortedThreads) { thread in
                             NavigationLink {
                                 ChatView(source: .dm(threadId: thread.id,
                                                      title: thread.friend?.name ?? "Direct Message"),
@@ -67,6 +67,20 @@ struct DirectMessagesTab: View {
             .scrollContentBackground(.hidden)
             .background(Brand.background)
         }
+    }
+
+    /// Threads with unread messages float to the top; everything else keeps
+    /// the view model's most-recent-activity order. A stable secondary sort on
+    /// recency stops rows from shuffling when two chats are both unread.
+    private var sortedThreads: [DmThread] {
+        vm.threads.enumerated()
+            .sorted { lhs, rhs in
+                let lUnread = unreadStore.count(for: lhs.element.id) > 0
+                let rUnread = unreadStore.count(for: rhs.element.id) > 0
+                if lUnread != rUnread { return lUnread }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 
     private func groupRow(_ group: GroupChat) -> some View {

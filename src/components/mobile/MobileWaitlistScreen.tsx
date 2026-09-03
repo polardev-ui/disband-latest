@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Logo } from "@/components/ui/Logo";
 import { Turnstile } from "@/components/ui/Turnstile";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { apiFetch } from "@/lib/api";
 
 export function MobileWaitlistScreen() {
   const [email, setEmail] = useState("");
@@ -17,7 +18,7 @@ export function MobileWaitlistScreen() {
     setMessage(null);
 
     try {
-      const res = await fetch("/api/mobile-waitlist", {
+      const res = await apiFetch("/api/mobile-waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), turnstileToken }),

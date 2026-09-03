@@ -33,3 +33,21 @@ clock with a half-empty battery looks unfinished.
 - No system alerts in frame. A keychain "Save Password?" prompt and a
   notification permission dialog both appeared during capture and were
   dismissed before shooting.
+
+## Device mockup
+
+`device.py` renders the phone body used by both the App Store panels and the
+email hero — a machined rail with a lit chamfer, an inset black bezel, side
+buttons, a faint specular sweep, and a two-part shadow (tight contact + wide
+ambient). It supersamples 3x and downsamples once, so the rail highlights stay
+crisp.
+
+`device-3d.html` is the animated counterpart for the website and email: real
+CSS 3D perspective rather than a pre-rendered tilt, so it rotates and floats,
+with the screens cross-fading on a timer. Drop the file's `<style>`, markup and
+`<script>` into a page; it expects the screens at `/marketing/screens/`.
+Open `device-3d-demo.html` directly to preview it.
+
+Animation cannot go in App Store screenshots — those are static PNGs — and App
+Previews must be real footage captured on device, so the animated mockup is for
+the web and email only.

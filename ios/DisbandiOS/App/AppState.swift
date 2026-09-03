@@ -2,16 +2,13 @@ import Foundation
 import Supabase
 import Observation
 
-/// Whether the current session has satisfied any required MFA step.
 enum AuthPhase: Equatable {
     case loading
     case signedOut
-    case mfaRequired          // signed in at aal1 but an aal2 factor exists
+    case mfaRequired
     case signedIn
 }
 
-/// Central, observable application state. Owns the auth session and the
-/// signed-in user's profile, and is injected into the SwiftUI environment.
 @MainActor
 @Observable
 final class AppState {
@@ -19,6 +16,10 @@ final class AppState {
     var session: Session?
     var profile: Profile?
     var authError: String?
+    var authNotice: String?
+    var profileError: String?
+
+    private var recovering = false
 
     var currentUserId: String? { session?.user.id.uuidString.lowercased() }
 
@@ -29,7 +30,6 @@ final class AppState {
         observeAuth()
     }
 
-    // MARK: - Bootstrap & auth observation
 
     private func observeAuth() {
         authTask = Task { [weak self] in
@@ -58,7 +58,6 @@ final class AppState {
         }
         self.session = session
 
-        // If the user has enrolled MFA but is only at aal1, gate behind a challenge.
         if await mfaChallengeRequired() {
             self.phase = .mfaRequired
             return
@@ -67,7 +66,6 @@ final class AppState {
         await loadProfile()
         self.phase = .signedIn
 
-        // Register for push notifications now that we have an authenticated user.
         PushManager.shared.registerIfAuthorized()
         await PushManager.shared.flushToken()
     }
@@ -86,12 +84,13 @@ final class AppState {
         phase = .signedIn
     }
 
-    // MARK: - Profile
 
     func loadProfile() async {
-        guard let uid = currentUserId else { return }
+        guard let uid = currentUserId else {
+            profileError = "Not signed in."
+            return
+        }
         do {
-            // Make sure a profile row exists (mirrors ensure_user_profile RPC).
             try? await client.rpc("ensure_user_profile").execute()
             let profile: Profile = try await client
                 .from("profiles")
@@ -101,15 +100,57 @@ final class AppState {
                 .execute()
                 .value
             self.profile = profile
+            profileError = nil
         } catch {
+            if isNoRows(error), !recovering {
+                await recoverSession(originalError: error)
+                return
+            }
+            profileError = String(describing: error)
             print("loadProfile error: \(error)")
         }
     }
 
-    // MARK: - Auth actions
+    private func isNoRows(_ error: Error) -> Bool {
+        String(describing: error).contains("PGRST116")
+    }
+
+    private func recoverSession(originalError: Error) async {
+        recovering = true
+        defer { recovering = false }
+
+        if (try? await client.auth.user()) != nil {
+            try? await client.rpc("ensure_user_profile").execute()
+            if let uid = currentUserId,
+               let profile: Profile = try? await client
+                    .from("profiles").select("*").eq("id", value: uid)
+                    .single().execute().value {
+                self.profile = profile
+                profileError = nil
+                return
+            }
+            profileError = "Your account has no profile yet. Pull to retry, or contact support."
+            return
+        }
+
+        if (try? await client.auth.refreshSession()) != nil {
+            await loadProfile()
+            return
+        }
+
+        profileError = nil
+        authError = "Your session expired and couldn't be renewed. Please sign in again."
+        try? await client.auth.signOut()
+        session = nil
+        profile = nil
+        phase = .signedOut
+        print("loadProfile: unrecoverable session — \(originalError)")
+    }
+
 
     func signIn(email: String, password: String) async {
         authError = nil
+        authNotice = nil
         do {
             _ = try await client.auth.signIn(email: email, password: password)
         } catch {
@@ -119,8 +160,12 @@ final class AppState {
 
     func signUp(email: String, password: String) async {
         authError = nil
+        authNotice = nil
         do {
-            _ = try await client.auth.signUp(email: email, password: password)
+            let response = try await client.auth.signUp(email: email, password: password)
+            if response.session == nil {
+                authNotice = "Check \(email) for a confirmation link to finish setting up your account."
+            }
         } catch {
             authError = friendlyAuthError(error)
         }
@@ -128,9 +173,10 @@ final class AppState {
 
     func sendPasswordReset(email: String) async {
         authError = nil
+        authNotice = nil
         do {
             try await client.auth.resetPasswordForEmail(email)
-            authError = "Password reset email sent."
+            authNotice = "Password reset email sent."
         } catch {
             authError = friendlyAuthError(error)
         }
@@ -140,9 +186,6 @@ final class AppState {
         try? await client.auth.signOut()
     }
 
-    /// Permanently deletes the signed-in user's account and all their data
-    /// (App Store Guideline 5.1.1(v)). Calls the `delete_my_account` RPC, then
-    /// signs out locally. Returns an error message on failure, nil on success.
     func deleteAccount() async -> String? {
         guard currentUserId != nil else { return "You're not signed in." }
         do {
@@ -157,8 +200,6 @@ final class AppState {
         }
     }
 
-    /// Apply a profile patch (display name, bio, avatar/banner, accent, settings)
-    /// and refresh the cached profile. Returns an error message on failure.
     @discardableResult
     func saveProfile(_ patch: DatabaseService.ProfilePatch) async -> String? {
         guard let uid = currentUserId else { return "Not signed in" }
@@ -195,6 +236,9 @@ final class AppState {
         }
         if msg.contains("email not confirmed") {
             return "Please confirm your email before signing in."
+        }
+        if msg.contains("only request this after") || msg.contains("rate limit") {
+            return "We just sent that email. Please wait a moment before trying again."
         }
         return error.localizedDescription
     }

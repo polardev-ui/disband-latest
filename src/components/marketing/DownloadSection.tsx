@@ -14,13 +14,14 @@ import {
   type ReleaseAsset,
 } from "@/lib/github-releases";
 import { parseSemverTag } from "@/lib/version";
+import { apiFetch } from "@/lib/api";
 
 async function loadReleases(): Promise<{
   release: GitHubRelease | null;
   assets: ReleaseAsset[];
 }> {
   try {
-    const res = await fetch("/api/releases");
+    const res = await apiFetch("/api/releases");
     if (res.ok) {
       const data = (await res.json()) as {
         release: GitHubRelease | null;

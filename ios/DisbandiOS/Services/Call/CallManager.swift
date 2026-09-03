@@ -38,6 +38,11 @@ final class CallManager {
     var error: String?
     var callNotice: String?
     var connectedAt: Date?
+
+    /// Whether the call UI is collapsed to a pill so the rest of the app is
+    /// usable during a call (the desktop never trapped you on the call screen;
+    /// iOS did).
+    var minimized = false
     var remoteHasVideo = false
 
     private(set) var engine: WebRTCEngine?
@@ -334,8 +339,10 @@ final class CallManager {
 
     private func setupRtc(callId: String, peerId: String, asCaller: Bool) async throws {
         guard let uid = app.currentUserId else { return }
-        configureAudioSession()
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // Hands the session to WebRTC's own wrapper and starts its audio
+        // unit; the previous raw AVAudioSession calls left the two disagreeing
+        // and the unit never ran, so both sides heard silence.
+        CallAudioSession.activate()
 
         let engine = WebRTCEngine(callId: callId, peerId: peerId, senderId: uid,
                                   onSignal: { [weak self] signal in
@@ -446,29 +453,24 @@ final class CallManager {
         incoming = nil
         activePeer = nil
         cameraEnabled = false
+        minimized = false
         connectedAt = nil
         error = nil
         activeCallId = nil
         activePeerId = nil
         noticeTask?.cancel()
         callNotice = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-
-    private func configureAudioSession() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord,
-                                 mode: .voiceChat,
-                                 options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker])
+        CallAudioSession.deactivate()
     }
 
     // MARK: - Ringtone
 
     private func startRingtone() {
         guard soundEnabled else { return }
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default)
-        try? session.setActive(true)
+        // Deliberately NOT `.playback`: that category cannot capture the
+        // microphone, and answering from it left the mic dead for the whole
+        // call.
+        CallAudioSession.prepareForRinging()
         CallSounds.shared.startRingtone()
     }
 

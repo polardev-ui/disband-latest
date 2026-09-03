@@ -7,6 +7,7 @@ import { BotTag } from "@/components/ui/BotTag";
 import { IconClose, IconCopy } from "@/components/icons";
 import { BOT_SCOPE_LABELS, BOT_SCOPE_ORDER } from "@/lib/bot-scopes";
 import type { BotScope } from "@/lib/bot-auth";
+import { apiFetch } from "@/lib/api";
 
 interface ManagedBot {
   id: string;
@@ -61,7 +62,7 @@ export function BotsPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/bot/list");
+      const res = await apiFetch("/api/bot/list");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not load bots.");
       setBots(data.bots ?? []);

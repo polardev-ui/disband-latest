@@ -11,10 +11,16 @@ struct ProfileTab: View {
 
     private var profile: Profile? { app.profile }
 
+    /// True when we have no trustworthy read of the account's plan.
+    private var planUnknown: Bool { profile == nil }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    if profile == nil, let problem = app.profileError {
+                        profileErrorCard(problem)
+                    }
                     header
                     statusPicker
                     if let bio = profile?.bio, !bio.isEmpty {
@@ -48,6 +54,28 @@ struct ProfileTab: View {
             .onChange(of: avatarItem) { _, item in if let item { Task { await upload(item, banner: false) } } }
             .onChange(of: bannerItem) { _, item in if let item { Task { await upload(item, banner: true) } } }
         }
+    }
+
+    /// Shown when the profile fetch failed, in place of an endless "Loading…".
+    private func profileErrorCard(_ problem: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Couldn't load your profile", systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Brand.dnd)
+            Text(problem)
+                .font(.caption)
+                .foregroundStyle(Brand.textSecondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Try again") {
+                Task { await app.loadProfile() }
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Brand.accent)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Brand.surface, in: .rect(cornerRadius: 14))
     }
 
     // MARK: - Header
@@ -169,12 +197,16 @@ struct ProfileTab: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     sectionLabel("Plan")
-                    Text(subscriptions.plan.label)
+                    // Never assert a plan we could not read. When the profile
+                    // fetch failed the subscription read almost certainly did
+                    // too, and defaulting to "Free" told a paying subscriber
+                    // they had no subscription.
+                    Text(planUnknown ? "—" : subscriptions.plan.label)
                         .font(.headline)
-                        .foregroundStyle(Brand.textPrimary)
+                        .foregroundStyle(planUnknown ? Brand.textMuted : Brand.textPrimary)
                 }
                 Spacer()
-                if subscriptions.plan != .free {
+                if !planUnknown, subscriptions.plan != .free {
                     Text(subscriptions.plan.label.uppercased())
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 8)
@@ -259,10 +291,21 @@ struct EditProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var displayName = ""
+    @State private var username = ""
     @State private var bio = ""
     @State private var accent: String?
     @State private var accent2: String?
     @State private var busy = false
+    @State private var usernameProblem: String?
+    @State private var saveError: String?
+
+    /// The username as it was when the sheet opened, so we only call the
+    /// rename RPC when it actually changed.
+    @State private var originalUsername = ""
+
+    private var usernameChanged: Bool {
+        username.trimmingCharacters(in: .whitespaces).lowercased() != originalUsername.lowercased()
+    }
 
     private let palette = ["#7A7D85", "#5865F2", "#EB459E", "#ED4245", "#FAA61A",
                            "#57F287", "#9B59B6", "#1ABC9C"]
@@ -276,6 +319,27 @@ struct EditProfileSheet: View {
                         .listRowBackground(Color.clear)
                 }
                 Section("Display name") { TextField("Display name", text: $displayName) }
+                Section {
+                    HStack(spacing: 4) {
+                        Text("@").foregroundStyle(Brand.textMuted)
+                        TextField("username", text: $username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    if let usernameProblem {
+                        Label(usernameProblem, systemImage: "exclamationmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Brand.dnd)
+                    } else if usernameChanged && !username.isEmpty {
+                        Label("Available", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Brand.online)
+                    }
+                } header: {
+                    Text("Username")
+                } footer: {
+                    Text("2–25 characters: letters, numbers and underscores.")
+                }
                 Section("About me") {
                     TextField("Tell people about yourself", text: $bio, axis: .vertical).lineLimit(3...6)
                 }
@@ -299,9 +363,25 @@ struct EditProfileSheet: View {
             }
             .onAppear {
                 displayName = app.profile?.displayName ?? ""
+                username = app.profile?.username ?? ""
+                originalUsername = username
                 bio = app.profile?.bio ?? ""
                 accent = app.profile?.accentColor
                 accent2 = app.profile?.accentColor2
+            }
+            // Debounced availability check: re-runs when typing settles rather
+            // than firing an RPC per keystroke.
+            .task(id: username) {
+                guard usernameChanged else { usernameProblem = nil; return }
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                let candidate = username.trimmingCharacters(in: .whitespaces)
+                usernameProblem = await DatabaseService.usernameUnavailableReason(candidate)
+            }
+            .alert("Couldn't save", isPresented: .constant(saveError != nil)) {
+                Button("OK") { saveError = nil }
+            } message: {
+                Text(saveError ?? "")
             }
         }
     }
@@ -354,12 +434,45 @@ struct EditProfileSheet: View {
     private func save() {
         busy = true
         Task {
+            // Username goes first: if the rename is rejected we stop rather
+            // than saving half the form and dismissing as though it worked.
+            if usernameChanged {
+                do {
+                    try await DatabaseService.updateUsername(
+                        username.trimmingCharacters(in: .whitespaces))
+                } catch {
+                    saveError = friendlyRenameError(error)
+                    busy = false
+                    return
+                }
+            }
+
             await app.saveProfile(.init(
                 displayName: displayName.trimmingCharacters(in: .whitespaces),
                 bio: bio.trimmingCharacters(in: .whitespaces),
                 accentColor: accent, accentColor2: accent2))
+            await app.loadProfile()
             busy = false
             dismiss()
         }
+    }
+
+    /// The database raises these as P0001 with a readable message; strip the
+    /// PostgREST wrapper so the user sees the sentence, not the envelope.
+    private func friendlyRenameError(_ error: Error) -> String {
+        let text = error.localizedDescription
+        if text.localizedCaseInsensitiveContains("already taken") {
+            return "That username is already taken."
+        }
+        if text.localizedCaseInsensitiveContains("not allowed") {
+            return "That username isn't allowed."
+        }
+        if text.localizedCaseInsensitiveContains("2–25") || text.localizedCaseInsensitiveContains("2-25") {
+            return "Usernames must be 2–25 characters: letters, numbers and underscores."
+        }
+        if text.localizedCaseInsensitiveContains("limit") {
+            return "You've changed your username too many times today. Try again tomorrow."
+        }
+        return text
     }
 }

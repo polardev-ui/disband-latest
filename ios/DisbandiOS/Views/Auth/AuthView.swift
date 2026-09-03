@@ -21,11 +21,21 @@ struct AuthView: View {
                           keyboard: .default, secure: true)
                 }
 
+                if let notice = app.authNotice {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "envelope.badge.fill")
+                        Text(notice)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(Brand.online)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
+                }
+
                 if let error = app.authError {
                     Text(error)
                         .font(.footnote)
-                        .foregroundStyle(error.localizedCaseInsensitiveContains("sent")
-                                         ? Brand.online : Brand.dnd)
+                        .foregroundStyle(Brand.dnd)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -56,6 +66,7 @@ struct AuthView: View {
                 Button {
                     withAnimation { mode = mode == .signIn ? .signUp : .signIn }
                     app.authError = nil
+                    app.authNotice = nil
                 } label: {
                     HStack(spacing: 4) {
                         Text(mode == .signIn ? "New to Disband?" : "Already have an account?")
@@ -116,7 +127,7 @@ struct AuthView: View {
             } else {
                 await app.signUp(email: email, password: password)
             }
-            busy = false
+            withAnimation { busy = false }
         }
     }
 }
