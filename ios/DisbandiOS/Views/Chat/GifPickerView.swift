@@ -34,9 +34,9 @@ struct GifPickerView: View {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 8) {
                             ForEach(gifs) { gif in
-                                if let thumb = gif.thumbUrl, let url = URL(string: thumb) {
+                                if let thumb = gif.thumbUrl {
                                     Button { onPick(gif); dismiss() } label: {
-                                        AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: {
+                                        RemoteImage(url: thumb, contentMode: .fill) {
                                             Rectangle().fill(Brand.elevated)
                                         }
                                         .frame(height: 120)

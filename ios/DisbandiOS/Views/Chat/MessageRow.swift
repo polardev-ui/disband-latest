@@ -80,6 +80,12 @@ struct MessageRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                // Invites and link previews, so a shared server can be joined
+                // from the message instead of read out as raw text.
+                if !message.content.isEmpty {
+                    MessageEmbeds(text: message.content)
+                }
+
                 attachment
 
                 if message.pending {

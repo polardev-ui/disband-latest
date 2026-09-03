@@ -62,6 +62,9 @@ function uniqueDownloadOptions(assets: ReleaseAsset[]): ReleaseAsset[] {
   return out;
 }
 
+const APP_STORE_URL =
+  "https://apps.apple.com/us/app/disband/id67838818007";
+
 export function DownloadSection() {
   const [release, setRelease] = useState<GitHubRelease | null>(null);
   const [assets, setAssets] = useState<ReleaseAsset[]>([]);
@@ -94,9 +97,48 @@ export function DownloadSection() {
           Download Disband
         </h2>
         <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
-          Native builds for macOS, Windows, and Linux — or skip the install and use Disband in your
-          browser.
+          Native builds for macOS, Windows, and Linux, or Disband on your iPhone through the App
+          Store. Skip the install entirely and use Disband in your browser.
         </p>
+
+        {/* iOS App Store */}
+        <div className="mt-10 flex flex-wrap items-start gap-8 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+              iOS
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-white">Get Disband on iPhone</h3>
+            <p className="mt-1.5 max-w-lg text-[15px] leading-relaxed text-[#9aa0a8]">
+              Chat, voice calls, and communities on the go — the same account you use on desktop,
+              synced across every device.
+            </p>
+            <a
+              href={APP_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-brand px-5 py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover"
+            >
+              <PlatformIcon platform="apple" />
+              Download on the App Store
+            </a>
+          </div>
+          <a
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Download Disband on the App Store"
+            className="shrink-0"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/appstore-badge.png"
+              alt="Download on the App Store"
+              width={150}
+              height={50}
+              className="h-[50px] w-[150px]"
+            />
+          </a>
+        </div>
 
         {loading ? (
           <p className="mt-10 text-sm text-[#6e727a]">Loading releases…</p>
