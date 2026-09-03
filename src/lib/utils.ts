@@ -127,13 +127,16 @@ export function getInviteUrl(code: string): string {
   return `${shareableAppOrigin()}/server/${code}`;
 }
 
-const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/server\/([a-zA-Z0-9]{7})\b/g;
+// `/invite/` is accepted alongside `/server/` because the iOS app shared that
+// spelling for a while. Case-insensitive so a capitalised "Https://" — which
+// phone keyboards produce at the start of a message — still matches.
+const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/(?:server|invite)\/([a-zA-Z0-9]{7})\b/gi;
 export const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
 
 export function extractInviteCodes(text: string): string[] {
   const codes = new Set<string>();
   let m: RegExpExecArray | null;
-  const re = new RegExp(INVITE_RE.source, "g");
+  const re = new RegExp(INVITE_RE.source, "gi");
   while ((m = re.exec(text)) !== null) codes.add(m[1]);
   return [...codes];
 }

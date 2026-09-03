@@ -98,7 +98,7 @@ struct FaceTimeCallView: View {
     @State private var controlsVisible = true
     @State private var hideTask: Task<Void, Never>?
 
-    @State private var corner: PiPCorner = .topTrailing
+    @State private var corner: PiPCorner = .bottomTrailing
     @State private var drag: CGSize = .zero
     @State private var pipEnlarged = false
 
@@ -108,34 +108,49 @@ struct FaceTimeCallView: View {
     }
 
     var body: some View {
+        // The reader deliberately does NOT ignore the safe area: a view that
+        // ignores it reports `safeAreaInsets` as zero, which is how the
+        // minimise chevron ended up drawn on top of the status bar clock.
+        // Only the backdrop is allowed outside the safe area; everything the
+        // user touches lays out inside it.
         GeometryReader { geo in
             ZStack {
                 peerLayer
                     // Pinned to the container so no avatar, however large or
                     // however it is decoded, can inflate the ZStack and drag
-                    // the controls off-screen with it.
-                    .frame(width: geo.size.width, height: geo.size.height)
+                    // the controls off-screen with it. Grown by the insets so
+                    // it still bleeds under the status bar and home indicator
+                    // rather than leaving a black strip.
+                    .frame(
+                        width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
+                        height: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+                    )
                     .clipped()
+                    .ignoresSafeArea()
 
-                selfTile(in: geo.size, insets: geo.safeAreaInsets)
+                selfTile(in: geo.size)
 
                 if controlsVisible {
-                    controlsLayer(insets: geo.safeAreaInsets)
+                    controlsLayer
                         .transition(.opacity)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .background(.black)
+            .background(Color.black.ignoresSafeArea())
             // Tap anywhere (not on a control) to reveal or dismiss the chrome.
             .contentShape(Rectangle())
             .onTapGesture { toggleControls() }
         }
-        .ignoresSafeArea()
-        .onAppear { scheduleHide() }
+        .onAppear { scheduleHide(); dismissKeyboard() }
         .onDisappear { hideTask?.cancel() }
         // Any state change worth looking at brings the controls back.
         .onChange(of: call.phase) { _, _ in showControls() }
         .onChange(of: call.error) { _, new in if new != nil { showControls() } }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
     }
 
     // MARK: - Peer (full screen)
@@ -168,7 +183,9 @@ struct FaceTimeCallView: View {
     }
 
     private func statusLine(at date: Date) -> String {
-        if call.phase == .outgoing { return "Calling\u{2026}" }
+        if call.phase == .outgoing {
+            return call.callSignaled ? "Calling\u{2026}" : "Connecting\u{2026}"
+        }
         if let connectedAt = call.connectedAt {
             return formatElapsed(connectedAt, at: date)
         }
@@ -181,7 +198,7 @@ struct FaceTimeCallView: View {
     /// clear of it rather than sitting on the end-call button.
     private static let controlsHeight: CGFloat = 96
 
-    private func selfTile(in container: CGSize, insets: EdgeInsets) -> some View {
+    private func selfTile(in container: CGSize) -> some View {
         let tile = pipEnlarged
             ? CGSize(width: 190, height: 260)
             : CGSize(width: 112, height: 156)
@@ -189,8 +206,7 @@ struct FaceTimeCallView: View {
             in: container,
             tile: tile,
             inset: 18,
-            topInset: insets.top,
-            bottomInset: insets.bottom + (controlsVisible ? Self.controlsHeight : 0)
+            bottomInset: controlsVisible ? Self.controlsHeight : 0
         )
 
         return selfContent
@@ -249,13 +265,11 @@ struct FaceTimeCallView: View {
 
     // MARK: - Controls
 
-    private func controlsLayer(insets: EdgeInsets) -> some View {
+    private var controlsLayer: some View {
         VStack(spacing: 0) {
             topBar
-                .padding(.top, insets.top)
             Spacer()
             bottomControls
-                .padding(.bottom, max(insets.bottom, 16))
         }
     }
 
@@ -286,11 +300,42 @@ struct FaceTimeCallView: View {
             }
 
             Spacer()
-            // Balances the minimise button so the timer stays centred.
-            Color.clear.frame(width: 44, height: 44)
+
+            HStack(spacing: 12) {
+                Button {
+                    call.toggleSpeaker()
+                    showControls()
+                } label: {
+                    Image(systemName: call.speakerOn ? "speaker.wave.2.fill" : "speaker.wave.2")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(call.speakerOn ? .black : .white)
+                        .frame(width: 44, height: 44)
+                        .background(call.speakerOn ? AnyShapeStyle(.white) : AnyShapeStyle(.black.opacity(0.35)),
+                                    in: .circle)
+                }
+                .accessibilityLabel("Speaker")
+
+                Button {
+                    call.switchCamera()
+                    showControls()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.35), in: .circle)
+                }
+                .accessibilityLabel("Switch camera")
+                .opacity(call.cameraEnabled ? 1 : 0.4)
+                .disabled(!call.cameraEnabled)
+            }
         }
+        // Nudged in from the corner: at the very top-left the chevron sits
+        // under the status bar clock on a notched phone, and its tap target
+        // fights the pull-down gesture area.
         .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.leading, 6)
+        .padding(.top, 40)
     }
 
     private var bottomControls: some View {
@@ -311,8 +356,6 @@ struct FaceTimeCallView: View {
             HStack(spacing: 16) {
                 glassButton(call.micMuted ? "mic.slash.fill" : "mic.fill",
                             on: call.micMuted, label: "Mute") { call.toggleMic() }
-                glassButton(call.deafened ? "speaker.slash.fill" : "headphones",
-                            on: call.deafened, label: "Deafen") { call.toggleDeafen() }
                 glassButton(call.cameraEnabled ? "video.fill" : "video.slash.fill",
                             on: call.cameraEnabled, label: "Camera") { call.toggleCamera() }
                 glassButton("bubble.left.fill", on: false, label: "Chat") {
@@ -331,6 +374,10 @@ struct FaceTimeCallView: View {
                 }
                 .accessibilityLabel("End call")
             }
+            // Lifts the row clear of the home indicator. Removed by accident
+            // during the safe-area rework, which dropped the buttons onto the
+            // bottom edge.
+            .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity)
         .background {
@@ -411,7 +458,7 @@ struct MinimisedCallBar: View {
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 } else {
-                    Text("Calling\u{2026}")
+                    Text(call.callSignaled || call.phase != .outgoing ? "Calling\u{2026}" : "Connecting\u{2026}")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.8))
                 }

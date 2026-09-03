@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { hasAllowedMobileWeb } from "@/lib/mobile-detect";
+import { allowMobileWeb, hasAllowedMobileWeb } from "@/lib/mobile-detect";
 
 /**
  * Site-wide iOS launch announcement.
@@ -140,6 +140,15 @@ export function LaunchAnnouncement() {
     setVisible(false);
   }, [released]);
 
+  // "Continue on the web" from the popup is a standing choice, just like the
+  // same button on /mobile: it flips the shared mobile-web-ok flag so neither
+  // this dialog nor the mobile gate asks again on any page.
+  const continueOnWeb = useCallback(() => {
+    allowMobileWeb();
+    writeFlag(released ? DISMISS_RELEASED : DISMISS_COUNTDOWN);
+    setVisible(false);
+  }, [released]);
+
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
@@ -263,6 +272,16 @@ export function LaunchAnnouncement() {
           >
             {released ? "Maybe later" : "Dismiss"}
           </button>
+
+          <p className="mt-5 border-t border-divider pt-4">
+            <button
+              type="button"
+              onClick={continueOnWeb}
+              className="text-[13px] font-semibold text-brand underline-offset-2 hover:underline"
+            >
+              Continue on the web
+            </button>
+          </p>
         </div>
       </div>
     </div>

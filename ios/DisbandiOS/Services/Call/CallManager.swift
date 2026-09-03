@@ -35,6 +35,7 @@ final class CallManager {
     var cameraEnabled = false
     var micMuted = false
     var deafened = false
+    var speakerOn = false
     var error: String?
     var callNotice: String?
     var connectedAt: Date?
@@ -43,6 +44,10 @@ final class CallManager {
     /// stays navigable — the desktop app never traps you on the call screen.
     var minimized = false
     var remoteHasVideo = false
+
+    /// True once the ring has been sent to the server, switching the outgoing
+    /// header from "Connecting…" to "Calling…".
+    var callSignaled = false
 
     private(set) var engine: WebRTCEngine?
 
@@ -53,6 +58,7 @@ final class CallManager {
     private var signalChannel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
     private var noticeTask: Task<Void, Never>?
+    private var ringWatchdog: Task<Void, Never>?
     private var activeCallId: String?
     private var activePeerId: String?
     private var listenSubscribed = false
@@ -183,10 +189,13 @@ final class CallManager {
         activePeerId = peer.id
         activePeer = peer
         phase = .outgoing
-        startRingtone()
+        callSignaled = false
+        armRingWatchdog()
+        startCallingTone()
         await send(to: peer.id,
                    CallSignal(type: "ring", from: uid, to: peer.id, callId: callId,
                               callerName: profile.name))
+        callSignaled = true
     }
 
     func acceptCall() async {
@@ -198,11 +207,16 @@ final class CallManager {
             activePeer = profile
         }
         phase = .active
+        cancelRingWatchdog()
         self.incoming = nil
         connectedAt = Date()
         CallSounds.shared.playConnected()
         await send(to: incoming.fromId,
                    CallSignal(type: "accept", from: uid, to: incoming.fromId,
+                              callId: incoming.callId))
+        // Stop this account's other devices ringing.
+        await send(to: uid,
+                   CallSignal(type: "handled", from: uid, to: uid,
                               callId: incoming.callId))
         do {
             try await setupRtc(callId: incoming.callId, peerId: incoming.fromId, asCaller: false)
@@ -219,8 +233,13 @@ final class CallManager {
                    CallSignal(type: "reject", from: uid, to: incoming.fromId,
                               callId: incoming.callId,
                               rejecterName: app.profile?.name ?? "User"))
+        // Declining on one device dismisses the ring on the rest of them.
+        await send(to: uid,
+                   CallSignal(type: "handled", from: uid, to: uid,
+                              callId: incoming.callId))
         self.incoming = nil
         phase = .idle
+        cancelRingWatchdog()
     }
 
     func endCall() async {
@@ -251,6 +270,11 @@ final class CallManager {
         engine?.setRemoteAudioEnabled(!deafened)
     }
 
+    func toggleSpeaker() {
+        speakerOn.toggle()
+        CallAudioSession.setSpeaker(speakerOn)
+    }
+
     func toggleCamera() {
         guard phase == .active else { return }
         cameraEnabled.toggle()
@@ -262,10 +286,59 @@ final class CallManager {
         }
     }
 
+    func switchCamera() {
+        engine?.switchCamera()
+    }
+
     // MARK: - Incoming signal handling
 
+    // MARK: - Phase watchdog
+
+    /// How long a call may sit ringing before it gives up.
+    private static let ringTimeout: Duration = .seconds(60)
+
+    /// Resets the call if it never leaves `.outgoing` or `.incoming`.
+    ///
+    /// Nothing else ever cleared these states on its own. If the far end went
+    /// away mid-handshake — the app was killed, the network dropped, the
+    /// accept was lost — the phase stayed non-idle for the rest of the
+    /// session, and because an incoming ring is auto-rejected whenever the
+    /// phase is not idle, *every subsequent call silently failed to ring*
+    /// with nothing on screen to explain why.
+    private func armRingWatchdog() {
+        ringWatchdog?.cancel()
+        ringWatchdog = Task { [weak self] in
+            try? await Task.sleep(for: Self.ringTimeout)
+            guard !Task.isCancelled, let self else { return }
+            guard self.phase == .outgoing || self.phase == .incoming else { return }
+            self.callNotice = self.phase == .outgoing ? "No answer" : nil
+            await self.reset()
+        }
+    }
+
+    private func cancelRingWatchdog() {
+        ringWatchdog?.cancel()
+        ringWatchdog = nil
+    }
+
     private func handleSignal(_ p: CallSignal) async {
-        guard let uid = app.currentUserId, p.from != uid else { return }
+        guard let uid = app.currentUserId else { return }
+
+        // "handled" is the one signal a user sends to themselves. A ring is
+        // broadcast to `call-user:<id>`, so every session that account is
+        // signed into rings at once, and the accept goes only to the caller —
+        // leaving the other sessions ringing after the call was already picked
+        // up elsewhere. Checked before the self-filter below precisely because
+        // it comes from this same account.
+        if p.type == "handled" {
+            if phase == .incoming, incoming?.callId == p.callId {
+                stopRingtone()
+                await reset()
+            }
+            return
+        }
+
+        guard p.from != uid else { return }
         switch p.type {
         case "ring" where p.callId != nil:
             if phase != .idle {
@@ -288,11 +361,13 @@ final class CallManager {
                                         callId: p.callId!)
             }
             phase = .incoming
+            armRingWatchdog()
             startRingtone()
 
         case "accept" where p.callId != nil && phase == .outgoing:
             stopRingtone()
             phase = .active
+            cancelRingWatchdog()
             connectedAt = Date()
             CallSounds.shared.playConnected()
             do {
@@ -455,10 +530,13 @@ final class CallManager {
         }
         signalChannel = nil
         phase = .idle
+        cancelRingWatchdog()
         incoming = nil
         activePeer = nil
         minimized = false
         cameraEnabled = false
+        speakerOn = false
+        callSignaled = false
         connectedAt = nil
         error = nil
         activeCallId = nil
@@ -477,6 +555,12 @@ final class CallManager {
         // call.
         CallAudioSession.prepareForRinging()
         CallSounds.shared.startRingtone()
+    }
+
+    private func startCallingTone() {
+        guard soundEnabled else { return }
+        CallAudioSession.prepareForRinging()
+        CallSounds.shared.startCallingTone()
     }
 
     private func stopRingtone() {

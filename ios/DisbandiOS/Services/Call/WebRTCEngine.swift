@@ -52,6 +52,10 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     private(set) var audioTrack: RTCAudioTrack
     private(set) var remoteAudioTrack: RTCAudioTrack?
     private(set) var remoteVideoTrack: RTCVideoTrack?
+    /// Whether the remote video track is actually enabled (vs. present but
+    /// disabled, which otherwise leaves the last frame frozen on screen).
+    private var remoteVideoPresent = false
+    private var usingFrontCamera = true
 
     private var videoSource: RTCVideoSource?
     private var videoTrack: RTCVideoTrack?
@@ -162,15 +166,38 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
             videoSender = nil
             videoSource = nil
             videoTrack = nil
+            // Notify the peer that remote video is gone so the avatar
+            // backdrop appears instead of a frozen last frame.
+            DispatchQueue.main.async {
+                self.onRemoteVideoTrack(nil)
+            }
             completion(true)
         }
     }
 
+    /// Switches between front and back camera while the camera is active.
+    func switchCamera() {
+        guard capturer != nil else { return }
+        usingFrontCamera.toggle()
+        capturer?.stopCapture()
+        startCapture { [weak self] ok in
+            DispatchQueue.main.async {
+                self?.videoTrack?.isEnabled = ok
+            }
+        }
+    }
+
     private func startCapture(completion: @escaping (Bool) -> Void) {
-        guard let capturer,
-              let device = RTCCameraVideoCapturer.captureDevices().first else {
+        guard let capturer else {
             completion(false)
             return
+        }
+        let devices = RTCCameraVideoCapturer.captureDevices()
+        let device: AVCaptureDevice
+        if usingFrontCamera {
+            device = devices.first(where: { $0.position == .front }) ?? devices.first!
+        } else {
+            device = devices.first(where: { $0.position == .back }) ?? devices.first!
         }
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         let target = CGSize(width: 640, height: 480)
@@ -308,9 +335,15 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
                 remoteAudioTrack = audio
                 onRemoteAudioTrack(audio)
             }
-            if let video = stream.videoTracks.first, remoteVideoTrack !== video {
-                remoteVideoTrack = video
-                onRemoteVideoTrack(video)
+            if let video = stream.videoTracks.first {
+                let hasVideo = video.isEnabled
+                if video !== remoteVideoTrack {
+                    remoteVideoTrack = video
+                }
+                if remoteVideoPresent != hasVideo {
+                    remoteVideoPresent = hasVideo
+                    onRemoteVideoTrack(hasVideo ? video : nil)
+                }
             }
         }
     }
@@ -333,9 +366,17 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
             if let audio = track as? RTCAudioTrack, remoteAudioTrack !== audio {
                 remoteAudioTrack = audio
                 onRemoteAudioTrack(audio)
-            } else if let video = track as? RTCVideoTrack, remoteVideoTrack !== video {
-                remoteVideoTrack = video
-                onRemoteVideoTrack(video)
+            } else if let video = track as? RTCVideoTrack {
+                // A disabled track holds its last frame forever — the avatar
+                // backdrop should take over instead of the frozen image.
+                let hasVideo = video.isEnabled
+                if video !== remoteVideoTrack {
+                    remoteVideoTrack = video
+                }
+                if remoteVideoPresent != hasVideo {
+                    remoteVideoPresent = hasVideo
+                    onRemoteVideoTrack(hasVideo ? video : nil)
+                }
             }
         }
     }
@@ -347,7 +388,20 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
     func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
-    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
+    func peerConnection(_ peerConnection: RTCPeerConnection,
+                        didRemove stream: RTCMediaStream) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            // A removed media stream means the peer (partially) tore down a
+            // track — most commonly their camera — so the avatar backdrop
+            // should take over instead of the last frame lingering.
+            if stream.videoTracks.contains(where: { $0 === self.remoteVideoTrack }),
+               self.remoteVideoPresent {
+                self.remoteVideoPresent = false
+                self.onRemoteVideoTrack(nil)
+            }
+        }
+    }
     func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
 
     private static func engineError(_ message: String) -> NSError {

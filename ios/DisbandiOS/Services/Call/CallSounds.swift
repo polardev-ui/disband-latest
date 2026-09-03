@@ -24,9 +24,38 @@ final class CallSounds {
         ringPlayer = player
     }
 
+    /// A soft, calm tone heard while an outgoing call is ringing — the "calling"
+    /// side of a phone call, as opposed to the ringtone the peer hears.
+    func startCallingTone() {
+        stopRingtone()
+        guard let data = callingToneData(), let player = try? AVAudioPlayer(data: data) else { return }
+        player.numberOfLoops = -1
+        player.volume = 0.35
+        player.play()
+        ringPlayer = player
+    }
+
     func stopRingtone() {
         ringPlayer?.stop()
         ringPlayer = nil
+    }
+
+    /// A slow, gentle pulse — one tone every 3 seconds — that reads as "your
+    /// call is going out" without being urgent.
+    private func callingToneData() -> Data? {
+        let toneDur = 0.5
+        let gap = 2.5
+        let total = toneDur + gap
+        let n = Int(total * sampleRate)
+        var samples = [Float](repeating: 0, count: n)
+        let toneCount = Int(toneDur * sampleRate)
+        for i in 0..<toneCount {
+            let t = Double(i) / sampleRate
+            let env = Float(exp(-t * 2.5))
+            let wave = 0.5 * sin(2 * .pi * 440.0 * t) + 0.25 * sin(2 * .pi * 550.0 * t)
+            samples[i] = Float(wave * Double(env) * 0.8)
+        }
+        return makeWav(samples)
     }
 
     func playConnected() { playOneShot(chime([(523.25, 0.0, 0.30), (783.99, 0.10, 0.35)])) }

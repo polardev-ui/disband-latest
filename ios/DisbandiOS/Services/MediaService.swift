@@ -23,7 +23,9 @@ struct GiphyGif: Codable, Identifiable, Hashable {
     let images: Images?
 
     var fullUrl: String? { url ?? images?.original?.url ?? images?.fixedWidth?.url ?? preview }
-    var thumbUrl: String? { preview ?? images?.fixedWidth?.url ?? fullUrl }
+    /// An animated thumbnail for the picker grid — prefers the fixed-width GIF,
+    /// which the system decodes as an animated image for a live preview.
+    var thumbUrl: String? { images?.fixedWidth?.url ?? fullUrl }
 }
 
 private struct GiphyResponse: Codable {
