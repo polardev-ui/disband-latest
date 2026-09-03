@@ -2,7 +2,7 @@
 // Sends an APNs push to all of a user's registered devices.
 //
 // Invoked by a Database Webhook / trigger with JSON:
-//   { "user_id": "<uuid>", "title": "…", "body": "…", "link": "…"? }
+//   { "user_id": "<uuid>", "title": "…", "body": "…", "link": "…"?, "source": "…"? }
 //
 // Required secrets (set with `supabase secrets set …`):
 //   APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (com.wsgpolar.disband),
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const { user_id, title, body, link } = await req.json();
+  const { user_id, title, body, link, source } = await req.json();
   if (!user_id || !body) return new Response("Bad request", { status: 400 });
 
   const supabase = createClient(
@@ -77,6 +77,9 @@ Deno.serve(async (req) => {
   const payload = JSON.stringify({
     aps: { alert: { title: title ?? "Disband", body }, sound: "default" },
     link: link ?? null,
+    // The conversation this is about, so a client already showing it can
+    // suppress the banner instead of interrupting the chat you are reading.
+    source: source ?? null,
   });
 
   let sent = 0;

@@ -3,6 +3,7 @@ import SwiftUI
 struct DirectMessagesTab: View {
     @Environment(AppState.self) private var app
     @Environment(DmUnreadStore.self) private var unreadStore
+    @Environment(PresenceService.self) private var presence
     // Shared with the app, which starts loading at sign-in rather than when
     // this tab is first opened.
     @Environment(DirectMessagesViewModel.self) private var vm
@@ -49,7 +50,7 @@ struct DirectMessagesTab: View {
                                 ConversationRow(
                                     iconUrl: thread.friend?.avatarUrl,
                                     name: thread.friend?.name ?? "Unknown",
-                                    status: thread.friend?.status,
+                                    status: liveStatus(thread.friend),
                                     preview: DirectMessagesViewModel.preview(for: thread),
                                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
                                     unread: unreadStore.count(for: thread.id)
@@ -85,6 +86,13 @@ struct DirectMessagesTab: View {
                 return lhs.offset < rhs.offset
             }
             .map(\.element)
+    }
+
+    /// A DM friend's live presence status (offline when not actively connected,
+    /// matching the web's presence semantics).
+    private func liveStatus(_ friend: Profile?) -> UserStatus? {
+        guard let friend else { return nil }
+        return presence.status(for: friend.id)
     }
 
     private func groupRow(_ group: GroupChat) -> some View {

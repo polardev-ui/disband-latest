@@ -1,7 +1,8 @@
 "use client";
 
 import { Logo } from "@/components/ui/Logo";
-import { allowMobileWeb } from "@/lib/mobile-detect";
+import { chooseContinueOnWeb } from "@/lib/mobile-session";
+import { useRouter } from "next/navigation";
 
 const APP_STORE_URL = "https://apps.apple.com/app/id6783881800";
 
@@ -14,9 +15,15 @@ const APP_STORE_URL = "https://apps.apple.com/app/id6783881800";
  * anyone who would rather stay in the browser.
  */
 export function MobileWaitlistScreen() {
+  const router = useRouter();
+
   function continueOnWeb() {
-    allowMobileWeb();
-    window.location.replace("/app");
+    // Session-scoped "let me in": the choice is remembered for the current page
+    // load, so the gate lets you into /app without re-asking, but a hard
+    // refresh asks again. Client-side push (not location.replace) keeps the
+    // in-memory flag alive across the navigation.
+    chooseContinueOnWeb();
+    router.push("/app");
   }
 
   return (

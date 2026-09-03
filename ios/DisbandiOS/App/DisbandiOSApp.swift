@@ -7,6 +7,7 @@ struct DisbandiOSApp: App {
     @State private var call: CallManager
     @State private var dmUnread: DmUnreadStore
     @State private var subscriptions: SubscriptionService
+    @State private var presence: PresenceService
     @State private var notes: NotesService
     @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
@@ -15,10 +16,13 @@ struct DisbandiOSApp: App {
         CallAudioSession.prepare()
 
         let appState = AppState()
+        let presence = PresenceService()
+        appState.presence = presence
         _appState = State(initialValue: appState)
         _call = State(initialValue: CallManager(app: appState))
         _dmUnread = State(initialValue: DmUnreadStore())
         _subscriptions = State(initialValue: SubscriptionService())
+        _presence = State(initialValue: presence)
         _notes = State(initialValue: NotesService())
         _directMessages = State(initialValue: DirectMessagesViewModel())
         _themeManager = State(initialValue: ThemeManager.shared)
@@ -31,6 +35,7 @@ struct DisbandiOSApp: App {
                 .environment(call)
                 .environment(dmUnread)
                 .environment(subscriptions)
+                .environment(presence)
                 .environment(notes)
                 .environment(directMessages)
                 .environment(themeManager)
@@ -38,6 +43,10 @@ struct DisbandiOSApp: App {
                 .tint(themeManager.palette.accent)
                 .task(id: appState.currentUserId) {
                     await subscriptions.start(userId: appState.currentUserId)
+                }
+                .task(id: appState.currentUserId) {
+                    await presence.start(userId: appState.currentUserId,
+                                         status: appState.profile?.status ?? .online)
                 }
                 .task(id: appState.currentUserId) {
                     await call.start(userId: appState.currentUserId)

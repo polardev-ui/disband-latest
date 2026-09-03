@@ -24,11 +24,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         print("APNs registration failed: \(error.localizedDescription)")
     }
 
-    /// Show banners/sound even when the app is in the foreground.
+    /// Show banners in the foreground — except for the conversation already on
+    /// screen. Being interrupted by a banner for the message you are watching
+    /// arrive is pure noise; the badge still updates so nothing is lost.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions {
-        [.banner, .sound, .badge]
+        let source = notification.request.content.userInfo["source"] as? String
+        if ActiveChat.shared.isShowing(source) { return [] }
+        return [.banner, .sound, .badge]
     }
 }
 

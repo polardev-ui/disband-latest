@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FriendsTab: View {
     @Environment(AppState.self) private var app
+    @Environment(PresenceService.self) private var presence
     @State private var friendships: [Friendship] = []
     @State private var loading = true
     @State private var showAdd = false
@@ -82,7 +83,8 @@ struct FriendsTab: View {
                             Section("Pending") {
                                 ForEach(outgoing) { f in
                                     HStack {
-                                        FriendRow(profile: counterparty(f))
+                                        FriendRow(profile: counterparty(f),
+                                                  status: liveStatus(counterparty(f)))
                                         Spacer()
                                         Text("Sent").font(.caption).foregroundStyle(Brand.textMuted)
                                     }
@@ -100,7 +102,8 @@ struct FriendsTab: View {
                             ForEach(visibleFriends) { f in
                                 Button { selectedProfile = counterparty(f) } label: {
                                     HStack {
-                                        FriendRow(profile: counterparty(f))
+                                        FriendRow(profile: counterparty(f),
+                                                  status: liveStatus(counterparty(f)))
                                         Spacer()
                                         Button { startDm(with: counterparty(f)) } label: {
                                             Image(systemName: "bubble.left.fill").foregroundStyle(Brand.accent)
@@ -156,10 +159,17 @@ struct FriendsTab: View {
         f.requesterId == uid ? f.addressee : f.requester
     }
 
+    /// Live presence status for a friend. Matches the web: offline when they're
+    /// not actively connected, never a stale stored status.
+    private func liveStatus(_ profile: Profile?) -> UserStatus? {
+        guard let profile else { return nil }
+        return presence.status(for: profile.id)
+    }
+
     @ViewBuilder
     private func requestRow(_ f: Friendship, profile: Profile?) -> some View {
         HStack {
-            FriendRow(profile: profile)
+            FriendRow(profile: profile, status: liveStatus(profile))
             Spacer()
             Button { respond(f, accept: true) } label: {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(Brand.online)
@@ -195,10 +205,14 @@ struct FriendsTab: View {
 
 struct FriendRow: View {
     let profile: Profile?
+    /// Live presence status, resolved by the caller; falls back to the stored
+    /// profile status so a friend offline (not in the presence channel) shows grey.
+    var status: UserStatus?
+
     var body: some View {
         HStack(spacing: 12) {
             AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?",
-                       size: 40, status: profile?.status)
+                       size: 40, status: status)
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile?.name ?? "Unknown").font(.subheadline.weight(.semibold))
                     .foregroundStyle(Brand.textPrimary)
