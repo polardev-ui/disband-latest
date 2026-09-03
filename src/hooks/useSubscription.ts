@@ -9,6 +9,7 @@ import {
   type Subscription,
 } from "@/lib/subscription";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { apiFetch } from "@/lib/api";
 
 let idCounter = 0;
 
@@ -73,7 +74,7 @@ export function useSubscription(userId: string | undefined) {
    */
   const syncFromStripe = useCallback(async (): Promise<SubscriptionPlan | null> => {
     try {
-      const res = await fetch("/api/stripe/sync", { method: "POST" });
+      const res = await apiFetch("/api/stripe/sync", { method: "POST" });
       const json = (await res.json()) as { synced?: boolean; plan?: SubscriptionPlan };
       if (!json.synced) return null;
       const row = await load();
@@ -154,7 +155,7 @@ export function useSubscription(userId: string | undefined) {
   const entitlements = ENTITLEMENTS[plan];
 
   const startCheckout = useCallback(async (planId: "basic" | "super"): Promise<string | null> => {
-    const res = await fetch("/api/stripe/create-checkout", {
+    const res = await apiFetch("/api/stripe/create-checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plan: planId }),
@@ -164,7 +165,7 @@ export function useSubscription(userId: string | undefined) {
   }, []);
 
   const openPortal = useCallback(async () => {
-    const res = await fetch("/api/stripe/portal");
+    const res = await apiFetch("/api/stripe/portal");
     const json = (await res.json()) as { url?: string; error?: string };
     if (json.url) {
       window.location.href = json.url;

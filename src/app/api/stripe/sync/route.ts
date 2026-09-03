@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import type Stripe from "stripe";
 import { getStripe, PRICE_IDS } from "@/lib/stripe";
 import { GRANTING_STATUSES } from "@/lib/subscription";
-import { getServiceSupabase } from "@/lib/supabase/server";
+import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
 /**
@@ -46,25 +44,9 @@ function rank(sub: Stripe.Subscription): number {
   return 1;
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(PUBLIC_ENV.supabaseUrl, PUBLIC_ENV.supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          );
-        },
-      },
-    });
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getRouteUser(req);
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }

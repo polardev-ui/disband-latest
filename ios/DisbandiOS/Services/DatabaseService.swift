@@ -341,6 +341,43 @@ enum DatabaseService {
         try await client.from("profiles").update(patch).eq("id", value: userId).execute()
     }
 
+    /// Change the signed-in user's username.
+    ///
+    /// Goes through `complete_signup_profile` rather than updating `profiles`
+    /// directly: that function normalises the value, enforces the blocked-word
+    /// and format policy, and checks availability. A raw UPDATE would skip all
+    /// of that and surface the CHECK-constraint failure as an opaque error.
+    static func updateUsername(_ username: String) async throws {
+        struct Params: Encodable {
+            let p_username: String
+            let p_display_name: String?
+        }
+        try await client
+            .rpc("complete_signup_profile",
+                 params: Params(p_username: username, p_display_name: nil))
+            .execute()
+    }
+
+    /// Live availability check for a candidate username.
+    /// Returns nil when the name is free, or a reason to show the user.
+    static func usernameUnavailableReason(_ username: String) async -> String? {
+        struct Params: Encodable { let p_username: String }
+        struct Result: Decodable {
+            let available: Bool
+            let reason: String?
+        }
+        do {
+            let result: Result = try await client
+                .rpc("check_username_available", params: Params(p_username: username))
+                .execute().value
+            return result.available ? nil : (result.reason ?? "That username is taken.")
+        } catch {
+            // Network/permission trouble: don't block the save here — the RPC
+            // is the authority when the user actually submits.
+            return nil
+        }
+    }
+
     // MARK: - Voice presence
 
     static func voiceParticipants(channelId: String) async throws -> [VoiceParticipant] {

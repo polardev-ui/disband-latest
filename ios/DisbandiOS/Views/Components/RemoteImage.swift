@@ -12,6 +12,10 @@ final class ImageCache {
 
 /// A reliable remote image: caches in memory, falls back to a placeholder, and
 /// retries transient failures — so avatars/banners don't intermittently vanish.
+///
+/// Animated sources (GIF/APNG) are decoded to a multi-frame `UIImage` and
+/// rendered through `AnimatedImageView`; SwiftUI's own `Image` shows only the
+/// first frame, which is why GIFs used to appear frozen.
 struct RemoteImage<Placeholder: View>: View {
     let url: String?
     var contentMode: ContentMode = .fill
@@ -19,12 +23,21 @@ struct RemoteImage<Placeholder: View>: View {
 
     @State private var image: UIImage?
 
+    private var isAnimated: Bool { (image?.images?.count ?? 0) > 1 }
+
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
+                if isAnimated {
+                    AnimatedImageView(
+                        image: image,
+                        contentMode: contentMode == .fill ? .scaleAspectFill : .scaleAspectFit
+                    )
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                }
             } else {
                 placeholder()
             }
@@ -44,7 +57,8 @@ struct RemoteImage<Placeholder: View>: View {
                 req.cachePolicy = .returnCacheDataElseLoad
                 req.timeoutInterval = 20
                 let (data, _) = try await URLSession.shared.data(for: req)
-                if let img = UIImage(data: data) {
+                // Animated first: UIImage(data:) would silently flatten it.
+                if let img = AnimatedImageDecoder.decode(data) ?? UIImage(data: data) {
                     ImageCache.shared.set(img, for: url)
                     if !Task.isCancelled { image = img }
                     return

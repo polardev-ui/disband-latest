@@ -1,0 +1,142 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:radial-gradient(60% 50% at 50% 35%,#1a1d29,#08090c);"><style>
+/* ---------------------------------------------------------------------------
+   Animated 3D device.
+
+   Real perspective via CSS transforms rather than a pre-rendered tilt, so the
+   phone actually rotates and catches light as it moves. Screens cross-fade on
+   a timer. Everything degrades to a static, upright phone if animation or 3D
+   is unavailable, and stops entirely under prefers-reduced-motion.
+   --------------------------------------------------------------------------- */
+.d3-stage {
+  --w: 300px;                 /* screen width; everything scales from this */
+  --rail: 10px;
+  --radius: calc(var(--w) * 0.093);
+  perspective: 1600px;
+  perspective-origin: 50% 45%;
+  display: grid;
+  place-items: center;
+  padding: 60px 20px 90px;
+}
+
+.d3-phone {
+  position: relative;
+  width: calc(var(--w) + var(--rail) * 2);
+  transform-style: preserve-3d;
+  animation: d3-float 9s cubic-bezier(.45,0,.55,1) infinite;
+  will-change: transform;
+}
+
+/* The machined rail. Two stacked gradients: a vertical sheen down the length,
+   and a horizontal one that brightens both chamfers. */
+.d3-body {
+  position: relative;
+  padding: var(--rail);
+  border-radius: calc(var(--radius) + var(--rail));
+  background:
+    linear-gradient(180deg, #e6e8ee 0%, #9aa0ad 22%, #6f747f 50%, #a8aeba 78%, #dfe2e9 100%),
+    linear-gradient(90deg, #f2f4f8 0%, #7e828d 18%, #62666f 50%, #7e828d 82%, #f2f4f8 100%);
+  background-blend-mode: overlay;
+  box-shadow:
+    0 2px 3px rgba(255,255,255,.35) inset,
+    0 40px 60px -20px rgba(0,0,0,.65),
+    0 12px 20px -8px rgba(0,0,0,.55);
+}
+
+.d3-screen {
+  position: relative;
+  width: var(--w);
+  aspect-ratio: 1206 / 2622;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0a0a0c;
+  box-shadow: 0 0 0 3px #08080a inset;
+}
+
+.d3-screen img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .9s ease;
+}
+.d3-screen img.is-on { opacity: 1; }
+
+/* Specular sweep travelling across the glass. */
+.d3-glare {
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  background: linear-gradient(105deg,
+    transparent 38%,
+    rgba(255,255,255,.10) 46%,
+    rgba(255,255,255,.18) 50%,
+    rgba(255,255,255,.06) 55%,
+    transparent 62%);
+  transform: translateX(-60%);
+  animation: d3-sweep 7s ease-in-out 1.2s infinite;
+}
+
+/* Buttons, so the silhouette isn't a plain rectangle. */
+.d3-btn {
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #d7dae1, #7c818c 30%, #5d616a);
+  transform: translateZ(-2px);
+}
+.d3-btn.l { left: -3px; }
+.d3-btn.r { right: -3px; }
+
+@keyframes d3-float {
+  0%   { transform: rotateY(-13deg) rotateX(4deg) translateY(0); }
+  50%  { transform: rotateY(-6deg)  rotateX(1deg) translateY(-14px); }
+  100% { transform: rotateY(-13deg) rotateX(4deg) translateY(0); }
+}
+@keyframes d3-sweep {
+  0%, 12%  { transform: translateX(-60%); }
+  55%,100% { transform: translateX(60%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d3-phone { animation: none; transform: rotateY(-8deg); }
+  .d3-glare { animation: none; opacity: .5; }
+  .d3-screen img { transition: none; }
+}
+</style>
+
+<div class="d3-stage">
+  <div class="d3-phone">
+    <div class="d3-body">
+      <span class="d3-btn l" style="top:17%;height:5%"></span>
+      <span class="d3-btn l" style="top:26%;height:9%"></span>
+      <span class="d3-btn l" style="top:37%;height:9%"></span>
+      <span class="d3-btn r" style="top:30%;height:14%"></span>
+      <div class="d3-screen">
+        <img class="is-on" src="../public/marketing/screens/01-servers.png" alt="Disband — your servers">
+        <img src="../public/marketing/screens/02-channels.png" alt="Disband — channels">
+        <img src="../public/marketing/screens/03-chat.png" alt="Disband — a conversation">
+        <img src="../public/marketing/screens/05-notes.png" alt="Disband — private notes">
+        <img src="../public/marketing/screens/06-appearance.png" alt="Disband — themes">
+        <span class="d3-glare"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) return;
+  var imgs = [].slice.call(document.querySelectorAll(".d3-screen img"));
+  if (imgs.length < 2) return;
+  var i = 0;
+  setInterval(function () {
+    imgs[i].classList.remove("is-on");
+    i = (i + 1) % imgs.length;
+    imgs[i].classList.add("is-on");
+  }, 3200);
+})();
+</script>
+</body></html>
