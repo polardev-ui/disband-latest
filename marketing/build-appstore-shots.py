@@ -1,5 +1,5 @@
 """
-Builds App Store screenshots at the 6.9" iPhone size (1320x2868).
+Builds App Store screenshots at 1284x2778 (6.5" portrait) by default.
 
 Real captures from the running app are composited into a dimensional frame —
 perspective tilt, contact shadow, rim light, depth-of-field gradient — rather
@@ -18,7 +18,20 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import device as device_mod
 
-W, H = 1320, 2868                      # App Store 6.9" portrait
+# App Store portrait sizes. 1284x2778 is the 6.5" slot; 1320x2868 is 6.9".
+# Override from the command line: `python3 build-appstore-shots.py 1320 2868`.
+REF_W = 1320                           # width the layout constants were tuned at
+W, H = 1284, 2778                      # App Store 6.5" portrait (default)
+
+if len(sys.argv) >= 3:
+    W, H = int(sys.argv[1]), int(sys.argv[2])
+
+
+def s(value: float) -> int:
+    """Scale a constant that was tuned at REF_W so the composition holds at any
+    canvas width. Margins, type and spacing all move together; anything already
+    expressed as a fraction of W or H is left alone."""
+    return max(1, round(value * W / REF_W))
 SRC = Path(__file__).resolve().parent / "source-captures"
 OUT = Path(__file__).resolve().parent / "appstore"
 
@@ -170,43 +183,43 @@ def build(panel, index):
     draw = ImageDraw.Draw(canvas)
 
     # --- type -------------------------------------------------------------
-    m = 96
-    y = 168
+    m = s(96)
+    y = s(168)
 
-    f_eye = font(38, 800)
+    f_eye = font(s(38), 800)
     draw.text((m, y), panel["eyebrow"], font=f_eye, fill=hue + (255,))
-    y += 74
+    y += s(74)
 
     # Shrink the headline until the longest line clears the margin, rather than
     # hand-tuning copy per panel. "unmistakably yours" ran to within 35px of the
     # edge at the nominal size.
     lines = panel["title"].split("\n")
-    size = 104
-    while size > 68:
+    size = s(104)
+    while size > s(68):
         f_title = font(size, 800)
         if max(draw.textlength(l, font=f_title) for l in lines) <= W - m * 2:
             break
-        size -= 4
+        size -= s(4)
     f_title = font(size, 800)
     for line in lines:
         draw.text((m, y), line, font=f_title, fill=(255, 255, 255, 255))
         y += int(size * 1.135)
-    y += 18
+    y += s(18)
 
-    f_sub = font(40, 500)
-    for line in wrap(draw, panel["sub"], f_sub, W - m * 2 - 40):
+    f_sub = font(s(40), 500)
+    for line in wrap(draw, panel["sub"], f_sub, W - m * 2 - s(40)):
         draw.text((m, y), line, font=f_sub, fill=(176, 182, 196, 255))
-        y += 54
+        y += s(54)
 
     # --- device -----------------------------------------------------------
     shot = Image.open(SRC / panel["shot"]).convert("RGB")
 
     # Fit to whatever vertical room the copy left, so a longer headline shrinks
     # the device rather than pushing it off the canvas.
-    top = y + 92
+    top = y + s(92)
     # Leave real breathing room below: the device was running off the canvas.
-    avail_h = H - top - 112
-    rail, bezel = 5, 4
+    avail_h = H - top - s(112)
+    rail, bezel = max(1, s(5)), max(1, s(4))
     target_w = int(W * 0.74)
     target_h = round(shot.height * target_w / shot.width)
     if target_h + (rail + bezel) * 2 > avail_h:
