@@ -6,6 +6,7 @@ import { playCallConnected, playCallJoin, playCallLeave } from "@/lib/call-sound
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { fetchIceServers } from "@/lib/ice-servers";
 
 interface SignalPayload {
   type: "offer" | "answer" | "ice" | "leave";
@@ -15,10 +16,6 @@ interface SignalPayload {
   candidate?: RTCIceCandidateInit;
 }
 
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-];
 
 export function useVoiceChannel(
   channelId: string | null,
@@ -88,7 +85,9 @@ export function useVoiceChannel(
       if (!userId || !channelId || remoteId === userId) return;
       if (peersRef.current.has(remoteId)) return;
 
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      // Voice channels used a hardcoded STUN-only list, so they could not
+      // connect across strict NATs at all. They share the relay now.
+      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
 
       const local = localStreamRef.current;

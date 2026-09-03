@@ -9,7 +9,7 @@ import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { playCallConnected, playCallEnd, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import { attachRemoteTrack, createOfferForPeer, setPeerVideoTrack } from "@/lib/webrtc";
-import { getIceServers } from "@/lib/ice-servers";
+import { fetchIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -28,7 +28,6 @@ export interface GroupCallParticipant {
 }
 
 // Shared with 1:1 calls so both paths pick up TURN when it is configured.
-const ICE: RTCIceServer[] = getIceServers();
 
 export type GroupCallPhase = "idle" | "ringing" | "active";
 
@@ -165,7 +164,7 @@ export function useGroupCallManager(
       if (!userId || !groupIdRef.current || remoteId === userId) return;
       if (peersRef.current.has(remoteId)) return;
 
-      const pc = new RTCPeerConnection({ iceServers: ICE });
+      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
       const local = localRef.current;
       if (local) local.getTracks().forEach((t) => pc.addTrack(t, local));

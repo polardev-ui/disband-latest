@@ -28,13 +28,24 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+// Every /api/bot/* route authenticates by bearer token only, and on desktop a
+// relative /api/ path resolves to the static shell rather than a route at all.
+// `apiFetch` handles both, so bot create/revoke/invite must go through it —
+// with a plain `fetch` they answered 401 on web and an empty error on desktop.
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data: any }> {
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    // An HTML error page, not JSON. Give the caller something to show.
+    data = { error: `Request failed (${res.status}).` };
+  }
   return { ok: res.ok, data };
 }
 
@@ -227,8 +238,8 @@ export function BotsPanel() {
                 <input
                   id="bot-new-name"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value.slice(0, 32))}
-                  maxLength={32}
+                  onChange={(e) => setNewName(e.target.value.slice(0, 25))}
+                  maxLength={25}
                   placeholder="Deploy Bot"
                   className={settingsInputClass}
                 />

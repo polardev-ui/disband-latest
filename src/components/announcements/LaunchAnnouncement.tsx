@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { hasAllowedMobileWeb } from "@/lib/mobile-detect";
 
 /**
  * Site-wide iOS launch announcement.
@@ -77,6 +78,16 @@ export function LaunchAnnouncement() {
 
   useEffect(() => {
     setMounted(true);
+
+    // /mobile is now itself an App Store pitch, and /verification is a step in
+    // a flow the user is in the middle of. Neither wants this dialog on top.
+    const path = window.location.pathname;
+    if (path.startsWith("/mobile") || path.startsWith("/verification")) return;
+
+    // Someone who just chose "Continue on the web" over the App Store has
+    // already answered this question. Do not ask it again on the next page.
+    if (hasAllowedMobileWeb()) return;
+
     const isReleased = Date.now() >= RELEASE_AT;
     setReleased(isReleased);
     setLeft(remainingFrom(RELEASE_AT - Date.now()));

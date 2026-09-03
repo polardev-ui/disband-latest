@@ -1,8 +1,8 @@
 import { MobileWaitlistScreen } from "@/components/mobile/MobileWaitlistScreen";
 
 export const metadata = {
-  title: "Disband — Mobile coming soon",
-  description: "Disband is not available on mobile browsers yet. Join the waitlist to be notified at launch.",
+  title: "Disband for iOS",
+  description: "Disband is available on the Apple App Store. Download the iOS app, or continue in your browser.",
 };
 
 export default function MobilePage() {

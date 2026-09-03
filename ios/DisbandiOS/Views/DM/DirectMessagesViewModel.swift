@@ -14,19 +14,33 @@ final class DirectMessagesViewModel {
     var loading = true
 
     private var hasLoadedOnce = false
+    private var startedForUserId: String?
     private var channel: RealtimeChannelV2?
     private var messageTask: Task<Void, Never>?
     private var currentUserId: String?
     private var unreadStore: DmUnreadStore?
 
+    /// Idempotent: the app starts this at sign-in to warm the tab, and the tab
+    /// calls it again when it first appears. The second call must not open a
+    /// second realtime subscription or re-block the list on a spinner.
     func start(currentUserId: String?, unread: DmUnreadStore) async {
-        self.currentUserId = currentUserId
         self.unreadStore = unread
+
+        if startedForUserId == currentUserId, hasLoadedOnce {
+            // Already live for this user; just refresh quietly in place.
+            await load(currentUserId: currentUserId)
+            return
+        }
+
+        if startedForUserId != currentUserId { stop() }
+        self.currentUserId = currentUserId
+        self.startedForUserId = currentUserId
         await load(currentUserId: currentUserId)
         await subscribeToMessages()
     }
 
     func stop() {
+        startedForUserId = nil
         messageTask?.cancel()
         messageTask = nil
         let ch = channel
