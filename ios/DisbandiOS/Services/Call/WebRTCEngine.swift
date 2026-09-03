@@ -64,6 +64,7 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     init(callId: String,
          peerId: String,
          senderId: String,
+         iceServers: [RTCIceServer] = AppConfig.baseIceServers,
          onSignal: @escaping (CallSignal) -> Void,
          onRemoteVideoTrack: @escaping (RTCVideoTrack?) -> Void,
          onRemoteAudioTrack: @escaping (RTCAudioTrack?) -> Void,
@@ -82,7 +83,9 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
 
         let config = RTCConfiguration()
         config.sdpSemantics = .unifiedPlan
-        config.iceServers = AppConfig.iceServers
+        // Passed in rather than read from config: the relay's credentials are
+        // fetched per session, so the caller resolves them before dialling.
+        config.iceServers = iceServers
         config.continualGatheringPolicy = .gatherContinually
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,

@@ -71,12 +71,15 @@ enum DatabaseService {
             .execute()
     }
 
+    /// `bannerUrl` was missing here even though `Server` has the field and the
+    /// column exists, so a server banner could never be set from iOS.
     static func updateServer(serverId: String, name: String?, description: String?,
-                             iconUrl: String?) async throws {
+                             iconUrl: String?, bannerUrl: String? = nil) async throws {
         var patch: [String: String] = [:]
         if let name { patch["name"] = name }
         if let description { patch["description"] = description }
         if let iconUrl { patch["icon_url"] = iconUrl }
+        if let bannerUrl { patch["banner_url"] = bannerUrl }
         guard !patch.isEmpty else { return }
         try await client.from("servers").update(patch).eq("id", value: serverId).execute()
     }

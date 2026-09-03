@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { isMobileGateDisabled, isMobileUserAgent } from "@/lib/mobile-detect";
+import { hasAllowedMobileWeb, isMobileGateDisabled, isMobileUserAgent } from "@/lib/mobile-detect";
 import { isTauri } from "@/lib/platform";
 
 export type MobileGateState = "checking" | "redirecting" | "allow";
@@ -26,7 +26,18 @@ export function useMobileWebGate(): MobileGateState {
       || path.startsWith("/mobile/")
       || path.startsWith("/privacy")
       || path.startsWith("/terms")
+      // Email links land on a phone more often than not. Bouncing someone to
+      // the App Store pitch mid-verification loses the token in the URL.
+      || path.startsWith("/verification")
+      || path.startsWith("/reset-password")
+      || path.startsWith("/bot-invite")
     ) {
+      setState("allow");
+      return;
+    }
+
+    // "Continue on the web" is a standing choice, not a one-time bypass.
+    if (hasAllowedMobileWeb()) {
       setState("allow");
       return;
     }

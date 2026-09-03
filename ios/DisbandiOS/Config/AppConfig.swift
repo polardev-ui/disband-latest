@@ -17,48 +17,48 @@ enum AppConfig {
     /// Public web origin for shareable links / invites.
     static let webAppURL = URL(string: "https://www.disband.dev")!
 
+    /// Where confirmation and recovery emails land. A real page, so a user who
+    /// taps the link in their mail app sees that it worked instead of a blank
+    /// redirect.
+    static let emailVerificationURL = URL(string: "https://www.disband.dev/verification")!
+
     // MARK: - Calls
 
-    /// TURN relay, mirroring NEXT_PUBLIC_TURN_* on the web.
+    /// STUN only. The relay is fetched per session by ``TurnService`` because
+    /// its credentials are time-limited and cannot be compiled in; these stay
+    /// as the direct-connection path, which is always cheaper and lower latency
+    /// than relaying, and as the fallback when no relay is available.
     ///
-    /// STUN alone cannot carry media. A phone is usually behind carrier-grade
-    /// NAT, so a mobile-to-desktop call often has no direct candidate pair and
-    /// connects with no audio in either direction. Leave empty to run without a
-    /// relay; calls between a phone and a desktop will be unreliable until it
-    /// is filled in.
-    static let turnURLs: [String] = []
-    static let turnUsername = ""
-    static let turnCredential = ""
-
-    /// STUN plus TURN when configured. Must match the web app's list, or the
-    /// two ends can gather candidates that never pair up.
-    static var iceServers: [RTCIceServer] {
-        var servers = [
-            RTCIceServer(urlStrings: [
-                "stun:stun.l.google.com:19302",
-                "stun:stun1.l.google.com:19302",
-            ])
-        ]
-        if !turnURLs.isEmpty {
-            servers.append(
-                RTCIceServer(
-                    urlStrings: turnURLs,
-                    username: turnUsername,
-                    credential: turnCredential
-                )
-            )
-        }
-        return servers
-    }
+    /// Must match the web app's list, or the two ends can gather candidates
+    /// that never pair up.
+    static let baseIceServers = [
+        RTCIceServer(urlStrings: [
+            "stun:stun.l.google.com:19302",
+            "stun:stun1.l.google.com:19302",
+        ])
+    ]
 }
 
-/// Process-wide shared Supabase client. Auth tokens are persisted in the
-/// Keychain automatically by the SDK, so sessions survive app relaunches.
+/// Process-wide shared Supabase client.
+///
+/// Session storage goes through ``ResilientAuthStorage`` rather than the SDK's
+/// Keychain default: a Keychain that refuses to vend items (a build missing its
+/// `application-identifier` entitlement) otherwise leaves the app signed in
+/// with a token it can never read back, which surfaces as an account with no
+/// data in it and a session that "expired" immediately.
 enum SupabaseManager {
+    static let authStorage = ResilientAuthStorage()
+
     static let client: SupabaseClient = {
         SupabaseClient(
             supabaseURL: AppConfig.supabaseURL,
-            supabaseKey: AppConfig.supabaseAnonKey
+            supabaseKey: AppConfig.supabaseAnonKey,
+            options: SupabaseClientOptions(
+                auth: SupabaseClientOptions.AuthOptions(
+                    storage: authStorage,
+                    redirectToURL: AppConfig.emailVerificationURL
+                )
+            )
         )
     }()
 }

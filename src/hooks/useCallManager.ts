@@ -26,7 +26,7 @@ interface CallSignal {
   candidate?: RTCIceCandidateInit;
 }
 
-import { getIceServers, hasTurnConfigured } from "@/lib/ice-servers";
+import { fetchIceServers, getIceServers, hasTurnConfigured } from "@/lib/ice-servers";
 
 export interface IncomingCallInfo {
   fromId: string;
@@ -140,7 +140,7 @@ export function useCallManager(
 
       const supabase = getSupabaseClient();
       const ch = supabase.channel(`call:${callId}`, { config: { broadcast: { self: false } } });
-      const pc = new RTCPeerConnection({ iceServers: getIceServers() });
+      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       pcRef.current = pc;
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 

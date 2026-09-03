@@ -37,6 +37,8 @@ struct BlurredAvatarBackdrop: View {
                 startPoint: .top, endPoint: .bottom
             )
         }
+        // Fill whatever is offered and clip; never grow to the source image.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
 }
@@ -49,14 +51,19 @@ struct BlurredAvatarBackdrop: View {
 enum PiPCorner: CaseIterable {
     case topLeading, topTrailing, bottomLeading, bottomTrailing
 
-    func offset(in size: CGSize, tile: CGSize, inset: CGFloat) -> CGSize {
+    /// Offset from the container's centre that parks the tile in this corner.
+    ///
+    /// `topInset` and `bottomInset` keep it clear of the status bar and of the
+    /// call controls, which otherwise sit underneath it.
+    func offset(in size: CGSize, tile: CGSize, inset: CGFloat,
+                topInset: CGFloat = 0, bottomInset: CGFloat = 0) -> CGSize {
         let x = (size.width - tile.width) / 2 - inset
         let y = (size.height - tile.height) / 2 - inset
         switch self {
-        case .topLeading:     return CGSize(width: -x, height: -y)
-        case .topTrailing:    return CGSize(width:  x, height: -y)
-        case .bottomLeading:  return CGSize(width: -x, height:  y)
-        case .bottomTrailing: return CGSize(width:  x, height:  y)
+        case .topLeading:     return CGSize(width: -x, height: -y + topInset)
+        case .topTrailing:    return CGSize(width:  x, height: -y + topInset)
+        case .bottomLeading:  return CGSize(width: -x, height:  y - bottomInset)
+        case .bottomTrailing: return CGSize(width:  x, height:  y - bottomInset)
         }
     }
 
@@ -104,20 +111,26 @@ struct FaceTimeCallView: View {
         GeometryReader { geo in
             ZStack {
                 peerLayer
-                    .ignoresSafeArea()
+                    // Pinned to the container so no avatar, however large or
+                    // however it is decoded, can inflate the ZStack and drag
+                    // the controls off-screen with it.
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
 
-                selfTile(in: geo.size)
+                selfTile(in: geo.size, insets: geo.safeAreaInsets)
 
                 if controlsVisible {
-                    controlsLayer
+                    controlsLayer(insets: geo.safeAreaInsets)
                         .transition(.opacity)
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
             .background(.black)
             // Tap anywhere (not on a control) to reveal or dismiss the chrome.
             .contentShape(Rectangle())
             .onTapGesture { toggleControls() }
         }
+        .ignoresSafeArea()
         .onAppear { scheduleHide() }
         .onDisappear { hideTask?.cancel() }
         // Any state change worth looking at brings the controls back.
@@ -140,30 +153,45 @@ struct FaceTimeCallView: View {
                         Text(peerName)
                             .font(.title2.weight(.semibold))
                             .foregroundStyle(.white)
-                        Text(statusLine)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.7))
+                        // Driven by a timeline rather than recomputed on the
+                        // next unrelated redraw, which is why the duration used
+                        // to advance only when the screen was tapped.
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text(statusLine(at: context.date))
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
                     }
                 }
             }
         }
     }
 
-    private var statusLine: String {
+    private func statusLine(at date: Date) -> String {
         if call.phase == .outgoing { return "Calling\u{2026}" }
         if let connectedAt = call.connectedAt {
-            return formatElapsed(connectedAt)
+            return formatElapsed(connectedAt, at: date)
         }
         return "Connecting\u{2026}"
     }
 
     // MARK: - Self view (draggable PiP)
 
-    private func selfTile(in container: CGSize) -> some View {
+    /// Height the bottom row of controls occupies, so the tile can be parked
+    /// clear of it rather than sitting on the end-call button.
+    private static let controlsHeight: CGFloat = 96
+
+    private func selfTile(in container: CGSize, insets: EdgeInsets) -> some View {
         let tile = pipEnlarged
             ? CGSize(width: 190, height: 260)
             : CGSize(width: 112, height: 156)
-        let base = corner.offset(in: container, tile: tile, inset: 18)
+        let base = corner.offset(
+            in: container,
+            tile: tile,
+            inset: 18,
+            topInset: insets.top,
+            bottomInset: insets.bottom + (controlsVisible ? Self.controlsHeight : 0)
+        )
 
         return selfContent
             .frame(width: tile.width, height: tile.height)
@@ -221,11 +249,13 @@ struct FaceTimeCallView: View {
 
     // MARK: - Controls
 
-    private var controlsLayer: some View {
-        VStack {
+    private func controlsLayer(insets: EdgeInsets) -> some View {
+        VStack(spacing: 0) {
             topBar
+                .padding(.top, insets.top)
             Spacer()
             bottomControls
+                .padding(.bottom, max(insets.bottom, 16))
         }
     }
 
@@ -301,7 +331,6 @@ struct FaceTimeCallView: View {
                 }
                 .accessibilityLabel("End call")
             }
-            .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity)
         .background {

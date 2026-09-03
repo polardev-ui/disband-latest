@@ -39,9 +39,8 @@ final class CallManager {
     var callNotice: String?
     var connectedAt: Date?
 
-    /// Whether the call UI is collapsed to a pill so the rest of the app is
-    /// usable during a call (the desktop never trapped you on the call screen;
-    /// iOS did).
+    /// True while the call is collapsed to a banner so the rest of Disband
+    /// stays navigable — the desktop app never traps you on the call screen.
     var minimized = false
     var remoteHasVideo = false
 
@@ -344,7 +343,13 @@ final class CallManager {
         // and the unit never ran, so both sides heard silence.
         CallAudioSession.activate()
 
+        // Resolved before the peer connection exists: ICE servers cannot be
+        // added after gathering starts, so a call created without the relay
+        // stays without it for its whole life.
+        let ice = await TurnService.shared.iceServers()
+
         let engine = WebRTCEngine(callId: callId, peerId: peerId, senderId: uid,
+                                  iceServers: ice,
                                   onSignal: { [weak self] signal in
                                       self?.sendOnSignalChannel(signal)
                                   },
@@ -452,8 +457,8 @@ final class CallManager {
         phase = .idle
         incoming = nil
         activePeer = nil
-        cameraEnabled = false
         minimized = false
+        cameraEnabled = false
         connectedAt = nil
         error = nil
         activeCallId = nil
