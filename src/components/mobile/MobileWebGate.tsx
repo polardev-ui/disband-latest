@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { hasAllowedMobileWeb, isMobileGateDisabled, isMobileUserAgent } from "@/lib/mobile-detect";
+import { hasChosenContinueOnWeb } from "@/lib/mobile-session";
 import { isTauri } from "@/lib/platform";
 
 export type MobileGateState = "checking" | "redirecting" | "allow";
@@ -36,8 +37,9 @@ export function useMobileWebGate(): MobileGateState {
       return;
     }
 
-    // "Continue on the web" is a standing choice, not a one-time bypass.
-    if (hasAllowedMobileWeb()) {
+    // "Continue on the web" is a standing choice within the current session
+    // (in-memory) or a persisted one (localStorage).
+    if (hasChosenContinueOnWeb() || hasAllowedMobileWeb()) {
       setState("allow");
       return;
     }

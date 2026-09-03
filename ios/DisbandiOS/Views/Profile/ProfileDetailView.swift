@@ -8,6 +8,7 @@ struct ProfileDetailView: View {
     var onStartDM: ((Profile) -> Void)? = nil
 
     @Environment(AppState.self) private var app
+    @Environment(PresenceService.self) private var presence
     @Environment(\.dismiss) private var dismiss
 
     @State private var relation: FriendshipStatus?
@@ -15,6 +16,13 @@ struct ProfileDetailView: View {
     @State private var error: String?
 
     private var isSelf: Bool { profile.id == app.currentUserId }
+
+    /// Live presence for this profile — the current user's own avatar uses their
+    /// stored status, everyone else gets live presence (offline when not connected,
+    /// matching the web).
+    private var liveStatus: UserStatus {
+        isSelf ? profile.status : presence.status(for: profile.id)
+    }
 
     var body: some View {
         NavigationStack {
@@ -54,7 +62,7 @@ struct ProfileDetailView: View {
             .clipped()
 
             AvatarView(url: profile.avatarUrl, name: profile.name, size: 88,
-                       status: profile.status, ringColors: accentColors, ringWidth: 5)
+                       status: liveStatus, ringColors: accentColors, ringWidth: 5)
                 .background(Circle().fill(Brand.background).padding(-3))
                 .padding(.leading, 18)
                 .offset(y: 44)

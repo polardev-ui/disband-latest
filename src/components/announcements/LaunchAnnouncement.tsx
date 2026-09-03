@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { allowMobileWeb, hasAllowedMobileWeb } from "@/lib/mobile-detect";
+import { hasAllowedMobileWeb } from "@/lib/mobile-detect";
+import { chooseContinueOnWeb, hasChosenContinueOnWeb } from "@/lib/mobile-session";
 
 /**
  * Site-wide iOS launch announcement.
@@ -63,6 +65,7 @@ function remainingFrom(ms: number): Remaining {
 }
 
 export function LaunchAnnouncement() {
+  const router = useRouter();
   // Never render on the server: the decision depends on localStorage and the
   // current time, both of which would cause a hydration mismatch.
   const [mounted, setMounted] = useState(false);
@@ -86,7 +89,9 @@ export function LaunchAnnouncement() {
 
     // Someone who just chose "Continue on the web" over the App Store has
     // already answered this question. Do not ask it again on the next page.
-    if (hasAllowedMobileWeb()) return;
+    // This holds for the current session (in-memory) or a past, persisted
+    // choice (localStorage).
+    if (hasChosenContinueOnWeb() || hasAllowedMobileWeb()) return;
 
     const isReleased = Date.now() >= RELEASE_AT;
     setReleased(isReleased);
@@ -140,14 +145,15 @@ export function LaunchAnnouncement() {
     setVisible(false);
   }, [released]);
 
-  // "Continue on the web" from the popup is a standing choice, just like the
-  // same button on /mobile: it flips the shared mobile-web-ok flag so neither
-  // this dialog nor the mobile gate asks again on any page.
+  // "Continue on the web" lets the visitor straight in: it records the choice
+  // for this session (so navigating around won't nag again) and navigates to
+  // the app. It is deliberately session-scoped — a reload re-asks.
   const continueOnWeb = useCallback(() => {
-    allowMobileWeb();
+    chooseContinueOnWeb();
     writeFlag(released ? DISMISS_RELEASED : DISMISS_COUNTDOWN);
     setVisible(false);
-  }, [released]);
+    router.push("/app");
+  }, [released, router]);
 
   useEffect(() => {
     if (!visible) return;

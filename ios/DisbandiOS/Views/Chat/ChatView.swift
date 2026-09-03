@@ -56,12 +56,15 @@ struct ChatView: View {
             if case .dm(let threadId, _) = model.source {
                 unreadStore.markActive(threadId: threadId)
             }
+            // Silences push banners for this conversation while it is open.
+            ActiveChat.shared.open(model.source.notificationSourceId)
             await model.start(currentUserId: app.currentUserId, profile: app.profile)
         }
         .onDisappear {
             if case .dm = model.source {
                 unreadStore.clearActive()
             }
+            ActiveChat.shared.close(model.source.notificationSourceId)
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }

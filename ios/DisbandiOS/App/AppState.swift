@@ -19,6 +19,10 @@ final class AppState {
     var authNotice: String?
     var profileError: String?
 
+    /// Live presence publisher — set by the app shell so status changes here are
+    /// reflected to every other device that is watching the presence channel.
+    weak var presence: PresenceService?
+
     private var recovering = false
 
     var currentUserId: String? { session?.user.id.uuidString.lowercased() }
@@ -256,6 +260,9 @@ final class AppState {
                 .execute()
             profile?.status = status
             profile?.preferredStatus = status
+            // Broadcast the change on the live presence channel so friends on web
+            // and iOS see it immediately rather than after a poll of profiles.status.
+            await presence?.update(status)
         } catch {
             print("setStatus error: \(error)")
         }

@@ -23,11 +23,15 @@ struct MessageComposer: View {
                     .lineLimit(1...5)
                     .font(.body)
                     .foregroundStyle(Brand.textPrimary)
-                    // 8 + 28 + 8 = 44: a comfortable single-line pill that
-                    // matches the attach button exactly, so the two centre on
-                    // each other without padding the bar out.
+                    // The frame applies *after* the padding, so it sets the
+                    // field's finished height: one line of text plus padding
+                    // came to 36 against a 44pt button, and with the row
+                    // bottom-aligned that sat the placeholder below the
+                    // button's centre. At a matching 44 the text is centred in
+                    // its own frame and the two line up; extra lines grow past
+                    // it as before.
                     .padding(.vertical, 8)
-                    .frame(minHeight: 28)
+                    .frame(minHeight: 44)
             }
             .padding(.leading, 7)
             .padding(.trailing, 16)

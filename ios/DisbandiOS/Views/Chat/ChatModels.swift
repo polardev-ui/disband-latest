@@ -108,6 +108,16 @@ enum ChatSource: Hashable {
     }
 
     var cacheKey: String { "\(realtimeTable):\(realtimeFilter)" }
+
+    /// The bare row id, matching the `source` a push notification carries, so
+    /// the app can tell whether a notification is about the open conversation.
+    var notificationSourceId: String {
+        switch self {
+        case .channel(let id, _): return id
+        case .dm(let threadId, _): return threadId
+        case .group(let id, _): return id
+        }
+    }
 }
 
 /// Process-wide cache so re-opening a conversation shows messages instantly
