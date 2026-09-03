@@ -1,6 +1,6 @@
 "use client";
 
-import { getStripe } from "@/lib/stripe-client";
+import { getStripe, isStripeConfigured } from "@/lib/stripe-client";
 import {
   CheckoutElementsProvider,
   PaymentElement,
@@ -214,6 +214,35 @@ export function StripeEmbeddedCheckout({
   onSuccess,
   onCancel,
 }: StripeEmbeddedCheckoutProps) {
+  // Without a publishable key the provider is handed a promise that never
+  // resolves, so the modal span forever with the real reason buried in an
+  // unhandled rejection from inside Stripe's own bundle. Say it plainly
+  // instead — and keep the way out visible.
+  if (!isStripeConfigured()) {
+    return (
+      <div className="flex flex-col">
+        <div className="px-6 py-8 text-center">
+          <p className="text-[15px] font-semibold text-text-normal">
+            Checkout is unavailable
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-text-muted">
+            This build of Disband was deployed without a Stripe publishable key, so
+            payments can&rsquo;t load. Nothing was charged.
+          </p>
+        </div>
+        <div className="border-t border-divider px-6 py-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-text-muted hover:text-text-normal"
+          >
+            Back to plans
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col">
       <CheckoutElementsProvider stripe={getStripe()} options={{ clientSecret }}>
