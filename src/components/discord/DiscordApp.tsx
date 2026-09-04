@@ -56,6 +56,7 @@ import type { Channel, ChannelCategory, Profile, Server } from "@/lib/supabase/t
 import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 import { ForwardModal, type ForwardDestination } from "./ForwardModal";
+import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 
 export function DiscordApp() {
   const app = useApp();
@@ -69,6 +70,7 @@ export function DiscordApp() {
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<ChatMessageData | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
@@ -122,6 +124,12 @@ export function DiscordApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [setZoom]);
+
+  useEffect(() => {
+    if (app.activeDmThreadId) {
+      void app.loadPinnedMessages("dm", app.activeDmThreadId);
+    }
+  }, [app.activeDmThreadId, app.loadPinnedMessages]);
 
   useEffect(() => {
     if (isMobile) setMobileMenuOpen(false);
@@ -283,6 +291,12 @@ export function DiscordApp() {
           icon: <IconSettings size={16} />,
           onClick: () => setServerSettingsOpen(true),
         },
+        {
+          id: "copy-id",
+          label: "Copy Server ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(server.id),
+        },
         ...(server.invite_code
           ? [
               {
@@ -397,38 +411,54 @@ export function DiscordApp() {
 
   const handleCategoryContext = useCallback(
     (category: ChannelCategory, x: number, y: number) => {
-      if (!canManageChannels) return;
-      openMenu(x, y, [
+      const items: ContextMenuItem[] = [
         {
-          id: "add-channel",
-          label: "Create Channel",
-          icon: <IconPlus size={16} />,
-          onClick: () => {
-            const name = prompt(`Channel name in ${category.name}`, "");
-            if (name && name.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
-          },
+          id: "copy-id",
+          label: "Copy Category ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(category.id),
         },
         {
-          id: "rename",
-          label: "Rename Category",
-          icon: <IconEdit size={16} />,
-          onClick: () => {
-            const name = prompt("Rename category", category.name);
-            if (name && name.trim()) void app.renameCategory(category.id, name.trim());
-          },
+          id: "copy-server-id",
+          label: "Copy Server ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(category.server_id),
         },
-        {
-          id: "delete",
-          label: "Delete Category",
-          icon: <IconTrash size={16} />,
-          danger: true,
-          onClick: () => {
-            if (confirm(`Delete category ${category.name}? Channels inside will be moved out.`)) {
-              void app.deleteCategory(category.id);
-            }
+      ];
+      if (canManageChannels) {
+        items.push(
+          {
+            id: "add-channel",
+            label: "Create Channel",
+            icon: <IconPlus size={16} />,
+            onClick: () => {
+              const name = prompt(`Channel name in ${category.name}`, "");
+              if (name && name.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
+            },
           },
-        },
-      ]);
+          {
+            id: "rename",
+            label: "Rename Category",
+            icon: <IconEdit size={16} />,
+            onClick: () => {
+              const name = prompt("Rename category", category.name);
+              if (name && name.trim()) void app.renameCategory(category.id, name.trim());
+            },
+          },
+          {
+            id: "delete",
+            label: "Delete Category",
+            icon: <IconTrash size={16} />,
+            danger: true,
+            onClick: () => {
+              if (confirm(`Delete category ${category.name}? Channels inside will be moved out.`)) {
+                void app.deleteCategory(category.id);
+              }
+            },
+          },
+        );
+      }
+      openMenu(x, y, items);
     },
     [openMenu, canManageChannels, app],
   );
@@ -474,6 +504,12 @@ export function DiscordApp() {
           label: isPinned ? "Unpin note" : "Pin note",
           icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
           onClick: () => void app.toggleNotePinned(message.id),
+        },
+        {
+          id: "copy-id",
+          label: "Copy Note ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(message.id),
         },
         {
           id: "reply",
@@ -523,6 +559,10 @@ export function DiscordApp() {
       const isOwn = message.author_id === app.user?.id;
       const chatRef =
         context === "dm" ? dmChatRef : context === "group" ? groupChatRef : channelChatRef;
+      const pinnedForSource = app.activeDmThreadId
+        ? app.pinnedBySource[`dm:${app.activeDmThreadId}`]
+        : undefined;
+      const isPinned = pinnedForSource?.some((p) => p.message_id === message.id) ?? false;
 
       openMenu(x, y, [
         {
@@ -547,6 +587,26 @@ export function DiscordApp() {
           icon: <IconCopy size={16} />,
           onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
         },
+        ...(context === "dm" && app.activeDmThreadId
+          ? [
+              {
+                id: "pin",
+                label: isPinned ? "Unpin Message" : "Pin Message",
+                icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
+                onClick: () => {
+                  if (isPinned) {
+                    void app.unpinMessage("dm", app.activeDmThreadId!, message.id);
+                  } else {
+                    void app.pinMessage("dm", app.activeDmThreadId!, {
+                      id: message.id,
+                      author_id: message.author_id,
+                      content: message.content,
+                    });
+                  }
+                },
+              },
+            ]
+          : []),
         {
           id: "copy",
           label: "Copy Text",
@@ -610,6 +670,12 @@ export function DiscordApp() {
             setInviteGroupId(group.id);
             setInviteGroupOpen(true);
           },
+        },
+        {
+          id: "copy-id",
+          label: "Copy Group ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(group.id),
         },
         ...(isOwner
           ? [
@@ -1189,10 +1255,23 @@ export function DiscordApp() {
           readCursorScope={{ kind: "dm", id: app.activeDmThreadId! }}
           headerTrailing={
             !dmCallActive ? (
-              <HeaderCallButton
-                disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-                onClick={() => void startVoiceCall(dmFriend)}
-              />
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinnedOpen(true);
+                    if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
+                  }}
+                  title="Pinned messages"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
+                >
+                  <IconPin size={18} />
+                </button>
+                <HeaderCallButton
+                  disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+                  onClick={() => void startVoiceCall(dmFriend)}
+                />
+              </div>
             ) : null
           }
           callPanel={renderCallPanel()}
@@ -1489,6 +1568,15 @@ export function DiscordApp() {
         open={!!forwardMessage}
         onClose={() => setForwardMessage(null)}
         onForward={handleForward}
+      />
+      <PinnedMessagesPanel
+        open={pinnedOpen}
+        threadName={dmFriend ? displayName(dmFriend) : ""}
+        pins={app.activeDmThreadId ? app.pinnedBySource[`dm:${app.activeDmThreadId}`] ?? [] : []}
+        onClose={() => setPinnedOpen(false)}
+        onUnpin={(messageId) => {
+          if (app.activeDmThreadId) void app.unpinMessage("dm", app.activeDmThreadId, messageId);
+        }}
       />
         </div>
       </div>

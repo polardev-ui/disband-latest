@@ -67,6 +67,8 @@ import type {
   ViewMode,
   VoicePresence,
   ChannelType,
+  PinnedMessage,
+  PinnedSourceType,
 } from "@/lib/supabase/types";
 
 interface AppContextValue {
@@ -174,6 +176,14 @@ interface AppContextValue {
   editNote: (noteId: string, content: string) => Promise<string | null>;
   deleteNote: (noteId: string) => Promise<void>;
   toggleNotePinned: (noteId: string) => Promise<void>;
+  pinnedBySource: Record<string, PinnedMessage[]>;
+  loadPinnedMessages: (sourceType: PinnedSourceType, sourceId: string) => Promise<void>;
+  pinMessage: (
+    sourceType: PinnedSourceType,
+    sourceId: string,
+    message: { id: string; author_id: string | null; content: string },
+  ) => Promise<void>;
+  unpinMessage: (sourceType: PinnedSourceType, sourceId: string, messageId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
   loadVoicePresence: (channelId: string) => Promise<void>;
   voiceJoinedChannelId: string | null;
@@ -289,6 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [activeDmThreadId, setActiveDmThreadId] = useState<string | null>(null);
+  const [pinnedBySource, setPinnedBySource] = useState<Record<string, PinnedMessage[]>>({});
   const [activeGroupChatId, setActiveGroupChatId] = useState<string | null>(null);
   const [micMuted, setMicMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
@@ -3363,6 +3374,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) await loadNotes(userId);
   }, [userId, notes, loadNotes]);
 
+  const loadPinnedMessages = useCallback(async (sourceType: PinnedSourceType, sourceId: string) => {
+    if (!userId) return;
+    const key = `${sourceType}:${sourceId}`;
+    const { data } = await getSupabaseClient().rpc("get_pinned_messages", {
+      p_source_type: sourceType,
+      p_source_id: sourceId,
+    });
+    if (data) setPinnedBySource((prev) => ({ ...prev, [key]: data as PinnedMessage[] }));
+  }, [userId]);
+
+  const pinMessage = useCallback(
+    async (
+      sourceType: PinnedSourceType,
+      sourceId: string,
+      message: { id: string; author_id: string | null; content: string },
+    ) => {
+      if (!userId) return;
+      await getSupabaseClient().rpc("pin_message", {
+        p_source_type: sourceType,
+        p_source_id: sourceId,
+        p_message_id: message.id,
+        p_content: message.content ?? "",
+        p_author_id: message.author_id,
+      });
+      await loadPinnedMessages(sourceType, sourceId);
+    },
+    [userId, loadPinnedMessages],
+  );
+
+  const unpinMessage = useCallback(
+    async (sourceType: PinnedSourceType, sourceId: string, messageId: string) => {
+      if (!userId) return;
+      await getSupabaseClient().rpc("unpin_message", {
+        p_source_type: sourceType,
+        p_source_id: sourceId,
+        p_message_id: messageId,
+      });
+      await loadPinnedMessages(sourceType, sourceId);
+    },
+    [userId, loadPinnedMessages],
+  );
+
   const deleteDmMessage = useCallback(async (messageId: string) => {
     setDmMessages((prev) => prev.filter((m) => m.id !== messageId));
     const { error } = await getSupabaseClient().from("dm_messages").delete().eq("id", messageId);
@@ -3603,6 +3656,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     editNote,
     deleteNote,
     toggleNotePinned,
+    pinnedBySource,
+    loadPinnedMessages,
+    pinMessage,
+    unpinMessage,
     markNotificationsRead,
     loadVoicePresence,
     voiceJoinedChannelId,

@@ -358,7 +358,14 @@ export function useCallManager(
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach caller");
       await reset();
+      return;
     }
+    // Best-effort VoIP push so the callee's phones ring like a real call even
+    // if the app is backgrounded or killed. The call itself is the realtime
+    // `ring` above; this only wakes their iOS devices.
+    void getSupabaseClient().functions.invoke("send-call-push", {
+      body: { calleeId: peer.id, callId, callerName: displayName(profile) },
+    }).catch(() => {});
   }, [userId, profile, sendToUser, reset]);
 
   const acceptCall = useCallback(async () => {

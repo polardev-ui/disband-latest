@@ -236,6 +236,19 @@ export interface GroupChatWithMembers extends GroupChat {
   members: Profile[];
 }
 
+/** Source of a pinned message: which conversation it belongs to. */
+export type PinnedSourceType = "dm" | "group" | "channel";
+
+/** A row from the `get_pinned_messages` RPC. */
+export interface PinnedMessage {
+  id: string;
+  message_id: string;
+  content: string;
+  author_id: string;
+  pinner_id: string;
+  created_at: string;
+}
+
 export interface DbVoicePresence {
   channel_id: string;
   user_id: string;
@@ -556,6 +569,31 @@ export interface Database {
       move_channel: {
         Args: { p_channel_id: string; p_category_id: string | null; p_index: number };
         Returns: undefined;
+      };
+      pin_message: {
+        Args: {
+          p_source_type: "dm" | "group" | "channel";
+          p_source_id: string;
+          p_message_id: string;
+          p_content?: string;
+          p_author_id?: string | null;
+        };
+        Returns: string;
+      };
+      unpin_message: {
+        Args: {
+          p_source_type: "dm" | "group" | "channel";
+          p_source_id: string;
+          p_message_id: string;
+        };
+        Returns: undefined;
+      };
+      get_pinned_messages: {
+        Args: {
+          p_source_type: "dm" | "group" | "channel";
+          p_source_id: string;
+        };
+        Returns: PinnedMessage[];
       };
       get_dm_unread: {
         Args: Record<string, never>;
