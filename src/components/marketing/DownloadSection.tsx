@@ -63,7 +63,7 @@ function uniqueDownloadOptions(assets: ReleaseAsset[]): ReleaseAsset[] {
 }
 
 const APP_STORE_URL =
-  "https://apps.apple.com/us/app/disband/id67838818007";
+  "https://apps.apple.com/us/app/disband/id6783881800";
 
 export function DownloadSection() {
   const [release, setRelease] = useState<GitHubRelease | null>(null);

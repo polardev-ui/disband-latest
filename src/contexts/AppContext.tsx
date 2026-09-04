@@ -194,6 +194,9 @@ interface AppContextValue {
   clearDmUnread: (threadId: string) => void;
   channelUnreadMap: Map<string, number>;
   getChannelUnreadCount: (channelId: string) => number;
+  groupUnreadMap: Map<string, number>;
+  getGroupUnreadCount: (groupId: string) => number;
+  clearGroupUnread: (groupId: string) => void;
   presenceMap: PresenceMap;
   channelHasMore: boolean;
   dmHasMore: boolean;
@@ -298,6 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dmThreadActivity, setDmThreadActivity] = useState<Record<string, string>>({});
   const [serverIndicators, setServerIndicators] = useState<Set<string>>(new Set());
   const [channelUnreadMap, setChannelUnreadMap] = useState<Map<string, number>>(new Map());
+  const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
 
   const sessionRef = useRef<Session | null>(null);
@@ -483,6 +487,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const getGroupUnreadCount = useCallback(
+    (groupId: string) => groupUnreadMap.get(groupId) ?? 0,
+    [groupUnreadMap],
+  );
+
+  const clearGroupUnread = useCallback((groupId: string) => {
+    setGroupUnreadMap((prev) => {
+      if (!prev.has(groupId)) return prev;
+      const next = new Map(prev);
+      next.delete(groupId);
+      return next;
+    });
+  }, []);
+
+  // Reconcile unread counts from the server. This is what makes unread state
+  // survive an app restart / cross-device: instead of counting only messages
+  // received over realtime while the app was open, we recompute from the
+  // per-user read cursors. The maps are rebuilt from server truth so a thread
+  // also clears when read on another device.
+  const seedUnread = useCallback(async (uid: string) => {
+    const supabase = getSupabaseClient();
+    const threadByFriend = new Map(dmThreads.map((t) => [t.friend.id, t]));
+
+    const [{ data: dm }, { data: grp }] = await Promise.all([
+      supabase.rpc("get_dm_unread"),
+      supabase.rpc("get_group_unread"),
+    ]);
+
+    setDmUnreadMap((prev) => {
+      const next = new Map<string, { friend: Profile; count: number; latestAt: string }>();
+      for (const row of dm ?? []) {
+        if (row.unread_count <= 0) continue;
+        const existing = prev.get(row.thread_id);
+        const friend =
+          existing?.friend ??
+          dmThreads.find((x) => x.id === row.thread_id)?.friend ??
+          threadByFriend.get(row.thread_id)?.friend;
+        if (!friend) continue;
+        next.set(row.thread_id, {
+          friend,
+          count: row.unread_count,
+          latestAt: row.last_read_at ?? existing?.latestAt ?? new Date().toISOString(),
+        });
+      }
+      return next;
+    });
+
+    setGroupUnreadMap((prev) => {
+      const next = new Map<string, number>();
+      for (const row of grp ?? []) {
+        if (row.unread_count > 0) next.set(row.group_id, row.unread_count);
+      }
+      return next;
+    });
+  }, [dmThreads]);
 
   const patchProfileInState = useCallback((updated: Profile) => {
     setProfile((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
@@ -1054,11 +1114,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadGroupChats(userId),
       loadNotifications(userId),
     ]);
+    // Seed unread after threads are loaded so friend lookups succeed.
+    await seedUnread(userId);
     if (activeServerId) await loadServerDetails(activeServerId);
     if (activeChannelId) await loadMessages(activeChannelId);
     if (activeDmThreadId) await loadDmMessages(activeDmThreadId);
     if (activeGroupChatId) await loadGroupMessages(activeGroupChatId);
-  }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages]);
+  }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages, seedUnread]);
 
   // Auth bootstrap
   useEffect(() => {
@@ -1812,6 +1874,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured, bumpDmThreadActivity]);
 
+  // Cross-device read sync: when the *other* participant marks a DM read
+  // (dm_thread_reads) or a group read (group_chat_members.last_read_at), re-pull
+  // our unread counts so badges clear without a reload. Ignore our own writes,
+  // which we handle locally already.
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const isOther = (userIdCol: string | undefined) =>
+      userId !== undefined && userIdCol !== undefined && userIdCol !== userId;
+    const sub = supabase
+      .channel(`read-sync:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "dm_thread_reads" },
+        (payload) => {
+          const p = payload.new as { user_id?: string };
+          if (isOther(p.user_id)) void seedUnread(userId);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "dm_thread_reads" },
+        (payload) => {
+          const p = payload.new as { user_id?: string };
+          if (isOther(p.user_id)) void seedUnread(userId);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "group_chat_members" },
+        (payload) => {
+          const p = payload.new as { user_id?: string };
+          if (isOther(p.user_id)) void seedUnread(userId);
+        },
+      )
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
+  }, [userId, configured, seedUnread]);
+
   // Server channel message notifications (when not viewing that channel)
   useEffect(() => {
     if (!userId || !configured) return;
@@ -1897,6 +1998,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (msg.mentions?.includes(userId)) return;
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
+          // Track unread for the badge when we're not looking at this group.
+          if (!(viewModeRef.current === "group" && activeGroupRef.current === msg.group_id)) {
+            setGroupUnreadMap((prev) => {
+              const next = new Map(prev);
+              next.set(msg.group_id, (next.get(msg.group_id) ?? 0) + 1);
+              return next;
+            });
+          }
           void (async () => {
             const { data: author } = await supabase
               .from("profiles")
@@ -2143,6 +2252,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDmHasMore(false);
     setDmLoading(true);
     clearDmUnread(threadId);
+    // Persist the read cursor so other devices (and future restarts) stop
+    // counting this thread as unread.
+    void getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
     await loadDmMessages(threadId);
   }, [loadDmMessages, clearDmUnread, persistActiveServerChannel, markActivity]);
 
@@ -2158,8 +2270,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupMessages([]);
     setGroupHasMore(false);
     setGroupLoading(true);
+    clearGroupUnread(groupId);
+    void getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
     await loadGroupMessages(groupId);
-  }, [loadGroupMessages, persistActiveServerChannel, markActivity]);
+  }, [loadGroupMessages, clearGroupUnread, persistActiveServerChannel, markActivity]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
@@ -3503,6 +3617,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearDmUnread,
     channelUnreadMap,
     getChannelUnreadCount,
+    groupUnreadMap,
+    getGroupUnreadCount,
+    clearGroupUnread,
     presenceMap,
     channelHasMore,
     dmHasMore,

@@ -102,7 +102,8 @@ struct DirectMessagesTab: View {
             ConversationRow(
                 iconUrl: group.iconUrl,
                 name: group.name,
-                subtitle: "\(group.members?.count ?? 0) members"
+                subtitle: "\(group.members?.count ?? 0) members",
+                unread: unreadStore.countGroup(for: group.id)
             )
         }
         .swipeActions {

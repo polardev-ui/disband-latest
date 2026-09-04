@@ -557,6 +557,30 @@ export interface Database {
         Args: { p_channel_id: string; p_category_id: string | null; p_index: number };
         Returns: undefined;
       };
+      get_dm_unread: {
+        Args: Record<string, never>;
+        Returns: {
+          thread_id: string;
+          unread_count: number;
+          last_read_at: string | null;
+        }[];
+      };
+      get_group_unread: {
+        Args: Record<string, never>;
+        Returns: {
+          group_id: string;
+          unread_count: number;
+          last_read_at: string | null;
+        }[];
+      };
+      mark_dm_read: {
+        Args: { p_thread_id: string };
+        Returns: undefined;
+      };
+      mark_group_read: {
+        Args: { p_group_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

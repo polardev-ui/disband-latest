@@ -94,6 +94,7 @@ export function HomePanel({
     setViewHome,
     setViewNotes,
     presenceMap,
+    getGroupUnreadCount,
   } = useApp();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
@@ -162,6 +163,7 @@ export function HomePanel({
             </div>
             {groupChats.map((g) => {
               const inCallCount = groupCallCounts.get(g.id) ?? 0;
+              const unreadCount = getGroupUnreadCount(g.id);
               const active = viewMode === "group" && activeGroupChatId === g.id;
               return (
                 <button
@@ -180,6 +182,11 @@ export function HomePanel({
                     <IconGroup size={16} />
                     {inCallCount > 0 && (
                       <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
+                    )}
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white">
+                        {unreadCount > 99 ? "99+" : String(unreadCount)}
+                      </span>
                     )}
                   </div>
                   <div className="min-w-0">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { IconClose, IconUpload } from "@/components/icons";
@@ -20,6 +20,19 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // The modal stays mounted across open/close (it renders `null` when closed),
+  // so reset all typed state each time it opens. Otherwise the previous
+  // server's name/description/icon/banner persist into the next form.
+  useEffect(() => {
+    if (!open) return;
+    setName("");
+    setDescription("");
+    setIconUrl(null);
+    setBannerUrl(null);
+    setError(null);
+    setLoading(false);
+  }, [open]);
 
   if (!open) return null;
 
