@@ -211,6 +211,50 @@ enum DatabaseService {
             .execute().value
     }
 
+    // MARK: - Unread / read state
+
+    struct DmUnreadRow: Decodable {
+        let threadId: String
+        let unreadCount: Int
+        let lastReadAt: String?
+        enum CodingKeys: String, CodingKey {
+            case threadId = "thread_id"
+            case unreadCount = "unread_count"
+            case lastReadAt = "last_read_at"
+        }
+    }
+
+    struct GroupUnreadRow: Decodable {
+        let groupId: String
+        let unreadCount: Int
+        let lastReadAt: String?
+        enum CodingKeys: String, CodingKey {
+            case groupId = "group_id"
+            case unreadCount = "unread_count"
+            case lastReadAt = "last_read_at"
+        }
+    }
+
+    /// Server-authoritative unread DM counts, keyed by thread id.
+    static func unreadDmCounts() async throws -> [DmUnreadRow] {
+        try await client.rpc("get_dm_unread").execute().value
+    }
+
+    /// Server-authoritative unread group counts, keyed by group id.
+    static func unreadGroupCounts() async throws -> [GroupUnreadRow] {
+        try await client.rpc("get_group_unread").execute().value
+    }
+
+    /// Persist the caller's read cursor for a DM thread (cross-device sync).
+    static func markDmRead(threadId: String) async throws {
+        try await client.rpc("mark_dm_read", params: ["p_thread_id": threadId]).execute()
+    }
+
+    /// Persist the caller's read cursor for a group chat (cross-device sync).
+    static func markGroupRead(groupId: String) async throws {
+        try await client.rpc("mark_group_read", params: ["p_group_id": groupId]).execute()
+    }
+
     static func dmMessages(threadId: String, limit: Int = 50) async throws -> [DmMessage] {
         let rows: [DmMessage] = try await client
             .from("dm_messages")
