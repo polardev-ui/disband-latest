@@ -378,6 +378,21 @@ final class CallManager {
         ringWatchdog = nil
     }
 
+    /// Start the incoming-call ring, shared by the realtime signal and the
+    /// VoIP push. Presents CallKit's lock-screen ring whenever the app is
+    /// off-screen: the realtime ring can beat the push, but only CallKit
+    /// reaches the lock screen, so whichever arrives first must hand the call
+    /// over or a backgrounded phone never rings at all.
+    private func ringIncoming(call: IncomingCall) {
+        incoming = call
+        phase = .incoming
+        armRingWatchdog()
+        startRingtone()
+        if UIApplication.shared.applicationState != .active {
+            CallKitProvider.shared.presentIncomingCall(call)
+        }
+    }
+
     private func handleSignal(_ p: CallSignal) async {
         guard let uid = app.currentUserId else { return }
 
@@ -413,18 +428,15 @@ final class CallManager {
                 return
             }
             if let profile = try? await DatabaseService.profile(id: p.from) {
-                incoming = IncomingCall(fromId: p.from,
-                                        callerName: p.callerName ?? "Someone",
-                                        callId: p.callId!,
-                                        profile: profile)
+                ringIncoming(call: IncomingCall(fromId: p.from,
+                                                callerName: p.callerName ?? "Someone",
+                                                callId: p.callId!,
+                                                profile: profile))
             } else {
-                incoming = IncomingCall(fromId: p.from,
-                                        callerName: p.callerName ?? "Someone",
-                                        callId: p.callId!)
+                ringIncoming(call: IncomingCall(fromId: p.from,
+                                                callerName: p.callerName ?? "Someone",
+                                                callId: p.callId!))
             }
-            phase = .incoming
-            armRingWatchdog()
-            startRingtone()
 
         case "accept" where p.callId != nil && phase == .outgoing:
             stopRingtone()
@@ -486,25 +498,26 @@ final class CallManager {
             return
         }
         if phase == .incoming, incoming?.callId == payload.callId {
+            // The realtime ring beat the push and only put up an in-app ring.
+            // With the app off-screen that ring is invisible — iOS suspends a
+            // backgrounded app and its audio shortly after. Hand the already-
+            // ringing call to CallKit now that the push has confirmed it, so
+            // the lock screen shows a real ring regardless of arrival order.
+            if UIApplication.shared.applicationState != .active,
+               !CallKitProvider.shared.isPresented(callId: payload.callId),
+               let ringing = incoming {
+                CallKitProvider.shared.presentIncomingCall(ringing)
+            }
             return
         }
         guard phase == .idle else { return }
 
-        let call: IncomingCall
         if let profile = try? await DatabaseService.profile(id: payload.from) {
-            call = IncomingCall(fromId: payload.from, callerName: payload.callerName,
-                                callId: payload.callId, profile: profile)
+            ringIncoming(call: IncomingCall(fromId: payload.from, callerName: payload.callerName,
+                                            callId: payload.callId, profile: profile))
         } else {
-            call = IncomingCall(fromId: payload.from, callerName: payload.callerName,
-                                callId: payload.callId)
-        }
-        incoming = call
-        phase = .incoming
-        armRingWatchdog()
-        startRingtone()
-
-        if UIApplication.shared.applicationState != .active {
-            CallKitProvider.shared.presentIncomingCall(call)
+            ringIncoming(call: IncomingCall(fromId: payload.from, callerName: payload.callerName,
+                                            callId: payload.callId))
         }
     }
 
