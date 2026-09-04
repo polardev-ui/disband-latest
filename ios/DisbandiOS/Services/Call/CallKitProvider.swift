@@ -55,6 +55,15 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         }
     }
 
+    /// Whether the system call UI is already showing this call.
+    ///
+    /// The realtime ring and the VoIP push carry the same call and can arrive
+    /// in either order: CallKit must only be presented once, but it must still
+    /// be presented when the realtime ring happened to be first.
+    func isPresented(callId: String) -> Bool {
+        calls.values.contains { $0.callId == callId }
+    }
+
     /// Dismiss the system ring (declined, missed, or picked up on another
     /// device). The system call UI disappears and the call is not logged.
     func dismissIncomingCall(for call: IncomingCall) {
