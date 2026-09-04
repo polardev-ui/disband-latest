@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import Realtime
 import Supabase
+import UIKit
 import WebRTC
 
 enum CallPhase: Equatable {
@@ -76,8 +77,30 @@ final class CallManager {
     private var client: SupabaseClient { SupabaseManager.client }
     private var soundEnabled: Bool { app.profile?.soundEnabled ?? true }
 
+    /// A VoIP push that reopened the app before the session was restored.
+    private var pendingPush: VoipPushPayload?
+
     init(app: AppState) {
         self.app = app
+        // CallKit calls the shots when the app is off-screen: answering
+        // here hands the pending call to the normal accept flow, ending hands
+        // it to the normal decline flow.
+        let callKit = CallKitProvider.shared
+        callKit.onAnswer = { [weak self] call in
+            Task { @MainActor [weak self] in
+                await self?.acceptCall(call)
+            }
+        }
+        callKit.onEnd = { [weak self] call in
+            Task { @MainActor [weak self] in
+                await self?.rejectCall(call)
+            }
+        }
+        VoipPushService.shared.onReceiveIncomingPush = { [weak self] payload in
+            Task { @MainActor [weak self] in
+                await self?.handleVoipPush(payload)
+            }
+        }
     }
 
     // MARK: - Auth lifecycle
@@ -101,6 +124,11 @@ final class CallManager {
             return
         }
         startListening(for: userId)
+        // A VoIP push can bring the app back from a cold start before the
+        // session is restored; now that it is, ring the waiting call.
+        if let pendingPush {
+            await handleVoipPush(pendingPush)
+        }
     }
 
     private func startListening(for uid: String) {
@@ -196,10 +224,37 @@ final class CallManager {
                    CallSignal(type: "ring", from: uid, to: peer.id, callId: callId,
                               callerName: profile.name))
         callSignaled = true
+        // Belt-and-braces: the realtime ring rings whatever is foregrounded at
+        // the callee, but a killed/backgrounded phone needs a VoIP push to
+        // ring at all. Fired best-effort; the call itself never depends on it.
+        fireCallPush(callId: callId, calleeId: peer.id, callerName: profile.name)
     }
 
-    func acceptCall() async {
-        guard let incoming, let uid = app.currentUserId else { return }
+    /// Best-effort VoIP push so the callee's phones ring even if the app is
+    /// backgrounded or killed. Uses the signed-in access token, so the edge
+    /// function can refuse pushes sent by anyone other than the caller.
+    private func fireCallPush(callId: String, calleeId: String, callerName: String) {
+        guard let session = client.auth.currentSession else { return }
+        var request = URLRequest(url: AppConfig.supabaseURL
+            .appendingPathComponent("functions/v1/send-call-push"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "calleeId": calleeId,
+            "callId": callId,
+            "callerName": callerName,
+        ])
+        Task {
+            _ = try? await URLSession.shared.data(for: request)
+        }
+    }
+
+    /// `given` is set when answering via CallKit (the system UI carries the
+    /// call in, possibly while the app was backgrounded), nil for the in-app
+    /// overlay.
+    func acceptCall(_ given: IncomingCall? = nil) async {
+        guard let incoming = given ?? self.incoming, let uid = app.currentUserId else { return }
         stopRingtone()
         activeCallId = incoming.callId
         activePeerId = incoming.fromId
@@ -208,6 +263,7 @@ final class CallManager {
         }
         phase = .active
         cancelRingWatchdog()
+        CallKitProvider.shared.markCallConnected(for: incoming)
         self.incoming = nil
         connectedAt = Date()
         CallSounds.shared.playConnected()
@@ -226,8 +282,8 @@ final class CallManager {
         }
     }
 
-    func rejectCall() async {
-        guard let incoming, let uid = app.currentUserId else { return }
+    func rejectCall(_ given: IncomingCall? = nil) async {
+        guard let incoming = given ?? self.incoming, let uid = app.currentUserId else { return }
         stopRingtone()
         await send(to: incoming.fromId,
                    CallSignal(type: "reject", from: uid, to: incoming.fromId,
@@ -237,6 +293,7 @@ final class CallManager {
         await send(to: uid,
                    CallSignal(type: "handled", from: uid, to: uid,
                               callId: incoming.callId))
+        CallKitProvider.shared.dismissIncomingCall(for: incoming)
         self.incoming = nil
         phase = .idle
         cancelRingWatchdog()
@@ -341,6 +398,11 @@ final class CallManager {
         guard p.from != uid else { return }
         switch p.type {
         case "ring" where p.callId != nil:
+            // The same call arrives twice by design: the realtime ring AND the
+            // VoIP push. If this one is already ringing, it's the duplicate.
+            if phase == .incoming, incoming?.callId == p.callId {
+                return
+            }
             if phase != .idle {
                 Task {
                     await send(to: p.from,
@@ -406,6 +468,43 @@ final class CallManager {
 
         default:
             break
+        }
+    }
+
+    /// Ring from a VoIP push — the path that fires when the callee's app was
+    /// backgrounded or killed, where the realtime `ring` could never arrive.
+    ///
+    /// Foreground: the in-app overlay is the ring, so this mirrors the normal
+    /// `ring` path (plus haptics). Backgrounded/off-screen: the phone has no
+    /// overlay to swipe, so the call is handed to CallKit for the lock-screen
+    /// ring and swipe-to-answer.
+    func handleVoipPush(_ payload: VoipPushPayload) async {
+        guard app.currentUserId != nil else {
+            // Cold-start push before the session was restored: hold it until
+            // start(userId:) runs with a session in hand.
+            pendingPush = payload
+            return
+        }
+        if phase == .incoming, incoming?.callId == payload.callId {
+            return
+        }
+        guard phase == .idle else { return }
+
+        let call: IncomingCall
+        if let profile = try? await DatabaseService.profile(id: payload.from) {
+            call = IncomingCall(fromId: payload.from, callerName: payload.callerName,
+                                callId: payload.callId, profile: profile)
+        } else {
+            call = IncomingCall(fromId: payload.from, callerName: payload.callerName,
+                                callId: payload.callId)
+        }
+        incoming = call
+        phase = .incoming
+        armRingWatchdog()
+        startRingtone()
+
+        if UIApplication.shared.applicationState != .active {
+            CallKitProvider.shared.presentIncomingCall(call)
         }
     }
 
@@ -531,6 +630,7 @@ final class CallManager {
         signalChannel = nil
         phase = .idle
         cancelRingWatchdog()
+        if let incoming { CallKitProvider.shared.dismissIncomingCall(for: incoming) }
         incoming = nil
         activePeer = nil
         minimized = false
@@ -555,15 +655,18 @@ final class CallManager {
         // call.
         CallAudioSession.prepareForRinging()
         CallSounds.shared.startRingtone()
+        CallHaptics.shared.startRingVibration()
     }
 
     private func startCallingTone() {
         guard soundEnabled else { return }
         CallAudioSession.prepareForRinging()
         CallSounds.shared.startCallingTone()
+        CallHaptics.shared.startCallingVibration()
     }
 
     private func stopRingtone() {
         CallSounds.shared.stopRingtone()
+        CallHaptics.shared.stop()
     }
 }
