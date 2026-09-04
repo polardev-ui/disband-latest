@@ -53,16 +53,30 @@ struct ChatView: View {
         }
         .overlay { reactionBar }
         .task {
-            if case .dm(let threadId, _) = model.source {
+            switch model.source {
+            case .dm(let threadId, _):
                 unreadStore.markActive(threadId: threadId)
+                // Persist the read cursor so the state syncs across devices and
+                // survives relaunch.
+                Task { try? await DatabaseService.markDmRead(threadId: threadId) }
+            case .group(let groupId, _):
+                unreadStore.markGroupActive(groupId: groupId)
+                Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
+            default:
+                break
             }
             // Silences push banners for this conversation while it is open.
             ActiveChat.shared.open(model.source.notificationSourceId)
             await model.start(currentUserId: app.currentUserId, profile: app.profile)
         }
         .onDisappear {
-            if case .dm = model.source {
+            switch model.source {
+            case .dm:
                 unreadStore.clearActive()
+            case .group:
+                unreadStore.clearGroupActive()
+            default:
+                break
             }
             ActiveChat.shared.close(model.source.notificationSourceId)
             model.stop()

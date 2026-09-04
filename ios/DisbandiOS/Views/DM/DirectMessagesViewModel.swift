@@ -17,6 +17,8 @@ final class DirectMessagesViewModel {
     private var startedForUserId: String?
     private var channel: RealtimeChannelV2?
     private var messageTask: Task<Void, Never>?
+    private var groupChannel: RealtimeChannelV2?
+    private var groupTask: Task<Void, Never>?
     private var currentUserId: String?
     private var unreadStore: DmUnreadStore?
 
@@ -43,9 +45,16 @@ final class DirectMessagesViewModel {
         startedForUserId = nil
         messageTask?.cancel()
         messageTask = nil
+        groupTask?.cancel()
+        groupTask = nil
         let ch = channel
         channel = nil
-        Task { await ch?.unsubscribe() }
+        let gch = groupChannel
+        groupChannel = nil
+        Task {
+            await ch?.unsubscribe()
+            await gch?.unsubscribe()
+        }
     }
 
     func leaveGroup(_ groupId: String) async {
@@ -69,10 +78,16 @@ final class DirectMessagesViewModel {
         }
         async let t = DatabaseService.myDmThreads(currentUserId: uid)
         async let g = DatabaseService.myGroups(currentUserId: uid)
+        async let dmU = DatabaseService.unreadDmCounts()
+        async let grpU = DatabaseService.unreadGroupCounts()
         do {
-            let (loadedThreads, loadedGroups) = try await (t, g)
+            let (loadedThreads, loadedGroups, dmUnread, grpUnread) = try await (t, g, dmU, grpU)
             threads = sortByRecency(loadedThreads)
             groups = loadedGroups
+            // Reconcile from server so messages received while the app was
+            // closed (which realtime never delivered) still show as unread.
+            unreadStore?.seedUnread(Dictionary(uniqueKeysWithValues: dmUnread.map { ($0.threadId, $0.unreadCount) }))
+            unreadStore?.seedGroupUnread(Dictionary(uniqueKeysWithValues: grpUnread.map { ($0.groupId, $0.unreadCount) }))
         } catch {
             // Keep whatever is already on screen rather than blanking the list.
         }
@@ -89,6 +104,21 @@ final class DirectMessagesViewModel {
                 await self?.handleIncoming(message)
             }
         }
+
+        // Second subscription for group messages → unread badge counts.
+        let (gchannel, gstream) = await RealtimeService.observeInserts(table: "group_messages", as: GroupMessage.self)
+        self.groupChannel = gchannel
+        groupTask = Task { [weak self] in
+            for await message in gstream {
+                self?.handleGroupIncoming(message)
+            }
+        }
+    }
+
+    private func handleGroupIncoming(_ message: GroupMessage) {
+        unreadStore?.incrementGroup(groupId: message.groupId,
+                                    senderId: message.authorId,
+                                    currentUserId: currentUserId)
     }
 
     private func handleIncoming(_ message: DmMessage) async {

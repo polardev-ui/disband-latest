@@ -1,6 +1,7 @@
 "use client";
 
-import { formatMessageTime, displayName, extractInviteCodes, isValidMentionToken, normalizeMessageContent } from "@/lib/utils";
+import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
+import { renderMarkdown } from "@/lib/markdown";
 import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
@@ -57,41 +58,6 @@ interface ChatMessageProps {
   onContentResize?: () => void;
 }
 
-function renderContent(content: string, members: Profile[] = []) {
-  const parts = content.split(/(@[a-zA-Z0-9_]{2,32}|\*\*[^*]+\*\*|https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/g);
-  return parts.map((part, i) => {
-    if (!part) return null;
-    if (part.startsWith("@")) {
-      const uname = part.slice(1);
-      if (!isValidMentionToken(uname, members)) return part;
-      const user = members.find((m) => m.username?.toLowerCase() === uname.toLowerCase());
-      const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
-      return (
-        <span key={i} className="rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40">
-          @{label}
-        </span>
-      );
-    }
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
-    }
-    if (/^https?:\/\//i.test(part)) {
-      return (
-        <a
-          key={i}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="break-all text-brand hover:underline"
-        >
-          {part}
-        </a>
-      );
-    }
-    return part;
-  });
-}
-
 function MessageBody({
   content,
   members,
@@ -115,17 +81,17 @@ function MessageBody({
   return (
     <>
       {textOnly && (
-        <span
-          className={`whitespace-pre-wrap break-words ${sending ? "text-text-muted" : "text-text-normal"} ${
+        <div
+          className={`break-words ${sending ? "text-text-muted" : "text-text-normal"} ${
             emojiOnly ? emojiSizeClass || normalClass : normalClass
           }`}
         >
           {emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
-            <Twemoji>{renderContent(textOnly, members)}</Twemoji>
+            <Twemoji>{renderMarkdown(textOnly, members)}</Twemoji>
           )}
-        </span>
+        </div>
       )}
       {codes.map((code) => (
         <ServerInviteCard key={code} code={code} onLoad={onContentResize} />
@@ -273,10 +239,10 @@ export function ChatMessage({
         )}
         {replyBlock}
         {body && (
-          <span className="inline">
+          <div className="min-w-0">
             <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} />
             {editedTag}
-          </span>
+          </div>
         )}
         {attachment}
         {message.uploadProgress != null && message.uploadProgress < 100 && (

@@ -69,13 +69,14 @@ struct MessageRow: View {
                 }
 
                 if !message.content.isEmpty {
-                    Text(message.content)
-                        // Discord-style jumbo emoji: a message that is nothing
-                        // but a handful of emoji renders large, because at body
-                        // size a lone reaction emoji is nearly illegible.
-                        .font(EmojiText.jumboSize(for: message.content).map { .system(size: $0) }
-                              ?? .body)
-                        .foregroundStyle(message.pending ? Brand.textMuted : Brand.textPrimary)
+                    // Discord-style jumbo emoji: a message that is nothing
+                    // but a handful of emoji renders large, because at body
+                    // size a lone reaction emoji is nearly illegible.
+                    let jumbo: CGFloat? = EmojiText.jumboSize(for: message.content)
+                    let size = jumbo ?? UIFont.systemFontSize
+                    let baseFont = UIFont.systemFont(ofSize: size)
+                    let color = UIColor(message.pending ? Brand.textMuted : Brand.textPrimary)
+                    Text(ChatMarkdown.render(message.content, baseFont: baseFont, baseColor: color))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
