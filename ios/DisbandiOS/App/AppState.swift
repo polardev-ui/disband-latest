@@ -89,6 +89,7 @@ final class AppState {
 
         PushManager.shared.registerIfAuthorized()
         await PushManager.shared.flushToken()
+        await VoipPushService.shared.flushToken()
     }
 
     private func mfaChallengeRequired() async -> Bool {
