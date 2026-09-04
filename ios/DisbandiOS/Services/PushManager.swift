@@ -9,6 +9,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // VoIP pushes never ask for permission and don't need the APNs
+        // registration dance — starting the registry is all they take, and a
+        // VoIP-push cold start depends on it being alive before anything else.
+        Task { @MainActor in
+            VoipPushService.shared.start()
+        }
         return true
     }
 

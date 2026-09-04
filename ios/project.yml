@@ -56,6 +56,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:
           - remote-notification
+          # VoIP pushes wake the app for an incoming call even when it is
+          # killed, and CallKit plays/records the call's audio.
+          - voip
+          - audio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wsgpolar.disband
