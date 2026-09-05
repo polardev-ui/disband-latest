@@ -9,6 +9,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { BOT_SCOPE_LABELS } from "@/lib/bot-scopes";
 import { Logo } from "@/components/ui/Logo";
 import type { BotScope } from "@/lib/bot-auth";
+import { apiFetch } from "@/lib/api";
 
 interface InviteData {
   code: string;
@@ -42,7 +43,7 @@ export function BotInviteCard({ code }: { code: string }) {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch(`/api/bot/invites/${code}`);
+        const res = await apiFetch(`/api/bot/invites/${code}`);
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data?.bot) {
           setNotFound(true);
@@ -73,7 +74,7 @@ export function BotInviteCard({ code }: { code: string }) {
           setSignedIn(false);
           return;
         }
-        const res = await fetch(`/api/bot/invites/${code}/${action}`, {
+        const res = await apiFetch(`/api/bot/invites/${code}/${action}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${session.access_token}` },
         });

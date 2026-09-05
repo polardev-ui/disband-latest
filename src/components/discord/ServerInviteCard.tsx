@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { apiFetch } from "@/lib/api";
 import { getInviteUrl } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { IconVerified } from "@/components/icons";
@@ -34,7 +35,10 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     void (async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/invites/${code}`);
+        // apiFetch, not fetch: the desktop app is a static export served from
+        // tauri://localhost and ships no API routes, so a relative /api/ path
+        // resolves to the HTML shell and the invite card never loads.
+        const res = await apiFetch(`/api/invites/${code}`);
         const json = (await res.json()) as {
           error?: string;
           id?: string;
