@@ -175,6 +175,11 @@ class AppState(
 
     private fun startCallListeners() {
         val uid = currentUserId ?: return
+        // Kept in step with the profile rather than sampled once. This is read
+        // when placing a call, and a profile that had not loaded yet (or failed
+        // to) left the name pinned to "User" for the whole session — which is
+        // what the person being called saw.
+        scope.launch { _profile.collect { p -> p?.name?.let { calls.myName = it } } }
         calls.myName = _profile.value?.name ?: "User"
         calls.start(uid)
         scope.launch {

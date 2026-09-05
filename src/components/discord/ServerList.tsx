@@ -2,7 +2,7 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
-import { IconHome, IconPlus, IconCompass } from "@/components/icons";
+import { IconVerified, IconHome, IconPlus, IconCompass } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, Server, ViewMode } from "@/lib/supabase/types";
@@ -141,24 +141,33 @@ export function ServerList({
                   active ? "h-10 w-1" : hasUnread ? "h-2 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
                 }`}
               />
-              {safeImageUrl(server.icon_url) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={safeImageUrl(server.icon_url)!}
-                  alt=""
-                  className={`h-12 w-12 object-cover transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-                    active ? "rounded-[30%]" : "rounded-[50%]"
-                  }`}
-                />
-              ) : (
-                <span
-                  className={`flex h-12 w-12 items-center justify-center bg-brand text-[15px] font-semibold text-white transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-                    active ? "rounded-[30%]" : "rounded-[50%]"
-                  }`}
-                >
-                  {serverInitials(server.name)}
-                </span>
-              )}
+              <div className="relative">
+                {safeImageUrl(server.icon_url) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={safeImageUrl(server.icon_url)!}
+                    alt=""
+                    className={`h-12 w-12 object-cover transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
+                      active ? "rounded-[30%]" : "rounded-[50%]"
+                    }`}
+                  />
+                ) : (
+                  <span
+                    className={`flex h-12 w-12 items-center justify-center bg-brand text-[15px] font-semibold text-white transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
+                      active ? "rounded-[30%]" : "rounded-[50%]"
+                    }`}
+                  >
+                    {serverInitials(server.name)}
+                  </span>
+                )}
+                {server.verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white ring-2 ring-bg-tertiary">
+                    <Tooltip label="This server is officially verified by Disband">
+                      <IconVerified size={10} />
+                    </Tooltip>
+                  </span>
+                )}
+              </div>
             </button>
           </Tooltip>
         );

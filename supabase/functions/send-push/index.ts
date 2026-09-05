@@ -173,7 +173,13 @@ Deno.serve(async (req) => {
     const host = Deno.env.get("APNS_HOST") ?? "api.push.apple.com";
     const topic = Deno.env.get("APNS_BUNDLE_ID")!;
     const payload = JSON.stringify({
-      aps: { alert: { title: title ?? "Disband", body }, sound: "default" },
+      aps: {
+        alert: { title: title ?? "Disband", body },
+        sound: "default",
+        // Group delivered notifications per conversation so a new message in an
+        // already-read thread updates its stack instead of spawning a fresh row.
+        "thread-id": (source as string | null) ?? "disband",
+      },
       link: link ?? null,
       // The conversation this is about, so a client already showing it can
       // suppress the banner instead of interrupting the chat you are reading.
