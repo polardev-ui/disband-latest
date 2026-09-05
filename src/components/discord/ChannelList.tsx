@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { UserPanel } from "./UserPanel";
 import { CallIndicator } from "./CallIndicator";
 import { Tooltip } from "./Tooltip";
 import {
   IconChevron,
   IconClose,
+  IconGripVertical,
   IconHash,
   IconHeadphonesOff,
   IconMicOff,
@@ -43,8 +44,13 @@ interface ChannelListProps {
   showServerHeader?: boolean;
   verified?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
+  onMoveCategory?: (categoryId: string, index: number) => void;
   onCreateChannel?: (name: string, type: ChannelType, categoryId: string | null) => Promise<string | null>;
   onCreateCategory?: (name: string) => Promise<string | null>;
+  /** Unread messages per channel — drives the white pill and bold name. */
+  getUnreadCount?: (channelId: string) => number;
+  /** Messages naming you — drives the red badge. */
+  getMentionCount?: (channelId: string) => number;
 }
 
 function MiniAvatar({ profile }: { profile?: Profile }) {
@@ -82,8 +88,11 @@ export function ChannelList({
   showServerHeader = true,
   verified,
   onMoveChannel,
+  onMoveCategory,
   onCreateChannel,
   onCreateCategory,
+  getUnreadCount,
+  getMentionCount,
 }: ChannelListProps) {
   // Seeded from storage so a collapsed category stays collapsed across reloads
   // and server switches; a lazy initialiser keeps localStorage off the server
@@ -98,6 +107,8 @@ export function ChannelList({
     });
   };
   const [dragChannelId, setDragChannelId] = useState<string | null>(null);
+  const [dragCategoryId, setDragCategoryId] = useState<string | null>(null);
+  const [dragGhost, setDragGhost] = useState<{ kind: "channel" | "category"; id: string; label: string; x: number; y: number } | null>(null);
   const [overCatId, setOverCatId] = useState<string | "uncategorized" | null>(null);
   const [overChannelId, setOverChannelId] = useState<string | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
@@ -112,16 +123,37 @@ export function ChannelList({
   const [addChannelType, setAddChannelType] = useState<ChannelType>("text");
   const [busy, setBusy] = useState(false);
 
+  // Pointer-event dragging replaces HTML5 drag-and-drop, which does not work in
+  // Safari/iOS over <button> rows and offers no touch support at all. A short
+  // threshold keeps a plain click from turning into a drag; once armed, the grip
+  // element keeps the pointer captured so move/up keep flowing even off-window.
+  const DRAG_THRESHOLD = 6;
+  const dragRef = useRef<{
+    kind: "channel" | "category";
+    id: string;
+    label: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
+
   const byCategory = (catId: string | null) =>
     channels.filter((c) => c.category_id === catId).sort((a, b) => a.position - b.position);
+
+  const clearDragState = () => {
+    setDragChannelId(null);
+    setDragCategoryId(null);
+    setOverCatId(null);
+    setOverChannelId(null);
+    setDragGhost(null);
+  };
 
   const dropCategory = (catId: string | null) => {
     if (dragChannelId && onMoveChannel) {
       onMoveChannel(dragChannelId, catId, byCategory(catId).length);
     }
-    setDragChannelId(null);
-    setOverCatId(null);
-    setOverChannelId(null);
+    clearDragState();
   };
 
   const dropOnChannel = (target: Channel) => {
@@ -130,10 +162,130 @@ export function ChannelList({
       const index = list.findIndex((c) => c.id === target.id);
       onMoveChannel(dragChannelId, target.category_id, index);
     }
-    setDragChannelId(null);
-    setOverCatId(null);
-    setOverChannelId(null);
+    clearDragState();
   };
+
+  const hitTest = (clientX: number, clientY: number) => {
+    const el = document.elementFromPoint(clientX, clientY);
+    const target = el?.closest?.(
+      "[data-channel-id], [data-category-id], [data-drop-uncategorized]",
+    ) as HTMLElement | null | undefined;
+    const overChannel = target?.dataset?.channelId ?? null;
+    const overCategory = target?.dataset?.categoryId ?? null;
+    const overUncategorized = target?.dataset?.dropUncategorized != null;
+    if (overChannel) {
+      setOverChannelId(overChannel);
+      setOverCatId(null);
+    } else if (overCategory) {
+      setOverCatId(overCategory);
+      setOverChannelId(null);
+    } else if (overUncategorized) {
+      setOverCatId("uncategorized");
+      setOverChannelId(null);
+    } else {
+      setOverChannelId(null);
+      setOverCatId(null);
+    }
+  };
+
+  const armDrag = (kind: "channel" | "category", id: string, label: string) =>
+    (e: React.PointerEvent<HTMLSpanElement>) => {
+      if (!canManageChannels) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragRef.current = { kind, id, label, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, active: false };
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    };
+
+  const moveDrag = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d.active) {
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < DRAG_THRESHOLD) return;
+      d.active = true;
+      if (d.kind === "channel") setDragChannelId(d.id);
+      else setDragCategoryId(d.id);
+    }
+    e.preventDefault();
+    setDragGhost({ kind: d.kind, id: d.id, label: d.label, x: e.clientX, y: e.clientY });
+    hitTest(e.clientX, e.clientY);
+  };
+
+  const releaseDrag = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    if (!d.active) return;
+    if (d.kind === "channel") {
+      if (overChannelId && overChannelId !== d.id) {
+        const target = channels.find((c) => c.id === overChannelId);
+        if (target) {
+          dropOnChannel(target);
+          return;
+        }
+      }
+      const src = channels.find((c) => c.id === d.id);
+      const targetCategory: string | null =
+        overCatId === "uncategorized" ? null : overCatId;
+      const movingAcross = overCatId != null
+        && (targetCategory ?? null) !== (src?.category_id ?? null);
+      if (overCatId != null && movingAcross && onMoveChannel) {
+        onMoveChannel(d.id, targetCategory, byCategory(targetCategory).length);
+        clearDragState();
+      } else {
+        clearDragState();
+      }
+    } else if (d.kind === "category") {
+      const dragged = categories.find((c) => c.id === d.id);
+      const over = overCategoryIdForDrop();
+      if (dragged && over && over !== "uncategorized" && over !== d.id) {
+        onMoveCategory?.(d.id, overCategoryPosition(over));
+      }
+      clearDragState();
+    } else {
+      clearDragState();
+    }
+  };
+
+  const overCategoryPosition = (targetCatId: string) => {
+    const sorted = [...categories].sort((a, b) => a.position - b.position);
+    const idx = sorted.findIndex((c) => c.id === targetCatId);
+    return idx < 0 ? sorted.length : idx;
+  };
+
+  const overCategoryIdForDrop = () => {
+    if (overChannelId) {
+      const ch = channels.find((c) => c.id === overChannelId);
+      return ch?.category_id ?? "uncategorized";
+    }
+    if (overCatId) return overCatId;
+    return null;
+  };
+
+  const cancelDrag = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    clearDragState();
+  };
+
+  const Grip = ({ kind, id, label }: { kind: "channel" | "category"; id: string; label: string }) =>
+    canManageChannels ? (
+      <span
+        role="button"
+        aria-label={`Drag ${label} to reorder`}
+        title="Drag to reorder"
+        className="flex h-4 w-4 shrink-0 cursor-grab items-center justify-center text-text-muted opacity-0 transition-opacity group-hover/drag:opacity-100 hover:!text-text-normal"
+        style={{ touchAction: "none" }}
+        onPointerDown={armDrag(kind, id, label)}
+        onPointerMove={moveDrag}
+        onPointerUp={releaseDrag}
+        onPointerCancel={cancelDrag}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+      >
+        <IconGripVertical size={12} />
+      </span>
+    ) : null;
 
   const startAddChannel = (catId: string | null) => {
     if (!canManageChannels) return;
@@ -211,46 +363,46 @@ export function ChannelList({
   const renderChannel = (ch: Channel) => {
     const active = ch.id === activeChannelId;
     const participants = ch.type === "voice" ? voicePresence.get(ch.id) ?? [] : [];
+    // An open channel is being read, so it never advertises itself as unread.
+    const unread = !active && (getUnreadCount?.(ch.id) ?? 0) > 0;
+    const mentions = active ? 0 : getMentionCount?.(ch.id) ?? 0;
     return (
       <div key={ch.id} className="relative">
         {overChannelId === ch.id && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
+        {/* The pill: a channel with something new is legible at a glance,
+            without having to open it to find out. */}
+        {unread && (
+          <span
+            aria-hidden
+            className="absolute -left-2 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-text-normal"
+          />
+        )}
         <button
           type="button"
-          draggable={canManageChannels}
-          onDragStart={(e) => {
-            setDragChannelId(ch.id);
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", ch.id);
-          }}
-          onDragEnd={() => {
-            setDragChannelId(null);
-            setOverCatId(null);
-            setOverChannelId(null);
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-            setOverChannelId(ch.id);
-          }}
-          onDragLeave={() => {
-            if (overChannelId === ch.id) setOverChannelId(null);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropOnChannel(ch);
-          }}
+          data-channel-id={ch.id}
           onClick={() => onSelectChannel(ch.id)}
           onContextMenu={(e) => {
             e.preventDefault();
             onChannelContext?.(ch, e.clientX, e.clientY);
           }}
-          className={`mb-0.5 flex w-full items-center gap-1.5 rounded px-1 py-[6px] text-[15px] transition-all duration-150 ease-in-out ${
-            active ? "bg-interactive-selected text-text-normal" : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
+          className={`group/drag mb-0.5 flex w-full items-center gap-1.5 rounded px-1 py-[6px] text-[15px] transition-all duration-150 ease-in-out ${
+            active
+              ? "bg-interactive-selected text-text-normal"
+              : unread
+                ? "font-semibold text-text-normal hover:bg-interactive-hover"
+                : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+          }`}
         >
+          <Grip kind="channel" id={ch.id} label={ch.name} />
           {ch.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
+          {/* Red badge means it was addressed to you — a mention or a reply —
+              which is a different thing from merely unread. */}
+          {mentions > 0 && (
+            <span className="ml-1 shrink-0 rounded-full bg-status-dnd px-[6px] py-[1px] text-[11px] font-bold leading-[16px] text-white">
+              {mentions > 99 ? "99+" : mentions}
+            </span>
+          )}
           {ch.type === "voice" && participants.length > 0 && (
             <span className="shrink-0 text-[11px] font-semibold text-text-muted">{participants.length}</span>
           )}
@@ -274,22 +426,11 @@ export function ChannelList({
   const renderCategoryHeader = (cat: ChannelCategory) => {
     const open = !collapsed[cat.id];
     return (
-      <div className="group/cat relative flex items-center">
+      <div className="group/cat group/drag relative flex items-center" data-category-id={cat.id}>
         {overCatId === cat.id && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
         <button
           type="button"
           onClick={() => toggleCollapsed(cat.id)}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.dataTransfer.dropEffect = "move";
-            setOverCatId(cat.id);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropCategory(cat.id);
-          }}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -299,6 +440,7 @@ export function ChannelList({
             overCatId === cat.id ? "text-brand" : "text-text-muted hover:text-text-normal"
           }`}
         >
+          <Grip kind="category" id={cat.id} label={cat.name} />
           <IconChevron size={12} className={`shrink-0 transition-transform duration-150 ${open ? "" : "-rotate-90"}`} />
           <span className="truncate">{cat.name}</span>
         </button>
@@ -402,18 +544,8 @@ export function ChannelList({
                   glance: it was the only heading without a chevron. */}
               <button
                 type="button"
+                data-drop-uncategorized="true"
                 onClick={() => toggleCollapsed(UNCATEGORIZED_KEY)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.dataTransfer.dropEffect = "move";
-                  setOverCatId("uncategorized");
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  dropCategory(null);
-                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -450,6 +582,21 @@ export function ChannelList({
           </div>
         )}
       </div>
+
+      {dragGhost && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 flex translate-x-2 translate-y-2 items-center gap-1.5 whitespace-nowrap rounded border border-white/10 bg-bg-tertiary px-3 py-1.5 text-sm font-medium text-text-normal shadow-lg"
+          style={{ left: dragGhost.x, top: dragGhost.y }}
+        >
+          {dragGhost.kind === "category" ? (
+            <IconChevron size={12} className="-rotate-90 shrink-0 text-text-muted" />
+          ) : (
+            <IconHash size={14} className="shrink-0 text-text-muted" />
+          )}
+          <span className="max-w-[180px] truncate">{dragGhost.label}</span>
+        </div>
+      )}
 
       <CallIndicator />
       <UserPanel onOpenSettings={onOpenSettings} onOpenProfile={onOpenProfile} onContextMenu={onUserPanelContext} />

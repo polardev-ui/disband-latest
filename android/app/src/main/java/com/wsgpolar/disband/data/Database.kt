@@ -4,6 +4,8 @@ import com.wsgpolar.disband.core.DisbandSupabase
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
@@ -350,13 +352,25 @@ object Database {
             .decodeAs<Profile>()
     }
 
+    // Profiles are fetched in batches: every id lands in one `in(...)` filter,
+    // so servers with a few hundred members build a URL past what the proxies
+    // in front of PostgREST accept and the whole list 400s — emptying the
+    // member list exactly where it is needed most. 100 ids stays near 4 KB.
     suspend fun profiles(ids: List<String>): Map<String, Profile> {
         val unique = ids.distinct()
         if (unique.isEmpty()) return emptyMap()
-        val rows: List<Profile> = client.from("profiles")
-            .select(Columns.ALL) { filter { isIn("id", unique) } }
-            .decodeList()
-        return rows.associateBy { it.id }
+        val out = mutableMapOf<String, Profile>()
+        coroutineScope {
+            unique.chunked(100).map { chunk ->
+                async {
+                    val rows: List<Profile> = client.from("profiles")
+                        .select(Columns.ALL) { filter { isIn("id", chunk) } }
+                        .decodeList()
+                    for (row in rows) out[row.id] = row
+                }
+            }.forEach { it.await() }
+        }
+        return out
     }
 
     suspend fun searchProfiles(query: String): List<Profile> {
