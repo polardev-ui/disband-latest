@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe, getPriceId } from "@/lib/stripe";
 import { getRouteUser } from "@/lib/supabase/server";
+import { PUBLIC_ENV } from "@/lib/public-env";
 
 export async function POST(req: Request) {
   try {
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
 
-    const origin = req.headers.get("origin") ?? "http://localhost:3000";
+    const origin = req.headers.get("origin") ?? PUBLIC_ENV.webAppUrl;
     const priceId = getPriceId(plan);
 
     // Misconfigured price ids used to surface as an opaque 500 from Stripe.

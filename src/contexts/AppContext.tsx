@@ -13,6 +13,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetSupabaseClient } from "@/lib/supabase/client";
+import { getSavedSessions, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
@@ -120,6 +121,9 @@ interface AppContextValue {
   refreshMfaStatus: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshAll: () => Promise<void>;
+  savedSessions: SavedSession[];
+  switchAccount: (account: SavedSession) => Promise<string | null>;
+  removeSavedAccount: (userId: string) => void;
   updateProfile: (patch: Partial<Profile>) => Promise<string | null>;
   setViewHome: () => void;
   setViewDiscover: () => void;
@@ -279,6 +283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const imagesWarmedRef = useRef(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
   const [categories, setCategories] = useState<ChannelCategory[]>([]);
@@ -367,6 +372,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
+
+  const rememberSession = useCallback((s: Session | null | undefined, p?: Profile | null) => {
+    persistSavedSession(s, p);
+    setSavedSessions(getSavedSessions());
+  }, []);
+
+  const removeSavedAccount = useCallback((userId: string) => {
+    dropSavedSession(userId);
+    setSavedSessions(getSavedSessions());
+  }, []);
   channelsRef.current = channels;
   dmThreadsRef.current = dmThreads;
   groupChatsRef.current = groupChats;
@@ -784,10 +799,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setServerRoles(cached.roles);
     }
     const supabase = getSupabaseClient();
-    const [{ data: cats }, { data: chs }, { data: mems }, { data: roles }, { data: roleRows }] = await Promise.all([
+    const [{ data: cats }, { data: chs }, { data: memRows }, { data: roles }, { data: roleRows }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
-      supabase.from("server_members").select("*").eq("server_id", serverId),
+      supabase.rpc("get_server_members", { p_server_id: serverId }),
       supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
       supabase.from("member_roles").select("server_id, user_id, role_id").eq("server_id", serverId),
     ]);
@@ -801,17 +816,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
     setServerRoles((roles as ServerRole[]) ?? []);
-    const memberRows = (mems as ServerMember[]) ?? [];
+    const memberRows = ((memRows as (ServerMember & { profile: Profile })[] | null) ?? []).filter(
+      (m) => m.profile != null,
+    );
     if (memberRows.length === 0) {
       setMembers([]);
       return channelRows;
     }
-    // Batched: a server with a few hundred members produced a query string
-    // past the URL limit and the whole request 400'd, emptying the member list.
-    const map = await fetchProfilesByIds(supabase, memberRows.map((m) => m.user_id));
-    const enrichedMembers = memberRows
-      .filter((m) => map.has(m.user_id))
-      .map((m) => ({ ...m, profile: map.get(m.user_id)!, role_ids: roleIdsByMember.get(m.user_id) ?? [] }));
+    const enrichedMembers = memberRows.map((m) => ({ ...m, role_ids: roleIdsByMember.get(m.user_id) ?? [] }));
     setMembers(enrichedMembers);
     const uid = sessionRef.current?.user?.id ?? null;
     if (uid) {
@@ -1261,6 +1273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setSession(session);
+      if (session) rememberSession(session);
       setReady(true);
     })();
 
@@ -1283,7 +1296,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
-  }, [configured]);
+  }, [configured, rememberSession]);
 
   // Recover a session that expired while the tab was backgrounded. supabase's
   // auto-refresh ticker only runs while the page is visible, so returning to a
@@ -2143,14 +2156,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     resetSupabaseClient();
     setProfile(null);
 
-    const { error } = await getSupabaseClient().auth.signInWithPassword({
+    const { data, error } = await getSupabaseClient().auth.signInWithPassword({
       email: email.trim(),
       password,
     });
     if (error) return mapAuthError(error.message);
+    if (data.session) rememberSession(data.session);
     await refreshMfaStatus();
     return null;
-  }, [refreshMfaStatus]);
+  }, [refreshMfaStatus, rememberSession]);
 
   const signUp = useCallback(async (email: string, password: string, username: string): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
@@ -2189,6 +2203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (data.session) {
+      rememberSession(data.session);
       const { error: profileError } = await supabase.rpc("complete_signup_profile", {
         p_username: normalized,
         p_display_name: displayNameVal,
@@ -2199,7 +2214,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // No session — email confirmation required (or anti-enumeration response)
     return { error: null, needsEmailConfirmation: true };
-  }, []);
+  }, [rememberSession]);
 
   const requestPasswordReset = useCallback(async (email: string) => {
     const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim(), {
@@ -2232,6 +2247,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.location.href = isTauri() ? "/app" : "/home";
     }
   }, [userId]);
+
+  /** Restore a previously saved account as the active one — the same mechanism
+   *  the app uses at launch, so switching is exactly "opening the app as X".
+   *  Returns an error message on failure, or null once the account is active. */
+  const switchAccount = useCallback(async (account: SavedSession) => {
+    resetSupabaseClient();
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.setSession({
+      access_token: account.access_token,
+      refresh_token: account.refresh_token,
+    });
+    if (error || !data.session) {
+      dropSavedSession(account.user_id);
+      setSavedSessions(getSavedSessions());
+      setSession(null);
+      return error?.message ?? "That saved session could not be restored.";
+    }
+    setSession(data.session);
+    rememberSession(data.session);
+    void refreshSessionOnce().then((r) => {
+      if ("session" in r && r.session) {
+        const refreshed = r.session as Session;
+        setSession(refreshed);
+        rememberSession(refreshed);
+      }
+    });
+    return null;
+  }, [rememberSession]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     if (!userId || !profile) return "Not signed in";
@@ -3748,6 +3791,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshMfaStatus,
     signOut,
     refreshAll,
+    savedSessions,
+    switchAccount,
+    removeSavedAccount,
     updateProfile,
     setViewHome,
 

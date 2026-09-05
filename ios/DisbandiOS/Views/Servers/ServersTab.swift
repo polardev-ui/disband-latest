@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ServersTab: View {
+    @Environment(AppState.self) private var app
     @State private var servers: [Server] = []
     @State private var loading = true
     @State private var error: String?
@@ -53,8 +54,12 @@ struct ServersTab: View {
     }
 
     private func load() async {
+        guard let uid = app.currentUserId else {
+            loading = false
+            return
+        }
         do {
-            servers = try await DatabaseService.myServers()
+            servers = try await DatabaseService.myServers(currentUserId: uid)
             error = nil
         } catch {
             self.error = error.localizedDescription

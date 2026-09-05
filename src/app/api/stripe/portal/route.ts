@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
+import { PUBLIC_ENV } from "@/lib/public-env";
 
 export async function GET(req: Request) {
   try {
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "No subscription found" }, { status: 404 });
     }
 
-    const origin = req.headers.get("origin") ?? "http://localhost:3000";
+    const origin = req.headers.get("origin") ?? PUBLIC_ENV.webAppUrl;
     const portal = await getStripe().billingPortal.sessions.create({
       customer: sub.stripe_customer_id,
       return_url: `${origin}/app`,

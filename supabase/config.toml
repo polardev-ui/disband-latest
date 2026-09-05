@@ -32,9 +32,7 @@ max_enrolled_factors = 10
 enroll_enabled = true
 verify_enabled = true
 
-[auth.mfa.webauthn]
-enroll_enabled = true
-verify_enabled = true
+
 
 [auth.email.template.confirmation]
 subject = "Confirm your Disband account"

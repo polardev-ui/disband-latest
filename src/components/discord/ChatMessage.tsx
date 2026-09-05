@@ -204,7 +204,7 @@ export function ChatMessage({
   );
   const pingedYou = mentionedYou || repliedToYou;
   const rowBgClass = pingedYou
-    ? "bg-super/10 hover:bg-super/15"
+    ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_3px_0_0_0_var(--ping-bar)]"
     : "hover:bg-interactive-hover/30";
 
   if (isSystem) {

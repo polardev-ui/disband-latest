@@ -6,6 +6,7 @@ import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { Logo } from "@/components/ui/Logo";
 import { Turnstile } from "@/components/ui/Turnstile";
+import { Avatar } from "@/components/ui/Avatar";
 
 type AuthMode = "login" | "signup" | "reset";
 
@@ -36,7 +37,7 @@ function Field({
 }
 
 export function AuthScreen() {
-  const { signIn, signUp, requestPasswordReset, configured } = useApp();
+  const { signIn, signUp, requestPasswordReset, configured, savedSessions, switchAccount, removeSavedAccount } = useApp();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +45,7 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [turnstileFailed, setTurnstileFailed] = useState(false);
@@ -118,6 +120,18 @@ export function AuthScreen() {
     setTurnstileKey((k) => k + 1);
   }
 
+  async function handleSwitch(acct: (typeof savedSessions)[number]) {
+    if (switchingId) return;
+    setSwitchingId(acct.user_id);
+    setError(null);
+    try {
+      const err = await switchAccount(acct);
+      if (err) setError(err);
+    } finally {
+      setSwitchingId(null);
+    }
+  }
+
   const title = success
     ? "Check your email"
     : mode === "login"
@@ -148,6 +162,64 @@ export function AuthScreen() {
           <h1 className="mt-5 text-[26px] font-semibold tracking-[-0.02em] text-text-normal">{title}</h1>
           <p className="mt-2 max-w-[19rem] text-[15px] leading-relaxed text-text-muted">{subtitle}</p>
         </div>
+
+        {mode === "login" && savedSessions.length > 0 && !success && (
+          <div className="mb-4">
+            <p className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+              Continue as
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {savedSessions.map((acct) => {
+                const display = acct.display_name || acct.username || acct.email?.split("@")[0] || "Account";
+                const busy = switchingId === acct.user_id;
+                return (
+                  <div
+                    key={acct.user_id}
+                    className="group flex items-center gap-2.5 rounded-lg border border-divider bg-bg-secondary px-2.5 py-2 transition-colors hover:border-text-muted hover:bg-interactive-hover"
+                  >
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleSwitch(acct)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <Avatar
+                        size="sm"
+                        profile={{ display_name: display, avatar_url: acct.avatar_url }}
+                        className="h-8 w-8 text-sm"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-medium text-text-normal">{display}</span>
+                        <span className="block truncate text-xs text-text-muted">{acct.email}</span>
+                      </span>
+                      {busy ? (
+                        <span className="ml-auto h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />
+                      ) : (
+                        <span className="ml-auto shrink-0 text-xs font-semibold text-brand">Switch</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Forget ${display}'s saved login`}
+                      title="Forget this account"
+                      onClick={() => removeSavedAccount(acct.user_id)}
+                      className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-status-dnd group-hover:opacity-100"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="my-4 flex items-center gap-3">
+              <span className="h-px flex-1 bg-divider" />
+              <span className="text-[11px] uppercase tracking-wide text-text-muted">or</span>
+              <span className="h-px flex-1 bg-divider" />
+            </div>
+          </div>
+        )}
 
         <form
           onSubmit={submit}
