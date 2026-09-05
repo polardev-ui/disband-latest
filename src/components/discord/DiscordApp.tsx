@@ -20,6 +20,7 @@ import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
+import { getLastChannelId } from "@/lib/server-last-channel";
 import {
   CallPanel,
   GroupRingOverlay,
@@ -198,6 +199,24 @@ export function DiscordApp() {
   }, [call.remoteStream, app.deafened]);
 
   const activeChannel = app.channels.find((c) => c.id === app.activeChannelId);
+
+  // Opening a server should land you somewhere. `selectServer` already picks
+  // the last channel you used, but it is not the only way into a server — a
+  // restored session or an invite lands here with a server and no channel, and
+  // the app then showed an empty pane. This is the backstop for every route:
+  // the channel you were last in, else the first text channel.
+  useEffect(() => {
+    if (app.viewMode !== "server") return;
+    const serverId = app.activeServerId;
+    if (!serverId || app.activeChannelId || app.channels.length === 0) return;
+
+    const savedId = getLastChannelId(serverId);
+    const target =
+      (savedId ? app.channels.find((c) => c.id === savedId) : undefined)
+      ?? app.channels.find((c) => c.type === "text")
+      ?? app.channels[0];
+    if (target) app.selectChannel(target.id);
+  }, [app.viewMode, app.activeServerId, app.activeChannelId, app.channels, app.selectChannel]);
   const isVoice = activeChannel?.type === "voice";
   const dmFriend =
     app.dmThreads.find((t) => t.id === app.activeDmThreadId)?.friend ??
@@ -553,6 +572,9 @@ export function DiscordApp() {
   const handleMessageContext = useCallback(
     (message: ChatMessageData, x: number, y: number, context: MessageContext) => {
       const isOwn = message.author_id === app.user?.id;
+      const canModerateMessages =
+        app.viewMode === "server"
+        && (app.activeServer?.owner_id === app.user?.id || !!app.serverPermissions.manage_messages);
       const chatRef =
         context === "dm" ? dmChatRef : context === "group" ? groupChatRef : channelChatRef;
       const pinnedForSource = app.activeDmThreadId
@@ -627,7 +649,13 @@ export function DiscordApp() {
               },
             ]
           : []),
-        ...(isOwn
+        // Moderators and the owner can remove anyone's message in a server
+        // channel. The database has always allowed this — the delete policy
+        // accepts the author or `manage_messages`, and an owner satisfies every
+        // permission — but the menu only ever offered it on your own messages,
+        // so there was no way to act on someone else's. DMs and group chats
+        // stay author-only: nobody moderates a private conversation.
+        ...(isOwn || (context === "channel" && canModerateMessages)
           ? [
               {
                 id: "delete",
@@ -1435,6 +1463,17 @@ export function DiscordApp() {
           hasMore={app.channelHasMore}
           onLoadMore={app.loadMoreChannelMessages}
         />
+      )}
+
+      {/* Holds the middle column open when no channel is selected. Without it
+          the member list slides left into the chat's place, which is what made
+          opening a server look broken. */}
+      {app.viewMode === "server" && !activeChannel && (
+        <div className="flex min-w-0 flex-1 items-center justify-center bg-bg-primary px-6 text-center">
+          <p className="text-[15px] text-text-muted">
+            {app.channels.length ? "Pick a channel to start talking." : "This server has no channels yet."}
+          </p>
+        </div>
       )}
 
       {app.viewMode === "server" && !isMobile && (

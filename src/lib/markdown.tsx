@@ -20,7 +20,12 @@ function linkFor(url: string): string {
   return url;
 }
 
-function renderInlineTokens(text: string, members: Profile[], keyPrefix: number): ReactNode[] {
+function renderInlineTokens(
+  text: string,
+  members: Profile[],
+  keyPrefix: number,
+  onMentionClick?: (profile: Profile) => void,
+): ReactNode[] {
   const out: ReactNode[] = [];
   let rest = text;
   let k = keyPrefix;
@@ -44,11 +49,32 @@ function renderInlineTokens(text: string, members: Profile[], keyPrefix: number)
       }
       const user = members.find((x) => x.username?.toLowerCase() === uname.toLowerCase());
       const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
-      out.push(
-        <span key={key} className="rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40">
-          @{label}
-        </span>,
-      );
+      const chipClass = "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
+
+      // A mention naming a real person opens their profile. It looked
+      // clickable — tinted and with a hover state — but was inert, so tapping
+      // a name did nothing. @everyone stays plain text: it names no one.
+      if (user && onMentionClick) {
+        out.push(
+          <button
+            key={key}
+            type="button"
+            className={`${chipClass} cursor-pointer`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMentionClick(user);
+            }}
+          >
+            @{label}
+          </button>,
+        );
+      } else {
+        out.push(
+          <span key={key} className={chipClass}>
+            @{label}
+          </span>,
+        );
+      }
       continue;
     }
 
@@ -136,7 +162,11 @@ function headerLevel(line: string): number {
   return m[1].length;
 }
 
-export function renderMarkdown(content: string, members: Profile[] = []): ReactNode[] {
+export function renderMarkdown(
+  content: string,
+  members: Profile[] = [],
+  onMentionClick?: (profile: Profile) => void,
+): ReactNode[] {
   const out: ReactNode[] = [];
   let k = 0;
 
@@ -176,7 +206,7 @@ export function renderMarkdown(content: string, members: Profile[] = []): ReactN
       if (lineBuf.length === 0) return;
       renderedLines.push(
         <span key={k++} className="whitespace-pre-wrap break-words">
-          {renderInlineTokens(lineBuf.join("\n"), members, k * 100)}
+          {renderInlineTokens(lineBuf.join("\n"), members, k * 100, onMentionClick)}
         </span>,
       );
       lineBuf = [];
@@ -188,7 +218,7 @@ export function renderMarkdown(content: string, members: Profile[] = []): ReactN
         flush();
         renderedLines.push(
           <span key={k++} className="block font-semibold text-text-normal">
-            {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100)}
+            {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100, onMentionClick)}
           </span>,
         );
       } else {
