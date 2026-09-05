@@ -1,8 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
 
-export const metadata = {
-  title: "Privacy Policy — Disband",
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description:
+    "How Disband handles your data — what we store, what we never sell, and the choices you have over your messages and profile.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

@@ -30,19 +30,30 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      const { getSupabaseClient } = await import("@/lib/supabase/client");
-      const supabase = getSupabaseClient();
-      const { data: rows } = await supabase.rpc("get_server_by_invite", { p_code: code });
-      if (!cancelled && rows?.[0]) {
-        const r = rows[0] as typeof info & { invite_code: string };
-        setInfo({
-          id: r.id,
-          name: r.name,
-          description: r.description,
-          icon_url: r.icon_url,
-          banner_url: r.banner_url,
-          member_count: Number(r.member_count ?? 0),
-        });
+      try {
+        const res = await fetch(`/api/invites/${code}`);
+        const json = (await res.json()) as {
+          error?: string;
+          id?: string;
+          name?: string;
+          description?: string | null;
+          icon_url?: string | null;
+          banner_url?: string | null;
+          member_count?: number | string;
+        };
+        if (!cancelled && !res.ok) setError(json?.error ?? "Could not load invite.");
+        if (!cancelled && res.ok && json?.id) {
+          setInfo({
+            id: json.id,
+            name: json.name ?? "",
+            description: json.description ?? null,
+            icon_url: json.icon_url ?? null,
+            banner_url: json.banner_url ?? null,
+            member_count: Number(json.member_count ?? 0),
+          });
+        }
+      } catch {
+        if (!cancelled) setError("Could not load invite.");
       }
       if (!cancelled) setLoading(false);
     })();

@@ -33,7 +33,7 @@ interface UserPanelProps {
 
 /** Discord-style pinned user bar at the bottom of the channel/friends sidebar. */
 export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: UserPanelProps) {
-  const { profile, user, micMuted, deafened, setMicMuted, setDeafened } = useApp();
+  const { profile, user, micMuted, deafened, setMicMuted, setDeafened, presenceMap } = useApp();
   const { plan } = useSubscription(profile?.id);
   const [popupOpen, setPopupOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   const name = profile
     ? displayName(profile)
     : user?.email?.split("@")[0] ?? "You";
-  const status: UserStatus = profile?.status ?? "online";
+  const status: UserStatus = profile ? presenceMap.get(profile.id) ?? profile.status : "online";
   const statusLabelText = statusLabel(status);
 
   const handleAvatarClick = useCallback(() => {

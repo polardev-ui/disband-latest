@@ -45,12 +45,16 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         update.localizedCallerName = call.callerName
         update.hasVideo = false
         calls[uuid] = call
+        PushDiag.log("callkit.report", "callId=\(call.callId)")
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
             if let error {
+                PushDiag.log("callkit.error", "callId=\(call.callId) \(error.localizedDescription)")
                 print("CallKit reportNewIncomingCall failed: \(error.localizedDescription)")
                 Task { @MainActor [weak self] in
                     self?.calls.removeValue(forKey: uuid)
                 }
+            } else {
+                PushDiag.log("callkit.reported", "callId=\(call.callId)")
             }
         }
     }

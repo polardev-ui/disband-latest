@@ -80,8 +80,27 @@ final class CallManager {
     /// A VoIP push that reopened the app before the session was restored.
     private var pendingPush: VoipPushPayload?
 
+    nonisolated(unsafe) private var didEnterBackgroundObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var willEnterForegroundObserver: NSObjectProtocol?
+
     init(app: AppState) {
         self.app = app
+        // Pause ringing while backgrounded and recover it on return, so a call
+        // that outlives the suspension isn't killed the instant the user comes back.
+        didEnterBackgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleAppDidBackground()
+            }
+        }
+        willEnterForegroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.handleAppReturnedToForeground()
+            }
+        }
         // CallKit calls the shots when the app is off-screen: answering
         // here hands the pending call to the normal accept flow, ending hands
         // it to the normal decline flow.
@@ -100,6 +119,46 @@ final class CallManager {
             Task { @MainActor [weak self] in
                 await self?.handleVoipPush(payload)
             }
+        }
+    }
+
+    deinit {
+        if let didEnterBackgroundObserver {
+            NotificationCenter.default.removeObserver(didEnterBackgroundObserver)
+        }
+        if let willEnterForegroundObserver {
+            NotificationCenter.default.removeObserver(willEnterForegroundObserver)
+        }
+    }
+
+    // MARK: - App lifecycle
+
+    /// The ring watchdog's `Task.sleep` keeps ticking while the app is
+    /// suspended, so a call the phone sat on for a few minutes would have been
+    /// torn down the instant the user returns. Pause it in the background; the
+    /// CallKit ring is a system process and keeps ringing on its own, and the
+    /// in-app tone is suspended with the rest of the app anyway.
+    private func handleAppDidBackground() {
+        cancelRingWatchdog()
+        stopRingtone()
+    }
+
+    /// Recover when the user returns: drain a cold-start push, re-arm the ring
+    /// watchdog, and restart the in-app tone so a call that outlived the
+    /// background period looks and sounds alive again.
+    private func handleAppReturnedToForeground() async {
+        if let pendingPush {
+            await handleVoipPush(pendingPush)
+        }
+        switch phase {
+        case .incoming:
+            armRingWatchdog()
+            startRingtone()
+        case .outgoing:
+            armRingWatchdog()
+            startCallingTone()
+        case .active, .idle:
+            break
         }
     }
 
@@ -389,6 +448,7 @@ final class CallManager {
         armRingWatchdog()
         startRingtone()
         if UIApplication.shared.applicationState != .active {
+            PushDiag.log("callkit.present", "callId=\(call.callId) state=\(UIApplication.shared.applicationState.rawValue)")
             CallKitProvider.shared.presentIncomingCall(call)
         }
     }
@@ -491,12 +551,17 @@ final class CallManager {
     /// overlay to swipe, so the call is handed to CallKit for the lock-screen
     /// ring and swipe-to-answer.
     func handleVoipPush(_ payload: VoipPushPayload) async {
+        PushDiag.log("push.handle", "callId=\(payload.callId)")
         guard app.currentUserId != nil else {
             // Cold-start push before the session was restored: hold it until
             // start(userId:) runs with a session in hand.
+            PushDiag.log("push.held.unsigned", "callId=\(payload.callId)")
             pendingPush = payload
             return
         }
+        // A held cold-start push is now being handled (or dropped), so the
+        // foreground recovery path must not re-ring it forever.
+        pendingPush = nil
         if phase == .incoming, incoming?.callId == payload.callId {
             // The realtime ring beat the push and only put up an in-app ring.
             // With the app off-screen that ring is invisible — iOS suspends a
@@ -506,19 +571,28 @@ final class CallManager {
             if UIApplication.shared.applicationState != .active,
                !CallKitProvider.shared.isPresented(callId: payload.callId),
                let ringing = incoming {
+                PushDiag.log("push.upgrade.callkit", "callId=\(payload.callId)")
                 CallKitProvider.shared.presentIncomingCall(ringing)
             }
             return
         }
-        guard phase == .idle else { return }
-
-        if let profile = try? await DatabaseService.profile(id: payload.from) {
-            ringIncoming(call: IncomingCall(fromId: payload.from, callerName: payload.callerName,
-                                            callId: payload.callId, profile: profile))
-        } else {
-            ringIncoming(call: IncomingCall(fromId: payload.from, callerName: payload.callerName,
-                                            callId: payload.callId))
+        guard phase == .idle else {
+            PushDiag.log("push.dropped.nonidle", "phase=\(phase) callId=\(payload.callId)")
+            return
         }
+        PushDiag.log("push.ringing", "callId=\(payload.callId) appState=\(UIApplication.shared.applicationState.rawValue)")
+        // Present BEFORE any network work: a backgrounded app that has to wait
+        // on a Supabase round trip to show the lock-screen ring misses Apple's
+        // VoIP-enforcement deadline and the call is silently dropped — exactly
+        // how "rings in the foreground, nothing on the lock screen" happened.
+        ringIncoming(call: IncomingCall(fromId: payload.from, callerName: payload.callerName,
+                                        callId: payload.callId))
+        // CallKit already shows callerName from the push; fetch the full profile
+        // only to enrich the in-app overlay, never gate the ring on it.
+        if let profile = try? await DatabaseService.profile(id: payload.from) {
+            incoming?.profile = profile
+        }
+        return
     }
 
     // MARK: - WebRTC setup / teardown
