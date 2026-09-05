@@ -64,12 +64,14 @@ function MessageBody({
   compact,
   onContentResize,
   sending,
+  onMentionClick,
 }: {
   content: string;
   members: Profile[];
   compact?: boolean;
   onContentResize?: () => void;
   sending?: boolean;
+  onMentionClick?: (profile: Profile) => void;
 }) {
   const codes = extractInviteCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
@@ -89,7 +91,7 @@ function MessageBody({
           {emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
-            <Twemoji>{renderMarkdown(textOnly, members)}</Twemoji>
+            <Twemoji>{renderMarkdown(textOnly, members, onMentionClick)}</Twemoji>
           )}
         </div>
       )}
@@ -249,7 +251,7 @@ export function ChatMessage({
         {replyBlock}
         {body && (
           <div className="min-w-0">
-            <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} />
+            <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} />
             {editedTag}
           </div>
         )}
@@ -320,7 +322,7 @@ export function ChatMessage({
           </header>
         )}
         {replyBlock}
-        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} />}
+        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} />}
         {attachment}
         {message.uploadProgress != null && message.uploadProgress < 100 && (
           <div className="mt-1 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-bg-accent">

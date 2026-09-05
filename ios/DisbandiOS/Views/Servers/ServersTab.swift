@@ -105,7 +105,8 @@ struct ChannelListView: View {
                         Section("Text Channels") {
                             ForEach(textChannels) { channel in
                                 NavigationLink {
-                                    ChatView(source: .channel(id: channel.id, name: channel.name))
+                                    ChatView(source: .channel(id: channel.id, name: channel.name),
+                                             canModerate: isOwner)
                                 } label: {
                                     Label("#  \(channel.name)", systemImage: "number")
                                         .foregroundStyle(Brand.textSecondary)

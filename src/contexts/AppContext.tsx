@@ -3329,8 +3329,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    const { error } = await getSupabaseClient().from("messages").delete().eq("id", messageId);
-    if (error && activeChannelId) await loadMessages(activeChannelId);
+    // `.select()` so the deleted rows come back: a delete the row-level policy
+    // refuses removes nothing and reports no error, so without this a refusal
+    // was indistinguishable from success — the message disappeared locally and
+    // silently returned on the next load.
+    const { data, error } = await getSupabaseClient()
+      .from("messages")
+      .delete()
+      .eq("id", messageId)
+      .select("id");
+    if ((error || !data?.length) && activeChannelId) await loadMessages(activeChannelId);
   }, [activeChannelId, loadMessages]);
 
   const sendNote = useCallback(async (content: string, options: MessageSendOptions = {}) => {

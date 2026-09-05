@@ -11,6 +11,10 @@ struct MessageRow: View {
     /// Tapping an @mention. The row does not resolve the name itself — the
     /// chat view owns the lookup and the card it opens.
     var onTapMention: (String) -> Void = { _ in }
+    /// Lets the owner (or a role with manage_messages) remove someone else's
+    /// message. The database has always permitted this; only the menu was
+    /// limited to your own messages.
+    var canModerate: Bool = false
     var onTapAuthor: (Profile) -> Void = { _ in }
     var onReact: () -> Void = {}
     var onReply: () -> Void = {}
@@ -50,9 +54,9 @@ struct MessageRow: View {
                     Button { onReply() } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
                     Button { onReact() } label: { Label("React", systemImage: "face.smiling") }
                     Button { onSpeak() } label: { Label("Speak Message", systemImage: "speaker.wave.2.fill") }
-                    if isOwn {
+                    if isOwn || canModerate {
                         Button(role: .destructive) { onDelete() } label: {
-                            Label("Delete", systemImage: "trash")
+                            Label(isOwn ? "Delete" : "Delete Message", systemImage: "trash")
                         }
                     }
                 }
