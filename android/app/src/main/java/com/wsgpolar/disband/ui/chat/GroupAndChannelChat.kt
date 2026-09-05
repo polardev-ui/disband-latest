@@ -29,7 +29,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
 
     LaunchedEffect(group.id) {
         dmUnread.markGroupActive(group.id)
-        ActiveChat.show("group:" + group.id)
+        ActiveChat.show(group.id)
         runCatching { Database.markGroupRead(group.id) }
 
         val loaded = runCatching { Database.groupMessages(group.id) }.getOrDefault(emptyList())
@@ -42,7 +42,10 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         if (live != null) {
             try {
                 live.flow.collect { msg ->
-                    if (msg.authorId != uid) dmUnread.incrementGroup(msg.groupId, msg.authorId, uid)
+                    if (msg.authorId != uid) {
+                        dmUnread.incrementGroup(msg.groupId, msg.authorId, uid)
+                        runCatching { Database.markGroupRead(group.id) }
+                    }
                     rows = rows.filterNot { it.id == msg.id } + msg.toRow()
                 }
             } finally {
@@ -86,7 +89,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     var loading by remember(channel.id) { mutableStateOf(true) }
 
     LaunchedEffect(channel.id) {
-        ActiveChat.show("channel:" + channel.id)
+        ActiveChat.show(channel.id)
         val loaded = runCatching { Database.messages(channel.id) }.getOrDefault(emptyList())
         rows = loaded.map { it.toRow() }
         loading = false

@@ -1157,6 +1157,7 @@ export function DiscordApp() {
               ) : (
                 <ChannelList
                   title={app.activeServer?.name ?? "Server"}
+                  verified={app.activeServer?.verified}
                   categories={app.categories}
                   channels={app.channels}
                   activeChannelId={app.activeChannelId}
@@ -1219,6 +1220,7 @@ export function DiscordApp() {
           ) : (
             <ChannelList
               title={app.activeServer?.name ?? "Server"}
+              verified={app.activeServer?.verified}
               categories={app.categories}
               channels={app.channels}
               activeChannelId={app.activeChannelId}

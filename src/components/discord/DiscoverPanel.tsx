@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { IconClose, IconFriends, IconSearch, IconCompass, IconSparkle } from "@/components/icons";
+import { IconClose, IconFriends, IconSearch, IconCompass, IconSparkle, IconVerified } from "@/components/icons";
 import { serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { UserPanel } from "./UserPanel";
 import { CallIndicator } from "./CallIndicator";
+import { Tooltip } from "./Tooltip";
 
 export interface DiscoverableServer {
   id: string;
@@ -19,6 +20,7 @@ export interface DiscoverableServer {
   owner_name: string;
   member_count: number;
   created_at: string;
+  verified?: boolean;
 }
 
 export type DiscoverTab = "popular" | "new";
@@ -270,8 +272,13 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
                         )}
                       </div>
 
-                      <p className="truncate text-[15px] font-semibold text-text-normal">
-                        {server.name}
+                      <p className="flex min-w-0 items-center gap-1 text-[15px] font-semibold text-text-normal">
+                        <span className="truncate">{server.name}</span>
+                        {server.verified && (
+                          <Tooltip label="This server is officially verified by Disband">
+                            <IconVerified size={15} className="shrink-0 text-sky-400" />
+                          </Tooltip>
+                        )}
                       </p>
                       <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-[13px] leading-relaxed text-text-muted">
                         {server.description || "No description."}

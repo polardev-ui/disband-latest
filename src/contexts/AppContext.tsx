@@ -492,6 +492,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /**
+   * Advance this user's read cursor for a thread.
+   *
+   * Separate from `clearDmUnread`, which only drops the local badge: unread is
+   * recomputed from server cursors on every refresh, so a thread whose cursor
+   * did not move comes straight back.
+   */
+  const markDmReadNow = useCallback(async (threadId: string) => {
+    const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
+    if (error) console.error("mark_dm_read failed", error.message);
+  }, []);
+
   const clearDmUnread = useCallback((threadId: string) => {
     setDmUnreadMap((prev) => {
       if (!prev.has(threadId)) return prev;
@@ -1595,6 +1607,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
             if (msg.author_id !== userId && author) {
+              // Keep the read cursor level with what is on screen. It was only
+              // advanced when the thread was opened, so anything arriving while
+              // you sat reading counted as unread the moment unread was
+              // recomputed — the badge returning for the conversation you were
+              // looking at.
+              void markDmReadNow(msg.thread_id);
               alertIncomingDm(
                 displayName(author),
                 msg.content.slice(0, 120) || undefined,
@@ -1932,8 +1950,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
-    const isOther = (userIdCol: string | undefined) =>
-      userId !== undefined && userIdCol !== undefined && userIdCol !== userId;
+    // Mine, not somebody else's. The point of this subscription is to notice
+    // *my own* read cursor moving on another device and clear the badge here;
+    // another person marking their own thread read says nothing about my
+    // unread counts. The test was inverted, so the cross-device clearing this
+    // exists for never ran, and reading a DM on the phone left it unread on
+    // the web until something else forced a refresh.
+    const isMine = (userIdCol: string | undefined) =>
+      userId !== undefined && userIdCol !== undefined && userIdCol === userId;
     const sub = supabase
       .channel(`read-sync:${userId}`)
       .on(
@@ -1941,7 +1965,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "dm_thread_reads" },
         (payload) => {
           const p = payload.new as { user_id?: string };
-          if (isOther(p.user_id)) void seedUnread(userId);
+          if (isMine(p.user_id)) void seedUnread(userId);
         },
       )
       .on(
@@ -1949,7 +1973,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "UPDATE", schema: "public", table: "dm_thread_reads" },
         (payload) => {
           const p = payload.new as { user_id?: string };
-          if (isOther(p.user_id)) void seedUnread(userId);
+          if (isMine(p.user_id)) void seedUnread(userId);
         },
       )
       .on(
@@ -1957,7 +1981,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "UPDATE", schema: "public", table: "group_chat_members" },
         (payload) => {
           const p = payload.new as { user_id?: string };
-          if (isOther(p.user_id)) void seedUnread(userId);
+          if (isMine(p.user_id)) void seedUnread(userId);
         },
       )
       .subscribe();
@@ -2046,6 +2070,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as GroupMessage;
           if (msg.author_id === userId) return;
+          // Group pushes/banners are mention-only (matches the server trigger);
+          // a mention here is alerted by the notifications-table subscription.
           if (msg.mentions?.includes(userId)) return;
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
@@ -2057,19 +2083,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return next;
             });
           }
-          void (async () => {
-            const { data: author } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", msg.author_id)
-              .maybeSingle();
-            if (!author) return;
-            notifyUser(
-              group.name,
-              `${displayName(author as Profile)}: ${msg.content.slice(0, 120)}`,
-              { kind: "group", groupId: msg.group_id },
-            );
-          })();
         },
       )
       .subscribe();
@@ -2304,10 +2317,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDmLoading(true);
     clearDmUnread(threadId);
     // Persist the read cursor so other devices (and future restarts) stop
-    // counting this thread as unread.
-    void getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
+    // counting this thread as unread. Awaited and checked: as a bare `void`
+    // this failed silently, and the badge simply returned on the next reseed
+    // with nothing to say why.
+    void markDmReadNow(threadId);
     await loadDmMessages(threadId);
-  }, [loadDmMessages, clearDmUnread, persistActiveServerChannel, markActivity]);
+  }, [loadDmMessages, clearDmUnread, markDmReadNow, persistActiveServerChannel, markActivity]);
 
   const selectGroupChat = useCallback(async (groupId: string) => {
     markActivity();

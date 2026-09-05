@@ -151,7 +151,7 @@ object Database {
                 filter { eq("id", id) }
                 single()
             }
-            .decodeSingle()
+            .decodeAs<Message>()
     }
 
     suspend fun deleteChannelMessage(id: String) {
@@ -343,7 +343,11 @@ object Database {
                 filter { eq("id", id) }
                 single()
             }
-            .decodeSingle()
+            // decodeAs, not decodeSingle: `single()` asks PostgREST for one
+            // object, so the body is `{...}` — decodeSingle expects an array
+            // and takes its first element, which threw on every read. Loading
+            // your own profile has never worked.
+            .decodeAs<Profile>()
     }
 
     suspend fun profiles(ids: List<String>): Map<String, Profile> {

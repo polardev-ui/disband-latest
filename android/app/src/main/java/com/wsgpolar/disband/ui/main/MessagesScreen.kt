@@ -68,6 +68,29 @@ fun MessagesScreen(app: AppState) {
         threads = runCatching { Database.myDmThreads(uid) }.getOrDefault(emptyList())
         groups = runCatching { Database.myGroups(uid) }.getOrDefault(emptyList())
         loading = false
+
+        // The list used to load once and never change, so a message arriving —
+        // or one you sent yourself — neither surfaced nor reordered the
+        // conversation until the app was restarted. Sorting by recency is only
+        // useful if the list is actually kept current.
+        val dmLive = runCatching {
+            com.wsgpolar.disband.data.RealtimeService.observeChanges("dm_messages")
+        }.getOrNull()
+        val groupLive = runCatching {
+            com.wsgpolar.disband.data.RealtimeService.observeChanges("group_messages")
+        }.getOrNull()
+        try {
+            kotlinx.coroutines.flow.merge(
+                dmLive?.flow ?: kotlinx.coroutines.flow.emptyFlow(),
+                groupLive?.flow ?: kotlinx.coroutines.flow.emptyFlow(),
+            ).collect {
+                threads = runCatching { Database.myDmThreads(uid) }.getOrDefault(threads)
+                groups = runCatching { Database.myGroups(uid) }.getOrDefault(groups)
+            }
+        } finally {
+            runCatching { dmLive?.channel?.unsubscribe() }
+            runCatching { groupLive?.channel?.unsubscribe() }
+        }
     }
 
     val open = openThread

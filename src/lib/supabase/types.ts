@@ -52,6 +52,7 @@ export interface Server {
   owner_id: string;
   invite_code?: string;
   discoverable?: boolean;
+  verified?: boolean;
   created_at: string;
 }
 

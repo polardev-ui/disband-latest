@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getInviteUrl } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
+import { IconVerified } from "@/components/icons";
+import { Tooltip } from "./Tooltip";
 
 interface ServerInviteCardProps {
   code: string;
@@ -19,6 +21,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     icon_url: string | null;
     banner_url: string | null;
     member_count: number;
+    verified?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -40,6 +43,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           icon_url?: string | null;
           banner_url?: string | null;
           member_count?: number | string;
+          verified?: boolean;
         };
         if (!cancelled && !res.ok) setError(json?.error ?? "Could not load invite.");
         if (!cancelled && res.ok && json?.id) {
@@ -50,6 +54,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
             icon_url: json.icon_url ?? null,
             banner_url: json.banner_url ?? null,
             member_count: Number(json.member_count ?? 0),
+            verified: json.verified ?? false,
           });
         }
       } catch {
@@ -98,7 +103,14 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
         )}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold uppercase text-text-muted">Server Invite</p>
-          <p className="truncate font-semibold">{info.name}</p>
+          <p className="flex min-w-0 items-center gap-1 font-semibold">
+            <span className="truncate">{info.name}</span>
+            {info.verified && (
+              <Tooltip label="This server is officially verified by Disband">
+                <IconVerified size={14} className="shrink-0 text-sky-400" />
+              </Tooltip>
+            )}
+          </p>
           {info.description && <p className="truncate text-xs text-text-muted">{info.description}</p>}
           <p className="text-xs text-text-muted">{info.member_count} members</p>
         </div>
