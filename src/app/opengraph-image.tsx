@@ -3,6 +3,11 @@ import { ImageResponse } from "next/og";
 export const alt = "Disband — A place for your people to talk";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+// The desktop app is a static export, and `output: export` refuses to build a
+// route that has not said whether it is static. This image depends on nothing
+// from the request, so generating it once at build time is what it wants —
+// without this the Tauri build fails collecting page data.
+export const dynamic = "force-static";
 
 export default function OpenGraphImage() {
   return new ImageResponse(
