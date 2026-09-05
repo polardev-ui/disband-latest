@@ -353,10 +353,16 @@ img.twemoji {
 :root,
 [data-theme] {
   --super: #fee75c;
+  --ping-bg: rgba(250, 166, 26, 0.1);
+  --ping-bg-hover: rgba(250, 166, 26, 0.16);
+  --ping-bar: #f0b232;
 }
 
 [data-theme="light"] {
   --super: #8a6407;
+  --ping-bg: rgba(214, 158, 46, 0.15);
+  --ping-bg-hover: rgba(214, 158, 46, 0.22);
+  --ping-bar: #c0851d;
 }
 
 /*

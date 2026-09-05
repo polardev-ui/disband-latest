@@ -7,7 +7,6 @@ import { Tooltip } from "./Tooltip";
 import {
   IconChevron,
   IconClose,
-  IconGripVertical,
   IconHash,
   IconHeadphonesOff,
   IconMicOff,
@@ -123,6 +122,11 @@ export function ChannelList({
   const [addChannelType, setAddChannelType] = useState<ChannelType>("text");
   const [busy, setBusy] = useState(false);
 
+  // A drag ends with the browser still firing a `click` on the row that was
+  // being dragged; without suppression that commits the move AND selects the
+  // channel (or collapses the category). Only swallow that one click.
+  const suppressClickRef = useRef<HTMLElement | null>(null);
+
   // Pointer-event dragging replaces HTML5 drag-and-drop, which does not work in
   // Safari/iOS over <button> rows and offers no touch support at all. A short
   // threshold keeps a plain click from turning into a drag; once armed, the grip
@@ -147,13 +151,6 @@ export function ChannelList({
     setOverCatId(null);
     setOverChannelId(null);
     setDragGhost(null);
-  };
-
-  const dropCategory = (catId: string | null) => {
-    if (dragChannelId && onMoveChannel) {
-      onMoveChannel(dragChannelId, catId, byCategory(catId).length);
-    }
-    clearDragState();
   };
 
   const dropOnChannel = (target: Channel) => {
@@ -189,7 +186,7 @@ export function ChannelList({
   };
 
   const armDrag = (kind: "channel" | "category", id: string, label: string) =>
-    (e: React.PointerEvent<HTMLSpanElement>) => {
+    (e: React.PointerEvent<HTMLElement>) => {
       if (!canManageChannels) return;
       e.preventDefault();
       e.stopPropagation();
@@ -197,7 +194,7 @@ export function ChannelList({
       e.currentTarget.setPointerCapture?.(e.pointerId);
     };
 
-  const moveDrag = (e: React.PointerEvent<HTMLSpanElement>) => {
+  const moveDrag = (e: React.PointerEvent<HTMLElement>) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     if (!d.active) {
@@ -211,11 +208,16 @@ export function ChannelList({
     hitTest(e.clientX, e.clientY);
   };
 
-  const releaseDrag = (e: React.PointerEvent<HTMLSpanElement>) => {
+  const releaseDrag = (e: React.PointerEvent<HTMLElement>) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     dragRef.current = null;
     if (!d.active) return;
+    suppressClickRef.current = e.currentTarget;
+    const dragEl = e.currentTarget;
+    window.setTimeout(() => {
+      if (suppressClickRef.current === dragEl) suppressClickRef.current = null;
+    }, 500);
     if (d.kind === "channel") {
       if (overChannelId && overChannelId !== d.id) {
         const target = channels.find((c) => c.id === overChannelId);
@@ -262,30 +264,20 @@ export function ChannelList({
     return null;
   };
 
-  const cancelDrag = (e: React.PointerEvent<HTMLSpanElement>) => {
+  const cancelDrag = (e: React.PointerEvent<HTMLElement>) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     dragRef.current = null;
     clearDragState();
   };
 
-  const Grip = ({ kind, id, label }: { kind: "channel" | "category"; id: string; label: string }) =>
-    canManageChannels ? (
-      <span
-        role="button"
-        aria-label={`Drag ${label} to reorder`}
-        title="Drag to reorder"
-        className="flex h-4 w-4 shrink-0 cursor-grab items-center justify-center text-text-muted opacity-0 transition-opacity group-hover/drag:opacity-100 hover:!text-text-normal"
-        style={{ touchAction: "none" }}
-        onPointerDown={armDrag(kind, id, label)}
-        onPointerMove={moveDrag}
-        onPointerUp={releaseDrag}
-        onPointerCancel={cancelDrag}
-        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
-      >
-        <IconGripVertical size={12} />
-      </span>
-    ) : null;
+  const consumeSuppressed = (el: HTMLElement) => {
+    if (suppressClickRef.current === el) {
+      suppressClickRef.current = null;
+      return true;
+    }
+    return false;
+  };
 
   const startAddChannel = (catId: string | null) => {
     if (!canManageChannels) return;
@@ -380,20 +372,27 @@ export function ChannelList({
         <button
           type="button"
           data-channel-id={ch.id}
-          onClick={() => onSelectChannel(ch.id)}
+          onClick={(e) => {
+            if (consumeSuppressed(e.currentTarget)) return;
+            onSelectChannel(ch.id);
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             onChannelContext?.(ch, e.clientX, e.clientY);
           }}
+          onPointerDown={armDrag("channel", ch.id, ch.name)}
+          onPointerMove={moveDrag}
+          onPointerUp={releaseDrag}
+          onPointerCancel={cancelDrag}
+          style={canManageChannels ? { touchAction: "none" } : undefined}
           className={`group/drag mb-0.5 flex w-full items-center gap-1.5 rounded px-1 py-[6px] text-[15px] transition-all duration-150 ease-in-out ${
             active
               ? "bg-interactive-selected text-text-normal"
               : unread
                 ? "font-semibold text-text-normal hover:bg-interactive-hover"
                 : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          }`}
+          } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
-          <Grip kind="channel" id={ch.id} label={ch.name} />
           {ch.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
           {/* Red badge means it was addressed to you — a mention or a reply —
@@ -430,17 +429,24 @@ export function ChannelList({
         {overCatId === cat.id && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
         <button
           type="button"
-          onClick={() => toggleCollapsed(cat.id)}
+          onClick={(e) => {
+            if (consumeSuppressed(e.currentTarget)) return;
+            toggleCollapsed(cat.id);
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
             onCategoryContext?.(cat, e.clientX, e.clientY);
           }}
+          onPointerDown={armDrag("category", cat.id, cat.name)}
+          onPointerMove={moveDrag}
+          onPointerUp={releaseDrag}
+          onPointerCancel={cancelDrag}
+          style={canManageChannels ? { touchAction: "none" } : undefined}
           className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-all duration-150 ${
             overCatId === cat.id ? "text-brand" : "text-text-muted hover:text-text-normal"
-          }`}
+          } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
-          <Grip kind="category" id={cat.id} label={cat.name} />
           <IconChevron size={12} className={`shrink-0 transition-transform duration-150 ${open ? "" : "-rotate-90"}`} />
           <span className="truncate">{cat.name}</span>
         </button>

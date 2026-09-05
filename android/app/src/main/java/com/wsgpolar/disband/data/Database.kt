@@ -29,6 +29,7 @@ object Database {
             .select(columns("server_id")) { filter { eq("user_id", currentUserId) } }
             .decodeList<ServerIdRow>()
             .map { it.serverId }
+            .distinct()
         if (ids.isEmpty()) return emptyList()
         return client.from("servers")
             .select(Columns.ALL) {
@@ -57,11 +58,12 @@ object Database {
     }
 
     suspend fun members(serverId: String): List<ServerMember> {
-        return client.from("server_members")
-            .select(columns("*, profile:profiles(*)")) {
-                filter { eq("server_id", serverId) }
-            }
-            .decodeList()
+        // Embedded profiles via the get_server_members RPC: one tiny URL per
+        // server no matter its size. The old "fetch ids then profiles(ids)"
+        // path built a `profiles?select=*&id=in.(...)` URL past the proxy
+        // limit on big servers and 400'd, so this never fetches by id.
+        return postgrest.rpc("get_server_members", buildJsonObject { put("p_server_id", serverId) })
+            .decodeList<ServerMember>()
     }
 
     suspend fun createServer(name: String): String {

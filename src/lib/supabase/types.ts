@@ -596,6 +596,13 @@ export interface Database {
         Args: { p_server_id: string };
         Returns: Record<string, boolean>;
       };
+      get_server_members: {
+        Args: { p_server_id: string };
+        Returns: (Omit<DbServerMember, "role"> & {
+          role: MemberRole;
+          profile: Profile;
+        })[];
+      };
       set_channel_role_permission: {
         Args: {
           p_channel_id: string;
