@@ -335,15 +335,35 @@ enum DatabaseService {
         return rows.first
     }
 
+    /// Profiles are fetched in batches: every id lands in a single `in(...)`
+    /// filter, so a server with a few hundred members builds a URL past what
+    /// the proxies in front of PostgREST accept and the whole list comes back
+    /// 400 — emptying the member list on exactly the servers big enough to
+    /// need it. 100 ids keeps the worst case near 4 KB.
+    private static let profileBatchSize = 100
+
     static func profiles(ids: [String]) async throws -> [String: Profile] {
         let unique = Array(Set(ids))
         guard !unique.isEmpty else { return [:] }
-        let rows: [Profile] = try await client
-            .from("profiles")
-            .select("*")
-            .in("id", values: unique)
-            .execute().value
-        return Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let chunks = stride(from: 0, to: unique.count, by: profileBatchSize).map {
+            Array(unique[$0 ..< min($0 + profileBatchSize, unique.count)])
+        }
+        var merged: [String: Profile] = [:]
+        try await withThrowingTaskGroup(of: [Profile].self) { group in
+            for chunk in chunks {
+                group.addTask {
+                    try await client
+                        .from("profiles")
+                        .select("*")
+                        .in("id", values: chunk)
+                        .execute().value
+                }
+            }
+            for try await rows in group {
+                for row in rows { merged[row.id] = row }
+            }
+        }
+        return merged
     }
 
     static func searchProfiles(query: String) async throws -> [Profile] {

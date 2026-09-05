@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
 import { buildVideoConstraints } from "@/lib/audio-settings";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
@@ -82,8 +83,7 @@ export function useGroupCallManager(
       setPresence([]);
       return;
     }
-    const { data: profiles } = await supabase.from("profiles").select("*").in("id", rows.map((r) => r.user_id));
-    const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    const map = await fetchProfilesByIds(supabase, rows.map((r) => r.user_id));
     setPresence(
       rows.map((r) => ({
         user_id: r.user_id,
@@ -313,11 +313,7 @@ export function useGroupCallManager(
         setConnectedAt(Date.now());
         playCallConnected();
         const { data: rows } = await supabase.from("group_call_presence").select("*").eq("group_id", gid);
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("*")
-          .in("id", (rows ?? []).map((r) => r.user_id));
-        const profileMap = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+        const profileMap = await fetchProfilesByIds(supabase, (rows ?? []).map((r) => r.user_id));
         const loaded: GroupCallParticipant[] = (rows ?? []).map((r) => ({
           user_id: r.user_id,
           joined_at: r.joined_at,

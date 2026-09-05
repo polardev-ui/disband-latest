@@ -627,6 +627,10 @@ export interface Database {
         Args: { p_channel_id: string; p_category_id: string | null; p_index: number };
         Returns: undefined;
       };
+      move_category: {
+        Args: { p_category_id: string; p_index: number };
+        Returns: undefined;
+      };
       pin_message: {
         Args: {
           p_source_type: "dm" | "group" | "channel";

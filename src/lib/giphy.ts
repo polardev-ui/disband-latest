@@ -48,15 +48,21 @@ function isSafeGifUrl(url: string): boolean {
   }
 }
 
-/** 
- * Giphy CDN URL → MP4 for reliable autoplay in chat.
- * Converts `.gif` → `.mp4` while preserving the signed URL prefix
- * so Giphy's CDN accepts the request.
+/**
+ * Giphy CDN URL → MP4 for autoplay in chat, when one actually exists.
+ *
+ * This used to rewrite any `.gif` to `.mp4` by swapping the extension, but
+ * Giphy does not publish an mp4 for every rendition — `giphy-downsized-medium`
+ * is one of the ones that has none, so the invented URL came back 403 and the
+ * message showed nothing at all. Only renditions known to carry an mp4 are
+ * converted; everything else keeps the GIF, which always exists.
  */
+const MP4_RENDITIONS = /\/(giphy|giphy-downsized|giphy-preview|giphy-loop)\.gif(\?|$)/i;
+
 export function giphyMp4Url(gifUrl: string): string | null {
   if (!isSafeGifUrl(gifUrl)) return null;
   if (/\.mp4(\?|$)/i.test(gifUrl)) return gifUrl;
-  if (/\.gif(\?|$)/i.test(gifUrl)) return gifUrl.replace(/\.gif(\?.*)?$/i, ".mp4$1");
+  if (MP4_RENDITIONS.test(gifUrl)) return gifUrl.replace(/\.gif(\?.*)?$/i, ".mp4$1");
   return null;
 }
 

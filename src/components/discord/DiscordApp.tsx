@@ -1185,6 +1185,8 @@ export function DiscordApp() {
                   categories={app.categories}
                   channels={visibleChannels}
                   activeChannelId={app.activeChannelId}
+                  getUnreadCount={app.getChannelUnreadCount}
+                  getMentionCount={app.getChannelMentionCount}
                   canManageChannels={canManageChannels}
                   voicePresence={serverVoicePresence}
                   onSelectChannel={handleSelectChannel}
@@ -1195,6 +1197,7 @@ export function DiscordApp() {
                   onCategoryContext={handleCategoryContext}
                   onUserPanelContext={handleUserPanelContext}
                   onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
+                  onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
                   onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
                   onCreateCategory={(name) => app.createCategory(name)}
                 />
@@ -1248,6 +1251,8 @@ export function DiscordApp() {
               categories={app.categories}
               channels={app.channels}
               activeChannelId={app.activeChannelId}
+              getUnreadCount={app.getChannelUnreadCount}
+              getMentionCount={app.getChannelMentionCount}
               canManageChannels={canManageChannels}
               voicePresence={serverVoicePresence}
               onSelectChannel={handleSelectChannel}
@@ -1258,6 +1263,7 @@ export function DiscordApp() {
               onCategoryContext={handleCategoryContext}
               onUserPanelContext={handleUserPanelContext}
               onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
+              onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
               onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
               onCreateCategory={(name) => app.createCategory(name)}
             />

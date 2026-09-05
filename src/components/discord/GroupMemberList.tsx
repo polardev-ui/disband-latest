@@ -47,7 +47,9 @@ export function GroupMemberList({
   }
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary lg:flex">
+    // Same as MemberList: the mount decision belongs to DiscordApp's 768px
+    // check, not to a second stricter breakpoint here.
+    <aside className="flex w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary">
       <div className="p-4">
         {inCall.length > 0 && (
           <section className="mb-4">

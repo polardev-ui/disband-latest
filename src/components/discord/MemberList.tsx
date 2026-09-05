@@ -102,7 +102,12 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   }
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary lg:flex">
+    // No breakpoint of its own. DiscordApp already decides whether to mount
+    // this, using `useIsMobile` at 768px — and a second, stricter CSS gate at
+    // lg (1024px) meant that between 768 and 1024 the list was mounted and
+    // then hidden by the stylesheet, so the column simply vanished on a
+    // narrower desktop window.
+    <aside className="flex w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary">
       <div className="p-4">
         {Object.entries(grouped).map(([label, list]) => (
           <section key={label} className="mb-4">

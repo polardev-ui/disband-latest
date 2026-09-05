@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisbandUserMedia } from "@/lib/media";
 import { playCallConnected, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { fetchIceServers } from "@/lib/ice-servers";
@@ -75,8 +76,7 @@ export function useVoiceChannel(
       setParticipants([]);
       return;
     }
-    const { data: profiles } = await supabase.from("profiles").select("*").in("id", rows.map((r) => r.user_id));
-    const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    const map = await fetchProfilesByIds(supabase, rows.map((r) => r.user_id));
     setParticipants(rows.map((r) => ({ ...r, profile: map.get(r.user_id) })));
   }, [channelId]);
 

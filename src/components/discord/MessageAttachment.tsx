@@ -40,7 +40,11 @@ export function MessageAttachment({
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const mp4 = type === "gif" ? giphyMp4Url(url) : null;
+  // Giphy does not serve an mp4 for every rendition, and a missing one answers
+  // 403 rather than anything catchable up front. Falling back to the GIF keeps
+  // the message from rendering as blank space.
+  const [mp4Error, setMp4Error] = useState(false);
+  const mp4 = type === "gif" && !mp4Error ? giphyMp4Url(url) : null;
   const displaySrc = mp4 ? giphyDisplayUrl(mp4) : null;
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
@@ -121,6 +125,7 @@ export function MessageAttachment({
               webkit-playsinline=""
               className={`${mediaClass} cursor-zoom-in`}
               onLoadedData={onLoad}
+              onError={() => setMp4Error(true)}
             />
           </button>
           <ImageLightbox
