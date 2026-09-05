@@ -23,9 +23,14 @@ struct ChatView: View {
 
     /// The DM peer, when `source` is `.dm`. Enables the header call button.
     var callPeer: Profile?
+    /// True when the reader may remove other people's messages here — the
+    /// server owner, or a role with manage_messages. Only meaningful for a
+    /// server channel; nobody moderates a DM or a group chat.
+    var canModerate: Bool = false
 
-    init(source: ChatSource, callPeer: Profile? = nil) {
+    init(source: ChatSource, callPeer: Profile? = nil, canModerate: Bool = false) {
         _model = State(initialValue: ChatViewModel(source: source))
+        self.canModerate = canModerate
         self.callPeer = callPeer
     }
 
@@ -120,6 +125,7 @@ struct ChatView: View {
                                 replyTo: model.repliedMessage(for: message),
                                 currentUserId: app.currentUserId,
                                 onTapMention: { openMention($0) },
+                                canModerate: canModerate,
                                 onTapAuthor: { openProfile = $0 },
                                 onReact: { reactingMessage = message },
                                 onReply: { withAnimation { replyingTo = message } },
