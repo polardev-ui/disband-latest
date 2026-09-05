@@ -48,6 +48,7 @@ import {
   trimToLatestWindow,
 } from "@/lib/message-pagination";
 import { apiFetch } from "@/lib/api";
+import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type {
   AppNotification,
   Channel,
@@ -162,6 +163,7 @@ interface AppContextValue {
   renameCategory: (categoryId: string, name: string) => Promise<string | null>;
   deleteCategory: (categoryId: string) => Promise<string | null>;
   moveChannel: (channelId: string, categoryId: string | null, index: number) => Promise<string | null>;
+  moveCategory: (categoryId: string, index: number) => Promise<string | null>;
   deleteRole: (roleId: string) => Promise<string | null>;
   moveRole: (roleId: string, position: number) => Promise<string | null>;
   sendChannelMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -206,6 +208,7 @@ interface AppContextValue {
   clearDmUnread: (threadId: string) => void;
   channelUnreadMap: Map<string, number>;
   getChannelUnreadCount: (channelId: string) => number;
+  getChannelMentionCount: (channelId: string) => number;
   groupUnreadMap: Map<string, number>;
   getGroupUnreadCount: (groupId: string) => number;
   clearGroupUnread: (groupId: string) => void;
@@ -333,6 +336,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dmThreadActivity, setDmThreadActivity] = useState<Record<string, string>>({});
   const [serverIndicators, setServerIndicators] = useState<Set<string>>(new Set());
   const [channelUnreadMap, setChannelUnreadMap] = useState<Map<string, number>>(new Map());
+  // Separate from the unread count: Discord's white pill means "something new",
+  // the red badge means "something addressed to you", and they are not the same
+  // signal. Without this there was no way to tell which channel pinged you.
+  const [channelMentionMap, setChannelMentionMap] = useState<Map<string, number>>(new Map());
   const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
 
@@ -799,11 +806,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMembers([]);
       return channelRows;
     }
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("*")
-      .in("id", memberRows.map((m) => m.user_id));
-    const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    // Batched: a server with a few hundred members produced a query string
+    // past the URL limit and the whole request 400'd, emptying the member list.
+    const map = await fetchProfilesByIds(supabase, memberRows.map((m) => m.user_id));
     const enrichedMembers = memberRows
       .filter((m) => map.has(m.user_id))
       .map((m) => ({ ...m, profile: map.get(m.user_id)!, role_ids: roleIdsByMember.get(m.user_id) ?? [] }));
@@ -915,8 +920,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     const ids = [...new Set(rows.flatMap((f) => [f.requester_id, f.addressee_id]))];
-    const { data: profiles } = await supabase.from("profiles").select("*").in("id", ids);
-    const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    const map = await fetchProfilesByIds(supabase, ids);
     setFriendships(
       rows.map((f) => ({
         ...f,
@@ -1085,8 +1089,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ]);
     const memberRows = (allMembers ?? []) as { group_id: string; user_id: string }[];
     const profileIds = [...new Set(memberRows.map((m) => m.user_id))];
-    const { data: profiles } = await supabase.from("profiles").select("*").in("id", profileIds);
-    const profileMap = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    const profileMap = await fetchProfilesByIds(supabase, profileIds);
     setGroupChats(
       ((groups ?? []) as GroupChatWithMembers[]).map((g) => ({
         ...g,
@@ -2047,6 +2050,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
               next.set(msg.channel_id, (next.get(msg.channel_id) ?? 0) + 1);
               return next;
             });
+            if (msg.mentions?.includes(userId)) {
+              setChannelMentionMap((prev) => {
+                const next = new Map(prev);
+                next.set(msg.channel_id, (next.get(msg.channel_id) ?? 0) + 1);
+                return next;
+              });
+            }
             setServerIndicators((prev) => new Set(prev).add(channel.server_id));
           }
           if (msg.mentions?.includes(userId)) return;
@@ -2331,6 +2341,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLastChannelId(channel.server_id, channelId);
     }
     setChannelUnreadMap((prev) => {
+      if (!prev.has(channelId)) return prev;
+      const next = new Map(prev);
+      next.delete(channelId);
+      return next;
+    });
+    // Opening the channel is reading the mentions in it.
+    setChannelMentionMap((prev) => {
       if (!prev.has(channelId)) return prev;
       const next = new Map(prev);
       next.delete(channelId);
@@ -2886,6 +2903,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().rpc("move_channel", {
       p_channel_id: channelId,
+      p_category_id: categoryId,
+      p_index: index,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const moveCategory = useCallback(async (categoryId: string, index: number) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("move_category", {
       p_category_id: categoryId,
       p_index: index,
     });
@@ -3645,11 +3673,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setVoicePresence([]);
       return;
     }
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("*")
-      .in("id", rows.map((r) => r.user_id));
-    const map = new Map((profiles as Profile[] | null)?.map((p) => [p.id, p]) ?? []);
+    const map = await fetchProfilesByIds(supabase, rows.map((r) => r.user_id));
     setVoicePresence(
       rows.map((r) => ({ ...r, profile: map.get(r.user_id)! })).filter((r) => r.profile),
     );
@@ -3657,6 +3681,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMaxMessageChars = useCallback((n: number) => { maxMessageCharsRef.current = n; }, []);
   const setMaxBioLength = useCallback((n: number) => { maxBioLengthRef.current = n; }, []);
+
+  const getChannelMentionCount = useCallback(
+    (channelId: string) => channelMentionMap.get(channelId) ?? 0,
+    [channelMentionMap],
+  );
 
   const getChannelUnreadCount = useCallback(
     (channelId: string) => channelUnreadMap.get(channelId) ?? 0,
@@ -3764,6 +3793,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     renameCategory,
     deleteCategory,
     moveChannel,
+    moveCategory,
     deleteRole,
     moveRole,
     sendChannelMessage,
@@ -3798,6 +3828,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearDmUnread,
     channelUnreadMap,
     getChannelUnreadCount,
+    getChannelMentionCount,
     groupUnreadMap,
     getGroupUnreadCount,
     clearGroupUnread,
