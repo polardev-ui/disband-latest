@@ -124,6 +124,10 @@ interface AppContextValue {
   savedSessions: SavedSession[];
   switchAccount: (account: SavedSession) => Promise<string | null>;
   removeSavedAccount: (userId: string) => void;
+  /** True while the login form is open over the app to add another account. */
+  addingAccount: boolean;
+  beginAddAccount: () => void;
+  cancelAddAccount: () => void;
   updateProfile: (patch: Partial<Profile>) => Promise<string | null>;
   setViewHome: () => void;
   setViewDiscover: () => void;
@@ -382,6 +386,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dropSavedSession(userId);
     setSavedSessions(getSavedSessions());
   }, []);
+
+  // Adding an account signs in over the top of the app rather than signing out
+  // first: the account you are already using stays live until the new one has
+  // actually authenticated, so a mistyped password does not strand you on a
+  // login screen.
+  const [addingAccount, setAddingAccount] = useState(false);
+  const beginAddAccount = useCallback(() => setAddingAccount(true), []);
+  const cancelAddAccount = useCallback(() => setAddingAccount(false), []);
+
+  // Keep the saved entry's name and avatar fresh. The session alone only knows
+  // the email, so without this the switcher lists everyone as a grey initial.
+  useEffect(() => {
+    if (session && profile) rememberSession(session, profile);
+  }, [session, profile, rememberSession]);
+
+  // The form is only open in order to add an account, so a different account
+  // being live means it has done its job.
+  useEffect(() => {
+    setAddingAccount(false);
+  }, [session?.user?.id]);
   channelsRef.current = channels;
   dmThreadsRef.current = dmThreads;
   groupChatsRef.current = groupChats;
@@ -3794,6 +3818,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     savedSessions,
     switchAccount,
     removeSavedAccount,
+    addingAccount,
+    beginAddAccount,
+    cancelAddAccount,
     updateProfile,
     setViewHome,
 
