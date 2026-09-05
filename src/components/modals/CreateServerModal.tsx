@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { IconClose, IconUpload } from "@/components/icons";
+import { IconClose, IconUpload, IconChevron, IconHash, IconSpeaker, IconShield } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
 
 interface CreateServerModalProps {
@@ -20,6 +20,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"name" | "customize">("name");
 
   // The modal stays mounted across open/close (it renders `null` when closed),
   // so reset all typed state each time it opens. Otherwise the previous
@@ -32,6 +33,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
     setBannerUrl(null);
     setError(null);
     setLoading(false);
+    setStep("name");
   }, [open]);
 
   if (!open) return null;
@@ -68,56 +70,114 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
         <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted hover:text-text-normal">
           <IconClose size={24} />
         </button>
-        <h2 className="text-xl font-bold text-text-normal">Create your space</h2>
-        <p className="mt-1 text-sm text-text-muted">Customize your server name, icon, and banner.</p>
 
-        <div className="mt-4 space-y-3">
-          <label className="block">
-            <span className="text-xs font-bold uppercase text-text-muted">Server name</span>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-              placeholder="My awesome space"
-            />
-          </label>
+        {step === "name" ? (
+          <>
+            <h2 className="text-xl font-bold text-text-normal">Create your space</h2>
+            <p className="mt-1 text-sm text-text-muted">
+              Name your server first — you can customize it right after.
+            </p>
 
-          <label className="block">
-            <span className="text-xs font-bold uppercase text-text-muted">Description</span>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-            />
-          </label>
+            <div className="mt-4">
+              <label className="block">
+                <span className="text-xs font-bold uppercase text-text-muted">Server name</span>
+                <input
+                  required
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (name.trim()) setStep("customize");
+                    }
+                  }}
+                  maxLength={32}
+                  className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                  placeholder="My awesome space"
+                />
+              </label>
+            </div>
 
-          <div className="flex gap-3">
-            <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-divider p-3 text-center transition-all duration-150 hover:border-brand">
-              <IconUpload className="text-text-muted" />
-              <span className="text-xs text-text-muted">Server icon</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
-              {safeImageUrl(iconUrl) && <img src={safeImageUrl(iconUrl)!} alt="" className="mt-1 h-10 w-10 rounded-[30%] object-cover" />}
-            </label>
-            <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-divider p-3 text-center transition-all duration-150 hover:border-brand">
-              <IconUpload className="text-text-muted" />
-              <span className="text-xs text-text-muted">Banner</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
-              {safeImageUrl(bannerUrl) && <img src={safeImageUrl(bannerUrl)!} alt="" className="mt-1 h-10 w-full rounded object-cover" />}
-            </label>
-          </div>
-        </div>
+            <div className="mt-4 rounded-lg border border-divider bg-bg-secondary px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Comes with</p>
+              <ul className="mt-2 space-y-1 text-sm text-text-muted">
+                <li className="flex items-center gap-2">
+                  <IconHash size={14} className="shrink-0" />
+                  #general and #welcome text channels
+                </li>
+                <li className="flex items-center gap-2">
+                  <IconSpeaker size={14} className="shrink-0" />
+                  A voice channel ready for calls
+                </li>
+                <li className="flex items-center gap-2">
+                  <IconShield size={14} className="shrink-0" />
+                  The @everyone role so anyone can chat
+                </li>
+              </ul>
+            </div>
 
-        {error && <p className="mt-3 text-sm text-status-dnd">{error}</p>}
+            <button
+              type="button"
+              disabled={!name.trim()}
+              onClick={() => setStep("customize")}
+              className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-brand-hover disabled:opacity-50"
+            >
+              Continue
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setStep("name")}
+              className="mb-1 flex items-center gap-1 text-xs font-semibold text-text-muted hover:text-text-normal"
+            >
+              <IconChevron size={14} className="rotate-90" />
+              Back
+            </button>
+            <h2 className="text-xl font-bold text-text-normal">Make it yours</h2>
+            <p className="mt-1 text-sm text-text-muted">Add a description, icon, and banner — or skip all of it.</p>
 
-        <button
-          type="submit"
-          disabled={loading || isUploading}
-          className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-brand-hover disabled:opacity-50"
-        >
-          {loading ? "Creating..." : "Create Server"}
-        </button>
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="text-xs font-bold uppercase text-text-muted">Description</span>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  maxLength={190}
+                  className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                />
+              </label>
+
+              <div className="flex gap-3">
+                <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-divider p-3 text-center transition-all duration-150 hover:border-brand">
+                  <IconUpload className="text-text-muted" />
+                  <span className="text-xs text-text-muted">Server icon</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
+                  {safeImageUrl(iconUrl) && <img src={safeImageUrl(iconUrl)!} alt="" className="mt-1 h-10 w-10 rounded-[30%] object-cover" />}
+                </label>
+                <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-divider p-3 text-center transition-all duration-150 hover:border-brand">
+                  <IconUpload className="text-text-muted" />
+                  <span className="text-xs text-text-muted">Banner</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
+                  {safeImageUrl(bannerUrl) && <img src={safeImageUrl(bannerUrl)!} alt="" className="mt-1 h-10 w-full rounded object-cover" />}
+                </label>
+              </div>
+            </div>
+
+            {error && <p className="mt-3 text-sm text-status-dnd">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={loading || isUploading}
+              className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-brand-hover disabled:opacity-50"
+            >
+              {loading ? "Creating..." : "Create Server"}
+            </button>
+          </>
+        )}
       </form>
     </div>
   );

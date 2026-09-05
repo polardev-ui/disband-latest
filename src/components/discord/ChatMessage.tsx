@@ -191,7 +191,16 @@ export function ChatMessage({
   ) : null;
 
   const highlightClass = highlight ? "bg-brand/10 ring-1 ring-brand/30" : "";
-  const pingedYou = !!(currentUserId && message.mentions?.includes(currentUserId));
+  // A reply to your message is a ping. It is addressed at you as directly as an
+  // @mention is, and it was previously indistinguishable from ordinary traffic,
+  // so a reply in a busy channel was easy to scroll straight past.
+  const mentionedYou = !!(currentUserId && message.mentions?.includes(currentUserId));
+  const repliedToYou = !!(
+    currentUserId
+    && message.reply_to?.author_id === currentUserId
+    && message.author_id !== currentUserId
+  );
+  const pingedYou = mentionedYou || repliedToYou;
   const rowBgClass = pingedYou
     ? "bg-super/10 hover:bg-super/15"
     : "hover:bg-interactive-hover/30";

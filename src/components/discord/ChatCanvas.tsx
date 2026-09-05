@@ -55,6 +55,8 @@ interface ChatCanvasProps {
   currentUserName?: string | null;
   messageContext: MessageContext;
   reactions?: MessageReaction[];
+  /** When false, disables reaction affordances (reaction rows, hover bar, double-click 👍). Defaults to true. */
+  reactionsEnabled?: boolean;
   getAuthorColor?: (authorId: string) => string | null | undefined;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
@@ -95,6 +97,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     currentUserName,
     messageContext,
     reactions = [],
+    reactionsEnabled = true,
     getAuthorColor,
     headerExtra,
     headerTrailing,
@@ -340,27 +343,27 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   highlight={highlightId === msg.id}
                   onJumpToReply={jumpToMessage}
                   onToggleReaction={
-                    onToggleReaction ? (emoji) => onToggleReaction(msg.id, emoji) : undefined
+                    onToggleReaction && reactionsEnabled ? (emoji) => onToggleReaction(msg.id, emoji) : undefined
                   }
                   onContextMenu={(e) => {
                     e.preventDefault();
                     onMessageContext(msg, e.clientX, e.clientY);
                   }}
                   onReply={
-                    onToggleReaction
+                    onToggleReaction && reactionsEnabled
                       ? (reply: ReplyPreview) => {
                           setReplyTo(reply);
                         }
                       : undefined
                   }
                   onOpenReactionPicker={
-                    onToggleReaction
+                    onToggleReaction && reactionsEnabled
                       ? () => setPicker({ messageId: msg.id, x: 0, y: 0 })
                       : undefined
                   }
                   onForward={onForward ? () => onForward(msg) : undefined}
                   onDoubleClick={
-                    onToggleReaction
+                    onToggleReaction && reactionsEnabled
                       ? () => onToggleReaction(msg.id, "👍")
                       : undefined
                   }

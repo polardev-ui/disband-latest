@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
-import { LaunchAnnouncement } from "@/components/announcements/LaunchAnnouncement";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
@@ -112,7 +111,6 @@ export default function RootLayout({
       <body>
         {children}
         {/* Site-wide, every route. Renders nothing once dismissed. */}
-        <LaunchAnnouncement />
       </body>
     </html>
   );

@@ -6,6 +6,11 @@ struct MessageRow: View {
     let grouped: Bool
     var reactions: [ReactionSummary] = []
     var replyTo: DisplayMessage? = nil
+    /// Who is reading, so a reply aimed at them can be marked.
+    var currentUserId: String? = nil
+    /// Tapping an @mention. The row does not resolve the name itself — the
+    /// chat view owns the lookup and the card it opens.
+    var onTapMention: (String) -> Void = { _ in }
     var onTapAuthor: (Profile) -> Void = { _ in }
     var onReact: () -> Void = {}
     var onReply: () -> Void = {}
@@ -17,6 +22,14 @@ struct MessageRow: View {
 
     private var authorName: String { message.author?.name ?? "Unknown" }
 
+    /// True when this message is aimed at the reader: it replies to one of
+    /// their messages, or mentions them.
+    private var pingedYou: Bool {
+        guard let me = currentUserId, message.authorId != me else { return false }
+        if let replyTo, replyTo.authorId == me { return true }
+        return message.mentions?.contains(me) ?? false
+    }
+
     var body: some View {
         ZStack(alignment: .trailing) {
             // Reply affordance revealed while swiping left.
@@ -26,7 +39,10 @@ struct MessageRow: View {
                 .padding(.trailing, 24)
 
             content
-                .background(Brand.surfaceRaised)
+                // A reply to your message is a ping — addressed at you as
+                // directly as an @mention — and read exactly like ordinary
+                // traffic until it was marked.
+                .background(pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
                 .offset(x: dragOffset)
                 .gesture(swipeToReply)
                 .onTapGesture(count: 2) { onReact() }
@@ -76,9 +92,17 @@ struct MessageRow: View {
                     let size = jumbo ?? UIFont.systemFontSize
                     let baseFont = UIFont.systemFont(ofSize: size)
                     let color = UIColor(message.pending ? Brand.textMuted : Brand.textPrimary)
-                    Text(ChatMarkdown.render(message.content, baseFont: baseFont, baseColor: color))
+                    Text(ChatMarkdown.render(message.content, baseFont: baseFont, baseColor: color,
+                                             mentionColor: UIColor(Brand.accent)))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
+                        .environment(\.openURL, OpenURLAction { url in
+                            guard let name = ChatMarkdown.mentionedUsername(from: url) else {
+                                return .systemAction
+                            }
+                            onTapMention(name)
+                            return .handled
+                        })
                 }
 
                 // Invites and link previews, so a shared server can be joined

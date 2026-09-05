@@ -14,10 +14,13 @@ struct DisplayMessage: Identifiable, Hashable {
     var editedAt: String?
     /// True while an optimistic message is still being confirmed by the server.
     var pending: Bool = false
+    /// User ids @mentioned here. Only channel messages carry these.
+    var mentions: [String]? = nil
 
     init(id: String, authorId: String, author: Profile?, content: String,
          attachmentUrl: String?, attachmentType: AttachmentType?, replyToId: String?,
-         createdAt: String, editedAt: String?, pending: Bool = false) {
+         createdAt: String, editedAt: String?, pending: Bool = false,
+         mentions: [String]? = nil) {
         self.id = id
         self.authorId = authorId
         self.author = author
@@ -28,12 +31,14 @@ struct DisplayMessage: Identifiable, Hashable {
         self.createdAt = createdAt
         self.editedAt = editedAt
         self.pending = pending
+        self.mentions = mentions
     }
 
     init(_ m: Message) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
-                  replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt)
+                  replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt,
+                  mentions: m.mentions)
     }
     init(_ m: DmMessage) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
@@ -57,9 +62,12 @@ struct RawMessageRow: Decodable, Sendable {
     let replyToId: String?
     let createdAt: String
     let editedAt: String?
+    /// User ids @mentioned in this message; nil on tables that have no such
+    /// column (DMs and group chats, where a mention is meaningless).
+    let mentions: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case id, content
+        case id, content, mentions
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"

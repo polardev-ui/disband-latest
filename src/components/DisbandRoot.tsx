@@ -8,7 +8,7 @@ import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
 import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
-import { MobileGateLoading, useMobileWebGate } from "@/components/mobile/MobileWebGate";
+import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
 
@@ -52,17 +52,15 @@ function AppShell() {
 }
 
 export function DisbandRoot() {
-  const mobileGate = useMobileWebGate();
-
-  if (mobileGate !== "allow") {
-    return <MobileGateLoading />;
-  }
-
   return (
     <ThemeProvider>
       <AppProvider>
         <ContextMenuProvider>
           <DesktopUpdateOverlay />
+          {/* A sheet over the app, not a redirect: the page underneath keeps
+              working, so a password reset or an email confirmation is never
+              interrupted by an App Store pitch. */}
+          <MobileAppPromo />
           <AppShell />
         </ContextMenuProvider>
       </AppProvider>

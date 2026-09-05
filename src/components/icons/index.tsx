@@ -49,6 +49,7 @@ import {
   Music,
   Compass,
   Sparkles,
+  GripVertical,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -133,6 +134,7 @@ export const IconCompass = icon(Compass);
 export const IconSparkle = icon(Sparkles);
 export const IconPin = icon(Pin);
 export const IconPinOff = icon(PinOff);
+export const IconGripVertical = icon(GripVertical);
 /**
  * Verified badge — a filled blue disc with a white check, for the official
  * "This server is officially verified by Disband" mark. Filled like IconStaff
