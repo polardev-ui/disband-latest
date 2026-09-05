@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus } from "@/components/icons";
+import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus, IconChevron, IconGripVertical } from "@/components/icons";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { getInviteUrl, serverInitials, displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
@@ -14,6 +14,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 interface ServerSettingsModalProps {
   open: boolean;
   onClose: () => void;
+  onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
 }
 
 type Section = "overview" | "invite" | "channels" | "members" | "roles" | "emoji" | "appearance" | "danger";
@@ -29,7 +30,7 @@ const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: 
   { id: "danger", label: "Danger Zone", icon: IconAlert, ownerOnly: true },
 ];
 
-export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps) {
+export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSettingsModalProps) {
   const {
     activeServer,
     updateServer,
@@ -46,6 +47,7 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     renameChannel,
     deleteChannel,
     deleteRole,
+    moveRole,
     setMemberRoles,
     kickMember,
     banMember,
@@ -72,6 +74,8 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
   const [emojiName, setEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
   const [emojiUploading, setEmojiUploading] = useState(false);
+  const [dragRoleId, setDragRoleId] = useState<string | null>(null);
+  const [overRoleId, setOverRoleId] = useState<string | null>(null);
   const { plan, entitlements } = useSubscription(user?.id);
 
   useEffect(() => {
@@ -219,6 +223,9 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
       manage_messages?: boolean;
       manage_emojis?: boolean;
       mention_everyone?: boolean;
+      send_messages?: boolean;
+      add_reactions?: boolean;
+      attach_files?: boolean;
     },
     permission:
       | "kick"
@@ -228,7 +235,10 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
       | "manage_channels"
       | "manage_messages"
       | "manage_emojis"
-      | "mention_everyone",
+      | "mention_everyone"
+      | "send_messages"
+      | "add_reactions"
+      | "attach_files",
   ) {
     setLoading(true);
     setError(null);
@@ -290,6 +300,16 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
     const err = await deleteRole(role.id);
     if (err) setError(err);
     setLoading(false);
+  }
+
+  async function handleMoveRole(roleId: string, targetIndex: number) {
+    setLoading(true);
+    setError(null);
+    const err = await moveRole(roleId, targetIndex);
+    if (err) setError(err);
+    setLoading(false);
+    setDragRoleId(null);
+    setOverRoleId(null);
   }
 
   async function handleToggleRole(memberUserId: string, roleId: string) {
@@ -367,6 +387,16 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
         ) : (
           <>
             <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
+            {onEditChannel && (
+              <button
+                type="button"
+                onClick={() => onEditChannel(c)}
+                className="rounded p-1 text-text-muted transition-colors hover:text-text-normal"
+                aria-label={`Edit ${c.name}`}
+              >
+                <IconSettings size={16} />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => startRename(c)}
@@ -700,14 +730,31 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
             {section === "roles" && canManageRoles && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Roles</h2>
-                <p className="text-sm text-text-muted">Create roles, set permissions, and assign them from the Members tab or by right-clicking members.</p>
+                <p className="text-sm text-text-muted">
+                  Create roles, set permissions, and assign them from the Members tab or by right-clicking members. Drag
+                  a role (or use the arrows) to reorder it — higher roles appear first in the member list.
+                </p>
                 <ul className="space-y-3">
-                  {serverRoles.map((r) => {
+                  {serverRoles.map((r, index) => {
                     const perms = r.permissions ?? {};
                     const PERMS: {
-                      key: "kick" | "ban" | "manage_roles" | "manage_server" | "manage_channels" | "manage_messages" | "manage_emojis" | "mention_everyone";
+                      key:
+                        | "kick"
+                        | "ban"
+                        | "manage_roles"
+                        | "manage_server"
+                        | "manage_channels"
+                        | "manage_messages"
+                        | "manage_emojis"
+                        | "mention_everyone"
+                        | "send_messages"
+                        | "add_reactions"
+                        | "attach_files";
                       label: string;
                     }[] = [
+                      { key: "send_messages", label: "Send Messages" },
+                      { key: "add_reactions", label: "Add Reactions" },
+                      { key: "attach_files", label: "Attach Files" },
                       { key: "kick", label: "Kick Members" },
                       { key: "ban", label: "Ban Members" },
                       { key: "manage_roles", label: "Manage Roles" },
@@ -718,14 +765,66 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                       { key: "mention_everyone", label: "Mention @everyone / @here" },
                     ];
                     return (
-                      <li key={r.id} className="rounded-lg border border-divider bg-bg-secondary p-4">
+                      <li
+                        key={r.id}
+                        draggable={!r.is_default}
+                        onDragStart={(e) => {
+                          if (r.is_default) return;
+                          setDragRoleId(r.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", r.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragRoleId(null);
+                          setOverRoleId(null);
+                        }}
+                        onDragOver={(e) => {
+                          if (r.is_default) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setOverRoleId(r.id);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (!dragRoleId || dragRoleId === r.id) return;
+                          void handleMoveRole(dragRoleId, index);
+                        }}
+                        className={`rounded-lg border border-divider bg-bg-secondary p-4 transition-all ${
+                          overRoleId === r.id && dragRoleId && dragRoleId !== r.id
+                            ? "ring-2 ring-brand"
+                            : ""
+                        } ${dragRoleId === r.id ? "opacity-40" : ""}`}
+                      >
                         <div className="flex items-center gap-3">
+                          {!r.is_default && (
+                            <span className="cursor-grab text-text-muted active:cursor-grabbing" title="Drag to reorder">
+                              <IconGripVertical size={16} />
+                            </span>
+                          )}
                           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
                           <span className="font-medium">{r.name}</span>
                           {r.is_default && <span className="text-xs text-text-muted">Default</span>}
                           <div className="ml-auto flex shrink-0 items-center gap-1">
                             {!r.is_default && (
                               <>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleMoveRole(r.id, Math.max(1, index - 1))}
+                                  disabled={loading || index <= 1}
+                                  className="rounded p-1 text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
+                                  aria-label="Move role up"
+                                >
+                                  <IconChevron size={16} className="rotate-180" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleMoveRole(r.id, index + 1)}
+                                  disabled={loading || index >= serverRoles.length - 1}
+                                  className="rounded p-1 text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
+                                  aria-label="Move role down"
+                                >
+                                  <IconChevron size={16} />
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => void handleRenameRole(r.id, r.name)}
@@ -747,21 +846,32 @@ export function ServerSettingsModal({ open, onClose }: ServerSettingsModalProps)
                           </div>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2">
-                          {PERMS.map((p) => (
-                            <label key={p.key} className="flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={!!perms[p.key]}
-                                disabled={loading || r.is_default}
-                                onChange={() => void togglePermission(r.id, perms, p.key)}
-                                className="h-4 w-4 accent-brand"
-                              />
-                              {p.label}
-                            </label>
-                          ))}
+                          {PERMS.map((p) => {
+                            const isMemberAction =
+                              p.key === "send_messages" ||
+                              p.key === "add_reactions" ||
+                              p.key === "attach_files";
+                            return (
+                              <label
+                                key={p.key}
+                                className="flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!perms[p.key]}
+                                  disabled={loading || (r.is_default && !isMemberAction)}
+                                  onChange={() => void togglePermission(r.id, perms, p.key)}
+                                  className="h-4 w-4 accent-brand"
+                                />
+                                {p.label}
+                              </label>
+                            );
+                          })}
                         </div>
                         {r.is_default && (
-                          <p className="mt-2 text-xs text-text-muted">The default @everyone role cannot hold moderation permissions.</p>
+                          <p className="mt-2 text-xs text-text-muted">
+                            {perms.send_messages ? "The default role's message permissions act as channel defaults for everyone." : "The default @everyone role cannot hold moderation permissions; its message permissions act as channel defaults for everyone."}
+                          </p>
                         )}
                       </li>
                     );

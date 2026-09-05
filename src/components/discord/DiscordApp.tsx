@@ -32,6 +32,7 @@ import { InviteGroupModal } from "./InviteGroupModal";
 import { SettingsModal } from "./SettingsModal";
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
 import { ServerSettingsModal } from "@/components/modals/ServerSettingsModal";
+import { ChannelSettingsModal } from "@/components/modals/ChannelSettingsModal";
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
 import {
   IconCopy,
@@ -67,6 +68,7 @@ export function DiscordApp() {
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
+  const [channelSettingsChannel, setChannelSettingsChannel] = useState<Channel | null>(null);
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
@@ -249,6 +251,11 @@ export function DiscordApp() {
   const canManageRoles = app.serverPermissions.manage_roles;
   const canManageChannels = app.serverPermissions.manage_channels;
   const isServerOwner = app.activeServer?.owner_id === app.user?.id;
+  const visibleChannels = useMemo(() => {
+    if (canManageChannels) return app.channels;
+    return app.channels.filter((c) => app.channelEffects[c.id]?.can_view ?? true);
+  }, [app.channels, app.channelEffects, canManageChannels]);
+  const activeChannelEffect = activeChannel ? app.channelEffects[activeChannel.id] : undefined;
   const profileServerMember = profileTarget
     ? app.members.find((m) => m.user_id === profileTarget.id)
     : undefined;
@@ -375,21 +382,10 @@ export function DiscordApp() {
       if (canManageChannels) {
         items.push(
           {
-            id: "rename",
-            label: "Rename Channel",
+            id: "settings",
+            label: "Edit Channel",
             icon: <IconEdit size={16} />,
-            onClick: () => {
-              const name = prompt("Rename channel", channel.name);
-              if (name && name.trim()) void app.renameChannel(channel.id, name.trim());
-            },
-          },
-          {
-            id: "read-only",
-            label: channel.read_only ? "Allow Everyone to Post" : "Make Announcement Channel",
-            icon: <IconEdit size={16} />,
-            onClick: () => {
-              void app.setChannelReadOnly(channel.id, !channel.read_only);
-            },
+            onClick: () => setChannelSettingsChannel(channel),
           },
           {
             id: "delete",
@@ -1159,7 +1155,7 @@ export function DiscordApp() {
                   title={app.activeServer?.name ?? "Server"}
                   verified={app.activeServer?.verified}
                   categories={app.categories}
-                  channels={app.channels}
+                  channels={visibleChannels}
                   activeChannelId={app.activeChannelId}
                   canManageChannels={canManageChannels}
                   voicePresence={serverVoicePresence}
@@ -1414,7 +1410,9 @@ export function DiscordApp() {
           composerLockedReason={
             activeChannel.read_only && !canManageChannels
               ? "This is an announcement channel. Only people who can manage channels may post here."
-              : null
+              : !canManageChannels && activeChannelEffect && !activeChannelEffect.can_post
+                ? "You don't have permission to post in this channel."
+                : null
           }
           messages={channelMessages}
           loading={app.messagesLoading}
@@ -1424,6 +1422,7 @@ export function DiscordApp() {
           currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="channel"
           reactions={app.messageReactions}
+          reactionsEnabled={canManageChannels ? true : (activeChannelEffect?.can_react ?? true)}
           typingScope={{ kind: "channel", id: activeChannel.id, serverId: activeChannel.server_id }}
           readCursorScope={{ kind: "channel", id: activeChannel.id }}
           getAuthorColor={getAuthorColor}
@@ -1555,7 +1554,18 @@ export function DiscordApp() {
         userId={app.user?.id}
       />
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
-      <ServerSettingsModal open={serverSettingsOpen} onClose={() => setServerSettingsOpen(false)} />
+      <ServerSettingsModal
+        open={serverSettingsOpen}
+        onClose={() => setServerSettingsOpen(false)}
+        onEditChannel={(ch) => {
+          setServerSettingsOpen(false);
+          setChannelSettingsChannel(app.channels.find((c) => c.id === ch.id) ?? null);
+        }}
+      />
+      <ChannelSettingsModal
+        channel={channelSettingsChannel}
+        onClose={() => setChannelSettingsChannel(null)}
+      />
       <InviteGroupModal
         open={inviteGroupOpen && !!inviteGroupId}
         groupId={inviteGroupId}

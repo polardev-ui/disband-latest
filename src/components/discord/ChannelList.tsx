@@ -145,6 +145,50 @@ export function ChannelList({
     setNewCategoryName("");
   };
 
+  const renderAddChannelComposer = () => (
+    <div className="mb-1 rounded-md bg-bg-accent/50 px-1.5 py-1.5">
+      <div className="mb-1 flex items-center gap-1">
+        {(["text", "voice"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setAddChannelType(t)}
+            title={t === "text" ? "Text channel" : "Voice channel"}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+              addChannelType === t
+                ? "bg-interactive-selected text-text-normal"
+                : "text-text-muted hover:text-text-normal"
+            }`}
+          >
+            {t === "text" ? <IconHash size={12} /> : <IconSpeaker size={12} />}
+            {t === "text" ? "Text" : "Voice"}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1">
+        <input
+          autoFocus
+          value={addChannelName}
+          onChange={(e) => setAddChannelName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void submitAddChannel();
+            if (e.key === "Escape") setAddChannelTarget(null);
+          }}
+          placeholder={addChannelType === "text" ? "New channel" : "New voice channel"}
+          className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
+        />
+        <button
+          type="button"
+          onClick={() => void submitAddChannel()}
+          disabled={busy}
+          className="shrink-0 text-xs font-medium text-brand hover:underline"
+        >
+          Create
+        </button>
+      </div>
+    </div>
+  );
+
   const sortedCategories = [...categories].sort((a, b) => a.position - b.position);
   const uncategorized = byCategory(null);
 
@@ -328,32 +372,7 @@ export function ChannelList({
             <div key={cat.id} className="mb-1">
               {renderCategoryHeader(cat)}
               {open && items.map((ch) => renderChannel(ch))}
-              {open && canManageChannels && addChannelTarget?.categoryId === cat.id && (
-                <div className="mb-1 flex items-center gap-1 px-1">
-                  <input
-                    autoFocus
-                    value={addChannelName}
-                    onChange={(e) => setAddChannelName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void submitAddChannel();
-                      if (e.key === "Escape") setAddChannelTarget(null);
-                    }}
-                    placeholder="New channel"
-                    className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAddChannelType((t) => (t === "text" ? "voice" : "text"))}
-                    className="shrink-0 rounded bg-bg-accent p-1 text-text-muted"
-                    title={addChannelType === "text" ? "Text channel" : "Voice channel"}
-                  >
-                    {addChannelType === "text" ? <IconHash size={14} /> : <IconSpeaker size={14} />}
-                  </button>
-                  <button type="button" onClick={() => void submitAddChannel()} disabled={busy} className="text-xs text-brand">
-                    Add
-                  </button>
-                </div>
-              )}
+              {open && canManageChannels && addChannelTarget?.categoryId === cat.id && renderAddChannelComposer()}
             </div>
           );
         })}
@@ -396,32 +415,7 @@ export function ChannelList({
               )}
             </div>
             {uncategorized.map((ch) => renderChannel(ch))}
-            {canManageChannels && addChannelTarget !== null && addChannelTarget.categoryId === null && (
-              <div className="mb-1 flex items-center gap-1 px-1">
-                <input
-                  autoFocus
-                  value={addChannelName}
-                  onChange={(e) => setAddChannelName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void submitAddChannel();
-                    if (e.key === "Escape") setAddChannelTarget(null);
-                  }}
-                  placeholder="New channel"
-                  className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
-                />
-                <button
-                  type="button"
-                  onClick={() => setAddChannelType((t) => (t === "text" ? "voice" : "text"))}
-                  className="shrink-0 rounded bg-bg-accent p-1 text-text-muted"
-                  title={addChannelType === "text" ? "Text channel" : "Voice channel"}
-                >
-                  {addChannelType === "text" ? <IconHash size={14} /> : <IconSpeaker size={14} />}
-                </button>
-                <button type="button" onClick={() => void submitAddChannel()} disabled={busy} className="text-xs text-brand">
-                  Add
-                </button>
-              </div>
-            )}
+            {canManageChannels && addChannelTarget !== null && addChannelTarget.categoryId === null && renderAddChannelComposer()}
           </div>
         )}
       </div>

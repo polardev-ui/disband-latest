@@ -13,6 +13,9 @@ struct ChatView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var uploading = false
     @State private var openProfile: Profile?
+    /// Set while a tapped mention is being looked up, so the sheet can show
+    /// something immediately rather than after a round trip.
+    @State private var mentionLookup: String?
     @State private var reactingMessage: DisplayMessage?
     @State private var replyingTo: DisplayMessage?
 
@@ -82,7 +85,13 @@ struct ChatView: View {
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
-        .sheet(item: $openProfile) { ProfileDetailView(profile: $0) }
+        .sheet(item: $openProfile) {
+            ProfileDetailView(profile: $0)
+                // A glance, not a destination: it opens part-height and is
+                // dragged up only if you want the whole profile.
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
@@ -109,6 +118,8 @@ struct ChatView: View {
                                 grouped: isGrouped(at: index),
                                 reactions: model.reactions[message.id] ?? [],
                                 replyTo: model.repliedMessage(for: message),
+                                currentUserId: app.currentUserId,
+                                onTapMention: { openMention($0) },
                                 onTapAuthor: { openProfile = $0 },
                                 onReact: { reactingMessage = message },
                                 onReply: { withAnimation { replyingTo = message } },
@@ -173,6 +184,31 @@ struct ChatView: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(Brand.surface)
+    }
+
+    /// Resolve a tapped @mention to a profile and show it.
+    ///
+    /// Anything shaped like a mention is tappable, so a name that belongs to
+    /// nobody simply does nothing rather than opening an empty card. The
+    /// author of a message already on screen is used when it matches, which
+    /// covers the common case without a request.
+    private func openMention(_ username: String) {
+        guard mentionLookup == nil else { return }
+        let wanted = username.lowercased()
+
+        if let known = model.messages.compactMap({ $0.author })
+            .first(where: { ($0.username ?? "").lowercased() == wanted }) {
+            openProfile = known
+            return
+        }
+
+        mentionLookup = username
+        Task {
+            defer { mentionLookup = nil }
+            if let found = try? await DatabaseService.profile(username: username) {
+                openProfile = found
+            }
+        }
     }
 
     private func isGrouped(at index: Int) -> Bool {

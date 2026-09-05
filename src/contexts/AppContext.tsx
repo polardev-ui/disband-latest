@@ -52,6 +52,7 @@ import type {
   AppNotification,
   Channel,
   ChannelCategory,
+  ChannelEffects,
   DmMessage,
   DmThread,
   Friendship,
@@ -162,6 +163,7 @@ interface AppContextValue {
   deleteCategory: (categoryId: string) => Promise<string | null>;
   moveChannel: (channelId: string, categoryId: string | null, index: number) => Promise<string | null>;
   deleteRole: (roleId: string) => Promise<string | null>;
+  moveRole: (roleId: string, position: number) => Promise<string | null>;
   sendChannelMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   sendDmMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   sendGroupMessage: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -229,10 +231,25 @@ interface AppContextValue {
     manage_messages: boolean;
     manage_emojis: boolean;
     mention_everyone: boolean;
+    send_messages: boolean;
+    add_reactions: boolean;
+    attach_files: boolean;
   };
   hasServerPermission: (
-    permission: "kick" | "ban" | "manage_roles" | "manage_server" | "manage_channels" | "manage_messages" | "manage_emojis" | "mention_everyone",
+    permission:
+      | "kick"
+      | "ban"
+      | "manage_roles"
+      | "manage_server"
+      | "manage_channels"
+      | "manage_messages"
+      | "manage_emojis"
+      | "mention_everyone"
+      | "send_messages"
+      | "add_reactions"
+      | "attach_files",
   ) => boolean;
+  channelEffects: Record<string, ChannelEffects>;
   updateRole: (
     roleId: string,
     patch: Partial<Pick<ServerRole, "name" | "color" | "permissions">>,
@@ -290,7 +307,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     manage_messages: false,
     manage_emojis: false,
     mention_everyone: false,
+    send_messages: false,
+    add_reactions: false,
+    attach_files: false,
   });
+  const [channelEffects, setChannelEffects] = useState<Record<string, ChannelEffects>>({});
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -787,7 +808,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .filter((m) => map.has(m.user_id))
       .map((m) => ({ ...m, profile: map.get(m.user_id)!, role_ids: roleIdsByMember.get(m.user_id) ?? [] }));
     setMembers(enrichedMembers);
-    if (userId) {
+    const uid = sessionRef.current?.user?.id ?? null;
+    if (uid) {
       const { data: perms } = await supabase.rpc("my_server_permissions", { p_server_id: serverId });
       if (perms && typeof perms === "object") {
         const p = perms as Record<string, unknown>;
@@ -800,7 +822,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           manage_messages: !!p.manage_messages,
           manage_emojis: !!p.manage_emojis,
           mention_everyone: !!p.mention_everyone,
+          send_messages: !!p.send_messages,
+          add_reactions: !!p.add_reactions,
+          attach_files: !!p.attach_files,
         });
+      }
+      const { data: effects } = await supabase.rpc("my_channel_effects", { p_server_id: serverId });
+      if (Array.isArray(effects)) {
+        const map: Record<string, ChannelEffects> = {};
+        for (const row of effects as (ChannelEffects & { channel_id: string })[]) {
+          map[row.channel_id] = {
+            can_view: !!row.can_view,
+            can_post: !!row.can_post,
+            can_react: !!row.can_react,
+            can_attach: !!row.can_attach,
+          };
+        }
+        setChannelEffects(map);
       }
     }
     const memForCache = memberRows.length > 0
@@ -2633,12 +2671,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const leaveServer = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
+    // An owner leaving would strand the server: nobody could administer it and
+    // they could not rejoin. The database refuses this outright; saying so here
+    // turns a silent no-op into an answer, and names the two things that do
+    // work.
+    const owned = servers.find((s) => s.id === serverId)?.owner_id === userId;
+    if (owned) {
+      return "You created this server, so you can't leave it. Transfer ownership to someone else, or delete the server.";
+    }
     const { error } = await getSupabaseClient().from("server_members").delete().eq("server_id", serverId).eq("user_id", userId);
     if (error) return error.message;
     await loadServers(userId);
     setViewHome();
     return null;
-  }, [userId, loadServers, setViewHome]);
+  }, [userId, servers, loadServers, setViewHome]);
 
   const joinServerByInvite = useCallback(async (code: string) => {
     if (!userId) return "Not signed in";
@@ -2746,7 +2792,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         | "manage_channels"
         | "manage_messages"
         | "manage_emojis"
-        | "mention_everyone",
+        | "mention_everyone"
+        | "send_messages"
+        | "add_reactions"
+        | "attach_files",
     ) => serverPermissions[permission],
     [serverPermissions],
   );
@@ -2849,6 +2898,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().rpc("delete_server_role", {
       p_role_id: roleId,
+    });
+    if (error) return error.message;
+    await loadServerDetails(activeServerId);
+    return null;
+  }, [activeServerId, loadServerDetails]);
+
+  const moveRole = useCallback(async (roleId: string, position: number) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("move_role", {
+      p_role_id: roleId,
+      p_new_position: position,
     });
     if (error) return error.message;
     await loadServerDetails(activeServerId);
@@ -3697,6 +3757,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteCategory,
     moveChannel,
     deleteRole,
+    moveRole,
     sendChannelMessage,
     sendDmMessage,
     sendGroupMessage,
@@ -3747,6 +3808,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshPlatformAccess,
     serverPermissions,
     hasServerPermission,
+    channelEffects,
     platformBanUser,
     platformUnbanUser,
   };
