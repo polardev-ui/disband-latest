@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -47,7 +48,7 @@ export function UsernameAvailabilityInput({
       void (async () => {
         try {
           const { data: { session } } = await getSupabaseClient().auth.getSession();
-          const res = await fetch(`/api/profile/check-username?username=${encodeURIComponent(norm)}`, {
+          const res = await apiFetch(`/api/profile/check-username?username=${encodeURIComponent(norm)}`, {
             headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
           });
           if (id !== requestId.current) return;

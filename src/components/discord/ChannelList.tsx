@@ -20,6 +20,11 @@ import { getAvatarStyle } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { PresenceMember } from "@/hooks/useServerVoicePresence";
 import type { Channel, ChannelCategory, ChannelType, Profile } from "@/lib/supabase/types";
+import {
+  getCollapsedCategories,
+  setCategoryCollapsed,
+  UNCATEGORIZED_KEY,
+} from "@/lib/collapsed-categories";
 
 interface ChannelListProps {
   title: string;
@@ -80,7 +85,18 @@ export function ChannelList({
   onCreateChannel,
   onCreateCategory,
 }: ChannelListProps) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Seeded from storage so a collapsed category stays collapsed across reloads
+  // and server switches; a lazy initialiser keeps localStorage off the server
+  // render.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => getCollapsedCategories());
+
+  const toggleCollapsed = (key: string) => {
+    setCollapsed((prev) => {
+      const next = !prev[key];
+      setCategoryCollapsed(key, next);
+      return { ...prev, [key]: next };
+    });
+  };
   const [dragChannelId, setDragChannelId] = useState<string | null>(null);
   const [overCatId, setOverCatId] = useState<string | "uncategorized" | null>(null);
   const [overChannelId, setOverChannelId] = useState<string | null>(null);
@@ -262,7 +278,7 @@ export function ChannelList({
         {overCatId === cat.id && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
         <button
           type="button"
-          onClick={() => setCollapsed((p) => ({ ...p, [cat.id]: !open }))}
+          onClick={() => toggleCollapsed(cat.id)}
           onDragOver={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -381,7 +397,12 @@ export function ChannelList({
           <div className="mb-1">
             <div className="group/cat relative flex items-center">
               {overCatId === "uncategorized" && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
-              <span
+              {/* A button like every other category header. It was the one
+                  group that could not be collapsed, which is visible at a
+                  glance: it was the only heading without a chevron. */}
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(UNCATEGORIZED_KEY)}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -397,12 +418,18 @@ export function ChannelList({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`flex min-w-0 flex-1 cursor-default items-center gap-0.5 px-0.5 py-1 text-[11px] font-bold uppercase tracking-wide text-text-muted ${
-                  overCatId === "uncategorized" ? "text-brand" : ""
+                className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-all duration-150 ${
+                  overCatId === "uncategorized" ? "text-brand" : "text-text-muted hover:text-text-normal"
                 }`}
               >
-                Uncategorized
-              </span>
+                <IconChevron
+                  size={12}
+                  className={`shrink-0 transition-transform duration-150 ${
+                    collapsed[UNCATEGORIZED_KEY] ? "-rotate-90" : ""
+                  }`}
+                />
+                <span className="truncate">Uncategorized</span>
+              </button>
               {canManageChannels && (
                 <button
                   type="button"
@@ -414,8 +441,12 @@ export function ChannelList({
                 </button>
               )}
             </div>
-            {uncategorized.map((ch) => renderChannel(ch))}
-            {canManageChannels && addChannelTarget !== null && addChannelTarget.categoryId === null && renderAddChannelComposer()}
+            {!collapsed[UNCATEGORIZED_KEY] && uncategorized.map((ch) => renderChannel(ch))}
+            {!collapsed[UNCATEGORIZED_KEY]
+              && canManageChannels
+              && addChannelTarget !== null
+              && addChannelTarget.categoryId === null
+              && renderAddChannelComposer()}
           </div>
         )}
       </div>
