@@ -10,12 +10,13 @@ enum DatabaseService {
 
     // MARK: - Servers
 
-    static func myServers() async throws -> [Server] {
+    static func myServers(currentUserId: String) async throws -> [Server] {
         let memberships: [ServerIdRow] = try await client
             .from("server_members")
             .select("server_id")
+            .eq("user_id", value: currentUserId)
             .execute().value
-        let ids = memberships.map(\.serverId)
+        let ids = Array(Set(memberships.map(\.serverId)))
         guard !ids.isEmpty else { return [] }
         return try await client
             .from("servers")
@@ -43,11 +44,14 @@ enum DatabaseService {
             .execute().value
     }
 
+    /// Embedded profiles via the `get_server_members` RPC: one short URL per
+    /// server regardless of size. Embedding through `server_members` directly
+    /// worked, but the prior "fetch ids then profiles(ids:)" fallback built a
+    /// `profiles?select=*&id=in.(...)` URL past the proxy limit on big servers
+    /// and 400'd, so this path never fetches profiles by id at all.
     static func members(serverId: String) async throws -> [ServerMember] {
         let rows: [ServerMember] = try await client
-            .from("server_members")
-            .select("*, profile:profiles(*)")
-            .eq("server_id", value: serverId)
+            .rpc("get_server_members", params: ["p_server_id": serverId])
             .execute().value
         return rows
     }
