@@ -36,7 +36,14 @@ function Field({
   );
 }
 
-export function AuthScreen() {
+interface AuthScreenProps {
+  /** Rendered over the running app to add a second account, rather than as the
+   *  whole page. The account you are already signed into stays live behind it. */
+  overlay?: boolean;
+  onClose?: () => void;
+}
+
+export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const { signIn, signUp, requestPasswordReset, configured, savedSessions, switchAccount, removeSavedAccount } = useApp();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
@@ -135,7 +142,7 @@ export function AuthScreen() {
   const title = success
     ? "Check your email"
     : mode === "login"
-      ? "Sign in to Disband"
+      ? overlay ? "Add an account" : "Sign in to Disband"
       : mode === "reset"
         ? "Reset your password"
         : "Create your account";
@@ -145,7 +152,9 @@ export function AuthScreen() {
       ? "Use the link we sent to choose a new password."
       : "Verify your email address to finish signing up."
     : mode === "login"
-      ? "Your servers, messages, and calls — on every device."
+      ? overlay
+        ? "Sign in to the account you want to add. This one stays signed in."
+        : "Your servers, messages, and calls — on every device."
       : mode === "reset"
         ? "We'll email you a link to choose a new one."
         : "Free to join. No card required.";
@@ -154,8 +163,30 @@ export function AuthScreen() {
     mode === "login" ? "Sign in" : mode === "reset" ? "Send reset link" : "Create account";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12">
-      <div className="w-full max-w-[400px]">
+    <div
+      className={
+        overlay
+          ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/70 px-6 py-12 backdrop-blur-sm"
+          : "flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12"
+      }
+      onClick={overlay ? onClose : undefined}
+    >
+      <div
+        className={overlay ? "relative w-full max-w-[400px] rounded-2xl bg-bg-tertiary p-6 shadow-2xl" : "w-full max-w-[400px]"}
+        onClick={overlay ? (e) => e.stopPropagation() : undefined}
+      >
+        {overlay && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cancel adding an account"
+            className="absolute right-3 top-3 rounded p-1.5 text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         {/* Mark sits outside the card so the card reads as a single input surface. */}
         <div className="mb-8 flex flex-col items-center text-center">
           <Logo adaptive size={44} className="h-11 w-11" priority />
@@ -163,7 +194,10 @@ export function AuthScreen() {
           <p className="mt-2 max-w-[19rem] text-[15px] leading-relaxed text-text-muted">{subtitle}</p>
         </div>
 
-        {mode === "login" && savedSessions.length > 0 && !success && (
+        {/* Not while adding an account: the accounts already saved are reached
+            from the switcher, and repeating them here would offer "switch" in
+            the middle of a flow that exists to add a new one. */}
+        {!overlay && mode === "login" && savedSessions.length > 0 && !success && (
           <div className="mb-4">
             <p className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">
               Continue as

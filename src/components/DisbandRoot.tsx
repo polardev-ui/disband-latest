@@ -29,6 +29,13 @@ function InviteBootstrap() {
   return null;
 }
 
+/** The login form over the running app, for adding a second account. */
+function AddAccountOverlay() {
+  const { session, addingAccount, cancelAddAccount } = useApp();
+  if (!session || !addingAccount) return null;
+  return <AuthScreen overlay onClose={cancelAddAccount} />;
+}
+
 function AppShell() {
   const { ready, session, hydrated, mfaRequired, platformBan } = useApp();
 
@@ -62,6 +69,7 @@ export function DisbandRoot() {
               interrupted by an App Store pitch. */}
           <MobileAppPromo />
           <AppShell />
+          <AddAccountOverlay />
         </ContextMenuProvider>
       </AppProvider>
     </ThemeProvider>
