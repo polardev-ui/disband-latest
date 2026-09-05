@@ -323,6 +323,18 @@ enum DatabaseService {
     ///
     /// Hydrating lists one profile at a time costs a request per row and turns a
     /// single transient failure into a permanently "Unknown" row.
+    /// Look a profile up by its @username, for tapping a mention in chat.
+    /// Case-insensitive, because a mention is typed by hand.
+    static func profile(username: String) async throws -> Profile? {
+        let rows: [Profile] = try await client
+            .from("profiles")
+            .select("*")
+            .ilike("username", pattern: username)
+            .limit(1)
+            .execute().value
+        return rows.first
+    }
+
     static func profiles(ids: [String]) async throws -> [String: Profile] {
         let unique = Array(Set(ids))
         guard !unique.isEmpty else { return [:] }

@@ -56,6 +56,13 @@ export interface Server {
   created_at: string;
 }
 
+export interface ChannelEffects {
+  can_view: boolean;
+  can_post: boolean;
+  can_react: boolean;
+  can_attach: boolean;
+}
+
 export interface ServerRole {
   id: string;
   server_id: string;
@@ -70,6 +77,9 @@ export interface ServerRole {
     manage_messages?: boolean;
     manage_emojis?: boolean;
     mention_everyone?: boolean;
+    send_messages?: boolean;
+    add_reactions?: boolean;
+    attach_files?: boolean;
   };
   position: number;
   is_default: boolean;
@@ -553,6 +563,52 @@ export interface Database {
       };
       delete_server_role: {
         Args: { p_role_id: string };
+        Returns: undefined;
+      };
+      get_channel_permissions: {
+        Args: { p_channel_id: string };
+        Returns: {
+          role_id: string;
+          role_name: string;
+          role_color: string;
+          is_default: boolean;
+          can_view: boolean | null;
+          can_post: boolean | null;
+          can_react: boolean | null;
+          can_attach: boolean | null;
+        }[];
+      };
+      my_channel_effects: {
+        Args: { p_server_id: string };
+        Returns: {
+          channel_id: string;
+          can_view: boolean;
+          can_post: boolean;
+          can_react: boolean;
+          can_attach: boolean;
+        }[];
+      };
+      move_role: {
+        Args: { p_role_id: string; p_new_position: number };
+        Returns: undefined;
+      };
+      my_server_permissions: {
+        Args: { p_server_id: string };
+        Returns: Record<string, boolean>;
+      };
+      set_channel_role_permission: {
+        Args: {
+          p_channel_id: string;
+          p_role_id: string;
+          p_can_view?: boolean | null;
+          p_can_post?: boolean | null;
+          p_can_react?: boolean | null;
+          p_can_attach?: boolean | null;
+        };
+        Returns: undefined;
+      };
+      remove_channel_role_permission: {
+        Args: { p_channel_id: string; p_role_id: string };
         Returns: undefined;
       };
       create_category: {

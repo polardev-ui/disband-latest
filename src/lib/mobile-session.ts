@@ -11,6 +11,10 @@
  */
 let continueOnWebChosen = false;
 
+// Retained for callers that still import it; the durable record now lives in
+// localStorage via `allowMobileWeb`, because an in-memory flag was lost on any
+// full reload and the prompt came straight back.
+
 export function chooseContinueOnWeb(): void {
   continueOnWebChosen = true;
 }

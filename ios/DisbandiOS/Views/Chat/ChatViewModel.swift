@@ -265,7 +265,8 @@ final class ChatViewModel {
             id: row.id, authorId: row.authorId, author: author,
             content: row.content ?? "", attachmentUrl: row.attachmentUrl,
             attachmentType: row.attachmentType, replyToId: row.replyToId,
-            createdAt: row.createdAt, editedAt: row.editedAt
+            createdAt: row.createdAt, editedAt: row.editedAt,
+            mentions: row.mentions
         )
         // If this confirms one of our optimistic rows, swap it in place (gray → white).
         if let idx = messages.firstIndex(where: {

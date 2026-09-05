@@ -9,7 +9,14 @@ enum ChatMarkdown {
 
     /// Returns a best-effort attributed string. Falls back to plain text if
     /// the markdown cannot be parsed (never crashes a message render).
-    static func render(_ raw: String, baseFont: UIFont, baseColor: UIColor) -> AttributedString {
+    /// `mentionColor` is passed in rather than read from `Brand`, whose
+    /// properties are main-actor isolated while this renderer is not.
+    static func render(
+        _ raw: String,
+        baseFont: UIFont,
+        baseColor: UIColor,
+        mentionColor: UIColor
+    ) -> AttributedString {
         let ns = NSMutableAttributedString(string: raw, attributes: [
             .font: baseFont,
             .foregroundColor: baseColor,
@@ -24,6 +31,9 @@ enum ChatMarkdown {
 
         applyInline(to: ns, baseFont: baseFont, baseColor: baseColor)
 
+        // Mentions last, so a name inside emphasis still reads as a mention.
+        applyMentions(to: ns, baseFont: baseFont, tint: mentionColor)
+
         if let result = try? AttributedString(ns, including: \.uiKit) {
             return result
         }
@@ -32,6 +42,45 @@ enum ChatMarkdown {
             .font: baseFont,
             .foregroundColor: baseColor,
         ]))
+    }
+
+    /// Scheme used to make a mention tappable.
+    ///
+    /// `Text` renders an `AttributedString` but gives no per-run tap callback,
+    /// so a mention carries a `.link` and the chat view intercepts this scheme
+    /// through `openURL` rather than letting the system open anything.
+    static let mentionScheme = "disband-user"
+
+    /// Extracts the username from a tapped mention link, or nil for any other
+    /// URL — which must be left alone and opened normally.
+    static func mentionedUsername(from url: URL) -> String? {
+        guard url.scheme == mentionScheme else { return nil }
+        let name = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return name.isEmpty ? nil : name
+    }
+
+    /// Styles `@username` as a mention chip and makes it tappable.
+    ///
+    /// Anything shaped like a mention is styled; whether it names a real person
+    /// is settled when it is tapped, which avoids holding the whole member list
+    /// just to draw a message.
+    private static func applyMentions(to ns: NSMutableAttributedString, baseFont: UIFont, tint: UIColor) {
+        let text = ns.string
+        guard let regex = try? NSRegularExpression(pattern: "@[a-zA-Z0-9_]{2,32}") else { return }
+        let range = NSRange(location: 0, length: (text as NSString).length)
+
+        for match in regex.matches(in: text, range: range) {
+            let token = (text as NSString).substring(with: match.range)
+            let username = String(token.dropFirst())
+            guard let url = URL(string: "\(mentionScheme)://\(username)") else { continue }
+
+            ns.addAttributes([
+                .foregroundColor: tint,
+                .backgroundColor: tint.withAlphaComponent(0.18),
+                .font: UIFont.systemFont(ofSize: baseFont.pointSize, weight: .medium),
+                .link: url,
+            ], range: match.range)
+        }
     }
 
     /// Applies `#`..`###` heading styles (bolder, larger) on lines where the
