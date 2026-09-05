@@ -22,6 +22,11 @@ const STATUS_OPTIONS: { status: UserStatus; label: string }[] = [
   { status: "offline", label: "Invisible" },
 ];
 
+/** Best available name for a saved account, which may predate a profile load. */
+function accountLabel(a: { display_name: string | null; username: string | null; email: string | null }): string {
+  return a.display_name || a.username || a.email?.split("@")[0] || "Account";
+}
+
 interface UserPanelPopupProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -32,16 +37,43 @@ interface UserPanelPopupProps {
  *  so it escapes the sidebar's overflow-hidden. Positioned just above the
  *  UserPanel bar using the anchor element's bounding rect. */
 export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanelPopupProps) {
-  const { profile, user, updateProfile, presenceMap, savedSessions, switchAccount, removeSavedAccount } = useApp();
+  const {
+    profile, user, updateProfile, presenceMap,
+    savedSessions, switchAccount, removeSavedAccount, beginAddAccount,
+  } = useApp();
   const [changing, setChanging] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [managing, setManaging] = useState(false);
   const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
 
   const name = profile ? displayName(profile) : user?.email?.split("@")[0] ?? "You";
   const currentUserId = profile?.id ?? user?.id ?? null;
-  const otherSessions = savedSessions.filter((s) => s.user_id !== currentUserId);
   const currentStatus: UserStatus = profile ? presenceMap.get(profile.id) ?? profile.status : "online";
   const statusText = statusLabel(currentStatus);
+
+  /**
+   * Every account this browser can sign into, the current one first.
+   *
+   * The list used to be the *other* accounts only, and was hidden entirely
+   * when there were none — so a single-account user never saw the switcher at
+   * all and had no way to reach "Add an Account". The current account is
+   * always shown, synthesised from the live profile if storage never kept it,
+   * so the section exists from the first sign-in onwards.
+   */
+  const accounts = (() => {
+    const others = savedSessions.filter((s) => s.user_id !== currentUserId);
+    const saved = savedSessions.find((s) => s.user_id === currentUserId);
+    const current = currentUserId
+      ? {
+          user_id: currentUserId,
+          email: saved?.email ?? user?.email ?? null,
+          display_name: saved?.display_name ?? (profile ? displayName(profile) : null),
+          username: saved?.username ?? profile?.username ?? null,
+          avatar_url: profile?.avatar_url ?? saved?.avatar_url ?? null,
+        }
+      : null;
+    return { current, others };
+  })();
 
   const handleSwitch = useCallback(async (acct: typeof savedSessions[number]) => {
     if (switchingId) return;
@@ -162,61 +194,100 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
           ))}
         </div>
 
-        {/* Switch Account */}
-        {otherSessions.length > 0 && (
-          <div className="border-t border-divider px-2 py-1.5">
-            <p className="mb-1 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-              <span>Switch Account</span>
-            </p>
-            <div className="flex flex-col gap-0.5">
-              {otherSessions.map((acct) => {
-                const display = acct.display_name || acct.username || acct.email?.split("@")[0] || "Account";
-                const busy = switchingId === acct.user_id;
-                return (
-                  <div
-                    key={acct.user_id}
-                    className="group flex items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-interactive-hover"
+        {/* Accounts */}
+        <div className="border-t border-divider px-2 py-1.5">
+          <div className="mb-1 flex items-center justify-between px-2">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Accounts</span>
+            <button
+              type="button"
+              onClick={() => setManaging((m) => !m)}
+              className="text-[10px] font-bold uppercase tracking-wide text-text-muted transition-colors hover:text-text-normal"
+            >
+              {managing ? "Done" : "Manage"}
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-0.5">
+            {accounts.current && (
+              <div className="flex items-center gap-2.5 rounded bg-interactive-selected px-2 py-1.5">
+                <span className="relative shrink-0">
+                  <Avatar
+                    size="sm"
+                    profile={{ display_name: accountLabel(accounts.current), avatar_url: accounts.current.avatar_url }}
+                    className="h-7 w-7 text-xs"
+                  />
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-bg-secondary ${STATUS_DOT_BG[currentStatus]}`}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-text-normal">{accountLabel(accounts.current)}</span>
+                  <span className="block truncate text-[11px] text-text-muted">{accounts.current.email}</span>
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+            )}
+
+            {accounts.others.map((acct) => {
+              const display = accountLabel(acct);
+              const busy = switchingId === acct.user_id;
+              return (
+                <div
+                  key={acct.user_id}
+                  className="group flex items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-interactive-hover"
+                >
+                  <button
+                    type="button"
+                    disabled={busy || managing}
+                    onClick={() => void handleSwitch(acct)}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default"
                   >
+                    <Avatar
+                      size="sm"
+                      profile={{ display_name: display, avatar_url: acct.avatar_url }}
+                      className="h-7 w-7 text-xs"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-text-normal">{display}</span>
+                      <span className="block truncate text-[11px] text-text-muted">{acct.email}</span>
+                    </span>
+                    {busy && (
+                      <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />
+                    )}
+                  </button>
+                  {managing && (
                     <button
                       type="button"
-                      disabled={busy}
-                      onClick={() => void handleSwitch(acct)}
-                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                    >
-                      <Avatar
-                        size="sm"
-                        profile={{ display_name: display, avatar_url: acct.avatar_url }}
-                        className="h-6 w-6 text-xs"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-sm text-text-normal">
-                        {display}
-                        <span className="block truncate text-[11px] text-text-muted">{acct.email}</span>
-                      </span>
-                      {busy ? (
-                        <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />
-                      ) : (
-                        <span className="shrink-0 text-xs font-medium text-brand opacity-0 transition-opacity group-hover:opacity-100">
-                          Switch
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Forget ${display}'s saved login`}
-                      title="Forget this account"
+                      aria-label={`Remove ${display}`}
+                      title="Remove this account"
                       onClick={() => removeSavedAccount(acct.user_id)}
-                      className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-status-dnd group-hover:opacity-100"
+                      className="shrink-0 rounded p-1 text-status-dnd transition-colors hover:bg-status-dnd/15"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <circle cx="12" cy="12" r="9" /><path d="M8 12h8" />
                       </svg>
                     </button>
-                  </div>
-                );
-              })}
-            </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => { beginAddAccount(); onClose(); }}
+              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-text-muted text-text-muted">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <span className="text-sm text-text-normal">Add an Account</span>
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </>
   );
