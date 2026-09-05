@@ -45,7 +45,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
 
     LaunchedEffect(thread.id) {
         dmUnread.markActive(thread.id)
-        ActiveChat.show("dm:" + thread.id)
+        ActiveChat.show(thread.id)
         runCatching { Database.markDmRead(thread.id) }
 
         val loaded = runCatching { Database.dmMessages(thread.id) }.getOrDefault(emptyList())
@@ -58,7 +58,13 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         if (live != null) {
             try {
                 live.flow.collect { msg ->
-                    if (msg.authorId != uid) dmUnread.increment(msg.threadId, msg.authorId, uid)
+                    if (msg.authorId != uid) {
+                        dmUnread.increment(msg.threadId, msg.authorId, uid)
+                        // Read state was only advanced when the screen opened,
+                        // so anything arriving while you sat reading came back
+                        // as unread on the next launch.
+                        runCatching { Database.markDmRead(thread.id) }
+                    }
                     rows = rows.filterNot { it.id == msg.id } + msg.toRow()
                 }
             } finally {

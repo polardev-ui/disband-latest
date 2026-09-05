@@ -133,6 +133,32 @@ export const IconCompass = icon(Compass);
 export const IconSparkle = icon(Sparkles);
 export const IconPin = icon(Pin);
 export const IconPinOff = icon(PinOff);
+/**
+ * Verified badge — a filled blue disc with a white check, for the official
+ * "This server is officially verified by Disband" mark. Filled like IconStaff
+ * so it stays legible at badge sizes (12–16px). Blue via `text-sky-400` etc.
+ */
+export const IconVerified = function IconVerified({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="11" fill="currentColor" />
+      <path
+        d="M7 12.4l3.3 3.3L17 9.1"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
 
 export function IconStatus(props: IconProps & { status: "online" | "idle" | "dnd" | "offline" }) {
   const colors = {

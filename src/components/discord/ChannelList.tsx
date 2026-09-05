@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { UserPanel } from "./UserPanel";
 import { CallIndicator } from "./CallIndicator";
+import { Tooltip } from "./Tooltip";
 import {
   IconChevron,
   IconClose,
@@ -12,6 +13,7 @@ import {
   IconPlus,
   IconSearch,
   IconSpeaker,
+  IconVerified,
 } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { getAvatarStyle } from "@/lib/profileColor";
@@ -34,6 +36,7 @@ interface ChannelListProps {
   onCategoryContext?: (category: ChannelCategory, x: number, y: number) => void;
   onUserPanelContext?: (e: React.MouseEvent) => void;
   showServerHeader?: boolean;
+  verified?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
   onCreateChannel?: (name: string, type: ChannelType, categoryId: string | null) => Promise<string | null>;
   onCreateCategory?: (name: string) => Promise<string | null>;
@@ -72,6 +75,7 @@ export function ChannelList({
   onCategoryContext,
   onUserPanelContext,
   showServerHeader = true,
+  verified,
   onMoveChannel,
   onCreateChannel,
   onCreateCategory,
@@ -261,7 +265,14 @@ export function ChannelList({
             onClick={onOpenServerSettings}
             className="flex min-w-0 flex-1 items-center justify-between py-2 text-left transition-all duration-150 ease-in-out hover:text-text-normal"
           >
-            <span className="truncate text-[15px] font-semibold">{title}</span>
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="truncate text-[15px] font-semibold">{title}</span>
+              {verified && (
+                <Tooltip label="This server is officially verified by Disband">
+                  <IconVerified size={15} className="shrink-0 text-sky-400" />
+                </Tooltip>
+              )}
+            </span>
             <IconChevron size={18} className="shrink-0 text-text-muted" />
           </button>
           {canManageChannels && (

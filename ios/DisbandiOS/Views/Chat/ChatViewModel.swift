@@ -250,6 +250,16 @@ final class ChatViewModel {
 
     private func handleInsert(_ row: RawMessageRow) async {
         guard !messages.contains(where: { $0.id == row.id }) else { return }
+
+        // Keep the server's read cursor level with what is on screen. It was
+        // only advanced when the conversation opened, so a message arriving
+        // while you sat reading still counted as unread — and unread is
+        // recomputed from those cursors, so the badge came back for the very
+        // thread you were looking at.
+        if row.authorId != currentUserId, case .dm(let threadId, _) = source {
+            Task { try? await DatabaseService.markDmRead(threadId: threadId) }
+        }
+
         let author = await resolveProfile(row.authorId)
         let message = DisplayMessage(
             id: row.id, authorId: row.authorId, author: author,
