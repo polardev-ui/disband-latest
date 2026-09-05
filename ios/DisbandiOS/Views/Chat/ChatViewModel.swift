@@ -2,6 +2,7 @@ import Foundation
 import Supabase
 import Realtime
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -20,9 +21,34 @@ final class ChatViewModel {
     private var listenTask: Task<Void, Never>?
     private var reactionChannel: RealtimeChannelV2?
     private var reactionTask: Task<Void, Never>?
+    nonisolated(unsafe) private var foregroundObserver: NSObjectProtocol?
 
     init(source: ChatSource) {
         self.source = source
+        // Re-fetch when the app returns to the foreground. Realtime inserts
+        // that happened while the socket was suspended are never replayed, so
+        // a chat open before backgrounding used to miss messages (and any
+        // unread state) until it was reopened.
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.reloadOnForeground()
+            }
+        }
+    }
+
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+    }
+
+    func reloadOnForeground() async {
+        await load()
+        await loadReactions()
     }
 
     func start(currentUserId: String?, profile: Profile?) async {

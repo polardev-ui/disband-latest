@@ -4,12 +4,21 @@ import SwiftUI
 struct ProfileTab: View {
     @Environment(AppState.self) private var app
     @Environment(SubscriptionService.self) private var subscriptions
+    @Environment(PresenceService.self) private var presence
     @State private var showEdit = false
     @State private var avatarItem: PhotosPickerItem?
     @State private var bannerItem: PhotosPickerItem?
     @State private var uploading = false
 
     private var profile: Profile? { app.profile }
+
+    /// The current user's live presence, falling back to their stored status
+    /// only while the presence socket is still joining. Returns nil when no
+    /// profile is loaded, so the avatar renders without a status dot.
+    private var ownStatus: UserStatus? {
+        guard let profile else { return nil }
+        return presence.status(for: profile.id, fallback: profile.status)
+    }
 
     /// True when we have no trustworthy read of the account's plan.
     private var planUnknown: Bool { profile == nil }
@@ -103,7 +112,7 @@ struct ProfileTab: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 80,
-                                   status: profile?.status, ringColors: accentColors, ringWidth: 4)
+                                   status: ownStatus, ringColors: accentColors, ringWidth: 4)
                             .background(Circle().fill(Brand.surface).padding(-4))
                             .overlay(alignment: .bottomTrailing) {
                                 if uploading {
@@ -288,6 +297,7 @@ struct ProfileTab: View {
 
 struct EditProfileSheet: View {
     @Environment(AppState.self) private var app
+    @Environment(PresenceService.self) private var presence
     @Environment(\.dismiss) private var dismiss
 
     @State private var displayName = ""
@@ -398,15 +408,17 @@ struct EditProfileSheet: View {
             .frame(height: 56)
 
             HStack(spacing: 10) {
-                AvatarView(url: app.profile?.avatarUrl, name: displayName.isEmpty ? "?" : displayName,
-                           size: 44, status: app.profile?.status)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(displayName.isEmpty ? (app.profile?.handle ?? "You") : displayName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Brand.textPrimary)
-                    Text("@\(app.profile?.handle ?? "user")")
-                        .font(.caption)
-                        .foregroundStyle(Brand.textMuted)
+                if let profile = app.profile {
+                    AvatarView(url: profile.avatarUrl, name: displayName.isEmpty ? "?" : displayName,
+                               size: 44, status: presence.status(for: profile.id, fallback: profile.status))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(displayName.isEmpty ? (profile.handle ?? "You") : displayName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Brand.textPrimary)
+                        Text("@\(profile.handle ?? "user")")
+                            .font(.caption)
+                            .foregroundStyle(Brand.textMuted)
+                    }
                 }
                 Spacer()
             }

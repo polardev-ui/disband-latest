@@ -32,12 +32,12 @@ interface UserPanelPopupProps {
  *  so it escapes the sidebar's overflow-hidden. Positioned just above the
  *  UserPanel bar using the anchor element's bounding rect. */
 export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanelPopupProps) {
-  const { profile, user, updateProfile } = useApp();
+  const { profile, user, updateProfile, presenceMap } = useApp();
   const [changing, setChanging] = useState(false);
   const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
 
   const name = profile ? displayName(profile) : user?.email?.split("@")[0] ?? "You";
-  const currentStatus: UserStatus = profile?.status ?? "online";
+  const currentStatus: UserStatus = profile ? presenceMap.get(profile.id) ?? profile.status : "online";
   const statusText = statusLabel(currentStatus);
 
   const setStatus = useCallback(

@@ -1,10 +1,12 @@
+import type { Metadata } from "next";
 import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
 import { BugReportForm } from "@/components/bugreport/BugReportForm";
 import { BUG_REPORT_EMAIL } from "@/lib/bug-reports";
 
-export const metadata = {
-  title: "Bug Report — Disband",
+export const metadata: Metadata = {
+  title: "Bug Report",
   description: "Report a bug in Disband and earn the Bug Bounty Hunter badge if we fix it.",
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
 };
 
 export default function BugReportPage() {

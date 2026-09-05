@@ -1,8 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
 
-export const metadata = {
-  title: "Terms of Service — Disband",
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description:
+    "The rules of Disband — what you own, what we expect from you, and the limits of using the service.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

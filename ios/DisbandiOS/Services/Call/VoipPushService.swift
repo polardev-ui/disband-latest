@@ -35,6 +35,7 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
     /// flushed to the server as soon as a user is signed in.
     func start() {
         guard registry == nil else { return }
+        PushDiag.log("voip.start", "pushing registry up")
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
@@ -50,6 +51,7 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
                       didUpdate pushCredentials: PKPushCredentials,
                       for type: PKPushType) {
         let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
+        PushDiag.log("voip.token", "prefix=\(token.prefix(8))")
         Task { @MainActor in
             self.pendingToken = token
             await self.flushToken()
@@ -59,9 +61,10 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
     func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {}
 
     func pushRegistry(_ registry: PKPushRegistry,
-                      didReceiveIncomingPushWith payload: PKPushPayload,
-                      for type: PKPushType,
-                      completion: @escaping () -> Void) {
+didReceiveIncomingPushWith payload: PKPushPayload,
+                          for type: PKPushType,
+                          completion: @escaping () -> Void) {
+        PushDiag.log("voip.push.received", "type=\(type.rawValue)")
         handle(payload: payload)
         completion()
     }
@@ -69,13 +72,18 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
     func pushRegistry(_ registry: PKPushRegistry,
                       didReceiveIncomingPushWith payload: PKPushPayload,
                       for type: PKPushType) {
+        PushDiag.log("voip.push.received", "type=\(type.rawValue)")
         handle(payload: payload)
     }
 
     private func handle(payload: PKPushPayload) {
         let dict = payload.dictionaryPayload
         guard let callId = dict["callId"] as? String,
-              let from = dict["from"] as? String else { return }
+              let from = dict["from"] as? String else {
+            PushDiag.log("voip.push.badpayload", "missing callId/from: \(dict)")
+            return
+        }
+        PushDiag.log("voip.push.parsed", "callId=\(callId)")
         onReceiveIncomingPush?(VoipPushPayload(
             callId: callId,
             from: from,

@@ -365,7 +365,17 @@ export function useCallManager(
     // `ring` above; this only wakes their iOS devices.
     void getSupabaseClient().functions.invoke("send-call-push", {
       body: { calleeId: peer.id, callId, callerName: displayName(profile) },
-    }).catch(() => {});
+    }).then(({ data }) => {
+      const result = data as { sent?: number; registered?: number; statuses?: number[] } | null;
+      console.log("[send-call-push]", result);
+      if (result && result.registered === 0) {
+        setCallNotice("Their phone isn't registered for call push yet — open Disband on it once.");
+      } else if (result && result.sent === 0 && result.statuses?.length) {
+        setCallNotice(`Push rejected by Apple (${result.statuses.join(",")}) — see console for details.`);
+      }
+    }).catch((err) => {
+      console.error("[send-call-push] invoke failed", err);
+    });
   }, [userId, profile, sendToUser, reset]);
 
   const acceptCall = useCallback(async () => {

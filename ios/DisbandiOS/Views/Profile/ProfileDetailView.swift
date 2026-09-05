@@ -17,11 +17,13 @@ struct ProfileDetailView: View {
 
     private var isSelf: Bool { profile.id == app.currentUserId }
 
-    /// Live presence for this profile — the current user's own avatar uses their
-    /// stored status, everyone else gets live presence (offline when not connected,
-    /// matching the web).
+    /// Live presence for this profile. The current user's own status is read
+    /// from the presence channel too (falling back to their stored status only
+    /// while the socket is still joining), so it reflects reality — auto-away,
+    /// DND picked on another device, or offline when the socket dies — instead
+    /// of a stale `profiles.status` column.
     private var liveStatus: UserStatus {
-        isSelf ? profile.status : presence.status(for: profile.id)
+        presence.status(for: profile.id, fallback: isSelf ? profile.status : .offline)
     }
 
     var body: some View {

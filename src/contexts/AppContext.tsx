@@ -324,6 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // get_or_create RPCs resolve out of order.
   const dmOpenTokenRef = useRef(0);
   const channelsRef = useRef<Channel[]>([]);
+  const dmThreadsRef = useRef<(DmThread & { friend: Profile })[]>([]);
   const groupChatsRef = useRef<GroupChatWithMembers[]>([]);
   const viewModeRef = useRef<ViewMode>("home");
   const profileRef = useRef<Profile | null>(null);
@@ -339,6 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   profileRef.current = profile;
   syncUserSettings(profile);
   channelsRef.current = channels;
+  dmThreadsRef.current = dmThreads;
   groupChatsRef.current = groupChats;
   useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
   useEffect(() => { activeChannelRef.current = activeChannelId; }, [activeChannelId]);
@@ -1264,6 +1266,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, refreshAll]);
 
+  // Keep the access token from lapsing while the tab sits idle in the
+  // foreground. supabase's auto-refresh ticker only runs while the page is
+  // visible AND only when the token is inside its expiry margin, so a tab left
+  // open for hours would otherwise let the token expire — silently killing
+  // every realtime socket (PGRST303) and stale-`fetch` calls until focus or a
+  // reload. Refresh just before expiry instead, from the shared deduplicated
+  // path so the cross-tab lock still applies.
+  useEffect(() => {
+    if (!configured) return;
+    const marginMs = 60_000;
+    const minDelayMs = 30_000;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      const session = sessionRef.current;
+      if (!session || !session.expires_at || isAccessTokenExpired(session)) return;
+      const delayMs = Math.max(minDelayMs, session.expires_at * 1000 - Date.now() - marginMs);
+      timer = setTimeout(() => {
+        void (async () => {
+          const result = await refreshSessionOnce();
+          if ("session" in result && result.session) {
+            await refreshAll();
+          }
+        })().finally(schedule);
+      }, delayMs);
+    };
+    schedule();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [configured, refreshAll]);
+
   const refreshMfaStatus = useCallback(async () => {
     if (!configured) {
       setMfaRequired(false);
@@ -1872,6 +1906,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return next;
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
+            if (!dmThreadsRef.current.some((t) => t.id === msg.thread_id)) {
+              // A thread created on another device (e.g. the iOS app) never
+              // surfaces here through realtime, so pull it in — otherwise the
+              // conversation is invisible until a manual reload.
+              void loadDmThreads(userId);
+            }
             alertIncomingDm(
               displayName(author as Profile),
               msg.content.slice(0, 120) || undefined,
@@ -1883,7 +1923,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
-  }, [userId, configured, bumpDmThreadActivity]);
+  }, [userId, configured, bumpDmThreadActivity, loadDmThreads]);
 
   // Cross-device read sync: when the *other* participant marks a DM read
   // (dm_thread_reads) or a group read (group_chat_members.last_read_at), re-pull

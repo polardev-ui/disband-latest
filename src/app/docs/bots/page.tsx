@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Bots — Disband Docs",
   description: "Create and run a self-hosted bot on Disband: scopes, invites, tokens, and the client libraries.",
+  alternates: { canonical: "/docs/bots" },
 };
 
 const SCOPE_ROWS: { scope: string; label: string; description: string }[] = [

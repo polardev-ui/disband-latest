@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Realtime
 import Supabase
+import UIKit
 
 /// Backs the Messages tab: loads DM threads (sorted by most recent activity)
 /// plus group chats, and live-updates thread previews, ordering, and unread
@@ -21,6 +22,35 @@ final class DirectMessagesViewModel {
     private var groupTask: Task<Void, Never>?
     private var currentUserId: String?
     private var unreadStore: DmUnreadStore?
+    nonisolated(unsafe) private var foregroundObserver: NSObjectProtocol?
+
+    init() {
+        // Messages (and read state) that landed while the app was backgrounded
+        // are never replayed by realtime, so refresh the list and unread counts
+        // whenever the user returns — otherwise new DMs stay invisible until
+        // the Messages tab is left and reopened.
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.reloadOnForeground()
+            }
+        }
+    }
+
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+    }
+
+    // MARK: - App lifecycle
+
+    func reloadOnForeground() async {
+        await load(currentUserId: currentUserId)
+    }
 
     /// Idempotent: the app starts this at sign-in to warm the tab, and the tab
     /// calls it again when it first appears. The second call must not open a
