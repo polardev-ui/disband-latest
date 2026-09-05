@@ -1,0 +1,405 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.wsgpolar.disband"
+4    android:versionCode="1"
+5    android:versionName="1.1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="36" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:5:5-67
+11-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:5:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:6:5-79
+12-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:6:22-76
+13    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+13-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:7:5-77
+13-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:7:22-74
+14    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+14-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:8:5-71
+14-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:8:22-68
+15    <uses-permission android:name="android.permission.CAMERA" />
+15-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:9:5-65
+15-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:9:22-62
+16    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+16-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:10:5-80
+16-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:10:22-77
+17    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+17-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:11:5-76
+17-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:11:22-73
+18    <uses-permission
+18-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:12:5-95
+19        android:name="android.permission.BLUETOOTH"
+19-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:12:22-65
+20        android:maxSdkVersion="30" />
+20-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:12:66-92
+21
+22    <uses-feature
+22-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:14:5-16:36
+23        android:name="android.hardware.camera"
+23-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:15:9-47
+24        android:required="false" />
+24-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:16:9-33
+25    <uses-feature
+25-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:17:5-19:36
+26        android:name="android.hardware.microphone"
+26-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:18:9-51
+27        android:required="false" />
+27-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:19:9-33
+28
+29    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Required by older versions of Google Play services to create IID tokens -->
+29-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:24:5-68
+29-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:24:22-65
+30    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+30-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:26:5-82
+30-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:26:22-79
+31
+32    <permission
+32-->[androidx.core:core:1.15.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/af1e9ce874a75ba653b7d94fc8fc142e/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
+33        android:name="com.wsgpolar.disband.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+33-->[androidx.core:core:1.15.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/af1e9ce874a75ba653b7d94fc8fc142e/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
+34        android:protectionLevel="signature" />
+34-->[androidx.core:core:1.15.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/af1e9ce874a75ba653b7d94fc8fc142e/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
+35
+36    <uses-permission android:name="com.wsgpolar.disband.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+36-->[androidx.core:core:1.15.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/af1e9ce874a75ba653b7d94fc8fc142e/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
+36-->[androidx.core:core:1.15.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/af1e9ce874a75ba653b7d94fc8fc142e/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
+37
+38    <application
+38-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:21:5-61:19
+39        android:name="com.wsgpolar.disband.DisbandApp"
+39-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:22:9-35
+40        android:allowBackup="true"
+40-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:23:9-35
+41        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+41-->[androidx.core:core:1.15.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/af1e9ce874a75ba653b7d94fc8fc142e/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
+42        android:debuggable="true"
+43        android:extractNativeLibs="false"
+44        android:icon="@mipmap/ic_launcher"
+44-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:24:9-43
+45        android:label="@string/app_name"
+45-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:25:9-41
+46        android:supportsRtl="true"
+46-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:26:9-35
+47        android:theme="@style/Theme.Disband" >
+47-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:27:9-45
+48        <activity
+48-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:30:9-52:20
+49            android:name="com.wsgpolar.disband.MainActivity"
+49-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:31:13-41
+50            android:exported="true"
+50-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:32:13-36
+51            android:launchMode="singleTask"
+51-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:33:13-44
+52            android:theme="@style/Theme.Disband" >
+52-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:34:13-49
+53            <intent-filter>
+53-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:35:13-38:29
+54                <action android:name="android.intent.action.MAIN" />
+54-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:36:17-69
+54-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:36:25-66
+55
+56                <category android:name="android.intent.category.LAUNCHER" />
+56-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:37:17-77
+56-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:37:27-74
+57            </intent-filter>
+58            <intent-filter android:autoVerify="false" >
+58-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:40:13-45:29
+58-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:40:28-54
+59                <action android:name="android.intent.action.VIEW" />
+59-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:41:17-69
+59-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:41:25-66
+60
+61                <category android:name="android.intent.category.DEFAULT" />
+61-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:42:17-76
+61-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:42:27-73
+62                <category android:name="android.intent.category.BROWSABLE" />
+62-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:43:17-78
+62-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:43:27-75
+63
+64                <data
+64-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:44:17-79
+65                    android:host="www.disband.dev"
+65-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:44:46-76
+66                    android:scheme="https" />
+66-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:44:23-45
+67            </intent-filter>
+68            <intent-filter>
+68-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:46:13-51:29
+69                <action android:name="android.intent.action.VIEW" />
+69-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:41:17-69
+69-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:41:25-66
+70
+71                <category android:name="android.intent.category.DEFAULT" />
+71-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:42:17-76
+71-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:42:27-73
+72                <category android:name="android.intent.category.BROWSABLE" />
+72-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:43:17-78
+72-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:43:27-75
+73
+74                <data android:scheme="disband" />
+74-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:44:17-79
+74-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:44:23-45
+75            </intent-filter>
+76        </activity>
+77
+78        <service
+78-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:54:9-60:19
+79            android:name="com.wsgpolar.disband.data.MessagingService"
+79-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:55:13-50
+80            android:exported="false" >
+80-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:56:13-37
+81            <intent-filter>
+81-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:57:13-59:29
+82                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+82-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:58:17-78
+82-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:58:25-75
+83            </intent-filter>
+84        </service>
+85
+86        <provider
+86-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:9:9-17:20
+87            android:name="androidx.startup.InitializationProvider"
+87-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:10:13-67
+88            android:authorities="com.wsgpolar.disband.androidx-startup"
+88-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:11:13-68
+89            android:exported="false" >
+89-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:12:13-37
+90            <meta-data
+90-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:14:13-16:52
+91                android:name="io.github.jan.supabase.auth.SupabaseInitializer"
+91-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:15:17-79
+92                android:value="androidx.startup" />
+92-->[io.github.jan-tennert.supabase:auth-kt-android:3.8.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/67a0e83de4c6cf36f629be3fb372a738/transformed/auth-kt/AndroidManifest.xml:16:17-49
+93            <meta-data
+93-->[androidx.emoji2:emoji2:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/c378ff79d3836bac6ca35a881df1b042/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+94                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+94-->[androidx.emoji2:emoji2:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/c378ff79d3836bac6ca35a881df1b042/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+95                android:value="androidx.startup" />
+95-->[androidx.emoji2:emoji2:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/c378ff79d3836bac6ca35a881df1b042/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+96            <meta-data
+96-->[androidx.lifecycle:lifecycle-process:2.10.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/28a81f86503630c4d01f1083af79dc5d/transformed/lifecycle-process-2.10.0/AndroidManifest.xml:29:13-31:52
+97                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+97-->[androidx.lifecycle:lifecycle-process:2.10.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/28a81f86503630c4d01f1083af79dc5d/transformed/lifecycle-process-2.10.0/AndroidManifest.xml:30:17-78
+98                android:value="androidx.startup" />
+98-->[androidx.lifecycle:lifecycle-process:2.10.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/28a81f86503630c4d01f1083af79dc5d/transformed/lifecycle-process-2.10.0/AndroidManifest.xml:31:17-49
+99            <meta-data
+99-->[com.squareup.okhttp3:okhttp-android:5.3.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/5c9d180daefaeb76a0b39847f9248aee/transformed/okhttp-release/AndroidManifest.xml:16:13-18:52
+100                android:name="okhttp3.internal.platform.PlatformInitializer"
+100-->[com.squareup.okhttp3:okhttp-android:5.3.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/5c9d180daefaeb76a0b39847f9248aee/transformed/okhttp-release/AndroidManifest.xml:17:17-77
+101                android:value="androidx.startup" />
+101-->[com.squareup.okhttp3:okhttp-android:5.3.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/5c9d180daefaeb76a0b39847f9248aee/transformed/okhttp-release/AndroidManifest.xml:18:17-49
+102            <meta-data
+102-->[com.russhwolf:multiplatform-settings-no-arg-android-debug:1.3.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/d07740412d2fabbb08d61144c470f5e7/transformed/multiplatform-settings-no-arg-debug/AndroidManifest.xml:29:13-31:52
+103                android:name="com.russhwolf.settings.SettingsInitializer"
+103-->[com.russhwolf:multiplatform-settings-no-arg-android-debug:1.3.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/d07740412d2fabbb08d61144c470f5e7/transformed/multiplatform-settings-no-arg-debug/AndroidManifest.xml:30:17-74
+104                android:value="androidx.startup" />
+104-->[com.russhwolf:multiplatform-settings-no-arg-android-debug:1.3.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/d07740412d2fabbb08d61144c470f5e7/transformed/multiplatform-settings-no-arg-debug/AndroidManifest.xml:31:17-49
+105            <meta-data
+105-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+106                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+106-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+107                android:value="androidx.startup" />
+107-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+108        </provider>
+109
+110        <receiver
+110-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:29:9-40:20
+111            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
+111-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:30:13-78
+112            android:exported="true"
+112-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:31:13-36
+113            android:permission="com.google.android.c2dm.permission.SEND" >
+113-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:32:13-73
+114            <intent-filter>
+114-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:33:13-35:29
+115                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+115-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:34:17-81
+115-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:34:25-78
+116            </intent-filter>
+117
+118            <meta-data
+118-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:37:13-39:40
+119                android:name="com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED"
+119-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:38:17-92
+120                android:value="true" />
+120-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:39:17-37
+121        </receiver>
+122        <!--
+123             FirebaseMessagingService performs security checks at runtime,
+124             but set to not exported to explicitly avoid allowing another app to call it.
+125        -->
+126        <service
+126-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:46:9-53:19
+127            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+127-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:47:13-82
+128            android:directBootAware="true"
+128-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:48:13-43
+129            android:exported="false" >
+129-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:49:13-37
+130            <intent-filter android:priority="-500" >
+130-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:57:13-59:29
+131                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+131-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:58:17-78
+131-->/Users/joshclark/Projects/disband-latest/android/app/src/main/AndroidManifest.xml:58:25-75
+132            </intent-filter>
+133        </service>
+134        <service
+134-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:54:9-63:19
+135            android:name="com.google.firebase.components.ComponentDiscoveryService"
+135-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:55:13-84
+136            android:directBootAware="true"
+136-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:32:13-43
+137            android:exported="false" >
+137-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:56:13-37
+138            <meta-data
+138-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:57:13-59:85
+139                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar"
+139-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:58:17-122
+140                android:value="com.google.firebase.components.ComponentRegistrar" />
+140-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:59:17-82
+141            <meta-data
+141-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:60:13-62:85
+142                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar"
+142-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:61:17-119
+143                android:value="com.google.firebase.components.ComponentRegistrar" />
+143-->[com.google.firebase:firebase-messaging:24.1.2] /Users/joshclark/.gradle/caches/8.14.3/transforms/43cad49642c3269f03f555ccc408e770/transformed/firebase-messaging-24.1.2/AndroidManifest.xml:62:17-82
+144            <meta-data
+144-->[com.google.firebase:firebase-installations:17.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/e35ab96cdfadf4a8808ad54399505ce5/transformed/firebase-installations-17.2.0/AndroidManifest.xml:15:13-17:85
+145                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
+145-->[com.google.firebase:firebase-installations:17.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/e35ab96cdfadf4a8808ad54399505ce5/transformed/firebase-installations-17.2.0/AndroidManifest.xml:16:17-130
+146                android:value="com.google.firebase.components.ComponentRegistrar" />
+146-->[com.google.firebase:firebase-installations:17.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/e35ab96cdfadf4a8808ad54399505ce5/transformed/firebase-installations-17.2.0/AndroidManifest.xml:17:17-82
+147            <meta-data
+147-->[com.google.firebase:firebase-installations:17.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/e35ab96cdfadf4a8808ad54399505ce5/transformed/firebase-installations-17.2.0/AndroidManifest.xml:18:13-20:85
+148                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
+148-->[com.google.firebase:firebase-installations:17.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/e35ab96cdfadf4a8808ad54399505ce5/transformed/firebase-installations-17.2.0/AndroidManifest.xml:19:17-127
+149                android:value="com.google.firebase.components.ComponentRegistrar" />
+149-->[com.google.firebase:firebase-installations:17.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/e35ab96cdfadf4a8808ad54399505ce5/transformed/firebase-installations-17.2.0/AndroidManifest.xml:20:17-82
+150            <meta-data
+150-->[com.google.firebase:firebase-common-ktx:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/38269a76aa61d31c333e3c616b49ec2b/transformed/firebase-common-ktx-21.0.0/AndroidManifest.xml:12:13-14:85
+151                android:name="com.google.firebase.components:com.google.firebase.ktx.FirebaseCommonLegacyRegistrar"
+151-->[com.google.firebase:firebase-common-ktx:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/38269a76aa61d31c333e3c616b49ec2b/transformed/firebase-common-ktx-21.0.0/AndroidManifest.xml:13:17-116
+152                android:value="com.google.firebase.components.ComponentRegistrar" />
+152-->[com.google.firebase:firebase-common-ktx:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/38269a76aa61d31c333e3c616b49ec2b/transformed/firebase-common-ktx-21.0.0/AndroidManifest.xml:14:17-82
+153            <meta-data
+153-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:35:13-37:85
+154                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
+154-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:36:17-109
+155                android:value="com.google.firebase.components.ComponentRegistrar" />
+155-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:37:17-82
+156            <meta-data
+156-->[com.google.firebase:firebase-datatransport:18.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/f7e2c19b1092612fb3f68060c05d9895/transformed/firebase-datatransport-18.2.0/AndroidManifest.xml:25:13-27:85
+157                android:name="com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar"
+157-->[com.google.firebase:firebase-datatransport:18.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/f7e2c19b1092612fb3f68060c05d9895/transformed/firebase-datatransport-18.2.0/AndroidManifest.xml:26:17-115
+158                android:value="com.google.firebase.components.ComponentRegistrar" />
+158-->[com.google.firebase:firebase-datatransport:18.2.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/f7e2c19b1092612fb3f68060c05d9895/transformed/firebase-datatransport-18.2.0/AndroidManifest.xml:27:17-82
+159        </service>
+160
+161        <activity
+161-->[com.google.android.gms:play-services-base:18.1.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/39f14f8e9b4238cc2317c58f99cf36c7/transformed/play-services-base-18.1.0/AndroidManifest.xml:20:9-22:45
+162            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+162-->[com.google.android.gms:play-services-base:18.1.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/39f14f8e9b4238cc2317c58f99cf36c7/transformed/play-services-base-18.1.0/AndroidManifest.xml:20:19-85
+163            android:exported="false"
+163-->[com.google.android.gms:play-services-base:18.1.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/39f14f8e9b4238cc2317c58f99cf36c7/transformed/play-services-base-18.1.0/AndroidManifest.xml:22:19-43
+164            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+164-->[com.google.android.gms:play-services-base:18.1.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/39f14f8e9b4238cc2317c58f99cf36c7/transformed/play-services-base-18.1.0/AndroidManifest.xml:21:19-78
+165
+166        <provider
+166-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:23:9-28:39
+167            android:name="com.google.firebase.provider.FirebaseInitProvider"
+167-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:24:13-77
+168            android:authorities="com.wsgpolar.disband.firebaseinitprovider"
+168-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:25:13-72
+169            android:directBootAware="true"
+169-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:26:13-43
+170            android:exported="false"
+170-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:27:13-37
+171            android:initOrder="100" />
+171-->[com.google.firebase:firebase-common:21.0.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/295506026d341f12170b0d632d096b66/transformed/firebase-common-21.0.0/AndroidManifest.xml:28:13-36
+172
+173        <activity
+173-->[androidx.compose.ui:ui-tooling-android:1.9.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/c3e6bae00020d8e2c9a1ffba38b1bc4f/transformed/ui-tooling/AndroidManifest.xml:23:9-25:39
+174            android:name="androidx.compose.ui.tooling.PreviewActivity"
+174-->[androidx.compose.ui:ui-tooling-android:1.9.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/c3e6bae00020d8e2c9a1ffba38b1bc4f/transformed/ui-tooling/AndroidManifest.xml:24:13-71
+175            android:exported="true" />
+175-->[androidx.compose.ui:ui-tooling-android:1.9.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/c3e6bae00020d8e2c9a1ffba38b1bc4f/transformed/ui-tooling/AndroidManifest.xml:25:13-36
+176
+177        <meta-data
+177-->[com.google.android.gms:play-services-basement:18.3.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/f070ccbf9a13070bbf6541badad31fbf/transformed/play-services-basement-18.3.0/AndroidManifest.xml:21:9-23:69
+178            android:name="com.google.android.gms.version"
+178-->[com.google.android.gms:play-services-basement:18.3.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/f070ccbf9a13070bbf6541badad31fbf/transformed/play-services-basement-18.3.0/AndroidManifest.xml:22:13-58
+179            android:value="@integer/google_play_services_version" />
+179-->[com.google.android.gms:play-services-basement:18.3.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/f070ccbf9a13070bbf6541badad31fbf/transformed/play-services-basement-18.3.0/AndroidManifest.xml:23:13-66
+180
+181        <service
+181-->[com.google.android.datatransport:transport-backend-cct:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/4619b4f4e1a4db25dd83efaefcb1d5fc/transformed/transport-backend-cct-3.1.9/AndroidManifest.xml:28:9-34:19
+182            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+182-->[com.google.android.datatransport:transport-backend-cct:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/4619b4f4e1a4db25dd83efaefcb1d5fc/transformed/transport-backend-cct-3.1.9/AndroidManifest.xml:29:13-103
+183            android:exported="false" >
+183-->[com.google.android.datatransport:transport-backend-cct:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/4619b4f4e1a4db25dd83efaefcb1d5fc/transformed/transport-backend-cct-3.1.9/AndroidManifest.xml:30:13-37
+184            <meta-data
+184-->[com.google.android.datatransport:transport-backend-cct:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/4619b4f4e1a4db25dd83efaefcb1d5fc/transformed/transport-backend-cct-3.1.9/AndroidManifest.xml:31:13-33:39
+185                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+185-->[com.google.android.datatransport:transport-backend-cct:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/4619b4f4e1a4db25dd83efaefcb1d5fc/transformed/transport-backend-cct-3.1.9/AndroidManifest.xml:32:17-94
+186                android:value="cct" />
+186-->[com.google.android.datatransport:transport-backend-cct:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/4619b4f4e1a4db25dd83efaefcb1d5fc/transformed/transport-backend-cct-3.1.9/AndroidManifest.xml:33:17-36
+187        </service>
+188        <service
+188-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:26:9-30:19
+189            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+189-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:27:13-117
+190            android:exported="false"
+190-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:28:13-37
+191            android:permission="android.permission.BIND_JOB_SERVICE" >
+191-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:29:13-69
+192        </service>
+193
+194        <receiver
+194-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:32:9-34:40
+195            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+195-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:33:13-132
+196            android:exported="false" />
+196-->[com.google.android.datatransport:transport-runtime:3.1.9] /Users/joshclark/.gradle/caches/8.14.3/transforms/33e7ef59a5d53a984611d911cd62ce16/transformed/transport-runtime-3.1.9/AndroidManifest.xml:34:13-37
+197        <receiver
+197-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+198            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+198-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+199            android:directBootAware="false"
+199-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+200            android:enabled="true"
+200-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+201            android:exported="true"
+201-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+202            android:permission="android.permission.DUMP" >
+202-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+203            <intent-filter>
+203-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+204                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+204-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+204-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+205            </intent-filter>
+206            <intent-filter>
+206-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+207                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+207-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+207-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+208            </intent-filter>
+209            <intent-filter>
+209-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+210                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+210-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+210-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+211            </intent-filter>
+212            <intent-filter>
+212-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+213                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+213-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+213-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/joshclark/.gradle/caches/8.14.3/transforms/bcdb5858b86df41fac7dc4c97a156bcf/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+214            </intent-filter>
+215        </receiver>
+216    </application>
+217
+218</manifest>
