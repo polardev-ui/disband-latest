@@ -51,6 +51,27 @@ async function upsertSubscription(
     },
     { onConflict: "user_id" },
   );
+
+  // The first paid period is what "subscriber since" dates from, and it is
+  // never rewritten afterwards — a cancel-and-return keeps the original date
+  // and the months already earned.
+  await supabase
+    .from("subscriptions")
+    .update({ first_subscribed_at: periodStartISO })
+    .eq("user_id", userId)
+    .is("first_subscribed_at", null);
+}
+
+/**
+ * Add a paid month to someone's tenure.
+ *
+ * Counted rather than derived from the start date, so a lapse does not hand
+ * out months nobody paid for and a returning subscriber keeps what they had.
+ */
+async function accrueTenure(userId: string) {
+  const supabase = getServiceSupabase();
+  if (!supabase) return;
+  await supabase.rpc("accrue_tenure_month", { p_user: userId });
 }
 
 async function cancelSubscription(subscriptionId: string) {
@@ -90,6 +111,23 @@ export async function POST(req: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // A gift is a one-off payment with no subscription attached, so it
+        // never reaches the branch below. Paying is what makes it claimable —
+        // until then the row exists only so the payment has somewhere to land.
+        if (session.metadata?.kind === "gift") {
+          const giftId = session.metadata.gift_id;
+          const supabase = getServiceSupabase();
+          if (giftId && supabase && session.payment_status === "paid") {
+            await supabase
+              .from("gifts")
+              .update({ status: "unclaimed" })
+              .eq("id", giftId)
+              .eq("status", "pending");
+          }
+          break;
+        }
+
         const userId = session.metadata?.user_id;
         const plan = session.metadata?.plan as "basic" | "super" | undefined;
         const subId = session.subscription as string;
@@ -132,6 +170,7 @@ export async function POST(req: Request) {
               periods.periodEnd,
               periods.canceledAt,
             );
+            await accrueTenure(userId);
           }
         }
         break;

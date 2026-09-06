@@ -9,6 +9,13 @@
           "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
         }
       ],
+      "missing": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|Google-InspectionTool|bingbot|Baiduspider|YandexBot|DuckDuckBot|Slurp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Applebot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Slackbot|rogerbot|Pinterest|GPTBot|ClaudeBot|CCBot|PerplexityBot|OAI-SearchBot|Bytespider|Diffbot|archive.org_bot|ia_archiver|SemrushBot|AhrefsBot|DotBot|MJ12bot|Moz).*"
+        }
+      ],
       "destination": "/mobile",
       "statusCode": 302
     },
@@ -19,6 +26,13 @@
           "type": "header",
           "key": "user-agent",
           "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
+        }
+      ],
+      "missing": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|Google-InspectionTool|bingbot|Baiduspider|YandexBot|DuckDuckBot|Slurp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Applebot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Slackbot|rogerbot|Pinterest|GPTBot|ClaudeBot|CCBot|PerplexityBot|OAI-SearchBot|Bytespider|Diffbot|archive.org_bot|ia_archiver|SemrushBot|AhrefsBot|DotBot|MJ12bot|Moz).*"
         }
       ],
       "destination": "/mobile",
@@ -33,6 +47,13 @@
           "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
         }
       ],
+      "missing": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|Google-InspectionTool|bingbot|Baiduspider|YandexBot|DuckDuckBot|Slurp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Applebot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Slackbot|rogerbot|Pinterest|GPTBot|ClaudeBot|CCBot|PerplexityBot|OAI-SearchBot|Bytespider|Diffbot|archive.org_bot|ia_archiver|SemrushBot|AhrefsBot|DotBot|MJ12bot|Moz).*"
+        }
+      ],
       "destination": "/mobile",
       "statusCode": 302
     },
@@ -45,6 +66,13 @@
           "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
         }
       ],
+      "missing": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|Google-InspectionTool|bingbot|Baiduspider|YandexBot|DuckDuckBot|Slurp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Applebot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Slackbot|rogerbot|Pinterest|GPTBot|ClaudeBot|CCBot|PerplexityBot|OAI-SearchBot|Bytespider|Diffbot|archive.org_bot|ia_archiver|SemrushBot|AhrefsBot|DotBot|MJ12bot|Moz).*"
+        }
+      ],
       "destination": "/mobile",
       "statusCode": 302
     },
@@ -55,6 +83,13 @@
           "type": "header",
           "key": "user-agent",
           "value": ".*(Mobile|iPhone|iPod|iPad|Android|webOS|BlackBerry|IEMobile|Opera Mini).*"
+        }
+      ],
+      "missing": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|Google-InspectionTool|bingbot|Baiduspider|YandexBot|DuckDuckBot|Slurp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Applebot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Slackbot|rogerbot|Pinterest|GPTBot|ClaudeBot|CCBot|PerplexityBot|OAI-SearchBot|Bytespider|Diffbot|archive.org_bot|ia_archiver|SemrushBot|AhrefsBot|DotBot|MJ12bot|Moz).*"
         }
       ],
       "destination": "/mobile",

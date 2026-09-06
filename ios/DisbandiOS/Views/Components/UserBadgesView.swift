@@ -1,108 +1,85 @@
 import SwiftUI
 
-/// Platform badges, wire-compatible with the desktop app's `PLATFORM_BADGES`.
-///
-/// These are awarded by Disband and locked server-side (the profile update
-/// trigger reverts any client attempt to set them), so this is display only.
-struct UserBadge: Identifiable, Hashable {
-    let key: String
-    let systemImage: String
-    let color: Color
-    let title: String
-    let subtitle: String
+/**
+ The badge row beside a name.
 
-    var id: String { key }
-}
-
-enum PlatformBadges {
-    static let owner = UserBadge(
-        key: "owner",
-        systemImage: "crown.fill",
-        color: Color(hex: 0xFAA61A),
-        title: "Disband Owner",
-        subtitle: "Owner and Founder of Disband"
-    )
-    static let staff = UserBadge(
-        key: "staff",
-        systemImage: "hammer.fill",
-        color: Color(hex: 0x8EA1E1),
-        title: "Disband Staff",
-        subtitle: "Member of the Disband staff team"
-    )
-    static let og = UserBadge(
-        key: "og",
-        systemImage: "sparkles",
-        color: Color(hex: 0xF04747),
-        title: "OG",
-        subtitle: "Joined Disband during its early days"
-    )
-    static let bounty = UserBadge(
-        key: "bounty",
-        systemImage: "ladybug.fill",
-        color: Color(hex: 0x43B581),
-        title: "Bug Bounty Hunter",
-        subtitle: "Helped find and report bugs in Disband"
-    )
-
-    /// Ordered to match the desktop badge row.
-    static func forProfile(_ profile: Profile) -> [UserBadge] {
-        var badges: [UserBadge] = []
-        if profile.showOwnerBadge == true { badges.append(owner) }
-        if profile.showStaffBadge == true { badges.append(staff) }
-        if profile.showOgBadge == true { badges.append(og) }
-        if profile.showBountyBadge == true { badges.append(bounty) }
-        return badges
-    }
-}
-
-/// Compact inline badge row, for next to a username.
+ Badges are loaded from the database rather than read off four booleans on the
+ profile, so the app shows whatever has actually been awarded — including
+ badges that did not exist when the build shipped.
+ */
 struct UserBadgesView: View {
     let profile: Profile
     var size: CGFloat = 13
 
+    @State private var badges: [AwardedBadge] = []
+    @State private var entitlement: Entitlement?
+    @State private var showTiers = false
+
     var body: some View {
-        let badges = PlatformBadges.forProfile(profile)
-        if !badges.isEmpty {
-            HStack(spacing: 4) {
-                ForEach(badges) { badge in
-                    Image(systemName: badge.systemImage)
-                        .font(.system(size: size))
-                        .foregroundStyle(badge.color)
-                        .accessibilityLabel(badge.title)
+        HStack(spacing: 4) {
+            if let ent = entitlement, ent.plan != "free",
+               let tier = SubscriptionTier.forMonths(ent.months) {
+                Button { showTiers = true } label: {
+                    SubscriptionMedallionView(tier: tier, isSuper: ent.plan == "super",
+                                              size: size + 7)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(ent.plan == "super" ? "Super" : "Basic") subscriber, \(tier.label)")
+            }
+
+            ForEach(badges) { badge in
+                Image(systemName: BadgeService.symbol(for: badge.def.key))
+                    .font(.system(size: size))
+                    .foregroundStyle(badge.def.color)
+                    .accessibilityLabel(badge.def.name)
+            }
+        }
+        .task(id: profile.id) {
+            badges = await BadgeService.shared.badges(for: profile.id)
+            entitlement = await EntitlementService.shared.entitlement(for: profile.id)
+        }
+        .sheet(isPresented: $showTiers) {
+            if let ent = entitlement, ent.plan != "free" {
+                SubscriptionTiersSheet(plan: ent.plan, months: ent.months, since: ent.since)
             }
         }
     }
 }
 
-/// Expanded badge list with titles, for the profile detail sheet.
+/// The expanded list, for the profile sheet.
 struct UserBadgeList: View {
     let profile: Profile
 
+    @State private var badges: [AwardedBadge] = []
+
     var body: some View {
-        let badges = PlatformBadges.forProfile(profile)
-        if !badges.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Badges")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Brand.textMuted)
-                ForEach(badges) { badge in
-                    HStack(spacing: 10) {
-                        Image(systemName: badge.systemImage)
-                            .font(.system(size: 15))
-                            .foregroundStyle(badge.color)
-                            .frame(width: 22)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(badge.title)
-                                .font(.subheadline)
-                                .foregroundStyle(Brand.textPrimary)
-                            Text(badge.subtitle)
-                                .font(.caption)
-                                .foregroundStyle(Brand.textMuted)
+        Group {
+            if !badges.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Badges")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Brand.textMuted)
+                    ForEach(badges) { badge in
+                        HStack(spacing: 10) {
+                            Image(systemName: BadgeService.symbol(for: badge.def.key))
+                                .font(.system(size: 15))
+                                .foregroundStyle(badge.def.color)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(badge.def.name)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Brand.textPrimary)
+                                Text(badge.detail ?? badge.def.description)
+                                    .font(.caption)
+                                    .foregroundStyle(Brand.textMuted)
+                            }
                         }
                     }
                 }
             }
+        }
+        .task(id: profile.id) {
+            badges = await BadgeService.shared.badges(for: profile.id)
         }
     }
 }

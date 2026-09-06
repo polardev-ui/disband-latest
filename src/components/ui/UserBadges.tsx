@@ -1,104 +1,141 @@
-import type { ComponentType } from "react";
-import type { Profile } from "@/lib/supabase/types";
-import { IconBounty, IconCrown, IconOG, IconStaff } from "@/components/icons";
+"use client";
+
+import { useState } from "react";
 import { Tooltip } from "@/components/discord/Tooltip";
+import { BadgeGlyph } from "@/lib/badge-icons";
+import { useBadges, type AwardedBadge } from "@/lib/badge-store";
+import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components/gift/SubscriptionMedallion";
+import { SubscriptionBadgeModal } from "@/components/subscription/SubscriptionBadgeModal";
+import type { SubscriptionPlan } from "@/lib/subscription";
 
-type IconType = ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
-
-export interface UserBadgeDef {
-  key: "owner" | "staff" | "og" | "bounty";
-  Icon: IconType;
-  color: string;
-  bg: string;
-  title: string;
-  subtitle: string;
-}
-
-export const PLATFORM_BADGES: UserBadgeDef[] = [
-  {
-    key: "owner",
-    Icon: IconCrown,
-    color: "#faa61a",
-    bg: "rgba(250, 166, 26, 0.18)",
-    title: "Disband Owner",
-    subtitle: "Owner and Founder of Disband",
-  },
-  {
-    key: "staff",
-    Icon: IconStaff,
-    color: "#8ea1e1",
-    bg: "rgba(142, 161, 225, 0.18)",
-    title: "Disband Staff",
-    subtitle: "Member of the Disband staff team",
-  },
-  {
-    key: "og",
-    Icon: IconOG,
-    color: "#f04747",
-    bg: "rgba(240, 71, 71, 0.18)",
-    title: "OG",
-    subtitle: "Joined Disband during its early days",
-  },
-  {
-    key: "bounty",
-    Icon: IconBounty,
-    color: "#43b581",
-    bg: "rgba(67, 181, 129, 0.18)",
-    title: "Bug Bounty Hunter",
-    subtitle: "Helped find and report bugs in Disband",
-  },
-];
+/**
+ * The badges on a profile.
+ *
+ * These used to be four booleans on the profile row, hardcoded against a list
+ * in this file. They come from the database now, so a badge can be added or
+ * awarded without shipping a client — which is the only way twenty-five of
+ * them, most awarded automatically, could work.
+ */
 
 export interface UserBadgesProps {
-  profile: Pick<
-    Profile,
-    "show_owner_badge" | "show_staff_badge" | "show_og_badge" | "show_bounty_badge"
-  >;
+  userId: string | null | undefined;
+  /** Shown ahead of the earned badges when the person is subscribed. */
+  plan?: SubscriptionPlan;
+  /** Paid months so far, which chooses the medallion's tier. */
+  tenureMonths?: number;
+  subscribedSince?: string | null;
   size?: number;
   className?: string;
+  /** Whether the subscription medallion opens the tier breakdown. */
+  interactive?: boolean;
 }
 
-export function badgeDefsFor(
-  profile: Pick<
-    Profile,
-    "show_owner_badge" | "show_staff_badge" | "show_og_badge" | "show_bounty_badge"
-  >,
-): UserBadgeDef[] {
-  const defs: UserBadgeDef[] = [];
-  if (profile.show_owner_badge) defs.push(PLATFORM_BADGES[0]);
-  if (profile.show_staff_badge) defs.push(PLATFORM_BADGES[1]);
-  if (profile.show_og_badge) defs.push(PLATFORM_BADGES[2]);
-  if (profile.show_bounty_badge) defs.push(PLATFORM_BADGES[3]);
-  return defs;
-}
+export function UserBadges({
+  userId, plan = "free", tenureMonths = 0, subscribedSince,
+  size = 13, className = "", interactive = true,
+}: UserBadgesProps) {
+  const badges = useBadges(userId);
+  const [showTiers, setShowTiers] = useState(false);
 
-export function UserBadges({ profile, size = 13, className = "" }: UserBadgesProps) {
-  const defs = badgeDefsFor(profile);
-  if (defs.length === 0) return null;
+  const tier: TierDef | null = plan === "free" ? null : tierForMonths(tenureMonths);
+  if (badges.length === 0 && !tier) return null;
+
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 ${className}`}>
-      {defs.map((badge) => (
-        <Tooltip
-          key={badge.key}
-          as="span"
-          side="top"
-          label={
-            <span className="block text-center">
-              <span className="block">{badge.title}</span>
-              <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
-                {badge.subtitle}
+    <>
+      <span className={`inline-flex shrink-0 items-center gap-1 ${className}`}>
+        {tier && (
+          <Tooltip
+            as="span"
+            side="top"
+            label={
+              <span className="block text-center">
+                <span className="block">{plan === "super" ? "Disband Super" : "Disband Basic"}</span>
+                <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
+                  {tier.label} · {interactive ? "click for details" : `${tenureMonths} months`}
+                </span>
               </span>
-            </span>
-          }
-        >
-          <span
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-            style={{ color: badge.color, backgroundColor: badge.bg }}
+            }
           >
-            <badge.Icon size={size} strokeWidth={2} />
-          </span>
-        </Tooltip>
-      ))}
-    </span>
+            {interactive ? (
+              <button
+                type="button"
+                onClick={() => setShowTiers(true)}
+                aria-label={`${plan === "super" ? "Super" : "Basic"} subscriber, ${tier.label} tier`}
+                className="inline-flex shrink-0 items-center transition-transform hover:scale-110"
+              >
+                <SubscriptionMedallion tier={tier} super={plan === "super"} size={size + 7} />
+              </button>
+            ) : (
+              <span className="inline-flex shrink-0 items-center">
+                <SubscriptionMedallion tier={tier} super={plan === "super"} size={size + 7} />
+              </span>
+            )}
+          </Tooltip>
+        )}
+
+        {badges.map((badge) => (
+          <BadgePip key={badge.key} badge={badge} size={size} />
+        ))}
+      </span>
+
+      {showTiers && tier && plan !== "free" && (
+        <SubscriptionBadgeModal
+          plan={plan}
+          tenureMonths={tenureMonths}
+          since={subscribedSince ?? null}
+          onClose={() => setShowTiers(false)}
+        />
+      )}
+    </>
   );
+}
+
+function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
+  const detail = badgeDetail(badge);
+  return (
+    <Tooltip
+      as="span"
+      side="top"
+      label={
+        <span className="block text-center">
+          <span className="block">{badge.name}</span>
+          <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
+            {badge.description}
+          </span>
+          {detail && (
+            <span className="mt-0.5 block text-[11px] font-normal text-[#8b9198]">{detail}</span>
+          )}
+        </span>
+      }
+    >
+      <span
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+        style={{ color: badge.accent, backgroundColor: `${badge.accent}2e` }}
+      >
+        <BadgeGlyph badgeKey={badge.key} size={size} />
+      </span>
+    </Tooltip>
+  );
+}
+
+/** The count or date an automatic award recorded, when it has one. */
+function badgeDetail(badge: AwardedBadge): string | null {
+  const m = badge.metadata ?? {};
+  const n = (k: string) => (typeof m[k] === "number" ? (m[k] as number) : null);
+  const reports = n("reports");
+  if (reports) return `${reports} confirmed report${reports === 1 ? "" : "s"}`;
+  const members = n("members");
+  if (members) return `${members} members`;
+  const servers = n("servers");
+  if (servers) return `${servers} servers`;
+  const joined = n("joined");
+  if (joined) return `${joined} joined`;
+  const uploaded = n("uploaded");
+  if (uploaded) return `${uploaded} emoji`;
+  const minutes = n("minutes");
+  if (minutes) return `${Math.floor(minutes / 60)} hours in calls`;
+  if (typeof m.since === "string") {
+    return `Since ${new Date(m.since).toLocaleDateString()}`;
+  }
+  return null;
 }

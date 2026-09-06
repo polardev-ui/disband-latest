@@ -42,7 +42,7 @@ struct ProfileTab: View {
                             }
                         }
                     }
-                    if let profile, !PlatformBadges.forProfile(profile).isEmpty {
+                    if let profile {
                         card { UserBadgeList(profile: profile) }
                     }
                     planCard

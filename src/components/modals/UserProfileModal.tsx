@@ -156,11 +156,10 @@ export function UserProfileModal({
                 @{profile.username}
               </p>
             )}
-            {plan && <SubscriptionBadge plan={plan} />}
           </div>
 
           <div className="mt-1.5">
-            <UserBadges profile={profile} size={17} />
+            <UserBadges userId={profile.id} plan={plan ?? "free"} size={17} />
           </div>
 
           {profile.bio && (

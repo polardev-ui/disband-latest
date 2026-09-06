@@ -1,0 +1,14 @@
+-- 0061_gifts_and_tenure.sql
+-- Applied to the live database via the Supabase MCP; kept here as the record.
+-- See the badge migration (0060) for the catalogue this leans on.
+--
+-- * subscriptions.first_subscribed_at / tenure_months — "subscriber since"
+--   and paid months, neither of which could be derived from what was stored.
+--   Tenure is counted on each renewal rather than measured from the start
+--   date, so a lapse does not award months nobody paid for.
+-- * gifts / gift_entitlements — a gift is a one-off payment whose beneficiary
+--   is not the payer, so it has no subscription to read a plan from.
+-- * claim_gift(code) — locks the row FOR UPDATE, because a gift dropped into
+--   a busy channel is genuinely raced and only one person may win.
+-- * get_entitlement(user) — the effective plan across both sources.
+-- * accrue_tenure_month(user) — called from the invoice.paid webhook.
