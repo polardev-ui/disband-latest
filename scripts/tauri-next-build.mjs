@@ -18,6 +18,10 @@ const moves = [
   // rejects outright. Approving a bot invite is a browser flow a server owner
   // reaches from a link, so it has no place in the desktop bundle anyway.
   ["src/app/bot-invite", `${stashRoot}/app-bot-invite`],
+  // Same again for gift links. Inside the app a gift renders as a card in the
+  // conversation, so this standalone page only exists for a link opened
+  // somewhere that is not Disband — which is never the desktop bundle.
+  ["src/app/gift", `${stashRoot}/app-gift`],
 ];
 
 function moveAside(from, to) {
