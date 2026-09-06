@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Tooltip } from "@/components/discord/Tooltip";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { useBadges, type AwardedBadge } from "@/lib/badge-store";
+import { useEntitlement } from "@/lib/entitlement-store";
 import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components/gift/SubscriptionMedallion";
 import { SubscriptionBadgeModal } from "@/components/subscription/SubscriptionBadgeModal";
 import type { SubscriptionPlan } from "@/lib/subscription";
@@ -19,9 +20,9 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 
 export interface UserBadgesProps {
   userId: string | null | undefined;
-  /** Shown ahead of the earned badges when the person is subscribed. */
+  /** Overrides the looked-up plan when the caller already knows it. */
   plan?: SubscriptionPlan;
-  /** Paid months so far, which chooses the medallion's tier. */
+  /** Overrides the looked-up tenure. */
   tenureMonths?: number;
   subscribedSince?: string | null;
   size?: number;
@@ -31,13 +32,23 @@ export interface UserBadgesProps {
 }
 
 export function UserBadges({
-  userId, plan = "free", tenureMonths = 0, subscribedSince,
+  userId, plan, tenureMonths, subscribedSince,
   size = 13, className = "", interactive = true,
 }: UserBadgesProps) {
   const badges = useBadges(userId);
+  // Resolved here rather than left to each caller. A caller that passed a plan
+  // but no tenure got a tier of zero months, which is no tier at all — so the
+  // subscription badge silently vanished from the profile views while still
+  // showing in the member list, which passes both.
+  const ent = useEntitlement(userId);
   const [showTiers, setShowTiers] = useState(false);
 
-  const tier: TierDef | null = plan === "free" ? null : tierForMonths(tenureMonths);
+  const effectivePlan: SubscriptionPlan =
+    plan && plan !== "free" ? plan : ent.plan;
+  const months = tenureMonths ?? ent.months;
+  const since = subscribedSince ?? ent.since;
+
+  const tier: TierDef | null = effectivePlan === "free" ? null : tierForMonths(months);
   if (badges.length === 0 && !tier) return null;
 
   return (
@@ -49,9 +60,9 @@ export function UserBadges({
             side="top"
             label={
               <span className="block text-center">
-                <span className="block">{plan === "super" ? "Disband Super" : "Disband Basic"}</span>
+                <span className="block">{effectivePlan === "super" ? "Disband Super" : "Disband Basic"}</span>
                 <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
-                  {tier.label} · {interactive ? "click for details" : `${tenureMonths} months`}
+                  {tier.label} · {interactive ? "click for details" : `${months} months`}
                 </span>
               </span>
             }
@@ -60,14 +71,14 @@ export function UserBadges({
               <button
                 type="button"
                 onClick={() => setShowTiers(true)}
-                aria-label={`${plan === "super" ? "Super" : "Basic"} subscriber, ${tier.label} tier`}
+                aria-label={`${effectivePlan === "super" ? "Super" : "Basic"} subscriber, ${tier.label} tier`}
                 className="inline-flex shrink-0 items-center transition-transform hover:scale-110"
               >
-                <SubscriptionMedallion tier={tier} super={plan === "super"} size={size + 7} />
+                <SubscriptionMedallion tier={tier} super={effectivePlan === "super"} size={size + 7} />
               </button>
             ) : (
               <span className="inline-flex shrink-0 items-center">
-                <SubscriptionMedallion tier={tier} super={plan === "super"} size={size + 7} />
+                <SubscriptionMedallion tier={tier} super={effectivePlan === "super"} size={size + 7} />
               </span>
             )}
           </Tooltip>
@@ -78,11 +89,11 @@ export function UserBadges({
         ))}
       </span>
 
-      {showTiers && tier && plan !== "free" && (
+      {showTiers && tier && effectivePlan !== "free" && (
         <SubscriptionBadgeModal
-          plan={plan}
-          tenureMonths={tenureMonths}
-          since={subscribedSince ?? null}
+          plan={effectivePlan}
+          tenureMonths={months}
+          since={since}
           onClose={() => setShowTiers(false)}
         />
       )}

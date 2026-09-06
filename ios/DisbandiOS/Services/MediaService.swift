@@ -35,7 +35,8 @@ private struct GiphyResponse: Codable {
 
 /// Uploads to the same media API the web/desktop apps use and proxies Giphy search.
 enum MediaService {
-    private static let apiBase = AppConfig.mediaAPIURL  // https://api.wsgpolar.me/v1
+    private static let apiBase = AppConfig.mediaAPIURL  // giphy, link previews
+    private static let cdnBase = AppConfig.cdnURL       // uploads and delivery
 
     enum MediaError: LocalizedError {
         case uploadFailed(String)
@@ -47,12 +48,18 @@ enum MediaService {
     /// Uploads image data via multipart/form-data to `/images`, returns the hosted URL.
     static func uploadImage(_ data: Data, filename: String = "upload.jpg",
                             mimeType: String = "image/jpeg") async throws -> MediaUploadResult {
-        let endpoint = apiBase.appendingPathComponent("images")
+        let endpoint = cdnBase.appendingPathComponent("images")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)",
                          forHTTPHeaderField: "Content-Type")
+
+        // The CDN only accepts uploads from a signed-in user, so the bucket
+        // cannot be used as free storage by whoever finds the endpoint.
+        if let token = try? await SupabaseManager.client.auth.session.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         var body = Data()
         body.append("--\(boundary)\r\n")

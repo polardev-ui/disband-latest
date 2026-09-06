@@ -11,8 +11,12 @@ enum AppConfig {
     static let supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM"
 
-    /// Custom media API used for all image/video/file uploads (mirrors NEXT_PUBLIC_MEDIA_API_URL).
+    /// Giphy search and link previews. Still the old service — it answers more
+    /// than uploads, so it does not move with them.
     static let mediaAPIURL = URL(string: "https://api.wsgpolar.me/v1")!
+
+    /// Where uploads go and where images are served from.
+    static let cdnURL = URL(string: "https://cdn.disband.dev/v1")!
 
     /// Public web origin for shareable links / invites.
     static let webAppURL = URL(string: "https://www.disband.dev")!
