@@ -1,4 +1,19 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { IconBounty, IconCrown, IconOG, IconStaff } from "@/components/icons";
+
+/**
+ * Badges that keep their original artwork.
+ *
+ * The four that existed before the badge system was rewritten are the ones
+ * people know by sight, so they render from the components they always used
+ * rather than being redrawn as outlines to match the newer marks.
+ */
+const BADGE_COMPONENTS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
+  owner: IconCrown,
+  staff: IconStaff,
+  og: IconOG,
+  bounty: IconBounty,
+};
 
 /**
  * The glyph for each badge key.
@@ -16,18 +31,14 @@ const S = {
 };
 
 export const BADGE_GLYPHS: Record<string, ReactNode> = {
-  owner: <><path d="M3 17.5 4.8 7.5 9 11.8 12 5.5 15 11.8 19.2 7.5 21 17.5Z" /><path d="M4.6 20.2h14.8" /></>,
-  staff: <><path d="M12 2.5 20 6v6.2c0 4.6-3.3 7.6-8 9.3-4.7-1.7-8-4.7-8-9.3V6Z" /><path d="M12 8.2l1.4 2.9 3.1.4-2.3 2.2.6 3.1-2.8-1.5-2.8 1.5.6-3.1-2.3-2.2 3.1-.4Z" /></>,
   moderator: <><path d="M12 2.5 20 6v6.2c0 4.6-3.3 7.6-8 9.3-4.7-1.7-8-4.7-8-9.3V6Z" /><path d="m8.6 12.1 2.4 2.4 4.4-4.6" /></>,
   partner: <><path d="M12 2.6 14.5 8l5.9.7-4.4 4 1.2 5.8L12 15.6 6.8 18.5 8 12.7l-4.4-4L9.5 8Z" /><path d="M8.6 21.4 12 19.2l3.4 2.2" /></>,
-  og: <><circle cx="12" cy="14.5" r="6" /><path d="M9 9 7 2.6h10L15 9" /><path d="M12 11.6v5.8M10.4 13.2h3.2" /></>,
   early: <><path d="M12 20.5S3.8 15.6 3.8 9.9A4.4 4.4 0 0 1 12 7.4a4.4 4.4 0 0 1 8.2 2.5c0 5.7-8.2 10.6-8.2 10.6Z" /><path d="M19.6 2.4v3.4M17.9 4.1h3.4" /></>,
   anniv: <><path d="M4.2 20.4v-6.2c0-1 .8-1.8 1.8-1.8h12c1 0 1.8.8 1.8 1.8v6.2Z" /><path d="M2.6 20.4h18.8" /><path d="M12 12.4V9M12 6.6c1.2-1.1.6-2.6-.4-3.4.9 1.5-1.4 1.9-.5 3.4" /><path d="M7.6 12.4V9.6M16.4 12.4V9.6" /></>,
   bot_dev: <><rect x="4" y="7.6" width="16" height="12" rx="3.2" /><path d="M12 7.6V4" /><circle cx="9" cy="13.2" r="1.4" fill="currentColor" stroke="none" /><circle cx="15" cy="13.2" r="1.4" fill="currentColor" stroke="none" /><path d="M9.4 16.8h5.2" /></>,
   bot_ver: <><rect x="3.2" y="7.6" width="14" height="11.4" rx="3" /><path d="M10.2 7.6V4.4" /><circle cx="7.6" cy="12.8" r="1.2" fill="currentColor" stroke="none" /><circle cx="12.8" cy="12.8" r="1.2" fill="currentColor" stroke="none" /><path d="m16.4 19.4 2.2 2.2 4-4.6" /></>,
   contrib: <><path d="m8.4 7.4-5 4.9 5 4.9M15.6 7.4l5 4.9-5 4.9" /><path d="m13.6 4.2-3.2 15.8" /></>,
   translate: <><circle cx="12" cy="12" r="9.2" /><path d="M2.8 12h18.4" /><path d="M12 2.8c2.5 2.6 3.8 5.8 3.8 9.2s-1.3 6.6-3.8 9.2c-2.5-2.6-3.8-5.8-3.8-9.2S9.5 5.4 12 2.8Z" /></>,
-  bounty: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" /></>,
   hunter: <><path d="M8.4 5.6a3.6 3.6 0 0 1 7.2 0" /><rect x="7.6" y="7.8" width="8.8" height="11.6" rx="4.4" /><path d="M7.6 11.4H4M7.6 15.6H4.4M16.4 11.4H20M16.4 15.6h3.2" /><path d="m8.6 5-1.8-2M15.4 5l1.8-2" /></>,
   hunter2: <><circle cx="10.4" cy="10.4" r="7.6" /><path d="m15.8 15.8 5.2 5.2" /><rect x="8.3" y="8.2" width="4.2" height="5.6" rx="2.1" /><path d="M8.3 10.1H6.1M8.3 12.6H6.3M12.5 10.1h2.2M12.5 12.6h2" /><path d="m9.1 7.8-.9-1.3M11.7 7.8l.9-1.3" /></>,
   security: <><path d="M12 2.6 19.4 6v6c0 4.4-3.1 7.2-7.4 8.8C7.7 19.2 4.6 16.4 4.6 12V6Z" /><circle cx="12" cy="10.8" r="2.2" /><path d="M12 13v3.4" /></>,
@@ -47,6 +58,9 @@ export const BADGE_GLYPHS: Record<string, ReactNode> = {
 const FALLBACK = <><circle cx="12" cy="12" r="8.6" /><path d="M12 8.4v4.4M12 16.2h.01" /></>;
 
 export function BadgeGlyph({ badgeKey, size = 13 }: { badgeKey: string; size?: number }) {
+  const Original = BADGE_COMPONENTS[badgeKey];
+  if (Original) return <Original size={size} />;
+
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" stroke="currentColor" aria-hidden {...S}>
       {BADGE_GLYPHS[badgeKey] ?? FALLBACK}
