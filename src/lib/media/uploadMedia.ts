@@ -1,7 +1,10 @@
 import type { AttachmentType } from "@/lib/messages";
+import { PUBLIC_ENV } from "@/lib/public-env";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
-const MEDIA_API_URL =
-  process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1";
+// Uploads go to the CDN, which is a different service from the media API that
+// still answers Giphy and link-preview requests.
+const CDN_URL = PUBLIC_ENV.cdnUrl;
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -58,6 +61,11 @@ export async function uploadMedia(
     throw new MediaUploadError(`File is too large (max ${maxUploadBytes / (1024 * 1024)} MB).`);
   }
 
+  // The CDN only accepts uploads from a signed-in user, so the bucket cannot
+  // be used as free storage by anyone who finds the endpoint.
+  const { data } = await getSupabaseClient().auth.getSession();
+  const token = data.session?.access_token ?? null;
+
   return new Promise<MediaUploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
@@ -106,7 +114,8 @@ export async function uploadMedia(
       signal.addEventListener("abort", () => xhr.abort());
     }
 
-    xhr.open("POST", `${MEDIA_API_URL}/images`);
+    xhr.open("POST", `${CDN_URL}/images`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
   });
 }

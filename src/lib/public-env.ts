@@ -9,8 +9,18 @@ export const PUBLIC_ENV = {
   supabaseAnonKey:
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM",
+  /**
+   * Giphy search and link previews. Still the old service.
+   *
+   * Kept separate from image storage on purpose: this base also serves
+   * /giphy/search and the link-preview endpoint, so repointing it at the CDN
+   * would take both of those down with it.
+   */
   mediaApiUrl:
     process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1",
+  /** Where uploads go and where images are served from. */
+  cdnUrl:
+    process.env.NEXT_PUBLIC_CDN_URL ?? "https://cdn.disband.dev/v1",
   githubRepo:
     process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest",
   /**
