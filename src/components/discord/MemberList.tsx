@@ -85,7 +85,7 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
         >
           <span className="truncate">{displayName(p)}</span>
           <BotTag profile={p} size="sm" />
-          <PlatformBadge profile={p} />
+          <PlatformBadge userId={p.id} />
           {m.role === "owner" && (
             <Tooltip label="Owner" side="top" as="span">
               <IconShield size={14} className="shrink-0 text-status-online" />

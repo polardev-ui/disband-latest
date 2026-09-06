@@ -13,9 +13,21 @@ export const PUBLIC_ENV = {
     process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1",
   githubRepo:
     process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest",
-  /** Public web app origin for shareable links (invites, etc.) */
-  webAppUrl:
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://www.disband.dev",
+  /**
+   * Public web app origin for shareable links (invites, etc.).
+   *
+   * This value is baked into metadata at build time (og:image, canonical,
+   * robots sitemap URL), so a build env accidentally pointing at localhost
+   * ships `http://localhost:3000` meta tags to production — Discord embeds and
+   * crawlers then resolve the card image against localhost. Treat any
+   * loopback value as "not configured" and always fall back to the real origin.
+   */
+  webAppUrl: !process.env.NEXT_PUBLIC_APP_URL ||
+    /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/.test(
+      process.env.NEXT_PUBLIC_APP_URL,
+    )
+    ? "https://www.disband.dev"
+    : process.env.NEXT_PUBLIC_APP_URL,
   /** Cloudflare Turnstile site key — website-only forms. */
   turnstileSiteKey:
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "0x4AAAAAADpTEU6IzBC_YVIF",

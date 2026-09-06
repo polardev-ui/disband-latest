@@ -11,6 +11,8 @@ export interface LinkPreview {
 
 const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
 const INVITE_IN_URL_RE = /\/server\/[a-zA-Z0-9]{7}\b/;
+// A gift renders as its own card, so it must not also fetch a page preview.
+const GIFT_IN_URL_RE = /\/gift\/[a-zA-Z0-9]{10}\b/;
 
 const cache = new Map<string, LinkPreview | null>();
 const inflight = new Map<string, Promise<LinkPreview | null>>();
@@ -24,6 +26,7 @@ export function extractPreviewUrls(text: string, max = 3): string[] {
   while ((match = re.exec(text)) !== null) {
     const url = match[0];
     if (seen.has(url)) continue;
+    if (GIFT_IN_URL_RE.test(url)) continue;
     if (INVITE_IN_URL_RE.test(url)) {
       const code = url.match(/\/server\/([a-zA-Z0-9]{7})\b/)?.[1];
       if (code && inviteCodes.has(code)) continue;

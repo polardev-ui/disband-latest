@@ -13,7 +13,10 @@ import {
   Hint,
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
-import { badgeDefsFor } from "@/components/ui/UserBadges";
+import { useBadges } from "@/lib/badge-store";
+import { BadgeGlyph } from "@/lib/badge-icons";
+import { GiftModal } from "@/components/gift/GiftModal";
+import { giftUrl } from "@/lib/gifts";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload } from "@/components/icons";
@@ -87,6 +90,11 @@ type SettingsTab = (typeof TABS)[number]["id"];
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
   const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut } = useApp();
+  // Badges come from the database now, so the list here is whatever has
+  // actually been awarded rather than four hardcoded flags.
+  const myBadges = useBadges(profile?.id);
+  const [gifting, setGifting] = useState(false);
+  const [giftLink, setGiftLink] = useState<string | null>(null);
   const { upload, isUploading } = useMediaUpload();
   const [zoom, setZoom] = useZoom();
   const [tab, setTab] = useState<SettingsTab>("profile");
@@ -622,21 +630,22 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </SettingRow>
                   </SettingsSection>
 
-                  {profile && badgeDefsFor(profile).length > 0 && (
+                  {myBadges.length > 0 && (
                     <SettingsSection
                       title="Badges"
                       description="Awarded by Disband — these can't be changed from here."
                     >
                       <SettingRow label="Your badges" stacked>
                         <div className="flex flex-wrap gap-2">
-                          {badgeDefsFor(profile).map((b) => (
+                          {myBadges.map((b) => (
                             <span
                               key={b.key}
                               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-semibold"
-                              style={{ backgroundColor: b.bg, color: b.color }}
+                              style={{ backgroundColor: `${b.accent}2e`, color: b.accent }}
+                              title={b.description}
                             >
-                              <b.Icon size={14} />
-                              {b.title}
+                              <BadgeGlyph badgeKey={b.key} size={14} />
+                              {b.name}
                             </span>
                           ))}
                         </div>
@@ -990,6 +999,50 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <p className="text-sm text-text-muted">
                     Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
                   </p>
+
+                  {/* Gifting sits with the plans rather than in the composer:
+                      you buy it here and send the link wherever you like. */}
+                  <div className="flex items-center justify-between rounded-lg border border-divider bg-bg-secondary p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-text-normal">Gift a subscription</p>
+                      <p className="text-xs text-text-muted">
+                        One to twelve months, claimable by whoever you send it to.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setGifting(true)}
+                      className="shrink-0 rounded-lg bg-brand px-3 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                    >
+                      Buy a gift
+                    </button>
+                  </div>
+
+                  {giftLink && (
+                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                      <p className="mb-2 text-sm font-semibold text-text-normal">
+                        Your gift is ready — send this link
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          readOnly
+                          value={giftLink}
+                          onFocus={(e) => e.currentTarget.select()}
+                          className="min-w-0 flex-1 rounded-md border border-divider bg-bg-tertiary px-2 py-1.5 text-[13px] text-text-normal"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void navigator.clipboard?.writeText(giftLink)}
+                          className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-text-muted">
+                        Paste it into a DM or a channel and it becomes a claimable card.
+                      </p>
+                    </div>
+                  )}
                   <div className="rounded-lg border border-divider bg-bg-secondary p-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
@@ -1114,6 +1167,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         onClose={() => setShowSubscription(false)}
         userId={profile?.id}
       />
+
+      {gifting && (
+        <GiftModal
+          onClose={() => setGifting(false)}
+          onPurchased={(code) => {
+            setGiftLink(giftUrl(code, window.location.origin));
+            setGifting(false);
+          }}
+        />
+      )}
     </>
   );
 }

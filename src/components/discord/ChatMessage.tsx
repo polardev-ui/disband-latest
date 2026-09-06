@@ -1,6 +1,7 @@
 "use client";
 
 import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
+import { extractGiftCodes } from "@/lib/gifts";
 import { renderMarkdown } from "@/lib/markdown";
 import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
@@ -11,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { BotTag } from "@/components/ui/BotTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
+import { GiftCard } from "@/components/gift/GiftCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageAttachment } from "./MessageAttachment";
 import { MessageReactions } from "./MessageReactions";
@@ -74,8 +76,12 @@ function MessageBody({
   onMentionClick?: (profile: Profile) => void;
 }) {
   const codes = extractInviteCodes(content);
+  const giftCodes = extractGiftCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
-  const textOnly = content.replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "").trim();
+  const textOnly = content
+    .replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "")
+    .replace(/(?:https?:\/\/[^\s]+)?\/gift\/[a-zA-Z0-9]{10}\b/g, "")
+    .trim();
   const emojiOnly = isEmojiOnlyMessage(textOnly);
   const emojiSizeClass = emojiOnly ? emojiOnlySizeClass(textOnly) : "";
   const normalClass = compact ? "text-[15px] leading-[1.25rem]" : "text-[15px] leading-[1.375rem]";
@@ -97,6 +103,9 @@ function MessageBody({
       )}
       {codes.map((code) => (
         <ServerInviteCard key={code} code={code} onLoad={onContentResize} />
+      ))}
+      {giftCodes.map((code) => (
+        <GiftCard key={code} code={code} onLoad={onContentResize} />
       ))}
       {previewUrls.map((url) => (
         <LinkPreviewCard key={url} url={url} onLoad={onContentResize} />
@@ -310,7 +319,7 @@ export function ChatMessage({
             )}
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
             <BotTag profile={author} size="sm" />
-            {author && <PlatformBadge profile={author} />}
+            {author && <PlatformBadge userId={author.id} />}
             <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
             {message.sending && (
               <svg className="h-3 w-3 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none">
