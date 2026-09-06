@@ -27,15 +27,27 @@ export interface AwardedBadge extends BadgeDef {
 }
 
 const cache = new Map<string, AwardedBadge[]>();
-const inflight = new Map<string, Promise<AwardedBadge[]>>();
-const listeners = new Set<() => void>();
+
+/**
+ * Listeners keyed by user.
+ *
+ * A single set meant one person's badges arriving re-rendered every badge row
+ * on screen. On a server with several hundred members that is a few hundred
+ * answers each waking a few hundred components, which showed up as the member
+ * list flickering and the whole app dropping frames.
+ */
+const listeners = new Map<string, Set<() => void>>();
+
+function notify(userId: string) {
+  const set = listeners.get(userId);
+  if (set) for (const fn of set) fn();
+}
 
 let catalogue: Map<string, BadgeDef> | null = null;
 let catalogueLoad: Promise<Map<string, BadgeDef>> | null = null;
 
 let queue = new Set<string>();
 let queueTimer: number | null = null;
-let queueResolvers: Array<() => void> = [];
 
 /** Same ceiling as profile loads: a long `in.(...)` filter is what broke them. */
 const CHUNK = 150;
@@ -58,9 +70,6 @@ async function flush() {
   const ids = [...queue];
   queue = new Set();
   queueTimer = null;
-  const resolvers = queueResolvers;
-  queueResolvers = [];
-
   try {
     const defs = await loadCatalogue();
     const supabase = getSupabaseClient();
@@ -90,50 +99,43 @@ async function flush() {
       }
     }
   } finally {
-    resolvers.forEach((r) => r());
-    listeners.forEach((l) => l());
+    for (const id of ids) notify(id);
   }
 }
 
-function request(userId: string): Promise<AwardedBadge[]> {
-  const existing = inflight.get(userId);
-  if (existing) return existing;
-
-  const p = new Promise<void>((resolve) => {
-    queue.add(userId);
-    queueResolvers.push(resolve);
-    if (queueTimer === null) queueTimer = window.setTimeout(flush, 16);
-  }).then(() => cache.get(userId) ?? []);
-
-  inflight.set(userId, p);
-  void p.finally(() => inflight.delete(userId));
-  return p;
+function request(userId: string): void {
+  queue.add(userId);
+  if (queueTimer === null) queueTimer = window.setTimeout(() => void flush(), 16);
 }
 
 /** Drop a cached answer so the next read refetches — used after an award. */
 export function invalidateBadges(userId: string) {
   cache.delete(userId);
-  listeners.forEach((l) => l());
+  request(userId);
 }
+
+const NONE: AwardedBadge[] = [];
 
 export function useBadges(userId: string | null | undefined): AwardedBadge[] {
   const [badges, setBadges] = useState<AwardedBadge[]>(() =>
-    userId ? cache.get(userId) ?? [] : []);
+    (userId ? cache.get(userId) : undefined) ?? NONE);
 
   useEffect(() => {
-    if (!userId) { setBadges([]); return; }
-    let alive = true;
+    if (!userId) { setBadges(NONE); return; }
 
-    const sync = () => {
-      const hit = cache.get(userId);
-      if (hit && alive) setBadges(hit);
-    };
+    const sync = () => setBadges(cache.get(userId) ?? NONE);
+
+    let set = listeners.get(userId);
+    if (!set) { set = new Set(); listeners.set(userId, set); }
+    set.add(sync);
 
     if (cache.has(userId)) sync();
-    else void request(userId).then((b) => { if (alive) setBadges(b); });
+    else request(userId);
 
-    listeners.add(sync);
-    return () => { alive = false; listeners.delete(sync); };
+    return () => {
+      set.delete(sync);
+      if (set.size === 0) listeners.delete(userId);
+    };
   }, [userId]);
 
   return badges;

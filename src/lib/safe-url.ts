@@ -1,3 +1,5 @@
+import { cdnImage } from "@/lib/media/cdn";
+
 const HTTPS_RE = /^https:\/\//i;
 
 export function isSafeUrl(url: string): boolean {
@@ -27,8 +29,16 @@ export function safeWindowOpen(url: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+/**
+ * The URL to actually load an image from.
+ *
+ * Every image in the app renders through here, which makes it the one place
+ * worth mapping legacy storage URLs onto the CDN. Rows were rewritten in the
+ * database, but URLs also arrive from client caches, older mobile builds and
+ * pasted links, and those never went through that migration.
+ */
 export function safeImageUrl(url: string | undefined | null): string | null {
   if (!url) return null;
   if (!isSafeUrl(url)) return null;
-  return url;
+  return cdnImage(url);
 }

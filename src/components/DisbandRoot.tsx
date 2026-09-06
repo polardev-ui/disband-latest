@@ -9,6 +9,7 @@ import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
+import { MaintenanceNotice } from "@/components/maintenance/MaintenanceNotice";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
 
@@ -68,7 +69,14 @@ export function DisbandRoot() {
               working, so a password reset or an email confirmation is never
               interrupted by an App Store pitch. */}
           <MobileAppPromo />
-          <AppShell />
+          {/* Above the shell so it reaches the login screen too, not only
+              people who are already signed in. */}
+          <div className="flex h-screen flex-col">
+            <MaintenanceNotice />
+            <div className="min-h-0 flex-1">
+              <AppShell />
+            </div>
+          </div>
           <AddAccountOverlay />
         </ContextMenuProvider>
       </AppProvider>

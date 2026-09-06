@@ -39,6 +39,13 @@ export function tierForMonths(months: number): TierDef | null {
   return out;
 }
 
+/** "1 month", "6 months", "1 year", "5 years" — never "1 months". */
+export function tierDuration(t: TierDef): string {
+  if (t.months < 12) return `${t.months} month${t.months === 1 ? "" : "s"}`;
+  const years = t.months / 12;
+  return `${years} year${years === 1 ? "" : "s"}`;
+}
+
 export function nextTier(months: number): TierDef | null {
   return TIERS.find((t) => t.months > months) ?? null;
 }
