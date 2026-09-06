@@ -118,7 +118,7 @@ export function ProfilePreview({
           >
             {name}
           </p>
-          <UserBadges userId={profile.id} />
+          <UserBadges userId={profile.id} variant="full" />
         </div>
 
         {username.trim() && (
