@@ -11,6 +11,7 @@ interface PlatformBadgeProps {
   className?: string;
   size?: number;
   interactive?: boolean;
+  variant?: "inline" | "full";
 }
 
 /**
@@ -22,7 +23,7 @@ interface PlatformBadgeProps {
  * from one object instead of two.
  */
 export function PlatformBadge({
-  userId, plan, className = "", size = 13, interactive = true,
+  userId, plan, className = "", size = 13, interactive = true, variant = "inline",
 }: PlatformBadgeProps) {
   const ent = useEntitlement(userId);
   const effective = plan && plan !== "free" ? plan : ent.plan;
@@ -36,6 +37,7 @@ export function PlatformBadge({
       size={size}
       className={className}
       interactive={interactive}
+      variant={variant}
     />
   );
 }

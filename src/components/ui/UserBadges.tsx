@@ -18,6 +18,17 @@ import type { SubscriptionPlan } from "@/lib/subscription";
  * them, most awarded automatically, could work.
  */
 
+/**
+ * The badges worth showing beside a name in a dense list.
+ *
+ * These say who someone is — staff, a partner, an early member — which is the
+ * only thing a reader needs from a badge while scanning a conversation. The
+ * rest are achievements, and twenty-five of them next to every message pushed
+ * the message itself off the line. They belong on the profile, where there is
+ * room and where someone has gone looking for them.
+ */
+const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "partner", "og"]);
+
 export interface UserBadgesProps {
   userId: string | null | undefined;
   /** Overrides the looked-up plan when the caller already knows it. */
@@ -29,13 +40,21 @@ export interface UserBadgesProps {
   className?: string;
   /** Whether the subscription medallion opens the tier breakdown. */
   interactive?: boolean;
+  /**
+   * "inline" is for lists — messages, members — and shows only the badges
+   * that identify someone, on a single line. "full" is the profile: every
+   * badge, wrapping onto as many rows as it needs.
+   */
+  variant?: "inline" | "full";
 }
 
 export function UserBadges({
   userId, plan, tenureMonths, subscribedSince,
-  size = 13, className = "", interactive = true,
+  size = 13, className = "", interactive = true, variant = "inline",
 }: UserBadgesProps) {
-  const badges = useBadges(userId);
+  const all = useBadges(userId);
+  const full = variant === "full";
+  const badges = full ? all : all.filter((b) => IDENTITY_BADGES.has(b.key));
   // Resolved here rather than left to each caller. A caller that passed a plan
   // but no tenure got a tier of zero months, which is no tier at all — so the
   // subscription badge silently vanished from the profile views while still
@@ -48,12 +67,19 @@ export function UserBadges({
   const months = tenureMonths ?? ent.months;
   const since = subscribedSince ?? ent.since;
 
-  const tier: TierDef | null = effectivePlan === "free" ? null : tierForMonths(months);
+  const tier: TierDef | null =
+    !full || effectivePlan === "free" ? null : tierForMonths(months);
   if (badges.length === 0 && !tier) return null;
 
   return (
     <>
-      <span className={`inline-flex shrink-0 items-center gap-1 ${className}`}>
+      <span
+        className={
+          full
+            ? `flex flex-wrap items-center gap-1.5 ${className}`
+            : `inline-flex shrink-0 items-center gap-1 ${className}`
+        }
+      >
         {tier && (
           <Tooltip
             as="span"
