@@ -136,7 +136,7 @@ export function ImageLightbox({
                   {isOwn && (
                     <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>
                   )}
-                  <PlatformBadge profile={author} />
+                  <PlatformBadge userId={author?.id} />
                   {createdAt && (
                     <time className="text-xs text-text-muted">{formatMessageTime(createdAt)}</time>
                   )}
