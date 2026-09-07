@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
+import { EMAIL_NOT_CONFIRMED } from "@/lib/authErrors";
 import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { Logo } from "@/components/ui/Logo";
@@ -50,6 +52,14 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The account exists but its address was never confirmed.
+   *
+   * `signIn` returns copy rather than a code, so this compares against the
+   * exact string the mapper produces instead of a phrase that happens to
+   * appear in it today.
+   */
+  const needsConfirmation = error === EMAIL_NOT_CONFIRMED;
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -354,6 +364,10 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                   {error}
                 </p>
               )}
+
+              {/* Being told to check an inbox is useless once the link in it
+                  has expired, which is exactly when this error appears. */}
+              {needsConfirmation && <ResendConfirmation defaultEmail={email} lockEmail />}
 
               <button
                 type="submit"

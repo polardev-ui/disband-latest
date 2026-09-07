@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { Logo } from "@/components/ui/Logo";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { recoverSessionFromUrl } from "@/lib/recover-session-from-url";
+import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
 
 type Phase = "verifying" | "verified" | "failed";
 
@@ -128,9 +129,18 @@ function Verification() {
               {hadToken ? "We couldn’t verify that link" : "Nothing to verify"}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-text-muted">{error}</p>
+
+            {/* An expired link used to end here, with "back to log in" as the
+                only way out — and logging in refuses an unconfirmed account.
+                The address was taken, so signing up again was not a way out
+                either: the account was simply unreachable by its owner. */}
+            <div className="mt-6">
+              <ResendConfirmation defaultEmail={email ?? ""} />
+            </div>
+
             <Link
               href="/login"
-              className="mt-6 block w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+              className="mt-3 block w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
             >
               Back to log in
             </Link>

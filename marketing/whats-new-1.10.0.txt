@@ -1,0 +1,21 @@
+Profile badges, gifting, and a much faster member list.
+
+BADGES
+• Twenty-five profile badges, awarded for what you actually do on Disband — running a server that grows past 100 members, registering a bot, uploading emoji, reporting a bug that gets confirmed, or simply sticking around for a year.
+• Most are awarded automatically the moment you earn them.
+• Badges appear on profiles, with the marks that identify someone — staff, moderators, partners — beside their name in conversations.
+
+SUBSCRIPTIONS
+• Basic and Super now show as a badge that changes colour the longer you have been subscribed, from Bronze at one month through to Opal at ten years.
+• Tap the badge to see every tier, which one you have reached, and how far the next one is.
+
+GIFTING
+• Subscriptions can be gifted. A gift arrives in a conversation as a card, and the first person to claim it gets it.
+• Claiming launches your new plan with a rocket and lights up everything it unlocks.
+
+FIXES
+• Servers failed to load for anyone in a large server. They load again, and the member list arrives in a single request instead of hundreds.
+• @mentions are highlighted and tappable, and open a profile card for whoever was mentioned.
+• A reply to your message, or a mention of you, is marked so it stands out from the rest of the conversation.
+• Server owners and moderators can delete any message, not only their own.
+• Images and attachments are served from a new content network, so avatars and photos load noticeably faster.

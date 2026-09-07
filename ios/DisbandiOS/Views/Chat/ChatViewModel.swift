@@ -133,6 +133,57 @@ final class ChatViewModel {
                        attachment: attachment, replyToId: replyToId, authorId: authorId)
     }
 
+    /**
+     Uploads a file and sends it, showing the upload in the conversation.
+
+     The upload used to happen behind a spinner on the composer, so the message
+     appeared only once it had finished — on a slow connection a large video
+     looked like nothing was happening at all. A placeholder row goes in first
+     and tracks the bytes, then becomes the real message.
+     */
+    func uploadAndSendAttachment(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        type: AttachmentType,
+        caption: String = "",
+        replyToId: String? = nil,
+        authorId: String,
+    ) async {
+        let placeholderId = "uploading-\(UUID().uuidString)"
+        messages.append(DisplayMessage(
+            id: placeholderId, authorId: authorId, author: currentUserProfile,
+            content: caption.trimmingCharacters(in: .whitespacesAndNewlines),
+            attachmentUrl: nil, attachmentType: type,
+            attachmentName: filename, attachmentSize: data.count,
+            replyToId: replyToId,
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            editedAt: nil, pending: true, uploadProgress: 0,
+        ))
+
+        do {
+            let result = try await MediaService.uploadImage(
+                data, filename: filename, mimeType: mimeType,
+                onProgress: { [weak self] fraction in
+                    Task { @MainActor in
+                        guard let self,
+                              let index = self.messages.firstIndex(where: { $0.id == placeholderId })
+                        else { return }
+                        self.messages[index].uploadProgress = fraction
+                    }
+                },
+            )
+            messages.removeAll { $0.id == placeholderId }
+            await sendAttachment(
+                OutgoingAttachment(url: result.url, type: type.rawValue, key: result.key),
+                caption: caption, replyToId: replyToId, authorId: authorId,
+            )
+        } catch {
+            messages.removeAll { $0.id == placeholderId }
+            loadError = error.localizedDescription
+        }
+    }
+
     private func dispatch(content: String, attachment: OutgoingAttachment?,
                           replyToId: String?, authorId: String) async {
         // Optimistic row — appears immediately in gray ("sending").
@@ -205,15 +256,19 @@ final class ChatViewModel {
     }
 
     private func summarize(_ all: [MessageReaction], messageId: String) -> [ReactionSummary] {
-        var map: [String: (count: Int, reacted: Bool)] = [:]
+        var map: [String: (count: Int, reacted: Bool, userIds: [String])] = [:]
         for r in all where r.messageId == messageId {
-            var e = map[r.emoji] ?? (0, false)
+            var e = map[r.emoji] ?? (0, false, [])
             e.count += 1
+            e.userIds.append(r.userId)
             if r.userId == currentUserId { e.reacted = true }
             map[r.emoji] = e
         }
-        return map.map { ReactionSummary(emoji: $0.key, count: $0.value.count, reacted: $0.value.reacted) }
-            .sorted { $0.count > $1.count }
+        return map.map {
+            ReactionSummary(emoji: $0.key, count: $0.value.count,
+                            reacted: $0.value.reacted, userIds: $0.value.userIds)
+        }
+        .sorted { $0.count > $1.count }
     }
 
     private func subscribeReactions() async {

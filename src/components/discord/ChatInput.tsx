@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
@@ -88,6 +89,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [windowDrag, setWindowDrag] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [emojiIdx, setEmojiIdx] = useState(0);
@@ -245,6 +247,66 @@ export function ChatInput({
   const removeFile = useCallback((id: string) => {
     remove(id);
   }, [remove]);
+
+  /**
+   * Dropping a file anywhere on the window attaches it.
+   *
+   * Dropping only onto the composer meant aiming at a 40px strip at the bottom
+   * of the window; anywhere else the browser navigated away from the app to
+   * open the file, which loses whatever was being typed. The listeners live
+   * here rather than in a wrapper because the mounted composer *is* the place
+   * a file would go — whichever conversation is open owns the drop.
+   */
+  useEffect(() => {
+    // dragenter/dragleave fire for every element the pointer crosses, so the
+    // overlay follows a depth count rather than the last event seen.
+    let depth = 0;
+
+    const hasFiles = (e: DragEvent) =>
+      Array.from(e.dataTransfer?.types ?? []).includes("Files");
+
+    const visible = () => {
+      const el = textareaRef.current;
+      return !!el && el.getClientRects().length > 0;
+    };
+
+    const onEnter = (e: DragEvent) => {
+      if (!hasFiles(e) || !visible()) return;
+      depth += 1;
+      setWindowDrag(true);
+    };
+    const onOver = (e: DragEvent) => {
+      if (!hasFiles(e) || !visible()) return;
+      // Without this the browser opens the file instead of handing it over.
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setWindowDrag(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      depth = 0;
+      setWindowDrag(false);
+      if (!hasFiles(e) || !visible()) return;
+      e.preventDefault();
+      const files = e.dataTransfer?.files;
+      if (files?.length) handleFiles(files);
+      textareaRef.current?.focus();
+    };
+
+    window.addEventListener("dragenter", onEnter);
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onEnter);
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [handleFiles]);
 
   function insertMention(item: MentionItem) {
     if (!mentionCtx || !textareaRef.current) return;
@@ -412,6 +474,22 @@ export function ChatInput({
 
   return (
     <div className="relative shrink-0 px-4 pb-6">
+      {windowDrag
+        && createPortal(
+          <div className="pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm">
+            <div className="flex w-full max-w-lg flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand/70 bg-bg-secondary/95 px-10 py-12 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/15 text-brand">
+                <IconPlus size={30} />
+              </span>
+              <p className="text-lg font-semibold text-text-normal">Drop to attach</p>
+              <p className="text-sm text-text-muted">
+                Anything you drop here is added to your message before you send it.
+              </p>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       {showMentions && mentionItems.length > 0 && (
         <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
           {(() => {

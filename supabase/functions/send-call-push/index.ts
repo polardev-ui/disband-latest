@@ -1,7 +1,8 @@
 // Supabase Edge Function: send-call-push
 // Sends an incoming-call push to a user's devices so a Disband call can ring
 // even when the app is backgrounded or fully killed.
-//   - iOS: PushKit "VoIP" push (lock screen, system swipe-to-answer).
+//   - iOS: PushKit "VoIP" push (lock screen, system swipe-to-answer), with a
+//     plain alert push as the fallback for devices that never registered one.
 //   - Android: FCM v1 data push → the app's MessagingService routes it to the
 //     call manager, which rings with the full in-app call UI.
 //
@@ -52,6 +53,20 @@ function corsHeaders(req: Request): Record<string, string> {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
+}
+
+/**
+ * Every response carries the CORS headers.
+ *
+ * The success response did not, so a push that was sent perfectly well was
+ * discarded by the browser before the caller ever saw it — which reads exactly
+ * like the push never happening.
+ */
+function json(body: unknown, status: number, cors: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...cors },
+  });
 }
 
 async function apnsJwt(): Promise<string> {
@@ -166,8 +181,19 @@ Deno.serve(async (req) => {
     return new Response("ok", { status: 200, headers: cors });
   }
 
-  const { calleeId, callId, callerName, from } = await req.json();
-  if (!calleeId || !callId) return new Response("Bad request", { status: 400, headers: cors });
+  // A body that is not JSON threw here, and the runtime's own 500 carries no
+  // CORS headers — so the browser reported a CORS failure for what was really
+  // a bad request, and the actual cause was invisible.
+  let body: {
+    calleeId?: string; callId?: string; callerName?: string; from?: string;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Expected a JSON body." }, 400, cors);
+  }
+  const { calleeId, callId, callerName, from } = body;
+  if (!calleeId || !callId) return json({ error: "calleeId and callId are required." }, 400, cors);
 
   // Identify the caller: either a trusted server/webhook or the user whose
   // access token signs this request. `from` is never trusted from the client
@@ -181,23 +207,44 @@ Deno.serve(async (req) => {
     callerId = from ?? "server";
   } else {
     const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    if (!token) return new Response("Unauthorized", { status: 401, headers: cors });
+    if (!token) return json({ error: "Sign in to place a call." }, 401, cors);
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
-      return new Response(`Unauthorized: ${JSON.stringify(error)}`, { status: 401, headers: cors });
+      return json({ error: "Session expired — sign in again." }, 401, cors);
     }
     callerId = user.id;
-    if (from && from !== user.id) return new Response("Forbidden", { status: 403, headers: cors });
+    if (from && from !== user.id) return json({ error: "Forbidden" }, 403, cors);
   }
 
-  const { data: iosTokens } = await supabase
+  const { data: voipTokens } = await supabase
     .from("device_tokens").select("token")
     .eq("user_id", calleeId).eq("platform", "ios-voip");
+  const { data: alertTokens } = await supabase
+    .from("device_tokens").select("token")
+    .eq("user_id", calleeId).eq("platform", "ios");
   const { data: androidTokens } = await supabase
     .from("device_tokens").select("token")
     .eq("user_id", calleeId).eq("platform", "android");
-  const registered = (iosTokens?.length ?? 0) + (androidTokens?.length ?? 0);
-  if (!registered) return new Response(JSON.stringify({ sent: 0, registered: 0, statuses: [] }), { status: 200, headers: cors });
+
+  /**
+   * A PushKit token is the good path — it rings through CallKit even from a
+   * killed app — but most installs do not have one: it is registered only by
+   * builds new enough to ask for it, so the great majority of devices had a
+   * normal `ios` token and nothing else, and this function answered "nobody to
+   * ring" and returned silently. An alert push is a worse ring than CallKit,
+   * but it is a ring, so it is what those devices get.
+   */
+  const iosTokens = voipTokens ?? [];
+  const voipTokenSet = new Set(iosTokens.map((t) => t.token));
+  const fallbackTokens = (alertTokens ?? []).filter((t) => !voipTokenSet.has(t.token));
+
+  const registered = iosTokens.length + fallbackTokens.length + (androidTokens?.length ?? 0);
+  if (!registered) {
+    // Logged, because "the callee has no device registered" and "the push
+    // failed" look identical from the caller and are fixed differently.
+    console.log("send-call-push: no devices", { calleeId, caller: callerId });
+    return json({ sent: 0, registered: 0, statuses: [] }, 200, cors);
+  }
 
   let sent = 0;
   const statuses: number[] = [];
@@ -208,23 +255,29 @@ Deno.serve(async (req) => {
     type: "voice",
   };
 
-  // iOS: PushKit VoIP push.
-  if (iosTokens?.length) {
+  // iOS: PushKit VoIP push, then a plain alert for devices without one.
+  if (iosTokens.length || fallbackTokens.length) {
     const jwt = await apnsJwt();
     const host = Deno.env.get("APNS_HOST") ?? "api.push.apple.com";
     const bundleId = Deno.env.get("APNS_BUNDLE_ID")!;
-    // VoIP pushes use the `.voip` topic; a normal .p8 APNs key signs them too.
-    const topic = `${bundleId}.voip`;
-    const payload = JSON.stringify(dataPayload);
 
-    await Promise.all((iosTokens ?? []).map(async ({ token }) => {
+    const push = async (
+      token: string,
+      topic: string,
+      pushType: "voip" | "alert",
+      payload: string,
+    ) => {
       const res = await fetch(`https://${host}/3/device/${token}`, {
         method: "POST",
         headers: {
           "authorization": `bearer ${jwt}`,
           "apns-topic": topic,
-          "apns-push-type": "voip",
+          "apns-push-type": pushType,
           "apns-priority": "10",
+          // A ring is worthless once the call has stopped ringing.
+          ...(pushType === "alert"
+            ? { "apns-expiration": String(Math.floor(Date.now() / 1000) + 45) }
+            : {}),
         },
         body: payload,
       });
@@ -233,8 +286,31 @@ Deno.serve(async (req) => {
       // 410 = token no longer valid → clean it up.
       else if (res.status === 410) {
         await supabase.from("device_tokens").delete().eq("token", token);
+      } else {
+        console.log("APNs error", pushType, res.status, await res.text());
       }
-    }));
+    };
+
+    // VoIP pushes use the `.voip` topic; a normal .p8 APNs key signs them too.
+    const voipPayload = JSON.stringify(dataPayload);
+    // The alert carries the same data, so tapping it opens the same call.
+    const alertPayload = JSON.stringify({
+      aps: {
+        alert: {
+          title: callerName ?? "Disband",
+          body: "Incoming call",
+        },
+        sound: "default",
+        "interruption-level": "time-sensitive",
+        "thread-id": `call:${callId}`,
+      },
+      ...dataPayload,
+    });
+
+    await Promise.all([
+      ...iosTokens.map(({ token }) => push(token, `${bundleId}.voip`, "voip", voipPayload)),
+      ...fallbackTokens.map(({ token }) => push(token, bundleId, "alert", alertPayload)),
+    ]);
   }
 
   // Android: FCM v1 data push (data keys must be strings).
@@ -255,9 +331,11 @@ Deno.serve(async (req) => {
     }
   }
 
-  console.log("send-call-push result", { calleeId, caller: callerId, registered, sent, statuses });
-
-  return new Response(JSON.stringify({ sent, registered, statuses }), {
-    status: 200, headers: { "Content-Type": "application/json" },
+  console.log("send-call-push result", {
+    calleeId, caller: callerId, registered, sent, statuses,
+    voip: iosTokens.length, alertFallback: fallbackTokens.length,
+    android: androidTokens?.length ?? 0,
   });
+
+  return json({ sent, registered, statuses }, 200, cors);
 });

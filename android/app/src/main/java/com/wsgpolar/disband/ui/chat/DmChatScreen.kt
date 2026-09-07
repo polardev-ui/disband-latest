@@ -107,5 +107,7 @@ private fun DmMessage.toRow(): ChatRow = ChatRow(
     author = author,
     content = content,
     attachmentType = attachmentType,
+    attachmentName = attachmentName,
+    attachmentSize = attachmentSize,
     createdAt = createdAt,
 )

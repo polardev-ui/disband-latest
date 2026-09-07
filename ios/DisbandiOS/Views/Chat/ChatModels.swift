@@ -9,17 +9,25 @@ struct DisplayMessage: Identifiable, Hashable {
     var content: String
     var attachmentUrl: String?
     var attachmentType: AttachmentType?
+    /// Original filename and byte size, for the file card and the upload row.
+    var attachmentName: String? = nil
+    var attachmentSize: Int? = nil
     var replyToId: String?
     var createdAt: String
     var editedAt: String?
     /// True while an optimistic message is still being confirmed by the server.
     var pending: Bool = false
+    /// 0...1 while the attachment is still uploading, nil once it has landed.
+    var uploadProgress: Double? = nil
     /// User ids @mentioned here. Only channel messages carry these.
     var mentions: [String]? = nil
 
     init(id: String, authorId: String, author: Profile?, content: String,
-         attachmentUrl: String?, attachmentType: AttachmentType?, replyToId: String?,
+         attachmentUrl: String?, attachmentType: AttachmentType?,
+         attachmentName: String? = nil, attachmentSize: Int? = nil,
+         replyToId: String?,
          createdAt: String, editedAt: String?, pending: Bool = false,
+         uploadProgress: Double? = nil,
          mentions: [String]? = nil) {
         self.id = id
         self.authorId = authorId
@@ -27,27 +35,33 @@ struct DisplayMessage: Identifiable, Hashable {
         self.content = content
         self.attachmentUrl = attachmentUrl
         self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+        self.attachmentSize = attachmentSize
         self.replyToId = replyToId
         self.createdAt = createdAt
         self.editedAt = editedAt
         self.pending = pending
+        self.uploadProgress = uploadProgress
         self.mentions = mentions
     }
 
     init(_ m: Message) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
+                  attachmentName: m.attachmentName, attachmentSize: m.attachmentSize,
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt,
                   mentions: m.mentions)
     }
     init(_ m: DmMessage) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
+                  attachmentName: m.attachmentName, attachmentSize: m.attachmentSize,
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt)
     }
     init(_ m: GroupMessage) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
+                  attachmentName: m.attachmentName, attachmentSize: m.attachmentSize,
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt)
     }
 }

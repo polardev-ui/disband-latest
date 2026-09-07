@@ -277,6 +277,9 @@ final class CallManager {
         activePeer = peer
         phase = .outgoing
         callSignaled = false
+        // Registered with the system now, not on connect: swiping up during
+        // the ring would otherwise suspend the app before the call is up.
+        CallKitProvider.shared.startActiveCall(id: callId, title: peer.name)
         armRingWatchdog()
         startCallingTone()
         await send(to: peer.id,
@@ -323,6 +326,8 @@ final class CallManager {
         phase = .active
         cancelRingWatchdog()
         CallKitProvider.shared.markCallConnected(for: incoming)
+        CallKitProvider.shared.startActiveCall(
+            id: incoming.callId, title: activePeer?.name ?? incoming.callerName)
         self.incoming = nil
         connectedAt = Date()
         CallSounds.shared.playConnected()
@@ -360,6 +365,7 @@ final class CallManager {
 
     func endCall() async {
         stopRingtone()
+        if let id = activeCallId { CallKitProvider.shared.endActiveCall(id: id) }
         if let peerId = activePeerId, let uid = app.currentUserId {
             if phase == .outgoing {
                 await send(to: peerId,
@@ -717,6 +723,11 @@ final class CallManager {
         signalChannel = nil
         phase = .idle
         cancelRingWatchdog()
+        // Every way a call ends comes through here — including the far side
+        // hanging up — so this is where the system call is released. Leaving
+        // it registered keeps a dead call in the switcher and the audio
+        // session held open.
+        if let id = activeCallId { CallKitProvider.shared.endActiveCall(id: id) }
         if let incoming { CallKitProvider.shared.dismissIncomingCall(for: incoming) }
         incoming = nil
         activePeer = nil

@@ -45,9 +45,19 @@ enum MediaService {
         }
     }
 
-    /// Uploads image data via multipart/form-data to `/images`, returns the hosted URL.
+    /**
+     Uploads data via multipart/form-data to `/images`, returns the hosted URL.
+
+     `onProgress` receives 0...1 as the bytes go out. Without it the app could
+     only show a spinner, which says a file is uploading but not whether it is
+     nearly done or barely started — the difference that matters on a phone
+     sending a video over a weak connection.
+     */
     static func uploadImage(_ data: Data, filename: String = "upload.jpg",
-                            mimeType: String = "image/jpeg") async throws -> MediaUploadResult {
+                            mimeType: String = "image/jpeg",
+                            onProgress: (@Sendable (Double) -> Void)? = nil)
+        async throws -> MediaUploadResult
+    {
         let endpoint = cdnBase.appendingPathComponent("images")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -68,7 +78,14 @@ enum MediaService {
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n")
 
-        let (respData, response) = try await URLSession.shared.upload(for: request, from: body)
+        let (respData, response): (Data, URLResponse)
+        if let onProgress {
+            (respData, response) = try await UploadProgressReporter.upload(
+                request: request, body: body, onProgress: onProgress,
+            )
+        } else {
+            (respData, response) = try await URLSession.shared.upload(for: request, from: body)
+        }
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw MediaError.uploadFailed("Upload failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))")
         }
@@ -92,6 +109,40 @@ enum MediaService {
         let (data, _) = try await URLSession.shared.data(from: comps.url!)
         let decoded = try JSONDecoder().decode(GiphyResponse.self, from: data)
         return decoded.results ?? decoded.data ?? []
+    }
+}
+
+/**
+ Runs one upload and reports how much of it has gone out.
+
+ URLSession only reports upload progress through a delegate, and the delegate
+ has to outlive the call, so it owns its own session and holds itself until the
+ task finishes.
+ */
+private final class UploadProgressReporter: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let onProgress: @Sendable (Double) -> Void
+
+    private init(onProgress: @escaping @Sendable (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    static func upload(
+        request: URLRequest,
+        body: Data,
+        onProgress: @escaping @Sendable (Double) -> Void,
+    ) async throws -> (Data, URLResponse) {
+        let reporter = UploadProgressReporter(onProgress: onProgress)
+        let session = URLSession(configuration: .default, delegate: reporter, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        return try await session.upload(for: request, from: body)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    didSendBodyData bytesSent: Int64,
+                    totalBytesSent: Int64,
+                    totalBytesExpectedToSend: Int64) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        onProgress(Double(totalBytesSent) / Double(totalBytesExpectedToSend))
     }
 }
 

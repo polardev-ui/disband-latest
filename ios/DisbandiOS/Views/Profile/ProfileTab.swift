@@ -129,16 +129,19 @@ struct ProfileTab: View {
                 .padding(.top, -40)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(profile?.name ?? "Loading…")
-                            .font(.title2.bold())
-                            .foregroundStyle(Brand.textPrimary)
-                            .lineLimit(1)
-                        if let profile { UserBadgesView(profile: profile, size: 15) }
-                    }
+                    Text(profile?.name ?? "Loading…")
+                        .font(.title2.bold())
+                        .foregroundStyle(Brand.textPrimary)
+                        .lineLimit(1)
                     Text("@\(profile?.handle ?? "user")")
                         .font(.subheadline)
                         .foregroundStyle(Brand.textMuted)
+                    // Below the name, so a full set of badges has the width to
+                    // wrap into instead of whatever the name left over.
+                    if let profile {
+                        UserBadgesView(profile: profile, size: 15)
+                            .padding(.top, 4)
+                    }
                 }
             }
             .padding(.horizontal, 16)
