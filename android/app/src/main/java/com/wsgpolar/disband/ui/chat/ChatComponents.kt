@@ -55,7 +55,24 @@ data class ChatRow(
     val content: String,
     val attachmentType: AttachmentType?,
     val createdAt: String,
+    /** Original filename and byte size, so a file is not just "Attachment". */
+    val attachmentName: String? = null,
+    val attachmentSize: Int? = null,
 )
+
+/** Human-readable byte counts, matching the other clients. */
+internal fun formatFileSize(bytes: Int?): String? {
+    if (bytes == null || bytes <= 0) return null
+    val units = listOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var unit = 0
+    while (value >= 1024 && unit < units.lastIndex) {
+        value /= 1024
+        unit++
+    }
+    return if (value >= 10 || unit == 0) "${value.toInt()} ${units[unit]}"
+    else String.format("%.1f %s", value, units[unit])
+}
 
 private fun ChatRow.isMine(ownUserId: String?): Boolean = ownUserId != null && author?.id == ownUserId
 
@@ -220,18 +237,27 @@ private fun MessageBubble(row: ChatRow, isMine: Boolean, showName: Boolean, pale
                     )
                 }
                 row.attachmentType?.let { type ->
-                    val label = when (type) {
-                        AttachmentType.Image, AttachmentType.Gif -> "Photo"
-                        AttachmentType.Video -> "Video"
-                        else -> "Attachment"
-                    }
+                    // The filename and size, not the word "Attachment" — a save
+                    // file, a document and a zip all read the same without them.
+                    val label = row.attachmentName?.takeIf { it.isNotBlank() }
+                        ?: when (type) {
+                            AttachmentType.Image, AttachmentType.Gif -> "Photo"
+                            AttachmentType.Video -> "Video"
+                            else -> "File"
+                        }
+                    val tint = if (isMine) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f)
+                    else palette.textMuted
                     Text(
                         label,
-                        color = if (isMine) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f)
-                        else palette.textMuted,
+                        color = tint,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    formatFileSize(row.attachmentSize)?.let { size ->
+                        Text(size, color = tint.copy(alpha = 0.7f), fontSize = 11.sp)
+                    }
                 }
             }
             Text(

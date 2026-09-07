@@ -7,6 +7,7 @@ import { AuthScreen } from "@/components/auth/AuthScreen";
 import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
 import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
+import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
 import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { MaintenanceNotice } from "@/components/maintenance/MaintenanceNotice";
@@ -54,7 +55,11 @@ function AppShell() {
   return (
     <>
       <InviteBootstrap />
-      <DiscordApp />
+      {/* Above the app, so being in a voice channel survives navigating to
+          another one — the connection is no longer tied to the view. */}
+      <VoiceSessionProvider>
+        <DiscordApp />
+      </VoiceSessionProvider>
     </>
   );
 }

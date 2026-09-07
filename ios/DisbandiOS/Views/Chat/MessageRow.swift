@@ -23,8 +23,20 @@ struct MessageRow: View {
     var onToggleReaction: (String) -> Void = { _ in }
 
     @State private var dragOffset: CGFloat = 0
+    /// The image or video opened full-screen from this row, if any.
+    @State private var viewingMedia: ViewedMedia?
+    /// The reaction whose reactor list is open, if any.
+    @State private var showingReactorsFor: ReactedEmoji?
 
     private var authorName: String { message.author?.name ?? "Unknown" }
+
+    /// The stored filename, or the last path component when one was never
+    /// recorded — anything but a bare "Attachment".
+    private func attachmentDisplayName(for url: URL) -> String {
+        if let name = message.attachmentName, !name.isEmpty { return name }
+        let last = url.lastPathComponent
+        return last.isEmpty ? "File" : last
+    }
 
     /// True when this message is aimed at the reader: it replies to one of
     /// their messages, or mentions them.
@@ -60,6 +72,13 @@ struct MessageRow: View {
                         }
                     }
                 }
+        }
+        .fullScreenCover(item: $viewingMedia) { media in
+            MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName)
+        }
+        .sheet(item: $showingReactorsFor) { picked in
+            ReactionDetailSheet(reactions: reactions, selected: picked.id)
+                .presentationDetents([.medium, .large])
         }
     }
 
@@ -155,20 +174,25 @@ struct MessageRow: View {
     // MARK: - Reaction chips
 
     private var reactionChips: some View {
+        // Bigger than they were: at caption size the emoji was smaller than the
+        // text around it and the chip was an awkward tap target.
         FlowLayout(spacing: 6) {
             ForEach(reactions) { r in
                 Button { onToggleReaction(r.emoji) } label: {
-                    HStack(spacing: 4) {
-                        Text(r.emoji).font(.caption)
-                        Text("\(r.count)").font(.caption2.weight(.semibold))
+                    HStack(spacing: 5) {
+                        Text(r.emoji).font(.system(size: 16))
+                        Text("\(r.count)").font(.footnote.weight(.semibold))
                             .foregroundStyle(r.reacted ? Brand.accent : Brand.textSecondary)
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .padding(.horizontal, 9).padding(.vertical, 5)
                     .background(r.reacted ? Brand.accent.opacity(0.2) : Brand.elevated,
                                 in: .capsule)
                     .overlay(Capsule().stroke(Brand.accent, lineWidth: r.reacted ? 1 : 0))
                 }
                 .buttonStyle(.plain)
+                // No hover on a phone, so "who reacted" is a press and hold.
+                .onLongPressGesture { showingReactorsFor = ReactedEmoji(id: r.emoji) }
+                .accessibilityHint("Double tap to react, press and hold to see who reacted")
             }
         }
         .padding(.top, 4)
@@ -192,58 +216,76 @@ struct MessageRow: View {
     // MARK: - Attachment
 
     @ViewBuilder private var attachment: some View {
-        if let urlString = message.attachmentUrl, let url = URL(string: urlString) {
+        // Still uploading: show the upload, not a finished-looking attachment.
+        if let progress = message.uploadProgress {
+            AttachmentUploadCard(
+                name: message.attachmentName ?? "File",
+                size: message.attachmentSize,
+                type: message.attachmentType,
+                progress: progress,
+            )
+        } else if let urlString = message.attachmentUrl, let url = URL(string: urlString) {
             switch message.attachmentType {
             case .image, .gif:
-                RemoteImage(url: urlString, contentMode: .fit) {
-                    RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
-                        .frame(height: 160)
-                        .overlay(ProgressView().tint(Brand.textMuted))
+                Button { viewingMedia = ViewedMedia(url: url, kind: .image) } label: {
+                    RemoteImage(url: urlString, contentMode: .fit) {
+                        RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
+                            .frame(height: 160)
+                            .overlay(ProgressView().tint(Brand.textMuted))
+                    }
+                    .frame(maxWidth: 260, maxHeight: 280)
+                    .clipShape(.rect(cornerRadius: 10))
                 }
-                .frame(maxWidth: 260, maxHeight: 280)
-                .clipShape(.rect(cornerRadius: 10))
+                .buttonStyle(.plain)
                 .padding(.top, 4)
+                .accessibilityLabel("Open image")
+
             case .video:
-                Link(destination: url) {
-                    Label("View video", systemImage: "play.rectangle.fill").font(.subheadline)
-                }.padding(.top, 4)
+                // Opened in the app rather than handed to Safari, so it can be
+                // scrubbed, zoomed and saved without leaving the conversation.
+                Button { viewingMedia = ViewedMedia(url: url, kind: .video) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(Brand.accent)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(message.attachmentName ?? "Video")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Brand.textPrimary)
+                                .lineLimit(1)
+                            if let size = FileSizeFormat.string(message.attachmentSize) {
+                                Text(size).font(.caption).foregroundStyle(Brand.textMuted)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                    }
+                    .padding(10)
+                    .background(Brand.surface, in: .rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Brand.elevated, lineWidth: 1))
+                    .frame(maxWidth: 300, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+
             default:
-                Link(destination: url) {
-                    Label("Attachment", systemImage: "doc.fill").font(.subheadline)
-                }.padding(.top, 4)
+                AttachmentFileCard(
+                    url: url,
+                    name: attachmentDisplayName(for: url),
+                    size: message.attachmentSize,
+                )
             }
         }
     }
 }
 
-/// Simple wrapping HStack for reaction chips.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
+/// The emoji whose reactor list is open. A bare String cannot be a sheet item.
+struct ReactedEmoji: Identifiable {
+    let id: String
+}
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth {
-                x = 0; y += rowHeight + spacing; rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: maxWidth == .infinity ? x : maxWidth, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX {
-                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
-            }
-            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
+/// The image or video the viewer is currently showing.
+struct ViewedMedia: Identifiable {
+    let url: URL
+    let kind: AttachmentType
+    var id: String { "\(kind.rawValue):\(url.absoluteString)" }
 }

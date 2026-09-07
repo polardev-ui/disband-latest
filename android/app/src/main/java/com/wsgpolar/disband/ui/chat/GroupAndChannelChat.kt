@@ -135,6 +135,8 @@ private fun Message.toRow(): ChatRow = ChatRow(
     author = author,
     content = content,
     attachmentType = attachmentType,
+    attachmentName = attachmentName,
+    attachmentSize = attachmentSize,
     createdAt = createdAt,
 )
 
@@ -143,5 +145,7 @@ private fun GroupMessage.toRow(): ChatRow = ChatRow(
     author = author,
     content = content,
     attachmentType = attachmentType,
+    attachmentName = attachmentName,
+    attachmentSize = attachmentSize,
     createdAt = createdAt,
 )

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { buildScreenConstraints } from "@/lib/stream-quality";
+import type { SubscriptionPlan } from "@/lib/subscription";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
@@ -9,13 +11,18 @@ import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { playCallConnected, playCallEnd, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
-import { attachRemoteTrack, createOfferForPeer, setPeerVideoTrack } from "@/lib/webrtc";
+import {
+  attachRemoteTrack, createOfferForPeer, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack,
+  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN,
+} from "@/lib/webrtc";
 import { fetchIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface SignalPayload {
-  type: "ring" | "offer" | "answer" | "ice" | "leave";
+  type: "ring" | "offer" | "answer" | "ice" | "leave" | "screen";
+  /** For "screen": whether the sender just started or stopped sharing. */
+  sharing?: boolean;
   from: string;
   to?: string;
   sdp?: RTCSessionDescriptionInit;
@@ -49,6 +56,27 @@ export function useGroupCallManager(
   const [ringingIds, setRingingIds] = useState<Set<string>>(new Set());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  // A share is its own tile, so it is its own map — merging it into the
+  // participant's stream is what made it replace their face.
+  const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
+  const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
+  const screenTrackRef = useRef<MediaStreamTrack | null>(null);
+  /**
+   * Who has said they are sharing.
+   *
+   * A lane is negotiated up front, so its track exists from the start and
+   * whether it reports itself muted depends on packet timing rather than on
+   * anyone's intent. The sharer knows; the sharer says so.
+   */
+  const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
+  /**
+   * Local tracks waiting for lanes to exist.
+   *
+   * The answering side has no transceivers until the offer arrives, so its
+   * mic and camera cannot be placed at peer-creation time — they are held
+   * here and applied the moment the lanes appear.
+   */
+  const pendingLocalRef = useRef<Map<string, { mic: MediaStreamTrack | null; cam: MediaStreamTrack | null }>>(new Map());
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
@@ -166,12 +194,35 @@ export function useGroupCallManager(
 
       const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
+
+      // The offerer lays out the lanes; the answerer inherits the same three
+      // from the offer, so both sides agree on what each index means.
+      if (initiator) ensureLanes(pc);
+
       const local = localRef.current;
-      if (local) local.getTracks().forEach((t) => pc.addTrack(t, local));
+      if (local) {
+        const mic = local.getAudioTracks()[0] ?? null;
+        const cam = local.getVideoTracks()[0] ?? null;
+        if (initiator) {
+          await setLaneTrack(pc, LANE_AUDIO, mic);
+          await setLaneTrack(pc, LANE_CAMERA, cam);
+          await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+        } else {
+          // Lanes do not exist yet on this side; they arrive with the offer.
+          pendingLocalRef.current.set(remoteId, { mic, cam });
+        }
+      }
 
       pc.ontrack = (ev) => {
         const track = ev.track;
+        const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
+          if (lane === LANE_SCREEN) {
+            // Keep the lane's track; the "screen" signal decides whether it
+            // is shown.
+            setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
+            return;
+          }
           setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, ev.streams[0]));
         };
         track.addEventListener("ended", sync);
@@ -189,6 +240,11 @@ export function useGroupCallManager(
           pc.close();
           peersRef.current.delete(remoteId);
           setRemoteStreams((prev) => {
+            const next = new Map(prev);
+            next.delete(remoteId);
+            return next;
+          });
+          setRemoteScreens((prev) => {
             const next = new Map(prev);
             next.delete(remoteId);
             return next;
@@ -236,6 +292,15 @@ export function useGroupCallManager(
 
       if (payload.type === "offer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
+        openLanesForSending(pc);
+        // Lanes exist now; put anything that was waiting into them.
+        const pending = pendingLocalRef.current.get(payload.from);
+        if (pending) {
+          pendingLocalRef.current.delete(payload.from);
+          await setLaneTrack(pc, LANE_AUDIO, pending.mic);
+          await setLaneTrack(pc, LANE_CAMERA, pending.cam);
+          await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+        }
         await flushIce(payload.from, pc);
         const ans = await pc.createAnswer();
         await pc.setLocalDescription(ans);
@@ -243,6 +308,13 @@ export function useGroupCallManager(
       } else if (payload.type === "answer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
         await flushIce(payload.from, pc);
+      } else if (payload.type === "screen") {
+        setSharingIds((prev) => {
+          const next = new Set(prev);
+          if (payload.sharing) next.add(payload.from);
+          else next.delete(payload.from);
+          return next;
+        });
       } else if (payload.type === "ice" && payload.candidate) {
         if (pc.remoteDescription) {
           await pc.addIceCandidate(payload.candidate);
@@ -406,20 +478,18 @@ export function useGroupCallManager(
         track = cam.getVideoTracks()[0];
         stream.addTrack(track);
       }
-      for (const [remoteId, pc] of peersRef.current) {
-        await setPeerVideoTrack(pc, stream, track);
-        await renegotiatePeer(remoteId, pc);
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_CAMERA, track);
       }
     } else if (existing) {
       existing.stop();
       stream.removeTrack(existing);
-      for (const [remoteId, pc] of peersRef.current) {
-        await setPeerVideoTrack(pc, stream, null);
-        await renegotiatePeer(remoteId, pc);
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_CAMERA, null);
       }
     }
     setLocalStream(new MediaStream(stream.getTracks()));
-  }, [renegotiatePeer]);
+  }, []);
 
   const reapplyCameraConstraints = useCallback(async (nextPlan: string | undefined) => {
     const stream = localRef.current;
@@ -435,15 +505,14 @@ export function useGroupCallManager(
         stream.removeTrack(existing);
       }
       stream.addTrack(track);
-      for (const [remoteId, pc] of peersRef.current) {
-        await setPeerVideoTrack(pc, stream, track);
-        await renegotiatePeer(remoteId, pc);
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_CAMERA, track);
       }
       setLocalStream(new MediaStream(stream.getTracks()));
     } catch {
       // Keep the existing camera track if re-acquisition fails.
     }
-  }, [renegotiatePeer]);
+  }, []);
 
   const prevPlanRef = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -453,38 +522,52 @@ export function useGroupCallManager(
     }
   }, [plan, reapplyCameraConstraints]);
 
+  /**
+   * Sharing no longer costs you your camera.
+   *
+   * The share goes in its own lane, so the other side receives it as a
+   * separate track and can show it beside you rather than instead of you.
+   */
   const toggleScreenShare = useCallback(async () => {
     const next = !screenShareRef.current;
-    setScreenShareEnabled(next);
-    screenShareRef.current = next;
-    const stream = localRef.current;
-    if (!stream || !joinedRef.current) return;
 
-    const screenTrack = stream.getVideoTracks().find((t) => t.label?.includes("screen") || t.label?.includes("Screen"));
-
-    if (next) {
-      const existing = stream.getVideoTracks()[0];
-      if (existing) { existing.stop(); stream.removeTrack(existing); }
-      try {
-        const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        const track = display.getVideoTracks()[0];
-        track.addEventListener("ended", () => { void toggleScreenShare(); });
-        stream.addTrack(track);
-        for (const [remoteId, pc] of peersRef.current) {
-          await setPeerVideoTrack(pc, stream, track);
-          await renegotiatePeer(remoteId, pc);
-        }
-      } catch { setScreenShareEnabled(false); screenShareRef.current = false; return; }
-    } else if (screenTrack) {
-      screenTrack.stop();
-      stream.removeTrack(screenTrack);
-      for (const [remoteId, pc] of peersRef.current) {
-        await setPeerVideoTrack(pc, stream, null);
-        await renegotiatePeer(remoteId, pc);
+    if (!next) {
+      const track = screenTrackRef.current;
+      if (track) {
+        track.stop();
+        screenTrackRef.current = null;
       }
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_SCREEN, null);
+      }
+      setLocalScreen(null);
+      setScreenShareEnabled(false);
+      screenShareRef.current = false;
+      broadcast({ type: "screen", from: userId ?? "", sharing: false });
+      return;
     }
-    setLocalStream(new MediaStream(stream.getTracks()));
-  }, [renegotiatePeer]);
+
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia(
+        buildScreenConstraints((planRef.current ?? "free") as SubscriptionPlan),
+      );
+      const track = display.getVideoTracks()[0];
+      // Stopping from the browser's own "stop sharing" bar has to unwind the
+      // same way the button does.
+      track.addEventListener("ended", () => { void toggleScreenShare(); });
+      screenTrackRef.current = track;
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_SCREEN, track);
+      }
+      setLocalScreen(new MediaStream([track]));
+      setScreenShareEnabled(true);
+      screenShareRef.current = true;
+      broadcast({ type: "screen", from: userId ?? "", sharing: true });
+    } catch {
+      setScreenShareEnabled(false);
+      screenShareRef.current = false;
+    }
+  }, [broadcast, userId]);
 
   const dismissRing = useCallback(() => {
     stopRingtone();
@@ -568,6 +651,9 @@ export function useGroupCallManager(
     ringingIds,
     localStream,
     remoteStreams,
+    // Only shares the sender has announced.
+    remoteScreens: new Map([...remoteScreens].filter(([id]) => sharingIds.has(id))),
+    localScreen,
     cameraEnabled,
     screenShareEnabled,
     incomingRing,

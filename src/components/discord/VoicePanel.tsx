@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { useVoiceChannel } from "@/hooks/useVoiceChannel";
-import { Avatar } from "@/components/ui/Avatar";
+import { useVoiceSession } from "@/contexts/VoiceSessionContext";
+import { CallTile, CallGrid } from "./CallTile";
+import { CallResizeHandle, useCallHeight } from "./CallResizer";
 import { CallControls } from "./CallUI";
 import { displayName } from "@/lib/utils";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
@@ -26,27 +27,65 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     setDeafened,
     setVoiceJoinedChannelId,
   } = useApp();
-  const voice = useVoiceChannel(channelId, user?.id ?? null, profile, micMuted, deafened);
-  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  // The call itself lives in VoiceSessionProvider, above the view — so
+  // opening another channel no longer unmounts the connection. This panel is
+  // only the view of it, and shows a Join button when the call is elsewhere.
+  const { height: callHeight, setHeight: setCallHeight } = useCallHeight(420);
+  const session = useVoiceSession();
+  const inThisChannel = session.connectedChannelId === channelId;
+  const voice = {
+    joined: session.joined && inThisChannel,
+    participants: session.participants,
+    error: session.error,
+    join: () => session.connect(channelId, channelName),
+    leave: () => session.disconnect(),
+  };
+
+  // Tiles: everyone in the channel, then a tile per screen share so the
+  // person sharing stays visible beside what they are sharing.
+  const tiles = [
+    ...session.participants.map((p) => {
+      const isSelf = p.user_id === user?.id;
+      const prof = p.profile ?? { display_name: "?", username: "?" };
+      return {
+        key: p.user_id,
+        profile: prof,
+        label: displayName(prof) + (isSelf ? " (you)" : ""),
+        stream: inThisChannel
+          ? (isSelf ? session.localStream : session.remoteStreams.get(p.user_id)) ?? null
+          : null,
+        kind: "camera" as const,
+        self: isSelf,
+        muted: isSelf ? micMuted : false,
+      };
+    }),
+    ...session.participants.flatMap((p) => {
+      const isSelf = p.user_id === user?.id;
+      const stream = isSelf ? session.localScreen : session.remoteScreens.get(p.user_id);
+      if (!stream || !inThisChannel) return [];
+      const prof = p.profile ?? { display_name: "?", username: "?" };
+      return [{
+        key: `screen:${p.user_id}`,
+        profile: prof,
+        label: `${displayName(prof)}'s screen`,
+        stream,
+        kind: "screen" as const,
+        self: false,
+        muted: false,
+      }];
+    }),
+  ];
+  // Shares first — they are what the room is looking at.
+  tiles.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "screen" ? -1 : 1));
 
   useEffect(() => {
     void loadVoicePresence(channelId);
   }, [channelId, loadVoicePresence, voice.participants.length]);
 
+  // Presence for a channel you are looking at but not connected to.
   useEffect(() => {
-    if (voice.joined) setVoiceJoinedChannelId(channelId);
-    else setVoiceJoinedChannelId(null);
-  }, [voice.joined, channelId, setVoiceJoinedChannelId]);
-
-  useEffect(() => {
-    return () => {
-      setVoiceJoinedChannelId(null);
-    };
-  }, [channelId, setVoiceJoinedChannelId]);
-
-  useEffect(() => {
-    audioRefs.current.forEach((el) => { el.muted = deafened; });
-  }, [deafened]);
+    if (!inThisChannel) session.peek(channelId);
+  }, [inThisChannel, channelId, session]);
 
   return (
     <main className="call-enter flex min-w-0 flex-1 flex-col bg-gradient-to-b from-status-online/[0.06] to-bg-primary">
@@ -61,7 +100,10 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         )}
       </header>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
+      <div
+        className="flex min-h-0 flex-col items-center gap-4 overflow-hidden px-6 pt-4"
+        style={{ height: callHeight }}
+      >
         <div className="text-center">
           <div
             className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${
@@ -78,34 +120,19 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-6">
-          {voice.participants.map((p) => {
-            const prof = p.profile ?? { display_name: "?", username: "?" };
-            const isSelf = p.user_id === user?.id;
-            const speaking = voice.joined && isSelf ? !micMuted : false;
-            return (
-              <div key={p.user_id} className="call-enter flex flex-col items-center gap-2">
-                <div className="relative">
-                  <div
-                    className={`rounded-full p-0.5 transition-all ${
-                      speaking ? "ring-2 ring-status-online" : isSelf ? "ring-1 ring-white/15" : ""
-                    }`}
-                  >
-                    <Avatar profile={prof} size="lg" className="h-20 w-20 text-2xl" />
-                  </div>
-                  {isSelf && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      You{micMuted ? " · muted" : ""}
-                    </span>
-                  )}
-                </div>
-                <span className={`max-w-[100px] truncate text-sm ${isSelf ? "font-semibold text-text-normal" : "text-text-normal"}`}>
-                  {displayName(prof)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <CallGrid>
+          {tiles.map((t) => (
+            <CallTile
+              key={t.key}
+              profile={t.profile}
+              label={t.label}
+              stream={t.stream}
+              kind={t.kind}
+              self={t.self}
+              muted={t.muted}
+            />
+          ))}
+        </CallGrid>
 
         {voice.error && <p className="text-sm text-status-dnd">{voice.error}</p>}
 
@@ -135,6 +162,30 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
                 onEnd={() => void voice.leave()}
                 onOpenSettings={onOpenSettings}
               />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void session.toggleCamera()}
+                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                    session.cameraEnabled
+                      ? "bg-status-online text-white"
+                      : "bg-white/10 text-text-normal hover:bg-white/20"
+                  }`}
+                >
+                  {session.cameraEnabled ? "Stop video" : "Turn on camera"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void session.toggleScreenShare()}
+                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
+                    session.screenEnabled
+                      ? "bg-status-online text-white"
+                      : "bg-white/10 text-text-normal hover:bg-white/20"
+                  }`}
+                >
+                  {session.screenEnabled ? "Stop sharing" : "Share screen"}
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => void voice.leave()}
@@ -146,22 +197,8 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
           )}
         </div>
 
-        {[...voice.remoteStreams.entries()].map(([uid, stream]) => (
-          <audio
-            key={uid}
-            ref={(el) => {
-              if (el) {
-                el.srcObject = stream;
-                el.muted = deafened;
-                audioRefs.current.set(uid, el);
-                void el.play().catch(() => {});
-              }
-            }}
-            autoPlay
-            playsInline
-          />
-        ))}
       </div>
+      <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </main>
   );
 }

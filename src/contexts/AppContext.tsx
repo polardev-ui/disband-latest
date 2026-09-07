@@ -3109,6 +3109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
+      uploadProgress: pendingFile ? 0 : undefined,
       display_id: 0,
     };
     setMessages((prev) => {
@@ -3229,6 +3230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
+      uploadProgress: pendingFile ? 0 : undefined,
       display_id: 0,
     };
     setDmMessages((prev) => {
@@ -3350,6 +3352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
+      uploadProgress: pendingFile ? 0 : undefined,
       display_id: 0,
     };
     setGroupMessages((prev) => {
@@ -3480,6 +3483,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: new Date().toISOString(),
       edited_at: null,
       sending: true,
+      uploadProgress: pendingFile ? 0 : undefined,
     };
     setNotes((prev) => {
       const next = [...prev, optimistic];

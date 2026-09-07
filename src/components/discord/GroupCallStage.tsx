@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { CallResizeHandle, useCallHeight } from "./CallResizer";
+import { CallGrid } from "./CallTile";
 import { IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
@@ -13,24 +15,27 @@ import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audi
 /*  Participant circle                                                */
 /* ------------------------------------------------------------------ */
 
-function ParticipantCircle({
+function ParticipantTile({
   profile,
   stream,
   label,
   mirrored,
   ring,
+  forceScreen,
 }: {
   profile?: Profile;
   stream?: MediaStream | null;
   label: string;
   mirrored?: boolean;
   ring?: boolean;
+  /** Set when the tile is a screen share rather than a camera. */
+  forceScreen?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(stream);
   const ringClass = ring
-    ? "ring-[3px] ring-status-online shadow-[0_0_20px_rgba(59,165,93,0.3)]"
-    : "ring-[3px] ring-white/15";
+    ? "ring-2 ring-status-online shadow-[0_0_20px_rgba(59,165,93,0.3)]"
+    : "ring-1 ring-white/10";
 
   useEffect(() => {
     if (ref.current && stream && hasVideo) {
@@ -39,26 +44,43 @@ function ParticipantCircle({
     }
   }, [stream, hasVideo]);
 
+  // A shared screen is not a face: it must not be cropped to fill a square,
+  // and it must never be mirrored or the text in it reads backwards.
+  const isScreen = forceScreen
+    || !!stream?.getVideoTracks().some((t) => /screen|display|window|monitor/i.test(t.label));
+
   return (
-    <div className="flex flex-col items-center gap-2.5">
-      <div className={`relative h-28 w-28 overflow-hidden rounded-full bg-[#2b2d31] ${ringClass}`}>
-        {hasVideo && stream ? (
-          <video
-            ref={ref}
-            autoPlay
-            playsInline
-            muted={mirrored}
-            className={`h-full w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`}
-          />
-        ) : profile ? (
-          <Avatar profile={profile} size="lg" className="h-28 w-28 text-3xl" />
-        ) : (
-          <div className="flex h-28 w-28 items-center justify-center">
+    <div
+      className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-[#2b2d31] ${ringClass}`}
+    >
+      {hasVideo && stream ? (
+        <video
+          ref={ref}
+          autoPlay
+          playsInline
+          muted={mirrored}
+          className={`h-full w-full ${isScreen ? "bg-black object-contain" : "object-cover"} ${
+            mirrored && !isScreen ? "scale-x-[-1]" : ""
+          }`}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          {profile ? (
+            <Avatar profile={profile} size="lg" className="h-24 w-24 text-3xl" />
+          ) : (
             <span className="text-3xl font-bold text-white/40">{label.charAt(0).toUpperCase()}</span>
-          </div>
+          )}
+        </div>
+      )}
+
+      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+        <span className="truncate">{label}</span>
+        {isScreen && (
+          <span className="shrink-0 rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
+            Live
+          </span>
         )}
-      </div>
-      <span className="max-w-[100px] truncate text-sm font-medium text-white/80">{label}</span>
+      </span>
     </div>
   );
 }
@@ -89,6 +111,9 @@ interface GroupCallStageProps {
   selfId?: string | null;
   localStream: MediaStream | null;
   remoteStreams: Map<string, MediaStream>;
+  /** Screen shares, keyed by whoever is sharing. Each gets its own tile. */
+  remoteScreens: Map<string, MediaStream>;
+  localScreen: MediaStream | null;
   cameraEnabled: boolean;
   micMuted: boolean;
   deafened: boolean;
@@ -100,9 +125,10 @@ interface GroupCallStageProps {
 
 export function GroupCallStage({
   groupName, members, presence, ringingIds, joined,
-  selfId, localStream, remoteStreams, cameraEnabled,
+  selfId, localStream, remoteStreams, remoteScreens, localScreen, cameraEnabled,
   micMuted, deafened, onJoin, onLeave, onToggleCamera, onToggleMic,
 }: GroupCallStageProps) {
+  const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
   const [elapsed, setElapsed] = useState(0);
   const joinedAtRef = useRef<number>(0);
 
@@ -120,16 +146,41 @@ export function GroupCallStage({
 
   if (presence.length === 0) return null;
 
-  const displayMembers = presence.map((p) => ({
+  const people = presence.map((p) => ({
     id: p.user_id,
     profile: p.profile ?? members.find((m) => m.id === p.user_id),
     stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
     mirrored: p.user_id === selfId,
     ringing: ringingIds.has(p.user_id),
+    isScreen: false,
+    label: p.profile ?? members.find((m) => m.id === p.user_id)
+      ? displayName((p.profile ?? members.find((m) => m.id === p.user_id))!)
+      : "Member",
   }));
 
+  // A share is a tile of its own, so the person sharing stays on screen
+  // beside it instead of being replaced by their own desktop.
+  const shares = presence.flatMap((p) => {
+    const stream = p.user_id === selfId ? localScreen : remoteScreens.get(p.user_id);
+    if (!stream) return [];
+    const profile = p.profile ?? members.find((m) => m.id === p.user_id);
+    return [{
+      id: `screen:${p.user_id}`,
+      profile,
+      stream,
+      mirrored: false,
+      ringing: false,
+      isScreen: true,
+      label: profile ? `${displayName(profile)}'s screen` : "Screen",
+    }];
+  });
+
+  // Shares lead: they are what everyone is looking at.
+  const displayMembers = [...shares, ...people];
+
   return (
-    <div className="flex shrink-0 flex-col items-center justify-center bg-black px-6 py-8">
+    <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: callHeight }}>
+     <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
       {/* Header */}
       <p className="text-xs font-bold uppercase tracking-widest text-white/30">
         Group Call
@@ -140,22 +191,27 @@ export function GroupCallStage({
         {ringingIds.size > 0 ? ` \u00b7 ${ringingIds.size} ringing` : ""}
       </p>
 
-      {/* Participant circles */}
-      <div className="flex flex-wrap items-center justify-center gap-8 py-8">
-        {displayMembers.map((m) => (
-          <ParticipantCircle
-            key={m.id}
-            profile={m.profile}
-            stream={m.stream}
-            mirrored={m.mirrored}
-            ring={m.ringing}
-            label={m.profile ? displayName(m.profile) : "Member"}
-          />
-        ))}
+      {/* Tiles keep a 16:9 shape and are sized to whatever fits, so the
+          layout follows the head count and the height of the region rather
+          than a breakpoint. */}
+      <div className="flex min-h-0 w-full max-w-4xl flex-1 flex-col py-3">
+        <CallGrid>
+          {displayMembers.map((m) => (
+            <ParticipantTile
+              key={m.id}
+              profile={m.profile}
+              stream={m.stream}
+              mirrored={m.mirrored}
+              ring={m.ringing}
+              forceScreen={m.isScreen}
+              label={m.label}
+            />
+          ))}
+        </CallGrid>
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-4 pb-3">
         <button
           type="button"
           onClick={onToggleCamera}
@@ -214,6 +270,8 @@ export function GroupCallStage({
           playsInline
         />
       ))}
+     </div>
+      <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </div>
   );
 }

@@ -1,0 +1,38 @@
+name = "disband-cdn"
+main = "src/index.js"
+compatibility_date = "2026-01-15"
+
+# The bucket the Worker reads and writes. `binding` is the name the code uses
+# (env.MEDIA); `bucket_name` is what the bucket is called in the dashboard.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "disband-media"
+
+[vars]
+# Used to build the URL that goes into the database, so it must be exactly the
+# hostname people will load images from.
+PUBLIC_BASE = "https://cdn.disband.dev"
+# Set to "false" only to test uploads without a token. Leave it on in production
+# or the bucket becomes free storage for anyone who finds the endpoint.
+REQUIRE_AUTH = "true"
+ALLOWED_ORIGIN = "*"
+# Used to check that an uploader is a real signed-in user. Both are already
+# public in every client, so neither is a secret.
+SUPABASE_URL = "https://mjqbrcabargylrimlafw.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM"
+
+# Secret — set with `wrangler secret put MIGRATION_SECRET`, never in this file.
+# Guards /v1/admin/ingest during the one-time move off the old host.
+
+# Secret — set with `wrangler secret put KLIPY_APP_KEY`, never in this file.
+# The key that /v1/giphy/search sends GIF queries to. Until it is set, the
+# Worker falls back to Giphy, then to the old host.
+
+# Attaches cdn.disband.dev on deploy, so the hostname does not have to be
+# wired up by hand in the dashboard.
+[[routes]]
+pattern = "cdn.disband.dev"
+custom_domain = true
+
+[observability]
+enabled = true

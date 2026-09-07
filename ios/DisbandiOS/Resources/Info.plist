@@ -26,6 +26,8 @@
 	<string>Disband uses the camera for video calls and sending photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Disband uses the microphone for voice and video calls.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Disband saves images and videos from chat to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Disband needs photo access to share images in chat.</string>
 	<key>UIBackgroundModes</key>

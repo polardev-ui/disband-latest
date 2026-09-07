@@ -225,6 +225,8 @@ struct DmMessage: Codable, Identifiable, Hashable {
     var content: String
     var attachmentUrl: String?
     var attachmentType: AttachmentType?
+    var attachmentName: String?
+    var attachmentSize: Int?
     var replyToId: String?
     let createdAt: String
     var editedAt: String?
@@ -236,6 +238,8 @@ struct DmMessage: Codable, Identifiable, Hashable {
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
+        case attachmentName = "attachment_name"
+        case attachmentSize = "attachment_size"
         case replyToId = "reply_to_id"
         case createdAt = "created_at"
         case editedAt = "edited_at"
@@ -267,6 +271,8 @@ struct GroupMessage: Codable, Identifiable, Hashable {
     var content: String
     var attachmentUrl: String?
     var attachmentType: AttachmentType?
+    var attachmentName: String?
+    var attachmentSize: Int?
     var replyToId: String?
     let createdAt: String
     var editedAt: String?
@@ -278,6 +284,8 @@ struct GroupMessage: Codable, Identifiable, Hashable {
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
+        case attachmentName = "attachment_name"
+        case attachmentSize = "attachment_size"
         case replyToId = "reply_to_id"
         case createdAt = "created_at"
         case editedAt = "edited_at"
@@ -306,6 +314,9 @@ struct ReactionSummary: Identifiable, Hashable {
     let emoji: String
     var count: Int
     var reacted: Bool
+    /// Who reacted, in the order the reactions arrived. Carried so a long
+    /// press can name them without another round trip per chip.
+    var userIds: [String] = []
 }
 
 // MARK: - Voice presence
