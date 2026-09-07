@@ -1048,6 +1048,8 @@ export function DiscordApp() {
           phase={call.phase === "outgoing" ? "outgoing" : "active"}
           localStream={call.localStream}
           remoteStream={call.remoteStream}
+          localScreen={call.localScreen}
+          remoteScreen={call.remoteScreen}
           connectedAt={call.connectedAt}
           micMuted={app.micMuted}
           deafened={app.deafened}
@@ -1056,7 +1058,7 @@ export function DiscordApp() {
           onToggleMic={toggleMic}
           onToggleDeafen={toggleDeafen}
           onToggleCamera={() => void call.toggleCamera()}
-          onToggleScreenShare={subPlan === "super" ? () => void call.toggleScreenShare() : undefined}
+          onToggleScreenShare={() => void call.toggleScreenShare()}
           onEnd={() => void call.endCall()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -1336,6 +1338,8 @@ export function DiscordApp() {
                 selfId={app.user?.id}
                 localStream={groupCall.localStream}
                 remoteStreams={groupCall.remoteStreams}
+                remoteScreens={groupCall.remoteScreens}
+                localScreen={groupCall.localScreen}
                 cameraEnabled={groupCall.cameraEnabled}
                 micMuted={app.micMuted}
                 deafened={app.deafened}

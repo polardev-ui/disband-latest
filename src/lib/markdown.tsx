@@ -162,6 +162,20 @@ function headerLevel(line: string): number {
   return m[1].length;
 }
 
+/**
+ * How each heading level renders.
+ *
+ * The level was detected and then discarded — every heading came out as
+ * `font-semibold`, so `#`, `##` and `###` were indistinguishable from bold
+ * text and from each other. Sizes follow Discord's, which is what people
+ * typing `#` in a chat box expect.
+ */
+const HEADING_CLASS: Record<number, string> = {
+  1: "mb-1 mt-2 block text-[24px] font-bold leading-tight text-text-normal first:mt-0",
+  2: "mb-1 mt-2 block text-[20px] font-bold leading-tight text-text-normal first:mt-0",
+  3: "mb-0.5 mt-1.5 block text-[16px] font-bold leading-snug text-text-normal first:mt-0",
+};
+
 export function renderMarkdown(
   content: string,
   members: Profile[] = [],
@@ -217,7 +231,7 @@ export function renderMarkdown(
       if (hl > 0) {
         flush();
         renderedLines.push(
-          <span key={k++} className="block font-semibold text-text-normal">
+          <span key={k++} className={HEADING_CLASS[hl] ?? HEADING_CLASS[3]}>
             {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100, onMentionClick)}
           </span>,
         );

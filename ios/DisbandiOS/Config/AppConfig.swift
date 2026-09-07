@@ -11,9 +11,13 @@ enum AppConfig {
     static let supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM"
 
-    /// Giphy search and link previews. Still the old service — it answers more
-    /// than uploads, so it does not move with them.
-    static let mediaAPIURL = URL(string: "https://api.wsgpolar.me/v1")!
+    /// Giphy search and link previews — the CDN serves these too now.
+    ///
+    /// They were the last two things still going to the old media host, which
+    /// answered slowly and sometimes 502'd, so every link in a chat waited on
+    /// it. Kept as its own value rather than folded into `cdnURL` so one
+    /// endpoint can be moved without taking image storage with it.
+    static let mediaAPIURL = URL(string: "https://cdn.disband.dev/v1")!
 
     /// Where uploads go and where images are served from.
     static let cdnURL = URL(string: "https://cdn.disband.dev/v1")!

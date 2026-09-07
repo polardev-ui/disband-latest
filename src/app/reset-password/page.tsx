@@ -3,9 +3,11 @@
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
+import { MfaStepUpForm } from "@/components/auth/MfaStepUpForm";
 import { Logo } from "@/components/ui/Logo";
 import { useApp } from "@/contexts/AppContext";
 import { recoverSessionFromUrl } from "@/lib/recover-session-from-url";
+import { getMfaAssurance } from "@/lib/mfa";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,12 +18,20 @@ function ResetPasswordGate() {
   const router = useRouter();
   const [linkReady, setLinkReady] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  // A recovery link always lands at aal1. Supabase will not change a password
+  // on such a session when the account has 2FA, so the second factor has to be
+  // cleared here rather than after the attempt fails.
+  const [needsMfa, setNeedsMfa] = useState(false);
 
   useEffect(() => {
     if (!configured || !ready) return;
     void (async () => {
       const { error } = await recoverSessionFromUrl();
       setLinkError(error);
+      if (!error) {
+        const { mfaRequired } = await getMfaAssurance();
+        setNeedsMfa(mfaRequired);
+      }
       setLinkReady(true);
     })();
   }, [configured, ready]);
@@ -62,11 +72,17 @@ function ResetPasswordGate() {
             </div>
             <h1 className="text-2xl font-bold text-text-normal">Choose a new password</h1>
             <p className="mt-1 text-sm text-text-muted">
-              {canReset ? "Enter a new password for your account." : "This reset link is invalid or has expired."}
+              {!canReset
+                ? "This reset link is invalid or has expired."
+                : needsMfa
+                  ? "One more step before you can set it."
+                  : "Enter a new password for your account."}
             </p>
           </div>
 
-          {canReset ? (
+          {canReset && needsMfa ? (
+            <MfaStepUpForm onVerified={() => setNeedsMfa(false)} />
+          ) : canReset ? (
             <NewPasswordForm
               submitLabel="Save new password"
               onSubmit={updatePassword}

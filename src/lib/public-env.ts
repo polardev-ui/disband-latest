@@ -10,14 +10,19 @@ export const PUBLIC_ENV = {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM",
   /**
-   * Giphy search and link previews. Still the old service.
+   * Giphy search and link previews — now the CDN too.
    *
-   * Kept separate from image storage on purpose: this base also serves
-   * /giphy/search and the link-preview endpoint, so repointing it at the CDN
-   * would take both of those down with it.
+   * These were the last two things still going to the old media host, which
+   * answered slowly and sometimes 502'd, and every link in chat waited on it.
+   * The Worker serves both itself: previews are scraped and cached at the
+   * edge, and GIF search is proxied through to Giphy (falling back to the old
+   * host until a GIPHY_API_KEY secret is set on the Worker).
+   *
+   * Kept as its own value rather than folded into `cdnUrl` so a single
+   * endpoint can be pointed elsewhere without moving image storage with it.
    */
   mediaApiUrl:
-    process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1",
+    process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://cdn.disband.dev/v1",
   /** Where uploads go and where images are served from. */
   cdnUrl:
     process.env.NEXT_PUBLIC_CDN_URL ?? "https://cdn.disband.dev/v1",

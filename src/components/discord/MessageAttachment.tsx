@@ -21,6 +21,8 @@ interface MessageAttachmentProps {
   authorColor?: string | null;
   isOwn?: boolean;
   createdAt?: string;
+  /** Who is looking — a poll marks their vote and lets an author close it. */
+  currentUserId?: string | null;
 }
 
 const mediaClass =
@@ -36,6 +38,7 @@ export function MessageAttachment({
   authorColor,
   isOwn,
   createdAt,
+  currentUserId,
 }: MessageAttachmentProps) {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
@@ -83,7 +86,7 @@ export function MessageAttachment({
   }
 
   if (type === "poll") {
-    return <PollCard pollId={url} />;
+    return <PollCard pollId={url} currentUserId={currentUserId} />;
   }
 
   if (type === "audio") {

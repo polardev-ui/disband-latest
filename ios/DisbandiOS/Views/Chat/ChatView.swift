@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// Shared conversation screen used for channels, DMs, and group chats.
 struct ChatView: View {
@@ -11,7 +12,6 @@ struct ChatView: View {
     @State private var showGifPicker = false
     @State private var showPhotoPicker = false
     @State private var photoItem: PhotosPickerItem?
-    @State private var uploading = false
     @State private var openProfile: Profile?
     /// Set while a tapped mention is being looked up, so the sheet can show
     /// something immediately rather than after a round trip.
@@ -38,7 +38,8 @@ struct ChatView: View {
         VStack(spacing: 0) {
             messageList
             if let replyingTo { replyBanner(replyingTo) }
-            MessageComposer(text: $draft, uploading: uploading, onSend: sendDraft,
+            // Progress now shows on the message itself, so the composer stays usable.
+            MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
                             onGif: { showGifPicker = true },
                             onPhoto: { showPhotoPicker = true })
         }
@@ -246,17 +247,21 @@ struct ChatView: View {
 
     private func uploadAndSend(_ item: PhotosPickerItem) async {
         guard let uid = app.currentUserId else { return }
-        uploading = true
         let reply = replyingTo?.id
-        defer { uploading = false; photoItem = nil }
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { return }
-            let result = try await MediaService.uploadImage(data)
-            withAnimation { replyingTo = nil }
-            await model.sendAttachment(OutgoingAttachment(url: result.url, type: "image", key: result.key),
-                                       replyToId: reply, authorId: uid)
-        } catch {
-            model.loadError = error.localizedDescription
-        }
+        defer { photoItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        withAnimation { replyingTo = nil }
+
+        // The progress row lives in the conversation now, so the composer no
+        // longer has to sit disabled behind a spinner while it uploads.
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+        await model.uploadAndSendAttachment(
+            data: data,
+            filename: isVideo ? "video.mp4" : "image.jpg",
+            mimeType: isVideo ? "video/mp4" : "image/jpeg",
+            type: isVideo ? .video : .image,
+            replyToId: reply,
+            authorId: uid,
+        )
     }
 }

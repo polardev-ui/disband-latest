@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { gifPreviewUrl, gifUrl, giphyThumbUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
+import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose } from "@/components/icons";
 
 interface GifPickerProps {
@@ -13,9 +13,9 @@ function GifThumb({ gif, onSelect }: {
   gif: GiphyImage;
   onSelect: (url: string) => void;
 }) {
-  const preview = gifPreviewUrl(gif);
+  const thumb = gifThumb(gif);
   const full = gifUrl(gif);
-  if (!preview || !full) return null;
+  if (!thumb || !full) return null;
 
   return (
     <div className="overflow-hidden rounded hover:ring-2 hover:ring-brand">
@@ -25,15 +25,25 @@ function GifThumb({ gif, onSelect }: {
         className="block w-full"
         title={gif.title}
       >
-        <video
-          src={giphyThumbUrl(preview)}
-          autoPlay
-          loop
-          muted
-          playsInline
-          webkit-playsinline=""
-          className="h-24 w-full object-cover"
-        />
+        {thumb.isVideo ? (
+          <video
+            src={thumb.src}
+            autoPlay
+            loop
+            muted
+            playsInline
+            webkit-playsinline=""
+            className="h-24 w-full object-cover"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumb.src}
+            alt={gif.title ?? "GIF"}
+            loading="lazy"
+            className="h-24 w-full object-cover"
+          />
+        )}
       </button>
     </div>
   );
@@ -129,7 +139,7 @@ export function GifPicker({ onSelect }: GifPickerProps) {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search GIFs"
+                placeholder="Search KLIPY"
                 className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
               />
               <button type="button" onClick={() => setOpen(false)} className="text-text-muted hover:text-text-normal">

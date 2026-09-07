@@ -17,7 +17,9 @@ import {
 } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
 import { useEffect, useRef, useState } from "react";
+import { CallResizeHandle, useCallHeight } from "./CallResizer";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
+import { CallGrid } from "./CallTile";
 
 /* ------------------------------------------------------------------ */
 /*  Controls                                                          */
@@ -80,11 +82,12 @@ export function CallControls({
 /*  Participant circle                                                */
 /* ------------------------------------------------------------------ */
 
-function ParticipantCircle({
+function ParticipantTile({
   profile,
   stream,
   label,
   mirrored,
+  isScreen,
   ring,
   size = "md",
 }: {
@@ -92,6 +95,8 @@ function ParticipantCircle({
   stream?: MediaStream | null;
   label: string;
   mirrored?: boolean;
+  /** A shared screen: fitted rather than cropped, and never mirrored. */
+  isScreen?: boolean;
   ring?: boolean;
   size?: "md" | "lg";
 }) {
@@ -113,7 +118,7 @@ function ParticipantCircle({
   return (
     <div className="flex flex-col items-center gap-2.5">
       <div
-        className={`relative ${dim} overflow-hidden rounded-full bg-[#2b2d31] ${ringClass} ${
+        className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-[#2b2d31] ${ringClass} ${
           ring ? "shadow-[0_0_24px_rgba(59,165,93,0.3)]" : ""
         }`}
       >
@@ -122,18 +127,29 @@ function ParticipantCircle({
             ref={ref}
             autoPlay
             playsInline
-            muted={mirrored}
-            className={`h-full w-full object-cover ${mirrored ? "scale-x-[-1]" : ""}`}
+            muted={mirrored || isScreen}
+            className={`h-full w-full ${isScreen ? "bg-black object-contain" : "object-cover"} ${
+              mirrored && !isScreen ? "scale-x-[-1]" : ""
+            }`}
           />
         ) : profile ? (
-          <Avatar profile={profile} size="lg" className={`${dim} ${textSize}`} />
+          <span className="flex h-full w-full items-center justify-center">
+            <Avatar profile={profile} size="lg" className="h-20 w-20 text-2xl" />
+          </span>
         ) : (
-          <div className={`flex ${dim} items-center justify-center`}>
+          <div className="flex h-full w-full items-center justify-center">
             <span className={`${textSize} font-bold text-white/40`}>{label.charAt(0).toUpperCase()}</span>
           </div>
         )}
+        <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+          <span className="max-w-[160px] truncate">{label}</span>
+          {isScreen && (
+            <span className="shrink-0 rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
+              Live
+            </span>
+          )}
+        </span>
       </div>
-      <span className="max-w-[110px] truncate text-sm font-medium text-white/80">{label}</span>
     </div>
   );
 }
@@ -215,6 +231,9 @@ interface CallPanelProps {
   peer?: Profile;
   selfProfile?: Profile | null;
   localStream?: MediaStream | null;
+  /** Screen shares get tiles of their own so nobody is replaced by a desktop. */
+  localScreen?: MediaStream | null;
+  remoteScreen?: MediaStream | null;
   remoteStream?: MediaStream | null;
   connectedAt?: number | null;
   micMuted: boolean;
@@ -230,11 +249,12 @@ interface CallPanelProps {
 }
 
 export function CallPanel({
-  title, subtitle, phase, peer, selfProfile, localStream, remoteStream,
+  title, subtitle, phase, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen,
   connectedAt, micMuted, deafened, cameraEnabled, screenShareEnabled,
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd, onOpenSettings,
 }: CallPanelProps) {
+  const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
   const calling = phase === "outgoing";
   const [elapsed, setElapsed] = useState(0);
 
@@ -250,13 +270,15 @@ export function CallPanel({
     return (
       <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black py-10">
         <p className="mb-6 text-xs font-bold uppercase tracking-widest text-white/30">Calling</p>
-        <div className="mb-6 flex items-center gap-10">
-          {selfProfile && (
-            <ParticipantCircle profile={selfProfile} label="You" size="md" />
-          )}
-          {peer && (
-            <ParticipantCircle profile={peer} label={displayName(peer)} ring size="md" />
-          )}
+        <div className="flex h-56 w-full max-w-3xl flex-col py-3">
+          <CallGrid>
+            {selfProfile && (
+              <ParticipantTile profile={selfProfile} label="You" size="md" />
+            )}
+            {peer && (
+              <ParticipantTile profile={peer} label={displayName(peer)} ring size="md" />
+            )}
+          </CallGrid>
         </div>
         <p className="mb-6 text-lg font-semibold text-white">{title}</p>
         <p className="mb-8 text-sm text-white/40">Ringing...</p>
@@ -272,7 +294,11 @@ export function CallPanel({
   }
 
   return (
-    <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black px-6 py-8">
+    <div
+      className="call-enter flex shrink-0 flex-col overflow-hidden bg-black"
+      style={{ height: callHeight }}
+    >
+     <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
       <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/30">
         Voice Connected
       </p>
@@ -280,28 +306,50 @@ export function CallPanel({
         {elapsed > 0 ? formatElapsed(elapsed) : subtitle}
       </p>
 
-      <div className="my-8 flex items-center gap-10">
-        {selfProfile && (
-          <ParticipantCircle
-            profile={selfProfile} stream={localStream} label="You"
-            mirrored size="md"
-          />
-        )}
-        {peer && (
-          <ParticipantCircle
-            profile={peer} stream={remoteStream}
-            label={displayName(peer)} size="md"
-          />
-        )}
+      {/* The tile area is what gives up room when the call is made shorter,
+          so the controls below are never pushed out of view. Tiles keep their
+          shape while doing it — the area re-lays them out rather than
+          flattening them. */}
+      <div className="flex min-h-0 w-full max-w-3xl flex-1 flex-col py-3">
+        <CallGrid>
+          {selfProfile && (
+            <ParticipantTile
+              profile={selfProfile} stream={localStream} label="You"
+              mirrored size="md"
+            />
+          )}
+          {localScreen && (
+            <ParticipantTile
+              profile={selfProfile ?? undefined} stream={localScreen} isScreen
+              label="Your screen" size="md"
+            />
+          )}
+          {remoteScreen && peer && (
+            <ParticipantTile
+              profile={peer} stream={remoteScreen} isScreen
+              label={`${displayName(peer)}'s screen`} size="md"
+            />
+          )}
+          {peer && (
+            <ParticipantTile
+              profile={peer} stream={remoteStream}
+              label={displayName(peer)} size="md"
+            />
+          )}
+        </CallGrid>
       </div>
 
-      <CallControls
-        micMuted={micMuted} deafened={deafened}
-        cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
-        onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
-        onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
-        onEnd={onEnd} onOpenSettings={onOpenSettings}
-      />
+      <div className="shrink-0 pb-3 pt-1">
+        <CallControls
+          micMuted={micMuted} deafened={deafened}
+          cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+          onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+          onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+          onEnd={onEnd} onOpenSettings={onOpenSettings}
+        />
+      </div>
+     </div>
+      <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </div>
   );
 }

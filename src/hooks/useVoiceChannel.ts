@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { buildScreenConstraints } from "@/lib/stream-quality";
+import type { SubscriptionPlan } from "@/lib/subscription";
+import {
+  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN,
+} from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
 import { playCallConnected, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -10,7 +15,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { fetchIceServers } from "@/lib/ice-servers";
 
 interface SignalPayload {
-  type: "offer" | "answer" | "ice" | "leave";
+  type: "offer" | "answer" | "ice" | "leave" | "screen";
+  /** For "screen": whether the sender just started or stopped sharing. */
+  sharing?: boolean;
   from: string;
   to?: string;
   sdp?: RTCSessionDescriptionInit;
@@ -24,11 +31,26 @@ export function useVoiceChannel(
   profile: Profile | null,
   micMuted: boolean,
   deafened: boolean,
+  /** Decides how high the screen share may go; sharing itself is free. */
+  plan: SubscriptionPlan = "free",
 ) {
   const [joined, setJoined] = useState(false);
   const [participants, setParticipants] = useState<(VoicePresence & { profile?: Profile })[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  // Server voice used to be audio only. Camera and screen each get their own
+  // lane, so a share never costs someone their camera and both can be seen.
+  const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
+  const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [screenEnabled, setScreenEnabled] = useState(false);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
+  const screenTrackRef = useRef<MediaStreamTrack | null>(null);
+  /** Who has announced a share. Track mute state is not a reliable signal. */
+  const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
+  const pendingLocalRef = useRef<Map<string, MediaStreamTrack | null>>(new Map());
+  const planRef = useRef<SubscriptionPlan>(plan);
+  useEffect(() => { planRef.current = plan; }, [plan]);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -92,13 +114,34 @@ export function useVoiceChannel(
 
       const local = localStreamRef.current;
       if (local) {
-        local.getTracks().forEach((t) => pc.addTrack(t, local));
+        const mic = local.getAudioTracks()[0] ?? null;
+        if (initiator) {
+          ensureLanes(pc);
+          await setLaneTrack(pc, LANE_AUDIO, mic);
+          await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
+          await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+        } else {
+          // The answering side has no lanes until the offer arrives.
+          pendingLocalRef.current.set(remoteId, mic);
+        }
       }
 
       pc.ontrack = (ev) => {
-        const stream = ev.streams[0];
-        if (!stream) return;
-        setRemoteStreams((prev) => new Map(prev).set(remoteId, stream));
+        const track = ev.track;
+        const lane = laneOfTransceiver(pc, ev.transceiver);
+        const sync = () => {
+          if (lane === LANE_SCREEN) {
+            // Keep the track; the "screen" signal decides whether it shows.
+            setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
+            return;
+          }
+          const stream = ev.streams[0];
+          if (stream) setRemoteStreams((prev) => new Map(prev).set(remoteId, stream));
+        };
+        track.addEventListener("ended", sync);
+        track.addEventListener("mute", sync);
+        track.addEventListener("unmute", sync);
+        sync();
       };
 
       pc.onicecandidate = (ev) => {
@@ -117,6 +160,7 @@ export function useVoiceChannel(
       };
 
       if (initiator) {
+        ensureLanes(pc);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         signalRef.current?.send({
@@ -148,6 +192,17 @@ export function useVoiceChannel(
 
       if (payload.type === "offer" && payload.sdp) {
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        // Lanes exist now. Declare them two-way before answering, then put
+        // this side's tracks in — otherwise the screen lane is answered
+        // recvonly and a later share is never sent.
+        openLanesForSending(pc);
+        if (pendingLocalRef.current.has(payload.from)) {
+          const mic = pendingLocalRef.current.get(payload.from) ?? null;
+          pendingLocalRef.current.delete(payload.from);
+          await setLaneTrack(pc, LANE_AUDIO, mic);
+          await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
+          await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+        }
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         signalRef.current?.send({
@@ -162,6 +217,13 @@ export function useVoiceChannel(
         });
       } else if (payload.type === "answer" && payload.sdp) {
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+      } else if (payload.type === "screen") {
+        setSharingIds((prev) => {
+          const next = new Set(prev);
+          if (payload.sharing) next.add(payload.from);
+          else next.delete(payload.from);
+          return next;
+        });
       } else if (payload.type === "ice" && payload.candidate) {
         await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
       } else if (payload.type === "leave") {
@@ -236,6 +298,65 @@ export function useVoiceChannel(
     }
   }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, participants, micMuted, deafened]);
 
+  /** Turn your camera on or off. Uses the camera lane, so a share is unaffected. */
+  const toggleCamera = useCallback(async () => {
+    const next = !cameraTrackRef.current;
+    if (!next) {
+      cameraTrackRef.current?.stop();
+      cameraTrackRef.current = null;
+      for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_CAMERA, null);
+      setCameraEnabled(false);
+      return;
+    }
+    try {
+      const cam = await getDisbandUserMedia({ video: true });
+      const track = cam.getVideoTracks()[0];
+      cameraTrackRef.current = track;
+      for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_CAMERA, track);
+      setCameraEnabled(true);
+    } catch {
+      setCameraEnabled(false);
+    }
+  }, []);
+
+  /** Tell the channel that sharing started or stopped. */
+  const announceSharing = useCallback((sharing: boolean) => {
+    if (!userId) return;
+    void signalRef.current?.send({
+      type: "broadcast",
+      event: "signal",
+      payload: { type: "screen", from: userId, sharing } satisfies SignalPayload,
+    });
+  }, [userId]);
+
+  /** Share your screen without giving up your camera. */
+  const toggleScreenShare = useCallback(async () => {
+    const next = !screenTrackRef.current;
+    if (!next) {
+      screenTrackRef.current?.stop();
+      screenTrackRef.current = null;
+      for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_SCREEN, null);
+      setLocalScreen(null);
+      setScreenEnabled(false);
+      announceSharing(false);
+      return;
+    }
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia(
+        buildScreenConstraints((planRef.current ?? "free") as SubscriptionPlan),
+      );
+      const track = display.getVideoTracks()[0];
+      track.addEventListener("ended", () => { void toggleScreenShare(); });
+      screenTrackRef.current = track;
+      for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_SCREEN, track);
+      setLocalScreen(new MediaStream([track]));
+      setScreenEnabled(true);
+      announceSharing(true);
+    } catch {
+      setScreenEnabled(false);
+    }
+  }, [announceSharing]);
+
   const leave = useCallback(async () => {
     if (userId && signalRef.current) {
       await signalRef.current.send({
@@ -286,6 +407,12 @@ export function useVoiceChannel(
     joined,
     participants,
     remoteStreams,
+    remoteScreens: new Map([...remoteScreens].filter(([id]) => sharingIds.has(id))),
+    localScreen,
+    cameraEnabled,
+    screenEnabled,
+    toggleCamera,
+    toggleScreenShare,
     error,
     join,
     leave,

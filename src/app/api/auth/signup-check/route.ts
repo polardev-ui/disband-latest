@@ -55,6 +55,21 @@ export async function POST(request: Request) {
     }
   }
 
+  if (email) {
+    // Plus-addressing and throwaway domains are refused by a trigger on the
+    // auth table, which can only fail the signup with a generic database
+    // error. Asking first turns that into a sentence someone can act on.
+    const { data: emailCheck } = await service.rpc("check_email_allowed", {
+      p_email: email,
+    });
+    if (emailCheck && emailCheck.allowed === false) {
+      return NextResponse.json({
+        allowed: false,
+        error: (emailCheck.error as string | undefined) ?? "That email cannot be used.",
+      }, { status: 400 });
+    }
+  }
+
   const formatErr = usernameFormatError(sanitized);
   if (formatErr) {
     if (usernameContainsBlockedWord(sanitized) && ipHash) {

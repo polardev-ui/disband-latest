@@ -4,7 +4,7 @@ import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const MEDIA_API =
-  process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://api.wsgpolar.me/v1";
+  process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://cdn.disband.dev/v1";
 
 function decodeHtml(text: string): string {
   return text

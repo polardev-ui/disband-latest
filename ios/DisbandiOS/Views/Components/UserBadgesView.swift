@@ -16,7 +16,10 @@ struct UserBadgesView: View {
     @State private var showTiers = false
 
     var body: some View {
-        HStack(spacing: 4) {
+        // Wraps rather than running off the edge: a profile that has earned a
+        // dozen badges showed only the first few, and the rest were simply cut
+        // off by the screen.
+        FlowLayout(spacing: 4, lineSpacing: 4) {
             if let ent = entitlement, ent.plan != "free",
                let tier = SubscriptionTier.forMonths(ent.months) {
                 Button { showTiers = true } label: {

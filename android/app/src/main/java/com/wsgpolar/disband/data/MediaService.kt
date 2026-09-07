@@ -2,9 +2,11 @@ package com.wsgpolar.disband.data
 
 import com.wsgpolar.disband.core.ApiHttp
 import com.wsgpolar.disband.core.AppConfig
+import com.wsgpolar.disband.core.DisbandSupabase
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -49,10 +51,21 @@ object MediaService {
 
     class UploadException(message: String) : Exception(message)
 
-    /** Uploads bytes via multipart/form-data to /images; returns the hosted URL. */
+    /**
+     * Uploads bytes via multipart/form-data to /images; returns the hosted URL.
+     *
+     * The CDN only accepts uploads from a signed-in user, so the bucket cannot
+     * be used as free storage by whoever finds the endpoint. The old host took
+     * anything from anyone, which is why this header did not exist before.
+     */
     suspend fun uploadImage(bytes: ByteArray, filename: String = "upload.jpg",
                             mimeType: String = "image/jpeg"): MediaUploadResult {
+        val token = runCatching {
+            DisbandSupabase.auth.currentSessionOrNull()?.accessToken
+        }.getOrNull()
+
         val response = ApiHttp.client.post("$apiBase/images") {
+            token?.let { header("Authorization", "Bearer $it") }
             setBody(
                 MultiPartFormDataContent(
                     formData {

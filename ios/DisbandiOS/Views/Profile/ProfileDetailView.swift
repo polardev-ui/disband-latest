@@ -83,13 +83,13 @@ struct ProfileDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                Text(profile.name).font(.title2.bold()).foregroundStyle(Brand.textPrimary)
-                // Full badge set, matching the desktop row (owner, staff, OG,
-                // bug bounty) rather than only the first two.
-                UserBadgesView(profile: profile, size: 15)
-            }
+            Text(profile.name).font(.title2.bold()).foregroundStyle(Brand.textPrimary)
             Text("@\(profile.handle)").font(.subheadline).foregroundStyle(Brand.textMuted)
+            // On its own line, with the full width to wrap into. Beside the
+            // name it had whatever the name left over, which on a long name was
+            // room for about two badges.
+            UserBadgesView(profile: profile, size: 15)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

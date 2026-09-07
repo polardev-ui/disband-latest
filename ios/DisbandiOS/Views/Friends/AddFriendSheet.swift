@@ -15,7 +15,7 @@ struct AddFriendSheet: View {
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(Brand.textMuted)
-                    TextField("Search by username", text: $query)
+                    TextField("Enter their exact username", text: $query)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .foregroundStyle(Brand.textPrimary)
@@ -28,7 +28,11 @@ struct AddFriendSheet: View {
                 if searching {
                     StateView(kind: .loading)
                 } else if results.isEmpty && !query.isEmpty {
-                    StateView(kind: .empty, title: "No users found", systemImage: "magnifyingglass")
+                    // The match is exact by design, so "nothing found" usually
+                    // means a typo rather than an absent person — say which.
+                    StateView(kind: .empty,
+                              title: "No account with that exact username",
+                              systemImage: "magnifyingglass")
                 } else {
                     List(results) { profile in
                         HStack {

@@ -21,6 +21,16 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     private let provider: CXProvider
     private var calls: [UUID: IncomingCall] = [:]
 
+    /// Outgoing and joined calls, which the system was never told about.
+    ///
+    /// iOS suspends an app shortly after it leaves the screen unless it has a
+    /// call registered with CallKit. Only incoming calls were reported, so any
+    /// call you started or joined yourself lost its microphone and its audio
+    /// the moment you swiped up — the process was simply suspended. Reporting
+    /// every active call is what keeps it alive in the background.
+    private let controller = CXCallController()
+    private var activeCalls: [String: UUID] = [:]
+
     override init() {
         let config = CXProviderConfiguration(localizedName: "Disband")
         config.supportsVideo = false
@@ -31,6 +41,45 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         provider = CXProvider(configuration: config)
         super.init()
         provider.setDelegate(self, queue: .main)
+    }
+
+    /// Register a call this device started or joined — a 1:1 call, a group
+    /// call, or a voice channel. Without this the app is suspended on
+    /// backgrounding and stops sending and receiving audio.
+    func startActiveCall(id: String, title: String, hasVideo: Bool = false) {
+        guard activeCalls[id] == nil else { return }
+        let uuid = UUID()
+        activeCalls[id] = uuid
+
+        let handle = CXHandle(type: .generic, value: title)
+        let action = CXStartCallAction(call: uuid, handle: handle)
+        action.isVideo = hasVideo
+
+        controller.request(CXTransaction(action: action)) { [weak self] error in
+            guard let self else { return }
+            Task { @MainActor in
+                if let error {
+                    // Nothing to keep alive if the system refused the call, so
+                    // do not leave a mapping that end() would act on later.
+                    self.activeCalls[id] = nil
+                    print("CallKit startActiveCall failed: \(error.localizedDescription)")
+                    return
+                }
+                self.provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+                self.provider.reportOutgoingCall(with: uuid, connectedAt: Date())
+            }
+        }
+    }
+
+    /// Tell the system a call this device started or joined has finished.
+    func endActiveCall(id: String) {
+        guard let uuid = activeCalls.removeValue(forKey: id) else { return }
+        let action = CXEndCallAction(call: uuid)
+        controller.request(CXTransaction(action: action)) { error in
+            if let error {
+                print("CallKit endActiveCall failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Present the system ring (lock screen, swipe to answer, banner upstairs).

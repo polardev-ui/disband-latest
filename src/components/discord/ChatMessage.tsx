@@ -15,6 +15,7 @@ import { ServerInviteCard } from "./ServerInviteCard";
 import { GiftCard } from "@/components/gift/GiftCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageAttachment } from "./MessageAttachment";
+import { AttachmentUploadCard } from "./AttachmentUploadCard";
 import { MessageReactions } from "./MessageReactions";
 import { MessageActionBar } from "./MessageActionBar";
 import { Twemoji } from "@/components/ui/Twemoji";
@@ -175,7 +176,17 @@ export function ChatMessage({
     if (author && onAuthorClick) onAuthorClick(author);
   }
 
-  const attachment = message.attachment_url ? (
+  // While the file is still going up the message shows the upload rather than
+  // pretending the attachment has arrived.
+  const attachment = message.attachment_url && message.uploadProgress !== undefined ? (
+    <AttachmentUploadCard
+      name={message.attachment_name || "File"}
+      size={message.attachment_size}
+      type={message.attachment_type}
+      progress={message.uploadProgress}
+      localUrl={message.attachment_url}
+    />
+  ) : message.attachment_url ? (
     <MessageAttachment
       url={message.attachment_url}
       type={message.attachment_type}
@@ -186,6 +197,7 @@ export function ChatMessage({
       authorColor={authorColor}
       isOwn={isOwn}
       createdAt={message.created_at}
+      currentUserId={currentUserId}
     />
   ) : null;
 

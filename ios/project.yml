@@ -16,8 +16,8 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "1.10.1"
-    CURRENT_PROJECT_VERSION: "41"
+    MARKETING_VERSION: "1.11.0"
+    CURRENT_PROJECT_VERSION: "43"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "KR54WPJ24G"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -53,6 +53,9 @@ targets:
         NSCameraUsageDescription: Disband uses the camera for video calls and sending photos.
         NSMicrophoneUsageDescription: Disband uses the microphone for voice and video calls.
         NSPhotoLibraryUsageDescription: Disband needs photo access to share images in chat.
+        # Saving a photo or video from chat asks only for permission to add,
+        # not to read the whole library — the smaller ask for the smaller thing.
+        NSPhotoLibraryAddUsageDescription: Disband saves images and videos from chat to your photo library.
         ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:
           - remote-notification

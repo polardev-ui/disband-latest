@@ -26,8 +26,22 @@ export const EMOJI_CATEGORIES: { name: string; emojis: string[] }[] = [
   },
 ];
 
-const EMOJI_ONLY_RE =
-  /^(?:\p{Extended_Pictographic}(?:[\p{Emoji_Modifier}\uFE0F\u200D]\p{Extended_Pictographic}*)|\s)+$/u;
+/**
+ * One emoji: a pictograph plus whatever may trail it — a skin-tone modifier,
+ * a variation selector, a keycap, or further pictographs joined with ZWJ.
+ *
+ * The trailing part has to be optional. It was not, so a bare "\u{1F525}" or
+ * "\u{1F62D}" failed to match while "\u2764\uFE0F" and "\u{1F937}\u200D\u2642\uFE0F"
+ * matched — which is exactly why only some emoji rendered large. Flags are
+ * their own shape: a pair of regional indicators, no pictograph involved.
+ */
+const EMOJI_SEQUENCE =
+  "(?:\\p{Regional_Indicator}{2}|[\\u0023\\u002A0-9]\\uFE0F?\\u20E3|\\p{Extended_Pictographic}(?:\\p{Emoji_Modifier}|[\\uFE0F\\uFE0E]|\\u20E3|\\u200D\\p{Extended_Pictographic}(?:\\p{Emoji_Modifier}|\\uFE0F)?)*)";
+
+const EMOJI_ONLY_RE = new RegExp(`^(?:${EMOJI_SEQUENCE}|\\s)+$`, "u");
+
+/** One whole emoji and nothing else — a flag or a keycap counts as one too. */
+const EMOJI_GRAPHEME_RE = new RegExp(`^${EMOJI_SEQUENCE}$`, "u");
 
 /** True when the message is only emoji (and optional whitespace) — render larger in chat. */
 export function isEmojiOnlyMessage(content: string): boolean {
@@ -42,10 +56,10 @@ export function countEmojis(content: string): number {
   try {
     const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
     for (const { segment } of seg.segment(content)) {
-      if (/\p{Extended_Pictographic}/u.test(segment)) count += 1;
+      if (EMOJI_GRAPHEME_RE.test(segment)) count += 1;
     }
   } catch {
-    const matches = content.match(/\p{Extended_Pictographic}(?:[\p{Emoji_Modifier}\uFE0F\u200D]\p{Extended_Pictographic}*)?/gu);
+    const matches = content.match(new RegExp(EMOJI_SEQUENCE, "gu"));
     count = matches?.length ?? 0;
   }
   return count;

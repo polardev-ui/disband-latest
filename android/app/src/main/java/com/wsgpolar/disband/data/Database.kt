@@ -375,12 +375,31 @@ object Database {
         return out
     }
 
+    /**
+     * Finds the one account with exactly this username.
+     *
+     * Substring matching turned the add-friend box into a directory: typing
+     * "a" listed twenty real people with their display names and avatars, so
+     * anyone could enumerate the platform and add strangers by accident. A
+     * username is something you are told, not something you browse for, so the
+     * match is exact — case-insensitively, since it is typed by hand — and a
+     * wildcard typed into the box is escaped rather than honoured.
+     */
     suspend fun searchProfiles(query: String): List<Profile> {
-        if (query.isBlank()) return emptyList()
+        val trimmed = query.trim().trimStart('@')
+        if (trimmed.isBlank()) return emptyList()
+
+        // `%` and `_` are wildcards to ilike; a username containing one must
+        // match itself, not everything.
+        val escaped = trimmed
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+
         return client.from("profiles")
             .select(Columns.ALL) {
-                filter { ilike("username", "%$query%") }
-                limit(20)
+                filter { ilike("username", escaped) }
+                limit(1)
             }
             .decodeList()
     }

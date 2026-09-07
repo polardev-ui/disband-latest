@@ -66,6 +66,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
   avatarChangesPerDay: number;
   profileChangeCooldowns: boolean;
   premiumThemeIds: string[];
+  /** Everyone can share a screen. The plan decides the quality ceiling. */
   screenShare: boolean;
   historyExport: boolean;
   prioritySupport: boolean;
@@ -85,7 +86,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     avatarChangesPerDay: 10,
     profileChangeCooldowns: true,
     premiumThemeIds: [],
-    screenShare: false,
+    screenShare: true,
     historyExport: false,
     prioritySupport: false,
   },
@@ -104,7 +105,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     avatarChangesPerDay: 20,
     profileChangeCooldowns: false,
     premiumThemeIds: ["sunset-gold"],
-    screenShare: false,
+    screenShare: true,
     historyExport: false,
     prioritySupport: false,
   },
@@ -181,7 +182,7 @@ export const PLANS: PlanTier[] = [
       { label: "Unlimited profile changes", included: true },
       { label: "Custom profile theme", included: true, detail: "Gradient + accent" },
       { label: "4 exclusive themes", included: true },
-      { label: "Screen sharing", included: true },
+      { label: "Screen sharing", included: true, detail: "4K at 120 fps" },
       { label: "Message history export", included: true },
       { label: "Priority support", included: true },
       { label: "Super badge", included: true },
