@@ -6,6 +6,14 @@ import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { statusLabel } from "@/lib/presence";
+import {
+  STATUS_DURATION_PRESETS,
+  activeStatusNote,
+  expiresAtForDuration,
+  presetForExpiresAt,
+  statusExpiryLabel,
+  type StatusDurationId,
+} from "@/lib/presence";
 import type { UserStatus } from "@/lib/supabase/types";
 
 const STATUS_DOT_BG: Record<UserStatus, string> = {
@@ -44,6 +52,12 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
   const [changing, setChanging] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
+  // Popup remounts on every open, so initializers seed from the live profile.
+  const [customNote, setCustomNote] = useState(() => profile?.status_note ?? "");
+  const [customDuration, setCustomDuration] = useState<StatusDurationId>(() =>
+    presetForExpiresAt(profile?.status_expires_at),
+  );
+  const [savingCustom, setSavingCustom] = useState(false);
   const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
 
   const name = profile ? displayName(profile) : user?.email?.split("@")[0] ?? "You";
@@ -98,6 +112,34 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
     },
     [changing, updateProfile],
   );
+
+  const saveCustomStatus = useCallback(async () => {
+    if (savingCustom) return;
+    const note = customNote.trim();
+    setSavingCustom(true);
+    try {
+      await updateProfile({
+        status_note: note || null,
+        status_expires_at: note ? expiresAtForDuration(customDuration) : null,
+      } as any);
+    } finally {
+      setSavingCustom(false);
+    }
+  }, [savingCustom, customNote, customDuration, updateProfile]);
+
+  const clearCustomStatus = useCallback(async () => {
+    if (savingCustom) return;
+    setSavingCustom(true);
+    try {
+      await updateProfile({ status_note: null, status_expires_at: null } as any);
+      setCustomNote("");
+      setCustomDuration("never");
+    } finally {
+      setSavingCustom(false);
+    }
+  }, [savingCustom, updateProfile]);
+
+  const liveNote = activeStatusNote(profile);
 
   useEffect(() => {
     const el = anchorRef.current;
@@ -166,6 +208,68 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
               <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
+        </div>
+
+        {/* Custom status — the clickable bubble's editor (Discord-style) */}
+        <div className="border-t border-divider px-4 py-2.5">
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+            Custom Status
+          </p>
+          {liveNote && (
+            <div className="mb-2 flex items-center gap-2 rounded-md bg-bg-tertiary px-2.5 py-1.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <p className="min-w-0 flex-1 truncate text-[13px] text-text-normal">{liveNote}</p>
+              <span className="shrink-0 text-[11px] text-text-muted">
+                {statusExpiryLabel(profile?.status_expires_at)}
+              </span>
+            </div>
+          )}
+          <input
+            value={customNote}
+            onChange={(e) => setCustomNote(e.target.value.slice(0, 60))}
+            maxLength={60}
+            placeholder="What's on your mind?"
+            className="w-full rounded-md border border-divider bg-bg-tertiary px-2.5 py-1.5 text-[13px] text-text-normal placeholder:text-text-muted/60 focus:border-brand focus:outline-none"
+          />
+          <div className="mt-1.5 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
+            {STATUS_DURATION_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setCustomDuration(preset.id)}
+                aria-pressed={customDuration === preset.id}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  customDuration === preset.id
+                    ? "bg-brand text-white"
+                    : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            <button
+              type="button"
+              disabled={savingCustom}
+              onClick={() => void saveCustomStatus()}
+              className="flex-1 rounded-md bg-brand px-2 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {savingCustom ? "Saving…" : "Set Status"}
+            </button>
+            {(liveNote || customNote.trim()) && (
+              <button
+                type="button"
+                disabled={savingCustom}
+                onClick={() => void clearCustomStatus()}
+                className="rounded-md border border-divider px-2.5 py-1.5 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Status switcher */}

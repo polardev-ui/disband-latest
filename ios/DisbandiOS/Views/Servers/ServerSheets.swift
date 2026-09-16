@@ -91,3 +91,117 @@ struct JoinServerSheet: View {
         }
     }
 }
+
+struct DiscoverServersSheet: View {
+    var onDone: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [DatabaseService.DiscoverableServer] = []
+    @State private var loading = true
+    @State private var error: String?
+    @State private var joiningId: String?
+    @State private var joinedIds: Set<String> = []
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if loading {
+                    StateView(kind: .loading)
+                } else if let error {
+                    VStack(spacing: 16) {
+                        StateView(kind: .error, title: error)
+                        Button("Try Again") { Task { await load() } }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Brand.accent)
+                    }
+                } else if items.isEmpty {
+                    StateView(kind: .empty, title: "No public servers yet.\nCreate one and make it discoverable.",
+                              systemImage: "safari")
+                } else {
+                    List(items) { server in
+                        HStack(spacing: 12) {
+                            AvatarView(url: server.iconUrl, name: server.name, size: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text(server.name)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Brand.textPrimary)
+                                        .lineLimit(1)
+                                    if server.verified == true {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.footnote)
+                                            .foregroundStyle(Brand.verified)
+                                            .accessibilityLabel("Verified server")
+                                    }
+                                }
+                                Text("\(server.memberCount) member\(server.memberCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(Brand.textMuted)
+                                if let desc = server.description, !desc.isEmpty {
+                                    Text(desc)
+                                        .font(.caption)
+                                        .foregroundStyle(Brand.textMuted)
+                                        .lineLimit(2)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if joinedIds.contains(server.id) {
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(Brand.online)
+                            } else {
+                                Button { join(server) } label: {
+                                    Text(joiningId == server.id ? "Joining…" : "Join")
+                                        .font(.subheadline.weight(.semibold))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
+                                        .background(joiningId == server.id ? Brand.elevated : Brand.accent,
+                                                    in: .capsule)
+                                        .foregroundStyle(joiningId == server.id ? Brand.textMuted : .white)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(joiningId == server.id)
+                            }
+                        }
+                        .listRowBackground(Brand.surface)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(Brand.background)
+            .navigationTitle("Discover")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.large])
+        .task { await load() }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            items = try await DatabaseService.discoverableServers()
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func join(_ server: DatabaseService.DiscoverableServer) {
+        guard joiningId == nil else { return }
+        joiningId = server.id
+        Task {
+            do {
+                try await DatabaseService.joinServerById(serverId: server.id)
+                joinedIds.insert(server.id)
+                await onDone()
+            } catch {
+                self.error = "Couldn't join that server."
+            }
+            joiningId = nil
+        }
+    }
+}

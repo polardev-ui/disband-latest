@@ -1,4 +1,5 @@
-export type GiftPlan = "basic" | "super";
+/** Gifting follows the plans that exist, and there is only one paid plan. */
+export type GiftPlan = "aero";
 
 /** The only lengths a gift can be bought in. A year is the ceiling. */
 export const GIFT_MONTHS = [1, 3, 6, 12] as const;
@@ -8,19 +9,17 @@ export type GiftMonths = (typeof GIFT_MONTHS)[number];
  * What each length costs, in cents.
  *
  * The price rises with every step up, and longer gifts carry a discount
- * against buying the same span a month at a time — a year of Super is 8,999
- * rather than 12 × 899. Kept as an explicit table rather than a formula so
- * the numbers on the buy screen are the numbers charged, with no rounding
- * drift between the two.
+ * against buying the same span a month at a time — a year is 8,999 rather
+ * than 12 × 899. Kept as an explicit table rather than a formula so the
+ * numbers on the buy screen are the numbers charged, with no rounding drift
+ * between the two.
  */
 export const GIFT_PRICING: Record<GiftPlan, Record<GiftMonths, number>> = {
-  basic: { 1: 299, 3: 849, 6: 1599, 12: 2999 },
-  super: { 1: 899, 3: 2549, 6: 4799, 12: 8999 },
+  aero: { 1: 899, 3: 2549, 6: 4799, 12: 8999 },
 };
 
 export const GIFT_PLAN_NAME: Record<GiftPlan, string> = {
-  basic: "Disband Basic",
-  super: "Disband Super",
+  aero: "Disband Aero",
 };
 
 export function giftPrice(plan: GiftPlan, months: GiftMonths): number {
@@ -45,7 +44,18 @@ export function savingsPercent(plan: GiftPlan, months: GiftMonths): number {
 }
 
 export function isGiftPlan(v: unknown): v is GiftPlan {
-  return v === "basic" || v === "super";
+  return v === "aero";
+}
+
+/**
+ * The plan a stored gift grants.
+ *
+ * Gift links minted before Basic and Super were merged are still out there,
+ * unredeemed and paid for. They grant Aero now — which is the same or more
+ * than was bought — rather than failing to resolve to a plan that exists.
+ */
+export function normalizeGiftPlan(_stored: unknown): GiftPlan {
+  return "aero";
 }
 
 export function isGiftMonths(v: unknown): v is GiftMonths {

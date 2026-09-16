@@ -1,30 +1,25 @@
+import type { SubscriptionPlan } from "@/lib/subscription";
+
 interface SubscriptionBadgeProps {
-  plan: "free" | "basic" | "super";
+  plan: SubscriptionPlan;
   className?: string;
   tooltip?: boolean;
 }
 
-const STYLES: Record<string, { label: string; className: string }> = {
-  basic: {
-    label: "Basic",
-    className: "bg-[#57f287]/20 text-[#57f287]",
-  },
-  super: {
-    label: "Super",
-    className: "bg-super/20 text-super",
-  },
+const AERO = {
+  label: "Aero",
+  className: "bg-super/20 text-super",
 };
 
 export function SubscriptionBadge({ plan, className = "", tooltip }: SubscriptionBadgeProps) {
   if (plan === "free") return null;
 
-  const style = STYLES[plan];
   return (
     <span
-      title={tooltip ? `${style.label} subscriber` : undefined}
-      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style.className} ${className}`}
+      title={tooltip ? `${AERO.label} subscriber` : undefined}
+      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${AERO.className} ${className}`}
     >
-      {style.label}
+      {AERO.label}
     </span>
   );
 }

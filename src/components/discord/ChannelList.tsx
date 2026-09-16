@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserPanel } from "./UserPanel";
+import { NotificationBell } from "./NotificationBell";
 import { CallIndicator } from "./CallIndicator";
 import { Tooltip } from "./Tooltip";
 import {
@@ -33,6 +34,8 @@ interface ChannelListProps {
   activeChannelId: string | null;
   canManageChannels: boolean;
   voicePresence: Map<string, PresenceMember[]>;
+  /** When each occupied voice channel's current active stretch began (epoch ms). */
+  voiceStartTimes: Map<string, number>;
   onSelectChannel: (id: string) => void;
   onOpenSettings: () => void;
   onOpenProfile?: () => void;
@@ -50,6 +53,9 @@ interface ChannelListProps {
   getUnreadCount?: (channelId: string) => number;
   /** Messages naming you — drives the red badge. */
   getMentionCount?: (channelId: string) => number;
+  /** Server catalyst count (level source) — shows the boost bar. */
+  catalystCount?: number;
+  onOpenCatalysts?: () => void;
 }
 
 function MiniAvatar({ profile }: { profile?: Profile }) {
@@ -62,12 +68,23 @@ function MiniAvatar({ profile }: { profile?: Profile }) {
     >
       {profile?.avatar_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={safeImageUrl(profile.avatar_url) ?? ""} alt="" className="h-full w-full" />
+        <img src={safeImageUrl(profile.avatar_url) || undefined} alt="" className="h-full w-full" />
       ) : (
         name.charAt(0).toUpperCase()
       )}
     </span>
   );
+}
+
+function formatCallDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 export function ChannelList({
@@ -77,6 +94,7 @@ export function ChannelList({
   activeChannelId,
   canManageChannels,
   voicePresence,
+  voiceStartTimes,
   onSelectChannel,
   onOpenSettings,
   onOpenProfile,
@@ -92,6 +110,8 @@ export function ChannelList({
   onCreateCategory,
   getUnreadCount,
   getMentionCount,
+  catalystCount,
+  onOpenCatalysts,
 }: ChannelListProps) {
   // Seeded from storage so a collapsed category stays collapsed across reloads
   // and server switches; a lazy initialiser keeps localStorage off the server
@@ -126,6 +146,16 @@ export function ChannelList({
   // being dragged; without suppression that commits the move AND selects the
   // channel (or collapses the category). Only swallow that one click.
   const suppressClickRef = useRef<HTMLElement | null>(null);
+
+  // Live call timer: re-render once a second while any voice channel is
+  // occupied so its green duration keeps ticking.
+  const [now, setNow] = useState(() => Date.now());
+  const anyCallActive = voiceStartTimes.size > 0;
+  useEffect(() => {
+    if (!anyCallActive) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [anyCallActive]);
 
   // Pointer-event dragging replaces HTML5 drag-and-drop, which does not work in
   // Safari/iOS over <button> rows and offers no touch support at all. A short
@@ -403,7 +433,17 @@ export function ChannelList({
             </span>
           )}
           {ch.type === "voice" && participants.length > 0 && (
-            <span className="shrink-0 text-[11px] font-semibold text-text-muted">{participants.length}</span>
+            <>
+              <span className="shrink-0 text-[11px] font-semibold text-text-muted">{participants.length}</span>
+              {(() => {
+                const start = voiceStartTimes.get(ch.id);
+                return start !== undefined ? (
+                  <span className="shrink-0 rounded-[5px] bg-status-online/10 px-[4px] py-[1px] text-[10px] font-bold tabular-nums leading-[13px] text-status-online">
+                    {formatCallDuration(now - start)}
+                  </span>
+                ) : null;
+              })()}
+            </>
           )}
         </button>
         {ch.type === "voice" && participants.length > 0 && (
@@ -493,7 +533,26 @@ export function ChannelList({
               <IconPlus size={16} />
             </button>
           )}
+          <span className="ml-1">
+            <NotificationBell />
+          </span>
         </div>
+      )}
+      {onOpenCatalysts && (
+        <button
+          type="button"
+          onClick={onOpenCatalysts}
+          title="View server Catalysts"
+          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-brand/25 bg-brand/[0.06] px-2.5 py-1.5 text-left transition-colors hover:bg-brand/[0.12]"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
+            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+          </svg>
+          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-text-normal">
+            {catalystCount ?? 0} {(catalystCount ?? 0) === 1 ? "Catalyst" : "Catalysts"}
+          </span>
+          <span className="shrink-0 text-[11px] font-bold text-brand">Boost</span>
+        </button>
       )}
 
       <div className="px-2 pt-2">

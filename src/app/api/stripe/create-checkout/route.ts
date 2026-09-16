@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getStripe, getPriceId } from "@/lib/stripe";
 import { getRouteUser } from "@/lib/supabase/server";
-import { PUBLIC_ENV } from "@/lib/public-env";
+import { checkoutOrigin } from "@/lib/checkout-origin";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { normalizePlan } from "@/lib/subscription";
 
 export async function POST(req: Request) {
   try {
@@ -10,12 +12,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { plan } = (await req.json()) as { plan: "basic" | "super" };
-    if (plan !== "basic" && plan !== "super") {
+    // Legacy names are still accepted from older clients and resolve to the
+    // one plan that exists, so a stale tab does not fail at checkout.
+    const { plan: requested } = (await req.json()) as { plan: string };
+    const plan = normalizePlan(requested);
+    if (plan !== "aero") {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
 
-    const origin = req.headers.get("origin") ?? PUBLIC_ENV.webAppUrl;
+    const limit = rateLimit(`checkout:stripe/create-checkout:${user.id}`, 10, 60_000);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+    const origin = checkoutOrigin(req);
     const priceId = getPriceId(plan);
 
     // Misconfigured price ids used to surface as an opaque 500 from Stripe.

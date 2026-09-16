@@ -154,7 +154,7 @@ export function useSubscription(userId: string | undefined) {
   const plan: SubscriptionPlan = planFromSubscription(subscription);
   const entitlements = ENTITLEMENTS[plan];
 
-  const startCheckout = useCallback(async (planId: "basic" | "super"): Promise<string | null> => {
+  const startCheckout = useCallback(async (planId: SubscriptionPlan): Promise<string | null> => {
     const res = await apiFetch("/api/stripe/create-checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

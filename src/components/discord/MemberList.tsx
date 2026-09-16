@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { BotTag } from "@/components/ui/BotTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
+import { roleGradientTextStyle, roleIsGradientAnimated } from "@/lib/profileColor";
 import { useApp } from "@/contexts/AppContext";
 import { IconCrown, IconShield } from "@/components/icons";
 import { Tooltip } from "./Tooltip";
@@ -102,8 +103,21 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
       else grouped.set(key, [m]);
     }
 
+    // Headers follow the role hierarchy, not arrival order: Owner, Admin,
+    // then custom roles highest-priority-first, and everyone else last. A Map
+    // in joined_at order would let @everyone-grade members jump the queue.
+    const groupPriority = (label: string): number => {
+      if (label === "Owner") return Number.MAX_SAFE_INTEGER;
+      if (label === "Admin") return Number.MAX_SAFE_INTEGER - 1;
+      const best = grouped
+        .get(label)
+        ?.reduce((max: number, m) => Math.max(max, topRole(m, roles)?.position ?? -1), -1);
+      return best ?? -1;
+    };
+
     const out: Item[] = [];
-    for (const [label, list] of grouped) {
+    for (const label of [...grouped.keys()].sort((a, b) => groupPriority(b) - groupPriority(a))) {
+      const list = grouped.get(label)!;
       out.push({ kind: "header", key: `h:${label}`, label, count: list.length });
       for (const m of list) out.push({ kind: "member", key: m.user_id, member: m });
     }
@@ -248,6 +262,8 @@ function Row({
 }) {
   const p = m.profile;
   const color = roleColor(m, roles);
+  const gradRole = topRole(m, roles);
+  const gradStyle = roleGradientTextStyle(gradRole);
   return (
     <button
       type="button"
@@ -269,7 +285,7 @@ function Row({
         className={`flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] ${live === "offline" ? "text-text-muted" : "text-text-normal"}`}
         style={color ? { color } : undefined}
       >
-        <span className="truncate">{displayName(p)}</span>
+        <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""}`} style={gradStyle ?? undefined}>{displayName(p)}</span>
         <BotTag profile={p} size="sm" />
         <PlatformBadge userId={p.id} />
         {m.role === "owner" && (

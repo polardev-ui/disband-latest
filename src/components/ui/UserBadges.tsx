@@ -52,7 +52,9 @@ export function UserBadges({
   userId, plan, tenureMonths, subscribedSince,
   size = 13, className = "", interactive = true, variant = "inline",
 }: UserBadgesProps) {
-  const all = useBadges(userId);
+  // A profile view is the one place a stale badge list is actually noticed,
+  // and it renders once rather than per row — so it re-reads.
+  const all = useBadges(userId, { fresh: variant === "full" });
   const full = variant === "full";
   const badges = full ? all : all.filter((b) => IDENTITY_BADGES.has(b.key));
   // Resolved here rather than left to each caller. A caller that passed a plan
@@ -86,7 +88,7 @@ export function UserBadges({
             side="top"
             label={
               <span className="block text-center">
-                <span className="block">{effectivePlan === "super" ? "Disband Super" : "Disband Basic"}</span>
+                <span className="block">Disband Aero</span>
                 <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
                   {tier.label} · {interactive ? "click for details" : `${months} months`}
                 </span>
@@ -97,14 +99,14 @@ export function UserBadges({
               <button
                 type="button"
                 onClick={() => setShowTiers(true)}
-                aria-label={`${effectivePlan === "super" ? "Super" : "Basic"} subscriber, ${tier.label} tier`}
+                aria-label={`Aero subscriber, ${tier.label} tier`}
                 className="inline-flex shrink-0 items-center transition-transform hover:scale-110"
               >
-                <SubscriptionMedallion tier={tier} super={effectivePlan === "super"} size={size + 7} />
+                <SubscriptionMedallion tier={tier} super size={size + 7} />
               </button>
             ) : (
               <span className="inline-flex shrink-0 items-center">
-                <SubscriptionMedallion tier={tier} super={effectivePlan === "super"} size={size + 7} />
+                <SubscriptionMedallion tier={tier} super size={size + 7} />
               </span>
             )}
           </Tooltip>

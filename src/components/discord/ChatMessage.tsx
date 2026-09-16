@@ -1,8 +1,17 @@
 "use client";
 
-import { formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent } from "@/lib/utils";
+import { Fragment, type ReactNode } from "react";
+import {
+  formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent,
+  mentionsEveryone, mentionsUsername,
+} from "@/lib/utils";
 import { extractGiftCodes } from "@/lib/gifts";
 import { renderMarkdown } from "@/lib/markdown";
+import {
+  CustomEmojiImg,
+  isSingleCustomEmoji,
+  splitCustomEmojiSegments,
+} from "@/lib/custom-emoji";
 import { extractPreviewUrls } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
@@ -21,6 +30,7 @@ import { MessageActionBar } from "./MessageActionBar";
 import { Twemoji } from "@/components/ui/Twemoji";
 import type { Profile } from "@/lib/supabase/types";
 import type { MessageReaction, ReplyPreview } from "@/lib/messages";
+import type { ChannelLite } from "@/lib/markdown";
 
 export interface ChatMessageData {
   id: string;
@@ -46,6 +56,8 @@ interface ChatMessageProps {
   showHeader: boolean;
   compact: boolean;
   currentUserId?: string | null;
+  /** Used to spot a ping by name when the stored id list missed it. */
+  currentUserName?: string | null;
   authorColor?: string | null;
   reactions?: MessageReaction[];
   onAuthorClick?: (profile: Profile) => void;
@@ -59,15 +71,54 @@ interface ChatMessageProps {
   onForward?: () => void;
   highlight?: boolean;
   onContentResize?: () => void;
+  channels?: ChannelLite[];
+  onChannelClick?: (channelId: string) => void;
+  /** Active server's custom emoji (name->url) so `:shortcode:` renders as images. */
+  customEmoji?: Record<string, string>;
 }
 
-function MessageBody({
-  content,
+/**
+ * Render message text with server custom emoji resolved: `:shortcode:`
+ * tokens become images, everything else goes through markdown as usual.
+ * Keyed Fragments keep React happy (each renderMarkdown call restarts its
+ * own key counter).
+ */
+function renderCustomEmojiMarkdown(
+  text: string,
+  members: Profile[],
+  onMentionClick: ((profile: Profile) => void) | undefined,
+  channels: ChannelLite[] | undefined,
+  onChannelClick: ((channelId: string) => void) | undefined,
+  customEmoji: Record<string, string> | undefined,
+): ReactNode[] {
+  const segs = splitCustomEmojiSegments(text, customEmoji);
+  if (segs.length <= 1 || !segs.some((s) => s.kind === "emoji")) {
+    return renderMarkdown(text, members, onMentionClick, channels, onChannelClick);
+  }
+  const out: ReactNode[] = [];
+  segs.forEach((s, i) => {
+    if (s.kind === "emoji") {
+      out.push(<CustomEmojiImg key={`e-${i}`} name={s.name} url={s.url} />);
+    } else {
+      out.push(
+        <Fragment key={`t-${i}`}>
+          {renderMarkdown(s.text, members, onMentionClick, channels, onChannelClick)}
+        </Fragment>,
+      );
+    }
+  });
+  return out;
+}
+
+function MessageBody({  content,
   members,
   compact,
   onContentResize,
   sending,
   onMentionClick,
+  channels,
+  onChannelClick,
+  customEmoji,
 }: {
   content: string;
   members: Profile[];
@@ -75,6 +126,9 @@ function MessageBody({
   onContentResize?: () => void;
   sending?: boolean;
   onMentionClick?: (profile: Profile) => void;
+  channels?: ChannelLite[];
+  onChannelClick?: (channelId: string) => void;
+  customEmoji?: Record<string, string>;
 }) {
   const codes = extractInviteCodes(content);
   const giftCodes = extractGiftCodes(content);
@@ -84,6 +138,7 @@ function MessageBody({
     .replace(/(?:https?:\/\/[^\s]+)?\/gift\/[a-zA-Z0-9]{10}\b/g, "")
     .trim();
   const emojiOnly = isEmojiOnlyMessage(textOnly);
+  const singleCustom = isSingleCustomEmoji(textOnly, customEmoji);
   const emojiSizeClass = emojiOnly ? emojiOnlySizeClass(textOnly) : "";
   const normalClass = compact ? "text-[15px] leading-[1.25rem]" : "text-[15px] leading-[1.375rem]";
 
@@ -95,10 +150,12 @@ function MessageBody({
             emojiOnly ? emojiSizeClass || normalClass : normalClass
           }`}
         >
-          {emojiOnly ? (
+          {singleCustom ? (
+            <CustomEmojiImg name={singleCustom.name} url={singleCustom.url} size="3em" />
+          ) : emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
-            <Twemoji>{renderMarkdown(textOnly, members, onMentionClick)}</Twemoji>
+            <Twemoji>{renderCustomEmojiMarkdown(textOnly, members, onMentionClick, channels, onChannelClick, customEmoji)}</Twemoji>
           )}
         </div>
       )}
@@ -146,6 +203,7 @@ export function ChatMessage({
   showHeader,
   compact,
   currentUserId,
+  currentUserName,
   authorColor,
   reactions = [],
   onAuthorClick,
@@ -159,6 +217,9 @@ export function ChatMessage({
   highlight,
   members = [],
   onContentResize,
+  channels,
+  onChannelClick,
+  customEmoji,
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const isOwn = message.author_id === currentUserId;
@@ -217,7 +278,15 @@ export function ChatMessage({
   // A reply to your message is a ping. It is addressed at you as directly as an
   // @mention is, and it was previously indistinguishable from ordinary traffic,
   // so a reply in a busy channel was easy to scroll straight past.
-  const mentionedYou = !!(currentUserId && message.mentions?.includes(currentUserId));
+  // Three ways a message can be aimed at you, and the stored id list is only
+  // one of them. It is written by the sender from the members their client had
+  // loaded, so it misses people in large servers — the text is the reliable
+  // source for both @everyone and a ping by name.
+  const mentionedYou = !!(
+    (currentUserId && message.mentions?.includes(currentUserId))
+    || mentionsEveryone(body)
+    || mentionsUsername(body, currentUserName)
+  );
   const repliedToYou = !!(
     currentUserId
     && message.reply_to?.author_id === currentUserId
@@ -272,7 +341,7 @@ export function ChatMessage({
         {replyBlock}
         {body && (
           <div className="min-w-0">
-            <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} />
+            <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
             {editedTag}
           </div>
         )}
@@ -343,7 +412,7 @@ export function ChatMessage({
           </header>
         )}
         {replyBlock}
-        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} />}
+        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />}
         {attachment}
         {message.uploadProgress != null && message.uploadProgress < 100 && (
           <div className="mt-1 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-bg-accent">

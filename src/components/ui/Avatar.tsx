@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { displayName, avatarStyle, type AvatarCrop } from "@/lib/utils";
 import { getAvatarStyle, type ProfileAccentFields } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
+import { getCachedAvatarUrl, storeAvatar } from "@/lib/avatar-cache";
 
 interface AvatarProps {
   profile: ProfileAccentFields & {
@@ -22,15 +24,35 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   const crop = "avatar_crop" in profile ? profile.avatar_crop : null;
   const style = avatarStyle(profile.avatar_url, crop);
   const accentStyle = getAvatarStyle(profile);
+  const remote = safeImageUrl(profile.avatar_url);
+  // Persistent IndexedDB cache (iOS-safe): paint the cached blob instantly
+  // when present, otherwise the remote URL while it backfills in background.
+  const [cachedSrc, setCachedSrc] = useState<string | null>(null);
+  useEffect(() => {
+    setCachedSrc(null);
+    if (!remote) return;
+    let live = true;
+    void getCachedAvatarUrl(remote).then((hit) => {
+      if (!live) return;
+      if (hit) {
+        setCachedSrc(hit);
+      } else {
+        void storeAvatar(remote);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [remote]);
 
   return (
     <div
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${SIZES[size]} ${className}`}
       style={accentStyle}
     >
-      {profile.avatar_url ? (
+      {remote ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={safeImageUrl(profile.avatar_url) ?? ""} alt="" className="h-full w-full" style={style} />
+        <img src={cachedSrc ?? remote} alt="" className="h-full w-full" style={style} />
       ) : (
         name.charAt(0).toUpperCase()
       )}

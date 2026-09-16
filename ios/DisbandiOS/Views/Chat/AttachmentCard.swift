@@ -136,3 +136,41 @@ struct AttachmentUploadCard: View {
         return percent < 100 ? "\(sizeLabel)Uploading… \(percent)%" : "\(sizeLabel)Finishing up…"
     }
 }
+
+/**
+ An attachment kind the iOS app understands is in the feed but cannot fully
+ render yet (polls are interactive objects backed by their own table). Rather
+ than mislead with a fake file, name what it is and where it works.
+ */
+struct AttachmentInfoCard: View {
+    let icon: String
+    let title: String
+    let caption: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundStyle(Brand.accent)
+                .frame(width: 40, height: 40)
+                .background(Brand.elevated, in: .rect(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Brand.textPrimary)
+                    .lineLimit(1)
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(Brand.textMuted)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(10)
+        .background(Brand.surface, in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Brand.elevated, lineWidth: 1))
+        .frame(maxWidth: 300, alignment: .leading)
+        .padding(.top, 4)
+    }
+}

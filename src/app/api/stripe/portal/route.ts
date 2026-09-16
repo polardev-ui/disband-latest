@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
-import { PUBLIC_ENV } from "@/lib/public-env";
+import { checkoutOrigin } from "@/lib/checkout-origin";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
   try {
@@ -24,7 +25,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "No subscription found" }, { status: 404 });
     }
 
-    const origin = req.headers.get("origin") ?? PUBLIC_ENV.webAppUrl;
+    const limit = rateLimit(`checkout:stripe/portal:${user.id}`, 10, 60_000);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+    const origin = checkoutOrigin(req);
     const portal = await getStripe().billingPortal.sessions.create({
       customer: sub.stripe_customer_id,
       return_url: `${origin}/app`,

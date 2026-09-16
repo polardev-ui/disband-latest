@@ -28,7 +28,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isMember = servers.some((s) => s.invite_code === code);
+  const isMember = servers.some((s) => s.invite_code === code || (s.vanity_code && s.vanity_code.toLowerCase() === code.toLowerCase()));
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +83,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
   }
 
   async function handleGo() {
-    const s = servers.find((x) => x.invite_code === code);
+    const s = servers.find((x) => x.invite_code === code || (x.vanity_code && x.vanity_code.toLowerCase() === code.toLowerCase()));
     if (s) await selectServer(s.id);
   }
 
@@ -94,12 +94,12 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     <div className="mt-1 max-w-sm overflow-hidden rounded-lg border border-divider bg-bg-secondary">
       {info.banner_url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={safeImageUrl(info.banner_url) ?? ""} alt="" className="h-16 w-full object-cover" onLoad={onLoad} />
+        <img src={safeImageUrl(info.banner_url) || undefined} alt="" className="h-16 w-full object-cover" onLoad={onLoad} />
       )}
       <div className="flex gap-3 p-3">
         {info.icon_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={safeImageUrl(info.icon_url) ?? ""} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
+          <img src={safeImageUrl(info.icon_url) || undefined} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-[30%] bg-brand text-lg font-bold text-white">
             {info.name.charAt(0)}

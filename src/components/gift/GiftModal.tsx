@@ -23,14 +23,16 @@ export function GiftModal({ onClose, onPurchased }: {
   onClose: () => void;
   onPurchased: (code: string) => void;
 }) {
-  const [plan, setPlan] = useState<GiftPlan>("super");
+  // One paid plan, so nothing to pick; kept as a constant so the pricing
+  // helpers below still read the same way.
+  const plan: GiftPlan = "aero";
   const [months, setMonths] = useState<GiftMonths>(1);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const accent = plan === "super" ? "#fee75c" : "#57f287";
+  const accent = "#fee75c";
   const price = giftPrice(plan, months);
   const saving = savingsPercent(plan, months);
   const tier = tierForMonths(months);
@@ -98,7 +100,7 @@ export function GiftModal({ onClose, onPurchased }: {
         ) : (
           <div className="p-6">
             <div className="mb-5 flex items-center gap-3">
-              {tier && <SubscriptionMedallion tier={tier} super={plan === "super"} size={52} />}
+              {tier && <SubscriptionMedallion tier={tier} super size={52} />}
               <div>
                 <h2 className="text-[19px] font-bold leading-tight text-text-normal">
                   Gift a subscription
@@ -107,32 +109,6 @@ export function GiftModal({ onClose, onPurchased }: {
                   Send it in a DM or a channel. First to claim it gets it.
                 </p>
               </div>
-            </div>
-
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Plan</p>
-            <div className="mb-5 grid grid-cols-2 gap-2">
-              {(["basic", "super"] as GiftPlan[]).map((p) => {
-                const on = plan === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPlan(p)}
-                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                      on ? "border-transparent" : "border-divider hover:bg-interactive-hover"
-                    }`}
-                    style={on ? { background: `${p === "super" ? "#fee75c" : "#57f287"}1f`,
-                                  borderColor: p === "super" ? "#fee75c" : "#57f287" } : undefined}
-                  >
-                    <span className="block text-[15px] font-semibold text-text-normal">
-                      {p === "super" ? "Super" : "Basic"}
-                    </span>
-                    <span className="block text-[12px] text-text-muted">
-                      from {formatPrice(giftPrice(p, 1))}
-                    </span>
-                  </button>
-                );
-              })}
             </div>
 
             <label htmlFor="gift-length" className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-text-muted">

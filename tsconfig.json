@@ -33,12 +33,16 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
+    ".next-dev/types/**/*.ts",
+    ".next-dev/dev/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "src-tauri",
     "supabase/functions",
-    "ios/build"
+    "ios/build",
+    ".next/dev",
+    ".next-dev/dev"
   ]
 }

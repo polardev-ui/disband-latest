@@ -116,7 +116,20 @@ export function invalidateBadges(userId: string) {
 
 const NONE: AwardedBadge[] = [];
 
-export function useBadges(userId: string | null | undefined): AwardedBadge[] {
+/**
+ * Someone's badges.
+ *
+ * `fresh` re-reads even when the answer is already cached. Without it a badge
+ * awarded during a session — granted by an admin, or earned and picked up by
+ * the server's sweep — stayed invisible until the next sign-in, because the
+ * cache is only ever filled once per person per session. Profile views pass
+ * it; the member list and message rows do not, since those render a badge per
+ * row and re-reading on every one of them is what the cache exists to stop.
+ */
+export function useBadges(
+  userId: string | null | undefined,
+  { fresh = false }: { fresh?: boolean } = {},
+): AwardedBadge[] {
   const [badges, setBadges] = useState<AwardedBadge[]>(() =>
     (userId ? cache.get(userId) : undefined) ?? NONE);
 
@@ -129,14 +142,21 @@ export function useBadges(userId: string | null | undefined): AwardedBadge[] {
     if (!set) { set = new Set(); listeners.set(userId, set); }
     set.add(sync);
 
-    if (cache.has(userId)) sync();
-    else request(userId);
+    if (fresh) {
+      // Show whatever is cached immediately, then correct it.
+      sync();
+      invalidateBadges(userId);
+    } else if (cache.has(userId)) {
+      sync();
+    } else {
+      request(userId);
+    }
 
     return () => {
       set.delete(sync);
       if (set.size === 0) listeners.delete(userId);
     };
-  }, [userId]);
+  }, [userId, fresh]);
 
   return badges;
 }

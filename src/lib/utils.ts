@@ -27,13 +27,33 @@ export function parseMentions(
     const user = members.find((u) => u.username?.toLowerCase() === token);
     if (user) ids.add(user.id);
   }
-  if (/@everyone\b/i.test(content)) {
-    for (const member of members) {
-      if (authorId && member.id === authorId) continue;
-      ids.add(member.id);
-    }
-  }
+  // @everyone is deliberately NOT expanded into ids here.
+  //
+  // It used to be, from whatever members the sender's client happened to have
+  // loaded — so in a server of a thousand people most of them were never in
+  // the list and never saw the ping, and the sender never saw it either. It is
+  // a property of the message text, so it is read from the text at render
+  // time instead, where it is right for everyone regardless of who was loaded.
+  void authorId;
   return [...ids];
+}
+
+/** True when a message addresses the whole channel. */
+export function mentionsEveryone(content: string): boolean {
+  return /@everyone\b/i.test(content);
+}
+
+/**
+ * Whether a message pings `username` by name.
+ *
+ * Checked against the text rather than the stored id list because that list is
+ * only as complete as the sender's loaded member list was — which is why a
+ * direct ping sometimes failed to highlight.
+ */
+export function mentionsUsername(content: string, username: string | null | undefined): boolean {
+  if (!username) return false;
+  const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`@${escaped}\\b`, "i").test(content);
 }
 
 /** Whether @token should render as a mention (member exists, or @everyone with members). */
@@ -67,6 +87,14 @@ export function getMentionQuery(text: string, cursor: number): { start: number; 
 export function getEmojiQuery(text: string, cursor: number): { start: number; query: string } | null {
   const before = text.slice(0, cursor);
   const match = before.match(/:([a-zA-Z0-9_+\-]*)$/);
+  if (!match) return null;
+  return { start: cursor - match[0].length, query: match[1] };
+}
+
+/** Channel autocomplete: typing `#chan` (no space yet) opens the picker. */
+export function getChannelQuery(text: string, cursor: number): { start: number; query: string } | null {
+  const before = text.slice(0, cursor);
+  const match = before.match(/#([a-zA-Z0-9_-]*)$/);
   if (!match) return null;
   return { start: cursor - match[0].length, query: match[1] };
 }
@@ -130,7 +158,8 @@ export function getInviteUrl(code: string): string {
 // `/invite/` is accepted alongside `/server/` because the iOS app shared that
 // spelling for a while. Case-insensitive so a capitalised "Https://" — which
 // phone keyboards produce at the start of a message — still matches.
-const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/(?:server|invite)\/([a-zA-Z0-9]{7})\b/gi;
+// Length covers generated 7-char codes and Level 1+ vanity slugs (3-24 chars).
+const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/(?:server|invite)\/([a-zA-Z0-9-]{3,32})\b/gi;
 export const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
 
 export function extractInviteCodes(text: string): string[] {

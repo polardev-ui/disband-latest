@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { SubscriptionPlan } from "@/lib/subscription";
+import { normalizePlan, type SubscriptionPlan } from "@/lib/subscription";
 
 /**
  * Someone's effective plan and how long they have paid for it.
@@ -67,7 +67,7 @@ async function flush() {
       for (const row of rows) {
         seen.add(row.user_id);
         cache.set(row.user_id, {
-          plan: (row.plan === "super" || row.plan === "basic" ? row.plan : "free") as SubscriptionPlan,
+          plan: normalizePlan(row.plan),
           months: typeof row.months === "number" ? row.months : 0,
           since: row.since,
           giftUntil: row.gift_until,

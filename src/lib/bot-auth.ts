@@ -48,7 +48,8 @@ export async function authenticateBot(request: NextRequest): Promise<BotActor | 
   void service
     .from("bots")
     .update({ last_seen_at: new Date().toISOString() })
-    .eq("id", data.id);
+    .eq("id", data.id)
+    .then(() => {}, () => {});
 
   return {
     botId: data.id,

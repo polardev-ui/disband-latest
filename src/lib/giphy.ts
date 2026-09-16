@@ -52,12 +52,15 @@ const HTTPS_RE = /^https:\/\//i;
 /**
  * Hosts a GIF may come from.
  *
- * Tenor is where new ones come from; Giphy stays because every GIF already
- * sent lives on it, and dropping it would blank those messages retroactively.
+ * Klipy is where new ones come from. Giphy stays because every GIF already
+ * sent lives on it, and dropping it would blank those messages retroactively
+ * — an allowlist here decides whether an existing message still renders, not
+ * only what the picker may return.
  */
 const GIF_HOSTS = [
   /^(?:[a-z0-9-]+\.)*giphy\.com$/i,
-  /^(?:[a-z0-9-]+\.)*tenor\.com$/i,
+  /^(?:[a-z0-9-]+\.)*klipy\.com$/i,
+  /^(?:[a-z0-9-]+\.)*klipy\.co$/i,
 ];
 
 function isSafeGifUrl(url: string): boolean {

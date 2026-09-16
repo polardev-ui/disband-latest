@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assertSafeUrl } from "@/lib/ssrf-guard";
+import { assertSafeUrl, fetchSafeHtml } from "@/lib/ssrf-guard";
 import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
@@ -26,22 +26,8 @@ function metaContent(html: string, key: string): string | undefined {
 }
 
 async function scrapeOpenGraph(url: string) {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "DisbandLinkPreview/1.0 (+https://www.disband.dev)",
-      Accept: "text/html,application/xhtml+xml",
-    },
-    // Do not follow redirects: a redirect could point at an internal host and
-    // bypass the SSRF pre-check performed on the original URL.
-    redirect: "manual",
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) return null;
-
-  const contentType = res.headers.get("content-type") ?? "";
-  if (!contentType.includes("html")) return null;
-
-  const html = await res.text();
+  const html = await fetchSafeHtml(url);
+  if (!html) return null;
   const title =
     metaContent(html, "og:title")
     ?? metaContent(html, "twitter:title")

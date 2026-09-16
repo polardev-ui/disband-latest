@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   DEFAULT_THEME,
+  themeColorScheme,
   isThemeId,
   THEMES,
   type ThemeId,
@@ -33,7 +34,7 @@ function applyTheme(theme: ThemeId) {
   root.setAttribute("data-theme", theme);
   // Keep the native color-scheme in sync so form controls + the desktop
   // window chrome match the active theme.
-  root.style.colorScheme = theme === "light" ? "light" : "dark";
+  root.style.colorScheme = themeColorScheme(theme);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -42,7 +43,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from localStorage (set early by the inline script in layout.tsx,
   // this just keeps React state aligned with the DOM).
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    let stored: string|null = null;
+    try { stored = window.localStorage.getItem(STORAGE_KEY); } catch { /* The current theme works without storage. */ }
     if (isThemeId(stored)) {
       setThemeState(stored);
       applyTheme(stored);
@@ -54,7 +56,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setTheme = useCallback((next: ThemeId) => {
     setThemeState(next);
     applyTheme(next);
-    window.localStorage.setItem(STORAGE_KEY, next);
+    try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* Session-only preference. */ }
     // TODO (integration): also persist to `profiles.theme` in Supabase here
     // for signed-in users so the preference follows them across devices.
   }, []);
@@ -64,7 +66,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const index = THEMES.findIndex((t) => t.id === current);
       const next = THEMES[(index + 1) % THEMES.length].id;
       applyTheme(next);
-      window.localStorage.setItem(STORAGE_KEY, next);
+      try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* Session-only preference. */ }
       return next;
     });
   }, []);

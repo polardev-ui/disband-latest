@@ -8,6 +8,7 @@
 type Bucket = { count: number; resetAt: number };
 
 const buckets = new Map<string, Bucket>();
+const MAX_BUCKETS = 10_000;
 let lastPrune = Date.now();
 
 function prune(now: number) {
@@ -30,6 +31,11 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
 
   const existing = buckets.get(key);
   if (!existing || existing.resetAt <= now) {
+    // Fail closed under a spray of unique keys; do not evict active limits.
+    if (!existing && buckets.size >= MAX_BUCKETS) {
+      for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
+      if (buckets.size >= MAX_BUCKETS) return { allowed: false, remaining: 0, retryAfterSeconds: 60 };
+    }
     buckets.set(key, { count: 1, resetAt: now + windowMs });
     return { allowed: true, remaining: limit - 1, retryAfterSeconds: 0 };
   }

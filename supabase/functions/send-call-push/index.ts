@@ -192,8 +192,10 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "Expected a JSON body." }, 400, cors);
   }
-  const { calleeId, callId, callerName, from } = body;
-  if (!calleeId || !callId) return json({ error: "calleeId and callId are required." }, 400, cors);
+  const { calleeId, callId, from } = body ?? {};
+  let callerName = "Disband call";
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof calleeId !== "string" || typeof callId !== "string" || !uuid.test(calleeId) || callId.length > 100 || !/^[0-9a-f:-]+$/i.test(callId)) return json({ error: "calleeId and callId are required." }, 400, cors);
 
   // Identify the caller: either a trusted server/webhook or the user whose
   // access token signs this request. `from` is never trusted from the client
@@ -213,7 +215,27 @@ Deno.serve(async (req) => {
       return json({ error: "Session expired — sign in again." }, 401, cors);
     }
     callerId = user.id;
+    if (callId !== [callerId, calleeId].sort().join(":")) return json({ error: "Invalid call identity." }, 400, cors);
     if (from && from !== user.id) return json({ error: "Forbidden" }, 403, cors);
+    // An authenticated token alone must not ring arbitrary phones or bypass blocks.
+    const [friendship, blocked, ban, restriction] = await Promise.all([
+      supabase.from("friendships").select("id").eq("status", "accepted")
+        .or(`and(requester_id.eq.${callerId},addressee_id.eq.${calleeId}),and(requester_id.eq.${calleeId},addressee_id.eq.${callerId})`).limit(1),
+      supabase.rpc("is_blocked_between", { p_a: callerId, p_b: calleeId }),
+      supabase.from("platform_bans").select("user_id").eq("user_id", callerId).limit(1),
+      supabase.from("account_restrictions").select("id").eq("user_id", callerId).eq("restriction", "send_messages").limit(1),
+    ]);
+    if ([friendship, blocked, ban, restriction].some(r => r.error)) return json({ error: "Call authorization unavailable." }, 503, cors);
+    if (!friendship.data?.length || blocked.data || ban.data?.length || restriction.data?.length) return json({ error: "You cannot ring this user." }, 403, cors);
+    const { error: limitError } = await supabase.rpc("platform_rate_limit", { p_key: `call-push:${callerId}`, p_max: 6, p_window_seconds: 60 });
+    if (limitError) return json({ error: "Call limit reached. Try again shortly." }, 429, cors);
+
+  }
+
+  // Display identity comes from the caller's profile, never arbitrary client text.
+  if (uuid.test(callerId)) {
+    const { data: profile } = await supabase.from("profiles").select("display_name,username").eq("id", callerId).maybeSingle();
+    callerName = profile?.display_name || profile?.username || "Disband call";
   }
 
   const { data: voipTokens } = await supabase

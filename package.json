@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "2.22.1",
+  "version": "2.24.0",
   "author": "Josh Clark <joshclark@wsgpolar.me>",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
@@ -10,7 +10,7 @@
     "build": "next build",
     "build:tauri": "node scripts/tauri-next-build.mjs",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "pnpm typecheck",
     "export": "next build",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
@@ -21,7 +21,9 @@
     "version:set": "node scripts/set-version.mjs",
     "release:next": "node scripts/next-release-version.mjs",
     "git:push-main": "git push origin refs/heads/main",
-    "git:fix-main-ref": "node scripts/fix-main-ref-conflict.mjs --delete-tag"
+    "git:fix-main-ref": "node scripts/fix-main-ref-conflict.mjs --delete-tag",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:security": "node --import ./scripts/test-typescript-loader.mjs --test tests/security/*.test.mjs"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
@@ -33,14 +35,16 @@
     "@twemoji/api": "^17.0.3",
     "emojibase-data": "^17.0.0",
     "lucide-react": "^1.21.0",
-    "next": "^16.2.9",
+    "next": "^16.3.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "sharp": "^0.35.4",
     "stripe": "^22.3.0",
     "tauri-plugin-macos-permissions-api": "2.3.0"
   },
   "devDependencies": {
-    "@remotion/cli": "^4.0.507",
+    "@electric-sql/pglite": "^0.5.8",
+    "@remotion/cli": "^4.0.523",
     "@remotion/media-utils": "^4.0.507",
     "@remotion/noise": "^4.0.507",
     "@tailwindcss/postcss": "^4.3.1",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
 import { EMAIL_NOT_CONFIRMED } from "@/lib/authErrors";
@@ -66,8 +66,20 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [turnstileFailed, setTurnstileFailed] = useState(false);
+  const [appliedRef, setAppliedRef] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const webOnly = !isTauri();
+
+  // A referral link (/referral/[code]) lands on /login?ref=code and starts
+  // the visitor in signup mode with the code already credited to the form.
+  useEffect(() => {
+    if (overlay) return;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref && /^[0-9a-zA-Z]{9}$/.test(ref)) {
+      setAppliedRef(ref);
+      setMode("signup");
+    }
+  }, [overlay]);
 
   if (!configured) {
     return (
@@ -109,7 +121,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
       if (sanitized.length < 2) {
         setError("Username must be at least 2 characters (letters, numbers, and underscores).");
       } else {
-        const result = await signUp(email, password, username);
+        const result = await signUp(email, password, username, appliedRef);
         if (result.error) {
           setError(result.error);
         } else if (result.needsEmailConfirmation !== false) {
@@ -339,6 +351,27 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                     autoComplete={mode === "login" ? "current-password" : "new-password"}
                     placeholder={mode === "signup" ? "At least 6 characters" : "••••••••"}
                     className={fieldClass}
+                  />
+                </Field>
+              )}
+
+              {mode === "signup" && appliedRef && (
+                <Field
+                  label="Referral code applied"
+                  hint={
+                    <span className="flex items-center gap-1 text-[13px] text-status-online">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      Credited on signup
+                    </span>
+                  }
+                >
+                  <input
+                    readOnly
+                    value={appliedRef}
+                    aria-label="Referral code applied"
+                    className={fieldClass + " cursor-default border-status-online/40 bg-status-online/[0.06] font-mono tracking-wide"}
                   />
                 </Field>
               )}

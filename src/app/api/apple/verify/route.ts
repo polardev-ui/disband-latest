@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { getServiceSupabase, getRouteUser } from "@/lib/supabase/server";
 import { verifyAppStoreTransaction } from "@/lib/apple/verify";
+import { normalizePlan, type SubscriptionPlan } from "@/lib/subscription";
 
 const BUNDLE_ID = process.env.APPLE_BUNDLE_ID ?? "com.wsgpolar.disband";
 const PRODUCT_ID_BASIC = process.env.APPLE_PRODUCT_ID_BASIC ?? "com.wsgpolar.disband.basic";
 const PRODUCT_ID_SUPER = process.env.APPLE_PRODUCT_ID_SUPER ?? "com.wsgpolar.disband.super";
 
-function productToPlan(productId: string): "basic" | "super" | null {
-  if (productId === PRODUCT_ID_BASIC) return "basic";
-  if (productId === PRODUCT_ID_SUPER) return "super";
+/**
+ * Both App Store products grant Aero.
+ *
+ * The identifiers cannot be renamed — they are what StoreKit sold, and a
+ * receipt from before the merge still names the old one — so the mapping
+ * happens here rather than pretending two paid tiers still exist.
+ */
+function productToPlan(productId: string): SubscriptionPlan | null {
+  if (productId === PRODUCT_ID_BASIC || productId === PRODUCT_ID_SUPER) return "aero";
   return null;
 }
 
@@ -100,7 +107,7 @@ export async function POST(req: Request) {
 
 async function upsertSubscription(
   userId: string,
-  plan: "basic" | "super",
+  plan: SubscriptionPlan,
   status: string,
   originalTransactionId: string,
   currentPeriodEnd: string | null,

@@ -18,6 +18,7 @@ import {
 import { fetchIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 interface SignalPayload {
   type: "ring" | "offer" | "answer" | "ice" | "leave" | "screen";
@@ -82,6 +83,8 @@ export function useGroupCallManager(
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  // Time in a call is what the Voice Veteran badge counts.
+  useVoiceMinutes(phase === "active");
 
   const localRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());

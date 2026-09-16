@@ -43,6 +43,9 @@ export function MessageAttachment({
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [imgError, setImgError] = useState(false);
+  // Gray skeleton until the media actually paints — without this a slow or
+  // blob-preview image flashes its alt text ("Attachment") in the gap.
+  const [mediaLoaded, setMediaLoaded] = useState(false);
   // Giphy does not serve an mp4 for every rendition, and a missing one answers
   // 403 rather than anything catchable up front. Falling back to the GIF keeps
   // the message from rendering as blank space.
@@ -52,6 +55,24 @@ export function MessageAttachment({
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
   const lightboxSrc = type === "gif" && mp4 ? giphyDisplayUrl(mp4) : url;
+  // Resolved once: a null src never reaches an element (an empty src makes
+  // the browser re-download the page and flashes alt text).
+  const imgSrc = safeImageUrl(url);
+  const gifSrc = safeImageUrl(displaySrc ?? mp4);
+
+  const handleMediaLoad = () => {
+    setMediaLoaded(true);
+    onLoad?.();
+  };
+
+  const skeleton = (
+    <div
+      aria-label="Loading attachment"
+      className="flex aspect-[16/10] w-full max-w-md items-center justify-center rounded-lg border border-black/20 bg-bg-accent"
+    >
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted/30 border-t-text-muted" />
+    </div>
+  );
 
   if (type === "file") {
     return (
@@ -112,48 +133,78 @@ export function MessageAttachment({
     );
   }
 
+  // Unresolvable URL: render a named tile, never an element with an empty src.
+  const brokenTile = (
+    <div className="mt-1 flex max-w-md items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-3 py-2.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-accent text-xs font-bold text-text-muted">
+        {fileExtension(fileName).slice(0, 4) || "FILE"}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-text-normal">{fileName}</p>
+        <p className="text-xs text-text-muted">Couldn't load this attachment.</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="mt-0.5 max-w-md overflow-hidden">
       {type === "video" ? (
-        <VideoPlayer src={safeImageUrl(url) ?? ""} onLoad={onLoad} />
+        imgSrc ? (
+          <>
+            {!mediaLoaded && skeleton}
+            <span className={mediaLoaded ? "" : "hidden"}>
+              <VideoPlayer src={imgSrc} onLoad={handleMediaLoad} />
+            </span>
+          </>
+        ) : (
+          brokenTile
+        )
       ) : type === "gif" && mp4 ? (
-        <>
-          <button type="button" onClick={() => setLightbox(true)} className="block text-left">
-            <video
-              src={safeImageUrl(displaySrc ?? mp4) ?? ""}
-              autoPlay
-              loop
-              muted
-              playsInline
-              webkit-playsinline=""
-              className={`${mediaClass} cursor-zoom-in`}
-              onLoadedData={onLoad}
-              onError={() => setMp4Error(true)}
+        gifSrc ? (
+          <>
+            <button type="button" onClick={() => setLightbox(true)} className="block text-left">
+              {!mediaLoaded && skeleton}
+              <video
+                src={gifSrc}
+                autoPlay
+                loop
+                muted
+                playsInline
+                webkit-playsinline=""
+                className={`${mediaClass} cursor-zoom-in ${mediaLoaded ? "" : "hidden"}`}
+                onLoadedData={handleMediaLoad}
+                onError={() => setMp4Error(true)}
+              />
+            </button>
+            <ImageLightbox
+              open={lightbox}
+              onClose={() => setLightbox(false)}
+              src={lightboxSrc}
+              alt="GIF"
+              fileName={fileName}
+              animated
+              author={author}
+              authorColor={authorColor}
+              isOwn={isOwn}
+              createdAt={createdAt}
             />
-          </button>
-          <ImageLightbox
-            open={lightbox}
-            onClose={() => setLightbox(false)}
-            src={lightboxSrc}
-            alt="GIF"
-            fileName={fileName}
-            animated
-            author={author}
-            authorColor={authorColor}
-            isOwn={isOwn}
-            createdAt={createdAt}
-          />
-        </>
+          </>
+        ) : (
+          brokenTile
+        )
+      ) : imgError || !imgSrc ? (
+        brokenTile
       ) : (
         <>
-          <button type="button" onClick={() => setLightbox(true)} className="block text-left">
+          {!mediaLoaded && skeleton}
+          <button type="button" onClick={() => setLightbox(true)} className={`block text-left ${mediaLoaded ? "" : "hidden"}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={safeImageUrl(url) ?? ""}
-              alt={type === "gif" ? "GIF" : "Attachment"}
-              className={`${mediaClass} cursor-zoom-in ${imgError ? "hidden" : ""}`}
+              src={imgSrc}
+              alt={type === "gif" ? "GIF" : fileName}
+              className={`${mediaClass} cursor-zoom-in`}
               loading="eager"
-              onLoad={onLoad}
+              onLoad={handleMediaLoad}
               onError={() => setImgError(true)}
             />
           </button>
@@ -161,7 +212,7 @@ export function MessageAttachment({
             open={lightbox}
             onClose={() => setLightbox(false)}
             src={lightboxSrc}
-            alt={type === "gif" ? "GIF" : "Attachment"}
+            alt={type === "gif" ? "GIF" : fileName}
             fileName={fileName}
             animated={type === "gif" && !!mp4}
             author={author}

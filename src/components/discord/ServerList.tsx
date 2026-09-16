@@ -161,9 +161,9 @@ export function ServerList({
                   </span>
                 )}
                 {server.verified && (
-                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white ring-2 ring-bg-tertiary">
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-bg-tertiary">
                     <Tooltip label="This server is officially verified by Disband">
-                      <IconVerified size={10} />
+                      <IconVerified size={12} className="shrink-0 text-sky-400" />
                     </Tooltip>
                   </span>
                 )}

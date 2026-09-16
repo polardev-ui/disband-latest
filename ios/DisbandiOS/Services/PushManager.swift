@@ -13,6 +13,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // registration dance — starting the registry is all they take, and a
         // VoIP-push cold start depends on it being alive before anything else.
         Task { @MainActor in
+            // Before PushKit: whether VoIP pushes may be requested at all
+            // depends on the storefront, and the cached answer is available
+            // immediately even on a cold start.
+            CallKitAvailability.start()
             VoipPushService.shared.start()
         }
         return true

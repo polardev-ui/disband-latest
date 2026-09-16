@@ -14,7 +14,7 @@ import {
 } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
-import { statusLabel } from "@/lib/presence";
+import { statusLabel, activeStatusNote } from "@/lib/presence";
 import { UserPanelPopup } from "./UserPanelPopup";
 import type { UserStatus } from "@/lib/supabase/types";
 
@@ -43,6 +43,10 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
     : user?.email?.split("@")[0] ?? "You";
   const status: UserStatus = profile ? presenceMap.get(profile.id) ?? profile.status : "online";
   const statusLabelText = statusLabel(status);
+  // Discord-style: your custom status renders as a clickable bubble next to
+  // your profile. Clicking anywhere on this row (bubble included) opens the
+  // popup, where the Custom Status editor lives — settable at any time.
+  const liveNote = activeStatusNote(profile);
 
   const handleAvatarClick = useCallback(() => {
     setPopupOpen((prev) => !prev);
@@ -78,7 +82,19 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
             <p className="truncate text-sm font-semibold leading-tight text-text-normal">{name}</p>
             <SubscriptionBadge plan={plan} tooltip />
           </div>
-          <p className="truncate text-xs leading-tight text-text-muted">{statusLabelText}</p>
+          {liveNote ? (
+            <span
+              title="Click to edit your status"
+              className="mt-0.5 flex max-w-full items-center gap-1 rounded-full bg-bg-primary/60 py-px pl-1.5 pr-2 ring-1 ring-divider"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span className="truncate text-[11px] leading-tight text-text-normal">{liveNote}</span>
+            </span>
+          ) : (
+            <p className="truncate text-xs leading-tight text-text-muted">{statusLabelText}</p>
+          )}
         </div>
       </button>
 

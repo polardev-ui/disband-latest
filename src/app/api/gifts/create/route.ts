@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 
-import { PUBLIC_ENV } from "@/lib/public-env";
+import { checkoutOrigin } from "@/lib/checkout-origin";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import {
   GIFT_PLAN_NAME, giftPrice, isGiftMonths, isGiftPlan, monthsLabel,
 } from "@/lib/gifts";
@@ -39,7 +40,9 @@ export async function POST(req: Request) {
     }
 
     const amount = giftPrice(plan, months);
-    const origin = req.headers.get("origin") ?? PUBLIC_ENV.webAppUrl;
+    const limit = rateLimit(`checkout:gifts/create:${user.id}`, 10, 60_000);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+    const origin = checkoutOrigin(req);
     const code = giftCode();
     const supabase = getServiceSupabase();
     if (!supabase) {

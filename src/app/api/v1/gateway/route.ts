@@ -22,20 +22,10 @@ export async function GET(request: NextRequest) {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    const { data: events } = await service
-      .from("bot_events")
-      .select("id, type, payload")
-      .eq("bot_id", bot.botId)
-      .is("delivered_at", null)
-      .order("id", { ascending: true })
-      .limit(50);
-
-    if (events && events.length > 0) {
-      const ids = events.map((e) => e.id);
-      const deliveredAt = new Date().toISOString();
-      await service.from("bot_events").update({ delivered_at: deliveredAt }).in("id", ids);
-      return NextResponse.json({ events });
-    }
+    const { data: events, error } = await service.rpc("take_bot_events", { p_bot_id: bot.botId, p_limit: 50 });
+    if (error) return NextResponse.json({ error: "Event delivery unavailable." }, { status: 503 });
+    if (events && events.length > 0) return NextResponse.json({ events });
+    if (request.signal.aborted) break;
 
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }

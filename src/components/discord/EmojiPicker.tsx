@@ -144,20 +144,24 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
                 <div className="mb-2">
                   <p className="mb-1 px-1 text-[11px] font-bold uppercase text-text-muted">Server Emoji</p>
                   <div className="grid grid-cols-8 gap-0.5">
-                    {customEmoji.map((e) => (
-                      <button
-                        key={`custom-${e.id}`}
-                        type="button"
-                        onClick={() => {
-                          onSelect(`:${e.name}:`);
-                          setOpen(false);
-                        }}
-                        className="flex h-9 w-9 items-center justify-center rounded hover:bg-interactive-hover"
-                        title={`:${e.name}:`}
-                      >
-                        <img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-5 w-5 object-contain" />
-                      </button>
-                    ))}
+                    {customEmoji.map((e) => {
+                      const src = safeImageUrl(e.url);
+                      if (!src) return null;
+                      return (
+                        <button
+                          key={`custom-${e.id}`}
+                          type="button"
+                          onClick={() => {
+                            onSelect(`:${e.name}:`);
+                            setOpen(false);
+                          }}
+                          className="flex h-9 w-9 items-center justify-center rounded hover:bg-interactive-hover"
+                          title={`:${e.name}:`}
+                        >
+                          <img src={src} alt={e.name} className="h-5 w-5 object-contain" />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

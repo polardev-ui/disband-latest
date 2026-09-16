@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+const user='00000000-0000-0000-0000-000000000001', server='00000000-0000-0000-0000-000000000002', channel='00000000-0000-0000-0000-000000000003', role='00000000-0000-0000-0000-000000000004', bot='00000000-0000-0000-0000-000000000005';
+test('bots respect private channels, queued-event revocation, and badge column privileges', async () => {
+ const db=new PGlite();
+ try {
+  await db.exec(`create role anon;create role authenticated;create role service_role;
+    create schema auth;create function auth.uid() returns uuid language sql as $$select null::uuid$$;
+    create table user_badges(user_id uuid,badge_key text,visible boolean,metadata jsonb);grant update on user_badges to authenticated;
+    create table channels(id uuid primary key,server_id uuid,read_only boolean,name text,category_id uuid,type text,position int);
+    create table server_members(server_id uuid,user_id uuid,role text);
+    create table member_roles(server_id uuid,user_id uuid,role_id uuid);
+    create table server_roles(id uuid,server_id uuid,is_default boolean,permissions jsonb);
+    create table channel_permissions(channel_id uuid,role_id uuid,can_view boolean,can_post boolean,can_react boolean,can_attach boolean);
+    create table bots(id uuid,user_id uuid,revoked_at timestamptz,scopes text[]);
+    create table bot_grants(bot_id uuid,server_id uuid,scopes text[]);
+    create table messages(id uuid primary key default gen_random_uuid(),channel_id uuid,author_id uuid,content text,reply_to_id uuid,created_at timestamptz default now(),edited_at timestamptz);
+    create table bot_events(id bigserial primary key,bot_id uuid,type text,payload jsonb,delivered_at timestamptz);
+    create function member_has_server_permission(uuid,uuid,text) returns boolean language sql as $$select false$$;
+    create function bot_has_server_permission(uuid,uuid,text) returns boolean language sql as $$select false$$;
+    create function is_bot_platform_banned(uuid) returns boolean language sql as $$select false$$;
+    create function bot_message_to_json(p_msg public.messages,p_server_id uuid) returns jsonb language sql as $$select to_jsonb(p_msg)$$;
+    insert into channels values('${channel}','${server}',false,'private',null,'text',0);
+    insert into server_members values('${server}','${user}','member');
+    insert into server_roles values('${role}','${server}',true,'{"send_messages":true}');
+    insert into channel_permissions values('${channel}','${role}',false,false,null,null);
+    insert into bots values('${bot}','${user}',null,array['messages.read','messages.write']);
+    insert into bot_grants values('${bot}','${server}',array['messages.read','messages.write']);
+    insert into messages(channel_id,author_id,content) values('${channel}','${user}','private message');
+    insert into bot_events(bot_id,type,payload) values('${bot}','messageCreate','{"channel_id":"${channel}","content":"secret"}');`);
+  const sql=await readFile('supabase/migrations/0065_badges_and_bot_channel_privacy.sql','utf8'); await db.exec(sql); await db.exec(sql);
+  assert.equal((await db.query("select has_column_privilege('authenticated','user_badges','badge_key','UPDATE') allowed")).rows[0].allowed,false);
+  assert.equal((await db.query("select has_column_privilege('authenticated','user_badges','visible','UPDATE') allowed")).rows[0].allowed,true);
+  await assert.rejects(db.query('select bot_list_messages($1,$2)',[bot,channel]),/permission denied/);
+  await assert.rejects(db.query("select bot_send_message($1,$2,'bad')",[bot,channel]),/permission denied/);
+  assert.deepEqual((await db.query('select bot_list_channels($1,$2) result',[bot,server])).rows[0].result,[]);
+  assert.deepEqual((await db.query('select take_bot_events($1) result',[bot])).rows[0].result,[]);
+  await db.exec("create trigger bot_dispatch after insert on messages for each row execute function bot_events_dispatch();");
+  await db.query("insert into messages(channel_id,author_id,content) values($1,$2,'hidden')",[channel,user]);
+  assert.equal((await db.query('select count(*)::int n from bot_events where delivered_at is null')).rows[0].n,0);
+  await db.exec('update channel_permissions set can_view=true,can_post=true');
+  assert.equal((await db.query('select bot_list_messages($1,$2) result',[bot,channel])).rows[0].result.some(m => m.content === 'private message'),true);
+  await db.query("select bot_send_message($1,$2,'allowed')",[bot,channel]);
+  assert.equal((await db.query('select bot_list_messages($1,$2) result',[bot,channel])).rows[0].result.length,3);
+ } finally {await db.close();}
+});

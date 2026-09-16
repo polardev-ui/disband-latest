@@ -51,8 +51,8 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
     [],
   );
 
-  const accent = plan === "super" ? "#fee75c" : "#57f287";
-  const planName = plan === "super" ? "Disband Super" : "Disband Basic";
+  const accent = "#fee75c";
+  const planName = "Disband Aero";
   const perks = useMemo(
     () => (PLANS.find((p) => p.id === plan)?.features ?? []).filter((f) => f.included).slice(0, 6),
     [plan],
@@ -115,7 +115,7 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
         {(phase === "perks" || phase === "done") && (
           <div className={`dg-reveal ${phase === "done" ? "is-done" : ""}`}>
             <div className="dg-medal">
-              <SubscriptionMedallion tier={tier} super={plan === "super"} size={124} />
+              <SubscriptionMedallion tier={tier} super size={124} />
             </div>
             <p className="dg-kicker">{fromName} gifted you</p>
             <h2 className="dg-title" style={{ color: accent }}>{planName}</h2>

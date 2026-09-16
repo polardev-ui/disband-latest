@@ -26,6 +26,8 @@ import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabi
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { AccountRestrictionsPanel } from "@/components/discord/AccountRestrictionsPanel";
 import { BotsPanel } from "./settings/BotsPanel";
+import { MyReferralCard } from "@/components/referrals/MyReferralCard";
+import Link from "next/link";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { useZoom, MIN_ZOOM, MAX_ZOOM } from "@/hooks/useZoom";
@@ -49,10 +51,17 @@ import {
 } from "@/lib/profileColor";
 import type { AvatarCrop } from "@/lib/utils";
 import type { UserStatus, Profile } from "@/lib/supabase/types";
+import {
+  STATUS_DURATION_PRESETS,
+  expiresAtForDuration,
+  presetForExpiresAt,
+  type StatusDurationId,
+} from "@/lib/presence";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { SubscriptionModal } from "@/components/subscription/SubscriptionModal";
 import { PLANS } from "@/lib/subscription";
 import { useSubscription } from "@/hooks/useSubscription";
+import { ThemesPanel } from "@/components/discord/settings/ThemesPanel";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface SettingsModalProps {
@@ -64,8 +73,10 @@ const TABS = [
   { id: "profile" as const, label: "Profile", group: "User Settings" },
   { id: "account" as const, label: "Account & Security", group: "User Settings" },
   { id: "subscriptions" as const, label: "Subscription", group: "User Settings" },
+  { id: "referrals" as const, label: "Referrals", group: "User Settings" },
   { id: "bots" as const, label: "Bots", group: "User Settings" },
   { id: "appearance" as const, label: "Appearance", group: "App Settings" },
+  { id: "themes" as const, label: "Themes", group: "App Settings" },
   { id: "notifications" as const, label: "Notifications", group: "App Settings" },
   { id: "voice" as const, label: "Voice & Video", group: "App Settings" },
   { id: "textMedia" as const, label: "Text & Media", group: "App Settings" },
@@ -101,6 +112,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
+  const [pronouns, setPronouns] = useState("");
+  const [statusNote, setStatusNote] = useState("");
+  const [statusDuration, setStatusDuration] = useState<StatusDurationId>("never");
   const [accent1, setAccent1] = useState(DEFAULT_ACCENT);
   const [accent2, setAccent2] = useState("#eb459e");
   const [useDefaultAccent, setUseDefaultAccent] = useState(true);
@@ -149,6 +163,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setDisplayName(profile.display_name ?? "");
     setUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
+    setPronouns(profile.pronouns ?? "");
+    setStatusNote(profile.status_note ?? "");
+    setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
     setAccent1(profile.accent_color ?? DEFAULT_ACCENT);
@@ -248,6 +265,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       display_name: displayName.trim(),
       username: sanitizedUsername,
       bio: bio.trim() || null,
+      pronouns: pronouns.trim() || null,
+      status_note: statusNote.trim() || null,
+      status_expires_at: statusNote.trim() ? expiresAtForDuration(statusDuration) : null,
       accent_color: useDefaultAccent ? null : accent1,
       accent_color_2: useDefaultAccent ? null : accent2,
       status,
@@ -265,6 +285,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     displayName !== (profile.display_name ?? "") ||
     username !== (profile.username ?? "") ||
     bio !== (profile.bio ?? "") ||
+    pronouns !== (profile.pronouns ?? "") ||
+    statusNote !== (profile.status_note ?? "") ||
+    statusDuration !== presetForExpiresAt(profile.status_expires_at) ||
     status !== (profile.preferred_status ?? profile.status) ||
     useDefaultAccent !== !usesCustomAccent(profile) ||
     (!useDefaultAccent &&
@@ -278,6 +301,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setDisplayName(profile.display_name ?? "");
     setUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
+    setPronouns(profile.pronouns ?? "");
+    setStatusNote(profile.status_note ?? "");
+    setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
     setAccent1(profile.accent_color ?? DEFAULT_ACCENT);
@@ -505,6 +531,52 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           </>
                         )}
                       </p>
+                    </SettingRow>
+
+                    <SettingRow label="Pronouns" stacked htmlFor="settings-pronouns">
+                      <input
+                        id="settings-pronouns"
+                        value={pronouns}
+                        onChange={(e) => setPronouns(e.target.value.slice(0, 40))}
+                        maxLength={40}
+                        placeholder="e.g. she/her, they/them"
+                        className={settingsInputClass}
+                      />
+                    </SettingRow>
+
+                    <SettingRow
+                      label="Status note"
+                      description="Shown under your profile picture — e.g. a tiny note about what you're up to."
+                      stacked
+                      htmlFor="settings-status-note"
+                    >
+                      <textarea
+                        id="settings-status-note"
+                        value={statusNote}
+                        onChange={(e) => setStatusNote(e.target.value.slice(0, 60))}
+                        rows={2}
+                        maxLength={60}
+                        placeholder="e.g. low-key lurking"
+                        className={`${settingsInputClass} resize-none`}
+                      />
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Clear status after">
+                        <span className="mr-1 text-[12px] text-text-muted">Clear after:</span>
+                        {STATUS_DURATION_PRESETS.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => setStatusDuration(preset.id)}
+                            aria-pressed={statusDuration === preset.id}
+                            className={`rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                              statusDuration === preset.id
+                                ? "bg-brand text-white"
+                                : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
                     </SettingRow>
                   </SettingsSection>
 
@@ -820,7 +892,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {themes.map((t) => {
-                      const isLocked = t.plan && t.plan !== subPlan && subPlan !== "super";
+                      // One paid plan, so a premium theme is locked only for free accounts.
+                      const isLocked = !!t.plan && subPlan === "free";
                       return (
                         <button
                           key={t.id}
@@ -856,6 +929,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </div>
                 </div>
               )}
+
+              {tab === "themes" && <ThemesPanel />}
 
               {tab === "notifications" && (
                 <div className="space-y-4">
@@ -1049,7 +1124,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         <p className="text-xs font-semibold uppercase text-text-muted">Current Plan</p>
                         <div className="flex items-center gap-2">
                           <span className="text-base font-bold capitalize">{subPlan}</span>
-                          <SubscriptionBadge plan={subPlan as "basic" | "super" | "free"} />
+                          <SubscriptionBadge plan={subPlan} />
                         </div>
                         {subscription?.status === "active" && (
                           <div className="space-y-0.5 pt-1">
@@ -1120,6 +1195,30 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       {exporting ? "Exporting..." : "Export Message History (JSON)"}
                     </button>
                   )}
+                </div>
+              )}
+
+              {tab === "referrals" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-muted">
+                    Share your code and earn when friends join with it.
+                  </p>
+                  <MyReferralCard />
+                  <div className="flex flex-col gap-1.5 rounded-lg border border-divider bg-bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[13px] font-medium text-text-normal">Live leaderboard</p>
+                      <p className="mt-0.5 text-[12px] text-text-muted">
+                        See who's verified the most referrals — the December winner takes home a $100
+                        Visa card.
+                      </p>
+                    </div>
+                    <Link
+                      href="/leaderboards/referrals"
+                      className="inline-flex shrink-0 items-center justify-center rounded-md bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
+                    >
+                      View leaderboard
+                    </Link>
+                  </div>
                 </div>
               )}
 

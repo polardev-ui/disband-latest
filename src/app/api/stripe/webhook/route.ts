@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type Stripe from "stripe";
+import { normalizePlan, type SubscriptionPlan } from "@/lib/subscription";
 
 function toISOStringSafe(timestamp: number | null | undefined): string | null {
   if (!timestamp || typeof timestamp !== "number") return null;
@@ -27,7 +28,7 @@ function extractSubscriptionPeriods(sub: Stripe.Subscription) {
 
 async function upsertSubscription(
   userId: string,
-  plan: "basic" | "super",
+  plan: SubscriptionPlan,
   status: string,
   subscriptionId: string,
   customerId: string,
@@ -36,8 +37,8 @@ async function upsertSubscription(
   canceledAtISO: string | null,
 ) {
   const supabase = getServiceSupabase();
-  if (!supabase) return;
-  await supabase.from("subscriptions").upsert(
+  if (!supabase) throw new Error("Database unavailable");
+  const { error: upsertError } = await supabase.from("subscriptions").upsert(
     {
       user_id: userId,
       plan,
@@ -52,14 +53,17 @@ async function upsertSubscription(
     { onConflict: "user_id" },
   );
 
+  if (upsertError) throw new Error(upsertError.message);
+
   // The first paid period is what "subscriber since" dates from, and it is
   // never rewritten afterwards — a cancel-and-return keeps the original date
   // and the months already earned.
-  await supabase
+  const { error: updateError } = await supabase
     .from("subscriptions")
     .update({ first_subscribed_at: periodStartISO })
     .eq("user_id", userId)
     .is("first_subscribed_at", null);
+  if (updateError) throw new Error(updateError.message);
 }
 
 /**
@@ -68,19 +72,21 @@ async function upsertSubscription(
  * Counted rather than derived from the start date, so a lapse does not hand
  * out months nobody paid for and a returning subscriber keeps what they had.
  */
-async function accrueTenure(userId: string) {
+async function accrueTenure(userId: string, invoiceId: string) {
   const supabase = getServiceSupabase();
-  if (!supabase) return;
-  await supabase.rpc("accrue_tenure_month", { p_user: userId });
+  if (!supabase) throw new Error("Database unavailable");
+  const { error } = await supabase.rpc("accrue_tenure_invoice", { p_user: userId, p_invoice_id: invoiceId });
+  if (error) throw new Error(error.message);
 }
 
 async function cancelSubscription(subscriptionId: string) {
   const supabase = getServiceSupabase();
-  if (!supabase) return;
-  await supabase
+  if (!supabase) throw new Error("Database unavailable");
+  const { error: updateError } = await supabase
     .from("subscriptions")
     .update({ plan: "free", status: "canceled", updated_at: new Date().toISOString() })
     .eq("stripe_subscription_id", subscriptionId);
+  if (updateError) throw new Error(updateError.message);
 }
 
 function getMetadata(sub: Stripe.Subscription): Record<string, string> {
@@ -109,31 +115,68 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
+      case "checkout.session.async_payment_succeeded":
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
         // A gift is a one-off payment with no subscription attached, so it
         // never reaches the branch below. Paying is what makes it claimable —
         // until then the row exists only so the payment has somewhere to land.
-        if (session.metadata?.kind === "gift") {
-          const giftId = session.metadata.gift_id;
+        if (session.metadata?.kind === "gift") {          const giftId = session.metadata.gift_id;
           const supabase = getServiceSupabase();
           if (giftId && supabase && session.payment_status === "paid") {
-            await supabase
+            const { error } = await supabase
               .from("gifts")
               .update({ status: "unclaimed" })
               .eq("id", giftId)
               .eq("status", "pending");
+            if (error) throw new Error(error.message);
+          }
+          break;
+        }
+
+        // A catalyst purchase is a one-off payment that lands straight on the
+        // server: one row per unit. The session id makes redeliveries
+        // idempotent (partial unique index, on-conflict no-op).
+        if (session.metadata?.kind === "catalyst") {
+          const supabase = getServiceSupabase();
+          const buyerId = session.metadata.user_id;
+          const serverId = session.metadata.server_id;
+          const qty = Math.max(
+            1,
+            Math.min(99, parseInt(session.metadata.quantity ?? "1", 10) || 1),
+          );
+          if (supabase && buyerId && serverId && session.payment_status === "paid") {
+            // Idempotency: the partial unique index guarantees one fulfillment
+            // per session; check first because ON CONFLICT cannot target a
+            // partial index from the query builder.
+            const { data: existing } = await supabase
+              .from("server_catalysts")
+              .select("id")
+              .eq("stripe_session_id", session.id)
+              .limit(1);
+            if (!existing || existing.length === 0) {
+              const rows = Array.from({ length: qty }, () => ({
+                server_id: serverId,
+                user_id: buyerId,
+                source: "purchase",
+                stripe_session_id: session.id,
+              }));
+              const { error } = await supabase.from("server_catalysts").insert(rows);
+              if (error) throw new Error(error.message);
+            }
           }
           break;
         }
 
         const userId = session.metadata?.user_id;
-        const plan = session.metadata?.plan as "basic" | "super" | undefined;
+        // Written by our own checkout; "basic"/"super" still arrive from
+        // sessions created before the merge and all mean Aero.
+        const plan = session.metadata?.plan ? normalizePlan(session.metadata.plan) : undefined;
         const subId = session.subscription as string;
         const customerId = session.customer as string;
 
-        if (userId && plan && subId) {
+        if (userId && plan === "aero" && subId) {
           const sub = await getStripe().subscriptions.retrieve(subId);
           const periods = extractSubscriptionPeriods(sub);
           await upsertSubscription(
@@ -152,25 +195,26 @@ export async function POST(req: Request) {
 
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
-        const invSubId = (invoice as unknown as { subscription: string | null }).subscription;
+        const invSubId = invoice.parent?.subscription_details?.subscription
+          ?? (invoice as unknown as { subscription: string | null }).subscription;
         if (invSubId) {
-          const sub = await getStripe().subscriptions.retrieve(invSubId);
+          const sub = await getStripe().subscriptions.retrieve(typeof invSubId === "string" ? invSubId : invSubId.id);
           const meta = getMetadata(sub);
           const userId = meta.user_id;
-          const plan = meta.plan as "basic" | "super" | undefined;
-          if (userId && plan) {
+          const plan = meta.plan ? normalizePlan(meta.plan) : undefined;
+          if (userId && plan === "aero") {
             const periods = extractSubscriptionPeriods(sub);
             await upsertSubscription(
               userId,
               plan,
               sub.status,
-              invSubId,
+              sub.id,
               sub.customer as string,
               periods.periodStart,
               periods.periodEnd,
               periods.canceledAt,
             );
-            await accrueTenure(userId);
+            await accrueTenure(userId, invoice.id);
           }
         }
         break;
@@ -180,11 +224,11 @@ export async function POST(req: Request) {
         const updatedSub = event.data.object as Stripe.Subscription;
         const meta = getMetadata(updatedSub);
         const userId2 = meta.user_id;
-        const plan2 = meta.plan as "basic" | "super" | undefined;
+        const plan2 = meta.plan ? normalizePlan(meta.plan) : undefined;
 
         if (updatedSub.status === "canceled" || updatedSub.status === "unpaid" || updatedSub.status === "incomplete_expired") {
           await cancelSubscription(updatedSub.id);
-        } else if (userId2 && plan2) {
+        } else if (userId2 && plan2 === "aero") {
           const periods = extractSubscriptionPeriods(updatedSub);
           await upsertSubscription(
             userId2,

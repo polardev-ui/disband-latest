@@ -24,14 +24,26 @@ export function getServiceSupabase(): SupabaseClient | null {
  * routes were written against. The Tauri desktop app calls the hosted origin
  * cross-origin, where those cookies are not sent, so it authenticates with an
  * `Authorization: Bearer <access_token>` header instead (see `apiFetch`).
- * Cookies are tried first so existing web behaviour is unchanged.
+ * Explicit bearer credentials take precedence; cookies remain a same-origin fallback.
  */
 export async function getRouteUser(req: Request): Promise<{ id: string; email?: string } | null> {
-  const { cookies } = await import("next/headers");
-  const { createServerClient } = await import("@supabase/ssr");
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  if (!url || !anonKey) return null;
+  // Explicit bearer identity wins over potentially stale cookies. It also
+  // avoids a redundant auth round trip for every desktop and web API call.
+  const auth = req.headers.get("authorization");
+  if (auth) {
+    const token = auth.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!token || token.length > 16384) return null;
+    const client = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: { user }, error } = await client.auth.getUser(token);
+    return error || !user ? null : { id: user.id, email: user.email ?? undefined };
+  }
+  // Cross-site requests must never gain ambient cookie authority.
+  if (req.headers.get("sec-fetch-site") === "cross-site") return null;
+  const { cookies } = await import("next/headers");
+  const { createServerClient } = await import("@supabase/ssr");
 
   try {
     const cookieStore = await cookies();
@@ -50,17 +62,8 @@ export async function getRouteUser(req: Request): Promise<{ id: string; email?: 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) return { id: user.id, email: user.email ?? undefined };
   } catch {
-    // Fall through to the bearer token.
+    // Invalid cookie sessions remain unauthenticated.
   }
 
-  const auth = req.headers.get("authorization") ?? req.headers.get("Authorization");
-  const token = auth?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) return null;
-
-  const bearerClient = createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: { user }, error } = await bearerClient.auth.getUser(token);
-  if (error || !user) return null;
-  return { id: user.id, email: user.email ?? undefined };
+  return null;
 }

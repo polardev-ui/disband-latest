@@ -12,7 +12,8 @@ import type { SubscriptionPlan } from "@/lib/subscription";
  *
  * Options above the plan's ceiling are shown rather than hidden — a free
  * account can see that 4K exists and what it costs, which a truncated list
- * cannot say. They are disabled, not missing.
+ * cannot say. They are disabled, not missing, and every locked option now
+ * names the same plan because there is only one.
  */
 export function StreamQualityMenu({
   plan, open, onClose, onChange,
@@ -72,7 +73,7 @@ export function StreamQualityMenu({
             label={`${f} FPS`}
             selected={quality.fps === f}
             locked={locked}
-            hint={locked ? lockHint(f > 60 ? "super" : "basic") : undefined}
+            hint={locked ? lockHint() : undefined}
             onClick={() => choose({ fps: f as FrameRate })}
           />
         );
@@ -88,7 +89,7 @@ export function StreamQualityMenu({
             label={resolutionLabel(r as Resolution)}
             selected={quality.resolution === r}
             locked={locked}
-            hint={locked ? lockHint(r > 1080 ? "super" : "basic") : undefined}
+            hint={locked ? lockHint() : undefined}
             onClick={() => choose({ resolution: r as Resolution })}
           />
         );
@@ -102,8 +103,8 @@ export function StreamQualityMenu({
   );
 }
 
-function lockHint(plan: "basic" | "super"): string {
-  return plan === "super" ? "Super" : "Basic";
+function lockHint(): string {
+  return "Aero";
 }
 
 function Section({ label }: { label: string }) {

@@ -1,3 +1,5 @@
+import { normalizePlan } from "@/lib/subscription";
+
 const INPUT_KEY = "disband:audio-input";
 const OUTPUT_KEY = "disband:audio-output";
 const VIDEO_KEY = "disband:video-input";
@@ -71,9 +73,10 @@ export function buildVideoFallbackConstraints(plan?: string): MediaTrackConstrai
 }
 
 function videoTierConstraints(plan?: string): MediaTrackConstraints {
-  return plan === "super"
+  // Loosely typed because the plan arrives as a bare string from callers that
+  // never narrowed it — which is exactly how this kept comparing against
+  // "super" after that plan stopped existing.
+  return normalizePlan(plan) === "aero"
     ? { width: { ideal: 2560 }, height: { ideal: 1440 }, frameRate: { ideal: 120 } }
-    : plan === "basic"
-      ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
-      : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
 }

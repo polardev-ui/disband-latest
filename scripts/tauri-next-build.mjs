@@ -22,6 +22,10 @@ const moves = [
   // conversation, so this standalone page only exists for a link opened
   // somewhere that is not Disband — which is never the desktop bundle.
   ["src/app/gift", `${stashRoot}/app-gift`],
+  // Same again for referral links. They validate the code server-side and
+  // bounce to /login?ref=, and are shared as web URLs — never opened inside
+  // the statically exported bundle.
+  ["src/app/referral", `${stashRoot}/app-referral`],
 ];
 
 function moveAside(from, to) {

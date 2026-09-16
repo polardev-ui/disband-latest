@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
   try {
     const res = await fetch(`${CLOUDFLARE_TURN_API}/${keyId}/credentials/generate-ice-servers`, {
       method: "POST",
+      signal: AbortSignal.timeout(8000),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",

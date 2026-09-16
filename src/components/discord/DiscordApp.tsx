@@ -16,6 +16,7 @@ import { ServerList } from "./ServerList";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
 import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPanel";
+import dynamic from "next/dynamic";
 import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
@@ -30,10 +31,10 @@ import {
 import { GroupCallStage } from "./GroupCallStage";
 import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
-import { SettingsModal } from "./SettingsModal";
+const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
-import { ServerSettingsModal } from "@/components/modals/ServerSettingsModal";
-import { ChannelSettingsModal } from "@/components/modals/ChannelSettingsModal";
+const ServerSettingsModal = dynamic(() => import("@/components/modals/ServerSettingsModal").then(m => m.ServerSettingsModal));
+const ChannelSettingsModal = dynamic(() => import("@/components/modals/ChannelSettingsModal").then(m => m.ChannelSettingsModal));
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
 import {
   IconCopy,
@@ -52,13 +53,15 @@ import {
   IconPlus,
   IconEdit,
 } from "@/components/icons";
-import { SubscriptionModal } from "@/components/subscription/SubscriptionModal";
+const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import type { Channel, ChannelCategory, Profile, Server } from "@/lib/supabase/types";
 import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 import { ForwardModal, type ForwardDestination } from "./ForwardModal";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
+import { DmProfileRail } from "./DmProfileRail";
+import { CatalystModal } from "./CatalystModal";
 
 export function DiscordApp() {
   const app = useApp();
@@ -76,6 +79,12 @@ export function DiscordApp() {
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<ChatMessageData | null>(null);
+  // Discord-like right-rail profile panel inside the DM column. Defaults open
+  // on desktop widths (the rail itself hides below lg); toggle lives in the DM
+  // header next to pinned-messages.
+  const [showDmProfile, setShowDmProfile] = useState(true);
+  // Server whose Catalyst modal is open (from the ChannelList boost bar).
+  const [catalystServerId, setCatalystServerId] = useState<string | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
 
   useEffect(() => {
@@ -323,26 +332,24 @@ export function DiscordApp() {
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(server.id),
         },
-        ...(server.invite_code
-          ? [
-              {
-                id: "invite",
-                label: "Copy Invite Link",
-                icon: <IconCopy size={16} />,
-                onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.invite_code!)),
-              },
-            ]
-          : []),
-        ...(subPlan === "super" && app.user?.id
-          ? [
-              {
-                id: "boost",
-                label: "Boost Server",
-                icon: <IconStar size={16} />,
-                onClick: () => void boostServer(server.id),
-              } as ContextMenuItem,
-            ]
-          : []),
+          ...(server.invite_code || server.vanity_code
+            ? [
+                {
+                  id: "invite",
+                  label: "Copy Invite Link",
+                  icon: <IconCopy size={16} />,
+                  onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.vanity_code || server.invite_code!)),
+                },
+              ]
+            : []),
+          ...[
+            {
+              id: "boost",
+              label: "Boost Server",
+              icon: <IconStar size={16} />,
+              onClick: () => void boostServer(server.id),
+            } as ContextMenuItem,
+          ],
         {
           id: "leave",
           label: "Leave Server",
@@ -369,23 +376,12 @@ export function DiscordApp() {
   );
 
   const boostServer = useCallback(
-    async (serverId: string) => {
-      if (!app.user?.id) return;
-      const supabase = (await import("@/lib/supabase/client")).getSupabaseClient();
-      // Check if already boosted
-      const { data: existing } = await supabase
-        .from("server_boosts")
-        .select("id")
-        .eq("server_id", serverId)
-        .eq("user_id", app.user.id)
-        .maybeSingle();
-      if (existing) {
-        await supabase.from("server_boosts").delete().eq("id", existing.id);
-      } else {
-        await supabase.from("server_boosts").insert({ server_id: serverId, user_id: app.user.id });
-      }
+    (serverId: string) => {
+      // Legacy server_boosts toggle, superseded by Catalysts: open the
+      // Catalyst modal (grant use is Aero-gated inside; buying is open).
+      setCatalystServerId(serverId);
     },
-    [app],
+    [],
   );
 
   const handleChannelContext = useCallback(
@@ -1131,8 +1127,17 @@ export function DiscordApp() {
       )}
 
       {call.callNotice && (
-        <div className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-lg border border-divider bg-bg-secondary px-4 py-3 text-sm shadow-xl">
-          {call.callNotice}
+        <div className="fixed bottom-6 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-4 py-3 text-sm shadow-xl">
+          <span>{call.callNotice}</span>
+          {call.canRetryCall && (
+            <button
+              type="button"
+              onClick={() => void call.retryCall()}
+              className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
       {isMobile ? (
@@ -1190,7 +1195,8 @@ export function DiscordApp() {
                   getUnreadCount={app.getChannelUnreadCount}
                   getMentionCount={app.getChannelMentionCount}
                   canManageChannels={canManageChannels}
-                  voicePresence={serverVoicePresence}
+                  voicePresence={serverVoicePresence.byChannel}
+                  voiceStartTimes={serverVoicePresence.startTimes}
                   onSelectChannel={handleSelectChannel}
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1202,6 +1208,8 @@ export function DiscordApp() {
                   onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
                   onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
                   onCreateCategory={(name) => app.createCategory(name)}
+                  catalystCount={app.activeServer ? app.catalystCounts[app.activeServer.id] ?? 0 : 0}
+                  onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
                 />
               )}
             </div>
@@ -1256,7 +1264,8 @@ export function DiscordApp() {
               getUnreadCount={app.getChannelUnreadCount}
               getMentionCount={app.getChannelMentionCount}
               canManageChannels={canManageChannels}
-              voicePresence={serverVoicePresence}
+              voicePresence={serverVoicePresence.byChannel}
+              voiceStartTimes={serverVoicePresence.startTimes}
               onSelectChannel={handleSelectChannel}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1268,56 +1277,83 @@ export function DiscordApp() {
               onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
               onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
               onCreateCategory={(name) => app.createCategory(name)}
+              catalystCount={app.activeServer ? app.catalystCounts[app.activeServer.id] ?? 0 : 0}
+              onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
             />
           )}
         </>
       )}
 
       {app.viewMode === "dm" && dmFriend && (
-        <ChatCanvas
-          key={app.activeDmThreadId}
-          ref={dmChatRef}
-          channelName={displayName(dmFriend)}
-          messages={dmMessages}
-          loading={app.dmLoading}
-          members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
-          currentUserId={app.user?.id}
-          currentUserName={app.profile ? displayName(app.profile) : undefined}
-          messageContext="dm"
-          reactions={app.messageReactions}
-          typingScope={{ kind: "dm", id: app.activeDmThreadId! }}
-          readCursorScope={{ kind: "dm", id: app.activeDmThreadId! }}
-          headerTrailing={
-            !dmCallActive ? (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPinnedOpen(true);
-                    if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
-                  }}
-                  title="Pinned messages"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
-                >
-                  <IconPin size={18} />
-                </button>
-                <HeaderCallButton
-                  disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-                  onClick={() => void startVoiceCall(dmFriend)}
-                />
-              </div>
-            ) : null
-          }
-          callPanel={renderCallPanel()}
-          onSend={app.sendDmMessage}
-          onEdit={app.editDmMessage}
-          onToggleReaction={(id, emoji) => void app.toggleReaction("dm", id, emoji)}
-          onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "dm")}
-          onForward={(m) => setForwardMessage(m)}
-          onAuthorClick={handleAuthorClick}
-          hasMore={app.dmHasMore}
-          onLoadMore={app.loadMoreDmMessages}
-        />
+        <>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <ChatCanvas
+            key={app.activeDmThreadId}
+            ref={dmChatRef}
+            channelName={displayName(dmFriend)}
+            messages={dmMessages}
+            loading={app.dmLoading}
+            members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
+            currentUserId={app.user?.id}
+            currentUserName={app.profile ? displayName(app.profile) : undefined}
+            messageContext="dm"
+            reactions={app.messageReactions}
+            typingScope={{ kind: "dm", id: app.activeDmThreadId! }}
+            readCursorScope={{ kind: "dm", id: app.activeDmThreadId! }}
+            headerTrailing={
+              !dmCallActive ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDmProfile((v) => !v)}
+                    title={showDmProfile ? "Hide profile panel" : "Show profile panel"}
+                    aria-pressed={showDmProfile}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-interactive-hover ${
+                      showDmProfile ? "text-brand" : "text-text-muted hover:text-text-normal"
+                    }`}
+                  >
+                    <IconFriends size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPinnedOpen(true);
+                      if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
+                    }}
+                    title="Pinned messages"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
+                  >
+                    <IconPin size={18} />
+                  </button>
+                  <HeaderCallButton
+                    disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+                    onClick={() => void startVoiceCall(dmFriend)}
+                  />
+                </div>
+              ) : null
+            }
+            callPanel={renderCallPanel()}
+            onSend={app.sendDmMessage}
+            onEdit={app.editDmMessage}
+            onToggleReaction={(id, emoji) => void app.toggleReaction("dm", id, emoji)}
+            onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "dm")}
+            onForward={(m) => setForwardMessage(m)}
+            onAuthorClick={handleAuthorClick}
+            hasMore={app.dmHasMore}
+            onLoadMore={app.loadMoreDmMessages}
+          />
+          </div>
+          {showDmProfile && (
+            <div className="hidden min-h-0 shrink-0 lg:flex">
+              <DmProfileRail
+                friend={dmFriend}
+                onClose={() => setShowDmProfile(false)}
+                onVoiceCall={() => void startVoiceCall(dmFriend)}
+                onOpenFullProfile={() => openProfile(dmFriend)}
+              />
+            </div>
+          )}
+        </>
       )}
 
       {/* Group chat: the call stage is conditional on the group and call matching,
@@ -1456,6 +1492,9 @@ export function DiscordApp() {
           loading={app.messagesLoading}
           members={app.members.map((m) => m.profile)}
           roles={app.serverRoles}
+          customEmoji={app.customEmojiMap}
+          channels={app.channels}
+          onChannelClick={(id) => void app.selectChannel(id)}
           currentUserId={app.user?.id}
           currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="channel"
@@ -1496,8 +1535,7 @@ export function DiscordApp() {
       )}
 
       <UserProfileModal
-        profile={profileTarget}
-        open={!!profileTarget}
+        profile={profileTarget}        open={!!profileTarget}
         onClose={() => setProfileTarget(null)}
         isSelf={profileTarget?.id === app.user?.id}
         plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
@@ -1597,6 +1635,11 @@ export function DiscordApp() {
       />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CatalystModal
+        server={app.servers.find((s) => s.id === catalystServerId) ?? null}
+        open={catalystServerId !== null}
+        onClose={() => setCatalystServerId(null)}
+      />
       <SubscriptionModal
         open={subscriptionOpen}
         onClose={() => setSubscriptionOpen(false)}

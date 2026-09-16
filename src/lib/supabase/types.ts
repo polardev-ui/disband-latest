@@ -10,6 +10,10 @@ export interface Profile {
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  pronouns?: string | null;
+  status_note?: string | null;
+  /** ISO instant after which status_note is treated as cleared. Null = never expires. */
+  status_expires_at?: string | null;
   status: UserStatus;
   preferred_status: UserStatus | null;
   banner_url: string | null;
@@ -51,6 +55,8 @@ export interface Server {
   description: string | null;
   owner_id: string;
   invite_code?: string;
+  /** Level 1+ catalyst perk: custom invite slug (globally unique, lowercase). */
+  vanity_code?: string | null;
   discoverable?: boolean;
   verified?: boolean;
   created_at: string;
@@ -68,6 +74,10 @@ export interface ServerRole {
   server_id: string;
   name: string;
   color: string;
+  /** Level 3+ catalyst perk: gradient end color (null = solid `color`). */
+  gradient_to?: string | null;
+  /** Animate the gradient (shimmer). Only meaningful with gradient_to. */
+  gradient_animated?: boolean;
   permissions: {
     kick?: boolean;
     ban?: boolean;
@@ -280,6 +290,8 @@ export interface AppNotification {
   body: string | null;
   link: string | null;
   read: boolean;
+  /** Null = never seen in the bell drawer (drives the red pill). Never stamped on mount. */
+  seen_at?: string | null;
   created_at: string;
 }
 
@@ -305,6 +317,9 @@ export interface Database {
           display_name?: string | null;
           avatar_url?: string | null;
           bio?: string | null;
+          pronouns?: string | null;
+          status_note?: string | null;
+          status_expires_at?: string | null;
           status?: UserStatus;
           preferred_status?: UserStatus | null;
           banner_url?: string | null;
@@ -320,6 +335,9 @@ export interface Database {
           display_name?: string | null;
           avatar_url?: string | null;
           bio?: string | null;
+          pronouns?: string | null;
+          status_note?: string | null;
+          status_expires_at?: string | null;
           status?: UserStatus;
           preferred_status?: UserStatus | null;
           banner_url?: string | null;
@@ -465,7 +483,17 @@ export interface Database {
       voice_presence: {
         Row: DbVoicePresence;
         Insert: { channel_id: string; user_id: string; muted?: boolean; deafened?: boolean };
-        Update: { muted?: boolean; deafened?: boolean };
+        Update: { muted?: boolean; deafened?: boolean; last_seen_at?: string };
+        Relationships: [];
+      };
+      /**
+       * voice_presence filtered to rows whose client is still heartbeating.
+       * Reads go here; writes still go to the table itself.
+       */
+      voice_presence_live: {
+        Row: DbVoicePresence;
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       notifications: {
