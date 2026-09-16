@@ -7,6 +7,7 @@ struct ServersTab: View {
     @State private var error: String?
     @State private var showJoin = false
     @State private var showCreate = false
+    @State private var showDiscover = false
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,7 @@ struct ServersTab: View {
                     Menu {
                         Button { showJoin = true } label: { Label("Join with Invite", systemImage: "link") }
                         Button { showCreate = true } label: { Label("Create Server", systemImage: "plus") }
+                        Button { showDiscover = true } label: { Label("Discover", systemImage: "safari") }
                     } label: { Image(systemName: "plus") }
                 }
             }
@@ -49,6 +51,9 @@ struct ServersTab: View {
             }
             .sheet(isPresented: $showCreate) {
                 CreateServerSheet { await load() }
+            }
+            .sheet(isPresented: $showDiscover) {
+                DiscoverServersSheet { await load() }
             }
         }
     }
@@ -74,7 +79,15 @@ private struct ServerRow: View {
         HStack(spacing: 12) {
             AvatarView(url: server.iconUrl, name: server.name, size: 44)
             VStack(alignment: .leading, spacing: 2) {
-                Text(server.name).font(.headline).foregroundStyle(Brand.textPrimary)
+                HStack(spacing: 4) {
+                    Text(server.name).font(.headline).foregroundStyle(Brand.textPrimary)
+                    if server.verified == true {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.footnote)
+                            .foregroundStyle(Brand.verified)
+                            .accessibilityLabel("Verified server")
+                    }
+                }
                 if let desc = server.description, !desc.isEmpty {
                     Text(desc).font(.caption).foregroundStyle(Brand.textMuted).lineLimit(1)
                 }
@@ -139,9 +152,19 @@ struct ChannelListView: View {
             }
         }
         .background(Brand.background)
-        .navigationTitle(server.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 4) {
+                    Text(server.name)
+                    if server.verified == true {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(Brand.verified)
+                            .accessibilityLabel("Verified server")
+                    }
+                }
+                .font(.headline)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { showInvite = true } label: { Label("Invite People", systemImage: "person.badge.plus") }

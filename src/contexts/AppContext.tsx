@@ -26,6 +26,7 @@ import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
+import { refreshOwnBadges } from "@/lib/badge-store";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   AWAY_AFTER_MS,
@@ -114,7 +115,7 @@ interface AppContextValue {
   setMicMuted: (v: boolean) => void;
   setDeafened: (v: boolean) => void;
   signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
+  signUp: (email: string, password: string, username: string, referralCode?: string | null) => Promise<SignUpResult>;
   requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
   mfaRequired: boolean;
@@ -197,6 +198,23 @@ interface AppContextValue {
   ) => Promise<void>;
   unpinMessage: (sourceType: PinnedSourceType, sourceId: string, messageId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
+  /** Catalyst rows per server id (level source). */
+  catalystCounts: Record<string, number>;
+  /** My own catalyst rows (balance + withdraw source). */
+  myCatalysts: { server_id: string; created_at: string }[];
+  refreshCatalysts: (serverIds: string[], uid: string) => Promise<void>;
+  /** Spend one monthly-grant credit on a server. Returns error or null. */
+  allocateCatalyst: (serverId: string) => Promise<string | null>;
+  /** Pull back my newest grant row on a server. Returns error or null. */
+  withdrawCatalyst: (serverId: string) => Promise<string | null>;
+  /** Name->url custom emoji for the active server (empty outside servers). */
+  customEmojiMap: Record<string, string>;
+  /** Stamp seen_at=now() on unseen notifications. Call ONLY on bell-drawer open, never on mount. */
+  markNotificationsSeen: () => Promise<void>;
+  /** Mark one notification read (click-through). */
+  markNotificationRead: (id: string) => Promise<void>;
+  /** Route to a notification link's target (DM / group / server channel). Returns false if unroutable. */
+  routeToNotification: (link: string | null) => Promise<boolean>;
   loadVoicePresence: (channelId: string) => Promise<void>;
   voiceJoinedChannelId: string | null;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
@@ -263,13 +281,26 @@ interface AppContextValue {
   channelEffects: Record<string, ChannelEffects>;
   updateRole: (
     roleId: string,
-    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions">>,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions" | "gradient_to" | "gradient_animated">>,
   ) => Promise<string | null>;
   platformBanUser: (opts: { username?: string; userId?: string; password: string; reason?: string }) => Promise<string | null>;
   platformUnbanUser: (opts: { userId: string; password: string }) => Promise<string | null>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+/**
+ * What to tell someone when an upload fails.
+ *
+ * Every one of these used to end as "Upload failed. Try a smaller file or
+ * different format." — advice that was wrong as often as it was right, and
+ * which discarded a message from the server that already said precisely what
+ * had happened and what the limit was.
+ */
+function uploadErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return "Upload failed. Check your connection and try again.";
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
@@ -290,6 +321,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
+  /** Catalyst rows per server (level source) + my own rows (balance/withdraw source). */
+  const [catalystCounts, setCatalystCounts] = useState<Record<string, number>>({});
+  const [myCatalysts, setMyCatalysts] = useState<{ server_id: string; created_at: string }[]>([]);
   const [categories, setCategories] = useState<ChannelCategory[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [members, setMembers] = useState<(ServerMember & { profile: Profile })[]>([]);
@@ -327,6 +361,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [customEmojiMap, setCustomEmojiMap] = useState<Record<string, string>>({});
   const [voicePresence, setVoicePresence] = useState<(VoicePresence & { profile: Profile })[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("home");
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
@@ -361,6 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // get_or_create RPCs resolve out of order.
   const dmOpenTokenRef = useRef(0);
   const channelsRef = useRef<Channel[]>([]);
+  const serversRef = useRef<Server[]>([]);
   const dmThreadsRef = useRef<(DmThread & { friend: Profile })[]>([]);
   const groupChatsRef = useRef<GroupChatWithMembers[]>([]);
   const viewModeRef = useRef<ViewMode>("home");
@@ -407,6 +443,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAddingAccount(false);
   }, [session?.user?.id]);
   channelsRef.current = channels;
+  serversRef.current = servers;
   dmThreadsRef.current = dmThreads;
   groupChatsRef.current = groupChats;
   useEffect(() => { activeDmRef.current = activeDmThreadId; }, [activeDmThreadId]);
@@ -790,6 +827,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return error?.message ?? null;
   }, []);
 
+  /**
+   * Catalyst levels for my servers + my own allocations (monthly-balance and
+   * withdraw source). Counts are public by RLS design; this scopes reads to
+   * my servers and my rows.
+   */
+  const refreshCatalysts = useCallback(async (serverIds: string[], uid: string) => {
+    if (serverIds.length === 0) {
+      setCatalystCounts({});
+      setMyCatalysts([]);
+      return;
+    }
+    const supabase = getSupabaseClient();
+    const [{ data: all }, { data: mine }] = await Promise.all([
+      supabase.from("server_catalysts").select("server_id").in("server_id", serverIds),
+      supabase.from("server_catalysts").select("server_id,created_at").eq("user_id", uid),
+    ]);
+    const counts: Record<string, number> = {};
+    for (const row of (all as { server_id: string }[] | null) ?? []) {
+      counts[row.server_id] = (counts[row.server_id] ?? 0) + 1;
+    }
+    setCatalystCounts(counts);
+    setMyCatalysts((mine as { server_id: string; created_at: string }[] | null) ?? []);
+  }, []);
+
+  const allocateCatalyst = useCallback(async (serverId: string) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient()
+      .from("server_catalysts")
+      .insert({ server_id: serverId, user_id: userId, source: "grant" });
+    if (error) return error.message;
+    await refreshCatalysts(servers.map((s) => s.id), userId);
+    return null;
+  }, [userId, servers, refreshCatalysts]);
+
+  const withdrawCatalyst = useCallback(async (serverId: string) => {
+    if (!userId) return "Not signed in";
+    // Pull back the newest own grant row (purchased rows stay put).
+    const { data } = await getSupabaseClient()
+      .from("server_catalysts")
+      .select("id")
+      .eq("server_id", serverId)
+      .eq("user_id", userId)
+      .eq("source", "grant")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const row = (data as { id: string }[] | null)?.[0];
+    if (!row) return "No catalyst to withdraw";
+    const { error } = await getSupabaseClient().from("server_catalysts").delete().eq("id", row.id);
+    if (error) return error.message;
+    await refreshCatalysts(servers.map((s) => s.id), userId);
+    return null;
+  }, [userId, servers, refreshCatalysts]);
+
   const loadServers = useCallback(async (uid: string) => {
     const cacheKey = `servers:${uid}`;
     const cached = getCached<Server[]>(cacheKey);
@@ -805,13 +895,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (ids.length === 0) {
       setServers([]);
       setCache(cacheKey, []);
+      void refreshCatalysts([], uid);
       return;
     }
     const { data } = await supabase.from("servers").select("*").in("id", ids).order("created_at");
     const servers = (data as Server[]) ?? [];
     setCache(cacheKey, servers);
     setServers(servers);
-  }, []);
+    void refreshCatalysts(ids, uid);
+  }, [refreshCatalysts]);
 
   const loadServerDetails = useCallback(async (serverId: string) => {
     const cacheKey = `server-details:${serverId}`;
@@ -837,9 +929,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       roleIdsByMember.set(row.user_id, list);
     }
     const channelRows = (chs as Channel[]) ?? [];
+    const serverRoles = (roles as ServerRole[]) ?? [];
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
-    setServerRoles((roles as ServerRole[]) ?? []);
+    setServerRoles(serverRoles);
+    // Only assignable roles (anything but @everyone) may be put back through
+    // set_member_roles; stale/canonical default ids would 400 the RPC.
+    const assignableRoleIds = new Set(
+      serverRoles.filter((r) => !r.is_default).map((r) => r.id),
+    );
+    const sanitizeRoleIds = (ids: string[]) =>
+      ids.filter((id) => assignableRoleIds.has(id));
     const memberRows = ((memRows as (ServerMember & { profile: Profile })[] | null) ?? []).filter(
       (m) => m.profile != null,
     );
@@ -847,7 +947,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMembers([]);
       return channelRows;
     }
-    const enrichedMembers = memberRows.map((m) => ({ ...m, role_ids: roleIdsByMember.get(m.user_id) ?? [] }));
+    const enrichedMembers = memberRows.map((m) => ({
+      ...m,
+      role_ids: sanitizeRoleIds(roleIdsByMember.get(m.user_id) ?? []),
+    }));
     setMembers(enrichedMembers);
     const uid = sessionRef.current?.user?.id ?? null;
     if (uid) {
@@ -894,6 +997,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return channelRows;
   }, []);
 
+  /**
+   * Load a channel's history.
+   *
+   * Every write checks that the channel is still the one on screen. Switching
+   * channels quickly starts two of these, and the slower one used to land
+   * last and overwrite the newer channel's messages with the older channel's
+   * — which is why #general would suddenly be full of #psa.
+   */
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
     const { data } = await supabase
@@ -902,12 +1013,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("channel_id", channelId)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
+    if (activeChannelRef.current !== channelId) return;
+
     const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
     setMessages(rows);
     setChannelHasMore(hasMore);
     setMessagesLoading(false);
+
     const ids = rows.map((m) => m.id);
     const rxn = await loadReactionsForMessages(supabase, "channel", ids);
+    if (activeChannelRef.current !== channelId) return;
     setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
   }, []);
 
@@ -1206,6 +1321,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications((data as AppNotification[]) ?? []);
   }, []);
 
+  /**
+   * Active server's custom emoji as name->url. Loaded on server switch so
+   * `:shortcode:` tokens in messages render as images (the picker already
+   * inserts shortcodes; without this they stayed literal text).
+   */
+  const loadCustomEmoji = useCallback(async (serverId: string) => {
+    const { data } = await getSupabaseClient()
+      .from("custom_emoji")
+      .select("name,url")
+      .eq("server_id", serverId);
+    const map: Record<string, string> = {};
+    for (const row of (data as { name: string; url: string }[] | null) ?? []) {
+      if (row.name && row.url) map[row.name] = row.url;
+    }
+    setCustomEmojiMap(map);
+  }, []);
+
   const refreshAll = useCallback(async () => {
     if (!userId) return;
     await Promise.all([
@@ -1318,6 +1450,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       signingOutRef.current = false;
       setSession(s);
+      // Re-evaluate automatic badges on a fresh sign-in. Server triggers cover
+      // the earning events; this catches time-based badges (Anniversary, Voice
+      // Veteran, Mobile Pioneer) that no event can fire.
+      if (_e === "SIGNED_IN" && s) {
+        void refreshOwnBadges(s.user.id);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [configured, rememberSession]);
@@ -1547,6 +1685,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
 
+    // Cross-device convergence for the identity + catalyst surfaces:
+    // - my own profile (status note / pronouns edited on another device),
+    // - friends' profiles (their status / avatar / name changes),
+    // - catalyst rows (counts, levels, and my monthly balance).
+    // Without these a phone and a desktop drift apart until reload.
+    const profileSub = supabase
+      .channel(`profiles:${userId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` }, () => {
+        void loadProfile(userId);
+      })
+      .subscribe();
+
+    const catalystSub = supabase
+      .channel(`catalysts:${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "server_catalysts" }, () => {
+        void refreshCatalysts(serversRef.current.map((s) => s.id), userId);
+      })
+      .subscribe();
+
     const notifSub = supabase
       .channel(`notif:${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
@@ -1597,11 +1754,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => {
+      void profileSub.unsubscribe();
+      void catalystSub.unsubscribe();
       void notifSub.unsubscribe();
       void friendSub.unsubscribe();
       void notesSub.unsubscribe();
     };
-  }, [userId, configured, loadFriendships]);
+  }, [userId, configured, loadFriendships, loadProfile, refreshCatalysts]);
+
+  // Friends' live profiles (status notes, avatars, names edited on any
+  // device). Keyed on the id set so the channel rebuilds only when the
+  // friend list itself changes. Capped so the filter stays URL-safe.
+  const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
+  useEffect(() => {
+    if (!userId || !configured || friendIdsKey === "") return;
+    const sub = getSupabaseClient()
+      .channel(`profiles:friends:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${friendIdsKey})` },
+        () => void loadFriendships(userId),
+      )
+      .subscribe();
+    return () => {
+      void sub.unsubscribe();
+    };
+  }, [userId, configured, friendIdsKey, loadFriendships]);
 
   useEffect(() => {
     if (!activeChannelId || !configured || !userId) return;
@@ -1614,6 +1792,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const msg = payload.new as Message;
+          // The subscription is torn down on switch, but that teardown is
+          // async: an event for the previous channel can still arrive after
+          // activeChannelRef has moved on, and appending it would seed the
+          // new channel with the old one's messages.
+          if (activeChannelRef.current !== activeChannelId) return;
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
             if (msg.author_id !== userId) {
@@ -1644,6 +1827,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "UPDATE", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const updated = payload.new as Message;
+          // Same teardown race as INSERT: never graft an old channel's
+          // update into the list of the channel now on screen.
+          if (activeChannelRef.current !== activeChannelId) return;
           setMessages((prev) =>
             prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
           );
@@ -1800,6 +1986,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     return () => { subs.forEach((s) => void s.unsubscribe()); };
   }, [userId, configured, groupChats.map((g) => g.id).join(","), loadGroupChats]);
+
+  // Active server's custom emoji for `:shortcode:` rendering in messages.
+  useEffect(() => {
+    if (!activeServerId || !configured) {
+      setCustomEmojiMap({});
+      return;
+    }
+    void loadCustomEmoji(activeServerId);
+  }, [activeServerId, configured, loadCustomEmoji]);
 
   // Live server member list
   useEffect(() => {
@@ -2190,7 +2385,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [refreshMfaStatus, rememberSession]);
 
-  const signUp = useCallback(async (email: string, password: string, username: string): Promise<SignUpResult> => {
+  const signUp = useCallback(async (email: string, password: string, username: string, referralCode?: string | null): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
     const normalized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
     const displayNameVal = username.trim();
@@ -2218,6 +2413,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         data: {
           username: normalized,
           display_name: displayNameVal,
+          // The account-creation trigger credits the referrer once the
+          // address is confirmed; an invalid or missing code is ignored.
+          ...(referralCode ? { referral_code: referralCode } : {}),
         },
       },
     });
@@ -2393,6 +2591,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const selectChannel = useCallback((channelId: string) => {
     markActivity();
+    // Synchronously, not only through the effect below: an in-flight load for
+    // the previous channel has to be able to see the switch immediately.
+    activeChannelRef.current = channelId;
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
@@ -2462,6 +2663,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
     await loadGroupMessages(groupId);
   }, [loadGroupMessages, clearGroupUnread, persistActiveServerChannel, markActivity]);
+
+  /**
+   * Route a bell-drawer notification click to the right place (DM thread /
+   * group / server channel) instead of funneling everything into the server
+   * view. Returns false when the link is missing or unroutable.
+   */
+  const routeToNotification = useCallback(async (link: string | null) => {
+    const target = parseNotificationLink(link);
+    if (!target) return false;
+    if (target.kind === "dm") {
+      await selectDmThread(target.threadId);
+      return true;
+    }
+    if (target.kind === "group") {
+      await selectGroupChat(target.groupId);
+      return true;
+    }
+    if (target.kind === "call") {
+      // Calls surface via the incoming-call UI, not via navigation.
+      return false;
+    }
+    const channel = channelsRef.current.find((c) => c.id === target.channelId);
+    if (channel && channel.server_id !== activeServerRef.current) {
+      await selectServer(channel.server_id);
+    }
+    selectChannel(target.channelId);
+    return true;
+  }, [selectDmThread, selectGroupChat, selectServer, selectChannel]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
@@ -2831,12 +3060,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateRole = useCallback(async (
     roleId: string,
-    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions">>,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions" | "gradient_to" | "gradient_animated">>,
   ) => {
     if (!activeServerId) return "No server selected";
     const update: Record<string, unknown> = {};
     if (patch.name !== undefined) update.name = patch.name.trim();
     if (patch.color !== undefined) update.color = patch.color;
+    if (patch.gradient_to !== undefined) update.gradient_to = patch.gradient_to;
+    if (patch.gradient_animated !== undefined) update.gradient_animated = patch.gradient_animated;
     if (patch.permissions !== undefined) update.permissions = patch.permissions;
     const { error } = await getSupabaseClient()
       .from("server_roles")
@@ -3141,10 +3372,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attUrl = result.url;
         attKey = result.key;
         URL.revokeObjectURL(blobUrl);
-      } catch {
+      } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         if (blobUrl) URL.revokeObjectURL(blobUrl);
-        return "Upload failed. Try a smaller file or different format.";
+        // The server says exactly what was wrong — too large, and by how much.
+        // Replacing that with "try a different format" left people guessing at
+        // a problem that had already been diagnosed for them.
+        return uploadErrorMessage(err);
       }
     }
 
@@ -3263,10 +3497,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attUrl = result.url;
         attKey = result.key;
         URL.revokeObjectURL(blobUrl);
-      } catch {
+      } catch (err) {
         setDmMessages((prev) => prev.filter((m) => m.id !== tempId));
         if (blobUrl) URL.revokeObjectURL(blobUrl);
-        return "Upload failed. Try a smaller file or different format.";
+        return uploadErrorMessage(err);
       }
     }
 
@@ -3384,10 +3618,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attUrl = result.url;
         attKey = result.key;
         URL.revokeObjectURL(blobUrl);
-      } catch {
+      } catch (err) {
         setGroupMessages((prev) => prev.filter((m) => m.id !== tempId));
         if (blobUrl) URL.revokeObjectURL(blobUrl);
-        return "Upload failed. Try a smaller file or different format.";
+        return uploadErrorMessage(err);
       }
     }
 
@@ -3512,10 +3746,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attUrl = result.url;
         attKey = result.key;
         URL.revokeObjectURL(blobUrl);
-      } catch {
+      } catch (err) {
         setNotes((prev) => prev.filter((n) => n.id !== tempId));
         URL.revokeObjectURL(blobUrl);
-        return "Upload failed. Try a smaller file or different format.";
+        return uploadErrorMessage(err);
       }
     }
 
@@ -3737,9 +3971,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadNotifications(userId);
   }, [userId, loadNotifications]);
 
+  const markNotificationsSeen = useCallback(async () => {
+    if (!userId) return;
+    const now = new Date().toISOString();
+    setNotifications((prev) =>
+      prev.map((n) => (n.seen_at ? n : { ...n, seen_at: now })),
+    );
+    await getSupabaseClient()
+      .from("notifications")
+      .update({ seen_at: now })
+      .eq("user_id", userId)
+      .is("seen_at", null);
+    await loadNotifications(userId);
+  }, [userId, loadNotifications]);
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    if (!userId) return;
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    await getSupabaseClient().from("notifications").update({ read: true }).eq("id", id).eq("user_id", userId);
+    await loadNotifications(userId);
+  }, [userId, loadNotifications]);
+
   const loadVoicePresence = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
-    const { data: rows } = await supabase.from("voice_presence").select("*").eq("channel_id", channelId);
+    const { data: rows } = await supabase
+      .from("voice_presence_live")
+      .select("*")
+      .eq("channel_id", channelId);
     if (!rows?.length) {
       setVoicePresence([]);
       return;
@@ -3892,6 +4150,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pinMessage,
     unpinMessage,
     markNotificationsRead,
+    catalystCounts,
+    myCatalysts,
+    refreshCatalysts,
+    allocateCatalyst,
+    withdrawCatalyst,
+    customEmojiMap,
+    markNotificationsSeen,
+    markNotificationRead,
+    routeToNotification,
     loadVoicePresence,
     voiceJoinedChannelId,
     setVoiceJoinedChannelId: handleVoiceJoinedChannel,

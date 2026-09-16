@@ -35,6 +35,7 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
     if (!trimmed) return;
     setBusy(true);
     setError(null);
+    try {
     const result = await checkout.applyPromotionCode(trimmed);
     if (result.type === "error") {
       setError(result.error.message);
@@ -42,14 +43,16 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
       setCode("");
       setOpen(false);
     }
-    setBusy(false);
+    } catch { setError("Could not apply the code. Try again."); }
+    finally { setBusy(false); }
   }, [checkout, code]);
 
   const remove = useCallback(async () => {
     setBusy(true);
     setError(null);
-    await checkout.removePromotionCode();
-    setBusy(false);
+    try { await checkout.removePromotionCode(); }
+    catch { setError("Could not remove the code. Try again."); }
+    finally { setBusy(false); }
   }, [checkout]);
 
   if (applied) {

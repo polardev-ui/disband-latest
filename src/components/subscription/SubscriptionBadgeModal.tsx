@@ -24,8 +24,8 @@ export function SubscriptionBadgeModal({
 }) {
   const current = tierForMonths(tenureMonths);
   const next = nextTier(tenureMonths);
-  const accent = plan === "super" ? "#fee75c" : "#57f287";
-  const planName = plan === "super" ? "Disband Super" : "Disband Basic";
+  const accent = "#fee75c";
+  const planName = "Disband Aero";
 
   const spanStart = current?.months ?? 0;
   const spanEnd = next?.months ?? spanStart;
@@ -64,7 +64,7 @@ export function SubscriptionBadgeModal({
           style={{ background: `linear-gradient(135deg, ${accent}1f, transparent 65%)` }}
         >
           {current && (
-            <SubscriptionMedallion tier={current} super={plan === "super"} size={64} />
+            <SubscriptionMedallion tier={current} super size={64} />
           )}
           <div className="min-w-0">
             <h2 className="text-[22px] font-extrabold leading-tight tracking-[-0.01em] text-text-normal">
@@ -119,7 +119,7 @@ export function SubscriptionBadgeModal({
                 style={isCurrent ? { borderColor: accent, boxShadow: `inset 0 0 0 1px ${accent}59` } : undefined}
               >
                 <span className={reached ? "" : "opacity-25 grayscale"}>
-                  <SubscriptionMedallion tier={t} super={plan === "super"} size={46} />
+                  <SubscriptionMedallion tier={t} super size={46} />
                 </span>
                 <p className={`mt-1.5 text-[12.5px] font-semibold ${
                   reached ? "text-text-normal" : "text-text-muted"

@@ -31,6 +31,10 @@ enum Brand {
     static let idle = Color(hex: 0xF0B232)
     static let dnd = Color(hex: 0xF23F43)
     static let danger = Color(hex: 0xDA373C)
+
+    /// The "officially verified by Disband" sky blue used for the server
+    /// checkmark, matching the web's `text-sky-400`.
+    static let verified = Color(hex: 0x38BDF8)
 }
 
 extension UserStatus {

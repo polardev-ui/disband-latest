@@ -34,6 +34,7 @@ interface CallSignal {
 }
 
 import { fetchIceServers, getIceServers, hasTurnConfigured } from "@/lib/ice-servers";
+import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 export interface IncomingCallInfo {
   fromId: string;
@@ -81,6 +82,8 @@ export function useCallManager(
   const [error, setError] = useState<string | null>(null);
   const [callNotice, setCallNotice] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  // Time in a call is what the Voice Veteran badge counts.
+  useVoiceMinutes(phase === "active");
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
@@ -89,6 +92,19 @@ export function useCallManager(
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeCallIdRef = useRef<string | null>(null);
   const activePeerIdRef = useRef<string | null>(null);
+  // Retry state: ICE-restart attempts for a failing peer connection, a grace
+  // timer for transient disconnects, caller flag for renegotiation, and the
+  // last peer so a dead call can be redialed manually.
+  const iceRetryRef = useRef(0);
+  const disconnectTimerRef = useRef<number | null>(null);
+  const callerRef = useRef(false);
+  const lastPeerRef = useRef<Profile | null>(null);
+  const reconnectingRef = useRef(false);
+  // ICE candidates routinely arrive before the offer/answer round-trip sets
+  // the remote description (cross-device especially). Adding them early
+  // throws InvalidStateError, so they queue here and drain once the remote
+  // description lands.
+  const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const phaseRef = useRef<CallPhase>("idle");
   const cameraRef = useRef(false);
   const screenShareRef = useRef(false);
@@ -129,6 +145,13 @@ export function useCallManager(
     setLocalScreen(null);
     stopRingtone();
     await cleanupRtc();
+    if (disconnectTimerRef.current !== null) {
+      window.clearTimeout(disconnectTimerRef.current);
+      disconnectTimerRef.current = null;
+    }
+    iceRetryRef.current = 0;
+    reconnectingRef.current = false;
+    pendingIceRef.current = [];
     setPhase("idle");
     setIncoming(null);
     setActivePeer(null);
@@ -201,21 +224,89 @@ export function useCallManager(
           });
         }
       };
-      pc.onconnectionstatechange = () => {
-        const state = pc.connectionState;
-        if (state === "failed") {
-          // Say why. A media path that never establishes previously just ended
-          // the call with no explanation, indistinguishable from the other side
-          // hanging up. This uses callNotice rather than error because reset()
-          // clears error on the very next line.
-          setCallNotice(
+      callerRef.current = asCaller;
+      // Caller-side renegotiation: fires after restartIce() so the re-offer
+      // goes out over the still-subscribed signal channel. The callee's
+      // existing `offer` handler answers renegotiations, completing the retry.
+      pc.onnegotiationneeded = () => {
+        if (!callerRef.current || pc.signalingState !== "stable") return;
+        void (async () => {
+          try {
+            const offer = await pc.createOffer({ iceRestart: true });
+            await pc.setLocalDescription(offer);
+            await ch.send({
+              type: "broadcast",
+              event: "call",
+              payload: { type: "offer", from: userId, to: peerId, sdp: offer } satisfies CallSignal,
+            });
+          } catch {
+            /* renegotiation failed — the failed-state path below retries/resets */
+          }
+        })();
+      };
+      const clearDisconnectTimer = () => {
+        if (disconnectTimerRef.current !== null) {
+          window.clearTimeout(disconnectTimerRef.current);
+          disconnectTimerRef.current = null;
+        }
+      };
+      const giveUp = (notice: string) => {
+        reconnectingRef.current = false;
+        setCallNotice(notice);
+        window.setTimeout(() => setCallNotice(null), 8000);
+        void reset();
+      };
+      const retryIce = () => {
+        // At most 2 automatic ICE restarts per connection; then give up so a
+        // truly dead path still ends the call instead of looping forever.
+        if (iceRetryRef.current >= 2 || !pcRef.current) {
+          giveUp(
             hasTurnConfigured()
               ? "Lost the connection to the other person."
               : "Couldn't connect audio. Calls between a phone and a desktop usually need a TURN relay.",
           );
-          window.setTimeout(() => setCallNotice(null), 8000);
+          return;
         }
-        if (state === "disconnected" || state === "failed" || state === "closed") {
+        iceRetryRef.current += 1;
+        reconnectingRef.current = true;
+        setCallNotice(`Connection lost. Reconnecting… (attempt ${iceRetryRef.current} of 2)`);
+        try {
+          pcRef.current.restartIce();
+        } catch {
+          giveUp("Lost the connection to the other person.");
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        const state = pc.connectionState;
+        if (state === "connected") {
+          // Healthy again: reset the retry budget and any reconnect notice.
+          clearDisconnectTimer();
+          iceRetryRef.current = 0;
+          if (reconnectingRef.current) {
+            reconnectingRef.current = false;
+            setCallNotice("Reconnected.");
+            window.setTimeout(() => setCallNotice(null), 3000);
+          }
+          return;
+        }
+        if (state === "failed") {
+          clearDisconnectTimer();
+          retryIce();
+          return;
+        }
+        if (state === "disconnected") {
+          // Transient blips (Wi-Fi hop, brief signal loss) recover on their
+          // own — only treat it as dead if it persists past a grace period.
+          if (disconnectTimerRef.current !== null) return;
+          disconnectTimerRef.current = window.setTimeout(() => {
+            disconnectTimerRef.current = null;
+            const cur = pcRef.current?.connectionState;
+            if (cur === "disconnected" || cur === "failed") retryIce();
+          }, 5000);
+          return;
+        }
+        if (state === "closed") {
+          clearDisconnectTimer();
           void reset();
         }
       };
@@ -223,9 +314,33 @@ export function useCallManager(
       ch.on("broadcast", { event: "call" }, ({ payload }) => {
         const p = payload as CallSignal;
         if (p.from === userId || (p.to && p.to !== userId)) return;
+        const addIce = async (candidate: RTCIceCandidateInit) => {
+          try {
+            if (!pc.remoteDescription) {
+              pendingIceRef.current.push(candidate);
+              return;
+            }
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // Stale/duplicate candidates are normal on renegotiation — never
+            // let one kill the signal handler.
+          }
+        };
+        const drainIce = async () => {
+          const queued = pendingIceRef.current;
+          pendingIceRef.current = [];
+          for (const candidate of queued) {
+            try {
+              await pc.addIceCandidate(candidate);
+            } catch {
+              /* drop stale entries */
+            }
+          }
+        };
         void (async () => {
           if (p.type === "offer" && p.sdp) {
             await pc.setRemoteDescription(p.sdp);
+            await drainIce();
             openLanesForSending(pc);
             const pending = pendingLocalRef.current;
             if (pending) {
@@ -243,11 +358,12 @@ export function useCallManager(
             void ch.send({ type: "broadcast", event: "call", payload: { type: "answer", from: userId, to: p.from, sdp: ans } });
           } else if (p.type === "answer" && p.sdp) {
             await pc.setRemoteDescription(p.sdp);
+            await drainIce();
             setRemoteStream((prev) => streamWithoutEndedTracks(prev));
           } else if (p.type === "screen") {
             setPeerSharing(!!p.sharing);
           } else if (p.type === "ice" && p.candidate) {
-            await pc.addIceCandidate(p.candidate);
+            await addIce(p.candidate);
           } else if (p.type === "leave") {
             await reset();
           }
@@ -394,6 +510,7 @@ export function useCallManager(
     const callId = directCallId(userId, peer.id);
     activeCallIdRef.current = callId;
     activePeerIdRef.current = peer.id;
+    lastPeerRef.current = peer;
     setActivePeer(peer);
     setPhase("outgoing");
     startRingtone();
@@ -435,7 +552,10 @@ export function useCallManager(
     await warmUpMediaDevices();
     const supabase = getSupabaseClient();
     const { data: fp } = await supabase.from("profiles").select("*").eq("id", incoming.fromId).maybeSingle();
-    if (fp) setActivePeer(fp as Profile);
+    if (fp) {
+      setActivePeer(fp as Profile);
+      lastPeerRef.current = fp as Profile;
+    }
     activeCallIdRef.current = incoming.callId;
     activePeerIdRef.current = incoming.fromId;
     setPhase("active");
@@ -482,6 +602,16 @@ export function useCallManager(
     }
     await reset();
   }, [userId, sendToUser, notifyPeerLeave, reset]);
+
+  /**
+   * Manual retry: redial the last peer after a dead call. Only valid from
+   * idle with no incoming call — the UI gates on `canRetryCall`.
+   */
+  const retryCall = useCallback(async () => {
+    const peer = lastPeerRef.current;
+    if (!peer || phaseRef.current !== "idle" || incoming) return;
+    await startCall(peer);
+  }, [incoming, startCall]);
 
   // Listen for incoming calls
   useEffect(() => {
@@ -607,6 +737,9 @@ export function useCallManager(
     acceptCall,
     rejectCall,
     endCall,
+    retryCall,
+    /** True when a manual redial is possible (idle, no incoming, have a peer). */
+    canRetryCall: phase === "idle" && !incoming && lastPeerRef.current !== null,
     toggleCamera,
     toggleScreenShare,
   };

@@ -10,6 +10,33 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@tauri-apps/plugin-notification@2.4.0'
+  - '@remotion/bundler@4.0.523'
+  - '@remotion/canvas@4.0.523'
+  - '@remotion/captions@4.0.523'
+  - '@remotion/cli@4.0.523'
+  - '@remotion/compositor-darwin-arm64@4.0.523'
+  - '@remotion/compositor-darwin-x64@4.0.523'
+  - '@remotion/compositor-linux-arm64-gnu@4.0.523'
+  - '@remotion/compositor-linux-arm64-musl@4.0.523'
+  - '@remotion/compositor-linux-x64-gnu@4.0.523'
+  - '@remotion/compositor-linux-x64-musl@4.0.523'
+  - '@remotion/compositor-win32-x64-msvc@4.0.523'
+  - '@remotion/licensing@4.0.523'
+  - '@remotion/media-parser@4.0.523'
+  - '@remotion/media-utils@4.0.523'
+  - '@remotion/media@4.0.523'
+  - '@remotion/player@4.0.523'
+  - '@remotion/renderer@4.0.523'
+  - '@remotion/streaming@4.0.523'
+  - '@remotion/studio-codemods@4.0.523'
+  - '@remotion/studio-protocol@4.0.523'
+  - '@remotion/studio-server@4.0.523'
+  - '@remotion/studio-shared@4.0.523'
+  - '@remotion/studio@4.0.523'
+  - '@remotion/timeline-utils@4.0.523'
+  - '@remotion/web-renderer@4.0.523'
+  - '@remotion/zod-types@4.0.523'
+  - remotion@4.0.523
 
 # pnpm 10+ reads project settings from here instead of the package.json "pnpm" field.
 # Allow sharp to run its build script (pulled in transitively by Next.js).
@@ -19,3 +46,10 @@ onlyBuiltDependencies:
 
 # Don't fail `pnpm <script>` on the pre-run dependency check.
 verifyDepsBeforeRun: false
+
+# Security patches for transitive dependencies; keep within compatible majors.
+overrides:
+  postcss: ^8.5.28
+  'nanoid@3': ^3.3.18
+  'fast-uri@3': ^3.1.7
+  sharp: ^0.35.4

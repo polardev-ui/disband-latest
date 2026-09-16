@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  catalystLevel,
+  sanitizeVanity,
+  vanityError,
+  EMOJI_SLOTS_BONUS,
+} from "@/lib/catalysts";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus, IconChevron, IconGripVertical } from "@/components/icons";
@@ -51,11 +57,14 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     setMemberRoles,
     kickMember,
     banMember,
+    catalystCounts,
   } = useApp();
   const { upload } = useMediaUpload();
   const [section, setSection] = useState<Section>("overview");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [vanity, setVanity] = useState("");
+  const [vanitySaved, setVanitySaved] = useState(false);
   const [discoverable, setDiscoverable] = useState(false);
   const [discoverableError, setDiscoverableError] = useState<string | null>(null);
   const [roleName, setRoleName] = useState("");
@@ -82,6 +91,8 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     if (!activeServer) return;
     setName(activeServer.name);
     setDescription(activeServer.description ?? "");
+    setVanity(activeServer.vanity_code ?? "");
+    setVanitySaved(false);
     setDiscoverable(activeServer.discoverable ?? false);
     setSection("overview");
   }, [activeServer, open]);
@@ -109,7 +120,10 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   const isOwner = activeServer.owner_id === user?.id;
   const canManageChannels = isOwner || serverPermissions.manage_channels;
   const canManageRoles = isOwner || serverPermissions.manage_roles;
-  const inviteUrl = activeServer.invite_code ? getInviteUrl(activeServer.invite_code) : null;
+  const catalystCount = catalystCounts[activeServer.id] ?? 0;
+  const catalystLvl = catalystLevel(catalystCount);
+  const inviteCode = activeServer.vanity_code || activeServer.invite_code;
+  const inviteUrl = inviteCode ? getInviteUrl(inviteCode) : null;
   const navItems = NAV.filter((n) => {
     if (n.ownerOnly && !isOwner) return false;
     if (n.permission === "manage_channels" && !canManageChannels) return false;
@@ -150,6 +164,28 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     setLoading(false);
   }
 
+  /** Level 1+ catalyst perk: custom vanity invite code (owner only). */
+  async function saveVanity() {
+    if (!activeServer || !isOwner || catalystLvl.level < 1) return;
+    const clean = sanitizeVanity(vanity);
+    const errMsg = clean ? vanityError(clean) : null;
+    if (vanity.trim() && errMsg) {
+      setError(errMsg);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const err = await updateServer(activeServer.id, { vanity_code: clean || null });
+    setLoading(false);
+    if (err) {
+      setError(/duplicate|unique/i.test(err) ? "That vanity is taken." : err);
+    } else {
+      setVanity(clean);
+      setVanitySaved(true);
+      setTimeout(() => setVanitySaved(false), 2000);
+    }
+  }
+
   async function handleDelete() {
     if (!confirm(`Delete "${activeServer!.name}" permanently? This cannot be undone.`)) return;
     setLoading(true);
@@ -171,9 +207,12 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
 
   async function handleEmojiUpload() {
     if (!emojiFile || !emojiName.trim() || !activeServer) return;
-    const slotLimit = entitlements.customEmojiSlots;
+    // Level 2+ catalyst perk: +50 slots server-wide, on top of the plan.
+    const lvl = catalystLevel(catalystCounts[activeServer.id] ?? 0).level;
+    const baseSlots = entitlements.customEmojiSlots;
+    const slotLimit = typeof baseSlots === "number" && lvl >= 2 ? baseSlots + EMOJI_SLOTS_BONUS : baseSlots;
     if (typeof slotLimit === "number" && customEmoji.length >= slotLimit) {
-      setError(`Your plan allows up to ${slotLimit} custom emoji. Delete one first or upgrade.`);
+      setError(`This server allows up to ${slotLimit} custom emoji. Delete one first or upgrade.`);
       return;
     }
     setEmojiUploading(true);
@@ -289,6 +328,15 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     setLoading(true);
     setError(null);
     const err = await updateRole(roleId, { name: next.trim() });
+    if (err) setError(err);
+    setLoading(false);
+  }
+
+  /** Level 3+ catalyst perk: gradient end color + shimmer for a role. */
+  async function handleRoleGradient(roleId: string, patch: { gradient_to?: string | null; gradient_animated?: boolean }) {
+    setLoading(true);
+    setError(null);
+    const err = await updateRole(roleId, patch);
     if (err) setError(err);
     setLoading(false);
   }
@@ -432,7 +480,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
         <div className="flex items-center gap-3">
           {activeServer.icon_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={safeImageUrl(activeServer.icon_url) ?? ""} alt="" className="h-8 w-8 rounded-[30%] object-cover" />
+            <img src={safeImageUrl(activeServer.icon_url) || undefined} alt="" className="h-8 w-8 rounded-[30%] object-cover" />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-[30%] bg-brand text-xs font-bold text-white">
               {serverInitials(activeServer.name)}
@@ -508,6 +556,47 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                     className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
                   />
                 </label>
+                <div>
+                  <span className="text-xs font-bold uppercase text-text-muted">
+                    Vanity invite code{" "}
+                    <span className="ml-1 rounded bg-brand/20 px-1.5 py-px text-[10px] font-bold text-brand">
+                      Level 1
+                    </span>
+                  </span>
+                  {catalystLvl.level >= 1 ? (
+                    <>
+                      <div className="mt-1 flex gap-2">
+                        <input
+                          value={vanity}
+                          onChange={(e) => setVanity(sanitizeVanity(e.target.value))}
+                          disabled={!isOwner}
+                          placeholder="e.g. my-cool-server"
+                          maxLength={24}
+                          className="min-w-0 flex-1 rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
+                        />
+                        {isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => void saveVanity()}
+                            disabled={loading}
+                            className="shrink-0 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                          >
+                            {vanitySaved ? "Saved" : "Set"}
+                          </button>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {activeServer.vanity_code
+                          ? `Invite link: ${getInviteUrl(activeServer.vanity_code)}`
+                          : "Boost this server to Level 1 to claim a custom link. Clear and save to release it."}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-xs text-text-muted">
+                      Boost this server to Level 1 (1 catalyst) to unlock a custom invite link.
+                    </p>
+                  )}
+                </div>
                 <div className="rounded-lg border border-divider bg-bg-secondary p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -733,9 +822,16 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                 <p className="text-sm text-text-muted">
                   Create roles, set permissions, and assign them from the Members tab or by right-clicking members. Drag
                   a role (or use the arrows) to reorder it — higher roles appear first in the member list.
+                  {catalystLvl.level >= 3 ? (
+                    <> <span className="font-medium text-brand">Level {catalystLvl.level}: gradient role styling unlocked.</span></>
+                  ) : (
+                    <> Boost this server to Level 3 (6 catalysts) for animated gradient roles.</>
+                  )}
                 </p>
                 <ul className="space-y-3">
-                  {serverRoles.map((r, index) => {
+                  {[...serverRoles]
+                    .sort((a, b) => b.position - a.position)
+                    .map((r) => {
                     const perms = r.permissions ?? {};
                     const PERMS: {
                       key:
@@ -787,7 +883,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                         onDrop={(e) => {
                           e.preventDefault();
                           if (!dragRoleId || dragRoleId === r.id) return;
-                          void handleMoveRole(dragRoleId, index);
+                          void handleMoveRole(dragRoleId, r.position);
                         }}
                         className={`rounded-lg border border-divider bg-bg-secondary p-4 transition-all ${
                           overRoleId === r.id && dragRoleId && dragRoleId !== r.id
@@ -804,13 +900,26 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                           <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
                           <span className="font-medium">{r.name}</span>
                           {r.is_default && <span className="text-xs text-text-muted">Default</span>}
+                          {r.gradient_to && (
+                            <span
+                              title="Gradient role styling"
+                              aria-label="Gradient role styling"
+                              className={`bg-clip-text text-sm font-black text-transparent ${r.gradient_animated ? "animate-role-gradient" : ""}`}
+                              style={{
+                                backgroundImage: `linear-gradient(90deg, ${r.color}, ${r.gradient_to})`,
+                                backgroundSize: r.gradient_animated ? "200% 100%" : undefined,
+                              }}
+                            >
+                              Aa
+                            </span>
+                          )}
                           <div className="ml-auto flex shrink-0 items-center gap-1">
                             {!r.is_default && (
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => void handleMoveRole(r.id, Math.max(1, index - 1))}
-                                  disabled={loading || index <= 1}
+                                  onClick={() => void handleMoveRole(r.id, r.position + 1)}
+                                  disabled={loading || r.position >= serverRoles.length - 1}
                                   className="rounded p-1 text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
                                   aria-label="Move role up"
                                 >
@@ -818,8 +927,8 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => void handleMoveRole(r.id, index + 1)}
-                                  disabled={loading || index >= serverRoles.length - 1}
+                                  onClick={() => void handleMoveRole(r.id, r.position - 1)}
+                                  disabled={loading || r.position <= 1}
                                   className="rounded p-1 text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
                                   aria-label="Move role down"
                                 >
@@ -844,6 +953,40 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                               </>
                             )}
                           </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 rounded bg-bg-accent px-3 py-2">
+                          <span className="text-xs font-bold uppercase text-text-muted">Gradient</span>
+                          <input
+                            type="color"
+                            value={r.gradient_to ?? r.color}
+                            disabled={loading || catalystLvl.level < 3}
+                            title={catalystLvl.level >= 3 ? "Gradient end color" : "Level 3 unlocks gradients"}
+                            onChange={(e) => void handleRoleGradient(r.id, { gradient_to: e.target.value })}
+                            className="h-7 w-10 cursor-pointer rounded disabled:cursor-not-allowed disabled:opacity-40"
+                          />
+                          {r.gradient_to && (
+                            <button
+                              type="button"
+                              disabled={loading}
+                              onClick={() => void handleRoleGradient(r.id, { gradient_to: null, gradient_animated: false })}
+                              className="text-xs text-text-muted hover:text-text-normal disabled:opacity-40"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-text-muted">
+                            <input
+                              type="checkbox"
+                              checked={!!r.gradient_animated}
+                              disabled={loading || !r.gradient_to || catalystLvl.level < 3}
+                              onChange={(e) => void handleRoleGradient(r.id, { gradient_animated: e.target.checked })}
+                              className="h-3.5 w-3.5 accent-brand disabled:opacity-40"
+                            />
+                            Animated
+                          </label>
+                          {catalystLvl.level < 3 && (
+                            <span className="w-full text-[11px] text-text-muted/70">Level 3 unlocks gradient roles.</span>
+                          )}
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           {PERMS.map((p) => {
@@ -900,11 +1043,14 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                   {typeof entitlements.customEmojiSlots === "number"
                     ? ` Your plan: ${customEmoji.length}/${entitlements.customEmojiSlots} slots used.`
                     : " Your plan: unlimited slots."}
+                  {catalystLvl.level >= 2 && (
+                    <> <span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS} from Level {catalystLvl.level}.</span></>
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {customEmoji.map((e) => (
                     <div key={e.id} className="group relative flex items-center gap-2 rounded-lg border border-divider bg-bg-secondary px-3 py-2 text-sm">
-                      <img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-6 w-6 object-contain" />
+                      <img src={safeImageUrl(e.url) || undefined} alt={e.name} className="h-6 w-6 object-contain" />
                       <span>:{e.name}:</span>
                       <button
                         type="button"
@@ -916,7 +1062,9 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                     </div>
                   ))}
                 </div>
-                {(typeof entitlements.customEmojiSlots !== "number" || customEmoji.length < entitlements.customEmojiSlots) && (
+                {(typeof entitlements.customEmojiSlots !== "number" ||
+                  customEmoji.length <
+                    entitlements.customEmojiSlots + (catalystLvl.level >= 2 ? EMOJI_SLOTS_BONUS : 0)) && (
                   <div className="flex flex-wrap items-end gap-3 rounded-lg border border-divider bg-bg-secondary p-4">
                     <label className="flex-1">
                       <span className="text-xs font-bold uppercase text-text-muted">Name</span>

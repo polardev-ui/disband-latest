@@ -4,6 +4,7 @@ import { getStripe, PRICE_IDS } from "@/lib/stripe";
 import { GRANTING_STATUSES } from "@/lib/subscription";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import type { SubscriptionPlan } from "@/lib/subscription";
 
 /**
  * Reconcile the signed-in user's subscription straight from Stripe.
@@ -22,18 +23,22 @@ interface StripePeriodFields {
   canceled_at?: number | null;
 }
 
-/** Map a Stripe price back to one of our plans. */
-function planForSubscription(sub: Stripe.Subscription): "basic" | "super" | null {
+/**
+ * Map a Stripe subscription back to one of our plans.
+ *
+ * Metadata written before the merge still says "basic" or "super"; both mean
+ * Aero now. The price fallback covers subscriptions created outside our own
+ * checkout — from the dashboard, or by a migration.
+ */
+function planForSubscription(sub: Stripe.Subscription): SubscriptionPlan | null {
   const metaPlan = (sub.metadata as Record<string, string> | undefined)?.plan;
-  if (metaPlan === "basic" || metaPlan === "super") return metaPlan;
+  if (metaPlan === "aero" || metaPlan === "basic" || metaPlan === "super") return "aero";
 
-  // Fall back to the price id, so subscriptions created outside our checkout
-  // (dashboard, migrations) still resolve.
   for (const item of sub.items?.data ?? []) {
     const priceId = item.price?.id;
     if (!priceId) continue;
-    if (priceId === PRICE_IDS.basic) return "basic";
-    if (priceId === PRICE_IDS.super) return "super";
+    if (priceId === PRICE_IDS.aero) return "aero";
+    if (PRICE_IDS.legacyBasic && priceId === PRICE_IDS.legacyBasic) return "aero";
   }
   return null;
 }

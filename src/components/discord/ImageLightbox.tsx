@@ -146,26 +146,34 @@ export function ImageLightbox({
 
             <div className="min-h-0 overflow-auto p-4">
               <div className="flex justify-center">
-                {animated ? (
-                  <video
-                    src={safeImageUrl(src) ?? ""}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={safeImageUrl(src) ?? ""}
-                    alt={alt}
-                    className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
-                    draggable={false}
-                  />
-                )}
+                {(() => {
+                  const resolved = safeImageUrl(src);
+                  if (!resolved) {
+                    return (
+                      <p className="py-10 text-sm text-text-muted">Couldn't load this image.</p>
+                    );
+                  }
+                  return animated ? (
+                    <video
+                      src={resolved}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={resolved}
+                      alt={alt}
+                      className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+                      draggable={false}
+                    />
+                  );
+                })()}
               </div>
             </div>
           </div>

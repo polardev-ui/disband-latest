@@ -13,6 +13,7 @@ import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { fetchIceServers } from "@/lib/ice-servers";
+import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 interface SignalPayload {
   type: "offer" | "answer" | "ice" | "leave" | "screen";
@@ -35,6 +36,8 @@ export function useVoiceChannel(
   plan: SubscriptionPlan = "free",
 ) {
   const [joined, setJoined] = useState(false);
+  // Server voice counts toward Voice Veteran too, not just DM calls.
+  useVoiceMinutes(joined);
   const [participants, setParticipants] = useState<(VoicePresence & { profile?: Profile })[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
@@ -93,7 +96,10 @@ export function useVoiceChannel(
   const loadPresence = useCallback(async () => {
     if (!channelId) return;
     const supabase = getSupabaseClient();
-    const { data: rows } = await supabase.from("voice_presence").select("*").eq("channel_id", channelId);
+    const { data: rows } = await supabase
+      .from("voice_presence_live")
+      .select("*")
+      .eq("channel_id", channelId);
     if (!rows?.length) {
       setParticipants([]);
       return;
@@ -258,6 +264,24 @@ export function useVoiceChannel(
     }
     setJoined(false);
   }, [channelId, userId]);
+
+  /**
+   * Keep this client's presence row alive.
+   *
+   * Without it a row outlives the session that made it: a closed tab or a
+   * refresh leaves no chance to delete it, and the channel goes on showing
+   * someone who left. The prune job removes anything that stops answering.
+   */
+  useEffect(() => {
+    if (!joined || !channelId || !userId) return;
+    const supabase = getSupabaseClient();
+    const beat = () => {
+      void supabase.rpc("touch_voice_presence", { p_channel: channelId });
+    };
+    beat();
+    const timer = window.setInterval(beat, 30_000);
+    return () => window.clearInterval(timer);
+  }, [joined, channelId, userId]);
 
   const join = useCallback(async () => {
     if (!channelId || !userId) return;

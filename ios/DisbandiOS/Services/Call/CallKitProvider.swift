@@ -18,6 +18,17 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     /// Fired on the main actor when the user declines/ends from the system UI.
     var onEnd: ((IncomingCall) -> Void)?
 
+    /// MIIT requires CallKit to be deactivated for apps distributed on the
+    /// China App Store, so the same binary ships everywhere and switches
+    /// itself off there; those devices use the in-app ring instead.
+    ///
+    /// The decision lives in `CallKitAvailability` because PushKit has to make
+    /// the same one — see the note there on why registering for VoIP pushes
+    /// with CallKit off gets the app killed.
+    static var isEnabledForCurrentRegion: Bool {
+        CallKitAvailability.isEnabled
+    }
+
     private let provider: CXProvider
     private var calls: [UUID: IncomingCall] = [:]
 
@@ -47,6 +58,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     /// call, or a voice channel. Without this the app is suspended on
     /// backgrounding and stops sending and receiving audio.
     func startActiveCall(id: String, title: String, hasVideo: Bool = false) {
+        guard Self.isEnabledForCurrentRegion else { return }
         guard activeCalls[id] == nil else { return }
         let uuid = UUID()
         activeCalls[id] = uuid
@@ -73,6 +85,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     /// Tell the system a call this device started or joined has finished.
     func endActiveCall(id: String) {
+        guard Self.isEnabledForCurrentRegion else { return }
         guard let uuid = activeCalls.removeValue(forKey: id) else { return }
         let action = CXEndCallAction(call: uuid)
         controller.request(CXTransaction(action: action)) { error in
@@ -84,6 +97,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     /// Present the system ring (lock screen, swipe to answer, banner upstairs).
     func presentIncomingCall(_ call: IncomingCall) {
+        guard Self.isEnabledForCurrentRegion else { return }
         // One CallKit call per Disband call: replace any stale entry.
         if let stale = calls.first(where: { $0.value.callId == call.callId })?.key {
             calls.removeValue(forKey: stale)
@@ -114,12 +128,14 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     /// in either order: CallKit must only be presented once, but it must still
     /// be presented when the realtime ring happened to be first.
     func isPresented(callId: String) -> Bool {
-        calls.values.contains { $0.callId == callId }
+        guard Self.isEnabledForCurrentRegion else { return false }
+        return calls.values.contains { $0.callId == callId }
     }
 
     /// Dismiss the system ring (declined, missed, or picked up on another
     /// device). The system call UI disappears and the call is not logged.
     func dismissIncomingCall(for call: IncomingCall) {
+        guard Self.isEnabledForCurrentRegion else { return }
         guard let uuid = calls.first(where: { $0.value.callId == call.callId })?.key else { return }
         calls.removeValue(forKey: uuid)
         provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
@@ -127,6 +143,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     /// Once audio is live, transfer the system UI into the in-progress call.
     func markCallConnected(for call: IncomingCall) {
+        guard Self.isEnabledForCurrentRegion else { return }
         guard let uuid = calls.first(where: { $0.value.callId == call.callId })?.key else { return }
         provider.reportOutgoingCall(with: uuid, connectedAt: Date())
     }

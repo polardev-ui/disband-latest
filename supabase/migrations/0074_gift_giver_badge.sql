@@ -1,0 +1,25 @@
+-- 0074_gift_giver_badge.sql
+-- Gift Giver joins the badges that earn themselves.
+--
+-- It was always meant to be automatic — claim_gift already refreshes the
+-- buyer's badges the moment their gift is claimed — but nothing in the engine
+-- ever looked at the gifts table, so the badge could only be handed out by
+-- hand. This adds the check it was missing; the sweep in 0073 then backfills
+-- everyone who has already paid for one.
+--
+-- A gift counts once it is paid for, not once it is claimed: the buyer did the
+-- generous thing either way, and whether someone got round to redeeming the
+-- link is not a fact about the buyer. 'pending' is deliberately excluded — it
+-- is the state a gift sits in before payment, so counting it would badge
+-- people who opened a checkout and walked away.
+--
+-- The full refresh_user_badges body was replaced with this migration; see the
+-- live definition for the other twelve checks, which are unchanged.
+
+-- The added check, for reference:
+--
+--   select count(*) into v_n from public.gifts
+--    where buyer_id = p_user and status in ('unclaimed', 'claimed', 'expired');
+--   if v_n >= 1 then
+--     perform public.award_badge(p_user, 'gift', jsonb_build_object('gifted', v_n));
+--   end if;

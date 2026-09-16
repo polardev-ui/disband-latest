@@ -33,13 +33,45 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
 
     /// Start listening for VoIP pushes. Called once at launch; tokens are
     /// flushed to the server as soon as a user is signed in.
+    ///
+    /// Not started at all where CallKit is unavailable. A VoIP push must be
+    /// answered with `reportNewIncomingCall`, and with CallKit off there is
+    /// nothing to report it to — iOS terminates the app for that, and repeats
+    /// cost the app PushKit entirely. Those devices are rung by the ordinary
+    /// alert push instead.
     func start() {
+        // Storefront answers can arrive after launch, so this may have to be
+        // undone (or done) later.
+        CallKitAvailability.onChange = { [weak self] enabled in
+            Task { @MainActor in
+                if enabled { self?.startRegistry() } else { self?.stopRegistry() }
+            }
+        }
+        guard CallKitAvailability.isEnabled else {
+            PushDiag.log("voip.start", "skipped — CallKit unavailable in this storefront")
+            return
+        }
+        startRegistry()
+    }
+
+    private func startRegistry() {
         guard registry == nil else { return }
         PushDiag.log("voip.start", "pushing registry up")
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
         self.registry = registry
+    }
+
+    /// Stop receiving VoIP pushes and drop the token, so the server stops
+    /// sending them to a device that can no longer act on one.
+    private func stopRegistry() {
+        guard let registry else { return }
+        PushDiag.log("voip.stop", "CallKit unavailable — unregistering")
+        registry.desiredPushTypes = []
+        self.registry = nil
+        pendingToken = nil
+        Task { await deleteStoredToken() }
     }
 
     /// PushKit handed us a VoIP device token — persist it for the signed-in user.
@@ -90,6 +122,27 @@ didReceiveIncomingPushWith payload: PKPushPayload,
             callerName: dict["callerName"] as? String ?? "Disband call",
             type: dict["type"] as? String ?? "voice"
         ))
+    }
+
+    /**
+     Remove this device's VoIP token from the server.
+
+     Left behind, the server keeps sending VoIP pushes to a device that has
+     just stopped being able to answer one — which is the exact situation that
+     gets an app terminated. RLS lets a user delete their own tokens, so no
+     privileged call is needed.
+     */
+    private func deleteStoredToken() async {
+        guard let userId = client.auth.currentUser?.id.uuidString.lowercased() else { return }
+        do {
+            try await client.from("device_tokens")
+                .delete()
+                .eq("user_id", value: userId)
+                .eq("platform", value: "ios-voip")
+                .execute()
+        } catch {
+            print("voip token cleanup error: \(error)")
+        }
     }
 
     /// Persist the pending VoIP token once a user is signed in

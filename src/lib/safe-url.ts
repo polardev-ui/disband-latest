@@ -3,7 +3,10 @@ import { cdnImage } from "@/lib/media/cdn";
 const HTTPS_RE = /^https:\/\//i;
 
 export function isSafeUrl(url: string): boolean {
-  return HTTPS_RE.test(url);
+  // https: for remote content; blob: for same-origin object URLs the app
+  // creates itself (optimistic upload previews, avatar crops). A blob: URL
+  // can only ever reference this origin's memory, so it is safe to load.
+  return HTTPS_RE.test(url) || url.startsWith("blob:");
 }
 
 export function assertSafeUrlScheme(url: string): void {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClaimAnimation } from "@/components/gift/ClaimAnimation";
 import { SubscriptionMedallion, TIERS, tierForMonths, nextTier } from "@/components/gift/SubscriptionMedallion";
+import type { GiftPlan } from "@/lib/gifts";
 
 /**
  * A sandbox for the gifting flow.
@@ -13,18 +14,18 @@ import { SubscriptionMedallion, TIERS, tierForMonths, nextTier } from "@/compone
  * directly instead of waiting for the real conditions to occur.
  */
 
-type Plan = "basic" | "super";
+type Plan = GiftPlan;
 
 const LENGTHS = [1, 3, 6, 12, 24, 60, 120];
 
 export default function GiftDemoPage() {
-  const [plan, setPlan] = useState<Plan>("super");
+  const [plan] = useState<Plan>("aero");
   const [months, setMonths] = useState(3);
   const [claimed, setClaimed] = useState(false);
   const [playing, setPlaying] = useState(false);
 
-  const accent = plan === "super" ? "#fee75c" : "#57f287";
-  const planName = plan === "super" ? "Disband Super" : "Disband Basic";
+  const accent = "#fee75c";
+  const planName = "Disband Aero";
   const tier = tierForMonths(months) ?? TIERS[0];
   const next = nextTier(months);
 
@@ -113,20 +114,6 @@ export default function GiftDemoPage() {
 
           {/* ------------------------------------------------- controls */}
           <aside className="space-y-5">
-            <Panel title="Plan">
-              <div className="grid grid-cols-2 gap-2">
-                {(["basic", "super"] as Plan[]).map((p) => (
-                  <button key={p} type="button" onClick={() => setPlan(p)}
-                    className={`rounded-lg border px-3 py-2 text-[13px] font-semibold capitalize transition-colors ${
-                      plan === p ? "border-transparent text-[#111]" : "border-white/15 text-[#c3c8ce] hover:bg-white/5"
-                    }`}
-                    style={plan === p ? { background: p === "super" ? "#fee75c" : "#57f287" } : undefined}>
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </Panel>
-
             <Panel title="Length">
               <div className="grid grid-cols-4 gap-2">
                 {LENGTHS.map((m) => (
@@ -145,7 +132,7 @@ export default function GiftDemoPage() {
 
             <Panel title="Badge it unlocks">
               <div className="flex items-center gap-3">
-                <SubscriptionMedallion tier={tier} super={plan === "super"} size={72} />
+                <SubscriptionMedallion tier={tier} super size={72} />
                 <div>
                   <p className="text-[15px] font-semibold">{tier.label}</p>
                   <p className="text-[12px] text-[#9aa0a6]">
@@ -176,7 +163,7 @@ export default function GiftDemoPage() {
           <div className="flex flex-wrap gap-6">
             {TIERS.map((t) => (
               <div key={t.key} className="text-center">
-                <SubscriptionMedallion tier={t} super={plan === "super"} size={78} />
+                <SubscriptionMedallion tier={t} super size={78} />
                 <p className="mt-1 text-[13px] font-semibold">{t.label}</p>
                 <p className="text-[11px] text-[#9aa0a6]">
                   {t.months >= 12 ? `${t.months / 12} year${t.months > 12 ? "s" : ""}` : `${t.months} months`}

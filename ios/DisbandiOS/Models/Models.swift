@@ -28,7 +28,20 @@ enum ChannelType: String, Codable {
 }
 
 enum AttachmentType: String, Codable {
-    case image, video, gif, file
+    case image, video, gif, file, poll, audio
+    /// Anything the server stores that this build doesn't know about yet
+    /// (new kinds ship on the web first). Decoding into this instead of
+    /// throwing keeps older clients from bricking a whole conversation.
+    case unknown
+
+    /// Raw values on the server have grown beyond `image/video/gif/file` (the
+    /// web writes `poll` and `audio`). Without this, decoding one such message
+    /// threw `dataCorrupted` and the entire channel failed with "The data
+    /// couldn't be read because it isn't in the correct format."
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AttachmentType(rawValue: raw) ?? .unknown
+    }
 }
 
 // MARK: - Profile
@@ -111,6 +124,9 @@ struct Server: Codable, Identifiable, Hashable {
     let ownerId: String
     var inviteCode: String?
     let createdAt: String?
+    /// Official "This server is verified by Disband" mark. Optional so older
+    /// payloads that omit it still decode.
+    var verified: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, name, description
@@ -119,6 +135,7 @@ struct Server: Codable, Identifiable, Hashable {
         case ownerId = "owner_id"
         case inviteCode = "invite_code"
         case createdAt = "created_at"
+        case verified
     }
 }
 

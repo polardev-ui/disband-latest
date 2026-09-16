@@ -15,6 +15,32 @@ export interface ProfileAccentFields {
   accent_color_2?: string | null;
 }
 
+export interface RoleGradientFields {
+  color: string;
+  gradient_to?: string | null;
+  gradient_animated?: boolean;
+}
+
+/**
+ * Level 3+ catalyst perk: a role renders as gradient text from `color` to
+ * `gradient_to`, shimmering when `gradient_animated` (via the
+ * `.animate-role-gradient` keyframes in globals.css).
+ */
+export function roleGradientTextStyle(role: RoleGradientFields | null | undefined): CSSProperties | undefined {
+  if (!role?.gradient_to?.trim()) return undefined;
+  return {
+    backgroundImage: `linear-gradient(90deg, ${role.color}, ${role.gradient_to.trim()})`,
+    backgroundSize: role.gradient_animated ? "200% 100%" : undefined,
+    WebkitBackgroundClip: "text",
+    backgroundClip: "text",
+    color: "transparent",
+  };
+}
+
+export function roleIsGradientAnimated(role: RoleGradientFields | null | undefined): boolean {
+  return !!role?.gradient_to?.trim() && !!role.gradient_animated;
+}
+
 export function normalizeHex(color: string): string {
   const c = color.trim().toLowerCase();
   if (/^#[0-9a-f]{3}$/.test(c)) {

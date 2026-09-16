@@ -3,6 +3,8 @@
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { SkinProvider } from "@/components/theme/SkinProvider";
+import { SkinLapsedNotice } from "@/components/theme/SkinLapsedNotice";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
 import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
@@ -38,6 +40,17 @@ function AddAccountOverlay() {
   return <AuthScreen overlay onClose={cancelAddAccount} />;
 }
 
+/** Binds the skin to whoever is signed in. */
+function SkinBoundary({ children }: { children: React.ReactNode }) {
+  const { session } = useApp();
+  return (
+    <SkinProvider userId={session?.user?.id ?? null}>
+      {children}
+      <SkinLapsedNotice />
+    </SkinProvider>
+  );
+}
+
 function AppShell() {
   const { ready, session, hydrated, mfaRequired, platformBan } = useApp();
 
@@ -68,6 +81,10 @@ export function DisbandRoot() {
   return (
     <ThemeProvider>
       <AppProvider>
+        {/* Inside AppProvider because a skin belongs to an account, and above
+            the shell because it has to be applied whether or not settings is
+            open. */}
+        <SkinBoundary>
         <ContextMenuProvider>
           <DesktopUpdateOverlay />
           {/* A sheet over the app, not a redirect: the page underneath keeps
@@ -84,6 +101,7 @@ export function DisbandRoot() {
           </div>
           <AddAccountOverlay />
         </ContextMenuProvider>
+        </SkinBoundary>
       </AppProvider>
     </ThemeProvider>
   );

@@ -6,15 +6,21 @@ import type { ReactNode } from "react";
 
 // A small, dependency-free renderer that turns a chat message into React
 // nodes, supporting Discord-style markdown: code blocks, inline code, headers,
-// bold, italics, underline, strikethrough, plus the existing @mentions and URLs.
+// bold, italics, underline, strikethrough, plus @mentions, #channel mentions
+// and URLs.
 //
 // It renders React elements (not raw HTML) so user content is never injected
 // as unescaped HTML — plain text is always escaped by React automatically.
 
 type Token = string;
 
+export interface ChannelLite {
+  id: string;
+  name: string;
+}
+
 const INLINE_RE =
-  /(@[a-zA-Z0-9_]{2,32}|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
+  /(@[a-zA-Z0-9_]{2,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
 
 function linkFor(url: string): string {
   return url;
@@ -25,6 +31,8 @@ function renderInlineTokens(
   members: Profile[],
   keyPrefix: number,
   onMentionClick?: (profile: Profile) => void,
+  channels?: ChannelLite[],
+  onChannelClick?: (channelId: string) => void,
 ): ReactNode[] {
   const out: ReactNode[] = [];
   let rest = text;
@@ -72,6 +80,37 @@ function renderInlineTokens(
         out.push(
           <span key={key} className={chipClass}>
             @{label}
+          </span>,
+        );
+      }
+      continue;
+    }
+
+    if (token.startsWith("#")) {
+      const name = token.slice(1).toLowerCase();
+      const channel = channels?.find((c) => c.name.toLowerCase() === name);
+      const chipClass =
+        "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
+      // A channel name that exists here becomes a clickable #-chip; one that
+      // doesn't stays plain text (Discord renders unknown names grey).
+      if (channel && onChannelClick) {
+        out.push(
+          <button
+            key={key}
+            type="button"
+            className={`${chipClass} cursor-pointer`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChannelClick(channel.id);
+            }}
+          >
+            #{channel.name}
+          </button>,
+        );
+      } else {
+        out.push(
+          <span key={key} className={channel ? chipClass : undefined}>
+            #{token.slice(1)}
           </span>,
         );
       }
@@ -180,6 +219,8 @@ export function renderMarkdown(
   content: string,
   members: Profile[] = [],
   onMentionClick?: (profile: Profile) => void,
+  channels?: ChannelLite[],
+  onChannelClick?: (channelId: string) => void,
 ): ReactNode[] {
   const out: ReactNode[] = [];
   let k = 0;
@@ -220,7 +261,7 @@ export function renderMarkdown(
       if (lineBuf.length === 0) return;
       renderedLines.push(
         <span key={k++} className="whitespace-pre-wrap break-words">
-          {renderInlineTokens(lineBuf.join("\n"), members, k * 100, onMentionClick)}
+          {renderInlineTokens(lineBuf.join("\n"), members, k * 100, onMentionClick, channels, onChannelClick)}
         </span>,
       );
       lineBuf = [];
@@ -232,7 +273,7 @@ export function renderMarkdown(
         flush();
         renderedLines.push(
           <span key={k++} className={HEADING_CLASS[hl] ?? HEADING_CLASS[3]}>
-            {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100, onMentionClick)}
+            {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100, onMentionClick, channels, onChannelClick)}
           </span>,
         );
       } else {

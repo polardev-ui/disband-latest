@@ -7,6 +7,7 @@ import { displayName } from "@/lib/utils";
 import { IconFriends, IconSearch, IconClose } from "@/components/icons";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
 import type { PresenceMap } from "@/lib/presence";
+import { activeStatusNote } from "@/lib/presence";
 
 type FriendsTab = "online" | "all" | "pending" | "blocked";
 
@@ -348,6 +349,15 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                           </span>
                         )}
                       </p>
+                      {(friend.pronouns || activeStatusNote(friend)) && (
+                        <p className="truncate text-[12px] text-text-muted/80">
+                          <span className="font-medium text-brand">{friend.pronouns}</span>
+                          {friend.pronouns && activeStatusNote(friend) && (
+                            <span className="mx-1 text-text-muted/40">·</span>
+                          )}
+                          <span className="italic">{activeStatusNote(friend)}</span>
+                        </p>
+                      )}
                       <p className="truncate text-[13px] text-text-muted">
                         {STATUS_LABEL[presenceMap.get(friend.id) ?? "offline"]}
                       </p>

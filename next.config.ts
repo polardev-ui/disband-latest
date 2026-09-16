@@ -32,6 +32,13 @@ const botApiHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  distDir: isProd ? ".next" : ".next-dev",
+  poweredByHeader: false,
+  agentRules: false,
+  // The repository is nested under a larger Projects directory. Pinning the
+  // Turbopack root prevents workspace inference from looking above the app
+  // and producing a blank dev server after dependency upgrades.
+  turbopack: { root: process.cwd() },
   ...(isTauriStaticExport
     ? {
         output: "export" as const,

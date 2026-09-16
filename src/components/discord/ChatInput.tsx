@@ -5,11 +5,12 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconPlus } from "@/components/icons";
-import { displayName, getMentionQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
+import { IconClose, IconHash, IconPlus } from "@/components/icons";
+import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
+import type { ChannelLite } from "@/lib/markdown";
 import { GifPicker } from "./GifPicker";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
@@ -18,6 +19,8 @@ interface ChatInputProps {
   placeholder: string;
   members?: Profile[];
   roles?: ServerRole[];
+  /** Server channels, for `#channel` autocomplete (server chat only). */
+  channels?: ChannelLite[];
   replyTo?: ReplyPreview | null;
   onClearReply?: () => void;
   editingMessageId?: string | null;
@@ -45,19 +48,50 @@ interface MentionItem {
 
 function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: string) => void }) {
   const type = entry.file.type.startsWith("video/") ? "video" : entry.file.type.startsWith("image/") ? "image" : "file";
+  const pct = entry.progress ? Math.max(0, Math.min(100, Math.round(entry.progress.percent))) : null;
+  // Staged ("queued") files aren't uploading yet — no overlay until bytes are
+  // actually in flight. In-message progress lives on AttachmentUploadCard.
+  const busy = entry.status === "uploading";
+  const failed = entry.status === "error";
 
   return (
     <div className="group relative">
       {type === "video" ? (
         <video src={entry.localUrl} className="h-20 w-20 rounded object-cover" />
       ) : type === "file" ? (
-        <div className="flex h-20 w-36 flex-col justify-center rounded border border-divider bg-bg-secondary px-2">
+        <div className={`flex h-20 w-36 flex-col justify-center rounded border bg-bg-secondary px-2 ${failed ? "border-status-dnd" : "border-divider"}`}>
           <p className="truncate text-xs font-medium">{entry.file.name}</p>
           <p className="text-[10px] text-text-muted">{formatFileSize(entry.file.size)}</p>
         </div>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={entry.localUrl} alt="" className="h-20 w-20 rounded object-cover" />
+      )}
+      {/* Upload state overlay: progress bar + % while bytes are in flight,
+          error tint on failure. Staged files render clean. */}
+      {busy && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded bg-black/55 px-2">
+          {pct !== null ? (
+            <>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-brand transition-[width]"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-bold text-white">{pct}%</span>
+            </>
+          ) : (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          )}
+        </div>
+      )}
+      {failed && (
+        <div className="absolute inset-0 flex items-center justify-center rounded bg-status-dnd/25 px-1" title={entry.error ?? "Upload failed"}>
+          <span className="truncate text-[10px] font-semibold text-white">
+            {entry.error ?? "Failed"}
+          </span>
+        </div>
       )}
       <button
         type="button"
@@ -75,6 +109,7 @@ export function ChatInput({
   placeholder,
   members = [],
   roles = [],
+  channels = [],
   replyTo,
   onClearReply,
   editingMessageId,
@@ -92,6 +127,7 @@ export function ChatInput({
   const [windowDrag, setWindowDrag] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
+  const [channelIdx, setChannelIdx] = useState(0);
   const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -189,10 +225,21 @@ export function ChatInput({
   const emojiCtx = getEmojiQuery(text, cursor);
   const showEmoji = !!emojiCtx && !showMentions;
 
+  const channelCtx = getChannelQuery(text, cursor);
+  const showChannels = !!channelCtx && !showMentions && !showEmoji;
+
   const emojiItems = useMemo((): EmojiMatch[] => {
     if (!emojiCtx) return [];
     return searchEmojis(emojiCtx.query);
   }, [emojiCtx]);
+
+  const channelItems = useMemo((): ChannelLite[] => {
+    if (!channelCtx) return [];
+    const q = channelCtx.query.toLowerCase();
+    return channels
+      .filter((c) => q === "" || c.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [channelCtx, channels]);
 
   useEffect(() => {
     if (!plusMenuOpen) return;
@@ -317,6 +364,20 @@ export function ChatInput({
     setMentionIdx(0);
     requestAnimationFrame(() => {
       const pos = before.length + item.insert.length + 1;
+      textareaRef.current?.setSelectionRange(pos, pos);
+      textareaRef.current?.focus();
+    });
+  }
+
+  function insertChannel(item: ChannelLite) {
+    if (!channelCtx || !textareaRef.current) return;
+    const before = text.slice(0, channelCtx.start);
+    const after = text.slice(textareaRef.current.selectionStart);
+    const next = `${before}#${item.name} ${after}`;
+    setText(next);
+    setChannelIdx(0);
+    requestAnimationFrame(() => {
+      const pos = before.length + item.name.length + 2;
       textareaRef.current?.setSelectionRange(pos, pos);
       textareaRef.current?.focus();
     });
@@ -449,6 +510,23 @@ export function ChatInput({
         return;
       }
     }
+    if (showChannels && channelItems.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setChannelIdx((i) => (i + 1) % channelItems.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setChannelIdx((i) => (i - 1 + channelItems.length) % channelItems.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertChannel(channelItems[channelIdx] ?? channelItems[0]);
+        return;
+      }
+    }
     if (showEmoji && emojiItems.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -541,6 +619,25 @@ export function ChatInput({
               </>
             );
           })()}
+        </div>
+      )}
+
+      {showChannels && channelItems.length > 0 && (
+        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
+          <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Channels</p>
+          {channelItems.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); insertChannel(c); }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
+                channelIdx === i ? "bg-interactive-selected" : ""
+              }`}
+            >
+              <IconHash size={15} className="shrink-0 text-text-muted" />
+              <span className="truncate font-medium">#{c.name}</span>
+            </button>
+          ))}
         </div>
       )}
 

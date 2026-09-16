@@ -25,8 +25,9 @@ export interface StreamQuality {
 /** The most a plan may send, and what it sends unless told otherwise. */
 const CAPS: Record<SubscriptionPlan, { max: StreamQuality; default: StreamQuality }> = {
   free: { max: { resolution: 720, fps: 30 }, default: { resolution: 720, fps: 30 } },
-  basic: { max: { resolution: 1080, fps: 60 }, default: { resolution: 1080, fps: 60 } },
-  super: { max: { resolution: 2160, fps: 120 }, default: { resolution: 1080, fps: 60 } },
+  // Aero keeps Super's old ceiling; 1080p60 stays the default because 4K120
+  // is a deliberate choice, not something to start everyone on.
+  aero: { max: { resolution: 2160, fps: 120 }, default: { resolution: 1080, fps: 60 } },
 };
 
 export function maxQuality(plan: SubscriptionPlan): StreamQuality {

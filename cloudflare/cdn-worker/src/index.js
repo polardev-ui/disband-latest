@@ -8,21 +8,76 @@
  * the database is a hostname swap and rolling back is the same swap reversed.
  */
 
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // Workers cap the request body here.
+/**
+ * The largest body this Worker will accept.
+ *
+ * Cloudflare caps a Worker's request body by account plan — 100 MB on Free,
+ * more above it — so this is a var rather than a constant: raising the plan
+ * without being able to raise the limit would be pointless, and raising the
+ * limit past what the plan allows would fail inside Cloudflare with an error
+ * this code never sees.
+ */
+function maxUploadBytes(env) {
+  const mb = Number(env.MAX_UPLOAD_MB);
+  return (Number.isFinite(mb) && mb > 0 ? mb : 100) * 1024 * 1024;
+}
 
-const ALLOWED_TYPES = new Set([
-  "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/svg+xml",
-  "video/mp4", "video/webm", "video/quicktime",
-  "audio/mpeg", "audio/ogg", "audio/wav",
-  "application/pdf", "text/plain",
+/**
+ * Types a browser may be handed back as-is.
+ *
+ * Anything on this list is stored with its own content type, so images and
+ * video render inline in a message. Everything else is still accepted — it is
+ * just stored as a generic download instead (see `storageTypeFor`), because
+ * this used to be an allowlist that *rejected* anything unlisted, and the
+ * unlisted set included iPhone photos (image/heic), zips, and every file a
+ * browser reports as application/octet-stream. A member on the plan that
+ * advertises 500 MB uploads could not send a screenshot from their phone.
+ */
+const INLINE_TYPES = new Set([
+  "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif",
+  "image/bmp", "image/tiff", "image/x-icon", "image/heic", "image/heif",
+  "video/mp4", "video/webm", "video/quicktime", "video/x-matroska",
+  "audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/mp4", "audio/aac",
+  "application/pdf",
+  "text/plain",
 ]);
+
+/**
+ * SVG is deliberately not inline-renderable.
+ *
+ * It can carry script, and while the sandbox CSP on every served object stops
+ * it executing, storing it as a download rather than an image removes the
+ * question entirely — and nobody sends an SVG as a chat photo.
+ */
+const NEVER_INLINE = new Set(["image/svg+xml", "text/html", "application/xhtml+xml"]);
 
 const EXT = {
   "image/png": "png", "image/jpeg": "jpeg", "image/gif": "gif", "image/webp": "webp",
-  "image/avif": "avif", "image/svg+xml": "svg", "video/mp4": "mp4", "video/webm": "webm",
-  "video/quicktime": "mov", "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/wav": "wav",
+  "image/avif": "avif", "image/bmp": "bmp", "image/tiff": "tiff",
+  "image/x-icon": "ico", "image/heic": "heic", "image/heif": "heif",
+  "image/svg+xml": "svg",
+  "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
+  "video/x-matroska": "mkv",
+  "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/wav": "wav", "audio/flac": "flac",
+  "audio/mp4": "m4a", "audio/aac": "aac",
   "application/pdf": "pdf", "text/plain": "txt",
 };
+
+/** The filename's own extension, when the type is one we do not know. */
+function extensionOf(name, type) {
+  if (EXT[type]) return EXT[type];
+  const match = /\.([a-z0-9]{1,8})$/i.exec(name ?? "");
+  return match ? match[1].toLowerCase() : "bin";
+}
+
+/**
+ * How an object is stored: its real type if it is safe to render, otherwise a
+ * generic download. Never rejected for being an unfamiliar kind of file.
+ */
+function storageTypeFor(type) {
+  if (NEVER_INLINE.has(type)) return "application/octet-stream";
+  return INLINE_TYPES.has(type) ? type : "application/octet-stream";
+}
 
 export default {
   async fetch(request, env) {
@@ -72,9 +127,12 @@ async function upload(request, env) {
   const auth = await requireUser(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status, env);
 
+  const limit = maxUploadBytes(env);
+  const limitMb = Math.round(limit / (1024 * 1024));
+
   const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_UPLOAD_BYTES) {
-    return json({ error: "File is too large (max 100 MB)." }, 413, env);
+  if (declared > limit) {
+    return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
   }
 
   let form;
@@ -88,19 +146,13 @@ async function upload(request, env) {
   if (!file || typeof file === "string") {
     return json({ error: "No file field in the form." }, 400, env);
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return json({ error: "File is too large (max 100 MB)." }, 413, env);
+  if (file.size > limit) {
+    return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
   }
 
   const type = file.type || "application/octet-stream";
-  if (!ALLOWED_TYPES.has(type)) {
-    return json({ error: `Unsupported file type: ${type}` }, 415, env);
-  }
-
-  // SVG can carry script, and these are served from a domain that shares
-  // cookies with nothing but is still worth not turning into an XSS host.
-  const contentType = type === "image/svg+xml" ? "image/svg+xml" : type;
-  const key = `${crypto.randomUUID()}.${EXT[type] ?? "bin"}`;
+  const contentType = storageTypeFor(type);
+  const key = `${crypto.randomUUID()}.${extensionOf(file.name, type)}`;
 
   await env.MEDIA.put(key, file.stream(), {
     httpMetadata: {
@@ -180,7 +232,13 @@ function isFetchableUrl(raw) {
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
 
-  const host = parsed.hostname.toLowerCase();
+  if (parsed.username || parsed.password || (parsed.port && !["80", "443"].includes(parsed.port))) return false;
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  if (host.endsWith(".local")) return false;
+  if (host.startsWith("[")) return false; // Preview service accepts DNS names and public IPv4 only.
+  if (/^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host)) return false;
+  if (/^(?:22[4-9]|2[3-5]\d)\./.test(host)) return false;
+  if (/^198\.(?:18|19)\./.test(host)) return false;
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) return false;
   if (/^(?:0|127|10)\./.test(host)) return false;
   if (/^169\.254\./.test(host)) return false;
@@ -227,6 +285,7 @@ async function linkPreview(request, env, target) {
       // A redirect could land on an address the check above rejected, so the
       // hop is followed manually and re-checked rather than automatically.
       redirect: "manual",
+      signal: AbortSignal.timeout(8000),
       cf: { cacheTtl: 3600 },
     });
 
@@ -237,6 +296,7 @@ async function linkPreview(request, env, target) {
       upstream = await fetch(next, {
         headers: { "user-agent": "DisbandLinkPreview/1.0 (+https://www.disband.dev)" },
         redirect: "manual",
+        signal: AbortSignal.timeout(8000),
       });
     }
   } catch {
@@ -250,7 +310,24 @@ async function linkPreview(request, env, target) {
 
   // Open Graph tags live in <head>; reading the whole of a large page to find
   // them wastes the Worker's memory and time budget.
-  const html = (await upstream.text()).slice(0, 512 * 1024);
+  // Bound bytes while streaming; slicing after .text() already allocated the
+  // entire attacker-controlled response.
+  const reader = upstream.body?.getReader();
+  if (!reader) return json({ error: "Preview unavailable." }, 502, env);
+  const decoder = new TextDecoder();
+  let html = "";
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 512 * 1024) { await reader.cancel(); break; }
+      html += decoder.decode(value, { stream: true });
+    }
+    html += decoder.decode();
+  } catch { return json({ error: "Preview unavailable." }, 502, env); }
+  finally { reader.releaseLock(); }
 
   const title = metaContent(html, "og:title")
     ?? metaContent(html, "twitter:title")

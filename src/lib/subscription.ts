@@ -1,4 +1,29 @@
-export type SubscriptionPlan = "free" | "basic" | "super";
+/**
+ * The plans that exist.
+ *
+ * Basic and Super were consolidated into one paid tier, Disband Aero, at
+ * Super's old price. Aero inherits Super's entitlements wholesale, so nobody
+ * lost anything in the merge — and there were no Basic subscribers to move.
+ *
+ * Legacy values still arrive from outside: Stripe metadata written before the
+ * merge, Apple product identifiers, and subscription rows mid-migration. Those
+ * are mapped at the edges (see `normalizePlan`) rather than being allowed
+ * further in, so the rest of the app only ever sees "free" or "aero".
+ */
+export type SubscriptionPlan = "free" | "aero";
+
+/** What a plan may be called on the wire, before it is normalised. */
+export type LegacyPlanName = SubscriptionPlan | "basic" | "super";
+
+/**
+ * Maps anything that has ever identified a paid plan onto the current one.
+ *
+ * The single place that knows Basic and Super used to exist, so removing this
+ * one function is all that is left when the legacy data is finally gone.
+ */
+export function normalizePlan(plan: string | null | undefined): SubscriptionPlan {
+  return plan === "aero" || plan === "basic" || plan === "super" ? "aero" : "free";
+}
 
 export interface Subscription {
   id: string;
@@ -29,8 +54,7 @@ export function isGranting(status: string | null | undefined): boolean {
 /** Resolve the effective plan from a stored subscription row. */
 export function planFromSubscription(sub: Subscription | null): SubscriptionPlan {
   if (!sub || !isGranting(sub.status)) return "free";
-  const plan = sub.plan as SubscriptionPlan;
-  return plan === "basic" || plan === "super" ? plan : "free";
+  return normalizePlan(sub.plan);
 }
 
 export interface PlanTier {
@@ -90,26 +114,14 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     historyExport: false,
     prioritySupport: false,
   },
-  basic: {
-    maxUploadBytes: 150 * 1024 * 1024,
-    maxMessageChars: 4000,
-    maxBioLength: 230,
-    videoQuality: "1080p",
-    animatedAvatar: true,
-    animatedBanner: false,
-    customEmojiSlots: 5,
-    serverBoostsPerMonth: 0,
-    rateLimits: { burst: 12, minute: 60 },
-    usernameChangesPerDay: 8,
-    displayNameChangesPerDay: 20,
-    avatarChangesPerDay: 20,
-    profileChangeCooldowns: false,
-    premiumThemeIds: ["sunset-gold"],
-    screenShare: true,
-    historyExport: false,
-    prioritySupport: false,
-  },
-  super: {
+  /**
+   * Aero is Super's old entitlement set, unchanged.
+   *
+   * Consolidating two paid tiers into one is only safe if the survivor is the
+   * more generous of the two — every former Super subscriber keeps exactly
+   * what they were paying for.
+   */
+  aero: {
     maxUploadBytes: 500 * 1024 * 1024,
     maxMessageChars: 4000,
     maxBioLength: 230,
@@ -147,29 +159,10 @@ export const PLANS: PlanTier[] = [
     ],
   },
   {
-    id: "basic",
-    name: "Basic",
-    monthlyPrice: 299,
-    badgeLabel: "Basic",
-    badgeClass: "bg-[#57f287]/20 text-[#57f287]",
-    highlighted: false,
-    features: [
-      { label: "150 MB file uploads", included: true, detail: "3× more than Free" },
-      { label: "Full HD video (1080p)", included: true, detail: "60 fps" },
-      { label: "Animated avatar", included: true },
-      { label: "5 custom emoji slots", included: true },
-      { label: "Faster rate limits", included: true, detail: "12 msg / 5s" },
-      { label: "More profile changes", included: true, detail: "8× daily" },
-      { label: "No profile cooldowns", included: true },
-      { label: "Exclusive theme", included: true },
-      { label: "Basic badge", included: true },
-    ],
-  },
-  {
-    id: "super",
-    name: "Super",
+    id: "aero",
+    name: "Disband Aero",
     monthlyPrice: 899,
-    badgeLabel: "Super",
+    badgeLabel: "Aero",
     badgeClass: "bg-[#fee75c]/20 text-[#fee75c]",
     highlighted: true,
     features: [
@@ -177,15 +170,16 @@ export const PLANS: PlanTier[] = [
       { label: "2K video (1440p)", included: true, detail: "120 fps" },
       { label: "Animated avatar + banner", included: true },
       { label: "Unlimited custom emoji", included: true },
-      { label: "2 server boosts / month", included: true },
+      { label: "4 Catalysts every month", included: true, detail: "Boost any servers you like" },
       { label: "Max rate limits", included: true, detail: "20 msg / 5s" },
       { label: "Unlimited profile changes", included: true },
       { label: "Custom profile theme", included: true, detail: "Gradient + accent" },
+      { label: "9 custom skins", included: true, detail: "Plus your own CSS and icons" },
       { label: "4 exclusive themes", included: true },
       { label: "Screen sharing", included: true, detail: "4K at 120 fps" },
       { label: "Message history export", included: true },
       { label: "Priority support", included: true },
-      { label: "Super badge", included: true },
+      { label: "Aero badge", included: true },
     ],
   },
 ];

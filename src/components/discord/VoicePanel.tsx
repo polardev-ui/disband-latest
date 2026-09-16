@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { CallTile, CallGrid } from "./CallTile";
-import { CallResizeHandle, useCallHeight } from "./CallResizer";
 import { CallControls } from "./CallUI";
 import { displayName } from "@/lib/utils";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
@@ -21,6 +20,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     profile,
     user,
     loadVoicePresence,
+    voicePresence,
     micMuted,
     deafened,
     setMicMuted,
@@ -30,12 +30,21 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   // The call itself lives in VoiceSessionProvider, above the view — so
   // opening another channel no longer unmounts the connection. This panel is
   // only the view of it, and shows a Join button when the call is elsewhere.
-  const { height: callHeight, setHeight: setCallHeight } = useCallHeight(420);
   const session = useVoiceSession();
   const inThisChannel = session.connectedChannelId === channelId;
+  /**
+   * Who is in the channel on screen.
+   *
+   * `session.participants` belongs to the channel you are *connected* to, so
+   * looking at any other voice channel reported "0 connected" while the
+   * sidebar showed four people in it. Connected to this one, the session is
+   * the better source — it is live and already loaded; otherwise the peeked
+   * presence for the channel being viewed is.
+   */
+  const members = inThisChannel ? session.participants : voicePresence;
   const voice = {
     joined: session.joined && inThisChannel,
-    participants: session.participants,
+    participants: members,
     error: session.error,
     join: () => session.connect(channelId, channelName),
     leave: () => session.disconnect(),
@@ -44,7 +53,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   // Tiles: everyone in the channel, then a tile per screen share so the
   // person sharing stays visible beside what they are sharing.
   const tiles = [
-    ...session.participants.map((p) => {
+    ...members.map((p) => {
       const isSelf = p.user_id === user?.id;
       const prof = p.profile ?? { display_name: "?", username: "?" };
       return {
@@ -59,7 +68,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         muted: isSelf ? micMuted : false,
       };
     }),
-    ...session.participants.flatMap((p) => {
+    ...members.flatMap((p) => {
       const isSelf = p.user_id === user?.id;
       const stream = isSelf ? session.localScreen : session.remoteScreens.get(p.user_id);
       if (!stream || !inThisChannel) return [];
@@ -100,10 +109,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         )}
       </header>
 
-      <div
-        className="flex min-h-0 flex-col items-center gap-4 overflow-hidden px-6 pt-4"
-        style={{ height: callHeight }}
-      >
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-4 overflow-hidden px-6 pt-4 pb-4">
         <div className="text-center">
           <div
             className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${
@@ -198,7 +204,6 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         </div>
 
       </div>
-      <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </main>
   );
 }

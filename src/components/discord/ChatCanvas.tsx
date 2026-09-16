@@ -17,6 +17,7 @@ import { ReactionPicker } from "./MessageReactions";
 import { IconHash, IconShield } from "@/components/icons";
 import { formatTypingLabel, useTypingPresence } from "@/hooks/useTypingPresence";
 import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
+import type { ChannelLite } from "@/lib/markdown";
 import {
   findNewMessagesDividerId,
   markChatReadNow,
@@ -73,6 +74,12 @@ interface ChatCanvasProps {
    */
   composerLockedReason?: string | null;
   typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
+  /** Server channels for #channel autocomplete and chip rendering (server chat only). */
+  channels?: ChannelLite[];
+  /** Active server's custom emoji (name->url) so `:shortcode:` renders as images. */
+  customEmoji?: Record<string, string>;
+  /** Jump to a #mentioned channel. */
+  onChannelClick?: (channelId: string) => void;
   readCursorScope?: ReadCursorScope | null;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   onEdit?: (messageId: string, content: string) => Promise<string | null>;
@@ -108,6 +115,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     composerLockedReason,
     typingScope = null,
     readCursorScope = null,
+    channels,
+    customEmoji,
+    onChannelClick,
     onSend,
     onEdit,
     onToggleReaction,
@@ -336,10 +346,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   showHeader={showHeader}
                   compact={grouped}
                   currentUserId={currentUserId}
+                  currentUserName={currentUserName}
                   authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
                   reactions={msgReactions}
                   onAuthorClick={onAuthorClick}
                   members={members}
+                  channels={channels}
+                  customEmoji={customEmoji}
+                  onChannelClick={onChannelClick}
                   highlight={highlightId === msg.id}
                   onJumpToReply={jumpToMessage}
                   onToggleReaction={
@@ -397,6 +411,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           placeholder={placeholder ?? `Message #${channelName}`}
           members={members}
           roles={roles}
+          channels={channels}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
           editingMessageId={editing?.id ?? null}

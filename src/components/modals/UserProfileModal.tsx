@@ -9,10 +9,12 @@ import { RolePicker } from "@/components/ui/RolePicker";
 import { getProfilePanelMutedColor, getProfilePanelStyle, getAccentBackground } from "@/lib/profileColor";
 import { displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
-import { presenceStatusFor } from "@/lib/presence";
+import { presenceStatusFor, activeStatusNote, statusExpiryLabel } from "@/lib/presence";
+import { roleIsGradientAnimated } from "@/lib/profileColor";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { UserBadges } from "@/components/ui/UserBadges";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
+import type { SubscriptionPlan } from "@/lib/subscription";
 
 interface UserProfileModalProps {
   profile: Profile | null;
@@ -32,7 +34,7 @@ interface UserProfileModalProps {
   pendingIncoming?: boolean;
   pendingOutgoing?: boolean;
   isSelf?: boolean;
-  plan?: "free" | "basic" | "super";
+  plan?: SubscriptionPlan;
   isServerMember?: boolean;
   serverRoles?: ServerRole[];
   canManageRoles?: boolean;
@@ -156,7 +158,26 @@ export function UserProfileModal({
                 @{profile.username}
               </p>
             )}
+            {profile.pronouns?.trim() && (
+              <span className="rounded bg-brand/20 px-1.5 py-px text-[11px] font-semibold text-brand">
+                {profile.pronouns.trim()}
+              </span>
+            )}
           </div>
+
+          {activeStatusNote(profile) && (
+            <div className="mt-2 flex items-start gap-2 rounded-lg bg-black/20 px-2.5 py-2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 opacity-70">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <div className="min-w-0">
+                <p className="break-words text-[13px] leading-snug">{activeStatusNote(profile)}</p>
+                <p className="mt-0.5 text-[11px] opacity-60">
+                  {statusExpiryLabel(profile.status_expires_at)}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="mt-1.5">
             <UserBadges userId={profile.id} plan={plan ?? "free"} size={17} variant="full" />
@@ -186,8 +207,16 @@ export function UserProfileModal({
                   {memberRoles.map((role) => (
                     <span
                       key={role.id}
-                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-semibold"
-                      style={{ backgroundColor: `${role.color}2e`, color: role.color }}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-semibold ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                      style={
+                        role.gradient_to?.trim()
+                          ? {
+                              backgroundImage: `linear-gradient(90deg, ${role.color}2e, ${role.gradient_to.trim()}2e)`,
+                              backgroundSize: role.gradient_animated ? "200% 100%" : undefined,
+                              color: role.color,
+                            }
+                          : { backgroundColor: `${role.color}2e`, color: role.color }
+                      }
                     >
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
                       {role.name}

@@ -170,6 +170,8 @@ final class DirectMessagesViewModel {
         switch message.attachmentType {
         case .some(.image), .some(.gif): return "Photo"
         case .some(.video): return "Video"
+        case .some(.poll): return "Poll"
+        case .some(.audio): return "Voice note"
         default: return "Attachment"
         }
     }

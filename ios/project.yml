@@ -16,8 +16,8 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "1.11.0"
-    CURRENT_PROJECT_VERSION: "43"
+    MARKETING_VERSION: "1.11.1"
+    CURRENT_PROJECT_VERSION: "45"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "KR54WPJ24G"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -59,9 +59,15 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:
           - remote-notification
-          # VoIP pushes wake the app for an incoming call even when it is
-          # killed, and CallKit plays/records the call's audio.
+          # PushKit delivers an incoming call to a killed app, and CallKit
+          # answers it. Apple asked what VoIP service justifies this: it is
+          # Disband's voice calls, DM and group, rung from send-call-push.
+          # Removing this does not degrade calls, it ends them — a killed app
+          # cannot be woken to ring at all.
           - voip
+          # A call's microphone and audio must survive the app leaving the
+          # screen. Without this, swiping up mid-call suspends the process:
+          # the mic stops transmitting and the other side goes silent.
           - audio
     settings:
       base:

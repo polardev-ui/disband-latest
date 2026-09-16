@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { PLANS, isGranting, type PlanTier, type SubscriptionPlan } from "@/lib/subscription";
+import { PLANS, isGranting, type SubscriptionPlan } from "@/lib/subscription";
+import { MONTHLY_GRANT, monthlyRemaining, monthStartIso } from "@/lib/catalysts";
 import { IconClose } from "@/components/icons";
 import { StripeEmbeddedCheckout } from "./StripeEmbeddedCheckout";
 
@@ -20,27 +22,18 @@ function CheckIcon() {
   );
 }
 
-function PlanCard({ plan, currentPlan, onSubscribe }: {
-  plan: PlanTier;
+function PlanCard({ currentPlan, onSubscribe }: {
   currentPlan: string;
-  onSubscribe: (id: "basic" | "super") => void;
+  onSubscribe: () => void;
 }) {
-  if (plan.id === "free") return null;
-
+  // Aero is the only plan — one hero card, no comparison grid.
+  const plan = PLANS.find((p) => p.id === "aero")!;
   const isCurrentPlan = currentPlan === plan.id;
   const priceDollars = (plan.monthlyPrice / 100).toFixed(2);
 
   return (
-    <div
-      className={`relative flex flex-col rounded-xl border p-6 ${
-        plan.highlighted
-          ? "border-yellow-400/40 bg-yellow-400/[0.04]"
-          : "border-white/10 bg-white/[0.03]"
-      }`}
-    >
-      {plan.highlighted && (
-        <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-yellow-400/20 pointer-events-none" />
-      )}
+    <div className="relative flex flex-col rounded-xl border border-yellow-400/40 bg-yellow-400/[0.04] p-6">
+      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-yellow-400/20" />
 
       <div className="mb-5">
         <div className="flex items-center justify-between">
@@ -72,13 +65,11 @@ function PlanCard({ plan, currentPlan, onSubscribe }: {
       <button
         type="button"
         disabled={isCurrentPlan}
-        onClick={() => onSubscribe(plan.id as "basic" | "super")}
+        onClick={onSubscribe}
         className={`w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
           isCurrentPlan
-            ? "bg-white/5 text-text-muted cursor-not-allowed"
-            : plan.highlighted
-              ? "bg-[#fee75c] text-black hover:bg-[#f0d843] active:scale-[0.98]"
-              : "bg-white/10 text-white hover:bg-white/15 active:scale-[0.98]"
+            ? "cursor-not-allowed bg-white/5 text-text-muted"
+            : "bg-[#fee75c] text-black hover:bg-[#f0d843] active:scale-[0.98]"
         }`}
       >
         {isCurrentPlan ? "Current plan" : "Subscribe"}
@@ -227,7 +218,7 @@ function ActivationScreen({
         onClick={onClose}
         className="mt-5 w-full rounded-lg bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-hover"
       >
-        Start using {plan === "super" ? "Super" : "Basic"}
+        Start using Disband Aero
       </button>
     </div>
   );
@@ -236,10 +227,15 @@ function ActivationScreen({
 export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalProps) {
   const { plan, loading, startCheckout, subscription, openPortal, activate } =
     useSubscription(userId);
+  const { myCatalysts } = useApp();
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activation, setActivation] = useState<"activating" | "active" | "stalled" | null>(null);
   const mobile = isMobileBrowser();
+  const isAero = isGranting(subscription?.status) && plan === "aero";
+
+  const monthlyUsed = myCatalysts.filter((c) => c.created_at >= monthStartIso()).length;
+  const catalystBalance = monthlyRemaining(isAero, monthlyUsed);
 
   const runActivation = useCallback(async () => {
     setActivation("activating");
@@ -247,9 +243,9 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
     setActivation(granted === "free" ? "stalled" : "active");
   }, [activate]);
 
-  const handleSubscribe = useCallback(async (planId: "basic" | "super") => {
+  const handleSubscribe = useCallback(async () => {
     setCheckoutError(null);
-    const result = await startCheckout(planId);
+    const result = await startCheckout("aero");
     if (result && (result.startsWith("cs_") || result.startsWith("seti_"))) {
       setCheckoutClientSecret(result);
     } else if (result) {
@@ -276,7 +272,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
           <div>
-            <h2 className="text-lg font-bold">Subscription</h2>
+            <h2 className="text-lg font-bold">Disband Aero</h2>
             {!checkoutClientSecret && !activation && isGranting(subscription?.status) && (
               <p className="mt-0.5 text-sm text-text-muted">
                 <span className="font-semibold text-text-normal capitalize">{plan}</span>
@@ -318,29 +314,53 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
                 <p className="text-sm text-red-400">{checkoutError}</p>
               </div>
             )}
-            <div className="grid gap-3 md:grid-cols-2">
-              <PlanCard
-                plan={PLANS.find((p) => p.id === "basic")!}
-                currentPlan={plan}
-                onSubscribe={handleSubscribe}
-              />
-              <PlanCard
-                plan={PLANS.find((p) => p.id === "super")!}
-                currentPlan={plan}
-                onSubscribe={handleSubscribe}
-              />
-            </div>
-
-            {subscription?.stripe_customer_id && (
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={() => void openPortal()}
-                  className="text-sm text-text-muted hover:text-text-normal"
-                >
-                  Manage billing & subscription &rarr;
-                </button>
+            {isAero ? (
+              <div className="rounded-xl border border-[#57f287]/25 bg-[#57f287]/[0.04] p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold">Disband Aero</h3>
+                  <span className="rounded-full bg-[#57f287]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#57f287]">
+                    Active
+                  </span>
+                </div>
+                {subscription?.current_period_end && (
+                  <p className="mt-1 text-sm text-text-muted">
+                    Renews {new Date(subscription.current_period_end).toLocaleDateString()}
+                  </p>
+                )}
+                <div className="mt-3 flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
+                    <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+                  </svg>
+                  <p className="text-sm">
+                    <span className="font-bold">{catalystBalance} of {MONTHLY_GRANT}</span>
+                    <span className="text-text-muted"> monthly Catalysts left</span>
+                  </p>
+                </div>
+                {subscription?.stripe_customer_id && (
+                  <button
+                    type="button"
+                    onClick={() => void openPortal()}
+                    className="mt-3 text-sm text-text-muted hover:text-text-normal"
+                  >
+                    Manage billing &rarr;
+                  </button>
+                )}
               </div>
+            ) : (
+              <>
+                <PlanCard currentPlan={plan} onSubscribe={handleSubscribe} />
+                {subscription?.stripe_customer_id && (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => void openPortal()}
+                      className="text-sm text-text-muted hover:text-text-normal"
+                    >
+                      Manage billing &rarr;
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

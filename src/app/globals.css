@@ -24,7 +24,45 @@
   --color-divider: var(--divider);
   --color-super: var(--super);
 
-  --font-sans: var(--font-discord);
+  /*
+   * Skins reach the whole app through these.
+   *
+   * Every `rounded-*` and every default font in the UI is a Tailwind utility,
+   * so a skin that wanted square corners would otherwise have to hunt down
+   * each component. Pointing Tailwind's own tokens at skin variables inverts
+   * that: setting one variable squares every corner in the product at once,
+   * and a skin that sets nothing gets the values Tailwind ships.
+   */
+  --radius-sm: var(--skin-radius-sm, 0.125rem);
+  --radius-md: var(--skin-radius-md, 0.375rem);
+  --radius-lg: var(--skin-radius-lg, 0.5rem);
+  --radius-xl: var(--skin-radius-xl, 0.75rem);
+  --radius-2xl: var(--skin-radius-2xl, 1rem);
+  --radius-3xl: var(--skin-radius-3xl, 1.5rem);
+  /* Not routed through a skin variable: a "full" radius is what makes an
+     avatar a circle, and squaring those makes the app unreadable rather than
+     themed. Skins that want square avatars can still target them directly. */
+
+  --font-sans: var(--skin-font, var(--font-discord));
+}
+
+/*
+ * Self-hosted so the desktop bundle works offline and the CSP needs no
+ * third-party font host. Both are SIL Open Font License 1.1 — see
+ * public/fonts/LICENSE.md.
+ */
+@font-face {
+  font-family: "Disband Pixel";
+  src: url("/fonts/press-start-2p-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Disband Condensed";
+  src: url("/fonts/oswald-600-latin.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
 }
 
 /* ---- Discord Dark (default) ---- */
@@ -373,4 +411,612 @@ img.twemoji {
  */
 [data-theme="light"] .logo-adaptive {
   filter: brightness(0);
+}
+
+
+/* ------------------------------------------------------------------ skins */
+
+/*
+ * A skin is a Super perk that changes the *shape* of the UI, not only its
+ * colours — the palette themes above already do colour. Each one is scoped to
+ * [data-skin] on <html> so nothing leaks when it is switched off, and each
+ * works by setting the variables declared in @theme inline above plus a small
+ * number of element rules.
+ *
+ * Kept in CSS rather than injected from JS so the shipped skins cost no
+ * runtime work and cannot flash unstyled; only a member's own custom CSS is
+ * injected at runtime.
+ */
+
+/* ---- Minecraft: blocky, pixel-lit, no curves anywhere ---- */
+[data-skin="minecraft"] {
+  --skin-radius-sm: 0px;
+  --skin-radius-md: 0px;
+  --skin-radius-lg: 0px;
+  --skin-radius-xl: 0px;
+  --skin-radius-2xl: 0px;
+  --skin-radius-3xl: 0px;
+
+  --bg-primary: #3b3b3b;
+  --bg-secondary: #2f2f2f;
+  --bg-tertiary: #1d1d1d;
+  --bg-accent: #262626;
+  --interactive-hover: #4a4a4a;
+  --interactive-selected: #5a5a5a;
+  --brand: #5b8c3a;
+  --brand-hover: #4a7530;
+  --text-normal: #ffffff;
+  --text-muted: #a8a8a8;
+  --divider: #151515;
+  --status-online: #5b8c3a;
+}
+
+/*
+ * Pixel type is unreadable as body copy at chat sizes, so it is used where
+ * Minecraft actually uses it — on controls and headings — and messages keep a
+ * legible face. A theme nobody can read their DMs in is a costume, not a skin.
+ */
+[data-skin="minecraft"] button,
+[data-skin="minecraft"] h1,
+[data-skin="minecraft"] h2,
+[data-skin="minecraft"] h3 {
+  font-family: "Disband Pixel", "Courier New", monospace;
+  letter-spacing: 0.02em;
+}
+
+[data-skin="minecraft"] button {
+  /* Including the pill-shaped ones: --skin-radius-full is deliberately not a
+     variable (it is what makes an avatar a circle), so buttons are squared
+     here by name instead. */
+  border-radius: 0;
+  /* The classic bevel: lit from the top-left, shadowed bottom-right. */
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.25),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.45);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+[data-skin="minecraft"] button:active {
+  /* Pressed: the light and shadow swap sides. */
+  box-shadow:
+    inset -2px -2px 0 rgba(255, 255, 255, 0.2),
+    inset 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+[data-skin="minecraft"] img,
+[data-skin="minecraft"] video {
+  image-rendering: pixelated;
+}
+
+/* ---- Call of Duty: dusty, hard-edged, stencilled ---- */
+[data-skin="cod"] {
+  --skin-radius-sm: 0px;
+  --skin-radius-md: 1px;
+  --skin-radius-lg: 1px;
+  --skin-radius-xl: 2px;
+  --skin-radius-2xl: 2px;
+  --skin-radius-3xl: 2px;
+
+  --bg-primary: #24231e;
+  --bg-secondary: #1c1b17;
+  --bg-tertiary: #121210;
+  --bg-accent: #16150f;
+  --interactive-hover: #33322a;
+  --interactive-selected: #403e33;
+  --brand: #b4802a;
+  --brand-hover: #8f6420;
+  --text-normal: #ddd8c8;
+  --text-muted: #8d8877;
+  --text-link: #d9a441;
+  --divider: #3a382e;
+  --status-online: #7d8c3a;
+}
+
+[data-skin="cod"] button,
+[data-skin="cod"] h1,
+[data-skin="cod"] h2 {
+  font-family: "Disband Condensed", "Oswald", "Arial Narrow", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+[data-skin="cod"] button {
+  border-radius: 1px;
+  border-left: 2px solid rgba(180, 128, 42, 0.55);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * The grain. A fixed, pointer-transparent overlay rather than a background on
+ * the body, so it sits over the whole app without any element having to opt
+ * in and without intercepting a single click.
+ */
+[data-skin="cod"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.05;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.7) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+}
+
+/*
+ * Light skins have to say so twice.
+ *
+ * `--super`, the ping tints and the scrollbars are declared per [data-theme],
+ * and a skin does not change the theme — so a light skin on a dark theme kept
+ * pale-yellow SUPER badges that vanish on a light panel. And `color-scheme` is
+ * set as an inline style by the theme provider, which a plain rule cannot
+ * beat; `!important` in an author stylesheet can, and it keeps the knowledge
+ * about which way round a skin is in the skin itself.
+ */
+[data-skin="y2k"],
+[data-skin="paper"],
+[data-skin="brutalist"] {
+  color-scheme: light !important;
+  /* Darker than the light theme's own gold: the 2000s panel is #d6d2c2, and
+     #8a6407 on it measures 3.6:1 — under AA for a badge this small. */
+  --super: #63480a;
+  --ping-bg: rgba(214, 158, 46, 0.15);
+  --ping-bg-hover: rgba(214, 158, 46, 0.22);
+  --ping-bar: #c0851d;
+  --status-offline: #8a8a8a;
+}
+
+[data-skin="minecraft"],
+[data-skin="cod"],
+[data-skin="frutiger"],
+[data-skin="terminal"],
+[data-skin="vaporwave"],
+[data-skin="neon"] {
+  color-scheme: dark !important;
+}
+
+/* ---- 2000s: Windows XP era, beveled and boxy ---- */
+[data-skin="y2k"] {
+  --skin-radius-sm: 0px;
+  --skin-radius-md: 2px;
+  --skin-radius-lg: 3px;
+  --skin-radius-xl: 3px;
+  --skin-radius-2xl: 3px;
+  --skin-radius-3xl: 3px;
+  --skin-font: Tahoma, Verdana, Geneva, "DejaVu Sans", sans-serif;
+
+  --bg-primary: #ece9d8;
+  --bg-secondary: #d6d2c2;
+  /*
+   * XP's window frame was that famous blue, and using it here was tempting —
+   * but --bg-tertiary is the server rail, which carries text and icons drawn
+   * in --text-normal. Near-black on #0a246a measured 1.2:1: not "hard to
+   * read", invisible. The blue lives on --brand instead, where it belongs.
+   */
+  --bg-tertiary: #c3bfae;
+  --bg-accent: #ffffff;
+  --interactive-hover: #c1d2ee;
+  --interactive-selected: #b6c9e8;
+  --brand: #0054e3;
+  --brand-hover: #003fb0;
+  --text-normal: #1b1b1b;
+  --text-muted: #4a4a4a;
+  --text-link: #0000ee;
+  --divider: #a8a294;
+  --status-online: #1f8a1f;
+}
+
+[data-skin="y2k"] button {
+  border-radius: 2px;
+  /* The 3D outset every control had before flat design. */
+  border: 1px solid #7f7f7f;
+  border-top-color: #ffffff;
+  border-left-color: #ffffff;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(0, 0, 0, 0.06));
+  box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+[data-skin="y2k"] button:active {
+  border-top-color: #7f7f7f;
+  border-left-color: #7f7f7f;
+  border-bottom-color: #ffffff;
+  border-right-color: #ffffff;
+  box-shadow: none;
+}
+
+[data-skin="y2k"] input,
+[data-skin="y2k"] textarea {
+  border: 1px solid #7f7f7f;
+  border-top-color: #404040;
+  border-left-color: #404040;
+  background: #ffffff;
+}
+
+/* ---- Frutiger Aero: glass, gloss, blue-into-green ---- */
+[data-skin="frutiger"] {
+  --skin-radius-sm: 6px;
+  --skin-radius-md: 12px;
+  --skin-radius-lg: 16px;
+  --skin-radius-xl: 22px;
+  --skin-radius-2xl: 28px;
+  --skin-radius-3xl: 34px;
+
+  --bg-primary: #0e3b52;
+  --bg-secondary: #0b3247;
+  --bg-tertiary: #072433;
+  --bg-accent: #0a2c3e;
+  --interactive-hover: rgba(255, 255, 255, 0.12);
+  --interactive-selected: rgba(255, 255, 255, 0.2);
+  --brand: #35c3f3;
+  --brand-hover: #23a5d4;
+  --text-normal: #f2fbff;
+  --text-muted: #a9cede;
+  --text-link: #7fe7c4;
+  --divider: rgba(255, 255, 255, 0.16);
+  --status-online: #6ee7a8;
+}
+
+/*
+ * The sky-to-grass wash the whole look is built on.
+ *
+ * On the body it was invisible: the app paints an opaque `bg-primary` surface
+ * over the full height of the window, so anything behind it is never seen.
+ * It is an overlay instead — screen-blended and faint, so it lights the UI the
+ * way the era's gradients did without tinting text into illegibility, and
+ * pointer-transparent so it intercepts nothing.
+ */
+[data-skin="frutiger"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(120% 90% at 15% -10%, rgba(80, 200, 255, 0.55), transparent 62%),
+    radial-gradient(120% 90% at 95% 110%, rgba(110, 231, 168, 0.5), transparent 62%);
+}
+
+[data-skin="frutiger"] button {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  /*
+   * Three layers make the glass read: a bright gloss across the top half, an
+   * inner rim light that catches the rounded corners the way refraction does,
+   * and a soft drop shadow so the control floats rather than sits.
+   */
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.12) 48%,
+    rgba(255, 255, 255, 0) 52%,
+    rgba(0, 0, 0, 0.08) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 12px rgba(255, 255, 255, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px) saturate(140%);
+}
+
+[data-skin="frutiger"] button:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 0 16px rgba(255, 255, 255, 0.28),
+    0 3px 12px rgba(0, 0, 0, 0.32);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-skin="frutiger"] button {
+    backdrop-filter: none;
+  }
+}
+
+
+/* ---- Terminal: green phosphor on black, and nothing else ---- */
+[data-skin="terminal"] {
+  --skin-radius-sm: 0px;
+  --skin-radius-md: 0px;
+  --skin-radius-lg: 0px;
+  --skin-radius-xl: 0px;
+  --skin-radius-2xl: 0px;
+  --skin-radius-3xl: 0px;
+  --skin-font: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --bg-primary: #030703;
+  --bg-secondary: #050c05;
+  --bg-tertiary: #000200;
+  --bg-accent: #071007;
+  --interactive-hover: #0d1f0d;
+  --interactive-selected: #123112;
+  --brand: #2fe86b;
+  --brand-hover: #24bd55;
+  --text-normal: #b8ffcb;
+  --text-muted: #4f9c66;
+  --text-link: #7dfba5;
+  --status-online: #2fe86b;
+  --status-idle: #d8f36a;
+  --status-dnd: #ff5f56;
+  --divider: #102c15;
+}
+
+[data-skin="terminal"] button {
+  border: 1px solid rgba(47, 232, 107, 0.4);
+  background-image: none;
+  text-transform: lowercase;
+}
+
+[data-skin="terminal"] button:hover {
+  border-color: rgba(47, 232, 107, 0.9);
+  box-shadow: 0 0 8px rgba(47, 232, 107, 0.35);
+}
+
+/* Scanlines. Fixed and pointer-transparent, like the COD grain. */
+[data-skin="terminal"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.22;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.7) 3px
+  );
+}
+
+/* ---- Vaporwave: hot pink, cyan, and chrome ---- */
+[data-skin="vaporwave"] {
+  --skin-radius-sm: 3px;
+  --skin-radius-md: 6px;
+  --skin-radius-lg: 10px;
+  --skin-radius-xl: 14px;
+  --skin-radius-2xl: 18px;
+  --skin-radius-3xl: 24px;
+
+  --bg-primary: #2a1052;
+  --bg-secondary: #220c46;
+  --bg-tertiary: #170733;
+  --bg-accent: #1d0a3d;
+  --interactive-hover: #3a1a68;
+  --interactive-selected: #4a2280;
+  --brand: #ff5ea8;
+  --brand-hover: #e0448c;
+  --text-normal: #f6e9ff;
+  --text-muted: #b088d8;
+  --text-link: #5ff0e6;
+  --status-online: #5ff0e6;
+  --status-idle: #ffd166;
+  --status-dnd: #ff5ea8;
+  --divider: #45217a;
+}
+
+[data-skin="vaporwave"] button {
+  border: 1px solid rgba(95, 240, 230, 0.45);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 94, 168, 0.12) 55%,
+    rgba(95, 240, 230, 0.18)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 12px rgba(255, 94, 168, 0.28);
+}
+
+/* The horizon grid, receding to a vanishing point. */
+[data-skin="vaporwave"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  background-image:
+    radial-gradient(90% 60% at 50% 105%, rgba(255, 94, 168, 0.55), transparent 60%),
+    radial-gradient(70% 50% at 50% -5%, rgba(95, 240, 230, 0.4), transparent 60%);
+}
+
+/* ---- Paper: warm, printed, quiet ---- */
+[data-skin="paper"] {
+  --skin-radius-sm: 2px;
+  --skin-radius-md: 3px;
+  --skin-radius-lg: 4px;
+  --skin-radius-xl: 6px;
+  --skin-radius-2xl: 8px;
+  --skin-radius-3xl: 10px;
+  --skin-font: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+
+  --bg-primary: #fbf7ef;
+  --bg-secondary: #f3ede1;
+  --bg-tertiary: #e8e0d0;
+  --bg-accent: #fffdf8;
+  --interactive-hover: #ece4d4;
+  --interactive-selected: #e0d5be;
+  --brand: #8a5a2b;
+  --brand-hover: #6f4720;
+  --text-normal: #2c2620;
+  --text-muted: #6b6055;
+  --text-link: #1f5f8b;
+  --status-online: #3f7d3f;
+  --status-idle: #b0862b;
+  --status-dnd: #a83232;
+  --divider: #d9cfba;
+}
+
+[data-skin="paper"] button {
+  border: 1px solid #cdc2ab;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+[data-skin="paper"] button:hover {
+  border-color: #b3a689;
+}
+
+/* ---- Neon: near-black with light bleeding off the edges ---- */
+[data-skin="neon"] {
+  --skin-radius-sm: 0px;
+  --skin-radius-md: 2px;
+  --skin-radius-lg: 3px;
+  --skin-radius-xl: 4px;
+  --skin-radius-2xl: 6px;
+  --skin-radius-3xl: 8px;
+
+  --bg-primary: #07070d;
+  --bg-secondary: #0a0a14;
+  --bg-tertiary: #030308;
+  --bg-accent: #0d0d1a;
+  --interactive-hover: #16162a;
+  --interactive-selected: #1f1f3d;
+  --brand: #ff2e88;
+  --brand-hover: #d81f6f;
+  --text-normal: #e8e8ff;
+  --text-muted: #7a7aa8;
+  --text-link: #24e6ff;
+  --status-online: #24e6ff;
+  --status-idle: #ffcf3f;
+  --status-dnd: #ff2e88;
+  --divider: #23234a;
+}
+
+[data-skin="neon"] button {
+  border: 1px solid rgba(36, 230, 255, 0.35);
+  box-shadow:
+    inset 0 0 8px rgba(36, 230, 255, 0.12),
+    0 0 10px rgba(255, 46, 136, 0.18);
+}
+
+[data-skin="neon"] button:hover {
+  border-color: rgba(36, 230, 255, 0.85);
+  box-shadow:
+    inset 0 0 10px rgba(36, 230, 255, 0.25),
+    0 0 16px rgba(36, 230, 255, 0.45);
+}
+
+/* ---- Brutalist: black on white, and the shadow is a solid block ---- */
+[data-skin="brutalist"] {
+  --skin-radius-sm: 0px;
+  --skin-radius-md: 0px;
+  --skin-radius-lg: 0px;
+  --skin-radius-xl: 0px;
+  --skin-radius-2xl: 0px;
+  --skin-radius-3xl: 0px;
+  --skin-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f2f2;
+  /* Not black: this surface carries text drawn in --text-normal, which here
+     is also black. The two-pixel borders below do the structural work. */
+  --bg-tertiary: #ffffff;
+  --bg-accent: #ffffff;
+  --interactive-hover: #e6e6e6;
+  --interactive-selected: #d4d4d4;
+  --brand: #1400ff;
+  --brand-hover: #1000cc;
+  --text-normal: #000000;
+  --text-muted: #555555;
+  --text-link: #1400ff;
+  --status-online: #007a2f;
+  --status-idle: #9a6b00;
+  --status-dnd: #d20000;
+  --divider: #000000;
+}
+
+[data-skin="brutalist"] button {
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0 #000000;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-skin="brutalist"] button:active {
+  /* Pressed into the page, so the block shadow disappears under it. */
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+[data-skin="brutalist"] input,
+[data-skin="brutalist"] textarea {
+  border: 2px solid #000000;
+}
+
+
+/* Complete additional palettes share the same semantic surface hierarchy. */
+[data-theme="graphite"] {
+ --bg-primary:#222426; --bg-secondary:#18191b; --bg-tertiary:#0d0e0f; --bg-accent:#0d0e0f;
+ --interactive-hover:color-mix(in srgb,#222426 85%,#bec3c9); --interactive-selected:color-mix(in srgb,#222426 75%,#bec3c9);
+ --brand:#bec3c9; --brand-hover:color-mix(in srgb,#bec3c9 85%,#f3f4f5); --brand-foreground:#121518;
+ --text-normal:#f3f4f5; --text-muted:#b1b5bc; --text-link:#bec3c9; --divider:#3a3d41;
+ --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#b1b5bc;
+}
+[data-theme="forest"] {
+ --bg-primary:#1c3026; --bg-secondary:#13251d; --bg-tertiary:#0c1713; --bg-accent:#0c1713;
+ --interactive-hover:color-mix(in srgb,#1c3026 85%,#85c59f); --interactive-selected:color-mix(in srgb,#1c3026 75%,#85c59f);
+ --brand:#85c59f; --brand-hover:color-mix(in srgb,#85c59f 85%,#e5f3e9); --brand-foreground:#121518;
+ --text-normal:#e5f3e9; --text-muted:#a3beae; --text-link:#85c59f; --divider:#354d40;
+ --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#a3beae;
+}
+[data-theme="cobalt"] {
+ --bg-primary:#182647; --bg-secondary:#111d37; --bg-tertiary:#0a1125; --bg-accent:#0a1125;
+ --interactive-hover:color-mix(in srgb,#182647 85%,#8caeff); --interactive-selected:color-mix(in srgb,#182647 75%,#8caeff);
+ --brand:#8caeff; --brand-hover:color-mix(in srgb,#8caeff 85%,#edf2ff); --brand-foreground:#121518;
+ --text-normal:#edf2ff; --text-muted:#aabadd; --text-link:#8caeff; --divider:#33476b;
+ --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#aabadd;
+}
+[data-theme="ember"] {
+ --bg-primary:#35241c; --bg-secondary:#2a1a14; --bg-tertiary:#1b100d; --bg-accent:#1b100d;
+ --interactive-hover:color-mix(in srgb,#35241c 85%,#eca580); --interactive-selected:color-mix(in srgb,#35241c 75%,#eca580);
+ --brand:#eca580; --brand-hover:color-mix(in srgb,#eca580 85%,#fff0e3); --brand-foreground:#121518;
+ --text-normal:#fff0e3; --text-muted:#cfb1a1; --text-link:#eca580; --divider:#554034;
+ --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#cfb1a1;
+}
+[data-theme="parchment"] {
+ --bg-primary:#faf5e9; --bg-secondary:#eee8dc; --bg-tertiary:#ded6c6; --bg-accent:#ded6c6;
+ --interactive-hover:color-mix(in srgb,#faf5e9 85%,#35664f); --interactive-selected:color-mix(in srgb,#faf5e9 75%,#35664f);
+ --brand:#35664f; --brand-hover:color-mix(in srgb,#35664f 85%,#342f27); --brand-foreground:#ffffff;
+ --text-normal:#342f27; --text-muted:#6c6254; --text-link:#35664f; --divider:#c9beac;
+ --status-online:#27804a; --status-idle:#856100; --status-dnd:#b62e41; --status-offline:#6c6254;
+}
+[data-theme="porcelain"] {
+ --bg-primary:#fafcfe; --bg-secondary:#ecf1f7; --bg-tertiary:#dce5ed; --bg-accent:#dce5ed;
+ --interactive-hover:color-mix(in srgb,#fafcfe 85%,#295e9e); --interactive-selected:color-mix(in srgb,#fafcfe 75%,#295e9e);
+ --brand:#295e9e; --brand-hover:color-mix(in srgb,#295e9e 85%,#22344a); --brand-foreground:#ffffff;
+ --text-normal:#22344a; --text-muted:#53657a; --text-link:#295e9e; --divider:#bdcbd9;
+ --status-online:#27804a; --status-idle:#856100; --status-dnd:#b62e41; --status-offline:#53657a;
+}
+[data-theme="orchid"] {
+ --bg-primary:#36263f; --bg-secondary:#2a1e32; --bg-tertiary:#1c1421; --bg-accent:#1c1421;
+ --interactive-hover:color-mix(in srgb,#36263f 85%,#d4afe9); --interactive-selected:color-mix(in srgb,#36263f 75%,#d4afe9);
+ --brand:#d4afe9; --brand-hover:color-mix(in srgb,#d4afe9 85%,#f8edff); --brand-foreground:#121518;
+ --text-normal:#f8edff; --text-muted:#c8b0d5; --text-link:#d4afe9; --divider:#533d60;
+ --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#c8b0d5;
+}
+[data-theme="copper"] {
+ --bg-primary:#26363f; --bg-secondary:#1d2a31; --bg-tertiary:#11191d; --bg-accent:#11191d;
+ --interactive-hover:color-mix(in srgb,#26363f 85%,#e6b28b); --interactive-selected:color-mix(in srgb,#26363f 75%,#e6b28b);
+ --brand:#e6b28b; --brand-hover:color-mix(in srgb,#e6b28b 85%,#eef4f7); --brand-foreground:#121518;
+ --text-normal:#eef4f7; --text-muted:#b0c1ca; --text-link:#e6b28b; --divider:#435762;
+ --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#b0c1ca;
+}
+
+[data-theme="dark"],[data-theme="midnight"],[data-theme="light"] { --brand-foreground:#fff; }
+[data-theme="sunset"],[data-theme="ocean"],[data-theme="rose-gold"],[data-theme="plasma"],[data-theme="nord"] { --brand-foreground:#17131b; }
+[data-theme="plasma"] { --text-muted:#baa2d2; }
+[data-theme="nord"] { --bg-primary:#363f50; --bg-secondary:#2e3645; --bg-tertiary:#242c38; --text-muted:#c1cad7; --divider:#536177; }
+/* Explicit button foreground prevents pale accents from washing out labels. */
+.bg-brand.text-white { color:var(--brand-foreground,#fff); }
+
+/* Level 3+ catalyst perk: animated gradient role styling. Slides the
+   background (200%-wide gradient) so text-clip and pill backgrounds shimmer. */
+@keyframes role-gradient-pan {
+ 0% { background-position:0% 50%; }
+ 50% { background-position:100% 50%; }
+ 100% { background-position:0% 50%; }
+}
+.animate-role-gradient { animation:role-gradient-pan 3s ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce) {
+ .animate-role-gradient { animation:none; }
 }

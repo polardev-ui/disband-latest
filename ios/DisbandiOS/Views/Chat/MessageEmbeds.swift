@@ -54,10 +54,17 @@ struct ServerInviteCard: View {
                 HStack(spacing: 10) {
                     AvatarView(url: server.iconUrl, name: server.name, size: 44)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(server.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Brand.textPrimary)
-                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(server.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Brand.textPrimary)
+                                .lineLimit(1)
+                            if server.verified == true {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.footnote)
+                                    .foregroundStyle(Brand.verified)
+                            }
+                        }
                         Text("\(server.memberCount) member\(server.memberCount == 1 ? "" : "s")")
                             .font(.caption)
                             .foregroundStyle(Brand.textMuted)

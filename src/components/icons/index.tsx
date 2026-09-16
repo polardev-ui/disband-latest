@@ -50,6 +50,12 @@ import {
   Compass,
   Sparkles,
   GripVertical,
+  Wand2,
+  Package,
+  Store,
+  RefreshCw,
+  BadgeDollarSign,
+  ShieldCheck,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -132,6 +138,12 @@ export const IconBounty = icon(Target);
 export const IconMusic = icon(Music);
 export const IconCompass = icon(Compass);
 export const IconSparkle = icon(Sparkles);
+export const IconWand = icon(Wand2);
+export const IconPackage = icon(Package);
+export const IconStore = icon(Store);
+export const IconRegenerate = icon(RefreshCw);
+export const IconDollar = icon(BadgeDollarSign);
+export const IconShieldCheck = icon(ShieldCheck);
 export const IconPin = icon(Pin);
 export const IconPinOff = icon(PinOff);
 export const IconGripVertical = icon(GripVertical);

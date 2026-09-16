@@ -63,7 +63,8 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   const mine = gift.buyer_id === user?.id;
   const claimedByMe = gift.claimed_by === user?.id;
   const gone = gift.status === "claimed" || gift.status === "expired";
-  const accent = gift.plan === "super" ? "#fee75c" : "#57f287";
+  // Every gift grants Aero now, including ones bought before the merge.
+  const accent = "#fee75c";
 
   async function claim() {
     if (claiming) return;

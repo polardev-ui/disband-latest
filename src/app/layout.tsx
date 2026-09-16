@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
+import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
@@ -99,10 +100,11 @@ export default function RootLayout({
 (function () {
   try {
     var stored = localStorage.getItem('disband:theme');
-    var valid = ['light','dark','midnight','sunset','ocean','rose-gold','plasma','nord'];
+    var themes = ${JSON.stringify(THEMES.map(t=>({id:t.id,mode:t.mode||"dark"}))).replace(/</g,"\\u003c")};
+    var valid = themes.map(function(t){return t.id;});
     var theme = valid.indexOf(stored) !== -1 ? stored : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.style.colorScheme = themes.find(function(t){return t.id===theme;}).mode;
   } catch (e) {}
 })();
           `}

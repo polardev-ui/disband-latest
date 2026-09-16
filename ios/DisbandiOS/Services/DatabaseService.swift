@@ -79,6 +79,7 @@ enum DatabaseService {
         let bannerUrl: String?
         let inviteCode: String?
         let memberCount: Int
+        var verified: Bool?
 
         enum CodingKeys: String, CodingKey {
             case id, name, description
@@ -86,6 +87,7 @@ enum DatabaseService {
             case bannerUrl = "banner_url"
             case inviteCode = "invite_code"
             case memberCount = "member_count"
+            case verified
         }
     }
 
@@ -93,6 +95,45 @@ enum DatabaseService {
     static func joinServer(invite: String) async throws -> String {
         try await client.rpc("join_server_by_invite", params: ["p_code": invite])
             .execute().value
+    }
+
+    // MARK: - Discovery
+
+    /// A public, browseable server row from `list_discoverable_servers`. The
+    /// web app's discovery panel reads the same shape.
+    struct DiscoverableServer: Codable, Sendable, Identifiable, Hashable {
+        let id: String
+        let name: String
+        let iconUrl: String?
+        let bannerUrl: String?
+        let description: String?
+        let ownerId: String
+        let ownerName: String?
+        let memberCount: Int
+        let createdAt: String?
+        var verified: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case id, name, description
+            case iconUrl = "icon_url"
+            case bannerUrl = "banner_url"
+            case ownerId = "owner_id"
+            case ownerName = "owner_name"
+            case memberCount = "member_count"
+            case createdAt = "created_at"
+            case verified
+        }
+    }
+
+    /// Servers with `discoverable = true`, most members first.
+    static func discoverableServers() async throws -> [DiscoverableServer] {
+        try await client.rpc("list_discoverable_servers").execute().value
+    }
+
+    /// Join a discoverable server directly by its id (no invite needed). The
+    /// RPC refuses non-discoverable servers and duplicate joins.
+    static func joinServerById(serverId: String) async throws {
+        try await client.rpc("join_server_by_id", params: ["p_server_id": serverId]).execute()
     }
 
     static func leaveServer(serverId: String, userId: String) async throws {
