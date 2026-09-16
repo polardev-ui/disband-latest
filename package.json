@@ -5,6 +5,14 @@
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
   "type": "module",
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.28",
+      "nanoid@3": "^3.3.18",
+      "fast-uri@3": "^3.1.7",
+      "sharp": "^0.35.4"
+    }
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
