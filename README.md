@@ -29,7 +29,7 @@
 
 ## Features
 
-| Features |
+| Features | More Features |
 | --- | --- |
 | **Servers & Channels** — Organize communities into servers with text and voice channels, custom categories, 7-character invite codes, and role-based permissions. | **Direct Messages & Group Chats** — Private 1-on-1 conversations and group chats with emoji reactions, GIFs, images, videos, files, replies, message editing, and a full emoji picker. |
 | **Voice & Video Calls** — Peer-to-peer voice and video calls over WebRTC with mesh group calls — no third-party services required. Mute, deafen, and camera controls built in. | **End-to-End Encrypted Messaging** — Conversations and media stay protected so only the people in a conversation can read them. |
