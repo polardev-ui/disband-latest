@@ -6,14 +6,6 @@ import {
 } from "@/components/gift/SubscriptionMedallion";
 import type { SubscriptionPlan } from "@/lib/subscription";
 
-/**
- * What the subscription badge means, opened by clicking it.
- *
- * The seven tiers sit on one row so the ramp reads left to right as a single
- * progression. An auto-fitting grid put six on the first row and stranded the
- * seventh alone underneath, which made the last tier look like a separate
- * thing rather than the end of the sequence.
- */
 export function SubscriptionBadgeModal({
   plan, tenureMonths, since, onClose,
 }: {
@@ -57,8 +49,7 @@ export function SubscriptionBadgeModal({
           </svg>
         </button>
 
-        {/* Header carries the badge you actually hold, so the modal opens on
-            the answer rather than on a row of things you mostly do not have. */}
+        {}
         <div
           className="flex items-center gap-4 px-7 py-6"
           style={{ background: `linear-gradient(135deg, ${accent}1f, transparent 65%)` }}
@@ -77,7 +68,7 @@ export function SubscriptionBadgeModal({
           </div>
         </div>
 
-        {/* Progress to the next tier, directly under the badge it belongs to. */}
+        {}
         <div className="px-7">
           <div className="rounded-xl bg-bg-tertiary px-4 py-3.5">
             {next ? (
@@ -105,7 +96,7 @@ export function SubscriptionBadgeModal({
           </div>
         </div>
 
-        {/* All seven on one row: the ramp is the point. */}
+        {}
         <div className="grid grid-cols-4 gap-x-2 gap-y-4 px-7 py-6 sm:grid-cols-7">
           {TIERS.map((t) => {
             const reached = tenureMonths >= t.months;
@@ -139,12 +130,6 @@ export function SubscriptionBadgeModal({
   return createPortal(body, document.body);
 }
 
-/**
- * A tenure in the largest unit that still reads plainly.
- *
- * "130 months subscribed" is arithmetic, not an answer; past a year people
- * count in years. Below that the month count is the more useful figure.
- */
 function monthsLabel(n: number): string {
   if (n < 12) return `${n} month${n === 1 ? "" : "s"}`;
   const years = Math.floor(n / 12);

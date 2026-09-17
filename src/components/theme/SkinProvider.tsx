@@ -13,38 +13,28 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { buildThemeStylesheet } from "@/lib/theme/custom-css";
 import { isSkinId, type SkinId } from "@/lib/theme/skins";
 
-/**
- * The Super skin: which preset is on, the member's own CSS, and their icons.
- *
- * Held above the app rather than inside the settings screen because a skin has
- * to be applied whether or not settings is open, and because it is server
- * state — the same account on a desktop and a browser must look the same, so
- * the row is the source of truth and localStorage is only a cache to stop the
- * skin flashing in on every load.
- */
-
 export interface SkinState {
   preset: SkinId | null;
   customCss: string;
   icons: Record<string, string>;
   enabled: boolean;
-  /** Whether the plan currently allows a skin to be applied. */
+
   entitled: boolean;
   plan: string;
-  /** A skin is saved but the plan no longer allows it. */
+
   lapsed: boolean;
   loading: boolean;
 }
 
 interface SkinContextValue extends SkinState {
-  /** Anything omitted is left as it is. Returns an error message, or null. */
+
   save: (patch: Partial<Pick<SkinState, "preset" | "customCss" | "icons" | "enabled">>)
     => Promise<string | null>;
-  /** Show a preset without saving it, so a card can be tried before choosing. */
+
   preview: (preset: SkinId | null) => void;
-  /** Stop previewing and go back to whatever is actually saved. */
+
   endPreview: () => void;
-  /** What the sanitiser stripped from the last save. */
+
   removedNotes: string[];
 }
 
@@ -64,16 +54,6 @@ const EMPTY: SkinState = {
 
 const SkinContext = createContext<SkinContextValue | null>(null);
 
-/**
- * Skins are web and desktop only for now.
- *
- * There is no platform check to make: the desktop app runs this exact bundle,
- * and the mobile apps are native SwiftUI and Compose with no stylesheet for a
- * skin to apply to, so they never reach this code. A member's row still syncs
- * everywhere — the skin is simply not rendered on a phone rather than being
- * half-applied there.
- */
-
 function applySkinAttribute(preset: SkinId | null) {
   const root = document.documentElement;
   if (preset) root.setAttribute("data-skin", preset);
@@ -91,8 +71,7 @@ function applyCustomCss(css: string) {
     el.id = STYLE_ID;
     document.head.appendChild(el);
   }
-  // textContent, never innerHTML: the string is treated as text by definition,
-  // which is a second line of defence behind the sanitiser.
+
   if (el.textContent !== css) el.textContent = css;
 }
 
@@ -118,7 +97,7 @@ function writeCache(state: SkinState) {
       }),
     );
   } catch {
-    // Private browsing: the skin still works, it just flashes in on load.
+
   }
 }
 
@@ -141,14 +120,12 @@ export function SkinProvider({
 }) {
   const [state, setState] = useState<SkinState>(EMPTY);
   const [removedNotes, setRemovedNotes] = useState<string[]>([]);
-  /** Set while a card is being hovered, so it does not fight the saved value. */
+
   const previewRef = useRef<SkinId | null | undefined>(undefined);
-  /** The latest state, readable from callbacks that must not re-subscribe. */
+
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Paint the cached skin before the row arrives, so a member who has one does
-  // not watch the plain theme for the length of a round trip on every load.
   useEffect(() => {
     if (!userId) return;
     const cached = readCache();
@@ -183,8 +160,7 @@ export function SkinProvider({
       enabled: row.enabled !== false,
       entitled: row.entitled === true,
       plan: row.plan ?? "free",
-      // "You have a skin and are no longer allowed it" is the state the notice
-      // is about, and the server states it rather than the UI guessing.
+
       lapsed: row.has_theme === true && row.entitled !== true,
       loading: false,
     };
@@ -196,8 +172,6 @@ export function SkinProvider({
     void load();
   }, [load]);
 
-  // The single place the DOM is touched, so preview, save and load can never
-  // disagree about what is currently applied.
   useEffect(() => {
     const active = state.entitled && state.enabled;
     const preset = previewRef.current !== undefined
@@ -217,14 +191,6 @@ export function SkinProvider({
     applySkinAttribute(preset);
   }, []);
 
-  /**
-   * `undefined` in the ref means "not previewing", which is why a preview of
-   * "no skin" cannot simply be null — the two are different states and the
-   * effect above has to be able to tell them apart.
-   *
-   * Reads the current skin from a ref rather than from a state updater: an
-   * updater must be pure, and React is free to run it twice.
-   */
   const endPreview = useCallback(() => {
     previewRef.current = undefined;
     const saved = stateRef.current;

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 
-// GET /api/bot/list — the caller's bots (developer authenticated).
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);

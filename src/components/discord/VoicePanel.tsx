@@ -27,20 +27,10 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     setDeafened,
     setVoiceJoinedChannelId,
   } = useApp();
-  // The call itself lives in VoiceSessionProvider, above the view — so
-  // opening another channel no longer unmounts the connection. This panel is
-  // only the view of it, and shows a Join button when the call is elsewhere.
+
   const session = useVoiceSession();
   const inThisChannel = session.connectedChannelId === channelId;
-  /**
-   * Who is in the channel on screen.
-   *
-   * `session.participants` belongs to the channel you are *connected* to, so
-   * looking at any other voice channel reported "0 connected" while the
-   * sidebar showed four people in it. Connected to this one, the session is
-   * the better source — it is live and already loaded; otherwise the peeked
-   * presence for the channel being viewed is.
-   */
+
   const members = inThisChannel ? session.participants : voicePresence;
   const voice = {
     joined: session.joined && inThisChannel,
@@ -50,8 +40,6 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     leave: () => session.disconnect(),
   };
 
-  // Tiles: everyone in the channel, then a tile per screen share so the
-  // person sharing stays visible beside what they are sharing.
   const tiles = [
     ...members.map((p) => {
       const isSelf = p.user_id === user?.id;
@@ -84,14 +72,13 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
       }];
     }),
   ];
-  // Shares first — they are what the room is looking at.
+
   tiles.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "screen" ? -1 : 1));
 
   useEffect(() => {
     void loadVoicePresence(channelId);
   }, [channelId, loadVoicePresence, voice.participants.length]);
 
-  // Presence for a channel you are looking at but not connected to.
   useEffect(() => {
     if (!inThisChannel) session.peek(channelId);
   }, [inThisChannel, channelId, session]);

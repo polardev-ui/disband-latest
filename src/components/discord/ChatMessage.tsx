@@ -56,7 +56,7 @@ interface ChatMessageProps {
   showHeader: boolean;
   compact: boolean;
   currentUserId?: string | null;
-  /** Used to spot a ping by name when the stored id list missed it. */
+
   currentUserName?: string | null;
   authorColor?: string | null;
   reactions?: MessageReaction[];
@@ -73,16 +73,10 @@ interface ChatMessageProps {
   onContentResize?: () => void;
   channels?: ChannelLite[];
   onChannelClick?: (channelId: string) => void;
-  /** Active server's custom emoji (name->url) so `:shortcode:` renders as images. */
+
   customEmoji?: Record<string, string>;
 }
 
-/**
- * Render message text with server custom emoji resolved: `:shortcode:`
- * tokens become images, everything else goes through markdown as usual.
- * Keyed Fragments keep React happy (each renderMarkdown call restarts its
- * own key counter).
- */
 function renderCustomEmojiMarkdown(
   text: string,
   members: Profile[],
@@ -237,8 +231,6 @@ export function ChatMessage({
     if (author && onAuthorClick) onAuthorClick(author);
   }
 
-  // While the file is still going up the message shows the upload rather than
-  // pretending the attachment has arrived.
   const attachment = message.attachment_url && message.uploadProgress !== undefined ? (
     <AttachmentUploadCard
       name={message.attachment_name || "File"}
@@ -275,13 +267,7 @@ export function ChatMessage({
   ) : null;
 
   const highlightClass = highlight ? "bg-brand/10 ring-1 ring-brand/30" : "";
-  // A reply to your message is a ping. It is addressed at you as directly as an
-  // @mention is, and it was previously indistinguishable from ordinary traffic,
-  // so a reply in a busy channel was easy to scroll straight past.
-  // Three ways a message can be aimed at you, and the stored id list is only
-  // one of them. It is written by the sender from the members their client had
-  // loaded, so it misses people in large servers — the text is the reliable
-  // source for both @everyone and a ping by name.
+
   const mentionedYou = !!(
     (currentUserId && message.mentions?.includes(currentUserId))
     || mentionsEveryone(body)

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data extraction (backup / device-transfer) rules for Android 12+ (API 31+).
+  Keep the auth session out of both cloud backup and device-to-device transfer.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="disband_sessions.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="disband_sessions.xml" />
+    </device-transfer>
+</data-extraction-rules>

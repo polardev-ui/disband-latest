@@ -39,10 +39,6 @@ export function useSubscription(userId: string | undefined) {
 
     let { data, error } = await fetchOnce();
 
-    // The access token lapsed (e.g. the app sat closed past the token
-    // lifetime). Refresh once and retry instead of spamming failed loads.
-    // Goes through the deduplicated, cross-tab-locked path so a subscription
-    // load here can't race the token against another tab.
     if (error && (error.code === "PGRST303" || /JWT expired/i.test(error.message ?? ""))) {
       const refreshed = await refreshSessionOnce();
       if ("session" in refreshed && refreshed.session) {
@@ -65,13 +61,6 @@ export function useSubscription(userId: string | undefined) {
     void load();
   }, [load]);
 
-  /**
-   * Ask the server to reconcile against Stripe directly.
-   *
-   * The webhook can silently fail (wrong endpoint or signing secret), which
-   * leaves a paying customer on the free plan. This asks Stripe what they
-   * actually have, so the purchase applies regardless.
-   */
   const syncFromStripe = useCallback(async (): Promise<SubscriptionPlan | null> => {
     try {
       const res = await apiFetch("/api/stripe/sync", { method: "POST" });
@@ -84,21 +73,11 @@ export function useSubscription(userId: string | undefined) {
     }
   }, [load]);
 
-  /**
-   * Drive a just-completed purchase to a live, granted plan.
-   *
-   * Stripe confirms the payment before the subscription object is queryable, and
-   * the webhook may not fire at all, so we retry reconciliation with backoff and
-   * only report success once the stored row actually grants a paid plan.
-   * Resolves to the granted plan, or "free" if it never landed.
-   */
   const activate = useCallback(async (): Promise<SubscriptionPlan> => {
     for (let attempt = 0; attempt < 8; attempt++) {
       const synced = await syncFromStripe();
       if (synced && synced !== "free") return synced;
 
-      // The webhook may have won the race even when reconciliation could not
-      // see the subscription yet.
       const row = await load();
       const fromRow = planFromSubscription(row);
       if (fromRow !== "free") return fromRow;
@@ -108,7 +87,6 @@ export function useSubscription(userId: string | undefined) {
     return "free";
   }, [syncFromStripe, load]);
 
-  // After a Stripe checkout redirect, reconcile first, then poll as a backstop.
   useEffect(() => {
     if (!userId) return;
     const params = new URLSearchParams(window.location.search);

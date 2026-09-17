@@ -6,10 +6,6 @@ interface BotTagProps {
   className?: string;
 }
 
-/**
- * Discord-style "BOT" pill, shown next to bot usernames in chat and the
- * member list. Renders nothing for human profiles.
- */
 export function BotTag({ profile, size = "md", className = "" }: BotTagProps) {
   if (!profile?.is_bot) return null;
   return (

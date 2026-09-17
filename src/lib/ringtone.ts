@@ -1,4 +1,4 @@
-/** Cinematic dual-tone ring loop via Web Audio (no external assets). */
+
 import { isSoundEnabled } from "@/lib/user-settings";
 
 let ctx: AudioContext | null = null;

@@ -34,7 +34,7 @@ export function MarketingHomePage() {
       <MarketingNav />
 
       <main className="pt-14">
-        {/* Hero — asymmetric: argument on the left, the actual product on the right. */}
+        {}
         <section className="border-b border-white/[0.06] px-6 py-20 sm:py-28">
           <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
             <div>
@@ -76,7 +76,7 @@ export function MarketingHomePage() {
           </div>
         </section>
 
-        {/* Specs — concrete facts in a hairline table, not floating cards. */}
+        {}
         <section className="border-b border-white/[0.06] px-6">
           <dl className="mx-auto grid max-w-6xl grid-cols-2 divide-x divide-white/[0.06] lg:grid-cols-4">
             {platformSpecs.map((spec) => (
@@ -90,7 +90,7 @@ export function MarketingHomePage() {
           </dl>
         </section>
 
-        {/* Capabilities — numbered columns on rules. No boxes, no backdrop blur. */}
+        {}
         <section className="px-6 py-20 sm:py-24">
           <div className="mx-auto max-w-6xl">
             <h2 className="max-w-xl text-2xl font-semibold tracking-[-0.02em] text-white sm:text-[2rem]">
@@ -111,7 +111,7 @@ export function MarketingHomePage() {
 
         <DownloadSection />
 
-        {/* Closing — a quiet band, not a glowing card. */}
+        {}
         <section className="border-t border-white/[0.06] px-6 py-16">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div>

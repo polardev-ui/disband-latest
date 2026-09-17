@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  /** Accepts nodes so callers can render a title plus a secondary line. */
+
   label: React.ReactNode;
   children: React.ReactNode;
   side?: "right" | "left" | "top";
-  /** Inline triggers must not emit a <div> inside phrasing content. */
+
   as?: "div" | "span";
 }
 

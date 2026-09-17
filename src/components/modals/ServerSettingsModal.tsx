@@ -131,13 +131,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     return true;
   });
 
-  /**
-   * Applied immediately rather than batched behind "Save Changes".
-   *
-   * Listing a server publicly is a visibility change, so it should take effect
-   * (and be revertible) with one click, not sit as an unsaved edit the owner
-   * might not realise is pending.
-   */
   async function toggleDiscoverable() {
     if (!activeServer || !isOwner) return;
     const next = !discoverable;
@@ -164,7 +157,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     setLoading(false);
   }
 
-  /** Level 1+ catalyst perk: custom vanity invite code (owner only). */
   async function saveVanity() {
     if (!activeServer || !isOwner || catalystLvl.level < 1) return;
     const clean = sanitizeVanity(vanity);
@@ -207,7 +199,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
 
   async function handleEmojiUpload() {
     if (!emojiFile || !emojiName.trim() || !activeServer) return;
-    // Level 2+ catalyst perk: +50 slots server-wide, on top of the plan.
+
     const lvl = catalystLevel(catalystCounts[activeServer.id] ?? 0).level;
     const baseSlots = entitlements.customEmojiSlots;
     const slotLimit = typeof baseSlots === "number" && lvl >= 2 ? baseSlots + EMOJI_SLOTS_BONUS : baseSlots;
@@ -332,7 +324,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     setLoading(false);
   }
 
-  /** Level 3+ catalyst perk: gradient end color + shimmer for a role. */
   async function handleRoleGradient(roleId: string, patch: { gradient_to?: string | null; gradient_animated?: boolean }) {
     setLoading(true);
     setError(null);

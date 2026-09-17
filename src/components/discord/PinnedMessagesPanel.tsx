@@ -12,7 +12,6 @@ interface PinnedMessagesPanelProps {
   onUnpin: (messageId: string) => void;
 }
 
-/** Modal that lists the messages pinned in the currently-open DM thread. */
 export function PinnedMessagesPanel({
   open,
   threadName,

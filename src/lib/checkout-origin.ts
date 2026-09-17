@@ -1,6 +1,5 @@
 import { PUBLIC_ENV } from "./public-env";
 
-/** Never trust the request's Origin as a payment return destination. */
 export function checkoutOrigin(req: Request): string {
   const canonical = new URL(PUBLIC_ENV.webAppUrl).origin;
   const origin = req.headers.get("origin");

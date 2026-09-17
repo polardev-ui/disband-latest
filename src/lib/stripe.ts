@@ -16,21 +16,10 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-/**
- * Prices, current and historical.
- *
- * `aero` is the one thing for sale. `legacyBasic` is kept only so a
- * subscription created before the merge can still be recognised by its price
- * when its metadata says nothing — reading it is not the same as selling it.
- *
- * Aero deliberately reuses Super's price id: the seven people already paying
- * are on that price, and pointing the new plan at a new price would have
- * meant migrating live subscriptions for no reason.
- */
 export const PRICE_IDS = {
   aero: process.env.STRIPE_AERO_PRICE_ID || process.env.STRIPE_SUPER_PRICE_ID!,
   legacyBasic: process.env.STRIPE_BASIC_PRICE_ID ?? "",
-  /** One-time Disband Catalyst price from the product catalogue. */
+
   catalyst: process.env.STRIPE_CATALYST_PRICE_ID!,
 } as const;
 
@@ -43,7 +32,6 @@ export function getPriceId(plan: SubscriptionPlan): string {
   return PRICE_IDS.aero;
 }
 
-/** Catalogue price for one Catalyst (one-time). Actionable when unconfigured. */
 export function getCatalystPriceId(): string {
   const id = PRICE_IDS.catalyst;
   if (!id || !id.startsWith("price_")) {
@@ -53,7 +41,3 @@ export function getCatalystPriceId(): string {
   }
   return id;
 }
-
-export const PLANS_MONTHLY_CENTS: Record<string, number> = {
-  aero: 899,
-};

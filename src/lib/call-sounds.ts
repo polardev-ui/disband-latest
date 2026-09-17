@@ -1,7 +1,4 @@
-/**
- * Call lifecycle sounds, synthesized with Web Audio so no audio assets are
- * needed. All respect the user's "Message sounds" preference.
- */
+
 import { isSoundEnabled } from "@/lib/user-settings";
 
 function newCtx(): AudioContext | null {
@@ -35,29 +32,26 @@ function tone(
   osc.stop(start + duration + 0.03);
 }
 
-/** Two-note chime when a call actually connects. */
 export function playCallConnected() {
   if (!isSoundEnabled()) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;
-  tone(ctx, 523.25, t, 0.12, 0.09); // C5
-  tone(ctx, 783.99, t + 0.1, 0.28, 0.09); // G5
+  tone(ctx, 523.25, t, 0.12, 0.09);
+  tone(ctx, 783.99, t + 0.1, 0.28, 0.09);
   setTimeout(() => void ctx.close(), 600);
 }
 
-/** Short ascending blip when someone joins a call or voice channel. */
 export function playCallJoin() {
   if (!isSoundEnabled()) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;
-  tone(ctx, 659.25, t, 0.09, 0.07); // E5
-  tone(ctx, 880, t + 0.07, 0.14, 0.07); // A5
+  tone(ctx, 659.25, t, 0.09, 0.07);
+  tone(ctx, 880, t + 0.07, 0.14, 0.07);
   setTimeout(() => void ctx.close(), 400);
 }
 
-/** Descending blip when someone leaves a call or voice channel. */
 export function playCallLeave() {
   if (!isSoundEnabled()) return;
   const ctx = newCtx();
@@ -68,7 +62,6 @@ export function playCallLeave() {
   setTimeout(() => void ctx.close(), 400);
 }
 
-/** Soft two-tone when a call ends or is declined. */
 export function playCallEnd() {
   if (!isSoundEnabled()) return;
   const ctx = newCtx();

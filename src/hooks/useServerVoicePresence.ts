@@ -8,19 +8,9 @@ export interface PresenceMember extends VoicePresence {
   profile?: Profile;
 }
 
-/**
- * Loads and live-subscribes to voice presence for every voice channel in a
- * server, keyed by channel_id. Lets the channel sidebar show who is connected
- * (and muted/deafened) without the viewer joining the voice channel.
- *
- * Tracks when each channel's *current* active stretch began (epoch ms): seeded
- * from the earliest join, kept while at least one person remains, dropped the
- * moment the channel empties. The sidebar renders that as the green "live
- * call" timer.
- */
 export function useServerVoicePresence(serverId: string | null) {
   const [byChannel, setByChannel] = useState<Map<string, PresenceMember[]>>(new Map());
-  // channel_id -> epoch ms the current active stretch began.
+
   const [startTimes, setStartTimes] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
@@ -71,10 +61,6 @@ export function useServerVoicePresence(serverId: string | null) {
     };
   }, [serverId]);
 
-  // Reconcile active-stretch starts against the latest presence. A start is
-  // created only when a channel goes from empty to occupied (seeded from its
-  // earliest join), survives members coming and going as long as one stays,
-  // and is dropped the instant it empties.
   useEffect(() => {
     setStartTimes((prev) => {
       const next = new Map(prev);

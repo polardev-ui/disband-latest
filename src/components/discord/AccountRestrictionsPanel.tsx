@@ -54,7 +54,7 @@ export function AccountRestrictionsPanel() {
       const json = (await res.json()) as { restrictions?: RestrictionRow[] };
       setRows(json.restrictions ?? []);
     } catch {
-      // Ignore transient failures.
+
     }
   }, [isStaff]);
 
@@ -62,7 +62,6 @@ export function AccountRestrictionsPanel() {
     if (isStaff) void loadRows();
   }, [isStaff, loadRows]);
 
-  // Debounced user search.
   useEffect(() => {
     const term = query.trim();
     if (selected || term.length < 1) {
@@ -160,7 +159,7 @@ export function AccountRestrictionsPanel() {
         </p>
       </div>
 
-      {/* User search */}
+      {}
       <div ref={containerRef} className="relative">
         <span className="text-xs font-bold uppercase text-text-muted">User</span>
         {selected ? (
@@ -200,7 +199,6 @@ export function AccountRestrictionsPanel() {
         )}
       </div>
 
-      {/* Apply restrictions */}
       {selected && (
         <div>
           <span className="text-xs font-bold uppercase text-text-muted">Apply restriction</span>
@@ -230,7 +228,6 @@ export function AccountRestrictionsPanel() {
       {error && <p className="text-sm text-status-danger">{error}</p>}
       {success && <p className="text-sm text-status-online">{success}</p>}
 
-      {/* Active restrictions list */}
       {rows.length > 0 && (
         <div className="rounded-lg border border-divider bg-bg-secondary">
           <p className="border-b border-divider px-4 py-2 text-xs font-bold uppercase text-text-muted">Active restrictions</p>

@@ -77,7 +77,7 @@ import type {
 
 interface AppContextValue {
   ready: boolean;
-  /** First full data load for the signed-in user has settled. */
+
   hydrated: boolean;
   configured: boolean;
   session: Session | null;
@@ -125,7 +125,7 @@ interface AppContextValue {
   savedSessions: SavedSession[];
   switchAccount: (account: SavedSession) => Promise<string | null>;
   removeSavedAccount: (userId: string) => void;
-  /** True while the login form is open over the app to add another account. */
+
   addingAccount: boolean;
   beginAddAccount: () => void;
   cancelAddAccount: () => void;
@@ -198,22 +198,22 @@ interface AppContextValue {
   ) => Promise<void>;
   unpinMessage: (sourceType: PinnedSourceType, sourceId: string, messageId: string) => Promise<void>;
   markNotificationsRead: () => Promise<void>;
-  /** Catalyst rows per server id (level source). */
+
   catalystCounts: Record<string, number>;
-  /** My own catalyst rows (balance + withdraw source). */
+
   myCatalysts: { server_id: string; created_at: string }[];
   refreshCatalysts: (serverIds: string[], uid: string) => Promise<void>;
-  /** Spend one monthly-grant credit on a server. Returns error or null. */
+
   allocateCatalyst: (serverId: string) => Promise<string | null>;
-  /** Pull back my newest grant row on a server. Returns error or null. */
+
   withdrawCatalyst: (serverId: string) => Promise<string | null>;
-  /** Name->url custom emoji for the active server (empty outside servers). */
+
   customEmojiMap: Record<string, string>;
-  /** Stamp seen_at=now() on unseen notifications. Call ONLY on bell-drawer open, never on mount. */
+
   markNotificationsSeen: () => Promise<void>;
-  /** Mark one notification read (click-through). */
+
   markNotificationRead: (id: string) => Promise<void>;
-  /** Route to a notification link's target (DM / group / server channel). Returns false if unroutable. */
+
   routeToNotification: (link: string | null) => Promise<boolean>;
   loadVoicePresence: (channelId: string) => Promise<void>;
   voiceJoinedChannelId: string | null;
@@ -289,14 +289,6 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-/**
- * What to tell someone when an upload fails.
- *
- * Every one of these used to end as "Upload failed. Try a smaller file or
- * different format." — advice that was wrong as often as it was right, and
- * which discarded a message from the server that already said precisely what
- * had happened and what the limit was.
- */
 function uploadErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
   return "Upload failed. Check your connection and try again.";
@@ -305,23 +297,16 @@ function uploadErrorMessage(err: unknown): string {
 export function AppProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [ready, setReady] = useState(false);
-  /**
-   * True once the first full data load for the signed-in user has settled.
-   *
-   * `ready` only means the auth session is known. Rendering the app on `ready`
-   * alone paints a shell with a null profile and empty lists for as long as the
-   * initial fetches take — which reads as "my username is my email and all my
-   * friends vanished". The shell waits on this instead.
-   */
+
   const [hydrated, setHydrated] = useState(false);
-  /** First data load has settled; avatars may still be warming. */
+
   const [dataLoaded, setDataLoaded] = useState(false);
   const imagesWarmedRef = useRef(false);
   const [session, setSession] = useState<Session | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
-  /** Catalyst rows per server (level source) + my own rows (balance/withdraw source). */
+
   const [catalystCounts, setCatalystCounts] = useState<Record<string, number>>({});
   const [myCatalysts, setMyCatalysts] = useState<{ server_id: string; created_at: string }[]>([]);
   const [categories, setCategories] = useState<ChannelCategory[]>([]);
@@ -380,9 +365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dmThreadActivity, setDmThreadActivity] = useState<Record<string, string>>({});
   const [serverIndicators, setServerIndicators] = useState<Set<string>>(new Set());
   const [channelUnreadMap, setChannelUnreadMap] = useState<Map<string, number>>(new Map());
-  // Separate from the unread count: Discord's white pill means "something new",
-  // the red badge means "something addressed to you", and they are not the same
-  // signal. Without this there was no way to tell which channel pinged you.
+
   const [channelMentionMap, setChannelMentionMap] = useState<Map<string, number>>(new Map());
   const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
@@ -392,8 +375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeChannelRef = useRef<string | null>(null);
   const activeServerRef = useRef<string | null>(null);
   const activeGroupRef = useRef<string | null>(null);
-  // Monotonic token so the newest "open DM" click wins even when the
-  // get_or_create RPCs resolve out of order.
+
   const dmOpenTokenRef = useRef(0);
   const channelsRef = useRef<Channel[]>([]);
   const serversRef = useRef<Server[]>([]);
@@ -423,22 +405,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSavedSessions(getSavedSessions());
   }, []);
 
-  // Adding an account signs in over the top of the app rather than signing out
-  // first: the account you are already using stays live until the new one has
-  // actually authenticated, so a mistyped password does not strand you on a
-  // login screen.
   const [addingAccount, setAddingAccount] = useState(false);
   const beginAddAccount = useCallback(() => setAddingAccount(true), []);
   const cancelAddAccount = useCallback(() => setAddingAccount(false), []);
 
-  // Keep the saved entry's name and avatar fresh. The session alone only knows
-  // the email, so without this the switcher lists everyone as a grey initial.
   useEffect(() => {
     if (session && profile) rememberSession(session, profile);
   }, [session, profile, rememberSession]);
 
-  // The form is only open in order to add an account, so a different account
-  // being live means it has done its job.
   useEffect(() => {
     setAddingAccount(false);
   }, [session?.user?.id]);
@@ -596,13 +570,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  /**
-   * Advance this user's read cursor for a thread.
-   *
-   * Separate from `clearDmUnread`, which only drops the local badge: unread is
-   * recomputed from server cursors on every refresh, so a thread whose cursor
-   * did not move comes straight back.
-   */
   const markDmReadNow = useCallback(async (threadId: string) => {
     const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
     if (error) console.error("mark_dm_read failed", error.message);
@@ -631,11 +598,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Reconcile unread counts from the server. This is what makes unread state
-  // survive an app restart / cross-device: instead of counting only messages
-  // received over realtime while the app was open, we recompute from the
-  // per-user read cursors. The maps are rebuilt from server truth so a thread
-  // also clears when read on another device.
   const seedUnread = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
     const threadByFriend = new Map(dmThreads.map((t) => [t.friend.id, t]));
@@ -728,7 +690,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void presenceChannelRef.current?.track(payload).then();
   }, [userId, patchProfileInState]);
 
-  /** Track own live presence on the shared presence channel. */
   const trackPresence = useCallback(async (status: UserStatus) => {
     if (!userId) return;
     const payload: PresencePayload = { userId, status };
@@ -747,13 +708,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [setLiveStatus]);
 
-  // Treat being in a voice channel or call as "active": you are using the app.
   useEffect(() => {
     inCallRef.current = !!voiceJoinedChannelId || callPhase !== "idle";
   }, [voiceJoinedChannelId, callPhase]);
 
-  // Auto-away: an "online" user who goes idle flips to away, and comes back
-  // automatically on the next activity. Never fires for manual away/DND/offline.
   useEffect(() => {
     if (!userId || !configured) return;
     const check = () => {
@@ -779,9 +737,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, configured, setLiveStatus, markActivity]);
 
-  // Live presence: join the shared channel, publish our status, and mirror the
-  // whole room into presenceMap. The server removes us the moment the socket
-  // drops, so closed apps can never linger as "online".
   useEffect(() => {
     if (!userId || !configured || !profile) return;
     const supabase = getSupabaseClient();
@@ -820,18 +775,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [patchProfileInState]);
 
-  /** Creates a profiles row if the auth trigger missed it (fixes server FK errors). */
   const ensureProfile = useCallback(async (_uid: string, _email?: string | null) => {
     const supabase = getSupabaseClient();
     const { error } = await supabase.rpc("ensure_user_profile");
     return error?.message ?? null;
   }, []);
 
-  /**
-   * Catalyst levels for my servers + my own allocations (monthly-balance and
-   * withdraw source). Counts are public by RLS design; this scopes reads to
-   * my servers and my rows.
-   */
   const refreshCatalysts = useCallback(async (serverIds: string[], uid: string) => {
     if (serverIds.length === 0) {
       setCatalystCounts({});
@@ -863,7 +812,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const withdrawCatalyst = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
-    // Pull back the newest own grant row (purchased rows stay put).
+
     const { data } = await getSupabaseClient()
       .from("server_catalysts")
       .select("id")
@@ -933,8 +882,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
     setServerRoles(serverRoles);
-    // Only assignable roles (anything but @everyone) may be put back through
-    // set_member_roles; stale/canonical default ids would 400 the RPC.
+
     const assignableRoleIds = new Set(
       serverRoles.filter((r) => !r.is_default).map((r) => r.id),
     );
@@ -997,14 +945,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return channelRows;
   }, []);
 
-  /**
-   * Load a channel's history.
-   *
-   * Every write checks that the channel is still the one on screen. Switching
-   * channels quickly starts two of these, and the slower one used to land
-   * last and overwrite the newer channel's messages with the older channel's
-   * — which is why #general would suddenly be full of #psa.
-   */
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
     const { data } = await supabase
@@ -1127,9 +1067,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // --- Notes -----------------------------------------------------------------
-  // Private to the signed-in user, so these queries filter on user_id rather
-  // than a thread/channel id. RLS enforces the same thing server-side.
   const loadNotes = useCallback(async (uid: string) => {
     const { data } = await getSupabaseClient()
       .from("notes")
@@ -1172,9 +1109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("thread_id", threadId)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
-    // The user may have switched conversations while this fetch was in flight.
-    // Committing it anyway would paint the old thread's messages under the
-    // new header, so only apply the result if this thread is still active.
+
     if (activeDmRef.current !== threadId) return;
     const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
     setDmMessages(rows);
@@ -1197,8 +1132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
-    // Switched away while the older page was loading — don't prepend the
-    // previous thread's history into the conversation now on screen.
+
     if (activeDmRef.current !== activeDmThreadId) return;
     const { rows: older, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
     if (!older.length) {
@@ -1260,8 +1194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("group_id", groupId)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
-    // Same stale-switch guard as loadDmMessages: a slow fetch for the group
-    // we just left must never overwrite the conversation now on screen.
+
     if (activeGroupRef.current !== groupId) return;
     const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
     setGroupMessages(rows);
@@ -1284,8 +1217,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE + 1);
-    // Switched away while the older page was loading — don't prepend the
-    // previous group's history into the conversation now on screen.
+
     if (activeGroupRef.current !== activeGroupChatId) return;
     const { rows: older, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
     if (!older.length) {
@@ -1321,11 +1253,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications((data as AppNotification[]) ?? []);
   }, []);
 
-  /**
-   * Active server's custom emoji as name->url. Loaded on server switch so
-   * `:shortcode:` tokens in messages render as images (the picker already
-   * inserts shortcodes; without this they stayed literal text).
-   */
   const loadCustomEmoji = useCallback(async (serverId: string) => {
     const { data } = await getSupabaseClient()
       .from("custom_emoji")
@@ -1348,7 +1275,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadGroupChats(userId),
       loadNotifications(userId),
     ]);
-    // Seed unread after threads are loaded so friend lookups succeed.
+
     await seedUnread(userId);
     if (activeServerId) await loadServerDetails(activeServerId);
     if (activeChannelId) await loadMessages(activeChannelId);
@@ -1356,7 +1283,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (activeGroupChatId) await loadGroupMessages(activeGroupChatId);
   }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages, seedUnread]);
 
-  // Auth bootstrap
   useEffect(() => {
     if (!configured) {
       setReady(true);
@@ -1368,18 +1294,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession();
       let session = data.session;
 
-      // Verify the persisted session is actually accepted by the server before
-      // booting the app. supabase-js only auto-refreshes while a token is still
-      // inside its expiry margin, so a dead token at boot — expired JWT, or one
-      // whose `exp` looks fine but is rejected server-side (revoked session,
-      // changed JWT secret) — would otherwise let every initial request 401
-      // with "JWT expired" forever while realtime channels fail with PGRST303.
       if (session) {
         if (isAccessTokenExpired(session)) {
-          // Retry with exponential backoff on 429 — a single burst of refreshes
-          // on boot is the root cause of the rate-limit cascade. Refreshes go
-          // through the deduplicated, cross-tab-locked path so N tabs reloading
-          // at once never race on the same single-use refresh token.
+
           let refreshed: { session: Session | null } | null = null;
           let retryError: unknown = null;
           for (let attempt = 0; attempt < 3; attempt++) {
@@ -1405,14 +1322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             } else {
               const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
               if (refreshError) {
-                // Only a definitive auth failure (revoked/invalid refresh token)
-                // means the session is truly dead. A transient failure — network
-                // blip, 5xx, or supabase-js's 60s refresh-failure cooldown cache —
-                // must NOT destroy the persisted session, or a single hiccup at
-                // boot force-logs the user out. supabase-js already removes the
-                // session itself when the refresh token is genuinely rejected, so
-                // we only need to clear it here for the edge case where the access
-                // token was still "valid" but the server rejected it.
+
                 if (refreshError.name === "AuthRetryableFetchError") {
                   console.warn("Could not refresh the session due to a transient error; continuing with the cached session.", refreshError);
                 } else {
@@ -1434,25 +1344,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      // When supabase-js fails to refresh the token due to a transient error
-      // (network blip, 429 rate-limit, 5xx), it fires SIGNED_OUT and may also
-      // clear the session from storage. Accepting the null here would boot the
-      // user for a hiccup. Only accept a null session when we ourselves called
-      // signOut (tracked by a ref), or when the token was already expired and
-      // the new state confirms it.
+
       if (!s) {
         const current = sessionRef.current;
-        // Ignore SIGNED_OUT entirely unless we initiated a manual sign-out.
-        // The worst case is a genuinely revoked session lingers for a few
-        // seconds until the next API call 401s and triggers a real cleanup.
-        // The alternative — booting the user on every 429 burst — is far worse.
+
         if (current && !signingOutRef.current) return;
       }
       signingOutRef.current = false;
       setSession(s);
-      // Re-evaluate automatic badges on a fresh sign-in. Server triggers cover
-      // the earning events; this catches time-based badges (Anniversary, Voice
-      // Veteran, Mobile Pioneer) that no event can fire.
+
       if (_e === "SIGNED_IN" && s) {
         void refreshOwnBadges(s.user.id);
       }
@@ -1460,25 +1360,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [configured, rememberSession]);
 
-  // Recover a session that expired while the tab was backgrounded. supabase's
-  // auto-refresh ticker only runs while the page is visible, so returning to a
-  // tab whose token lapsed can otherwise leave realtime channels and fetches
-  // stuck on an expired JWT until a manual reload.
   useEffect(() => {
     if (!configured) return;
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       void (async () => {
-        // Use the ref instead of auth.getSession() — the latter triggers an
-        // implicit token refresh inside supabase-js, and a 429 on that refresh
-        // cascades into SIGNED_OUT. If the token is already expired there is
-        // nothing to refresh; the next onAuthStateChange cycle will handle it.
+
         const session = sessionRef.current;
         if (!session || !isAccessTokenExpired(session)) return;
-        // Go through the deduplicated path so the global cooldown (shared
-        // across tabs) and the cross-tab lock apply — focus events can fire
-        // rapidly, and unthrottled refresh attempts on a stale token are what
-        // keep the per-IP rate-limit bucket drained once it trips.
+
         const result = await refreshSessionOnce();
         if ("error" in result) return;
         if (result.session) {
@@ -1494,13 +1384,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, refreshAll]);
 
-  // Keep the access token from lapsing while the tab sits idle in the
-  // foreground. supabase's auto-refresh ticker only runs while the page is
-  // visible AND only when the token is inside its expiry margin, so a tab left
-  // open for hours would otherwise let the token expire — silently killing
-  // every realtime socket (PGRST303) and stale-`fetch` calls until focus or a
-  // reload. Refresh just before expiry instead, from the shared deduplicated
-  // path so the cross-tab lock still applies.
   useEffect(() => {
     if (!configured) return;
     const marginMs = 60_000;
@@ -1531,17 +1414,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMfaRequired(false);
       return;
     }
-    // Use the session from state — calling auth.getSession() here would trigger
-    // an implicit token refresh inside supabase-js, and a 429 rate-limit on that
-    // refresh cascades into SIGNED_OUT (kicking the user out).
+
     const current = sessionRef.current;
     if (!current) {
       setMfaRequired(false);
       return;
     }
-    // If the token is already expired, skip the network call too — it would
-    // just 401 or trigger another refresh. The onAuthStateChange guard will
-    // handle the eventual sign-out gracefully.
+
     if (isAccessTokenExpired(current)) {
       return;
     }
@@ -1549,8 +1428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const assurance = await getMfaAssurance();
       setMfaRequired(assurance.mfaRequired);
     } catch {
-      // Transient error (429, network blip) — keep the previous MFA state.
-      // Better to be slightly stale than to boot the user out.
+
     }
   }, [configured]);
 
@@ -1636,8 +1514,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await ensureProfile(userId, user?.email);
         await refreshAll();
       } catch (err) {
-        // A failed bootstrap must not strand the user on the splash forever —
-        // fall through and let the app render whatever did load.
+
         console.error("Initial load failed:", err);
       } finally {
         if (!cancelled) setDataLoaded(true);
@@ -1645,8 +1522,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void primeNotificationPermission();
     })();
 
-    // Safety valve: if a request hangs rather than rejecting, show the app
-    // anyway rather than spinning indefinitely.
     const timeout = window.setTimeout(() => {
       if (!cancelled) {
         setDataLoaded(true);
@@ -1660,11 +1535,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Second startup phase: once the data is in, warm every avatar and icon that
-   * the first screen will render before lifting the splash. Without this the
-   * app appears, then avatars pop in one by one a moment later.
-   */
   useEffect(() => {
     if (!dataLoaded || hydrated || imagesWarmedRef.current) return;
     imagesWarmedRef.current = true;
@@ -1680,16 +1550,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void preloadImages(urls).finally(() => setHydrated(true));
   }, [dataLoaded, hydrated, profile, friends, dmThreads, servers, groupChats]);
 
-  // Realtime subscriptions
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
 
-    // Cross-device convergence for the identity + catalyst surfaces:
-    // - my own profile (status note / pronouns edited on another device),
-    // - friends' profiles (their status / avatar / name changes),
-    // - catalyst rows (counts, levels, and my monthly balance).
-    // Without these a phone and a desktop drift apart until reload.
     const profileSub = supabase
       .channel(`profiles:${userId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` }, () => {
@@ -1729,8 +1593,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, () => void loadFriendships(userId))
       .subscribe();
 
-    // Notes are private, but the same account can be open on several devices —
-    // keep them converged. Rows arrive already filtered to this user by RLS.
     const notesSub = supabase
       .channel(`notes:${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notes", filter: `user_id=eq.${userId}` }, (payload) => {
@@ -1741,7 +1603,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         const row = payload.new as Note;
         setNotes((prev) => {
-          // Drop the optimistic twin this echo corresponds to, if it is still around.
+
           const without = prev.filter(
             (n) => n.id !== row.id && !(n.id.startsWith("opt-") && n.content === row.content && (n.attachment_url ?? null) === (row.attachment_url ?? null)),
           );
@@ -1762,9 +1624,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, configured, loadFriendships, loadProfile, refreshCatalysts]);
 
-  // Friends' live profiles (status notes, avatars, names edited on any
-  // device). Keyed on the id set so the channel rebuilds only when the
-  // friend list itself changes. Capped so the filter stays URL-safe.
   const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
   useEffect(() => {
     if (!userId || !configured || friendIdsKey === "") return;
@@ -1792,10 +1651,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const msg = payload.new as Message;
-          // The subscription is torn down on switch, but that teardown is
-          // async: an event for the previous channel can still arrive after
-          // activeChannelRef has moved on, and appending it would seed the
-          // new channel with the old one's messages.
+
           if (activeChannelRef.current !== activeChannelId) return;
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
@@ -1827,8 +1683,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "UPDATE", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const updated = payload.new as Message;
-          // Same teardown race as INSERT: never graft an old channel's
-          // update into the list of the channel now on screen.
+
           if (activeChannelRef.current !== activeChannelId) return;
           setMessages((prev) =>
             prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
@@ -1852,8 +1707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
         (payload) => {
           const msg = payload.new as DmMessage;
-          // A message for the thread we just left can still arrive while the
-          // realtime channel tears down — never append it to the new view.
+
           if (msg.thread_id !== activeDmRef.current) return;
           void (async () => {
             let author: Profile | undefined = profile ?? undefined;
@@ -1871,11 +1725,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
             if (msg.author_id !== userId && author) {
-              // Keep the read cursor level with what is on screen. It was only
-              // advanced when the thread was opened, so anything arriving while
-              // you sat reading counted as unread the moment unread was
-              // recomputed — the badge returning for the conversation you were
-              // looking at.
+
               void markDmReadNow(msg.thread_id);
               alertIncomingDm(
                 displayName(author),
@@ -1922,8 +1772,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
         (payload) => {
           const msg = payload.new as GroupMessage;
-          // A message for the group we just left can still arrive while the
-          // realtime channel tears down — never append it to the new view.
+
           if (msg.group_id !== activeGroupRef.current) return;
           void (async () => {
             if (msg.author_id == null) {
@@ -1970,7 +1819,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [activeGroupChatId, configured, userId, loadGroupMessages, profile]);
 
-  // Live group membership updates
   useEffect(() => {
     if (!userId || !configured || groupChats.length === 0) return;
     const supabase = getSupabaseClient();
@@ -1987,7 +1835,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { subs.forEach((s) => void s.unsubscribe()); };
   }, [userId, configured, groupChats.map((g) => g.id).join(","), loadGroupChats]);
 
-  // Active server's custom emoji for `:shortcode:` rendering in messages.
   useEffect(() => {
     if (!activeServerId || !configured) {
       setCustomEmojiMap({});
@@ -1996,7 +1843,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void loadCustomEmoji(activeServerId);
   }, [activeServerId, configured, loadCustomEmoji]);
 
-  // Live server member list
   useEffect(() => {
     if (!activeServerId || !configured) return;
     const supabase = getSupabaseClient();
@@ -2011,7 +1857,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [activeServerId, configured, loadServerDetails]);
 
-  // Group call activity badges in sidebar
   useEffect(() => {
     if (!userId || !configured || groupChats.length === 0) {
       setGroupCallCounts(new Map());
@@ -2041,7 +1886,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { subs.forEach((s) => void s.unsubscribe()); };
   }, [userId, configured, groupChats.map((g) => g.id).join(",")]);
 
-  // Live profile updates (avatar/banner) across tabs
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
@@ -2058,7 +1902,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured, patchProfileInState]);
 
-  // Live status for friends
   useEffect(() => {
     if (!userId || !configured || friends.length === 0) return;
     const supabase = getSupabaseClient();
@@ -2074,7 +1917,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void channel.unsubscribe(); };
   }, [userId, configured, friends.map((f) => f.id).sort().join(","), patchProfileInState]);
 
-  // Live status for server members
   useEffect(() => {
     if (!configured || !activeServerId || members.length === 0) return;
     const supabase = getSupabaseClient();
@@ -2092,7 +1934,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void channel.unsubscribe(); };
   }, [configured, activeServerId, userId, members.map((m) => m.user_id).sort().join(","), patchProfileInState]);
 
-  // Live status for group chat members
   useEffect(() => {
     if (!userId || !configured || groupChats.length === 0) return;
     const ids = new Set<string>();
@@ -2122,9 +1963,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchProfileInState,
   ]);
 
-  // Presence: remember the user's chosen status; restore from a stale "offline"
-  // column when the app is actually open. Closed apps are handled by the live
-  // presence channel (see below), not by best-effort pagehide writes.
   useEffect(() => {
     if (!profile) return;
     preferredStatusRef.current = profile.preferred_status ?? profile.status;
@@ -2139,7 +1977,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, profile?.id, configured, setLiveStatus]);
 
-  // Live reaction updates
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
@@ -2167,7 +2004,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured]);
 
-  // Track unread DMs globally
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
@@ -2198,9 +2034,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
             if (!dmThreadsRef.current.some((t) => t.id === msg.thread_id)) {
-              // A thread created on another device (e.g. the iOS app) never
-              // surfaces here through realtime, so pull it in — otherwise the
-              // conversation is invisible until a manual reload.
+
               void loadDmThreads(userId);
             }
             alertIncomingDm(
@@ -2216,19 +2050,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured, bumpDmThreadActivity, loadDmThreads]);
 
-  // Cross-device read sync: when the *other* participant marks a DM read
-  // (dm_thread_reads) or a group read (group_chat_members.last_read_at), re-pull
-  // our unread counts so badges clear without a reload. Ignore our own writes,
-  // which we handle locally already.
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
-    // Mine, not somebody else's. The point of this subscription is to notice
-    // *my own* read cursor moving on another device and clear the badge here;
-    // another person marking their own thread read says nothing about my
-    // unread counts. The test was inverted, so the cross-device clearing this
-    // exists for never ran, and reading a DM on the phone left it unread on
-    // the web until something else forced a refresh.
+
     const isMine = (userIdCol: string | undefined) =>
       userId !== undefined && userIdCol !== undefined && userIdCol === userId;
     const sub = supabase
@@ -2261,7 +2086,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured, seedUnread]);
 
-  // Server channel message notifications (when not viewing that channel)
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
@@ -2312,7 +2136,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured]);
 
-  // Server typing indicators (white dot on server icon)
   useEffect(() => {
     if (!userId || !configured || servers.length === 0) return;
     const supabase = getSupabaseClient();
@@ -2338,7 +2161,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, configured, servers.map((s) => s.id).join(",")]);
 
-  // Group message notifications (when not viewing that group)
   useEffect(() => {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
@@ -2350,12 +2172,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const msg = payload.new as GroupMessage;
           if (msg.author_id === userId) return;
-          // Group pushes/banners are mention-only (matches the server trigger);
-          // a mention here is alerted by the notifications-table subscription.
+
           if (msg.mentions?.includes(userId)) return;
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
-          // Track unread for the badge when we're not looking at this group.
+
           if (!(viewModeRef.current === "group" && activeGroupRef.current === msg.group_id)) {
             setGroupUnreadMap((prev) => {
               const next = new Map(prev);
@@ -2402,7 +2223,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { error: json.error ?? "Account creation is not allowed right now." };
       }
     } catch {
-      // If the pre-check is unavailable, fall through to Supabase signup (DB triggers still enforce blocks).
+
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -2413,8 +2234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         data: {
           username: normalized,
           display_name: displayNameVal,
-          // The account-creation trigger credits the referrer once the
-          // address is confirmed; an invalid or missing code is ignored.
+
           ...(referralCode ? { referral_code: referralCode } : {}),
         },
       },
@@ -2434,7 +2254,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { error: null, needsEmailConfirmation: false };
     }
 
-    // No session — email confirmation required (or anti-enumeration response)
     return { error: null, needsEmailConfirmation: true };
   }, [rememberSession]);
 
@@ -2470,9 +2289,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [userId]);
 
-  /** Restore a previously saved account as the active one — the same mechanism
-   *  the app uses at launch, so switching is exactly "opening the app as X".
-   *  Returns an error message on failure, or null once the account is active. */
   const switchAccount = useCallback(async (account: SavedSession) => {
     resetSupabaseClient();
     const supabase = getSupabaseClient();
@@ -2578,8 +2394,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const target = saved ?? channelRows.find((c) => c.type === "text") ?? channelRows[0];
     if (target) {
       setActiveChannelId(target.id);
-      // Clear the previous server's messages immediately so they don't flash
-      // while the new channel loads.
+
       setMessages([]);
       setMessagesLoading(true);
       setChannelHasMore(false);
@@ -2591,14 +2406,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const selectChannel = useCallback((channelId: string) => {
     markActivity();
-    // Synchronously, not only through the effect below: an in-flight load for
-    // the previous channel has to be able to see the switch immediately.
+
     activeChannelRef.current = channelId;
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
-    // Clear previous channel's messages immediately so they don't flash
-    // while the new channel's messages load.
+
     setMessages([]);
     setMessagesLoading(true);
     setChannelHasMore(false);
@@ -2614,7 +2427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       next.delete(channelId);
       return next;
     });
-    // Opening the channel is reading the mentions in it.
+
     setChannelMentionMap((prev) => {
       if (!prev.has(channelId)) return prev;
       const next = new Map(prev);
@@ -2632,17 +2445,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveGroupChatId(null);
     activeGroupRef.current = null;
     setActiveChannelId(null);
-    // Drop the previous conversation immediately so a slow fetch (or a late
-    // realtime event) for the thread we just left can't flash under the new
-    // header. loadDmMessages re-populates this list for the active thread.
+
     setDmMessages([]);
     setDmHasMore(false);
     setDmLoading(true);
     clearDmUnread(threadId);
-    // Persist the read cursor so other devices (and future restarts) stop
-    // counting this thread as unread. Awaited and checked: as a bare `void`
-    // this failed silently, and the badge simply returned on the next reseed
-    // with nothing to say why.
+
     void markDmReadNow(threadId);
     await loadDmMessages(threadId);
   }, [loadDmMessages, clearDmUnread, markDmReadNow, persistActiveServerChannel, markActivity]);
@@ -2664,11 +2472,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadGroupMessages(groupId);
   }, [loadGroupMessages, clearGroupUnread, persistActiveServerChannel, markActivity]);
 
-  /**
-   * Route a bell-drawer notification click to the right place (DM thread /
-   * group / server channel) instead of funneling everything into the server
-   * view. Returns false when the link is missing or unroutable.
-   */
   const routeToNotification = useCallback(async (link: string | null) => {
     const target = parseNotificationLink(link);
     if (!target) return false;
@@ -2681,7 +2484,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     }
     if (target.kind === "call") {
-      // Calls surface via the incoming-call UI, not via navigation.
+
       return false;
     }
     const channel = channelsRef.current.find((c) => c.id === target.channelId);
@@ -2752,11 +2555,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabaseClient();
     let { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
 
-    // `auth.uid()` was null inside the function, so PostgREST sent the request
-    // without a usable user token. Go through the shared refresh helper rather
-    // than calling refreshSession() directly: it holds the cross-tab lock and
-    // cooldown that stop concurrent refreshes from burning the single-use
-    // refresh token and getting the session revoked.
     if (error && /not authenticated|jwt/i.test(error.message)) {
       const result = await refreshSessionOnce();
       if ("session" in result && result.session) {
@@ -2770,9 +2568,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const threadId = data as string;
 
-    // Another friend was clicked while this RPC was in flight. The newest
-    // click wins, regardless of which request resolves first — otherwise a
-    // slow response could yank the user into a conversation they left.
     if (token !== dmOpenTokenRef.current) return;
 
     let friendProfile = friends.find((f) => f.id === friendId);
@@ -2984,10 +2779,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const leaveServer = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
-    // An owner leaving would strand the server: nobody could administer it and
-    // they could not rejoin. The database refuses this outright; saying so here
-    // turns a silent no-op into an answer, and names the two things that do
-    // work.
+
     const owned = servers.find((s) => s.id === serverId)?.owner_id === userId;
     if (owned) {
       return "You created this server, so you can't leave it. Transfer ownership to someone else, or delete the server.";
@@ -3079,12 +2871,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails]);
 
-  /**
-   * Replace a member's whole role stack (add/remove multiple roles at once).
-   *
-   * Goes through the set_member_roles RPC so the replacement is atomic and the
-   * legacy server_members.role_id is synced to the highest-priority role.
-   */
   const setMemberRoles = useCallback(async (targetUserId: string, roleIds: string[]) => {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().rpc("set_member_roles", {
@@ -3129,9 +2915,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails, selectChannel]);
 
-  /**
-   * Announcement channels. RLS is the real gate — this only flips the flag.
-   */
   const setChannelReadOnly = useCallback(async (channelId: string, readOnly: boolean) => {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient()
@@ -3277,8 +3060,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const getMemberColor = useCallback(
     (member: ServerMember) => {
-      // Like Discord, the name colour comes from the member's highest-priority
-      // role, regardless of how many roles they hold.
+
       const roleIds = member.role_ids && member.role_ids.length > 0
         ? member.role_ids
         : member.role_id
@@ -3375,9 +3157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         if (blobUrl) URL.revokeObjectURL(blobUrl);
-        // The server says exactly what was wrong — too large, and by how much.
-        // Replacing that with "try a different format" left people guessing at
-        // a problem that had already been diagnosed for them.
+
         return uploadErrorMessage(err);
       }
     }
@@ -3661,10 +3441,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    // `.select()` so the deleted rows come back: a delete the row-level policy
-    // refuses removes nothing and reports no error, so without this a refusal
-    // was indistinguishable from success — the message disappeared locally and
-    // silently returned on the next load.
+
     const { data, error } = await getSupabaseClient()
       .from("messages")
       .delete()
@@ -3691,7 +3468,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let attSize = attachment?.size ?? null;
     let attKey = attachment?.key ?? null;
 
-    // Show the local file immediately, then swap in the hosted URL once uploaded.
     if (pendingFile) {
       blobUrl = URL.createObjectURL(pendingFile);
       attUrl = blobUrl;
@@ -3787,7 +3563,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId) return "Not signed in";
     const normalized = normalizeMessageContent(content);
     const target = notes.find((n) => n.id === noteId);
-    // An attachment-only note may legitimately have empty text.
+
     if (!normalized && !target?.attachment_url) return "Note cannot be empty";
     const editedAt = new Date().toISOString();
     setNotes((prev) =>

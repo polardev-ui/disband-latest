@@ -3,13 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisbandUserMedia } from "@/lib/media";
 
-/**
- * Live input meter for the selected microphone.
- *
- * Picking a device from a dropdown tells you nothing about whether it actually
- * hears you — this lets someone confirm their mic works before joining a call
- * rather than discovering it mid-conversation.
- */
 export function MicTest({ deviceId }: { deviceId: string }) {
   const [running, setRunning] = useState(false);
   const [level, setLevel] = useState(0);
@@ -30,10 +23,8 @@ export function MicTest({ deviceId }: { deviceId: string }) {
     setLevel(0);
   }, []);
 
-  // Never leave the mic hot after the panel goes away.
   useEffect(() => stop, [stop]);
 
-  // Switching devices mid-test would otherwise keep metering the old mic.
   useEffect(() => {
     if (running) stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,7 +48,7 @@ export function MicTest({ deviceId }: { deviceId: string }) {
       const buffer = new Uint8Array(analyser.fftSize);
       const tick = () => {
         analyser.getByteTimeDomainData(buffer);
-        // RMS around the 128 midpoint, scaled so normal speech fills the bar.
+
         let sum = 0;
         for (const sample of buffer) {
           const centered = (sample - 128) / 128;

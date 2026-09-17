@@ -21,7 +21,7 @@ interface MessageAttachmentProps {
   authorColor?: string | null;
   isOwn?: boolean;
   createdAt?: string;
-  /** Who is looking — a poll marks their vote and lets an author close it. */
+
   currentUserId?: string | null;
 }
 
@@ -43,20 +43,16 @@ export function MessageAttachment({
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [imgError, setImgError] = useState(false);
-  // Gray skeleton until the media actually paints — without this a slow or
-  // blob-preview image flashes its alt text ("Attachment") in the gap.
+
   const [mediaLoaded, setMediaLoaded] = useState(false);
-  // Giphy does not serve an mp4 for every rendition, and a missing one answers
-  // 403 rather than anything catchable up front. Falling back to the GIF keeps
-  // the message from rendering as blank space.
+
   const [mp4Error, setMp4Error] = useState(false);
   const mp4 = type === "gif" && !mp4Error ? giphyMp4Url(url) : null;
   const displaySrc = mp4 ? giphyDisplayUrl(mp4) : null;
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
   const lightboxSrc = type === "gif" && mp4 ? giphyDisplayUrl(mp4) : url;
-  // Resolved once: a null src never reaches an element (an empty src makes
-  // the browser re-download the page and flashes alt text).
+
   const imgSrc = safeImageUrl(url);
   const gifSrc = safeImageUrl(displaySrc ?? mp4);
 
@@ -133,7 +129,6 @@ export function MessageAttachment({
     );
   }
 
-  // Unresolvable URL: render a named tile, never an element with an empty src.
   const brokenTile = (
     <div className="mt-1 flex max-w-md items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-3 py-2.5">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-accent text-xs font-bold text-text-muted">

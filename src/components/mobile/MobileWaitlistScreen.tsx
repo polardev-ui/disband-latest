@@ -6,22 +6,10 @@ import { useRouter } from "next/navigation";
 
 const APP_STORE_URL = "https://apps.apple.com/app/id6783881800";
 
-/**
- * What a phone browser sees.
- *
- * This used to be a waitlist: "Disband is desktop-only for now", collect an
- * email, promise to write when mobile exists. Mobile exists — Disband is on the
- * App Store — so the screen now sends people there, with an escape hatch for
- * anyone who would rather stay in the browser.
- */
 export function MobileWaitlistScreen() {
   const router = useRouter();
 
   function continueOnWeb() {
-    // Session-scoped "let me in": the choice is remembered for the current page
-    // load, so the gate lets you into /app without re-asking, but a hard
-    // refresh asks again. Client-side push (not location.replace) keeps the
-    // in-memory flag alive across the navigation.
     chooseContinueOnWeb();
     router.push("/app");
   }

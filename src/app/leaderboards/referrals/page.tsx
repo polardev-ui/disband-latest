@@ -4,13 +4,6 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ReferralLeaderboard, type LeaderRow } from "@/components/referrals/ReferralLeaderboard";
 
-/**
- * Client-rendered on purpose: the Tauri/iOS build is a static export with no
- * server runtime, so a force-dynamic server page breaks `pnpm build:tauri`.
- * The `referral_leaderboard` RPC is granted to anon/authenticated, so the
- * browser (and the native WebView, straight to Supabase) can load it live.
- * Prerender emits the loading state; hydration fills the board.
- */
 export default function ReferralLeaderboardPage() {
   const [rows, setRows] = useState<LeaderRow[] | null>(null);
 

@@ -1,13 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import { IconBounty, IconCrown, IconOG, IconStaff } from "@/components/icons";
 
-/**
- * Badges that keep their original artwork.
- *
- * The four that existed before the badge system was rewritten are the ones
- * people know by sight, so they render from the components they always used
- * rather than being redrawn as outlines to match the newer marks.
- */
 const BADGE_COMPONENTS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
   owner: IconCrown,
   staff: IconStaff,
@@ -15,14 +8,6 @@ const BADGE_COMPONENTS: Record<string, ComponentType<{ size?: number; className?
   bounty: IconBounty,
 };
 
-/**
- * The glyph for each badge key.
- *
- * Drawn here rather than pulled from the icon set because most of these marks
- * exist only as badges, and the catalogue itself lives in the database — the
- * key is the contract between the two, so a badge added server-side renders
- * with a neutral fallback rather than breaking the row.
- */
 const S = {
   fill: "none",
   strokeWidth: 1.75,
@@ -54,7 +39,6 @@ export const BADGE_GLYPHS: Record<string, ReactNode> = {
   voice: <><rect x="9" y="2.6" width="6" height="11" rx="3" /><path d="M5.4 11.4a6.6 6.6 0 0 0 13.2 0" /><path d="M12 18v3.4M9 21.4h6" /><path d="M2.6 9.4v4M21.4 9.4v4" /></>,
 };
 
-/** A badge the client does not know the glyph for still gets a mark. */
 const FALLBACK = <><circle cx="12" cy="12" r="8.6" /><path d="M12 8.4v4.4M12 16.2h.01" /></>;
 
 export function BadgeGlyph({ badgeKey, size = 13 }: { badgeKey: string; size?: number }) {

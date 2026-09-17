@@ -4,11 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-/**
- * The signed-in visitor's own slice of the referral program: their code, the
- * link to share, and how many verified referrals they have. Signed-out
- * visitors get a sign-in prompt instead — no data, no dead UI.
- */
 export function MyReferralCard() {
   const [code, setCode] = useState<string | null>(null);
   const [count, setCount] = useState<number | null>(null);
@@ -61,19 +56,9 @@ export function MyReferralCard() {
 
   return (
     <div className="rounded-xl border border-divider bg-bg-secondary p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Your referral code
-          </p>
-          {code ? (
-            <p className="mt-1 font-mono text-[18px] tracking-wide text-text-normal">{code}</p>
-          ) : (
-            <p className="mt-1 text-[14px] text-text-muted">Loading…</p>
-          )}
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
             Verified referrals
           </p>
           <p className="mt-1 text-[18px] font-semibold tabular-nums text-text-normal">

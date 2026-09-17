@@ -32,7 +32,7 @@ async function loadReleases(): Promise<{
       }
     }
   } catch {
-    // Static export (Tauri) has no API routes — fall back to GitHub directly.
+
   }
   return fetchLatestReleaseFromGitHub();
 }
@@ -49,7 +49,6 @@ function displayVersion(release: GitHubRelease | null, assets: ReleaseAsset[]): 
   return inferVersionFromAssets(assets) ? `v${inferVersionFromAssets(assets)}` : release.tag;
 }
 
-/** One button per platform variant (e.g. both macOS DMGs). */
 function uniqueDownloadOptions(assets: ReleaseAsset[]): ReleaseAsset[] {
   const seen = new Set<string>();
   const out: ReleaseAsset[] = [];
@@ -101,7 +100,7 @@ export function DownloadSection() {
           Store. Skip the install entirely and use Disband in your browser.
         </p>
 
-        {/* iOS App Store */}
+        {}
         <div className="mt-10 flex flex-wrap items-start gap-8 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">

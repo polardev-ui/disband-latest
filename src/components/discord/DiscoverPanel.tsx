@@ -25,13 +25,6 @@ export interface DiscoverableServer {
 
 export type DiscoverTab = "popular" | "new";
 
-/**
- * Shared fetch for the discovery surface.
- *
- * Lives here rather than in AppContext because the list is only needed while
- * the Discover view is open, and it should be re-fetched each time rather than
- * held in global state where it would go stale.
- */
 function useDiscoverableServers() {
   const [items, setItems] = useState<DiscoverableServer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,10 +55,6 @@ function useDiscoverableServers() {
   return { items, loading, error };
 }
 
-/* ------------------------------------------------------------------ */
-/* Sidebar                                                             */
-/* ------------------------------------------------------------------ */
-
 interface DiscoverSidebarProps {
   tab: DiscoverTab;
   onTabChange: (tab: DiscoverTab) => void;
@@ -76,7 +65,6 @@ interface DiscoverSidebarProps {
   onUserPanelContext?: (e: React.MouseEvent) => void;
 }
 
-/** Sits between the server rail and the results, with the user panel pinned below. */
 export function DiscoverSidebar({
   tab,
   onTabChange,
@@ -103,7 +91,7 @@ export function DiscoverSidebar({
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden bg-bg-secondary">
-      {/* Search sits in the top-left, in place of a title */}
+      {}
       <header className="flex h-12 shrink-0 items-center border-b border-black/20 px-2 shadow-sm">
         <div className="relative w-full">
           <IconSearch
@@ -167,11 +155,6 @@ export function DiscoverSidebar({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Main pane                                                           */
-/* ------------------------------------------------------------------ */
-
-/** Full-pane replacement for the old Discover modal. */
 export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string }) {
   const { servers, joinServerById } = useApp();
   const { items, loading, error } = useDiscoverableServers();

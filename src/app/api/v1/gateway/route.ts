@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot } from "@/lib/bot-auth";
 
-// GET /api/v1/gateway?timeout=20 — long-polling event stream for bots.
-//
-// The client library loops on this endpoint: it blocks (server-side) until an
-// event is available or the timeout elapses, then returns whatever arrived.
-// Delivery is at-least-once; events are marked delivered on fetch.
 export const maxDuration = 30;
 export const dynamic = "force-dynamic";
 

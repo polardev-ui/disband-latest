@@ -1,9 +1,4 @@
-/**
- * Resolve checkout ref and release tag for Release Desktop CI.
- *
- * Pre-checkout (--phase=pre): validate inputs, no repo required.
- * Post-checkout (--phase=post): derive vX.Y.Z from package.json for branch builds.
- */
+
 import { readFileSync, appendFileSync } from "node:fs";
 
 const phase = process.argv.find((arg) => arg.startsWith("--phase="))?.split("=")[1] ?? "pre";

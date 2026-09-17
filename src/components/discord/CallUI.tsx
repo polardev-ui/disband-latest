@@ -21,10 +21,6 @@ import { CallResizeHandle, useCallHeight } from "./CallResizer";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { CallGrid } from "./CallTile";
 
-/* ------------------------------------------------------------------ */
-/*  Controls                                                          */
-/* ------------------------------------------------------------------ */
-
 interface CallControlsProps {
   micMuted: boolean;
   deafened: boolean;
@@ -78,10 +74,6 @@ export function CallControls({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Participant circle                                                */
-/* ------------------------------------------------------------------ */
-
 function ParticipantTile({
   profile,
   stream,
@@ -95,7 +87,7 @@ function ParticipantTile({
   stream?: MediaStream | null;
   label: string;
   mirrored?: boolean;
-  /** A shared screen: fitted rather than cropped, and never mirrored. */
+
   isScreen?: boolean;
   ring?: boolean;
   size?: "md" | "lg";
@@ -154,10 +146,6 @@ function ParticipantTile({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Ringing overlay                                                   */
-/* ------------------------------------------------------------------ */
-
 export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }: {
   callerName: string; profile?: Profile; onAccept: () => void; onReject: () => void;
 }) {
@@ -207,10 +195,6 @@ export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Timer                                                             */
-/* ------------------------------------------------------------------ */
-
 function formatElapsed(ms: number): string {
   const total = Math.floor(ms / 1000);
   const h = Math.floor(total / 3600);
@@ -220,10 +204,6 @@ function formatElapsed(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Call panel (DM / 1-1)                                             */
-/* ------------------------------------------------------------------ */
-
 interface CallPanelProps {
   title: string;
   subtitle: string;
@@ -231,7 +211,7 @@ interface CallPanelProps {
   peer?: Profile;
   selfProfile?: Profile | null;
   localStream?: MediaStream | null;
-  /** Screen shares get tiles of their own so nobody is replaced by a desktop. */
+
   localScreen?: MediaStream | null;
   remoteScreen?: MediaStream | null;
   remoteStream?: MediaStream | null;
@@ -306,10 +286,7 @@ export function CallPanel({
         {elapsed > 0 ? formatElapsed(elapsed) : subtitle}
       </p>
 
-      {/* The tile area is what gives up room when the call is made shorter,
-          so the controls below are never pushed out of view. Tiles keep their
-          shape while doing it — the area re-lays them out rather than
-          flattening them. */}
+      {}
       <div className="flex min-h-0 w-full max-w-3xl flex-1 flex-col py-3">
         <CallGrid>
           {selfProfile && (
@@ -353,27 +330,6 @@ export function CallPanel({
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Deprecated wrapper                                                */
-/* ------------------------------------------------------------------ */
-
-export function DmCallPanel(props: Omit<CallPanelProps, "title" | "subtitle"> & { peer: Profile; phase: "outgoing" | "active" }) {
-  const { peer, phase, ...rest } = props;
-  return (
-    <CallPanel
-      {...rest}
-      phase={phase}
-      peer={peer}
-      title={displayName(peer)}
-      subtitle={phase === "outgoing" ? "Calling..." : "Connected"}
-    />
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Header phone button                                               */
-/* ------------------------------------------------------------------ */
 
 export function HeaderCallButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
   return (

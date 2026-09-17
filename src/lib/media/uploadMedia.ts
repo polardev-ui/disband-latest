@@ -1,9 +1,6 @@
-import type { AttachmentType } from "@/lib/messages";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-// Uploads go to the CDN, which is a different service from the media API that
-// still answers Giphy and link-preview requests.
 const CDN_URL = PUBLIC_ENV.cdnUrl;
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -42,12 +39,6 @@ export interface UploadMediaOptions {
   maxUploadBytes?: number;
 }
 
-export function inferAttachmentType(file: File): AttachmentType {
-  if (file.type.startsWith("video/")) return "video";
-  if (file.type.startsWith("image/")) return "image";
-  return "file";
-}
-
 export async function uploadMedia(
   file: File,
   options: UploadMediaOptions = {},
@@ -61,8 +52,6 @@ export async function uploadMedia(
     throw new MediaUploadError(`File is too large (max ${maxUploadBytes / (1024 * 1024)} MB).`);
   }
 
-  // The CDN only accepts uploads from a signed-in user, so the bucket cannot
-  // be used as free storage by anyone who finds the endpoint.
   const { data } = await getSupabaseClient().auth.getSession();
   const token = data.session?.access_token ?? null;
 
@@ -86,7 +75,7 @@ export async function uploadMedia(
       try {
         data = JSON.parse(xhr.responseText) as MediaApiResponse;
       } catch {
-        // Non-JSON response
+
       }
 
       if (xhr.status >= 200 && xhr.status < 300 && data?.url) {
@@ -118,8 +107,4 @@ export async function uploadMedia(
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
   });
-}
-
-export function inferMediaType(file: File): "image" | "video" {
-  return file.type.startsWith("video/") ? "video" : "image";
 }

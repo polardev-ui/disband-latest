@@ -2,10 +2,6 @@
 
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-/**
- * fetch() that attaches the current user's JWT as a Bearer token, so browser
- * calls to our API routes can use getUserFromRequest() for auth.
- */
 export async function authFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const { data } = await getSupabaseClient().auth.getSession();
   const token = data?.session?.access_token;

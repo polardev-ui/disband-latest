@@ -5,18 +5,6 @@ import { PUBLIC_ENV } from "@/lib/public-env";
 
 let browserClient: SupabaseClient | null = null;
 
-// Refresh deduplication: only one refresh in flight at a time, and at most
-// once every 10 seconds. Prevents a storm when multiple queries all hit
-// JWT-expired at once (e.g. on app boot), each triggering its own refresh.
-//
-// The cooldown and the serialization are shared across tabs:
-//  - The cooldown timestamp lives in localStorage, so N tabs together still
-//    refresh at most ~6×/minute instead of N× that. Exceeding Supabase's
-//    per-IP refresh rate limit (1800/hr) trips 429s that cascade into
-//    sign-outs.
-//  - Refresh calls are serialized through the Web Locks API so two tabs can
-//    never use the same (single-use, rotating) refresh token concurrently —
-//    a race that GoTrue's reuse detection punishes by revoking the session.
 type RefreshResult = { session: unknown } | { error: unknown };
 let refreshPromise: Promise<RefreshResult> | null = null;
 let lastRefreshTime = 0;
@@ -41,16 +29,10 @@ function writeSharedCooldown() {
   try {
     window.localStorage.setItem(REFRESH_COOLDOWN_KEY, String(lastRefreshTime));
   } catch {
-    // storage unavailable — the in-tab value still throttles this tab
+
   }
 }
 
-/**
- * Runs `task` while holding a cross-tab exclusive lock, so that concurrent
- * refresh attempts from multiple tabs are serialized. Uses the Web Locks API
- * where available (Safari 15.4+), falling back to a localStorage mutex with a
- * TTL so a crashed tab cannot wedge it.
- */
 async function acquireRefreshLock<T>(task: () => Promise<T>): Promise<T> {
   const locks =
     typeof navigator !== "undefined" && "locks" in navigator
@@ -60,7 +42,7 @@ async function acquireRefreshLock<T>(task: () => Promise<T>): Promise<T> {
     try {
       return await locks.request(REFRESH_LOCK_NAME, task);
     } catch {
-      // Lock manager error (rare) — fall through to the storage mutex.
+
     }
   }
   const stamp = Date.now();
@@ -87,7 +69,7 @@ async function acquireRefreshLock<T>(task: () => Promise<T>): Promise<T> {
         }
       }
     } catch {
-      // storage unavailable — fall through and run without the lock
+
       return task();
     }
     await new Promise((r) => setTimeout(r, 100));
@@ -103,7 +85,7 @@ export async function refreshSessionOnce(): Promise<RefreshResult> {
     return { error: new Error("refresh cooldown") };
   }
   refreshPromise = acquireRefreshLock(async () => {
-    // Another tab may have refreshed while we waited for the lock.
+
     if (Date.now() - readSharedCooldown() < REFRESH_COOLDOWN_MS) {
       return { error: new Error("refresh cooldown") };
     }

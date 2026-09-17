@@ -4,7 +4,6 @@ import { isNewerVersion, parseSemverTag, semverToString } from "@/lib/version";
 export type DownloadPlatform = "macos" | "windows" | "linux" | "unknown";
 export type MacArch = "aarch64" | "x64" | "unknown";
 
-/** owner/repo slug for GitHub Releases (not a URL). */
 export const GITHUB_REPO_SLUG = PUBLIC_ENV.githubRepo;
 
 export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO_SLUG}/releases`;
@@ -66,7 +65,6 @@ function macLabelFromArch(arch: MacArch | undefined): string {
   return "macOS";
 }
 
-/** Sync Apple Silicon detection — `navigator.platform` is often "MacIntel" on M-series Macs. */
 export function detectMacArchSync(): MacArch {
   if (typeof navigator === "undefined") return "unknown";
   if (!/Mac/i.test(navigator.platform) && !/Macintosh/i.test(navigator.userAgent)) {
@@ -82,13 +80,12 @@ export function detectMacArchSync(): MacArch {
       if (/Apple M\d/i.test(renderer)) return "aarch64";
     }
   } catch {
-    // ignore
+
   }
 
   return "unknown";
 }
 
-/** Preferred async detection via User-Agent Client Hints (Chrome/Edge). */
 export async function detectMacArchAsync(): Promise<MacArch> {
   if (typeof navigator === "undefined") return "unknown";
 
@@ -105,7 +102,7 @@ export async function detectMacArchAsync(): Promise<MacArch> {
       }
     }
   } catch {
-    // ignore
+
   }
 
   return detectMacArchSync();
@@ -201,7 +198,6 @@ function githubFetchHeaders(): HeadersInit {
   };
 }
 
-/** Pick the newest non-draft, non-prerelease release with a semver tag (ignores tags like `main`). */
 export function pickLatestSemverRelease(rows: GitHubReleaseJson[]): GitHubRelease | null {
   let best: { release: GitHubRelease; semver: string } | null = null;
 
@@ -219,7 +215,6 @@ export function pickLatestSemverRelease(rows: GitHubReleaseJson[]): GitHubReleas
   return best?.release ?? null;
 }
 
-/** Prefer semver releases; fall back to the newest release that has installable assets. */
 export function pickLatestDownloadRelease(rows: GitHubReleaseJson[]): GitHubRelease | null {
   const semver = pickLatestSemverRelease(rows);
   if (semver?.assets.length) return semver;
@@ -237,7 +232,6 @@ export function pickLatestDownloadRelease(rows: GitHubReleaseJson[]): GitHubRele
   return best?.release ?? null;
 }
 
-/** Derive a display version from installer filenames when the release tag is not semver. */
 export function inferVersionFromAssets(assets: ReleaseAsset[]): string | null {
   for (const asset of assets) {
     const match = asset.name.match(/[_-]v?(\d+\.\d+\.\d+)/i);
@@ -259,7 +253,6 @@ async function fetchGitHubReleaseRows(): Promise<GitHubReleaseJson[]> {
   return Array.isArray(json) ? json : [];
 }
 
-/** Client-side fetch for static export (Tauri) where `/api/releases` is unavailable. */
 export async function fetchLatestReleaseFromGitHub(): Promise<{
   release: GitHubRelease | null;
   assets: ReleaseAsset[];

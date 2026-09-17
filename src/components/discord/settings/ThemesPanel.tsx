@@ -7,12 +7,6 @@ import { isValidIconName, MAX_CUSTOM_CSS_BYTES } from "@/lib/theme/custom-css";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { IconClose } from "@/components/icons";
 
-/**
- * Themes: the Aero-only skins, custom CSS, and uploaded icons.
- *
- * Everything here is saved to the account rather than the device, so a skin
- * set up on a desktop is already on when the same person opens the web app.
- */
 export function ThemesPanel() {
   const skin = useSkin();
   const [draftCss, setDraftCss] = useState(skin.customCss);
@@ -23,8 +17,6 @@ export function ThemesPanel() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // The row arrives after the first render, so the editor has to pick it up —
-  // but not while it is being typed in, or every keystroke would be reverted.
   const touched = useRef(false);
   useEffect(() => {
     if (!touched.current) setDraftCss(skin.customCss);

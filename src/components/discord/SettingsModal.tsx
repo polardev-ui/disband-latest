@@ -84,7 +84,6 @@ const TABS = [
 
 const NAV_GROUPS = ["User Settings", "App Settings"] as const;
 
-/** Human-readable summary of what a plan actually grants right now. */
 function formatBytes(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
@@ -101,8 +100,7 @@ type SettingsTab = (typeof TABS)[number]["id"];
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
   const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut } = useApp();
-  // Badges come from the database now, so the list here is whatever has
-  // actually been awarded rather than four hardcoded flags.
+
   const myBadges = useBadges(profile?.id);
   const [gifting, setGifting] = useState(false);
   const [giftLink, setGiftLink] = useState<string | null>(null);
@@ -214,12 +212,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [profile]);
 
-  /**
-   * Ends every other session for this account.
-   *
-   * Previously the only recourse for a shared or lost device was changing the
-   * password and hoping tokens expired.
-   */
   const signOutEverywhere = useCallback(async () => {
     setSigningOutAll(true);
     setSettingsError(null);
@@ -280,7 +272,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }
 
-  // Drives the save bar, so it is obvious when edits are still uncommitted.
   const profileDirty = !!profile && (
     displayName !== (profile.display_name ?? "") ||
     username !== (profile.username ?? "") ||
@@ -454,8 +445,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         Preview
                       </p>
                       <ProfilePreview
-                        // Reflect unsaved edits so colour and name changes are
-                        // visible before committing them.
+
                         profile={{
                           ...profile,
                           display_name: displayName,
@@ -468,7 +458,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                         username={username}
                         bio={bio}
                         status={status}
-                        // Hover the preview's avatar/banner to change them.
+
                         onChangeAvatar={pickAvatar}
                         onChangeBanner={(file) => void handleBanner(file)}
                       />
@@ -892,7 +882,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {themes.map((t) => {
-                      // One paid plan, so a premium theme is locked only for free accounts.
+
                       const isLocked = !!t.plan && subPlan === "free";
                       return (
                         <button
@@ -1075,49 +1065,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
                   </p>
 
-                  {/* Gifting sits with the plans rather than in the composer:
-                      you buy it here and send the link wherever you like. */}
-                  <div className="flex items-center justify-between rounded-lg border border-divider bg-bg-secondary p-4">
-                    <div>
-                      <p className="text-sm font-semibold text-text-normal">Gift a subscription</p>
-                      <p className="text-xs text-text-muted">
-                        One to twelve months, claimable by whoever you send it to.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setGifting(true)}
-                      className="shrink-0 rounded-lg bg-brand px-3 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-                    >
-                      Buy a gift
-                    </button>
-                  </div>
-
-                  {giftLink && (
-                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
-                      <p className="mb-2 text-sm font-semibold text-text-normal">
-                        Your gift is ready — send this link
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          readOnly
-                          value={giftLink}
-                          onFocus={(e) => e.currentTarget.select()}
-                          className="min-w-0 flex-1 rounded-md border border-divider bg-bg-tertiary px-2 py-1.5 text-[13px] text-text-normal"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void navigator.clipboard?.writeText(giftLink)}
-                          className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <p className="mt-2 text-xs text-text-muted">
-                        Paste it into a DM or a channel and it becomes a claimable card.
-                      </p>
-                    </div>
-                  )}
                   <div className="rounded-lg border border-divider bg-bg-secondary p-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">

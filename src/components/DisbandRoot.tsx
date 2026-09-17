@@ -33,14 +33,12 @@ function InviteBootstrap() {
   return null;
 }
 
-/** The login form over the running app, for adding a second account. */
 function AddAccountOverlay() {
   const { session, addingAccount, cancelAddAccount } = useApp();
   if (!session || !addingAccount) return null;
   return <AuthScreen overlay onClose={cancelAddAccount} />;
 }
 
-/** Binds the skin to whoever is signed in. */
 function SkinBoundary({ children }: { children: React.ReactNode }) {
   const { session } = useApp();
   return (
@@ -59,17 +57,12 @@ function AppShell() {
   if (mfaRequired) return <MfaChallengeScreen />;
   if (platformBan?.banned) return <PlatformBanScreen />;
 
-  // `ready` only means the session is known. Hold the splash until the first
-  // data load settles too, otherwise the shell paints with a null profile and
-  // empty friend/DM/server lists for a few seconds — which reads as the account
-  // being wrong rather than merely unloaded.
   if (!hydrated) return <LoadingScreen />;
 
   return (
     <>
       <InviteBootstrap />
-      {/* Above the app, so being in a voice channel survives navigating to
-          another one — the connection is no longer tied to the view. */}
+      {}
       <VoiceSessionProvider>
         <DiscordApp />
       </VoiceSessionProvider>
@@ -81,18 +74,13 @@ export function DisbandRoot() {
   return (
     <ThemeProvider>
       <AppProvider>
-        {/* Inside AppProvider because a skin belongs to an account, and above
-            the shell because it has to be applied whether or not settings is
-            open. */}
+        {}
         <SkinBoundary>
         <ContextMenuProvider>
           <DesktopUpdateOverlay />
-          {/* A sheet over the app, not a redirect: the page underneath keeps
-              working, so a password reset or an email confirmation is never
-              interrupted by an App Store pitch. */}
+          {}
           <MobileAppPromo />
-          {/* Above the shell so it reaches the login screen too, not only
-              people who are already signed in. */}
+          {}
           <div className="flex h-screen flex-col">
             <MaintenanceNotice />
             <div className="min-h-0 flex-1">

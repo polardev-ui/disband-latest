@@ -12,8 +12,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    // Legacy names are still accepted from older clients and resolve to the
-    // one plan that exists, so a stale tab does not fail at checkout.
     const { plan: requested } = (await req.json()) as { plan: string };
     const plan = normalizePlan(requested);
     if (plan !== "aero") {
@@ -25,8 +23,6 @@ export async function POST(req: Request) {
     const origin = checkoutOrigin(req);
     const priceId = getPriceId(plan);
 
-    // Misconfigured price ids used to surface as an opaque 500 from Stripe.
-    // Fail here with something actionable instead.
     if (!priceId || !priceId.startsWith("price_")) {
       console.error(
         `Invalid price id for plan "${plan}": expected a "price_..." value from ` +
@@ -42,8 +38,7 @@ export async function POST(req: Request) {
       ui_mode: "elements",
       customer_email: user.email,
       mode: "subscription",
-      // Lets the buyer redeem a promotion code from inside our own checkout UI
-      // via checkout.applyPromotionCode().
+
       allow_promotion_codes: true,
       line_items: [{ price: priceId, quantity: 1 }],
       return_url: `${origin}/app`,
@@ -58,8 +53,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("Stripe checkout error:", err);
     const message = err instanceof Error ? err.message : "";
-    // Missing server config is our fault, not a card problem — say so plainly
-    // rather than leaving the buyer staring at a generic failure.
+
     if (/STRIPE_SECRET_KEY/.test(message)) {
       return NextResponse.json(
         { error: "Billing is not configured on this server yet." },

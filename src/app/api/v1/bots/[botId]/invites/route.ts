@@ -3,8 +3,6 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, isBotScope } from "@/lib/bot-auth";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
-// POST /api/v1/bots/[botId]/invites — a bot generates an invite for itself.
-// The bot's owner acts on its behalf (the bot is not a logged-in session).
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ botId: string }> },

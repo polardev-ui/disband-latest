@@ -43,15 +43,6 @@ interface UserProfileModalProps {
   onSetRoles?: (roleIds: string[]) => void;
 }
 
-/**
- * Profile banner with a graceful fallback.
- *
- * Previously a broken image URL rendered a blank strip (a background-image div
- * fails silently), which is exactly the "banner missing for some people" bug.
- * The accent gradient always sits underneath, and the image is an <img> with an
- * onError fallback, so any load failure degrades to the user's accent colour
- * instead of nothing.
- */
 function ProfileBanner({ profile }: { profile: Profile }) {
   const [failed, setFailed] = useState(false);
   const url = safeImageUrl(profile.banner_url);
@@ -118,8 +109,6 @@ export function UserProfileModal({
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      {/* No overflow-hidden on the card: the role picker's dropdown must be
-          able to escape it. The banner handles its own rounded top corners. */}
       <div className="relative w-full max-w-sm rounded-xl shadow-2xl" style={panelStyle}>
         <ProfileBanner profile={profile} />
 
@@ -158,15 +147,10 @@ export function UserProfileModal({
                 @{profile.username}
               </p>
             )}
-            {profile.pronouns?.trim() && (
-              <span className="rounded bg-brand/20 px-1.5 py-px text-[11px] font-semibold text-brand">
-                {profile.pronouns.trim()}
-              </span>
-            )}
           </div>
 
           {activeStatusNote(profile) && (
-            <div className="mt-2 flex items-start gap-2 rounded-lg bg-black/20 px-2.5 py-2">
+            <div className="mt-2 flex items-start gap-2 rounded-md bg-black/20 px-2.5 py-2">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 opacity-70">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>

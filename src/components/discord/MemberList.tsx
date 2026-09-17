@@ -27,17 +27,9 @@ const STATUS_BG: Record<UserStatus, string> = {
   offline: "bg-status-offline",
 };
 
-/** Starting guesses, replaced by real measurements after the first paint. */
 const ROW_H = 44;
 const HEADER_H = 36;
 
-/**
- * How much is kept mounted beyond what fits on screen.
- *
- * Big enough that a flick of the wheel lands on rows that already exist, so
- * scrolling never shows a blank band; small enough that a server with
- * hundreds of members is only ever a few dozen live components.
- */
 const OVERSCAN_PX = 600;
 
 type Item =
@@ -49,7 +41,6 @@ function memberRoleIds(member: ServerMember): string[] {
   return member.role_id ? [member.role_id] : [];
 }
 
-/** Like Discord, the highest-priority role wins for grouping and colouring. */
 function topRole(member: ServerMember, roles: ServerRole[]): ServerRole | null {
   let best: ServerRole | null = null;
   for (const id of memberRoleIds(member)) {
@@ -68,16 +59,6 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
-/**
- * The member sidebar, rendering only the rows near the viewport.
- *
- * Every row carries an avatar, presence and a badge lookup, so a server with
- * several hundred members was several hundred live components whether or not
- * any of them were on screen — which is what made scrolling this column
- * stutter. Rows outside the viewport are replaced by two spacers that hold
- * the scrollbar exactly where it would otherwise be, so the list scrolls,
- * measures and jumps identically to a fully rendered one.
- */
 export function MemberList({ members, roles, onMemberClick, onMemberContext }: MemberListProps) {
   const { presenceMap } = useApp();
 
@@ -86,8 +67,6 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
     [presenceMap],
   );
 
-  // One flat list of headers and rows: a virtualised list needs a single
-  // index space, and the grouping is only a matter of which items are headers.
   const items = useMemo<Item[]>(() => {
     const online: Member[] = [];
     const offline: Member[] = [];
@@ -103,9 +82,6 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
       else grouped.set(key, [m]);
     }
 
-    // Headers follow the role hierarchy, not arrival order: Owner, Admin,
-    // then custom roles highest-priority-first, and everyone else last. A Map
-    // in joined_at order would let @everyone-grade members jump the queue.
     const groupPriority = (label: string): number => {
       if (label === "Owner") return Number.MAX_SAFE_INTEGER;
       if (label === "Admin") return Number.MAX_SAFE_INTEGER - 1;
@@ -134,8 +110,6 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   const [rowH, setRowH] = useState(ROW_H);
   const [headerH, setHeaderH] = useState(HEADER_H);
 
-  // Where every item starts, and how tall the whole list is. Two heights are
-  // in play, so this is a running total rather than index × height.
   const { offsets, total } = useMemo(() => {
     const offs = new Array<number>(items.length + 1);
     let y = 0;
@@ -155,9 +129,7 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    // A column that has not been given its height yet measures 0, and a
-    // window of zero renders only the overscan — enough to scroll, but a
-    // needlessly thin band. Fall back to the screen until it settles.
+
     const measure = () => setViewport(el.clientHeight || window.innerHeight || 700);
     measure();
     const ro = new ResizeObserver(measure);
@@ -165,9 +137,6 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
     return () => ro.disconnect();
   }, []);
 
-  // Real heights, taken from what the browser actually laid out. Guessing
-  // wrong only shifts the window slightly, but it makes the scrollbar the
-  // wrong length, which is visible.
   useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -196,11 +165,7 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   const padBottom = Math.max(0, total - (offsets[last] ?? total));
 
   return (
-    // No breakpoint of its own. DiscordApp already decides whether to mount
-    // this, using `useIsMobile` at 768px — and a second, stricter CSS gate at
-    // lg (1024px) meant that between 768 and 1024 the list was mounted and
-    // then hidden by the stylesheet, so the column simply vanished on a
-    // narrower desktop window.
+
     <aside
       ref={scrollerRef}
       onScroll={onScroll}
@@ -234,7 +199,6 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   );
 }
 
-/** Index of the last item starting at or before `y`. */
 function binarySearch(offsets: number[], y: number, count: number): number {
   let lo = 0;
   let hi = count - 1;

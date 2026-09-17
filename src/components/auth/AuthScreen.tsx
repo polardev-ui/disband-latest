@@ -12,7 +12,6 @@ import { Avatar } from "@/components/ui/Avatar";
 
 type AuthMode = "login" | "signup" | "reset";
 
-/** Shared input chrome — a quiet field that lights up on focus. */
 const fieldClass =
   "w-full rounded-md border border-divider bg-bg-accent px-3.5 py-2.5 text-[15px] text-text-normal " +
   "outline-none transition-colors placeholder:text-text-muted " +
@@ -39,8 +38,7 @@ function Field({
 }
 
 interface AuthScreenProps {
-  /** Rendered over the running app to add a second account, rather than as the
-   *  whole page. The account you are already signed into stays live behind it. */
+
   overlay?: boolean;
   onClose?: () => void;
 }
@@ -52,13 +50,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
-  /**
-   * The account exists but its address was never confirmed.
-   *
-   * `signIn` returns copy rather than a code, so this compares against the
-   * exact string the mapper produces instead of a phrase that happens to
-   * appear in it today.
-   */
+
   const needsConfirmation = error === EMAIL_NOT_CONFIRMED;
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,8 +62,6 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const submittingRef = useRef(false);
   const webOnly = !isTauri();
 
-  // A referral link (/referral/[code]) lands on /login?ref=code and starts
-  // the visitor in signup mode with the code already credited to the form.
   useEffect(() => {
     if (overlay) return;
     const ref = new URLSearchParams(window.location.search).get("ref");
@@ -132,7 +122,6 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
       }
     }
 
-    // Turnstile tokens are single-use — remount the widget after every attempt.
     setTurnstileToken(null);
     setTurnstileFailed(false);
     setTurnstileKey((k) => k + 1);
@@ -209,16 +198,13 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
             </svg>
           </button>
         )}
-        {/* Mark sits outside the card so the card reads as a single input surface. */}
+
         <div className="mb-8 flex flex-col items-center text-center">
           <Logo adaptive size={44} className="h-11 w-11" priority />
           <h1 className="mt-5 text-[26px] font-semibold tracking-[-0.02em] text-text-normal">{title}</h1>
           <p className="mt-2 max-w-[19rem] text-[15px] leading-relaxed text-text-muted">{subtitle}</p>
         </div>
 
-        {/* Not while adding an account: the accounts already saved are reached
-            from the switcher, and repeating them here would offer "switch" in
-            the middle of a flow that exists to add a new one. */}
         {!overlay && mode === "login" && savedSessions.length > 0 && !success && (
           <div className="mb-4">
             <p className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">
@@ -398,8 +384,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 </p>
               )}
 
-              {/* Being told to check an inbox is useless once the link in it
-                  has expired, which is exactly when this error appears. */}
+              {}
               {needsConfirmation && <ResendConfirmation defaultEmail={email} lockEmail />}
 
               <button

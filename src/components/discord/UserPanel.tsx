@@ -31,7 +31,6 @@ interface UserPanelProps {
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-/** Discord-style pinned user bar at the bottom of the channel/friends sidebar. */
 export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: UserPanelProps) {
   const { profile, user, micMuted, deafened, setMicMuted, setDeafened, presenceMap } = useApp();
   const { plan } = useSubscription(profile?.id);
@@ -43,9 +42,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
     : user?.email?.split("@")[0] ?? "You";
   const status: UserStatus = profile ? presenceMap.get(profile.id) ?? profile.status : "online";
   const statusLabelText = statusLabel(status);
-  // Discord-style: your custom status renders as a clickable bubble next to
-  // your profile. Clicking anywhere on this row (bubble included) opens the
-  // popup, where the Custom Status editor lives — settable at any time.
+
   const liveNote = activeStatusNote(profile);
 
   const handleAvatarClick = useCallback(() => {

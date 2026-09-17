@@ -62,7 +62,6 @@ export function shouldShowNotification(
   }
 }
 
-/** True when the tab/window is not actively focused (background tab, minimized, another app on top). */
 export function isAppInBackground(): boolean {
   if (typeof document === "undefined") return false;
   return document.visibilityState === "hidden" || !document.hasFocus();
@@ -81,7 +80,6 @@ export function isRecipientDoNotDisturb(
   return profile.status === "dnd" || profile.preferred_status === "dnd";
 }
 
-/** Discord-style mention ping via Web Audio API. */
 export function playMentionPing() {
   if (!getUserSettings().soundEnabled) return;
   try {
@@ -99,11 +97,10 @@ export function playMentionPing() {
     osc.stop(ctx.currentTime + 0.35);
     setTimeout(() => void ctx.close(), 500);
   } catch {
-    // Audio not available
+
   }
 }
 
-/** Two-tone bing for incoming DMs. */
 export function playDmPing() {
   if (!getUserSettings().soundEnabled) return;
   try {
@@ -125,7 +122,7 @@ export function playDmPing() {
     playTone(1174.66, t + 0.08, 0.22);
     setTimeout(() => void ctx.close(), 500);
   } catch {
-    // Audio not available
+
   }
 }
 
@@ -143,10 +140,6 @@ function notificationTag(target?: NotificationTarget, prefix = "disband"): strin
   }
 }
 
-/**
- * DM alert when you're not viewing that conversation.
- * Shows macOS/browser notifications even when Disband is focused on another view.
- */
 export function alertIncomingDm(
   title: string,
   body: string | undefined,
@@ -160,7 +153,6 @@ export function alertIncomingDm(
   showSystemNotification(title, body, undefined, notificationTag(target));
 }
 
-/** Mention / @everyone alert with ping sound and OS notification. */
 export function alertMention(
   title: string,
   body: string | undefined,
@@ -223,7 +215,6 @@ async function sendNativeNotification(title: string, body?: string): Promise<boo
   }
 }
 
-/** Only call from a click/tap handler — browsers reject permission prompts otherwise. */
 export async function requestNotificationPermissionFromGesture(): Promise<boolean> {
   if (isTauri()) {
     return ensureNativeNotificationPermission();
@@ -239,7 +230,6 @@ export async function requestNotificationPermissionFromGesture(): Promise<boolea
   }
 }
 
-/** Request notification permission as soon as the user is signed in (desktop + web). */
 export async function primeNotificationPermission(): Promise<void> {
   if (typeof window === "undefined") return;
   if (Notification.permission === "denied") return;

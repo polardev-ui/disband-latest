@@ -3,25 +3,15 @@
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
 import { IconMusic } from "@/components/icons";
 
-/**
- * What a message looks like while its file is still going up.
- *
- * The message used to appear the moment it was sent, with the attachment
- * rendered as if it had arrived — a generic "Attachment" for anything that was
- * not an image, and no sign that anything was still happening. On a slow
- * connection a 40 MB video looked identical to a finished one until it
- * suddenly changed. This says what the file is, how big it is and how far
- * along it is, which is the whole of what someone waiting wants to know.
- */
 export function AttachmentUploadCard({
   name, size, type, progress, localUrl,
 }: {
   name: string;
   size?: number | null;
   type?: AttachmentType | null;
-  /** 0-100. */
+
   progress: number;
-  /** A local preview, so an image is recognisable before it has uploaded. */
+
   localUrl?: string | null;
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(progress)));

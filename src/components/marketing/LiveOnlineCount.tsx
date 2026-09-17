@@ -5,19 +5,6 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { PRESENCE_CHANNEL, flattenPresenceState } from "@/lib/presence";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
-/**
- * Real "how many people are online right now" for the marketing hero.
- *
- * Reads the same `presence:global` Realtime channel the app itself publishes
- * to, so the count is genuine — every signed-in client tracks its own
- * `{ userId, status }` there, and Realtime drops it the moment the socket
- * dies. Anonymous visitors viewing this page only observe the channel; they
- * never track, so they don't inflate the number.
- *
- * To avoid holding a Realtime socket open for every marketing visitor (free
- * tier has a connection cap), each poll keeps the socket for at most the
- * first sync (or ~4s if the channel is slow) and then re-subscribes every 60s.
- */
 const POLL_MS = 60_000;
 const CONNECT_TIMEOUT_MS = 4_000;
 
@@ -39,7 +26,7 @@ export function LiveOnlineCount() {
             .on("presence", { event: "sync" }, () => {
               if (disposedRef.current || !channel) return;
               const state = channel.presenceState() as Parameters<typeof flattenPresenceState>[0];
-              // Distinct users: a user with several open devices tracks once.
+
               setCount(new Set(flattenPresenceState(state).keys()).size);
             })
             .subscribe((status) => {
@@ -50,7 +37,7 @@ export function LiveOnlineCount() {
             });
         });
       } catch {
-        // Supabase not configured or Realtime unavailable: leave count null.
+
       } finally {
         if (!disposedRef.current) {
           timer = setTimeout(() => {

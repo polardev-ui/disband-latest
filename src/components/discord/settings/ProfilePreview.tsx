@@ -21,13 +21,6 @@ const STATUS_LABEL: Record<UserStatus, string> = {
   offline: "Invisible",
 };
 
-/**
- * Live preview of the profile card as others will see it.
- *
- * Driven by the *unsaved* form state rather than the stored profile, so colour
- * and name edits are visible before committing — previously you had to save and
- * then go open your own profile to find out what you'd picked.
- */
 export function ProfilePreview({
   profile,
   displayName,
@@ -42,9 +35,9 @@ export function ProfilePreview({
   username: string;
   bio: string;
   status: UserStatus;
-  /** When provided, hovering the avatar shows a "Change" overlay that opens a file picker. */
+
   onChangeAvatar?: (file: File) => void;
-  /** When provided, hovering the banner shows a "Change banner" overlay that opens a file picker. */
+
   onChangeBanner?: (file: File) => void;
 }) {
   const name = displayName.trim() || username.trim() || "Your name";
@@ -138,7 +131,6 @@ export function ProfilePreview({
   );
 }
 
-/** Curated starting points so users aren't forced to fight a colour picker. */
 export const ACCENT_PRESETS: { name: string; from: string; to: string }[] = [
   { name: "Slate", from: "#7a7d85", to: "#7a7d85" },
   { name: "Blurple", from: "#5865f2", to: "#5865f2" },

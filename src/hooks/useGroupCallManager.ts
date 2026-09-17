@@ -22,7 +22,7 @@ import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 interface SignalPayload {
   type: "ring" | "offer" | "answer" | "ice" | "leave" | "screen";
-  /** For "screen": whether the sender just started or stopped sharing. */
+
   sharing?: boolean;
   from: string;
   to?: string;
@@ -35,8 +35,6 @@ export interface GroupCallParticipant {
   profile?: Profile;
   joined_at?: string;
 }
-
-// Shared with 1:1 calls so both paths pick up TURN when it is configured.
 
 export type GroupCallPhase = "idle" | "ringing" | "active";
 
@@ -57,33 +55,20 @@ export function useGroupCallManager(
   const [ringingIds, setRingingIds] = useState<Set<string>>(new Set());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
-  // A share is its own tile, so it is its own map — merging it into the
-  // participant's stream is what made it replace their face.
+
   const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
-  /**
-   * Who has said they are sharing.
-   *
-   * A lane is negotiated up front, so its track exists from the start and
-   * whether it reports itself muted depends on packet timing rather than on
-   * anyone's intent. The sharer knows; the sharer says so.
-   */
+
   const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
-  /**
-   * Local tracks waiting for lanes to exist.
-   *
-   * The answering side has no transceivers until the offer arrives, so its
-   * mic and camera cannot be placed at peer-creation time — they are held
-   * here and applied the moment the lanes appear.
-   */
+
   const pendingLocalRef = useRef<Map<string, { mic: MediaStreamTrack | null; cam: MediaStreamTrack | null }>>(new Map());
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
-  // Time in a call is what the Voice Veteran badge counts.
+
   useVoiceMinutes(phase === "active");
 
   const localRef = useRef<MediaStream | null>(null);
@@ -132,7 +117,6 @@ export function useGroupCallManager(
     void signalRef.current?.send({ type: "broadcast", event: "group-call", payload });
   }, []);
 
-  // Diff presence so join/leave blips only fire for *other* people.
   const prevPresenceRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!joined) {
@@ -198,8 +182,6 @@ export function useGroupCallManager(
       const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
 
-      // The offerer lays out the lanes; the answerer inherits the same three
-      // from the offer, so both sides agree on what each index means.
       if (initiator) ensureLanes(pc);
 
       const local = localRef.current;
@@ -211,7 +193,7 @@ export function useGroupCallManager(
           await setLaneTrack(pc, LANE_CAMERA, cam);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
         } else {
-          // Lanes do not exist yet on this side; they arrive with the offer.
+
           pendingLocalRef.current.set(remoteId, { mic, cam });
         }
       }
@@ -221,8 +203,7 @@ export function useGroupCallManager(
         const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
           if (lane === LANE_SCREEN) {
-            // Keep the lane's track; the "screen" signal decides whether it
-            // is shown.
+
             setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
             return;
           }
@@ -279,7 +260,7 @@ export function useGroupCallManager(
           next.delete(payload.from);
           return next;
         });
-        // 2-person call: when the only peer leaves, end for us too
+
         if (peersRef.current.size === 0 && joinedRef.current) {
           await cleanup();
         }
@@ -296,7 +277,7 @@ export function useGroupCallManager(
       if (payload.type === "offer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
         openLanesForSending(pc);
-        // Lanes exist now; put anything that was waiting into them.
+
         const pending = pendingLocalRef.current.get(payload.from);
         if (pending) {
           pendingLocalRef.current.delete(payload.from);
@@ -513,7 +494,7 @@ export function useGroupCallManager(
       }
       setLocalStream(new MediaStream(stream.getTracks()));
     } catch {
-      // Keep the existing camera track if re-acquisition fails.
+
     }
   }, []);
 
@@ -525,12 +506,6 @@ export function useGroupCallManager(
     }
   }, [plan, reapplyCameraConstraints]);
 
-  /**
-   * Sharing no longer costs you your camera.
-   *
-   * The share goes in its own lane, so the other side receives it as a
-   * separate track and can show it beside you rather than instead of you.
-   */
   const toggleScreenShare = useCallback(async () => {
     const next = !screenShareRef.current;
 
@@ -555,8 +530,7 @@ export function useGroupCallManager(
         buildScreenConstraints((planRef.current ?? "free") as SubscriptionPlan),
       );
       const track = display.getVideoTracks()[0];
-      // Stopping from the browser's own "stop sharing" bar has to unwind the
-      // same way the button does.
+
       track.addEventListener("ended", () => { void toggleScreenShare(); });
       screenTrackRef.current = track;
       for (const pc of peersRef.current.values()) {
@@ -578,7 +552,6 @@ export function useGroupCallManager(
     if (phaseRef.current === "ringing") setPhase("idle");
   }, []);
 
-  // Listen for incoming rings
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -610,7 +583,6 @@ export function useGroupCallManager(
     };
   }, [userId]);
 
-  // Realtime presence for active group
   useEffect(() => {
     if (!groupId) return;
     void loadPresence(groupId);
@@ -626,7 +598,6 @@ export function useGroupCallManager(
     return () => { void sub.unsubscribe(); };
   }, [groupId, loadPresence]);
 
-  // Connect to new joiners while we're in call
   useEffect(() => {
     if (!joined || !userId) return;
     presence.forEach((p) => {
@@ -654,7 +625,7 @@ export function useGroupCallManager(
     ringingIds,
     localStream,
     remoteStreams,
-    // Only shares the sender has announced.
+
     remoteScreens: new Map([...remoteScreens].filter(([id]) => sharingIds.has(id))),
     localScreen,
     cameraEnabled,

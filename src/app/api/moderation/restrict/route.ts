@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 
-// GET: list all restrictions (staff/owner only)
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
@@ -26,7 +25,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: apply or remove a restriction
 export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
@@ -60,7 +58,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // apply
     const { error } = await service.rpc("apply_restriction", {
       p_user_id: body.userId,
       p_restriction: body.restriction,

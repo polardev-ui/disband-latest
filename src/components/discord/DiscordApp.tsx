@@ -79,11 +79,9 @@ export function DiscordApp() {
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<ChatMessageData | null>(null);
-  // Discord-like right-rail profile panel inside the DM column. Defaults open
-  // on desktop widths (the rail itself hides below lg); toggle lives in the DM
-  // header next to pinned-messages.
+
   const [showDmProfile, setShowDmProfile] = useState(true);
-  // Server whose Catalyst modal is open (from the ChannelList boost bar).
+
   const [catalystServerId, setCatalystServerId] = useState<string | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
 
@@ -209,11 +207,6 @@ export function DiscordApp() {
 
   const activeChannel = app.channels.find((c) => c.id === app.activeChannelId);
 
-  // Opening a server should land you somewhere. `selectServer` already picks
-  // the last channel you used, but it is not the only way into a server — a
-  // restored session or an invite lands here with a server and no channel, and
-  // the app then showed an empty pane. This is the backstop for every route:
-  // the channel you were last in, else the first text channel.
   useEffect(() => {
     if (app.viewMode !== "server") return;
     const serverId = app.activeServerId;
@@ -377,8 +370,7 @@ export function DiscordApp() {
 
   const boostServer = useCallback(
     (serverId: string) => {
-      // Legacy server_boosts toggle, superseded by Catalysts: open the
-      // Catalyst modal (grant use is Aero-gated inside; buying is open).
+
       setCatalystServerId(serverId);
     },
     [],
@@ -645,12 +637,7 @@ export function DiscordApp() {
               },
             ]
           : []),
-        // Moderators and the owner can remove anyone's message in a server
-        // channel. The database has always allowed this — the delete policy
-        // accepts the author or `manage_messages`, and an owner satisfies every
-        // permission — but the menu only ever offered it on your own messages,
-        // so there was no way to act on someone else's. DMs and group chats
-        // stay author-only: nobody moderates a private conversation.
+
         ...(isOwn || (context === "channel" && canModerateMessages)
           ? [
               {
@@ -923,8 +910,6 @@ export function DiscordApp() {
   const dmMessages: ChatMessageData[] = app.dmMessages.map(mapChatMessage);
   const groupMessages: ChatMessageData[] = app.groupMessages.map(mapChatMessage);
 
-  // Notes have no author column — they are all yours — so the current profile is
-  // attached here to satisfy the shared message renderer.
   const noteMessages: ChatMessageData[] = app.profile
     ? app.notes.map((n) =>
         mapChatMessage({
@@ -979,7 +964,6 @@ export function DiscordApp() {
     return map;
   }, [activeGroup]);
 
-  // Publish the current call to the persistent indicator above the user panel.
   const lastCallRef = useRef<{ kind: string; startedAt: number } | null>(null);
   useEffect(() => {
     const activeKind = dmCallActive ? "dm" : groupCall.joined ? "group" : app.voiceJoinedChannelId ? "voice" : null;
@@ -1031,9 +1015,7 @@ export function DiscordApp() {
   ]);
 
   const renderCallPanel = () => {
-    // Only render the call UI inside the DM it actually belongs to. Switching
-    // to another DM, GC or server must not drag the call panel along — the
-    // indicator pill above the user panel handles returning to the call.
+
     if (dmCallActive && callBannerPeer && dmFriend?.id === callBannerPeer.id) {
       return (
         <CallPanel
@@ -1356,126 +1338,6 @@ export function DiscordApp() {
         </>
       )}
 
-      {/* Group chat: the call stage is conditional on the group and call matching,
-          but the chat canvas and member list persist regardless of call state.
-          Previously the entire block was gated on groupCall.groupId === activeGroup.id,
-          which nuked the chat UI when the call ended (cleanup sets groupId=null). */}
-      {app.viewMode === "group" && activeGroup && (
-        <>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {groupCall.groupId === activeGroup.id && (
-              <GroupCallStage
-                groupName={activeGroup.name}
-                members={activeGroup.members}
-                presence={groupCall.presence}
-                inCallUserIds={groupCall.inCallUserIds}
-                ringingIds={groupCall.ringingIds}
-                joined={groupCall.joined}
-                selfId={app.user?.id}
-                localStream={groupCall.localStream}
-                remoteStreams={groupCall.remoteStreams}
-                remoteScreens={groupCall.remoteScreens}
-                localScreen={groupCall.localScreen}
-                cameraEnabled={groupCall.cameraEnabled}
-                micMuted={app.micMuted}
-                deafened={app.deafened}
-                onJoin={() => void groupCall.joinGroupCall(activeGroup.id, activeGroup.name)}
-                onLeave={() => void groupCall.endGroupCall()}
-                onToggleCamera={() => void groupCall.toggleCamera()}
-                onToggleMic={toggleMic}
-              />
-            )}
-            <ChatCanvas
-              key={app.activeGroupChatId}
-              ref={groupChatRef}
-              channelName={activeGroup.name}
-              channelIcon={<IconGroup size={22} className="text-text-muted" />}
-              messages={groupMessages}
-              loading={app.groupLoading}
-              members={activeGroup.members}
-              currentUserId={app.user?.id}
-              messageContext="group"
-              reactions={app.messageReactions}
-              readCursorScope={{ kind: "group", id: activeGroup.id }}
-              headerTrailing={
-                !groupCall.joined ? (
-                  <HeaderCallButton
-                    disabled={call.phase !== "idle"}
-                    onClick={() => {
-                      if (groupVoiceLive) void groupCall.joinGroupCall(activeGroup.id, activeGroup.name);
-                      else startGroupVoiceCall();
-                    }}
-                  />
-                ) : null
-              }
-              onSend={app.sendGroupMessage}
-              onEdit={app.editGroupMessage}
-              onToggleReaction={(id, emoji) => void app.toggleReaction("group", id, emoji)}
-              onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "group")}
-              onForward={(m) => setForwardMessage(m)}
-              onAuthorClick={handleAuthorClick}
-              hasMore={app.groupHasMore}
-              onLoadMore={app.loadMoreGroupMessages}
-            />
-          </div>
-          {!isMobile && (
-            <GroupMemberList
-              members={activeGroup.members}
-              ownerId={activeGroup.owner_id}
-              inCallUserIds={groupCall.inCallUserIds}
-              currentUserId={app.user?.id}
-              onMemberClick={openProfile}
-            />
-          )}
-        </>
-      )}
-
-      {app.viewMode === "notes" && (
-        <ChatCanvas
-          key="notes"
-          ref={notesChatRef}
-          channelName="Notes"
-          channelIcon={<IconNotes size={22} className="text-text-muted" />}
-          introText="Your private Notes — only you can see this"
-          placeholder="Write a note, or drop in an image, video or file…"
-          messages={noteMessages}
-          members={app.profile ? [app.profile] : []}
-          currentUserId={app.user?.id}
-          messageContext="notes"
-          headerTrailing={
-            pinnedNoteIds.size > 0 ? (
-              <span className="flex items-center gap-1 rounded-full bg-bg-accent px-2 py-0.5 text-[11px] font-medium text-text-muted">
-                <IconPin size={12} />
-                {pinnedNoteIds.size} pinned
-              </span>
-            ) : null
-          }
-          onSend={app.sendNote}
-          onEdit={app.editNote}
-          onMessageContext={handleNoteContext}
-          onAuthorClick={handleAuthorClick}
-          hasMore={app.notesHasMore}
-          onLoadMore={app.loadMoreNotes}
-        />
-      )}
-
-      {app.viewMode === "home" && (
-        <>
-          <FriendsPanel onOpenProfile={openProfile} onFriendContext={handleFriendContext} />
-          <ActiveNowPanel />
-        </>
-      )}
-
-      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} />}
-
-      {app.viewMode === "server" && activeChannel && isVoice && (
-        <VoicePanel
-          channelId={activeChannel.id}
-          channelName={activeChannel.name}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      )}
-
       {app.viewMode === "server" && activeChannel && !isVoice && (
         <ChatCanvas
           key={app.activeChannelId}
@@ -1514,28 +1376,9 @@ export function DiscordApp() {
         />
       )}
 
-      {/* Holds the middle column open when no channel is selected. Without it
-          the member list slides left into the chat's place, which is what made
-          opening a server look broken. */}
-      {app.viewMode === "server" && !activeChannel && (
-        <div className="flex min-w-0 flex-1 items-center justify-center bg-bg-primary px-6 text-center">
-          <p className="text-[15px] text-text-muted">
-            {app.channels.length ? "Pick a channel to start talking." : "This server has no channels yet."}
-          </p>
-        </div>
-      )}
-
-      {app.viewMode === "server" && !isMobile && (
-        <MemberList
-          members={app.members}
-          roles={app.serverRoles}
-          onMemberClick={(m) => openProfile(m.profile)}
-          onMemberContext={handleMemberContext}
-        />
-      )}
-
       <UserProfileModal
-        profile={profileTarget}        open={!!profileTarget}
+        profile={profileTarget}
+        open={!!profileTarget}
         onClose={() => setProfileTarget(null)}
         isSelf={profileTarget?.id === app.user?.id}
         plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
@@ -1548,58 +1391,6 @@ export function DiscordApp() {
             ? () => {
                 void app.openDmWithFriend(profileTarget.id);
                 setProfileTarget(null);
-              }
-            : undefined
-        }
-        onAddFriend={
-          profileTarget && !profileFriend && !profilePendingIncoming && !profilePendingOutgoing && profileTarget.username
-            ? () => {
-                void app.sendFriendRequest(profileTarget.username!);
-                setProfileTarget(null);
-              }
-            : undefined
-        }
-        onAcceptFriend={
-          profileIncomingRequestId
-            ? () => {
-                void app.respondFriendRequest(profileIncomingRequestId, true);
-                setProfileTarget(null);
-              }
-            : undefined
-        }
-        onDeclineFriend={
-          profileIncomingRequestId
-            ? () => {
-                void app.respondFriendRequest(profileIncomingRequestId, false);
-                setProfileTarget(null);
-              }
-            : undefined
-        }
-        onVoiceCall={
-          profileTarget && profileFriend && !app.isBlockedEitherWay(profileTarget.id)
-            ? () => {
-                void startVoiceCall(profileTarget);
-                setProfileTarget(null);
-              }
-            : undefined
-        }
-        onRemoveFriend={
-          profileTarget && profileFriend
-            ? () => {
-                if (confirm(`Remove ${displayName(profileTarget)} as a friend?`)) {
-                  void app.removeFriend(profileTarget.id);
-                  setProfileTarget(null);
-                }
-              }
-            : undefined
-        }
-        onBlock={
-          profileTarget && profileTarget.id !== app.user?.id && !app.isBlocked(profileTarget.id)
-            ? () => {
-                if (confirm(`Block ${displayName(profileTarget)}? They won't be able to message or call you.`)) {
-                  void app.blockUser(profileTarget.id).then((err) => { if (err) alert(err); });
-                  setProfileTarget(null);
-                }
               }
             : undefined
         }

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { IconPhone, IconPhoneOff } from "@/components/icons";
 import { getCallIndicatorState, subscribeCallIndicator, type CallIndicatorState } from "@/lib/call-status";
 
-/** 1–3 bars from the browser's network hint, defaulting to good. */
 function connectionBars(): number {
   if (typeof navigator === "undefined" || !("connection" in navigator)) return 3;
   const et = (navigator.connection as { effectiveType?: string } | undefined)?.effectiveType;
@@ -21,7 +20,6 @@ function formatElapsed(ms: number): string {
   return `${pad(m)}:${pad(s)}`;
 }
 
-/** Persistent "you're in a call" pill rendered just above the user panel. */
 export function CallIndicator() {
   const [state, setState] = useState<CallIndicatorState>(() => getCallIndicatorState());
   const [now, setNow] = useState(() => Date.now());

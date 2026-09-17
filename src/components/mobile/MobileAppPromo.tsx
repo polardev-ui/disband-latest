@@ -7,26 +7,8 @@ import { isTauri } from "@/lib/platform";
 
 const APP_STORE_URL = "https://apps.apple.com/app/id6783881800";
 
-/**
- * Paths that must never be interrupted.
- *
- * These are where an email link lands. Covering a password reset or an email
- * confirmation with anything — even a dismissible sheet — puts a step between
- * someone and the thing they came to do, and the old full-page redirect lost
- * the token out of the URL entirely.
- */
-const UNINTERRUPTIBLE = ["/reset-password", "/verification", "/bot-invite", "/privacy", "/terms", "/mobile"];
+const UNINTERRUPTIBLE = ["/reset-password", "/bot-invite", "/privacy", "/terms", "/mobile"];
 
-/**
- * Suggests the iOS app to phone browsers.
- *
- * This used to be a redirect to /mobile, which replaced whatever you were
- * doing with a full page. Someone following a password-reset link was taken
- * away from the reset form and could not get back to it, and "Continue on the
- * web" only held for the current page load, so any reload started the argument
- * again. It is a sheet over the current page now: nothing navigates, the page
- * underneath keeps working, and dismissing it is remembered.
- */
 export function MobileAppPromo() {
   const [visible, setVisible] = useState(false);
 

@@ -4,25 +4,13 @@ import { Children, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Profile } from "@/lib/supabase/types";
 
-/**
- * One tile in a call.
- *
- * Everything in a call is the same shape — a rounded rectangle — because a
- * screen share is not round. Circles worked while a call was only faces, but
- * cropping a shared screen into one made it unreadable, and mixing a circle
- * with a rectangle made the share look like a different kind of object rather
- * than another participant.
- *
- * The avatar stays circular *inside* the tile, and a live camera or screen
- * replaces it in place rather than appearing somewhere else.
- */
 export function CallTile({
   profile, label, stream, kind = "camera", speaking = false, muted = false,
   self = false, onClick,
 }: {
   profile?: Profile | { display_name?: string | null; avatar_url?: string | null } | null;
   label: string;
-  /** A camera or screen track. Absent means show the avatar. */
+
   stream?: MediaStream | null;
   kind?: "camera" | "screen";
   speaking?: boolean;
@@ -52,8 +40,7 @@ export function CallTile({
           ref={videoRef}
           autoPlay
           playsInline
-          // Your own camera is mirrored, the way every other app shows it; a
-          // shared screen never is, or text in it comes out backwards.
+
           muted={self || kind === "screen"}
           className={`h-full w-full ${
             kind === "screen" ? "object-contain bg-black" : "object-cover"
@@ -89,30 +76,11 @@ export function CallTile({
   );
 }
 
-/**
- * The area a call lays its tiles out in.
- *
- * Tiles keep a 16:9 shape at whatever size fits. A plain CSS grid stretches
- * every cell to fill the row, so making the call region shorter squashed the
- * tiles into letterbox slabs and a face was cropped to a strip. Here the
- * layout is measured instead: every column count is tried, and the one that
- * makes the largest tile that still fits — width *and* height — wins. That is
- * why two people get two big tiles side by side while nine get a 3x3, without
- * any breakpoint deciding it in advance.
- */
 const TILE_ASPECT = 16 / 9;
 const TILE_GAP = 12;
-/** Below this a tile is unreadable; the area scrolls rather than shrink further. */
+
 const MIN_TILE_WIDTH = 128;
 
-/**
- * A pixel of slack in each direction.
- *
- * A row that comes to exactly the available width is a coin flip: sub-pixel
- * layout rounds it either way, and losing the flip wraps the last tile onto a
- * line of its own. Giving up one pixel costs nothing visible and makes the
- * arithmetic decide the layout rather than the rounding.
- */
 const FIT_SLACK = 1;
 
 export function bestTileSize(
@@ -131,7 +99,7 @@ export function bestTileSize(
     const cellW = (availableW - TILE_GAP * (cols - 1)) / cols;
     const cellH = (availableH - TILE_GAP * (rows - 1)) / rows;
     if (cellW <= 0 || cellH <= 0) continue;
-    // Whichever of the two constrains the tile is the one that sets its size.
+
     best = Math.max(best, Math.min(cellW, cellH * TILE_ASPECT));
   }
 
@@ -143,25 +111,12 @@ export function CallGrid({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
 
-  /**
-   * The call region is resizable, so tile size is derived from the box itself
-   * rather than from the window or a breakpoint.
-   *
-   * Measured directly as well as observed. A ResizeObserver reports nothing
-   * until its first callback — and does not run at all while the page is not
-   * being rendered — so relying on it alone left the tiles with no size, which
-   * collapses them to the width of the avatar inside. Measuring in a layout
-   * effect also means the first paint is already correct instead of popping
-   * into place a frame later.
-   */
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const measure = () => {
-      // clientWidth/Height, not the bounding rect: when the tiles do overflow
-      // and this box gains a scrollbar, the rect still counts the scrollbar's
-      // width as usable and the last tile of each row wraps away.
+
       const width = el.clientWidth;
       const height = el.clientHeight;
       setBox((prev) =>
@@ -174,8 +129,7 @@ export function CallGrid({ children }: { children: React.ReactNode }) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    // A window resize that does not change this element's own box still can
-    // change it a moment later, once the surrounding layout settles.
+
     window.addEventListener("resize", measure);
     return () => {
       observer.disconnect();
@@ -183,8 +137,6 @@ export function CallGrid({ children }: { children: React.ReactNode }) {
     };
   });
 
-  // toArray drops the nulls a conditional tile leaves behind, so an absent
-  // camera or share is not counted as a tile and given an empty box.
   const tiles = Children.toArray(children);
   const tile = bestTileSize(tiles.length, box.width, box.height);
 

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-// GET /api/bot/invites/[code] — public invite details shown on the approval
-// page. Contains the bot identity, requested scopes, and server name.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },

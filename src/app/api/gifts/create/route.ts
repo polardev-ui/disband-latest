@@ -8,15 +8,6 @@ import {
   GIFT_PLAN_NAME, giftPrice, isGiftMonths, isGiftPlan, monthsLabel,
 } from "@/lib/gifts";
 
-/**
- * Buy a gift subscription.
- *
- * One-time payment rather than a subscription: the person paying is not the
- * person who ends up with the plan, so there is nothing to renew against
- * them. Prices are built inline from our own table so a length can be added
- * without creating and wiring another Stripe price id.
- */
-
 const ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function giftCode(): string {
@@ -49,8 +40,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Gifting is not configured." }, { status: 500 });
     }
 
-    // Recorded before payment so the webhook has a row to flip, and so a
-    // completed payment can never arrive with nowhere to land.
     const { data: gift, error } = await supabase
       .from("gifts")
       .insert({

@@ -15,13 +15,6 @@ interface StripeEmbeddedCheckoutProps {
   onCancel: () => void;
 }
 
-/**
- * Coupon redemption.
- *
- * Stripe only surfaces promotion codes in its own hosted page; with the Elements
- * checkout we have to drive `applyPromotionCode` ourselves, so this renders the
- * redeem box and reports back what Stripe said about the code.
- */
 function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValue }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -124,7 +117,6 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
   );
 }
 
-/** Line-by-line totals, so a discount is visibly reflected before paying. */
 function OrderSummary({ checkout }: { checkout: StripeCheckoutElementsValue }) {
   const { subtotal, discount, total } = checkout.total;
   const hasDiscount = discount.minorUnitsAmount > 0;
@@ -217,10 +209,7 @@ export function StripeEmbeddedCheckout({
   onSuccess,
   onCancel,
 }: StripeEmbeddedCheckoutProps) {
-  // Without a publishable key the provider is handed a promise that never
-  // resolves, so the modal span forever with the real reason buried in an
-  // unhandled rejection from inside Stripe's own bundle. Say it plainly
-  // instead — and keep the way out visible.
+
   if (!isStripeConfigured()) {
     return (
       <div className="flex flex-col">

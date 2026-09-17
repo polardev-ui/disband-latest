@@ -2,12 +2,6 @@
 
 import { useId } from "react";
 
-/**
- * The subscription badge: one medallion whose colour advances with how long
- * someone has been subscribed. Super adds four studs and a halo, so the plan
- * reads at a glance without any text beside it.
- */
-
 export interface TierDef {
   key: string;
   label: string;
@@ -27,19 +21,12 @@ export const TIERS: TierDef[] = [
   { key: "opal", label: "Opal", months: 120, base: "#8bd4e8", deep: "#4a7f96", light: "#ffe6fb" },
 ];
 
-export const TIER_DURATION: Record<number, string> = {
-  1: "1 month", 3: "3 months", 6: "6 months", 12: "1 year",
-  24: "2 years", 60: "5 years", 120: "10 years",
-};
-
-/** Highest tier reached at a given tenure. Below a month there is no badge. */
 export function tierForMonths(months: number): TierDef | null {
   let out: TierDef | null = null;
   for (const t of TIERS) if (months >= t.months) out = t;
   return out;
 }
 
-/** "1 month", "6 months", "1 year", "5 years" — never "1 months". */
 export function tierDuration(t: TierDef): string {
   if (t.months < 12) return `${t.months} month${t.months === 1 ? "" : "s"}`;
   const years = t.months / 12;
@@ -69,8 +56,6 @@ export function SubscriptionMedallion({
   const markScale = (r * 1.06) / 24;
   const off = c - 12 * markScale;
 
-  // Opal is every tier before it, blended and blurred into one surface — the
-  // last tier visibly contains the ones you passed through to reach it.
   const opal = tier.key === "opal";
   const blend = [...TIERS.slice(0, 6).map((t) => t.base), TIERS[5].light, TIERS[2].light];
 

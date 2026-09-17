@@ -19,7 +19,6 @@ export async function POST(request: Request) {
   const limit = rateLimit(`bug-report:${ip}`, 3, 60_000);
   if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
 
-  // Attach the signed-in user (if any) so the bounty badge can be granted.
   let userId: string | null = null;
   let userEmail: string | null = null;
   let userName: string | null = null;
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
         ?? null;
     }
   } catch {
-    // Cookie/session read failed — fall through and treat as anonymous.
+
   }
 
   let body: Partial<BugReportInput>;
@@ -114,7 +113,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Deliver to the bug inbox.
   try {
     await sendResendEmail({
       to: BUG_REPORT_EMAIL,
@@ -124,7 +122,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("[bug-report] email error:", err);
-    // The report is saved; failing to email shouldn't fail the whole request.
+
   }
 
   return NextResponse.json({

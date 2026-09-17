@@ -1,14 +1,5 @@
 "use client";
 
-/**
- * Shared building blocks for the settings surface.
- *
- * The old modal hand-rolled every row, so spacing, label casing and control
- * alignment drifted between tabs. These give each section the same rhythm:
- * a titled group, rows with a label + description on the left and the control
- * on the right.
- */
-
 export function SettingsSection({
   title,
   description,
@@ -38,7 +29,6 @@ export function SettingsSection({
   );
 }
 
-/** A single labelled row. `stacked` puts the control on its own line below. */
 export function SettingRow({
   label,
   description,
@@ -79,7 +69,6 @@ export function SettingRow({
   );
 }
 
-/** Accessible switch — replaces the mix of checkboxes used before. */
 export function Toggle({
   checked,
   onChange,
@@ -120,7 +109,6 @@ export const settingsInputClass =
   "w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal " +
   "outline-none transition-colors placeholder:text-text-muted focus:border-brand/60";
 
-/** Small pill used for plan / permission hints. */
 export function Hint({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "super" | "online" }) {
   return (
     <span

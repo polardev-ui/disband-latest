@@ -36,8 +36,7 @@ export async function requirePlatformOwner(userId: string): Promise<boolean> {
 export function verifyOwnerPassword(input: string | undefined | null): boolean {
   const expected = process.env.OWNER_PASSWORD;
   if (!expected || !input) return false;
-  // Constant-time comparison using SHA-256 digests so length is not leaked and
-  // comparison time does not depend on the input.
+
   const a = createHash("sha256").update(input).digest();
   const b = createHash("sha256").update(expected).digest();
   return timingSafeEqual(a, b);

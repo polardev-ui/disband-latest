@@ -56,29 +56,25 @@ interface ChatCanvasProps {
   currentUserName?: string | null;
   messageContext: MessageContext;
   reactions?: MessageReaction[];
-  /** When false, disables reaction affordances (reaction rows, hover bar, double-click 👍). Defaults to true. */
+
   reactionsEnabled?: boolean;
   getAuthorColor?: (authorId: string) => string | null | undefined;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
-  /** Divider text at the top of the history. Defaults to "Welcome to #<name>". */
+
   introText?: string;
-  /** Composer placeholder. Defaults to "Message #<name>". */
+
   placeholder?: string;
-  /**
-   * Replaces the composer with an explanation. Used for announcement channels,
-   * where posting is blocked by RLS — showing a composer that always fails
-   * would just look broken.
-   */
+
   composerLockedReason?: string | null;
   typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
-  /** Server channels for #channel autocomplete and chip rendering (server chat only). */
+
   channels?: ChannelLite[];
-  /** Active server's custom emoji (name->url) so `:shortcode:` renders as images. */
+
   customEmoji?: Record<string, string>;
-  /** Jump to a #mentioned channel. */
+
   onChannelClick?: (channelId: string) => void;
   readCursorScope?: ReadCursorScope | null;
   onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
@@ -90,7 +86,7 @@ interface ChatCanvasProps {
   onLoadMore?: () => void | Promise<void>;
   hasMore?: boolean;
   maxUploadBytes?: number;
-  /** Show a skeleton placeholder while messages are loading (typically after switching conversations). */
+
   loading?: boolean;
 }
 

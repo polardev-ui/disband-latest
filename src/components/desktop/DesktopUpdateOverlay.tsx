@@ -56,7 +56,7 @@ export function DesktopUpdateOverlay() {
         download,
       });
     } catch {
-      // Ignore network/API failures — app remains usable offline.
+
     }
   }, []);
 

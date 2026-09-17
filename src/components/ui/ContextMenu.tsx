@@ -99,12 +99,3 @@ export function useContextMenu() {
   if (!ctx) throw new Error("useContextMenu requires ContextMenuProvider");
   return ctx;
 }
-
-/** Helper to open a menu from a native contextmenu event. */
-export function useContextMenuHandler(items: ContextMenuItem[]) {
-  const { openMenu } = useContextMenu();
-  return (e: React.MouseEvent) => {
-    e.preventDefault();
-    openMenu(e.clientX, e.clientY, items);
-  };
-}

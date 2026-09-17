@@ -42,7 +42,7 @@ export function PlatformModerationPanel() {
       const json = (await res.json()) as { bans?: PlatformBanRow[] };
       setBans(json.bans ?? []);
     } catch {
-      // Ignore transient failures; the list is best-effort.
+
     }
   }, []);
 
@@ -50,7 +50,6 @@ export function PlatformModerationPanel() {
     if (profile?.show_owner_badge) void loadBans();
   }, [profile?.show_owner_badge, loadBans]);
 
-  // Debounced username/display-name search.
   useEffect(() => {
     const term = query.trim();
     if (selected || term.length < 1) {
@@ -82,7 +81,6 @@ export function PlatformModerationPanel() {
     return () => clearTimeout(handle);
   }, [query, selected]);
 
-  // Close dropdown on outside click.
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {

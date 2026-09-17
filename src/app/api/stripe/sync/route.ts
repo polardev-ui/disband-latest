@@ -6,30 +6,12 @@ import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import type { SubscriptionPlan } from "@/lib/subscription";
 
-/**
- * Reconcile the signed-in user's subscription straight from Stripe.
- *
- * The webhook is the primary path, but it is a single point of failure: if its
- * endpoint URL or signing secret is wrong, the customer is charged and the app
- * never learns about it. This endpoint asks Stripe what the user actually has
- * and writes it, so a purchase applies even when the webhook does not fire.
- *
- * Safe to call repeatedly — it is an idempotent upsert keyed on user_id.
- */
-
 interface StripePeriodFields {
   current_period_start?: number;
   current_period_end?: number;
   canceled_at?: number | null;
 }
 
-/**
- * Map a Stripe subscription back to one of our plans.
- *
- * Metadata written before the merge still says "basic" or "super"; both mean
- * Aero now. The price fallback covers subscriptions created outside our own
- * checkout — from the dashboard, or by a migration.
- */
 function planForSubscription(sub: Stripe.Subscription): SubscriptionPlan | null {
   const metaPlan = (sub.metadata as Record<string, string> | undefined)?.plan;
   if (metaPlan === "aero" || metaPlan === "basic" || metaPlan === "super") return "aero";
@@ -66,8 +48,6 @@ export async function POST(req: Request) {
 
     const stripe = getStripe();
 
-    // Collect every subscription that could belong to this user: those tagged
-    // with their id, plus anything under a customer with their email.
     const found: Stripe.Subscription[] = [];
 
     try {
@@ -77,7 +57,7 @@ export async function POST(req: Request) {
       });
       found.push(...search.data);
     } catch {
-      // Search is unavailable on some accounts — the email path below covers it.
+
     }
 
     if (user.email) {
@@ -96,7 +76,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ synced: false, reason: "no_stripe_subscription" });
     }
 
-    // Prefer a granting subscription, most recently created wins ties.
     const best = found
       .filter((s) => planForSubscription(s) !== null)
       .sort((a, b) => rank(b) - rank(a) || b.created - a.created)[0];

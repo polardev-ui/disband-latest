@@ -29,7 +29,6 @@ function EmojiImg({ emoji, size = "1.375em" }: { emoji: string; size?: string })
   );
 }
 
-/** How many names the hover card lists before it starts counting the rest. */
 const NAMES_IN_PREVIEW = 3;
 
 function reactorSentence(names: string[], total: number): string {
@@ -40,15 +39,6 @@ function reactorSentence(names: string[], total: number): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/**
- * The card that appears over a reaction on hover.
- *
- * It names a few of the people who reacted, which is the question anyone
- * hovering a reaction is actually asking. It is clickable — and so cannot use
- * the shared Tooltip, which is deliberately pointer-transparent — because the
- * follow-up question is "who else?", and the full list is one click away
- * rather than behind a menu.
- */
 function ReactionHoverCard({
   summary, anchor, onOpenList, onEnter, onLeave,
 }: {
@@ -92,7 +82,6 @@ function ReactionHoverCard({
   );
 }
 
-/** Everyone who reacted, with a tab per emoji so one dialog answers all of them. */
 function ReactionListDialog({
   reactions, initialEmoji, onClose,
 }: {
@@ -125,8 +114,7 @@ function ReactionListDialog({
         aria-label="Reactions"
         className="relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-white/10"
       >
-        {/* A column of emoji rather than a row: the count sits beside each one,
-            and a message with many reactions scrolls instead of wrapping. */}
+        {}
         <div className="flex w-[104px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-divider p-2">
           {reactions.map((r) => (
             <button
@@ -189,8 +177,7 @@ function ReactionListDialog({
 export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageReactionsProps) {
   const [hovered, setHovered] = useState<{ emoji: string; rect: DOMRect } | null>(null);
   const [listFor, setListFor] = useState<string | null>(null);
-  // The card sits above the pill with a gap, so the pointer crosses empty
-  // space between the two. A short grace period keeps it open while it does.
+
   const closeTimer = useRef<number | null>(null);
 
   const hoveredSummary = useMemo(

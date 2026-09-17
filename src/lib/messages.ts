@@ -42,12 +42,6 @@ export interface ReplyPreview {
   author?: Pick<Profile, "id" | "username" | "display_name">;
 }
 
-export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"] as const;
-
-export function reactionKey(context: MessageContext, messageId: string): string {
-  return `${context}:${messageId}`;
-}
-
 export function summarizeReactions(
   reactions: MessageReaction[],
   messageId: string,
@@ -65,7 +59,6 @@ export function summarizeReactions(
   return [...map.values()].sort((a, b) => b.count - a.count);
 }
 
-/** Match optimistic rows to realtime inserts (content + attachment aware). */
 export function matchesOptimisticRow(
   opt: {
     author_id: string | null;

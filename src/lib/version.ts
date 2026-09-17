@@ -1,4 +1,4 @@
-/** Strip a leading `v` and parse semver-ish segments for comparison. */
+
 export function parseSemverTag(tag: string): { major: number; minor: number; patch: number } | null {
   const m = String(tag)
     .replace(/^v/i, "")
@@ -17,7 +17,6 @@ export function parseVersionParts(tag: string): number[] | null {
   return [semver.major, semver.minor, semver.patch];
 }
 
-/** True when `latest` is strictly newer than `current` (both must be valid semver). */
 export function isNewerVersion(latest: string, current: string): boolean {
   const a = parseVersionParts(latest);
   const b = parseVersionParts(current);

@@ -32,7 +32,6 @@ export function setReadCursor(
   );
 }
 
-/** Mark a chat read up to now (e.g. after sending a message). */
 export function markChatReadNow(scope: ReadCursorScope) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(

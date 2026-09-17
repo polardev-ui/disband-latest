@@ -12,7 +12,7 @@ export interface Profile {
   bio: string | null;
   pronouns?: string | null;
   status_note?: string | null;
-  /** ISO instant after which status_note is treated as cleared. Null = never expires. */
+
   status_expires_at?: string | null;
   status: UserStatus;
   preferred_status: UserStatus | null;
@@ -55,7 +55,7 @@ export interface Server {
   description: string | null;
   owner_id: string;
   invite_code?: string;
-  /** Level 1+ catalyst perk: custom invite slug (globally unique, lowercase). */
+
   vanity_code?: string | null;
   discoverable?: boolean;
   verified?: boolean;
@@ -74,9 +74,9 @@ export interface ServerRole {
   server_id: string;
   name: string;
   color: string;
-  /** Level 3+ catalyst perk: gradient end color (null = solid `color`). */
+
   gradient_to?: string | null;
-  /** Animate the gradient (shimmer). Only meaningful with gradient_to. */
+
   gradient_animated?: boolean;
   permissions: {
     kick?: boolean;
@@ -104,7 +104,6 @@ export interface DbServerMember {
   joined_at: string;
 }
 
-/** A row in the member_roles join table (one member can hold many roles). */
 export interface MemberRoleRow {
   server_id: string;
   user_id: string;
@@ -113,7 +112,7 @@ export interface MemberRoleRow {
 
 export interface ServerMember extends DbServerMember {
   profile?: Profile;
-  /** All roles assigned to this member (source of truth: member_roles). */
+
   role_ids?: string[];
 }
 
@@ -138,7 +137,7 @@ export interface Channel {
   name: string;
   type: ChannelType;
   position: number;
-  /** Announcement channel: everyone reads, only manage_channels may post. */
+
   read_only?: boolean;
   created_at: string;
 }
@@ -162,7 +161,7 @@ export interface DbMessage {
 
 export interface Message extends DbMessage {
   author?: Profile;
-  /** Client-side only: tracks optimistic send state */
+
   sending?: boolean;
 }
 
@@ -188,7 +187,6 @@ export interface DmMessage extends DbDmMessage {
   sending?: boolean;
 }
 
-/** A single entry in the user's private Notes space. */
 export interface DbNote {
   id: string;
   user_id: string;
@@ -257,10 +255,8 @@ export interface GroupChatWithMembers extends GroupChat {
   members: Profile[];
 }
 
-/** Source of a pinned message: which conversation it belongs to. */
 export type PinnedSourceType = "dm" | "group" | "channel";
 
-/** A row from the `get_pinned_messages` RPC. */
 export interface PinnedMessage {
   id: string;
   message_id: string;
@@ -290,7 +286,7 @@ export interface AppNotification {
   body: string | null;
   link: string | null;
   read: boolean;
-  /** Null = never seen in the bell drawer (drives the red pill). Never stamped on mount. */
+
   seen_at?: string | null;
   created_at: string;
 }
@@ -486,10 +482,7 @@ export interface Database {
         Update: { muted?: boolean; deafened?: boolean; last_seen_at?: string };
         Relationships: [];
       };
-      /**
-       * voice_presence filtered to rows whose client is still heartbeating.
-       * Reads go here; writes still go to the table itself.
-       */
+
       voice_presence_live: {
         Row: DbVoicePresence;
         Insert: never;

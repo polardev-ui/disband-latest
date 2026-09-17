@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 
-// POST /api/bot/revoke — permanently disable a bot and its token.
 export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);

@@ -18,14 +18,6 @@ interface GiftRow {
   expires_at: string;
 }
 
-/**
- * A gift posted into a channel or DM.
- *
- * Rendered from the link the same way a server invite is, so sending one is
- * just sending a message. Anyone who can see it can claim it — the race is
- * settled in the database, and the loser is told it is gone rather than being
- * left with a button that silently does nothing.
- */
 export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }) {
   const { user, profile } = useApp();
   const [gift, setGift] = useState<GiftRow | null>(null);
@@ -63,7 +55,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   const mine = gift.buyer_id === user?.id;
   const claimedByMe = gift.claimed_by === user?.id;
   const gone = gift.status === "claimed" || gift.status === "expired";
-  // Every gift grants Aero now, including ones bought before the merge.
+
   const accent = "#fee75c";
 
   async function claim() {
@@ -76,7 +68,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
       const res = (data ?? {}) as { ok?: boolean; error?: string };
       if (rpcError || !res.ok) {
         setError(res.error ?? rpcError?.message ?? "Could not claim this gift.");
-        // Re-read so a lost race shows as claimed rather than still offering.
+
         const { data: fresh } = await getSupabaseClient()
           .from("gifts")
           .select("code, plan, months, status, buyer_id, claimed_by, expires_at")
@@ -164,7 +156,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
           onClose={() => setCelebrate(false)}
         />
       )}
-      {/* profile is read so the claim refreshes the signed-in user's own row */}
+      {}
       {profile ? null : null}
     </>
   );

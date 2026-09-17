@@ -1,7 +1,6 @@
 import githubShortcodes from "emojibase-data/en/shortcodes/github.json";
 
 const shortcodeToEmoji = new Map<string, string>();
-const emojiToShortcode = new Map<string, string>();
 
 function hexcodeToEmoji(hex: string): string {
   return String.fromCodePoint(...hex.split("-").map((h) => parseInt(h, 16)));
@@ -13,7 +12,6 @@ for (const [hex, short] of Object.entries(githubShortcodes)) {
   for (const code of codes) {
     if (!shortcodeToEmoji.has(code)) shortcodeToEmoji.set(code, emoji);
   }
-  if (!emojiToShortcode.has(emoji)) emojiToShortcode.set(emoji, codes[0]);
 }
 
 export interface EmojiMatch {
@@ -65,19 +63,12 @@ const POPULAR_SHORTCODES = [
   "tada",
 ];
 
-/** Exact shortcode lookup, e.g. `sob` → 😭. Returns null when unknown. */
 export function lookupShortcode(code: string): string | null {
   const key = code.trim().toLowerCase().replace(/:/g, "").replace(/_+$/, "");
   if (!key) return null;
   return shortcodeToEmoji.get(key) ?? null;
 }
 
-/** Primary Discord-style shortcode for an emoji (used for display/titles). */
-export function shortcodeForEmoji(emoji: string): string | undefined {
-  return emojiToShortcode.get(emoji);
-}
-
-/** Fuzzy search over shortcodes for the `:`-picker. */
 export function searchEmojis(query: string, limit = 12): EmojiMatch[] {
   const q = query.trim().toLowerCase().replace(/[\s:_-]/g, "");
   if (!q) {

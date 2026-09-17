@@ -1,4 +1,4 @@
-/** Blocked username substrings (alphanumeric only, case-insensitive). Keep in sync with DB migration. */
+
 export const BLOCKED_USERNAME_WORDS = [
   "nigger",
   "nigga",

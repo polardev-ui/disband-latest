@@ -1,13 +1,4 @@
-/**
- * Polls the App Store until the Disband listing is actually live.
- *
- * A listing does not become reachable the instant it flips to Ready for Sale —
- * it propagates across Apple's regions and CDN, which can take minutes to a
- * couple of hours. Sending the launch email on the scheduled time rather than
- * on the listing being live is how recipients land on a 404.
- *
- *   node scripts/watch-app-store.mjs
- */
+
 const APP_ID = "6783881800";
 const LOOKUP = `https://itunes.apple.com/lookup?id=${APP_ID}`;
 const PAGE = `https://apps.apple.com/app/id${APP_ID}`;
@@ -31,7 +22,6 @@ async function check() {
     detail = `lookup failed: ${err.message}`;
   }
 
-  // The lookup API can lag the storefront, so confirm the page too.
   let pageOk = false;
   try {
     const res = await fetch(PAGE, { redirect: "follow" });

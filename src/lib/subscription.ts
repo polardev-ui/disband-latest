@@ -1,26 +1,8 @@
-/**
- * The plans that exist.
- *
- * Basic and Super were consolidated into one paid tier, Disband Aero, at
- * Super's old price. Aero inherits Super's entitlements wholesale, so nobody
- * lost anything in the merge — and there were no Basic subscribers to move.
- *
- * Legacy values still arrive from outside: Stripe metadata written before the
- * merge, Apple product identifiers, and subscription rows mid-migration. Those
- * are mapped at the edges (see `normalizePlan`) rather than being allowed
- * further in, so the rest of the app only ever sees "free" or "aero".
- */
+
 export type SubscriptionPlan = "free" | "aero";
 
-/** What a plan may be called on the wire, before it is normalised. */
 export type LegacyPlanName = SubscriptionPlan | "basic" | "super";
 
-/**
- * Maps anything that has ever identified a paid plan onto the current one.
- *
- * The single place that knows Basic and Super used to exist, so removing this
- * one function is all that is left when the legacy data is finally gone.
- */
 export function normalizePlan(plan: string | null | undefined): SubscriptionPlan {
   return plan === "aero" || plan === "basic" || plan === "super" ? "aero" : "free";
 }
@@ -37,21 +19,12 @@ export interface Subscription {
   canceled_at: string | null;
 }
 
-/**
- * Stripe statuses that should grant paid entitlements.
- *
- * `trialing` is a paid-intent state, and `past_due` means a renewal charge is
- * being retried — cutting perks off mid-retry punishes people whose card simply
- * needs updating. Kept here so the client, the webhook and the reconciliation
- * endpoint can never disagree about who is a paying customer.
- */
 export const GRANTING_STATUSES = new Set(["active", "trialing", "past_due"]);
 
 export function isGranting(status: string | null | undefined): boolean {
   return !!status && GRANTING_STATUSES.has(status);
 }
 
-/** Resolve the effective plan from a stored subscription row. */
 export function planFromSubscription(sub: Subscription | null): SubscriptionPlan {
   if (!sub || !isGranting(sub.status)) return "free";
   return normalizePlan(sub.plan);
@@ -90,7 +63,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
   avatarChangesPerDay: number;
   profileChangeCooldowns: boolean;
   premiumThemeIds: string[];
-  /** Everyone can share a screen. The plan decides the quality ceiling. */
+
   screenShare: boolean;
   historyExport: boolean;
   prioritySupport: boolean;
@@ -114,13 +87,7 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     historyExport: false,
     prioritySupport: false,
   },
-  /**
-   * Aero is Super's old entitlement set, unchanged.
-   *
-   * Consolidating two paid tiers into one is only safe if the survivor is the
-   * more generous of the two — every former Super subscriber keeps exactly
-   * what they were paying for.
-   */
+
   aero: {
     maxUploadBytes: 500 * 1024 * 1024,
     maxMessageChars: 4000,

@@ -1,4 +1,4 @@
-/** Where bug reports are emailed. */
+
 export const BUG_REPORT_EMAIL = "it@disband.dev";
 
 export const BUG_REPORT_LIMITS = {
@@ -35,7 +35,6 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Simple validation shared between the API route and (optionally) the client. */
 export function validateBugReport(input: BugReportInput): string | null {
   const title = input.title?.trim() ?? "";
   const description = input.description?.trim() ?? "";
@@ -60,7 +59,6 @@ export function validateBugReport(input: BugReportInput): string | null {
   return null;
 }
 
-/** Renders the staff-facing email sent to the bug inbox. */
 export function buildBugReportEmailHtml(report: BugReportInput): string {
   const lines = report.description.split(/\r?\n/).map((line) => escapeHtml(line)).join("<br />");
   const steps = report.steps

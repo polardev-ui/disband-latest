@@ -27,7 +27,6 @@ interface HomePanelProps {
   onOpenSubscription?: () => void;
 }
 
-/** A top-level destination row: circular icon badge + label, optional trailing slot. */
 function NavRow({
   icon,
   label,
@@ -99,8 +98,6 @@ export function HomePanel({
   } = useApp();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
-  // Friends browsing (tabs, search, add-by-username) lives in the main pane —
-  // the sidebar only routes to it and lists conversations.
   const onFriends = viewMode === "home";
 
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {

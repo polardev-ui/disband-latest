@@ -28,10 +28,6 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
-// Every /api/bot/* route authenticates by bearer token only, and on desktop a
-// relative /api/ path resolves to the static shell rather than a route at all.
-// `apiFetch` handles both, so bot create/revoke/invite must go through it —
-// with a plain `fetch` they answered 401 on web and an empty error on desktop.
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data: any }> {
   const res = await apiFetch(url, {
     method: "POST",
@@ -43,7 +39,7 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    // An HTML error page, not JSON. Give the caller something to show.
+
     data = { error: `Request failed (${res.status}).` };
   }
   return { ok: res.ok, data };

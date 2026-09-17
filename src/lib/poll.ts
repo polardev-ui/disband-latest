@@ -2,16 +2,6 @@
 
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-/**
- * Polls live in the database rather than on an outside service.
- *
- * The old host stored tallies but not voters, so "have I voted" was kept in
- * localStorage — clearing storage let the same person vote twice, and a vote
- * cast on a phone was invisible on a desktop. A vote is now a row keyed by the
- * voter, which is the only place that question has a real answer. It also
- * takes a slow third-party request out of every message that carries a poll.
- */
-
 export interface Poll {
   id: string;
   question: string;
@@ -19,7 +9,7 @@ export interface Poll {
   counts: number[];
   closed: boolean;
   authorId: string | null;
-  /** The option this viewer chose, or null if they have not voted. */
+
   myVote: number | null;
 }
 
@@ -41,7 +31,7 @@ function normalize(data: PollPayload | null): Poll {
     id: data.id,
     question: data.question ?? "",
     options,
-    // A poll nobody has voted on yet comes back with no counts at all.
+
     counts: options.map((_, i) => counts[i] ?? 0),
     closed: data.closed === true,
     authorId: data.author_id ?? null,
@@ -68,10 +58,6 @@ export async function getPoll(id: string): Promise<Poll> {
   return normalize(data as PollPayload);
 }
 
-/**
- * Casts, changes or takes back a vote — voting for the option you already hold
- * removes it. The updated poll comes back, so no follow-up read is needed.
- */
 export async function votePoll(id: string, optionIndex: number): Promise<Poll> {
   const { data, error } = await getSupabaseClient().rpc("vote_poll", {
     p_poll: id,

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup rules for Android 11 and below (API < 31).
+  Exclude the Supabase auth session so a restored install signs in fresh
+  instead of reinstating a possibly-stale token on a new device.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="disband_sessions.xml" />
+</full-backup-content>

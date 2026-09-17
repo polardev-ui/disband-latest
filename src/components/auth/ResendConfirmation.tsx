@@ -4,22 +4,9 @@ import { useState } from "react";
 import { mapAuthError } from "@/lib/authErrors";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-/**
- * Sends a fresh confirmation email.
- *
- * A confirmation link expires, and until now nothing in the app could issue
- * another one: signing in answered "email not confirmed" and stopped there,
- * and an expired link landed on a page whose only button was "back to log in".
- * An account created a day too early was therefore permanently unreachable by
- * its owner — the address was taken, so they could not sign up again either.
- *
- * Supabase reveals nothing about whether an address exists here, and neither
- * does this: the same wording comes back either way, so it cannot be used to
- * test which addresses have accounts.
- */
 export function ResendConfirmation({
   defaultEmail = "",
-  /** Hide the field when the address is already known and not in question. */
+
   lockEmail = false,
 }: {
   defaultEmail?: string;
@@ -45,9 +32,6 @@ export function ResendConfirmation({
     if (sendError) {
       const reason = sendError.message.toLowerCase();
 
-      // "No such user" and "already confirmed" are answers about the address,
-      // and reporting either turns this box into a way to test which addresses
-      // have accounts. Both get the same neutral reply as a real send.
       const revealsAccount =
         reason.includes("not found")
         || reason.includes("no user")
@@ -55,8 +39,7 @@ export function ResendConfirmation({
         || reason.includes("already confirmed");
 
       if (!revealsAccount) {
-        // A rate limit is worth naming: the mail is already on its way, and
-        // "try again" would be exactly the wrong advice.
+
         setError(mapAuthError(sendError.message));
         setState("idle");
         return;

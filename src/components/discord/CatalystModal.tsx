@@ -39,10 +39,6 @@ function Check({ locked }: { locked?: boolean }) {
   );
 }
 
-/**
- * Server Catalysts: view the count + level, spend a monthly Aero credit,
- * pull one back, or buy as many as wanted (one-time, never expire).
- */
 export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
   const {
     user,
@@ -62,8 +58,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
   const [buySecret, setBuySecret] = useState<string | null>(null);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
-  // Catalogue unit price (display). Falls back to the lib constant if the
-  // endpoint is unreachable — checkout always charges the catalogue price.
+
   const [unitCents, setUnitCents] = useState(CATALYST_PRICE_CENTS);
 
   const count = server ? catalystCounts[server.id] ?? 0 : 0;
@@ -90,8 +85,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
       setBusy(false);
       setBuying(false);
     } else {
-      // apiFetch, not fetch: the browser client clears auth cookies, so only
-      // the bearer token authenticates API routes (plain fetch 401s).
+
       apiFetch("/api/stripe/create-catalyst-checkout")
         .then((r) => (r.ok ? r.json() : null))
         .then((d: { unitAmount?: number } | null) => {
@@ -144,8 +138,6 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
     }
   }, [server, buying, qty]);
 
-  // After a purchase, the webhook fulfills it within seconds — poll the
-  // count until it lands so the modal shows the new level live.
   const handleBuySuccess = useCallback(() => {
     setBuySecret(null);
     setQty(1);
@@ -183,11 +175,9 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
           perks for everyone in it.
         </p>
 
-        {/* Count + level */}
-        <div className="mx-5 mt-4 rounded-xl border border-brand/30 bg-brand/[0.06] p-4 text-center">
-          <p className="text-4xl font-black text-text-normal">{count}</p>
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            {count === 1 ? "Catalyst" : "Catalysts"}
+        <div className="px-5 pt-4">
+          <p className="text-2xl font-bold text-text-normal">
+            {count} {count === 1 ? "Catalyst" : "Catalysts"}
           </p>
           <p className="mt-1 inline-block rounded-full bg-brand/20 px-2.5 py-0.5 text-xs font-bold text-brand">
             {level.name}
@@ -207,10 +197,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
           )}
         </div>
 
-        {/* Perks */}
-        <div className="px-5 pt-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">Perks</p>
-          <div className="space-y-2">
+        <div className="space-y-2">
             {CATALYST_LEVELS.filter((l) => l.level > 0).map((l) => {
               const unlocked = count >= l.min;
               return (
@@ -235,18 +222,12 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
                 </div>
               );
             })}
-          </div>
         </div>
 
-        {/* Monthly credit */}
-        <div className="px-5 pt-4">
-          <div className="rounded-xl border border-divider p-4">
-            <p className="text-sm font-bold">
-              Your Catalysts{" "}
-              <span className="font-normal text-text-muted">
-                · {myHere} in this server
-              </span>
-            </p>
+        <div className="border-t border-white/10 px-5 py-4">
+          <p className="text-sm text-text-muted">
+            Put free monthly Catalysts on <span className="font-semibold text-text-normal">{server.name}</span>
+          </p>
             {isAero ? (
               <p className="mt-0.5 text-[13px] text-text-muted">
                 {balance} of 4 monthly credits left
@@ -279,12 +260,9 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
               )}
             </div>
           </div>
-        </div>
 
-        {/* Buy */}
-        <div className="px-5 py-4">
-          <div className="rounded-xl border border-divider p-4">
-            <p className="text-sm font-bold">Buy Catalysts</p>
+        <div className="border-t border-white/10 px-5 py-4">
+          <p className="text-sm font-bold">Buy Catalysts</p>
             <p className="mt-0.5 text-[13px] text-text-muted">
               One-time purchase, never expire · {formatCents(unitCents)} each
             </p>
@@ -333,6 +311,5 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
           </div>
         </div>
       </div>
-    </div>
   );
 }

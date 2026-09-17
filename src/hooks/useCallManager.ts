@@ -22,7 +22,7 @@ export type CallPhase = "idle" | "outgoing" | "incoming" | "active";
 
 interface CallSignal {
   type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave" | "handled" | "screen";
-  /** For "screen": whether the sender just started or stopped sharing. */
+
   sharing?: boolean;
   from: string;
   to?: string;
@@ -60,20 +60,11 @@ export function useCallManager(
   const [activePeer, setActivePeer] = useState<Profile | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  // The share is its own track now, so it is its own tile rather than
-  // something that evicts the other person's camera.
+
   const [remoteScreen, setRemoteScreen] = useState<MediaStream | null>(null);
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
-  /**
-   * Whether the other side says it is sharing.
-   *
-   * Inferring this from the received track's `muted` flag looked reasonable
-   * and is not reliable: a lane is negotiated up front, so the track exists
-   * from the start, and whether it reports itself muted depends on packet
-   * timing rather than on anyone's intent. The sharer knows the answer, so
-   * the sharer says so.
-   */
+
   const [peerSharing, setPeerSharing] = useState(false);
   const screenTrackByLaneRef = useRef<MediaStreamTrack | null>(null);
   const pendingLocalRef = useRef<{ mic: MediaStreamTrack | null; cam: MediaStreamTrack | null } | null>(null);
@@ -82,7 +73,7 @@ export function useCallManager(
   const [error, setError] = useState<string | null>(null);
   const [callNotice, setCallNotice] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
-  // Time in a call is what the Voice Veteran badge counts.
+
   useVoiceMinutes(phase === "active");
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -92,18 +83,13 @@ export function useCallManager(
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeCallIdRef = useRef<string | null>(null);
   const activePeerIdRef = useRef<string | null>(null);
-  // Retry state: ICE-restart attempts for a failing peer connection, a grace
-  // timer for transient disconnects, caller flag for renegotiation, and the
-  // last peer so a dead call can be redialed manually.
+
   const iceRetryRef = useRef(0);
   const disconnectTimerRef = useRef<number | null>(null);
   const callerRef = useRef(false);
   const lastPeerRef = useRef<Profile | null>(null);
   const reconnectingRef = useRef(false);
-  // ICE candidates routinely arrive before the offer/answer round-trip sets
-  // the remote description (cross-device especially). Adding them early
-  // throws InvalidStateError, so they queue here and drain once the remote
-  // description lands.
+
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const phaseRef = useRef<CallPhase>("idle");
   const cameraRef = useRef(false);
@@ -200,14 +186,13 @@ export function useCallManager(
         await setLaneTrack(pc, LANE_AUDIO, mic0);
         await setLaneTrack(pc, LANE_CAMERA, cam0);
       } else {
-        // The answering side has no lanes until the offer arrives.
+
         pendingLocalRef.current = { mic: mic0, cam: cam0 };
       }
 
       pc.ontrack = (ev) => {
         if (laneOfTransceiver(pc, ev.transceiver) === LANE_SCREEN) {
-          // Hold the lane's track. Whether it is shown is decided by the
-          // "screen" signal, not by the track's own mute state.
+
           screenTrackByLaneRef.current = ev.track;
           setRemoteScreen(new MediaStream([ev.track]));
           return;
@@ -225,9 +210,7 @@ export function useCallManager(
         }
       };
       callerRef.current = asCaller;
-      // Caller-side renegotiation: fires after restartIce() so the re-offer
-      // goes out over the still-subscribed signal channel. The callee's
-      // existing `offer` handler answers renegotiations, completing the retry.
+
       pc.onnegotiationneeded = () => {
         if (!callerRef.current || pc.signalingState !== "stable") return;
         void (async () => {
@@ -240,7 +223,7 @@ export function useCallManager(
               payload: { type: "offer", from: userId, to: peerId, sdp: offer } satisfies CallSignal,
             });
           } catch {
-            /* renegotiation failed — the failed-state path below retries/resets */
+
           }
         })();
       };
@@ -257,8 +240,7 @@ export function useCallManager(
         void reset();
       };
       const retryIce = () => {
-        // At most 2 automatic ICE restarts per connection; then give up so a
-        // truly dead path still ends the call instead of looping forever.
+
         if (iceRetryRef.current >= 2 || !pcRef.current) {
           giveUp(
             hasTurnConfigured()
@@ -279,7 +261,7 @@ export function useCallManager(
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
         if (state === "connected") {
-          // Healthy again: reset the retry budget and any reconnect notice.
+
           clearDisconnectTimer();
           iceRetryRef.current = 0;
           if (reconnectingRef.current) {
@@ -295,8 +277,7 @@ export function useCallManager(
           return;
         }
         if (state === "disconnected") {
-          // Transient blips (Wi-Fi hop, brief signal loss) recover on their
-          // own — only treat it as dead if it persists past a grace period.
+
           if (disconnectTimerRef.current !== null) return;
           disconnectTimerRef.current = window.setTimeout(() => {
             disconnectTimerRef.current = null;
@@ -322,8 +303,7 @@ export function useCallManager(
             }
             await pc.addIceCandidate(candidate);
           } catch {
-            // Stale/duplicate candidates are normal on renegotiation — never
-            // let one kill the signal handler.
+
           }
         };
         const drainIce = async () => {
@@ -333,7 +313,7 @@ export function useCallManager(
             try {
               await pc.addIceCandidate(candidate);
             } catch {
-              /* drop stale entries */
+
             }
           }
         };
@@ -349,8 +329,7 @@ export function useCallManager(
               await setLaneTrack(pc, LANE_CAMERA, pending.cam);
               await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
             }
-            // If we are already sharing when they connect, say so — they
-            // missed the announcement that went out before they arrived.
+
             if (screenShareRef.current) announceSharing(true);
             const ans = await pc.createAnswer();
             await pc.setLocalDescription(ans);
@@ -436,7 +415,7 @@ export function useCallManager(
       await setLaneTrack(pc, LANE_CAMERA, track);
       setLocalStream(new MediaStream(stream.getTracks()));
     } catch {
-      // Keep the existing camera track if re-acquisition fails.
+
     }
   }, [userId]);
 
@@ -448,7 +427,6 @@ export function useCallManager(
     }
   }, [plan, reapplyCameraConstraints]);
 
-  /** Tell the other side that sharing started or stopped. */
   const announceSharing = useCallback((sharing: boolean) => {
     const peerId = activePeerIdRef.current;
     if (!peerId || !signalRef.current || !userId) return;
@@ -459,15 +437,6 @@ export function useCallManager(
     });
   }, [userId]);
 
-  /**
-   * Share without losing your camera, and without renegotiating.
-   *
-   * This stopped the camera, swapped the track, then sent a fresh offer
-   * mid-call: the share replaced the person on the far side, and a
-   * renegotiation the other end mishandled dropped the call outright. The
-   * screen has its own lane now, so turning it on is a track swap on a
-   * transceiver that already exists.
-   */
   const toggleScreenShare = useCallback(async () => {
     const next = !screenShareRef.current;
     const pc = pcRef.current;
@@ -527,9 +496,7 @@ export function useCallManager(
       await reset();
       return;
     }
-    // Best-effort VoIP push so the callee's phones ring like a real call even
-    // if the app is backgrounded or killed. The call itself is the realtime
-    // `ring` above; this only wakes their iOS devices.
+
     void getSupabaseClient().functions.invoke("send-call-push", {
       body: { calleeId: peer.id, callId, callerName: displayName(profile) },
     }).then(({ data }) => {
@@ -564,11 +531,11 @@ export function useCallManager(
     playCallConnected();
     try {
       await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
-      // Stop this account's other sessions ringing.
+
       void sendToUser(userId, { type: "handled", from: userId, to: userId, callId: incoming.callId });
       await setupRtc(incoming.callId, incoming.fromId, false);
     } catch {
-      // setupRtc already sets error and resets
+
     }
   }, [incoming, userId, sendToUser, setupRtc]);
 
@@ -582,7 +549,7 @@ export function useCallManager(
       callId: incoming.callId,
       rejecterName: displayName(profile),
     });
-    // Declining on one device dismisses the ring on the rest of them.
+
     void sendToUser(userId, { type: "handled", from: userId, to: userId, callId: incoming.callId });
     setIncoming(null);
     setPhase("idle");
@@ -603,17 +570,12 @@ export function useCallManager(
     await reset();
   }, [userId, sendToUser, notifyPeerLeave, reset]);
 
-  /**
-   * Manual retry: redial the last peer after a dead call. Only valid from
-   * idle with no incoming call — the UI gates on `canRetryCall`.
-   */
   const retryCall = useCallback(async () => {
     const peer = lastPeerRef.current;
     if (!peer || phaseRef.current !== "idle" || incoming) return;
     await startCall(peer);
   }, [incoming, startCall]);
 
-  // Listen for incoming calls
   useEffect(() => {
     if (!userId) return;
     const supabase = getSupabaseClient();
@@ -623,11 +585,6 @@ export function useCallManager(
     ch.on("broadcast", { event: "call" }, ({ payload }) => {
       const p = payload as CallSignal;
 
-      // "handled" is the one signal a user sends to themselves: a ring goes to
-      // `call-user:<id>`, so every session that account is signed into rings,
-      // and the accept goes only to the caller. Without this the other
-      // sessions keep ringing after the call has already been picked up
-      // somewhere else.
       if (p.type === "handled") {
         if (phaseRef.current === "incoming") {
           stopRingtone();
@@ -674,7 +631,7 @@ export function useCallManager(
           try {
             await setupRtc(p.callId, p.from, true);
           } catch {
-            // setupRtc already sets error and resets
+
           }
         } else if (p.type === "reject") {
           if (phaseRef.current === "outgoing") {
@@ -684,12 +641,7 @@ export function useCallManager(
           playCallEnd();
           await reset();
         } else if (p.type === "cancel" || p.type === "leave") {
-          // Treat both as "the other side is gone".
-          //
-          // The two can legitimately cross: if our `accept` never reached the
-          // caller, they still believe the call is ringing and hang up with
-          // `cancel` while we are already `active`. Keying each type to one
-          // phase left us stuck in a call with nobody on the other end.
+
           const fromActivePeer = activePeerIdRef.current === p.from;
           if (phaseRef.current === "active" ? fromActivePeer : phaseRef.current !== "idle") {
             if (phaseRef.current === "active") playCallLeave();
@@ -724,7 +676,7 @@ export function useCallManager(
     activePeer,
     localStream,
     remoteStream,
-    // Only a share the other side has actually announced.
+
     remoteScreen: peerSharing ? remoteScreen : null,
     localScreen,
     cameraEnabled,
@@ -738,7 +690,7 @@ export function useCallManager(
     rejectCall,
     endCall,
     retryCall,
-    /** True when a manual redial is possible (idle, no incoming, have a peer). */
+
     canRetryCall: phase === "idle" && !incoming && lastPeerRef.current !== null,
     toggleCamera,
     toggleScreenShare,

@@ -10,7 +10,6 @@ interface StatusIndicatorProps {
   className?: string;
 }
 
-/** Discord-style status dot (online / idle / dnd / offline). */
 export function StatusIndicator({ status, size = "md", showLabel = false, className = "" }: StatusIndicatorProps) {
   const dim = size === "sm" ? 12 : 16;
   const inner = size === "sm" ? 6 : 8;

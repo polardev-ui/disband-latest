@@ -3,9 +3,6 @@ import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-// GET /api/invites/[code] — public server-invite preview shown before
-// signing up. Proxied through the service role (instead of an anonymous RPC)
-// and throttled per IP so a spammer can't grind the database with anon calls.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },

@@ -2,19 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * A call region you can drag taller or shorter.
- *
- * The call took a fixed slice of the window, so on a short screen it crowded
- * the conversation out and on a tall one it wasted space. Dragging the bottom
- * edge sets the height, and the choice is remembered — a call is not a
- * one-size thing, and the right size depends on whether you are watching a
- * shared screen or just listening.
- */
-
 const KEY = "disband:call-height";
 const MIN = 180;
-/** Leave room for the composer and a few messages, whatever the window height. */
+
 const MAX_FRACTION = 0.8;
 
 function stored(): number | null {
@@ -34,8 +24,6 @@ export function useCallHeight(defaultHeight = 360) {
     return Math.min(max, Math.max(MIN, Math.round(h)));
   }, []);
 
-  // A window that shrinks below the stored height would otherwise leave no
-  // room for the conversation at all.
   useEffect(() => {
     const onResize = () => setHeight((h) => clamp(h));
     window.addEventListener("resize", onResize);
@@ -49,7 +37,7 @@ export function useCallHeight(defaultHeight = 360) {
     try {
       localStorage.setItem(KEY, String(next));
     } catch {
-      // Private browsing: the size holds for this session.
+
     }
   }, [clamp]);
 
@@ -93,7 +81,7 @@ export function CallResizeHandle({
       onPointerMove={onPointerMove}
       onPointerUp={end}
       onPointerCancel={end}
-      // Keyboard resizing, since a drag handle is unreachable without a mouse.
+
       onKeyDown={(e) => {
         if (e.key === "ArrowUp") { e.preventDefault(); onResize(height - 24); }
         if (e.key === "ArrowDown") { e.preventDefault(); onResize(height + 24); }

@@ -1,4 +1,4 @@
-/** Returns true when the IP appears to be VPN, proxy, Tor, or datacenter hosting. */
+
 export async function isVpnOrProxy(ip: string): Promise<boolean> {
   if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
     return false;
@@ -16,7 +16,7 @@ export async function isVpnOrProxy(ip: string): Promise<boolean> {
         return !!(data.vpn || data.proxy || data.tor || data.active_vpn);
       }
     } catch {
-      // fall through to backup provider
+
     }
   }
 

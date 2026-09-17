@@ -10,21 +10,11 @@ import {
 } from "@/lib/gifts";
 import { SubscriptionMedallion, tierForMonths } from "./SubscriptionMedallion";
 
-/**
- * Buying a gift.
- *
- * Length is a dropdown rather than a row of buttons because a year is the
- * ceiling and four options do not deserve four buttons competing with the
- * plan choice above them. Price is shown for the exact combination chosen —
- * it rises with each step, and the saving against paying monthly is stated
- * rather than left to be worked out.
- */
 export function GiftModal({ onClose, onPurchased }: {
   onClose: () => void;
   onPurchased: (code: string) => void;
 }) {
-  // One paid plan, so nothing to pick; kept as a constant so the pricing
-  // helpers below still read the same way.
+
   const plan: GiftPlan = "aero";
   const [months, setMonths] = useState<GiftMonths>(1);
   const [clientSecret, setClientSecret] = useState<string | null>(null);

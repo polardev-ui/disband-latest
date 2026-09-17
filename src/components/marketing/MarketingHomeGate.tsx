@@ -12,11 +12,7 @@ export function MarketingHomeGate() {
 
   useEffect(() => {
     if (isPasswordResetLink()) {
-      // A recovery link that Supabase bounced to the site root — forward it to
-      // the reset page (which exchanges the tokens) instead of dropping the
-      // user on the homepage. The tokens travel in the URL's query/hash, so a
-      // full navigation carries them across (Next.js's client-side Router would
-      // strip the fragment).
+
       window.location.assign(`/reset-password${window.location.search}${window.location.hash}`);
       return;
     }

@@ -6,28 +6,14 @@ import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import type { Profile } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
 
-/**
- * The voice connection, held above the view.
- *
- * It used to live inside VoicePanel, which only renders while you are looking
- * at the voice channel — so opening any other channel unmounted the panel, ran
- * the hook's cleanup, and dropped the call. Being in a voice channel and
- * looking at one are different things, and this is what separates them: the
- * session is tied to the channel you connected to, not the channel on screen.
- *
- * The remote audio elements live here too. Rendering them in the panel meant
- * that even if the connection had survived, the sound would have stopped the
- * moment you navigated away.
- */
-
 interface VoiceSession {
-  /** The channel the call is in, regardless of what is on screen. */
+
   connectedChannelId: string | null;
   connectedChannelName: string | null;
   joined: boolean;
   participants: ReturnType<typeof useVoiceChannel>["participants"];
   error: string | null;
-  /** Live video from the people in the call, and their screen shares. */
+
   remoteStreams: Map<string, MediaStream>;
   remoteScreens: Map<string, MediaStream>;
   localScreen: MediaStream | null;
@@ -38,7 +24,7 @@ interface VoiceSession {
   toggleScreenShare: () => Promise<void>;
   connect: (channelId: string, channelName: string) => Promise<void>;
   disconnect: () => Promise<void>;
-  /** Presence for a channel you are only looking at, not connected to. */
+
   peek: (channelId: string) => void;
 }
 
@@ -73,7 +59,6 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     audioRefs.current.forEach((el) => { el.muted = deafened; });
   }, [deafened]);
 
-  // Mirror into app state so the sidebar indicator knows where the call is.
   useEffect(() => {
     setVoiceJoinedChannelId(voice.joined ? connectedChannelId : null);
   }, [voice.joined, connectedChannelId, setVoiceJoinedChannelId]);
@@ -81,7 +66,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const connect = useCallback(async (channelId: string, channelName: string) => {
     setConnectedChannelId(channelId);
     setConnectedChannelName(channelName);
-    // The hook keys off channelId, so the join has to wait for that to land.
+
     await Promise.resolve();
   }, []);
 
@@ -95,8 +80,6 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     void loadVoicePresence(channelId);
   }, [loadVoicePresence]);
 
-  // Joining is a second step: connect() sets the channel, and this fires once
-  // the hook has been rebuilt against it.
   const wantJoinRef = useRef(false);
   const connectAndJoin = useCallback(async (channelId: string, channelName: string) => {
     wantJoinRef.current = true;
@@ -135,7 +118,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   return (
     <Ctx.Provider value={value}>
       {children}
-      {/* Audio stays mounted for the life of the call, not the life of the view. */}
+      {}
       {[...voice.remoteStreams.entries()].map(([uid, stream]) => (
         <audio
           key={uid}

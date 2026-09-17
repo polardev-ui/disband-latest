@@ -5,17 +5,13 @@
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
   "type": "module",
-  "pnpm": {
-    "overrides": {
-      "postcss": "^8.5.28",
-      "nanoid@3": "^3.3.18",
-      "fast-uri@3": "^3.1.7",
-      "sharp": "^0.35.4"
-    }
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && wrangler dev",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:types": "wrangler types",
     "build:tauri": "node scripts/tauri-next-build.mjs",
     "start": "next start",
     "lint": "pnpm typecheck",
@@ -46,21 +42,17 @@
     "next": "^16.3.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "sharp": "^0.35.4",
     "stripe": "^22.3.0",
     "tauri-plugin-macos-permissions-api": "2.3.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
-    "@remotion/cli": "^4.0.523",
-    "@remotion/media-utils": "^4.0.507",
-    "@remotion/noise": "^4.0.507",
+    "@opennextjs/cloudflare": "^1.20.6",
     "@tailwindcss/postcss": "^4.3.1",
     "@tauri-apps/cli": "^2.11.3",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "remotion": "^4.0.507",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3"
   }

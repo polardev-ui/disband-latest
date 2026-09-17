@@ -1,14 +1,6 @@
 import { Logo } from "@/components/ui/Logo";
 import { LiveOnlineCount } from "./LiveOnlineCount";
 
-/**
- * A static, faithful rendering of the Disband client for the marketing hero.
- *
- * Deliberately shows real copy rather than grey placeholder bars — skeleton
- * mockups read as unfinished, and the point of the hero image is to show what
- * the product actually looks like.
- */
-
 const channels = [
   { name: "announcements", type: "text" as const },
   { name: "general", type: "text" as const, active: true },
@@ -68,7 +60,7 @@ export function ProductFrame() {
   return (
     <div className="relative">
       <div className="overflow-hidden rounded-lg border border-white/10 bg-[#1e1f22] shadow-[0_24px_70px_-20px_rgba(0,0,0,0.75)]">
-        {/* Title bar */}
+        {}
         <div className="flex h-9 items-center gap-2 border-b border-black/40 bg-[#17181b] px-3.5">
           <span className="h-[11px] w-[11px] rounded-full bg-[#ed6a5e]" />
           <span className="h-[11px] w-[11px] rounded-full bg-[#f4bf50]" />
@@ -77,7 +69,6 @@ export function ProductFrame() {
         </div>
 
         <div className="flex h-[398px] text-left">
-          {/* Server rail */}
           <div className="flex w-[58px] shrink-0 flex-col items-center gap-2.5 bg-[#131417] py-3">
             <Logo size={34} className="h-[34px] w-[34px]" />
             <span className="h-px w-6 bg-white/10" />
@@ -89,7 +80,6 @@ export function ProductFrame() {
             </span>
           </div>
 
-          {/* Channel list */}
           <div className="hidden w-[172px] shrink-0 flex-col bg-[#1a1b1f] sm:flex">
             <div className="flex h-11 items-center border-b border-black/30 px-3.5 text-[13px] font-semibold text-white">
               Disband Demo HQ
@@ -130,7 +120,6 @@ export function ProductFrame() {
             </div>
           </div>
 
-          {/* Conversation */}
           <div className="flex min-w-0 flex-1 flex-col bg-[#212328]">
             <div className="flex h-11 shrink-0 items-center gap-1.5 border-b border-black/30 px-4 text-[#8b9097]">
               <HashIcon />
@@ -169,7 +158,6 @@ export function ProductFrame() {
             </div>
           </div>
 
-          {/* Member list */}
           <div className="hidden w-[148px] shrink-0 bg-[#1a1b1f] px-2.5 py-3 lg:block">
             <p className="px-1.5 pb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#6e727a]">
               <LiveOnlineCount />

@@ -1,9 +1,8 @@
-/** True for phone / tablet user agents (not desktop browsers). */
+
 export function isMobileUserAgent(userAgent: string | null | undefined): boolean {
   if (!userAgent) return false;
   const ua = userAgent.toLowerCase();
 
-  // Tablets and phones
   if (/ipad|tablet|playbook|silk|(android(?!.*mobile))/i.test(userAgent)) return true;
   if (/mobile|iphone|ipod|android.*mobile|windows phone|blackberry|opera mini|iemobile/i.test(ua)) {
     return true;
@@ -19,12 +18,11 @@ export function isMobileGateDisabled(): boolean {
 
 const ALLOW_KEY = "disband:mobile-web-ok";
 
-/** Remember that this visitor chose the web app over the iOS app. */
 export function allowMobileWeb(): void {
   try {
     window.localStorage.setItem(ALLOW_KEY, "1");
   } catch {
-    // Private browsing with storage disabled: the choice just won't stick.
+
   }
 }
 

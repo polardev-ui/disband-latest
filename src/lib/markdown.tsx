@@ -4,14 +4,6 @@ import { isValidMentionToken } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
 
-// A small, dependency-free renderer that turns a chat message into React
-// nodes, supporting Discord-style markdown: code blocks, inline code, headers,
-// bold, italics, underline, strikethrough, plus @mentions, #channel mentions
-// and URLs.
-//
-// It renders React elements (not raw HTML) so user content is never injected
-// as unescaped HTML — plain text is always escaped by React automatically.
-
 type Token = string;
 
 export interface ChannelLite {
@@ -59,9 +51,6 @@ function renderInlineTokens(
       const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
       const chipClass = "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
 
-      // A mention naming a real person opens their profile. It looked
-      // clickable — tinted and with a hover state — but was inert, so tapping
-      // a name did nothing. @everyone stays plain text: it names no one.
       if (user && onMentionClick) {
         out.push(
           <button
@@ -91,8 +80,7 @@ function renderInlineTokens(
       const channel = channels?.find((c) => c.name.toLowerCase() === name);
       const chipClass =
         "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
-      // A channel name that exists here becomes a clickable #-chip; one that
-      // doesn't stays plain text (Discord renders unknown names grey).
+
       if (channel && onChannelClick) {
         out.push(
           <button
@@ -201,14 +189,6 @@ function headerLevel(line: string): number {
   return m[1].length;
 }
 
-/**
- * How each heading level renders.
- *
- * The level was detected and then discarded — every heading came out as
- * `font-semibold`, so `#`, `##` and `###` were indistinguishable from bold
- * text and from each other. Sizes follow Discord's, which is what people
- * typing `#` in a chat box expect.
- */
 const HEADING_CLASS: Record<number, string> = {
   1: "mb-1 mt-2 block text-[24px] font-bold leading-tight text-text-normal first:mt-0",
   2: "mb-1 mt-2 block text-[20px] font-bold leading-tight text-text-normal first:mt-0",
@@ -225,8 +205,6 @@ export function renderMarkdown(
   const out: ReactNode[] = [];
   let k = 0;
 
-  // Split into [text, lang, code] triples. Capture groups land on indexes 1-3
-  // of each match, so text is on i%4==0, lang on i%4==1, code on i%4==2.
   const fenceRe = /```(\w*)\n?([\s\S]*?)```/g;
   const segments = content.split(fenceRe);
 
@@ -235,12 +213,12 @@ export function renderMarkdown(
     if (seg === undefined) continue;
 
     if (i % 4 === 0) {
-      // Plain text (may contain inline markdown, headers, multi-line).
+
       emitText(seg);
     } else if (i % 4 === 1) {
-      // language tag — handled on the code segment; ignore.
+
     } else if (i % 4 === 2) {
-      // fenced code block body
+
       out.push(
         <pre
           key={k++}

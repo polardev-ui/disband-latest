@@ -5,7 +5,6 @@ function isMacDesktop(): boolean {
   return /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 }
 
-/** Prompt macOS for mic/camera before WebView getUserMedia (required for Tauri/WKWebView). */
 export async function requestNativeMediaPermissions(constraints: {
   audio?: boolean;
   video?: boolean;
@@ -34,7 +33,7 @@ export async function requestNativeMediaPermissions(constraints: {
       if (!granted) await requestCameraPermission();
     }
   } catch {
-    // Plugin unavailable during web dev or non-mac builds — WebView may still prompt.
+
   }
 }
 

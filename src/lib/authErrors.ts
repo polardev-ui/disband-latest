@@ -1,25 +1,14 @@
-/**
- * Shown when the account exists but its address was never confirmed.
- *
- * Exported because the login screen offers to send a new confirmation link
- * when it sees exactly this, and matching on a copy string that lives
- * somewhere else is the kind of coupling that breaks silently the next time
- * the wording is edited.
- */
+
 export const EMAIL_NOT_CONFIRMED =
   "Please confirm your email address before signing in. If your link expired, "
   + "you can send yourself a new one below.";
 
-/** Maps Supabase Auth errors to user-friendly copy. */
 export function mapAuthError(message: string | undefined | null): string {
   if (!message || message === "{}" || message === "{}") {
     return "Something went wrong. Please try again.";
   }
   const lower = message.toLowerCase();
 
-  // Raised by the signup trigger on auth.users. Supabase wraps a trigger
-  // exception in a generic database error, so the specific reason has to be
-  // recovered from the message or the person is told nothing useful.
   if (lower.includes("disposable_email")) {
     return "Temporary and disposable email addresses cannot be used to create an account. Use a permanent address.";
   }

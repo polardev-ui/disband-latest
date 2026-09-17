@@ -9,7 +9,6 @@ interface DmUnreadBadgeProps {
   onClick: () => void;
 }
 
-/** Floating DM notification — top-left PFP with unread count badge. */
 export function DmUnreadBadge({ friend, count, onClick }: DmUnreadBadgeProps) {
   if (count <= 0) return null;
   const label = count > 99 ? "99+" : String(count);

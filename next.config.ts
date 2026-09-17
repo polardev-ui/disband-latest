@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+initOpenNextCloudflareForDev();
 
 const isProd = process.env.NODE_ENV === "production";
 /** Set for Tauri desktop packaging only — static `out/` bundle. Web (Vercel) omits this. */

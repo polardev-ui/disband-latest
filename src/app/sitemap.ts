@@ -1,9 +1,6 @@
 import type { MetadataRoute } from "next";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
-// `output: export` (the desktop build) refuses a route that has not declared
-// whether it is static. Nothing here depends on the request, so it is
-// generated once at build time.
 export const dynamic = "force-static";
 const base = PUBLIC_ENV.webAppUrl;
 
