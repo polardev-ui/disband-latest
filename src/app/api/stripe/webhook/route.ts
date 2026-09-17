@@ -131,22 +131,26 @@ export async function POST(req: Request) {
             Math.min(99, parseInt(session.metadata.quantity ?? "1", 10) || 1),
           );
           if (supabase && buyerId && serverId && session.payment_status === "paid") {
-
-            const { data: existing } = await supabase
+            // One row per unit, numbered within the order. `session_seq` is
+            // what makes each unit distinct — without it a quantity > 1 order
+            // collides with itself on the session-id unique index and the
+            // buyer gets nothing (see migration 0083). Upserting on the unit
+            // key is what makes redelivery exactly-once, so there is no
+            // read-then-insert race between two concurrent retries.
+            const rows = Array.from({ length: qty }, (_, i) => ({
+              server_id: serverId,
+              user_id: buyerId,
+              source: "purchase",
+              stripe_session_id: session.id,
+              session_seq: i,
+            }));
+            const { error } = await supabase
               .from("server_catalysts")
-              .select("id")
-              .eq("stripe_session_id", session.id)
-              .limit(1);
-            if (!existing || existing.length === 0) {
-              const rows = Array.from({ length: qty }, () => ({
-                server_id: serverId,
-                user_id: buyerId,
-                source: "purchase",
-                stripe_session_id: session.id,
-              }));
-              const { error } = await supabase.from("server_catalysts").insert(rows);
-              if (error) throw new Error(error.message);
-            }
+              .upsert(rows, {
+                onConflict: "stripe_session_id,session_seq",
+                ignoreDuplicates: true,
+              });
+            if (error) throw new Error(error.message);
           }
           break;
         }
