@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot } from "@/lib/bot-auth";
 
-// GET /api/bot/me — the bot's own identity (bot token). Used by client
-// libraries on connect() to resolve the bot id and profile.
 export async function GET(request: NextRequest) {
   try {
     const bot = await authenticateBot(request);

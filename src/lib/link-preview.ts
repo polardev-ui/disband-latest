@@ -11,7 +11,7 @@ export interface LinkPreview {
 
 const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
 const INVITE_IN_URL_RE = /\/server\/[a-zA-Z0-9]{7}\b/;
-// A gift renders as its own card, so it must not also fetch a page preview.
+
 const GIFT_IN_URL_RE = /\/gift\/[a-zA-Z0-9]{10}\b/;
 
 const cache = new Map<string, LinkPreview | null>();
@@ -57,7 +57,7 @@ function parsePreviewPayload(url: string, data: {
   try {
     hostname = new URL(url).hostname;
   } catch {
-    // keep raw url
+
   }
   return {
     url,
@@ -94,7 +94,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
             return preview;
           }
         } catch {
-          // try next endpoint
+
         }
       }
       cache.set(url, null);

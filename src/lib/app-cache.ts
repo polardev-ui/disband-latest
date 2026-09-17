@@ -20,7 +20,7 @@ function persist(key: string, data: unknown): void {
     const raw = JSON.stringify(data);
     localStorage.setItem(CACHE_PREFIX + key, btoa(raw));
   } catch {
-    /* storage full — ignore */
+
   }
 }
 
@@ -39,7 +39,6 @@ export function getCached<T>(key: string): T | null {
   const mem = store().get(key) as CacheEntry<T> | undefined;
   if (mem && Date.now() < mem.expiresAt) return mem.data;
 
-  // fallback to persisted cache
   const persisted = loadPersisted(key);
   if (persisted) {
     const entry = persisted as CacheEntry<T>;
@@ -55,12 +54,4 @@ export function setCache<T>(key: string, data: T, ttl = CACHE_TTL): void {
   const entry: CacheEntry<T> = { data, expiresAt: Date.now() + ttl };
   store().set(key, entry);
   persist(key, entry);
-}
-
-export function clearCache(): void {
-  store().clear();
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const k = localStorage.getItem(localStorage.key(i)!);
-    if (k?.startsWith(CACHE_PREFIX)) localStorage.removeItem(localStorage.key(i)!);
-  }
 }

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 
-// POST /api/v1/servers/[serverId]/leave — the bot removes itself from a server.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ serverId: string }> },

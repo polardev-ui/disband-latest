@@ -11,7 +11,7 @@ interface AttachmentDraft {
   id: string;
   name: string;
   type: string;
-  url: string | null; // set once uploaded
+  url: string | null;
   error: string | null;
 }
 
@@ -51,7 +51,7 @@ export function BugReportForm() {
         const p = profile as { display_name?: string | null; username?: string | null } | null;
         if (p?.display_name || p?.username) setName(p.display_name || p.username || "");
       } catch {
-        // Not signed in — leave the fields empty.
+
       }
     })();
     return () => {

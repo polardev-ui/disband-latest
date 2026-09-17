@@ -22,9 +22,6 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"name" | "customize">("name");
 
-  // The modal stays mounted across open/close (it renders `null` when closed),
-  // so reset all typed state each time it opens. Otherwise the previous
-  // server's name/description/icon/banner persist into the next form.
   useEffect(() => {
     if (!open) return;
     setName("");

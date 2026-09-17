@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 
-// GET /api/v1/servers/[serverId]/members — member list (members.read).
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ serverId: string }> },

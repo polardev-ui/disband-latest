@@ -1,7 +1,4 @@
-/**
- * Next.js static export for Tauri cannot include server-only routes (API handlers,
- * middleware). Temporarily move them aside, run `next build`, then restore for local dev.
- */
+
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
@@ -9,22 +6,13 @@ import { dirname } from "node:path";
 const stashRoot = "src/.web-only-stash";
 const moves = [
   ["src/app/api", `${stashRoot}/app-api`],
-  // The middleware moved under src/ at some point; the old root path silently
-  // matched nothing, so this never actually stashed anything. Next disables
-  // middleware during export anyway, so it was harmless — but a stale entry
-  // that quietly does nothing is worse than no entry.
+
   ["src/middleware.ts", `${stashRoot}/middleware.ts`],
-  // Dynamic route with no generateStaticParams(), which `output: export`
-  // rejects outright. Approving a bot invite is a browser flow a server owner
-  // reaches from a link, so it has no place in the desktop bundle anyway.
+
   ["src/app/bot-invite", `${stashRoot}/app-bot-invite`],
-  // Same again for gift links. Inside the app a gift renders as a card in the
-  // conversation, so this standalone page only exists for a link opened
-  // somewhere that is not Disband — which is never the desktop bundle.
+
   ["src/app/gift", `${stashRoot}/app-gift`],
-  // Same again for referral links. They validate the code server-side and
-  // bounce to /login?ref=, and are shared as web URLs — never opened inside
-  // the statically exported bundle.
+
   ["src/app/referral", `${stashRoot}/app-referral`],
 ];
 
@@ -37,7 +25,7 @@ function moveAside(from, to) {
   try {
     renameSync(from, to);
   } catch {
-    // Windows can fail to rename non-empty directories across paths.
+
     cpSync(from, to, { recursive: true });
     rmSync(from, { recursive: true, force: true });
   }

@@ -4,8 +4,6 @@ import { getUserFromRequest } from "@/lib/server-auth";
 import { isBotScope } from "@/lib/bot-auth";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
-// POST /api/bot/invites — a bot owner creates an invite so a server owner can
-// approve the bot joining. Body: { botId, serverId, scopes }.
 export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);

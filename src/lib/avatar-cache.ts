@@ -1,15 +1,4 @@
-/**
- * Persistent avatar image cache (IndexedDB + object URLs).
- *
- * Avatars render through plain `<img src={remote}>`, which means every cold
- * start — and every iOS WebView cache eviction — re-fetches every visible
- * avatar and pops them in late. This module fetches once, stores the blob in
- * IndexedDB, and hands out `blob:` object URLs that paint instantly on repeat
- * views, with the remote URL as the fallback while a fetch is in flight.
- *
- * Never throws: storage pressure, private mode, or a missing IndexedDB all
- * degrade to plain remote loading.
- */
+
 
 const DB_NAME = "disband-avatar-cache";
 const STORE = "avatars";
@@ -54,7 +43,6 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
   );
 }
 
-/** Cached object URL for a remote avatar, or null on miss/expiry. */
 export async function getCachedAvatarUrl(remoteUrl: string): Promise<string | null> {
   try {
     const hit = objectUrls.get(remoteUrl);
@@ -70,7 +58,6 @@ export async function getCachedAvatarUrl(remoteUrl: string): Promise<string | nu
   }
 }
 
-/** Fetch a remote avatar into the cache (fire-and-forget safe). */
 export async function storeAvatar(remoteUrl: string): Promise<void> {
   try {
     if (!dbSupported() || objectUrls.has(remoteUrl)) return;
@@ -79,7 +66,7 @@ export async function storeAvatar(remoteUrl: string): Promise<void> {
     const blob = await res.blob();
     if (!blob.size || blob.size > MAX_BLOB_BYTES) return;
     await tx("readwrite", (s) => s.put({ url: remoteUrl, blob, fetchedAt: Date.now() } as AvatarRow));
-    // Best-effort LRU cap: drop the oldest rows beyond the limit.
+
     try {
       const keys = await tx<IDBValidKey[]>("readonly", (s) => s.getAllKeys());
       if (keys.length > MAX_ENTRIES) {
@@ -92,9 +79,9 @@ export async function storeAvatar(remoteUrl: string): Promise<void> {
           });
       }
     } catch {
-      /* cap is best-effort */
+
     }
   } catch {
-    /* cache must never break rendering */
+
   }
 }

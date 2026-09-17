@@ -27,11 +27,6 @@ interface DmProfileRailProps {
   onOpenFullProfile: () => void;
 }
 
-/**
- * Discord-like right-rail profile panel inside the DM column: banner,
- * avatar + presence, name + pronouns, the custom-status bubble, bio,
- * member-since, and quick actions. Hidden below lg via the parent.
- */
 export function DmProfileRail({ friend, onClose, onVoiceCall, onOpenFullProfile }: DmProfileRailProps) {
   const { presenceMap } = useApp();
   const [bannerFailed, setBannerFailed] = useState(false);

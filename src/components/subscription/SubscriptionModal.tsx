@@ -26,7 +26,7 @@ function PlanCard({ currentPlan, onSubscribe }: {
   currentPlan: string;
   onSubscribe: () => void;
 }) {
-  // Aero is the only plan — one hero card, no comparison grid.
+
   const plan = PLANS.find((p) => p.id === "aero")!;
   const isCurrentPlan = currentPlan === plan.id;
   const priceDollars = (plan.monthlyPrice / 100).toFixed(2);
@@ -94,14 +94,6 @@ function isMobileBrowser(): boolean {
   return /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-/**
- * Post-payment confirmation.
- *
- * Payment succeeding is not the same as the account being upgraded — the plan
- * only counts as live once our own subscription row grants it. So this screen
- * stays in an explicit "activating" state until that is true, and lists the
- * perks that are now unlocked instead of just claiming success.
- */
 function ActivationScreen({
   state,
   plan,

@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 
-// POST /api/v1/channels/[channelId]/messages
-//   Authorization: Bot <token>
-//   { "content": "Deploy finished", "reply_to_id": null }
-// GET  /api/v1/channels/[channelId]/messages?limit=50&before=<messageId>
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ channelId: string }> },

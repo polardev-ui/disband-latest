@@ -3,8 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import ts from 'typescript';
-// Test-only loader: execute real TypeScript modules without introducing a
-// second runtime/bundler into the application.
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
     let target;

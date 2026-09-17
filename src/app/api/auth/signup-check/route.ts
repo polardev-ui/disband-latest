@@ -19,8 +19,7 @@ export async function POST(request: Request) {
 
   const email = body.email?.trim().toLowerCase() ?? "";
   const username = body.username?.trim().toLowerCase() ?? "";
-  // The DB derives a username from the display name when none is usable, so a
-  // blank or non-ASCII name is fine here — only sanitized names are validated.
+
   const sanitized = username.replace(/[^a-z0-9_]/g, "");
   const ip = getClientIp(request);
   const ipHash = ip ? hashIp(ip) : null;
@@ -56,9 +55,7 @@ export async function POST(request: Request) {
   }
 
   if (email) {
-    // Plus-addressing and throwaway domains are refused by a trigger on the
-    // auth table, which can only fail the signup with a generic database
-    // error. Asking first turns that into a sentence someone can act on.
+
     const { data: emailCheck } = await service.rpc("check_email_allowed", {
       p_email: email,
     });

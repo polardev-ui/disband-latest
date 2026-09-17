@@ -5,21 +5,17 @@ import { IconPlus } from "@/components/icons";
 import type { ServerRole } from "@/lib/supabase/types";
 
 interface RolePickerProps {
-  /** Roles the caller may assign (already filtered to non-default roles). */
+
   roles: ServerRole[];
-  /** Currently selected role ids. */
+
   selected: string[];
-  /** Called with the toggled role id; the caller decides the new list. */
+
   onToggle: (roleId: string) => void;
   disabled?: boolean;
   align?: "left" | "right";
   compact?: boolean;
 }
 
-/**
- * Discord-style multi-role picker: a button showing the count, expanding to a
- * checkbox list. Used from the profile popup and the server members list.
- */
 export function RolePicker({ roles, selected, onToggle, disabled, align = "left", compact = false }: RolePickerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

@@ -19,7 +19,7 @@ interface ChatInputProps {
   placeholder: string;
   members?: Profile[];
   roles?: ServerRole[];
-  /** Server channels, for `#channel` autocomplete (server chat only). */
+
   channels?: ChannelLite[];
   replyTo?: ReplyPreview | null;
   onClearReply?: () => void;
@@ -30,9 +30,9 @@ interface ChatInputProps {
   onTypingActivity?: () => void;
   maxUploadBytes?: number;
   serverId?: string | null;
-  /** When false, the "+" button only uploads files (polls are disabled). */
+
   allowPolls?: boolean;
-  /** Incrementing value that triggers a focus of the composer textarea. */
+
   focusSignal?: number;
 }
 
@@ -49,8 +49,7 @@ interface MentionItem {
 function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: string) => void }) {
   const type = entry.file.type.startsWith("video/") ? "video" : entry.file.type.startsWith("image/") ? "image" : "file";
   const pct = entry.progress ? Math.max(0, Math.min(100, Math.round(entry.progress.percent))) : null;
-  // Staged ("queued") files aren't uploading yet — no overlay until bytes are
-  // actually in flight. In-message progress lives on AttachmentUploadCard.
+
   const busy = entry.status === "uploading";
   const failed = entry.status === "error";
 
@@ -67,32 +66,19 @@ function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: 
         // eslint-disable-next-line @next/next/no-img-element
         <img src={entry.localUrl} alt="" className="h-20 w-20 rounded object-cover" />
       )}
-      {/* Upload state overlay: progress bar + % while bytes are in flight,
-          error tint on failure. Staged files render clean. */}
-      {busy && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded bg-black/55 px-2">
-          {pct !== null ? (
-            <>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-                <div
-                  className="h-full rounded-full bg-brand transition-[width]"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-[10px] font-bold text-white">{pct}%</span>
-            </>
-          ) : (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          )}
-        </div>
-      )}
-      {failed && (
-        <div className="absolute inset-0 flex items-center justify-center rounded bg-status-dnd/25 px-1" title={entry.error ?? "Upload failed"}>
-          <span className="truncate text-[10px] font-semibold text-white">
-            {entry.error ?? "Failed"}
-          </span>
-        </div>
-      )}
+      {entry.status === "uploading" && entry.progress ? (
+        <span className="absolute inset-x-0 bottom-0 h-1 overflow-hidden rounded-b bg-black/40">
+          <span
+            className="block h-full bg-brand transition-[width]"
+            style={{ width: `${pct ?? 0}%` }}
+          />
+        </span>
+      ) : null}
+      {failed ? (
+        <span className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-[10px] font-bold text-white">
+          FAILED
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={() => onRemove(entry.id)}
@@ -158,24 +144,11 @@ export function ChatInput({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [focusSignal]);
 
-  /**
-   * Type anywhere to start typing in the composer, like Discord.
-   *
-   * Focus happens synchronously inside the keydown handler and the event is
-   * left to run, so the character that triggered it lands in the composer
-   * instead of being swallowed. Deferring to state or rAF would lose it.
-   *
-   * Bails out whenever the keystroke plausibly belongs to something else: an
-   * open dialog, another text field, a shortcut chord, or a bare navigation
-   * key.
-   */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.isComposing) return;
 
-      // Printable characters only — a lone Tab, Escape or arrow key must not
-      // yank focus into the composer.
       if (e.key.length !== 1) return;
 
       const target = e.target as HTMLElement | null;
@@ -193,10 +166,6 @@ export function ChatInput({
       const el = textareaRef.current;
       if (!el || el === document.activeElement || el.disabled) return;
 
-      // Is anything covering the composer? Most modals here are plain fixed
-      // overlays without a dialog role, so asking the document what is actually
-      // on top at the composer's position catches all of them — including ones
-      // added later — rather than relying on each modal to mark itself.
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
       const topmost = document.elementFromPoint(
@@ -295,18 +264,8 @@ export function ChatInput({
     remove(id);
   }, [remove]);
 
-  /**
-   * Dropping a file anywhere on the window attaches it.
-   *
-   * Dropping only onto the composer meant aiming at a 40px strip at the bottom
-   * of the window; anywhere else the browser navigated away from the app to
-   * open the file, which loses whatever was being typed. The listeners live
-   * here rather than in a wrapper because the mounted composer *is* the place
-   * a file would go — whichever conversation is open owns the drop.
-   */
   useEffect(() => {
-    // dragenter/dragleave fire for every element the pointer crosses, so the
-    // overlay follows a depth count rather than the last event seen.
+
     let depth = 0;
 
     const hasFiles = (e: DragEvent) =>
@@ -324,7 +283,7 @@ export function ChatInput({
     };
     const onOver = (e: DragEvent) => {
       if (!hasFiles(e) || !visible()) return;
-      // Without this the browser opens the file instead of handing it over.
+
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
     };

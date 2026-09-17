@@ -3,12 +3,6 @@
 import type { Profile } from "@/lib/supabase/types";
 import type { Session } from "@supabase/supabase-js";
 
-/**
- * A previously signed-in account that can be switched back to with one click.
- * The tokens let us re-submit the session straight to GoTrue — the same
- * mechanism the app uses to restore a session at launch — so switching only
- * persists once the target account is genuinely active in this tab.
- */
 export interface SavedSession {
   user_id: string;
   email: string | null;
@@ -45,11 +39,10 @@ function persist(list: SavedSession[]) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
-    // storage unavailable — switching still works within this tab
+
   }
 }
 
-/** Upsert a signed-in session into the saved list (refreshing stored tokens). */
 export function saveSession(session: Session | null | undefined, profile?: Profile | null): void {
   if (!session?.user?.id || !session.refresh_token) return;
   const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
@@ -77,8 +70,4 @@ export function saveSession(session: Session | null | undefined, profile?: Profi
 
 export function removeSavedSession(userId: string): void {
   persist(getSavedSessions().filter((s) => s.user_id !== userId));
-}
-
-export function savedSessionsRemainder(currentUserId: string | null): SavedSession[] {
-  return getSavedSessions().filter((s) => s.user_id !== currentUserId);
 }

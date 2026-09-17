@@ -5,22 +5,12 @@ import { closePoll, getPoll, totalVotes, votePoll, type Poll } from "@/lib/poll"
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconClose } from "@/components/icons";
 
-/**
- * A poll in a message.
- *
- * Results are always visible, not hidden behind having voted. Hiding them
- * followed from the old service being unable to tell who had voted, so the
- * card guessed from localStorage and had to hide the numbers to make the guess
- * survivable. The database knows, so the card can simply show the state:
- * bars fill in as votes land, your own choice is marked, and clicking it again
- * takes it back.
- */
 export function PollCard({ pollId, currentUserId }: { pollId: string; currentUserId?: string | null }) {
   const [poll, setPoll] = useState<Poll | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // A vote landing elsewhere should not fight a vote being cast here.
+
   const inFlight = useRef(false);
 
   const load = useCallback(async () => {
@@ -38,8 +28,6 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     void load();
   }, [load]);
 
-  // Everyone watching the same poll sees the same tally as it changes, which
-  // is the whole point of asking a room a question.
   useEffect(() => {
     const channel = getSupabaseClient()
       .channel(`poll:${pollId}`)
@@ -148,9 +136,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
                     : "border-divider bg-bg-accent hover:border-brand/50"
               } ${poll.closed || busy ? "cursor-default" : "cursor-pointer"}`}
             >
-              {/* The bar is behind the label rather than under it, so the row
-                  height never changes as results come in and the message does
-                  not jump while people are voting. */}
+              {}
               <span
                 aria-hidden
                 className={`absolute inset-y-0 left-0 transition-[width] duration-500 ease-out ${

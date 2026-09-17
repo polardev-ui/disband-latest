@@ -46,7 +46,7 @@ async function scrapeOpenGraph(url: string) {
   try {
     hostname = new URL(url).hostname;
   } catch {
-    // keep raw url
+
   }
 
   return {
@@ -67,7 +67,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing url parameter." }, { status: 400 });
   }
 
-  // SSRF guard: reject internal/private/metadata targets and non-http(s) schemes.
   try {
     await assertSafeUrl(target);
   } catch {
@@ -86,7 +85,7 @@ export async function GET(req: NextRequest) {
       });
     }
   } catch {
-    // fall through to direct scrape
+
   }
 
   try {

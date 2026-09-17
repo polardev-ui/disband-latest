@@ -9,20 +9,6 @@ import {
   type MfaFactor,
 } from "@/lib/mfa";
 
-/**
- * A second-factor check inside a flow that has already signed you in.
- *
- * Supabase refuses to change a password on a session that has not cleared MFA,
- * and a recovery link only ever produces one of those. The reset page had no
- * step for it, so anyone with 2FA turned on followed a valid link, typed a
- * valid password and was told "AAL2 session is required" with nothing on the
- * page to do about it — the one flow they were using precisely because they
- * could not get in another way.
- *
- * Unlike the full-screen challenge this is a panel inside an existing card, so
- * the reset flow keeps its own heading and does not look like a different page
- * appeared mid-way through.
- */
 export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
   const [factors, setFactors] = useState<MfaFactor[]>([]);
   const [selectedFactorId, setSelectedFactorId] = useState("");
@@ -67,8 +53,6 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
     return <p className="py-4 text-center text-sm text-text-muted">Loading…</p>;
   }
 
-  // No verified factor but the session still says MFA is needed: telling
-  // someone to enter a code they cannot produce is worse than saying so.
   if (factors.length === 0) {
     return (
       <p className="rounded border border-status-dnd/40 bg-status-dnd/10 px-3 py-2.5 text-sm text-status-dnd">

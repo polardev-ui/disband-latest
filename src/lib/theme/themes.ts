@@ -1,7 +1,4 @@
-/**
- * Theme registry for Disband.
- * Each entry maps to a `[data-theme="id"]` block in globals.css.
- */
+
 export type ThemeId = "light" | "dark" | "midnight" | "sunset" | "ocean" | "rose-gold" | "plasma" | "nord" | "graphite" | "forest" | "cobalt" | "ember" | "parchment" | "porcelain" | "orchid" | "copper";
 
 export interface ThemeDefinition {
@@ -9,10 +6,9 @@ export interface ThemeDefinition {
   label: string;
   mode?: "light" | "dark";
   description: string;
-  /** Preview swatches: [tertiary, secondary, primary canvas, brand]. */
+
   swatch: [string, string, string, string];
-  /** Minimum plan required to use this theme (undefined = free). */
-  /** Undefined means free. Premium themes need the paid plan. */
+
   plan?: "aero";
 }
 

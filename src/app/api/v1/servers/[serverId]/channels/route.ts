@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 
-// GET  /api/v1/servers/[serverId]/channels — channels the bot can see.
-// POST /api/v1/servers/[serverId]/channels — create a channel (channels.manage).
-//   { "name": "deploys", "type": "text", "category_id": null }
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ serverId: string }> },

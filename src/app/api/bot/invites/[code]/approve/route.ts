@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 
-// POST /api/bot/invites/[code]/approve — the server owner lets the bot in.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },

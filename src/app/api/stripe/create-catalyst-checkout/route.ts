@@ -5,15 +5,6 @@ import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { formatCents } from "@/lib/catalysts";
 
-/**
- * Buy catalysts for a server (any quantity, one-time payment).
- *
- * Unlike the monthly Aero grant, purchased catalysts never expire and are
- * fulfilled by the Stripe webhook, which inserts one `server_catalysts` row
- * per unit with the checkout session id (idempotent on redelivery).
- */
-
-/** Catalogue unit price for display (amounts aren't secret). */
 export async function GET() {
   try {
     const price = await getStripe().prices.retrieve(getCatalystPriceId());
@@ -47,9 +38,6 @@ export async function POST(req: Request) {
     if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
     const origin = checkoutOrigin(req);
 
-    // Catalogue price (one-time). Validated up front: a recurring catalogue
-    // price cannot be charged in a one-time checkout, so fail here with
-    // something actionable instead of an opaque Stripe 400.
     let priceId: string;
     try {
       priceId = getCatalystPriceId();

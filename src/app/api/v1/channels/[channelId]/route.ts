@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 
-// PATCH /api/v1/channels/[channelId]  — rename a channel (channels.manage).
-// DELETE /api/v1/channels/[channelId] — delete a channel (channels.manage).
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ channelId: string }> },

@@ -39,7 +39,6 @@ function StatusAvatar({ profile, presence }: { profile: Profile; presence: Prese
   );
 }
 
-/** Circular hover action, matching the message/overflow buttons in the mock. */
 function RowAction({
   label,
   onClick,
@@ -112,7 +111,6 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   const pendingCount = pendingIncoming.length;
 
-  // Blocked rows live on the friendships table; the profile is already joined on.
   const blocked = useMemo(
     () =>
       friendships
@@ -163,7 +161,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      {/* Header: title, tab strip, and the Add Friend affordance */}
+      {}
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         <IconFriends size={22} className="shrink-0 text-text-muted" />
         <h1 className="shrink-0 text-[15px] font-semibold text-text-normal">My Friends</h1>
@@ -212,7 +210,6 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
         </nav>
       </header>
 
-      {/* Add-friend form lives in the main pane, not crammed into the sidebar */}
       {addOpen && (
         <div className="shrink-0 border-b border-black/20 px-6 py-5">
           <h2 className="text-[15px] font-semibold text-text-normal">Add a friend</h2>
@@ -500,7 +497,6 @@ function PendingList({
   );
 }
 
-/** Right rail — mirrors the "Active Now" column in the reference layout. */
 export function ActiveNowPanel() {
   const { friends, dmListEntries, presenceMap } = useApp();
 

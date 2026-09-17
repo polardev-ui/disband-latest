@@ -1,4 +1,4 @@
-/** Maps Supabase/Postgres profile update errors to user-friendly copy. */
+
 export function mapProfileError(message: string, code?: string): string {
   const lower = message.toLowerCase();
 
@@ -23,7 +23,6 @@ export function mapProfileError(message: string, code?: string): string {
   return message;
 }
 
-/** Maps message send errors (rate limits, word/length caps, blocks) to friendly copy. */
 export function mapMessageError(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes("too quickly")) return "You are sending messages too quickly. Slow down.";
@@ -33,7 +32,6 @@ export function mapMessageError(message: string): string {
   return message;
 }
 
-/** Maps group chat action errors (creation, messaging, etc.). */
 export function mapGroupChatError(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes("wait 20 seconds before creating")) {

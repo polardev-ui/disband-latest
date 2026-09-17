@@ -50,7 +50,7 @@ export async function applyAudioOutputToElement(
   try {
     await sink.setSinkId(deviceId);
   } catch {
-    // Browser may reject sink changes until user gesture.
+
   }
 }
 
@@ -67,15 +67,12 @@ export function buildVideoConstraints(plan?: string): boolean | MediaTrackConstr
   return { ...resolution, deviceId: { ideal: deviceId } };
 }
 
-/** Best-effort fallback resolution when a pinned device can't satisfy the tier. */
 export function buildVideoFallbackConstraints(plan?: string): MediaTrackConstraints {
   return { facingMode: "user", ...videoTierConstraints(plan) };
 }
 
 function videoTierConstraints(plan?: string): MediaTrackConstraints {
-  // Loosely typed because the plan arrives as a bare string from callers that
-  // never narrowed it — which is exactly how this kept comparing against
-  // "super" after that plan stopped existing.
+
   return normalizePlan(plan) === "aero"
     ? { width: { ideal: 2560 }, height: { ideal: 1440 }, frameRate: { ideal: 120 } }
     : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };

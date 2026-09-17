@@ -23,7 +23,7 @@ interface ThemeContextValue {
   theme: ThemeId;
   themes: ThemeDefinition[];
   setTheme: (theme: ThemeId) => void;
-  /** Cycle to the next registered theme — handy for a single toggle button. */
+
   cycleTheme: () => void;
 }
 
@@ -32,16 +32,13 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 function applyTheme(theme: ThemeId) {
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
-  // Keep the native color-scheme in sync so form controls + the desktop
-  // window chrome match the active theme.
+
   root.style.colorScheme = themeColorScheme(theme);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
 
-  // Hydrate from localStorage (set early by the inline script in layout.tsx,
-  // this just keeps React state aligned with the DOM).
   useEffect(() => {
     let stored: string|null = null;
     try { stored = window.localStorage.getItem(STORAGE_KEY); } catch { /* The current theme works without storage. */ }
@@ -57,8 +54,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(next);
     applyTheme(next);
     try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* Session-only preference. */ }
-    // TODO (integration): also persist to `profiles.theme` in Supabase here
-    // for signed-in users so the preference follows them across devices.
+
   }, []);
 
   const cycleTheme = useCallback(() => {

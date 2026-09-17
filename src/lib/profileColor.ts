@@ -1,13 +1,5 @@
 import type { CSSProperties } from "react";
 
-/**
- * Neutral grey rather than the brand blurple.
- *
- * An un-customised profile should read as "not set yet", not as though the user
- * deliberately picked the brand colour — and it makes any colour they later
- * choose obviously theirs. `usesCustomAccent()` still gates on both accent
- * fields being present, so this is purely the un-set appearance.
- */
 export const DEFAULT_ACCENT = "#7a7d85";
 
 export interface ProfileAccentFields {
@@ -21,11 +13,6 @@ export interface RoleGradientFields {
   gradient_animated?: boolean;
 }
 
-/**
- * Level 3+ catalyst perk: a role renders as gradient text from `color` to
- * `gradient_to`, shimmering when `gradient_animated` (via the
- * `.animate-role-gradient` keyframes in globals.css).
- */
 export function roleGradientTextStyle(role: RoleGradientFields | null | undefined): CSSProperties | undefined {
   if (!role?.gradient_to?.trim()) return undefined;
   return {
@@ -169,9 +156,4 @@ export function getUsernameStyle(profile: ProfileAccentFields, onDarkBackground 
   const solid = sanitizeHex(profile.accent_color);
   const color = onDarkBackground && relativeLuminance(solid) < 0.45 ? lightenHex(solid) : solid;
   return { color };
-}
-
-export function getUsernameColor(profile: ProfileAccentFields, onDarkBackground = true): string | undefined {
-  const style = getUsernameStyle(profile, onDarkBackground);
-  return typeof style.color === "string" ? style.color : undefined;
 }

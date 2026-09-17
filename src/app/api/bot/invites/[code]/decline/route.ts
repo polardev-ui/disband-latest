@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 
-// POST /api/bot/invites/[code]/decline — the server owner turns the bot away.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },

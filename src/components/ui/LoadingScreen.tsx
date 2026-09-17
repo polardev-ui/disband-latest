@@ -3,15 +3,6 @@
 import { useState, useEffect } from "react";
 import { Logo } from "@/components/ui/Logo";
 
-/**
- * Full-window splash shown while the session resolves and the first data load
- * settles. Deliberately quiet: a mark, a label, and a thin indeterminate bar —
- * enough to read as "working", without a spinner that draws the eye on every
- * cold start.
- *
- * After 4 seconds, a small "Connection issues? Check our status" link fades in
- * at the bottom, linking to /status.
- */
 export function LoadingScreen({ label = "Loading Disband" }: { label?: string }) {
   const [showStatus, setShowStatus] = useState(false);
 

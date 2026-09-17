@@ -3,7 +3,6 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let serviceClient: SupabaseClient | null = null;
 
-/** Server-only Supabase client with service role (API routes, scripts). */
 export function getServiceSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,21 +16,11 @@ export function getServiceSupabase(): SupabaseClient | null {
   return serviceClient;
 }
 
-/**
- * Resolve the calling user for an API route.
- *
- * Browsers on the same origin send Supabase's auth cookies, which is what these
- * routes were written against. The Tauri desktop app calls the hosted origin
- * cross-origin, where those cookies are not sent, so it authenticates with an
- * `Authorization: Bearer <access_token>` header instead (see `apiFetch`).
- * Explicit bearer credentials take precedence; cookies remain a same-origin fallback.
- */
 export async function getRouteUser(req: Request): Promise<{ id: string; email?: string } | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
   if (!url || !anonKey) return null;
-  // Explicit bearer identity wins over potentially stale cookies. It also
-  // avoids a redundant auth round trip for every desktop and web API call.
+
   const auth = req.headers.get("authorization");
   if (auth) {
     const token = auth.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -40,7 +29,7 @@ export async function getRouteUser(req: Request): Promise<{ id: string; email?: 
     const { data: { user }, error } = await client.auth.getUser(token);
     return error || !user ? null : { id: user.id, email: user.email ?? undefined };
   }
-  // Cross-site requests must never gain ambient cookie authority.
+
   if (req.headers.get("sec-fetch-site") === "cross-site") return null;
   const { cookies } = await import("next/headers");
   const { createServerClient } = await import("@supabase/ssr");
@@ -54,7 +43,7 @@ export async function getRouteUser(req: Request): Promise<{ id: string; email?: 
           try {
             cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
           } catch {
-            // Read-only cookie store (route handlers): ignore.
+
           }
         },
       },
@@ -62,7 +51,7 @@ export async function getRouteUser(req: Request): Promise<{ id: string; email?: 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) return { id: user.id, email: user.email ?? undefined };
   } catch {
-    // Invalid cookie sessions remain unauthenticated.
+
   }
 
   return null;

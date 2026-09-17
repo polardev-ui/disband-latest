@@ -1,61 +1,29 @@
-/**
- * Production defaults for NEXT_PUBLIC_* vars.
- * These are client-visible (same as the hosted web app) and are inlined at build time
- * so Tauri desktop builds work without a local `.env.local`.
- */
+
 export const PUBLIC_ENV = {
   supabaseUrl:
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://mjqbrcabargylrimlafw.supabase.co",
   supabaseAnonKey:
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM",
-  /**
-   * Giphy search and link previews — now the CDN too.
-   *
-   * These were the last two things still going to the old media host, which
-   * answered slowly and sometimes 502'd, and every link in chat waited on it.
-   * The Worker serves both itself: previews are scraped and cached at the
-   * edge, and GIF search is proxied through to Giphy (falling back to the old
-   * host until a GIPHY_API_KEY secret is set on the Worker).
-   *
-   * Kept as its own value rather than folded into `cdnUrl` so a single
-   * endpoint can be pointed elsewhere without moving image storage with it.
-   */
+
   mediaApiUrl:
     process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://cdn.disband.dev/v1",
-  /** Where uploads go and where images are served from. */
+
   cdnUrl:
     process.env.NEXT_PUBLIC_CDN_URL ?? "https://cdn.disband.dev/v1",
   githubRepo:
     process.env.NEXT_PUBLIC_GITHUB_REPO ?? "polardev-ui/disband-latest",
-  /**
-   * Public web app origin for shareable links (invites, etc.).
-   *
-   * This value is baked into metadata at build time (og:image, canonical,
-   * robots sitemap URL), so a build env accidentally pointing at localhost
-   * ships `http://localhost:3000` meta tags to production — Discord embeds and
-   * crawlers then resolve the card image against localhost. Treat any
-   * loopback value as "not configured" and always fall back to the real origin.
-   */
+
   webAppUrl: !process.env.NEXT_PUBLIC_APP_URL ||
     /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/.test(
       process.env.NEXT_PUBLIC_APP_URL,
     )
     ? "https://www.disband.dev"
     : process.env.NEXT_PUBLIC_APP_URL,
-  /** Cloudflare Turnstile site key — website-only forms. */
+
   turnstileSiteKey:
     process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "0x4AAAAAADpTEU6IzBC_YVIF",
 
-  /**
-   * TURN relay for calls. Comma-separated urls, e.g.
-   * "turn:turn.example.com:3478,turns:turn.example.com:5349".
-   *
-   * STUN alone only works when at least one peer is directly reachable. Mobile
-   * networks are usually behind carrier-grade NAT, so a phone calling a desktop
-   * frequently has no viable candidate pair and the call connects with no audio
-   * in either direction. TURN relays the media and fixes exactly that case.
-   */
   turnUrls: process.env.NEXT_PUBLIC_TURN_URLS ?? "",
   turnUsername: process.env.NEXT_PUBLIC_TURN_USERNAME ?? "",
   turnCredential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL ?? "",

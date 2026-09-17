@@ -33,7 +33,6 @@ export function Turnstile({ siteKey, onToken, onExpire, onError, className }: Tu
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  // Always call the latest prop versions — avoid stale closures registered with the widget.
   const onTokenRef = useRef(onToken);
   const onExpireRef = useRef(onExpire);
   const onErrorRef = useRef(onError);
@@ -53,8 +52,7 @@ export function Turnstile({ siteKey, onToken, onExpire, onError, className }: Tu
   };
 
   useEffect(() => {
-    // If the Turnstile script was already loaded (e.g. cached from a prior navigation),
-    // window.turnstile exists immediately — render now without waiting for onLoad.
+
     render();
 
     return () => {

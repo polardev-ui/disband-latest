@@ -1,12 +1,4 @@
-/**
- * Prints the Resend segment (formerly audience) IDs for this account, so the
- * newsletter env var can be filled in without guessing.
- *
- * Reads RESEND_API_KEY from the environment — the key is never written
- * anywhere, and only ids and names are printed.
- *
- *   RESEND_API_KEY=re_... node scripts/list-resend-segments.mjs
- */
+
 const key = process.env.RESEND_API_KEY;
 if (!key) {
   console.error("RESEND_API_KEY is not set.\n");
@@ -24,8 +16,6 @@ async function fetchList(path) {
   return { ok: true, json: await res.json() };
 }
 
-// Segments is current; audiences is the deprecated name and still works on
-// older accounts, so fall back rather than reporting an empty list.
 let result = await fetchList("/segments");
 let label = "segment";
 

@@ -3,15 +3,6 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-/**
- * Badges, fetched once per person and shared across every place they appear.
- *
- * A profile's badges show up in the member list, on every message, and in the
- * profile card, so asking per component would mean one request per avatar on
- * screen. Requests for ids seen in the same tick are collected and sent as one
- * query, and answers are cached for the session.
- */
-
 export interface BadgeDef {
   key: string;
   name: string;
@@ -28,14 +19,6 @@ export interface AwardedBadge extends BadgeDef {
 
 const cache = new Map<string, AwardedBadge[]>();
 
-/**
- * Listeners keyed by user.
- *
- * A single set meant one person's badges arriving re-rendered every badge row
- * on screen. On a server with several hundred members that is a few hundred
- * answers each waking a few hundred components, which showed up as the member
- * list flickering and the whole app dropping frames.
- */
 const listeners = new Map<string, Set<() => void>>();
 
 function notify(userId: string) {
@@ -49,7 +32,6 @@ let catalogueLoad: Promise<Map<string, BadgeDef>> | null = null;
 let queue = new Set<string>();
 let queueTimer: number | null = null;
 
-/** Same ceiling as profile loads: a long `in.(...)` filter is what broke them. */
 const CHUNK = 150;
 
 async function loadCatalogue(): Promise<Map<string, BadgeDef>> {
@@ -92,8 +74,7 @@ async function flush() {
         list.push({ ...def, awarded_at: row.awarded_at, metadata: row.metadata ?? {} });
         grouped.set(row.user_id, list);
       }
-      // Everyone asked for is cached, including those with none — otherwise
-      // an empty answer is retried forever.
+
       for (const id of slice) {
         cache.set(id, (grouped.get(id) ?? []).sort((a, b) => a.sort - b.sort));
       }
@@ -108,7 +89,6 @@ function request(userId: string): void {
   if (queueTimer === null) queueTimer = window.setTimeout(() => void flush(), 16);
 }
 
-/** Drop a cached answer so the next read refetches — used after an award. */
 export function invalidateBadges(userId: string) {
   cache.delete(userId);
   request(userId);
@@ -116,16 +96,6 @@ export function invalidateBadges(userId: string) {
 
 const NONE: AwardedBadge[] = [];
 
-/**
- * Someone's badges.
- *
- * `fresh` re-reads even when the answer is already cached. Without it a badge
- * awarded during a session — granted by an admin, or earned and picked up by
- * the server's sweep — stayed invisible until the next sign-in, because the
- * cache is only ever filled once per person per session. Profile views pass
- * it; the member list and message rows do not, since those render a badge per
- * row and re-reading on every one of them is what the cache exists to stop.
- */
 export function useBadges(
   userId: string | null | undefined,
   { fresh = false }: { fresh?: boolean } = {},
@@ -143,7 +113,7 @@ export function useBadges(
     set.add(sync);
 
     if (fresh) {
-      // Show whatever is cached immediately, then correct it.
+
       sync();
       invalidateBadges(userId);
     } else if (cache.has(userId)) {
@@ -161,7 +131,6 @@ export function useBadges(
   return badges;
 }
 
-/** Nudge the server to re-evaluate what the signed-in user has earned. */
 export async function refreshOwnBadges(userId: string) {
   await getSupabaseClient().rpc("refresh_user_badges", { p_user: userId });
   invalidateBadges(userId);

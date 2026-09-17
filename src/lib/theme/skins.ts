@@ -1,15 +1,4 @@
-/**
- * Skins: the Super-only themes that change the *shape* of the UI.
- *
- * Distinct from the palette themes in `themes.ts`, which only recolour. A skin
- * squares corners, swaps typefaces, bevels controls — so it is registered
- * separately and applied through `data-skin` on <html>, alongside rather than
- * instead of the chosen colour theme.
- *
- * The CSS itself lives in globals.css, not here: shipped skins should cost no
- * runtime work and must never flash unstyled on load. This file is only the
- * catalogue the settings screen and the docs render from.
- */
+
 
 export type SkinId =
   | "minecraft" | "cod" | "y2k" | "frutiger"
@@ -19,11 +8,11 @@ export interface SkinDefinition {
   id: SkinId;
   label: string;
   description: string;
-  /** Preview swatches: [chrome, panel, canvas, accent]. */
+
   swatch: [string, string, string, string];
-  /** Shown on the card so the look is legible before it is applied. */
+
   sample: {
-    /** CSS font stack for the preview label. */
+
     font: string;
     radius: string;
   };
@@ -99,8 +88,4 @@ export const SKIN_IDS = SKINS.map((s) => s.id);
 
 export function isSkinId(value: string | null | undefined): value is SkinId {
   return !!value && (SKIN_IDS as string[]).includes(value);
-}
-
-export function skinById(id: string | null | undefined): SkinDefinition | null {
-  return SKINS.find((s) => s.id === id) ?? null;
 }

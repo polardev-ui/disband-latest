@@ -15,7 +15,6 @@ export interface BotActor {
   scopes: string[];
 }
 
-/** One-way hash used for bot tokens — the raw token is never stored. */
 export function hashBotToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -24,10 +23,6 @@ export function isBotScope(value: string): value is BotScope {
   return (BOT_SCOPES as string[]).includes(value);
 }
 
-/**
- * Authenticates a request using the `Authorization: Bot <token>` scheme.
- * Returns the bot actor or null when the token is missing, unknown, or revoked.
- */
 export async function authenticateBot(request: NextRequest): Promise<BotActor | null> {
   const header = request.headers.get("authorization");
   const token = header?.startsWith("Bot ") ? header.slice(4).trim() : null;
@@ -44,7 +39,6 @@ export async function authenticateBot(request: NextRequest): Promise<BotActor | 
 
   if (!data || data.revoked_at) return null;
 
-  // Fire-and-forget presence update.
   void service
     .from("bots")
     .update({ last_seen_at: new Date().toISOString() })

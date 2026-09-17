@@ -4,17 +4,6 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSkin } from "@/components/theme/SkinProvider";
 
-/**
- * Says why the app suddenly looks ordinary again.
- *
- * A skin is a Super perk, so when a subscription lapses it stops being
- * applied. Doing that silently is the worst version of it: the app changes
- * shape between one launch and the next and nothing anywhere explains it, so
- * it reads as the app breaking rather than as a subscription ending.
- *
- * The saved skin is untouched — it comes straight back on resubscribing —
- * which is what the copy promises, so it had better remain true.
- */
 const DISMISS_KEY = "disband:skin-lapsed-ack";
 
 export function SkinLapsedNotice() {
@@ -24,8 +13,7 @@ export function SkinLapsedNotice() {
   useEffect(() => {
     if (loading || !lapsed) return;
     try {
-      // Acknowledged per plan, so a Super → Basic → free slide says it again
-      // rather than staying quiet after the first time.
+
       setDismissed(window.localStorage.getItem(DISMISS_KEY) === plan);
     } catch {
       setDismissed(false);
@@ -39,7 +27,7 @@ export function SkinLapsedNotice() {
     try {
       window.localStorage.setItem(DISMISS_KEY, plan);
     } catch {
-      // Not being able to remember the dismissal is better than not showing it.
+
     }
   };
 

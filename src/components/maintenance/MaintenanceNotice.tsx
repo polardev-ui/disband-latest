@@ -3,16 +3,6 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-/**
- * The scheduled-maintenance banner.
- *
- * Switched on from the Supabase table editor rather than a deploy, so a
- * notice can go up while something is actually going wrong. Dismissal is held
- * back for a few seconds because a banner that can be closed the instant it
- * appears gets closed reflexively, before it has been read; the button says
- * how long is left rather than simply refusing to work.
- */
-
 interface Notice {
   active: boolean;
   title: string;
@@ -58,8 +48,6 @@ export function MaintenanceNotice() {
 
     void load();
 
-    // Picked up live, so switching it on reaches people already in the app
-    // rather than only those who reload.
     const channel = getSupabaseClient()
       .channel("maintenance-notice")
       .on("postgres_changes",
@@ -67,7 +55,6 @@ export function MaintenanceNotice() {
         () => void load())
       .subscribe();
 
-    // A tab left open for hours should still notice a banner going up.
     const poll = window.setInterval(() => void load(), 120_000);
 
     return () => {
@@ -90,7 +77,7 @@ export function MaintenanceNotice() {
     try {
       localStorage.setItem(DISMISSED_KEY, String(notice.revision));
     } catch {
-      // Storage blocked: it will reappear next load, which is the safer miss.
+
     }
     setNotice(null);
   }
@@ -139,7 +126,6 @@ export function MaintenanceNotice() {
   );
 }
 
-/** "on 6 Sep, 14:00–16:00" in the reader's own timezone. */
 function formatWindow(startsAt: string, endsAt: string | null): string {
   const start = new Date(startsAt);
   if (Number.isNaN(start.getTime())) return "";

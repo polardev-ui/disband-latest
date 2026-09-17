@@ -11,9 +11,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const username = url.searchParams.get("username")?.trim() ?? "";
 
-  // Proxied through the service role rather than the anon key: the RPC is no
-  // longer granted to `anon` (see 0053), so anonymous callers of this route
-  // must be served server-side instead.
   const supabase = getServiceSupabase();
   if (!supabase) {
     return NextResponse.json({ available: false, reason: "Service unavailable" }, { status: 503 });

@@ -15,7 +15,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
 
-    // Throttle owner-password attempts to prevent brute force (per user + per IP).
     const ip = getClientIp(request) || "unknown";
     const ipLimit = rateLimit(`platform-ban:ip:${ip}`, 10, 60_000);
     if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfterSeconds);
@@ -70,7 +69,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, action: "unban" });
     }
 
-    // Best-effort email lookup for record-keeping; never block the ban on it.
     let targetEmail: string | null = null;
     try {
       const { data: authUser } = await service.auth.admin.getUserById(targetUserId);

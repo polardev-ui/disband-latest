@@ -11,10 +11,6 @@ import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 
-/* ------------------------------------------------------------------ */
-/*  Participant circle                                                */
-/* ------------------------------------------------------------------ */
-
 function ParticipantTile({
   profile,
   stream,
@@ -28,7 +24,7 @@ function ParticipantTile({
   label: string;
   mirrored?: boolean;
   ring?: boolean;
-  /** Set when the tile is a screen share rather than a camera. */
+
   forceScreen?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -44,8 +40,6 @@ function ParticipantTile({
     }
   }, [stream, hasVideo]);
 
-  // A shared screen is not a face: it must not be cropped to fill a square,
-  // and it must never be mirrored or the text in it reads backwards.
   const isScreen = forceScreen
     || !!stream?.getVideoTracks().some((t) => /screen|display|window|monitor/i.test(t.label));
 
@@ -85,10 +79,6 @@ function ParticipantTile({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Timer                                                             */
-/* ------------------------------------------------------------------ */
-
 function formatElapsed(ms: number): string {
   const total = Math.floor(ms / 1000);
   const m = Math.floor(total / 60);
@@ -96,10 +86,6 @@ function formatElapsed(ms: number): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${pad(m)}:${pad(s)}`;
 }
-
-/* ------------------------------------------------------------------ */
-/*  Group call stage                                                  */
-/* ------------------------------------------------------------------ */
 
 interface GroupCallStageProps {
   groupName: string;
@@ -111,7 +97,7 @@ interface GroupCallStageProps {
   selfId?: string | null;
   localStream: MediaStream | null;
   remoteStreams: Map<string, MediaStream>;
-  /** Screen shares, keyed by whoever is sharing. Each gets its own tile. */
+
   remoteScreens: Map<string, MediaStream>;
   localScreen: MediaStream | null;
   cameraEnabled: boolean;
@@ -158,8 +144,6 @@ export function GroupCallStage({
       : "Member",
   }));
 
-  // A share is a tile of its own, so the person sharing stays on screen
-  // beside it instead of being replaced by their own desktop.
   const shares = presence.flatMap((p) => {
     const stream = p.user_id === selfId ? localScreen : remoteScreens.get(p.user_id);
     if (!stream) return [];
@@ -175,13 +159,12 @@ export function GroupCallStage({
     }];
   });
 
-  // Shares lead: they are what everyone is looking at.
   const displayMembers = [...shares, ...people];
 
   return (
     <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: callHeight }}>
      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
-      {/* Header */}
+      {}
       <p className="text-xs font-bold uppercase tracking-widest text-white/30">
         Group Call
       </p>
@@ -191,9 +174,7 @@ export function GroupCallStage({
         {ringingIds.size > 0 ? ` \u00b7 ${ringingIds.size} ringing` : ""}
       </p>
 
-      {/* Tiles keep a 16:9 shape and are sized to whatever fits, so the
-          layout follows the head count and the height of the region rather
-          than a breakpoint. */}
+      {}
       <div className="flex min-h-0 w-full max-w-4xl flex-1 flex-col py-3">
         <CallGrid>
           {displayMembers.map((m) => (
@@ -210,7 +191,7 @@ export function GroupCallStage({
         </CallGrid>
       </div>
 
-      {/* Controls */}
+      {}
       <div className="flex shrink-0 items-center gap-4 pb-3">
         <button
           type="button"
@@ -254,7 +235,7 @@ export function GroupCallStage({
         )}
       </div>
 
-      {/* Remote audio elements */}
+      {}
       {[...remoteStreams.entries()].map(([uid, stream]) => (
         <audio
           key={uid}

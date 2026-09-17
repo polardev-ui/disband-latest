@@ -1,11 +1,4 @@
-/**
- * Print the next semver for a release (stdout only).
- *
- * Env:
- *   BUMP=patch|minor|major  (default: patch)
- *   GITHUB_REPOSITORY=owner/repo
- *   GITHUB_TOKEN / GH_TOKEN  (optional, avoids API rate limits)
- */
+
 import { readFileSync } from "node:fs";
 
 const bumpType = (process.env.BUMP || "patch").toLowerCase();
@@ -58,7 +51,6 @@ async function fetchReleaseTags() {
     page++;
   }
 
-  // Git tags API — only semver v* tags (ignore branch tags like `main`).
   page = 1;
   while (page <= 5) {
     const res = await fetch(
@@ -99,7 +91,7 @@ try {
     if (parsed) latest = maxSemver(latest ?? parsed, parsed);
   }
 } catch {
-  // Offline / API failure — fall back to package.json.
+
 }
 
 if (!latest) {

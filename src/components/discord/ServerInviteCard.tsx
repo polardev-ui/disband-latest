@@ -35,9 +35,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     void (async () => {
       setLoading(true);
       try {
-        // apiFetch, not fetch: the desktop app is a static export served from
-        // tauri://localhost and ships no API routes, so a relative /api/ path
-        // resolves to the HTML shell and the invite card never loads.
+
         const res = await apiFetch(`/api/invites/${code}`);
         const json = (await res.json()) as {
           error?: string;
@@ -107,10 +105,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
         )}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold uppercase text-text-muted">Server Invite</p>
-          {/* A <div> may not sit inside a <p>, and Tooltip renders one — the
-              browser closed the paragraph early and React's markup stopped
-              matching the server's, which is the hydration error this threw
-              on every page with an invite in it. */}
+          {}
           <div className="flex min-w-0 items-center gap-1 font-semibold">
             <span className="truncate">{info.name}</span>
             {info.verified && (

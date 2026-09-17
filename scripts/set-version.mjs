@@ -1,7 +1,4 @@
-/**
- * Sync the app version across package.json, tauri.conf.json, and Cargo.toml.
- * Usage: node scripts/set-version.mjs 0.1.2
- */
+
 import { readFileSync, writeFileSync } from "node:fs";
 
 const version = process.argv[2]?.replace(/^v/i, "");

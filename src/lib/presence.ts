@@ -1,14 +1,7 @@
 import type { Profile, UserStatus } from "@/lib/supabase/types";
 
-/**
- * Live presence is connection-based: every signed-in client joins a shared
- * Realtime presence channel and tracks its own user id + effective status.
- * When the app closes (or the socket dies), the Realtime server drops that
- * presence automatically, so stale "online" rows can never persist.
- */
 export const PRESENCE_CHANNEL = "presence:global";
 
-/** How long with no activity before an "online" user is auto-marked away. */
 export const AWAY_AFTER_MS = 5 * 60 * 1000;
 
 export interface PresencePayload {
@@ -26,7 +19,6 @@ export function presenceStatusFor(
   return presence?.get(profile.id) ?? "offline";
 }
 
-/** Visible label for a status — "idle" reads as Away everywhere. */
 export function statusLabel(status: UserStatus): string {
   switch (status) {
     case "online":
@@ -40,12 +32,6 @@ export function statusLabel(status: UserStatus): string {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Custom status (note + duration). Discord-style: a free-text note     */
-/* with a lifetime. Minimum 10 minutes; "never" means until changed.   */
-/* ------------------------------------------------------------------ */
-
-/** Duration presets for a custom status. `ms: null` = never expires. */
 export const STATUS_DURATION_PRESETS = [
   { id: "10m", label: "10 mins", ms: 10 * 60 * 1000 },
   { id: "30m", label: "30 mins", ms: 30 * 60 * 1000 },
@@ -58,18 +44,12 @@ export const STATUS_DURATION_PRESETS = [
 
 export type StatusDurationId = (typeof STATUS_DURATION_PRESETS)[number]["id"];
 
-/** ISO instant for a duration preset chosen now, or null for "never". */
 export function expiresAtForDuration(id: StatusDurationId, now = Date.now()): string | null {
   const preset = STATUS_DURATION_PRESETS.find((p) => p.id === id);
   if (!preset || preset.ms == null) return null;
   return new Date(now + preset.ms).toISOString();
 }
 
-/**
- * The note to actually render for a profile: the stored note, unless it has
- * lapsed (status_expires_at in the past), in which case null — the status is
- * treated as cleared without needing a server round-trip.
- */
 export function activeStatusNote(
   profile: Pick<Profile, "status_note" | "status_expires_at"> | null | undefined,
   now = Date.now(),
@@ -81,7 +61,6 @@ export function activeStatusNote(
   return note;
 }
 
-/** Human label for when a status clears, e.g. "Clears in 2 hours" / "Never". */
 export function statusExpiryLabel(expiresAt: string | null | undefined, now = Date.now()): string {
   if (!expiresAt) return "Never";
   const ms = Date.parse(expiresAt) - now;
@@ -94,10 +73,6 @@ export function statusExpiryLabel(expiresAt: string | null | undefined, now = Da
   return `Clears in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-/**
- * Best-guess preset id for a stored expires_at (used to seed pickers).
- * Returns "never" for null/invalid, else the closest preset at or after now.
- */
 export function presetForExpiresAt(expiresAt: string | null | undefined, now = Date.now()): StatusDurationId {
   if (!expiresAt) return "never";
   const ms = Date.parse(expiresAt) - now;

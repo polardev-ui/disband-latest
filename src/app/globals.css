@@ -1,10 +1,5 @@
 @import "tailwindcss";
 
-/*
- * Disband — Discord-accurate theme engine
- * CSS variables scoped to [data-theme] drive the entire UI.
- */
-
 @theme inline {
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
@@ -24,33 +19,16 @@
   --color-divider: var(--divider);
   --color-super: var(--super);
 
-  /*
-   * Skins reach the whole app through these.
-   *
-   * Every `rounded-*` and every default font in the UI is a Tailwind utility,
-   * so a skin that wanted square corners would otherwise have to hunt down
-   * each component. Pointing Tailwind's own tokens at skin variables inverts
-   * that: setting one variable squares every corner in the product at once,
-   * and a skin that sets nothing gets the values Tailwind ships.
-   */
   --radius-sm: var(--skin-radius-sm, 0.125rem);
   --radius-md: var(--skin-radius-md, 0.375rem);
   --radius-lg: var(--skin-radius-lg, 0.5rem);
   --radius-xl: var(--skin-radius-xl, 0.75rem);
   --radius-2xl: var(--skin-radius-2xl, 1rem);
   --radius-3xl: var(--skin-radius-3xl, 1.5rem);
-  /* Not routed through a skin variable: a "full" radius is what makes an
-     avatar a circle, and squaring those makes the app unreadable rather than
-     themed. Skins that want square avatars can still target them directly. */
 
   --font-sans: var(--skin-font, var(--font-discord));
 }
 
-/*
- * Self-hosted so the desktop bundle works offline and the CSP needs no
- * third-party font host. Both are SIL Open Font License 1.1 — see
- * public/fonts/LICENSE.md.
- */
 @font-face {
   font-family: "Disband Pixel";
   src: url("/fonts/press-start-2p-latin.woff2") format("woff2");
@@ -65,7 +43,6 @@
   font-display: swap;
 }
 
-/* ---- Discord Dark (default) ---- */
 :root,
 [data-theme="dark"] {
   --bg-primary: #313338;
@@ -88,7 +65,6 @@
     sans-serif;
 }
 
-/* ---- AMOLED (deeper blacks, same structure) ---- */
 [data-theme="midnight"] {
   --bg-primary: #060607;
   --bg-secondary: #0a0a0b;
@@ -108,7 +84,6 @@
   --divider: #2e3035;
 }
 
-/* ---- Discord Light ---- */
 [data-theme="light"] {
   --bg-primary: #ffffff;
   --bg-secondary: #f2f3f5;
@@ -128,7 +103,6 @@
   --divider: #e3e5e8;
 }
 
-/* ---- Sunset variant (Discord layout, warm accents) ---- */
 [data-theme="sunset"] {
   --bg-primary: #2a2224;
   --bg-secondary: #231c1e;
@@ -148,7 +122,6 @@
   --divider: #3f3538;
 }
 
-/* ---- Ocean (Basic) ---- */
 [data-theme="ocean"] {
   --bg-primary: #1b2a3a;
   --bg-secondary: #1b2838;
@@ -168,7 +141,6 @@
   --divider: #334155;
 }
 
-/* ---- Rose Gold (Super) ---- */
 [data-theme="rose-gold"] {
   --bg-primary: #332224;
   --bg-secondary: #2c1d1f;
@@ -188,7 +160,6 @@
   --divider: #4a3035;
 }
 
-/* ---- Plasma (Super) ---- */
 [data-theme="plasma"] {
   --bg-primary: #1f1137;
   --bg-secondary: #1a0f2e;
@@ -208,7 +179,6 @@
   --divider: #2d1b45;
 }
 
-/* ---- Nord (Super) ---- */
 [data-theme="nord"] {
   --bg-primary: #434c5e;
   --bg-secondary: #3b4252;
@@ -248,7 +218,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Discord-style scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -266,7 +235,6 @@ body {
   background-color: var(--interactive-selected);
 }
 
-/* Tooltip fade-in */
 @keyframes tooltip-enter {
   from {
     opacity: 0;
@@ -282,7 +250,6 @@ body {
   animation: tooltip-enter 0.12s ease-out forwards;
 }
 
-/* Marketing homepage */
 @keyframes marketing-fade-up {
   from {
     opacity: 0;
@@ -328,7 +295,6 @@ img.twemoji {
   display: inline-block;
 }
 
-/* Call UI */
 @keyframes call-enter {
   from {
     opacity: 0;
@@ -344,7 +310,6 @@ img.twemoji {
   animation: call-enter 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 
-/* Expanding pulse ring around the ringing avatar. */
 @keyframes call-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
@@ -361,7 +326,6 @@ img.twemoji {
   animation: call-ring 1.4s ease-out infinite;
 }
 
-/* Indeterminate progress bar for the app splash (LoadingScreen). */
 @keyframes loading-bar-slide {
   0% {
     transform: translateX(-100%);
@@ -383,11 +347,6 @@ img.twemoji {
   }
 }
 
-/*
- * Premium ("Disband SUPER") accent.
- * #fee75c is only legible on dark chrome — light theme needs a darker amber
- * or the badge reads as blank space.
- */
 :root,
 [data-theme] {
   --super: #fee75c;
@@ -403,32 +362,10 @@ img.twemoji {
   --ping-bar: #c0851d;
 }
 
-/*
- * The Disband mark is a white glyph on transparency, so it vanishes on the
- * light theme. brightness(0) flattens it to black while preserving the alpha
- * shape. Opt-in via <Logo adaptive /> so marketing pages — which have a
- * hardcoded dark background regardless of the stored theme — keep the white mark.
- */
 [data-theme="light"] .logo-adaptive {
   filter: brightness(0);
 }
 
-
-/* ------------------------------------------------------------------ skins */
-
-/*
- * A skin is a Super perk that changes the *shape* of the UI, not only its
- * colours — the palette themes above already do colour. Each one is scoped to
- * [data-skin] on <html> so nothing leaks when it is switched off, and each
- * works by setting the variables declared in @theme inline above plus a small
- * number of element rules.
- *
- * Kept in CSS rather than injected from JS so the shipped skins cost no
- * runtime work and cannot flash unstyled; only a member's own custom CSS is
- * injected at runtime.
- */
-
-/* ---- Minecraft: blocky, pixel-lit, no curves anywhere ---- */
 [data-skin="minecraft"] {
   --skin-radius-sm: 0px;
   --skin-radius-md: 0px;
@@ -451,11 +388,6 @@ img.twemoji {
   --status-online: #5b8c3a;
 }
 
-/*
- * Pixel type is unreadable as body copy at chat sizes, so it is used where
- * Minecraft actually uses it — on controls and headings — and messages keep a
- * legible face. A theme nobody can read their DMs in is a costume, not a skin.
- */
 [data-skin="minecraft"] button,
 [data-skin="minecraft"] h1,
 [data-skin="minecraft"] h2,
@@ -465,11 +397,9 @@ img.twemoji {
 }
 
 [data-skin="minecraft"] button {
-  /* Including the pill-shaped ones: --skin-radius-full is deliberately not a
-     variable (it is what makes an avatar a circle), so buttons are squared
-     here by name instead. */
+
   border-radius: 0;
-  /* The classic bevel: lit from the top-left, shadowed bottom-right. */
+
   box-shadow:
     inset 2px 2px 0 rgba(255, 255, 255, 0.25),
     inset -2px -2px 0 rgba(0, 0, 0, 0.45);
@@ -477,7 +407,7 @@ img.twemoji {
 }
 
 [data-skin="minecraft"] button:active {
-  /* Pressed: the light and shadow swap sides. */
+
   box-shadow:
     inset -2px -2px 0 rgba(255, 255, 255, 0.2),
     inset 2px 2px 0 rgba(0, 0, 0, 0.5);
@@ -488,7 +418,6 @@ img.twemoji {
   image-rendering: pixelated;
 }
 
-/* ---- Call of Duty: dusty, hard-edged, stencilled ---- */
 [data-skin="cod"] {
   --skin-radius-sm: 0px;
   --skin-radius-md: 1px;
@@ -526,11 +455,6 @@ img.twemoji {
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.5);
 }
 
-/*
- * The grain. A fixed, pointer-transparent overlay rather than a background on
- * the body, so it sits over the whole app without any element having to opt
- * in and without intercepting a single click.
- */
 [data-skin="cod"] body::after {
   content: "";
   position: fixed;
@@ -542,22 +466,11 @@ img.twemoji {
   background-size: 3px 3px;
 }
 
-/*
- * Light skins have to say so twice.
- *
- * `--super`, the ping tints and the scrollbars are declared per [data-theme],
- * and a skin does not change the theme — so a light skin on a dark theme kept
- * pale-yellow SUPER badges that vanish on a light panel. And `color-scheme` is
- * set as an inline style by the theme provider, which a plain rule cannot
- * beat; `!important` in an author stylesheet can, and it keeps the knowledge
- * about which way round a skin is in the skin itself.
- */
 [data-skin="y2k"],
 [data-skin="paper"],
 [data-skin="brutalist"] {
   color-scheme: light !important;
-  /* Darker than the light theme's own gold: the 2000s panel is #d6d2c2, and
-     #8a6407 on it measures 3.6:1 — under AA for a badge this small. */
+
   --super: #63480a;
   --ping-bg: rgba(214, 158, 46, 0.15);
   --ping-bg-hover: rgba(214, 158, 46, 0.22);
@@ -574,7 +487,6 @@ img.twemoji {
   color-scheme: dark !important;
 }
 
-/* ---- 2000s: Windows XP era, beveled and boxy ---- */
 [data-skin="y2k"] {
   --skin-radius-sm: 0px;
   --skin-radius-md: 2px;
@@ -586,12 +498,7 @@ img.twemoji {
 
   --bg-primary: #ece9d8;
   --bg-secondary: #d6d2c2;
-  /*
-   * XP's window frame was that famous blue, and using it here was tempting —
-   * but --bg-tertiary is the server rail, which carries text and icons drawn
-   * in --text-normal. Near-black on #0a246a measured 1.2:1: not "hard to
-   * read", invisible. The blue lives on --brand instead, where it belongs.
-   */
+
   --bg-tertiary: #c3bfae;
   --bg-accent: #ffffff;
   --interactive-hover: #c1d2ee;
@@ -607,7 +514,7 @@ img.twemoji {
 
 [data-skin="y2k"] button {
   border-radius: 2px;
-  /* The 3D outset every control had before flat design. */
+
   border: 1px solid #7f7f7f;
   border-top-color: #ffffff;
   border-left-color: #ffffff;
@@ -631,7 +538,6 @@ img.twemoji {
   background: #ffffff;
 }
 
-/* ---- Frutiger Aero: glass, gloss, blue-into-green ---- */
 [data-skin="frutiger"] {
   --skin-radius-sm: 6px;
   --skin-radius-md: 12px;
@@ -655,15 +561,6 @@ img.twemoji {
   --status-online: #6ee7a8;
 }
 
-/*
- * The sky-to-grass wash the whole look is built on.
- *
- * On the body it was invisible: the app paints an opaque `bg-primary` surface
- * over the full height of the window, so anything behind it is never seen.
- * It is an overlay instead — screen-blended and faint, so it lights the UI the
- * way the era's gradients did without tinting text into illegibility, and
- * pointer-transparent so it intercepts nothing.
- */
 [data-skin="frutiger"] body::before {
   content: "";
   position: fixed;
@@ -679,11 +576,7 @@ img.twemoji {
 
 [data-skin="frutiger"] button {
   border: 1px solid rgba(255, 255, 255, 0.35);
-  /*
-   * Three layers make the glass read: a bright gloss across the top half, an
-   * inner rim light that catches the rounded corners the way refraction does,
-   * and a soft drop shadow so the control floats rather than sits.
-   */
+
   background-image: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.42) 0%,
@@ -711,8 +604,6 @@ img.twemoji {
   }
 }
 
-
-/* ---- Terminal: green phosphor on black, and nothing else ---- */
 [data-skin="terminal"] {
   --skin-radius-sm: 0px;
   --skin-radius-md: 0px;
@@ -750,7 +641,6 @@ img.twemoji {
   box-shadow: 0 0 8px rgba(47, 232, 107, 0.35);
 }
 
-/* Scanlines. Fixed and pointer-transparent, like the COD grain. */
 [data-skin="terminal"] body::after {
   content: "";
   position: fixed;
@@ -766,7 +656,6 @@ img.twemoji {
   );
 }
 
-/* ---- Vaporwave: hot pink, cyan, and chrome ---- */
 [data-skin="vaporwave"] {
   --skin-radius-sm: 3px;
   --skin-radius-md: 6px;
@@ -805,7 +694,6 @@ img.twemoji {
     0 0 12px rgba(255, 94, 168, 0.28);
 }
 
-/* The horizon grid, receding to a vanishing point. */
 [data-skin="vaporwave"] body::before {
   content: "";
   position: fixed;
@@ -819,7 +707,6 @@ img.twemoji {
     radial-gradient(70% 50% at 50% -5%, rgba(95, 240, 230, 0.4), transparent 60%);
 }
 
-/* ---- Paper: warm, printed, quiet ---- */
 [data-skin="paper"] {
   --skin-radius-sm: 2px;
   --skin-radius-md: 3px;
@@ -855,7 +742,6 @@ img.twemoji {
   border-color: #b3a689;
 }
 
-/* ---- Neon: near-black with light bleeding off the edges ---- */
 [data-skin="neon"] {
   --skin-radius-sm: 0px;
   --skin-radius-md: 2px;
@@ -895,7 +781,6 @@ img.twemoji {
     0 0 16px rgba(36, 230, 255, 0.45);
 }
 
-/* ---- Brutalist: black on white, and the shadow is a solid block ---- */
 [data-skin="brutalist"] {
   --skin-radius-sm: 0px;
   --skin-radius-md: 0px;
@@ -907,8 +792,7 @@ img.twemoji {
 
   --bg-primary: #ffffff;
   --bg-secondary: #f2f2f2;
-  /* Not black: this surface carries text drawn in --text-normal, which here
-     is also black. The two-pixel borders below do the structural work. */
+
   --bg-tertiary: #ffffff;
   --bg-accent: #ffffff;
   --interactive-hover: #e6e6e6;
@@ -933,7 +817,7 @@ img.twemoji {
 }
 
 [data-skin="brutalist"] button:active {
-  /* Pressed into the page, so the block shadow disappears under it. */
+
   transform: translate(3px, 3px);
   box-shadow: none;
 }
@@ -943,8 +827,6 @@ img.twemoji {
   border: 2px solid #000000;
 }
 
-
-/* Complete additional palettes share the same semantic surface hierarchy. */
 [data-theme="graphite"] {
  --bg-primary:#222426; --bg-secondary:#18191b; --bg-tertiary:#0d0e0f; --bg-accent:#0d0e0f;
  --interactive-hover:color-mix(in srgb,#222426 85%,#bec3c9); --interactive-selected:color-mix(in srgb,#222426 75%,#bec3c9);
@@ -1006,11 +888,9 @@ img.twemoji {
 [data-theme="sunset"],[data-theme="ocean"],[data-theme="rose-gold"],[data-theme="plasma"],[data-theme="nord"] { --brand-foreground:#17131b; }
 [data-theme="plasma"] { --text-muted:#baa2d2; }
 [data-theme="nord"] { --bg-primary:#363f50; --bg-secondary:#2e3645; --bg-tertiary:#242c38; --text-muted:#c1cad7; --divider:#536177; }
-/* Explicit button foreground prevents pale accents from washing out labels. */
+
 .bg-brand.text-white { color:var(--brand-foreground,#fff); }
 
-/* Level 3+ catalyst perk: animated gradient role styling. Slides the
-   background (200%-wide gradient) so text-clip and pill backgrounds shimmer. */
 @keyframes role-gradient-pan {
  0% { background-position:0% 50%; }
  50% { background-position:100% 50%; }

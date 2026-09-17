@@ -51,7 +51,7 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
   try {
     hostname = new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    // keep raw url
+
   }
 
   return (

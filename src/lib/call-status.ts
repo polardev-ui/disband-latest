@@ -1,8 +1,4 @@
-/**
- * Tiny module-level store describing the current call, so the persistent
- * in-call indicator (above the user panel) can be rendered from anywhere
- * without prop-drilling through every sidebar.
- */
+
 export type CallIndicatorKind = "dm" | "group" | "voice";
 
 export interface CallIndicatorState {

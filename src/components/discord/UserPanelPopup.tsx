@@ -30,7 +30,6 @@ const STATUS_OPTIONS: { status: UserStatus; label: string }[] = [
   { status: "offline", label: "Invisible" },
 ];
 
-/** Best available name for a saved account, which may predate a profile load. */
 function accountLabel(a: { display_name: string | null; username: string | null; email: string | null }): string {
   return a.display_name || a.username || a.email?.split("@")[0] || "Account";
 }
@@ -41,9 +40,6 @@ interface UserPanelPopupProps {
   onOpenSettings: () => void;
 }
 
-/** Compact profile preview + presence switcher rendered via portal
- *  so it escapes the sidebar's overflow-hidden. Positioned just above the
- *  UserPanel bar using the anchor element's bounding rect. */
 export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanelPopupProps) {
   const {
     profile, user, updateProfile, presenceMap,
@@ -52,7 +48,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
   const [changing, setChanging] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
-  // Popup remounts on every open, so initializers seed from the live profile.
+
   const [customNote, setCustomNote] = useState(() => profile?.status_note ?? "");
   const [customDuration, setCustomDuration] = useState<StatusDurationId>(() =>
     presetForExpiresAt(profile?.status_expires_at),
@@ -65,15 +61,6 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
   const currentStatus: UserStatus = profile ? presenceMap.get(profile.id) ?? profile.status : "online";
   const statusText = statusLabel(currentStatus);
 
-  /**
-   * Every account this browser can sign into, the current one first.
-   *
-   * The list used to be the *other* accounts only, and was hidden entirely
-   * when there were none — so a single-account user never saw the switcher at
-   * all and had no way to reach "Add an Account". The current account is
-   * always shown, synthesised from the live profile if storage never kept it,
-   * so the section exists from the first sign-in onwards.
-   */
   const accounts = (() => {
     const others = savedSessions.filter((s) => s.user_id !== currentUserId);
     const saved = savedSessions.find((s) => s.user_id === currentUserId);
@@ -164,7 +151,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
         className="fixed z-40 w-72 max-h-[calc(100vh-100px)] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-white/10"
         style={{ left: pos.left, bottom: pos.bottom }}
       >
-        {/* Banner */}
+        {}
         <div
           className="relative h-16"
           style={{
@@ -183,7 +170,6 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
           )}
         </div>
 
-        {/* Avatar */}
         <div className="relative -mt-9 mb-1 flex justify-center px-4">
           <div className="relative">
             <Avatar profile={profile ?? { display_name: name }} size="lg" className="ring-[6px] ring-bg-secondary" />
@@ -193,7 +179,6 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
           </div>
         </div>
 
-        {/* Info + settings */}
         <div className="flex items-center justify-between px-4 pb-2">
           <div>
             <p className="text-sm font-semibold text-text-normal">{name}</p>
@@ -210,28 +195,13 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
           </button>
         </div>
 
-        {/* Custom status — the clickable bubble's editor (Discord-style) */}
         <div className="border-t border-divider px-4 py-2.5">
-          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-            Custom Status
-          </p>
-          {liveNote && (
-            <div className="mb-2 flex items-center gap-2 rounded-md bg-bg-tertiary px-2.5 py-1.5">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <p className="min-w-0 flex-1 truncate text-[13px] text-text-normal">{liveNote}</p>
-              <span className="shrink-0 text-[11px] text-text-muted">
-                {statusExpiryLabel(profile?.status_expires_at)}
-              </span>
-            </div>
-          )}
           <input
             value={customNote}
-            onChange={(e) => setCustomNote(e.target.value.slice(0, 60))}
-            maxLength={60}
-            placeholder="What's on your mind?"
-            className="w-full rounded-md border border-divider bg-bg-tertiary px-2.5 py-1.5 text-[13px] text-text-normal placeholder:text-text-muted/60 focus:border-brand focus:outline-none"
+            onChange={(e) => setCustomNote(e.target.value)}
+            placeholder="Set a custom status"
+            maxLength={128}
+            className="w-full rounded-md border border-divider bg-bg-tertiary px-2.5 py-2 text-[13px] text-text-normal placeholder:text-text-muted/60 focus:border-brand focus:outline-none"
           />
           <div className="mt-1.5 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
             {STATUS_DURATION_PRESETS.map((preset) => (
@@ -272,7 +242,6 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
           </div>
         </div>
 
-        {/* Status switcher */}
         <div className="border-t border-divider px-2 py-1.5">
           <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
             Set Status
@@ -298,7 +267,6 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings }: UserPanel
           ))}
         </div>
 
-        {/* Accounts */}
         <div className="border-t border-divider px-2 py-1.5">
           <div className="mb-1 flex items-center justify-between px-2">
             <span className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Accounts</span>

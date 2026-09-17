@@ -50,12 +50,6 @@ import {
   Compass,
   Sparkles,
   GripVertical,
-  Wand2,
-  Package,
-  Store,
-  RefreshCw,
-  BadgeDollarSign,
-  ShieldCheck,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -106,24 +100,13 @@ export const IconScreenShareOff = icon(ScreenShareOff);
 export const IconNotes = icon(SquarePen);
 export const IconCrown = icon(Crown);
 export const IconMenu = icon(Menu);
-/**
- * Staff badge — a solid hammer crossed with a double-ended wrench, matching the
- * conventional 🛠 "hammer and wrench" staff mark.
- *
- * Filled rather than stroked so it stays legible at badge sizes (13–16px),
- * where a 1.75px outline turns to mush. `strokeWidth` is accepted for API
- * parity with the other icons but intentionally unused.
- */
+
 export const IconStaff = function IconStaff({ size = 20, className }: IconProps) {
   return (
     <svg
       width={size}
       height={size}
-      /*
-       * Tight square crop around the artwork. The source SVG's 0 0 512 512 box
-       * left the tools filling only ~47% of it, so at a shared badge size this
-       * rendered about half as large as the lucide marks beside it.
-       */
+
       viewBox="129 129 254 254"
       fill="currentColor"
       className={className}
@@ -138,20 +121,10 @@ export const IconBounty = icon(Target);
 export const IconMusic = icon(Music);
 export const IconCompass = icon(Compass);
 export const IconSparkle = icon(Sparkles);
-export const IconWand = icon(Wand2);
-export const IconPackage = icon(Package);
-export const IconStore = icon(Store);
-export const IconRegenerate = icon(RefreshCw);
-export const IconDollar = icon(BadgeDollarSign);
-export const IconShieldCheck = icon(ShieldCheck);
 export const IconPin = icon(Pin);
 export const IconPinOff = icon(PinOff);
 export const IconGripVertical = icon(GripVertical);
-/**
- * Verified badge — a filled blue disc with a white check, for the official
- * "This server is officially verified by Disband" mark. Filled like IconStaff
- * so it stays legible at badge sizes (12–16px). Blue via `text-sky-400` etc.
- */
+
 export const IconVerified = function IconVerified({ size = 16, className }: IconProps) {
   return (
     <svg
@@ -174,17 +147,4 @@ export const IconVerified = function IconVerified({ size = 16, className }: Icon
   );
 };
 
-export function IconStatus(props: IconProps & { status: "online" | "idle" | "dnd" | "offline" }) {
-  const colors = {
-    online: "text-status-online",
-    idle: "text-status-idle",
-    dnd: "text-status-dnd",
-    offline: "text-status-offline",
-  };
-  const { status, size = 20, className } = props;
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={`${colors[status]} ${className ?? ""}`}>
-      <circle cx="12" cy="12" r="8" />
-    </svg>
-  );
-}
+

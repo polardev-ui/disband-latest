@@ -17,7 +17,7 @@ import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 interface SignalPayload {
   type: "offer" | "answer" | "ice" | "leave" | "screen";
-  /** For "screen": whether the sender just started or stopped sharing. */
+
   sharing?: boolean;
   from: string;
   to?: string;
@@ -25,31 +25,29 @@ interface SignalPayload {
   candidate?: RTCIceCandidateInit;
 }
 
-
 export function useVoiceChannel(
   channelId: string | null,
   userId: string | null,
   profile: Profile | null,
   micMuted: boolean,
   deafened: boolean,
-  /** Decides how high the screen share may go; sharing itself is free. */
+
   plan: SubscriptionPlan = "free",
 ) {
   const [joined, setJoined] = useState(false);
-  // Server voice counts toward Voice Veteran too, not just DM calls.
+
   useVoiceMinutes(joined);
   const [participants, setParticipants] = useState<(VoicePresence & { profile?: Profile })[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
-  // Server voice used to be audio only. Camera and screen each get their own
-  // lane, so a share never costs someone their camera and both can be seen.
+
   const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenEnabled, setScreenEnabled] = useState(false);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
-  /** Who has announced a share. Track mute state is not a reliable signal. */
+
   const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
   const pendingLocalRef = useRef<Map<string, MediaStreamTrack | null>>(new Map());
   const planRef = useRef<SubscriptionPlan>(plan);
@@ -77,7 +75,6 @@ export function useVoiceChannel(
       .eq("user_id", userId);
   }, [channelId, userId, joined, micMuted, deafened]);
 
-  // Diff presence so join/leave blips only fire for *other* people.
   const prevPresenceRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!joined) {
@@ -113,8 +110,6 @@ export function useVoiceChannel(
       if (!userId || !channelId || remoteId === userId) return;
       if (peersRef.current.has(remoteId)) return;
 
-      // Voice channels used a hardcoded STUN-only list, so they could not
-      // connect across strict NATs at all. They share the relay now.
       const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
 
@@ -127,7 +122,7 @@ export function useVoiceChannel(
           await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
         } else {
-          // The answering side has no lanes until the offer arrives.
+
           pendingLocalRef.current.set(remoteId, mic);
         }
       }
@@ -137,7 +132,7 @@ export function useVoiceChannel(
         const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
           if (lane === LANE_SCREEN) {
-            // Keep the track; the "screen" signal decides whether it shows.
+
             setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
             return;
           }
@@ -198,9 +193,7 @@ export function useVoiceChannel(
 
       if (payload.type === "offer" && payload.sdp) {
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-        // Lanes exist now. Declare them two-way before answering, then put
-        // this side's tracks in — otherwise the screen lane is answered
-        // recvonly and a later share is never sent.
+
         openLanesForSending(pc);
         if (pendingLocalRef.current.has(payload.from)) {
           const mic = pendingLocalRef.current.get(payload.from) ?? null;
@@ -265,13 +258,6 @@ export function useVoiceChannel(
     setJoined(false);
   }, [channelId, userId]);
 
-  /**
-   * Keep this client's presence row alive.
-   *
-   * Without it a row outlives the session that made it: a closed tab or a
-   * refresh leaves no chance to delete it, and the channel goes on showing
-   * someone who left. The prune job removes anything that stops answering.
-   */
   useEffect(() => {
     if (!joined || !channelId || !userId) return;
     const supabase = getSupabaseClient();
@@ -311,7 +297,6 @@ export function useVoiceChannel(
       playCallConnected();
       await loadPresence();
 
-      // Connect to existing participants
       const others = participants.filter((p) => p.user_id !== userId);
       for (const p of others) {
         await createPeer(p.user_id, true);
@@ -322,7 +307,6 @@ export function useVoiceChannel(
     }
   }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, participants, micMuted, deafened]);
 
-  /** Turn your camera on or off. Uses the camera lane, so a share is unaffected. */
   const toggleCamera = useCallback(async () => {
     const next = !cameraTrackRef.current;
     if (!next) {
@@ -343,7 +327,6 @@ export function useVoiceChannel(
     }
   }, []);
 
-  /** Tell the channel that sharing started or stopped. */
   const announceSharing = useCallback((sharing: boolean) => {
     if (!userId) return;
     void signalRef.current?.send({
@@ -353,7 +336,6 @@ export function useVoiceChannel(
     });
   }, [userId]);
 
-  /** Share your screen without giving up your camera. */
   const toggleScreenShare = useCallback(async () => {
     const next = !screenTrackRef.current;
     if (!next) {
@@ -393,7 +375,6 @@ export function useVoiceChannel(
     await loadPresence();
   }, [cleanup, loadPresence, userId]);
 
-  // Subscribe to presence changes
   useEffect(() => {
     if (!channelId) return;
     void loadPresence();
@@ -411,7 +392,6 @@ export function useVoiceChannel(
     };
   }, [channelId, loadPresence]);
 
-  // When new participant joins while we're in VC, initiate connection
   useEffect(() => {
     if (!joined || !userId) return;
     participants.forEach((p) => {

@@ -25,8 +25,7 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   const style = avatarStyle(profile.avatar_url, crop);
   const accentStyle = getAvatarStyle(profile);
   const remote = safeImageUrl(profile.avatar_url);
-  // Persistent IndexedDB cache (iOS-safe): paint the cached blob instantly
-  // when present, otherwise the remote URL while it backfills in background.
+
   const [cachedSrc, setCachedSrc] = useState<string | null>(null);
   useEffect(() => {
     setCachedSrc(null);

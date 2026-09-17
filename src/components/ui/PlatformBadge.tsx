@@ -6,7 +6,7 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 
 interface PlatformBadgeProps {
   userId: string | null | undefined;
-  /** Known plan, when the caller already has it — saves a lookup. */
+
   plan?: SubscriptionPlan;
   className?: string;
   size?: number;
@@ -14,14 +14,6 @@ interface PlatformBadgeProps {
   variant?: "inline" | "full";
 }
 
-/**
- * Badges beside a name, wherever one appears.
- *
- * The subscription used to show here as a "SUPER" / "BASIC" text pill next to
- * the earned badges. It is the tier medallion now, so the row is all marks
- * rather than a word competing with icons, and the plan and its length read
- * from one object instead of two.
- */
 export function PlatformBadge({
   userId, plan, className = "", size = 13, interactive = true, variant = "inline",
 }: PlatformBadgeProps) {

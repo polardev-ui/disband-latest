@@ -18,9 +18,7 @@ function ResetPasswordGate() {
   const router = useRouter();
   const [linkReady, setLinkReady] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
-  // A recovery link always lands at aal1. Supabase will not change a password
-  // on such a session when the account has 2FA, so the second factor has to be
-  // cleared here rather than after the attempt fails.
+
   const [needsMfa, setNeedsMfa] = useState(false);
 
   useEffect(() => {

@@ -42,8 +42,7 @@ function formatAuthError(error: { message?: string; status?: number } | null | u
 export async function getMfaAssurance(): Promise<MfaAssurance> {
   const { data, error } = await supabase().auth.mfa.getAuthenticatorAssuranceLevel();
   if (error || !data) {
-    // Fail-secure: when the assurance level cannot be determined, require MFA
-    // rather than skipping it (the API may be degraded or under attack).
+
     return { currentLevel: null, nextLevel: null, mfaRequired: true };
   }
   const mfaRequired = data.currentLevel !== "aal2" && data.nextLevel === "aal2";
@@ -67,7 +66,6 @@ export async function listVerifiedMfaFactors(): Promise<MfaFactor[]> {
   return factors.filter((factor) => factor.status === "verified");
 }
 
-/** Remove stale unverified factors left over from cancelled setup attempts. */
 async function cleanupUnverifiedFactors(): Promise<void> {
   const { factors } = await listAllMfaFactors();
   const pending = factors.filter((f) => f.status !== "verified");
@@ -125,9 +123,6 @@ export async function registerPasskeyFactor(friendlyName = "Passkey"): Promise<s
 
   await cleanupUnverifiedFactors();
 
-  // Let the SDK derive rpId/rpOrigins from window.location so they always match
-  // the page origin exactly — passing our config values explicitly can cause a
-  // mismatch if the env var differs from the actual deployment URL.
   const { error } = await supabase().auth.mfa.webauthn.register({ friendlyName });
   if (error) return formatAuthError(error, "Could not register passkey.");
   await supabase().auth.refreshSession();
@@ -149,8 +144,7 @@ export async function verifyTotpChallenge(factorId: string, code: string): Promi
 }
 
 export async function verifyPasskeyChallenge(factorId: string): Promise<string | null> {
-  // Let the SDK derive rpId/rpOrigins from window.location — must match the
-  // origin the passkey was registered on.
+
   const { error } = await supabase().auth.mfa.webauthn.authenticate({ factorId });
   if (error) return formatAuthError(error, "Passkey verification failed. Try again or use your authenticator app.");
   await supabase().auth.refreshSession();
@@ -175,9 +169,4 @@ export function factorLabel(factor: MfaFactor): string {
   if (factor.factor_type === "webauthn") return "Passkey";
   if (factor.factor_type === "phone") return "Phone";
   return "Security key";
-}
-
-export function passkeySetupHint(): string {
-  const { rpId, appOrigin } = getMfaWebAuthnConfig();
-  return `Passkeys use domain ${rpId}. Register on ${appOrigin} and ensure that origin is listed in Supabase Auth → Passkeys.`;
 }

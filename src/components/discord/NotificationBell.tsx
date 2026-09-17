@@ -19,18 +19,6 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/**
- * Bell with the unread red pill + drawer.
- *
- * The pill means `seen_at is null` and survives reloads. Opening the drawer
- * stamps seen_at=now() — never on mount, so the pill only clears when the
- * user actually opens it. Clicking an item marks it read and routes to the
- * right place (DM thread / group / server channel).
- *
- * The drawer renders via portal: the sidebar containers this bell lives in
- * (HomePanel, ChannelList) are overflow-hidden, which clips an inline
- * dropdown off the side of the screen.
- */
 export function NotificationBell() {
   const {
     notifications,
@@ -46,7 +34,6 @@ export function NotificationBell() {
 
   const unseen = notifications.filter((n) => !n.seen_at).length;
 
-  // Stamp seen ONLY on drawer open — never on mount.
   const toggle = useCallback(() => {
     setOpen((prev) => {
       if (!prev) void markNotificationsSeen();
@@ -59,7 +46,7 @@ export function NotificationBell() {
     const place = () => {
       const r = btnRef.current?.getBoundingClientRect();
       if (!r) return;
-      // Right-align to the button, clamped inside the viewport with margin.
+
       const right = Math.max(8, window.innerWidth - r.right);
       setPos({ top: r.bottom + 8, right });
     };

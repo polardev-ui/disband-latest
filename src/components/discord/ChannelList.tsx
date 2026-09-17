@@ -34,7 +34,7 @@ interface ChannelListProps {
   activeChannelId: string | null;
   canManageChannels: boolean;
   voicePresence: Map<string, PresenceMember[]>;
-  /** When each occupied voice channel's current active stretch began (epoch ms). */
+
   voiceStartTimes: Map<string, number>;
   onSelectChannel: (id: string) => void;
   onOpenSettings: () => void;
@@ -49,11 +49,11 @@ interface ChannelListProps {
   onMoveCategory?: (categoryId: string, index: number) => void;
   onCreateChannel?: (name: string, type: ChannelType, categoryId: string | null) => Promise<string | null>;
   onCreateCategory?: (name: string) => Promise<string | null>;
-  /** Unread messages per channel — drives the white pill and bold name. */
+
   getUnreadCount?: (channelId: string) => number;
-  /** Messages naming you — drives the red badge. */
+
   getMentionCount?: (channelId: string) => number;
-  /** Server catalyst count (level source) — shows the boost bar. */
+
   catalystCount?: number;
   onOpenCatalysts?: () => void;
 }
@@ -113,9 +113,7 @@ export function ChannelList({
   catalystCount,
   onOpenCatalysts,
 }: ChannelListProps) {
-  // Seeded from storage so a collapsed category stays collapsed across reloads
-  // and server switches; a lazy initialiser keeps localStorage off the server
-  // render.
+
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => getCollapsedCategories());
 
   const toggleCollapsed = (key: string) => {
@@ -132,23 +130,15 @@ export function ChannelList({
   const [overChannelId, setOverChannelId] = useState<string | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  // `null` means "not adding". The category is wrapped so that adding an
-  // *uncategorized* channel (categoryId: null) stays distinguishable from the
-  // idle state — sharing `null` for both made the composer render permanently,
-  // for every member, regardless of permissions.
+
   const [addChannelTarget, setAddChannelTarget] =
     useState<{ categoryId: string | null } | null>(null);
   const [addChannelName, setAddChannelName] = useState("");
   const [addChannelType, setAddChannelType] = useState<ChannelType>("text");
   const [busy, setBusy] = useState(false);
 
-  // A drag ends with the browser still firing a `click` on the row that was
-  // being dragged; without suppression that commits the move AND selects the
-  // channel (or collapses the category). Only swallow that one click.
   const suppressClickRef = useRef<HTMLElement | null>(null);
 
-  // Live call timer: re-render once a second while any voice channel is
-  // occupied so its green duration keeps ticking.
   const [now, setNow] = useState(() => Date.now());
   const anyCallActive = voiceStartTimes.size > 0;
   useEffect(() => {
@@ -157,10 +147,6 @@ export function ChannelList({
     return () => window.clearInterval(t);
   }, [anyCallActive]);
 
-  // Pointer-event dragging replaces HTML5 drag-and-drop, which does not work in
-  // Safari/iOS over <button> rows and offers no touch support at all. A short
-  // threshold keeps a plain click from turning into a drag; once armed, the grip
-  // element keeps the pointer captured so move/up keep flowing even off-window.
   const DRAG_THRESHOLD = 6;
   const dragRef = useRef<{
     kind: "channel" | "category";
@@ -385,14 +371,13 @@ export function ChannelList({
   const renderChannel = (ch: Channel) => {
     const active = ch.id === activeChannelId;
     const participants = ch.type === "voice" ? voicePresence.get(ch.id) ?? [] : [];
-    // An open channel is being read, so it never advertises itself as unread.
+
     const unread = !active && (getUnreadCount?.(ch.id) ?? 0) > 0;
     const mentions = active ? 0 : getMentionCount?.(ch.id) ?? 0;
     return (
       <div key={ch.id} className="relative">
         {overChannelId === ch.id && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
-        {/* The pill: a channel with something new is legible at a glance,
-            without having to open it to find out. */}
+        {}
         {unread && (
           <span
             aria-hidden
@@ -425,8 +410,7 @@ export function ChannelList({
         >
           {ch.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
-          {/* Red badge means it was addressed to you — a mention or a reply —
-              which is a different thing from merely unread. */}
+          {}
           {mentions > 0 && (
             <span className="ml-1 shrink-0 rounded-full bg-status-dnd px-[6px] py-[1px] text-[11px] font-bold leading-[16px] text-white">
               {mentions > 99 ? "99+" : mentions}
@@ -604,9 +588,6 @@ export function ChannelList({
           <div className="mb-1">
             <div className="group/cat relative flex items-center">
               {overCatId === "uncategorized" && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
-              {/* A button like every other category header. It was the one
-                  group that could not be collapsed, which is visible at a
-                  glance: it was the only heading without a chevron. */}
               <button
                 type="button"
                 data-drop-uncategorized="true"

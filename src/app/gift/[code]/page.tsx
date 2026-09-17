@@ -5,13 +5,6 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import { GiftCard } from "@/components/gift/GiftCard";
 
-/**
- * A gift link opened on its own.
- *
- * Inside Disband a gift renders as a card in the conversation; this is the
- * same card for a link that arrived by other means — pasted into a browser,
- * or followed from somewhere that is not a Disband message.
- */
 export default function GiftPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
 

@@ -8,18 +8,13 @@ export type CustomEmojiSegment =
 
 const TOKEN_RE = /:([a-z0-9_]{2,32}):/g;
 
-/**
- * Split message text on `:shortcode:` tokens that resolve in the server's
- * custom-emoji map. Code spans (`...` and ```...```) are left intact so
- * literal colons in code never become images — matching Discord.
- */
 export function splitCustomEmojiSegments(
   text: string,
   map: Record<string, string> | undefined | null,
 ): CustomEmojiSegment[] {
   if (!text || !map) return [{ kind: "text", text }];
   const out: CustomEmojiSegment[] = [];
-  // Protect code spans first: split them out, only tokenize the rest.
+
   const parts = text.split(/(```[\s\S]*?```|`[^`\n]*`)/g);
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
@@ -42,7 +37,6 @@ export function splitCustomEmojiSegments(
   return out.filter((s) => (s.kind === "text" ? s.text.length > 0 : true));
 }
 
-/** True when the whole message is one custom emoji (renders jumbo). */
 export function isSingleCustomEmoji(
   text: string,
   map: Record<string, string> | undefined | null,

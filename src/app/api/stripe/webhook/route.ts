@@ -12,11 +12,10 @@ function toISOStringSafe(timestamp: number | null | undefined): string | null {
 
 function extractSubscriptionPeriods(sub: Stripe.Subscription) {
   const item = sub.items?.data?.[0];
-  
-  // Extract period start & end from items[0] or top-level fallback
+
   const startTimestamp = item?.current_period_start ?? (sub as unknown as { current_period_start?: number }).current_period_start;
   const endTimestamp = item?.current_period_end ?? (sub as unknown as { current_period_end?: number }).current_period_end;
-  
+
   const canceledAtTimestamp = sub.canceled_at ?? (sub as unknown as { canceled_at?: number }).canceled_at;
 
   return {
@@ -55,9 +54,6 @@ async function upsertSubscription(
 
   if (upsertError) throw new Error(upsertError.message);
 
-  // The first paid period is what "subscriber since" dates from, and it is
-  // never rewritten afterwards — a cancel-and-return keeps the original date
-  // and the months already earned.
   const { error: updateError } = await supabase
     .from("subscriptions")
     .update({ first_subscribed_at: periodStartISO })
@@ -66,12 +62,6 @@ async function upsertSubscription(
   if (updateError) throw new Error(updateError.message);
 }
 
-/**
- * Add a paid month to someone's tenure.
- *
- * Counted rather than derived from the start date, so a lapse does not hand
- * out months nobody paid for and a returning subscriber keeps what they had.
- */
 async function accrueTenure(userId: string, invoiceId: string) {
   const supabase = getServiceSupabase();
   if (!supabase) throw new Error("Database unavailable");
@@ -119,9 +109,6 @@ export async function POST(req: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
-        // A gift is a one-off payment with no subscription attached, so it
-        // never reaches the branch below. Paying is what makes it claimable —
-        // until then the row exists only so the payment has somewhere to land.
         if (session.metadata?.kind === "gift") {          const giftId = session.metadata.gift_id;
           const supabase = getServiceSupabase();
           if (giftId && supabase && session.payment_status === "paid") {
@@ -135,9 +122,6 @@ export async function POST(req: Request) {
           break;
         }
 
-        // A catalyst purchase is a one-off payment that lands straight on the
-        // server: one row per unit. The session id makes redeliveries
-        // idempotent (partial unique index, on-conflict no-op).
         if (session.metadata?.kind === "catalyst") {
           const supabase = getServiceSupabase();
           const buyerId = session.metadata.user_id;
@@ -147,9 +131,7 @@ export async function POST(req: Request) {
             Math.min(99, parseInt(session.metadata.quantity ?? "1", 10) || 1),
           );
           if (supabase && buyerId && serverId && session.payment_status === "paid") {
-            // Idempotency: the partial unique index guarantees one fulfillment
-            // per session; check first because ON CONFLICT cannot target a
-            // partial index from the query builder.
+
             const { data: existing } = await supabase
               .from("server_catalysts")
               .select("id")
@@ -170,8 +152,7 @@ export async function POST(req: Request) {
         }
 
         const userId = session.metadata?.user_id;
-        // Written by our own checkout; "basic"/"super" still arrive from
-        // sessions created before the merge and all mean Aero.
+
         const plan = session.metadata?.plan ? normalizePlan(session.metadata.plan) : undefined;
         const subId = session.subscription as string;
         const customerId = session.customer as string;

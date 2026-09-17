@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-/**
- * Push or verify Disband auth email templates on hosted Supabase.
- *
- * The dashboard preview can look correct while GoTrue still sends the DEFAULT
- * template — this script writes directly to mailer_templates_* via Management API.
- *
- * Usage:
- *   pnpm sync:auth-emails          # push templates
- *   pnpm verify:auth-emails        # show what Supabase actually has stored
- *
- * Requires SUPABASE_ACCESS_TOKEN (https://supabase.com/dashboard/account/tokens)
- * Project ref from SUPABASE_PROJECT_REF or NEXT_PUBLIC_SUPABASE_URL in .env.local
- */
 
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";

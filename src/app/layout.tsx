@@ -67,11 +67,10 @@ export const metadata: Metadata = {
     images: ["/opengraph-image"],
   },
   icons: {
-    // Transparent mark — sits cleanly on light and dark browser chrome.
+
     icon: "/logo.png",
     shortcut: "/favicon.png",
-    // Apple touch icons must stay opaque: iOS composites transparency onto
-    // black, so the transparent mark would render as a dark square.
+
     apple: "/logo-app.png",
   },
   appleWebApp: {
@@ -112,7 +111,7 @@ export default function RootLayout({
       </head>
       <body>
         {children}
-        {/* Site-wide, every route. Renders nothing once dismissed. */}
+        {}
       </body>
     </html>
   );

@@ -5,14 +5,6 @@ import { Rocket } from "./Rocket";
 import { SubscriptionMedallion, tierForMonths, TIERS } from "./SubscriptionMedallion";
 import { PLANS, type SubscriptionPlan } from "@/lib/subscription";
 
-/**
- * What a claim looks like: the gift bursts, a rocket carries it up, the perks
- * light up one by one on the way, and the tier medallion lands at the top.
- *
- * Anyone who has asked not to see motion gets the same information as a
- * straight statement of what they were given, with no movement at all.
- */
-
 type Phase = "gift" | "launch" | "perks" | "done";
 
 export interface ClaimAnimationProps {
@@ -22,14 +14,6 @@ export interface ClaimAnimationProps {
   onClose: () => void;
 }
 
-/**
- * Installs the keyframes once, into the document head.
- *
- * They cannot live in the render output: this component re-renders on every
- * phase change and once per perk lighting up, and a re-inserted <style>
- * restarts every CSS animation that depends on it — which left the rocket
- * relaunching from the bottom six times over and never clearing the screen.
- */
 function useGiftStyles() {
   useEffect(() => {
     const ID = "dg-claim-styles";
@@ -61,8 +45,7 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
 
   useEffect(() => {
     if (reduced) { setPhase("done"); setLitPerks(perks.length); return; }
-    // The reveal waits for the rocket to leave rather than overlapping it —
-    // text under a moving rocket is unreadable however it is layered.
+
     const LAUNCH_AT = 850;
     const CLEARS_AT = LAUNCH_AT + 1600;
     const timers: number[] = [];
@@ -77,7 +60,7 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
 
   return (
     <div className="dg-overlay" role="dialog" aria-modal="true" aria-label={`${planName} activated`}>
-      {/* stars streaking down while the rocket climbs */}
+      {}
       {!reduced && phase !== "gift" && (
         <div className="dg-stars" aria-hidden>
           {Array.from({ length: 46 }).map((_, i) => (
@@ -155,47 +138,10 @@ const CSS = `
   background:radial-gradient(circle at 50% 120%,#1b1f3a 0%,#0b0c14 55%,#05060a 100%);overflow:hidden;
   animation:dg-fade .32s ease both}
 @keyframes dg-fade{from{opacity:0}to{opacity:1}}
-/* centred by flex rather than by text-align, which only lines up inline
-   content and left the gift box drifting off centre */
-.dg-stage{position:relative;width:100%;max-width:520px;padding:24px;text-align:center;
-  display:flex;flex-direction:column;align-items:center;justify-content:center}
-.dg-giftbox,.dg-reveal{width:100%;display:flex;flex-direction:column;align-items:center}
-
-.dg-stars{position:absolute;inset:0;pointer-events:none}
-.dg-stars span{position:absolute;top:-40px;width:2px;border-radius:2px;
-  background:linear-gradient(180deg,transparent,rgba(255,255,255,.85),transparent);
-  animation-name:dg-star;animation-timing-function:linear;animation-iteration-count:infinite}
-@keyframes dg-star{from{transform:translateY(-60px)}to{transform:translateY(105vh)}}
-
-.dg-giftbox{animation:dg-shake .55s ease-in-out 2}
-@keyframes dg-shake{0%,100%{transform:rotate(0) scale(1)}
-  20%{transform:rotate(-9deg) scale(1.05)}40%{transform:rotate(8deg) scale(1.05)}
-  60%{transform:rotate(-6deg) scale(1.08)}80%{transform:rotate(5deg) scale(1.04)}}
-
-.dg-burst{position:absolute;left:50%;top:52%;width:20px;height:20px;margin:-10px 0 0 -10px;
-  border-radius:999px;border:3px solid;opacity:.9;animation:dg-burst .7s cubic-bezier(.2,.7,.3,1) both}
+er-radius:999px;border:3px solid;opacity:.9;animation:dg-burst .7s cubic-bezier(.2,.7,.3,1) both}
 @keyframes dg-burst{to{width:520px;height:520px;margin:-260px 0 0 -260px;opacity:0;border-width:1px}}
 
-/* behind the reveal: the rocket is still climbing as the perks start to
-   light, and it must pass behind the text rather than across it */
-.dg-rocket-wrap{position:absolute;left:50%;top:58%;margin-left:-95px;z-index:0;
-  animation:dg-launch 1.6s cubic-bezier(.45,0,.6,.25) forwards}
-.dg-reveal{z-index:1}
-@keyframes dg-launch{
-  0%{transform:translateY(60px) scale(.72);opacity:0}
-  14%{transform:translateY(24px) scale(.88);opacity:1}
-  44%{transform:translateY(-70px) scale(1);opacity:1}
-  88%{opacity:1}
-  100%{transform:translateY(-135vh) scale(1.06);opacity:0}}
-.dg-rocket{filter:drop-shadow(0 12px 30px rgba(255,140,26,.35))}
-.dg-flame-outer{transform-origin:60px 168px;animation:dg-fl1 .11s steps(2,end) infinite alternate}
-.dg-flame-inner{transform-origin:60px 168px;animation:dg-fl2 .09s steps(2,end) infinite alternate}
-@keyframes dg-fl1{from{transform:scaleY(.72) scaleX(.94)}to{transform:scaleY(1.24) scaleX(1.06)}}
-@keyframes dg-fl2{from{transform:scaleY(1.18) scaleX(1.05)}to{transform:scaleY(.68) scaleX(.9)}}
-
-.dg-reveal{position:relative;animation:dg-rise .5s cubic-bezier(.2,.8,.3,1) both}
-@keyframes dg-rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
-.dg-medal{display:flex;justify-content:center;animation:dg-pop .6s cubic-bezier(.2,1.5,.4,1) both}
+pop .6s cubic-bezier(.2,1.5,.4,1) both}
 @keyframes dg-pop{from{transform:scale(.4) rotate(-18deg);opacity:0}to{transform:none;opacity:1}}
 .dg-kicker{margin:14px 0 0;font-size:13px;color:#9aa0a6}
 .dg-title{margin:4px 0 0;font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.1}

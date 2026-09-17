@@ -23,7 +23,6 @@ function legacyGetUserMedia(constraints: MediaStreamConstraints): Promise<MediaS
   });
 }
 
-/** Warm up media device enumeration after a user gesture (helps some desktop webviews). */
 export async function warmUpMediaDevices(): Promise<void> {
   if (typeof navigator === "undefined") return;
   try {
@@ -31,7 +30,7 @@ export async function warmUpMediaDevices(): Promise<void> {
       await navigator.mediaDevices.enumerateDevices();
     }
   } catch {
-    // ignore
+
   }
 }
 
