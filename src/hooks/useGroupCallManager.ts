@@ -73,6 +73,7 @@ export function useGroupCallManager(
 
   const localRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const iceRetryRef = useRef<Map<string, number>>(new Map());
   const signalRef = useRef<RealtimeChannel | null>(null);
   const listenRef = useRef<RealtimeChannel | null>(null);
   const groupIdRef = useRef<string | null>(null);
@@ -220,9 +221,22 @@ export function useGroupCallManager(
         }
       };
       pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed") {
+          const attempts = (iceRetryRef.current.get(remoteId) ?? 0) + 1;
+          iceRetryRef.current.set(remoteId, attempts);
+          if (attempts <= 2) {
+            try {
+              pc.restartIce();
+              return;
+            } catch {
+              // fall through to drop
+            }
+          }
+        }
         if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
           pc.close();
           peersRef.current.delete(remoteId);
+          iceRetryRef.current.delete(remoteId);
           setRemoteStreams((prev) => {
             const next = new Map(prev);
             next.delete(remoteId);
@@ -401,6 +415,13 @@ export function useGroupCallManager(
           groupId: gid,
           groupName: name,
           callerName: displayName(profile),
+        });
+        void getSupabaseClient().functions.invoke("send-call-push", {
+          body: { calleeId: mid, callId: gid, callerName: displayName(profile), groupId: gid, groupName: name },
+        }).then(({ data }) => {
+          console.log("[send-group-call-push]", mid, data);
+        }).catch((err) => {
+          console.error("[send-group-call-push] invoke failed", err);
         });
       }
       window.setTimeout(() => setRingingIds(new Set()), 30000);

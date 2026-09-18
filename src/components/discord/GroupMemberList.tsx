@@ -10,6 +10,7 @@ interface GroupMemberListProps {
   inCallUserIds?: Set<string>;
   currentUserId?: string | null;
   onMemberClick?: (profile: Profile) => void;
+  onMemberContext?: (profile: Profile, x: number, y: number) => void;
 }
 
 export function GroupMemberList({
@@ -18,6 +19,7 @@ export function GroupMemberList({
   inCallUserIds,
   currentUserId,
   onMemberClick,
+  onMemberContext,
 }: GroupMemberListProps) {
   const inCall = members.filter((m) => inCallUserIds?.has(m.id));
   const notInCall = members.filter((m) => !inCallUserIds?.has(m.id));
@@ -28,6 +30,10 @@ export function GroupMemberList({
       <button
         type="button"
         onClick={() => onMemberClick?.(m)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onMemberContext?.(m, e.clientX, e.clientY);
+        }}
         className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-interactive-hover"
       >
         <div className="relative">

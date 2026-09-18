@@ -69,7 +69,7 @@ interface ChatCanvasProps {
   placeholder?: string;
 
   composerLockedReason?: string | null;
-  typingScope?: { kind: "channel" | "dm"; id: string; serverId?: string } | null;
+  typingScope?: { kind: "channel" | "dm" | "group"; id: string; serverId?: string } | null;
 
   channels?: ChannelLite[];
 
@@ -83,6 +83,7 @@ interface ChatCanvasProps {
   onForward?: (message: ChatMessageData) => void;
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
   onAuthorClick?: (profile: Profile) => void;
+  onAuthorContextMenu?: (profile: Profile, e: React.MouseEvent) => void;
   onLoadMore?: () => void | Promise<void>;
   hasMore?: boolean;
   maxUploadBytes?: number;
@@ -120,6 +121,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     onForward,
     onMessageContext,
     onAuthorClick,
+    onAuthorContextMenu,
     onLoadMore,
     hasMore,
     maxUploadBytes,
@@ -346,6 +348,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
                   reactions={msgReactions}
                   onAuthorClick={onAuthorClick}
+                  onAuthorContextMenu={onAuthorContextMenu}
                   members={members}
                   channels={channels}
                   customEmoji={customEmoji}

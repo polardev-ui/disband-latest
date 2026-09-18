@@ -65,8 +65,13 @@ import type {
   Note,
   Profile,
   Server,
+  ServerBan,
+  ServerFolder,
+  ServerListState,
   ServerMember,
+  ServerPermissionKey,
   ServerRole,
+  ServerTimeout,
   UserStatus,
   ViewMode,
   VoicePresence,
@@ -137,6 +142,7 @@ interface AppContextValue {
   selectChannel: (channelId: string) => void;
   selectDmThread: (threadId: string) => Promise<void>;
   selectGroupChat: (groupId: string) => Promise<void>;
+  refreshGroupChats: () => Promise<void>;
   createGroupChat: (name: string, memberIds: string[]) => Promise<string | null>;
   leaveGroupChat: (groupId: string) => Promise<string | null>;
   inviteToGroup: (groupId: string, memberIds: string[]) => Promise<string | null>;
@@ -161,6 +167,23 @@ interface AppContextValue {
   joinServerById: (serverId: string) => Promise<string | null>;
   kickMember: (userId: string) => Promise<string | null>;
   banMember: (userId: string, reason?: string) => Promise<string | null>;
+  unbanMember: (userId: string) => Promise<string | null>;
+  timeoutMember: (userId: string, seconds: number, reason?: string) => Promise<string | null>;
+  removeMemberTimeout: (userId: string) => Promise<string | null>;
+  removeGroupMember: (groupId: string, userId: string) => Promise<string | null>;
+  loadMutuals: (userId: string) => Promise<{ serverIds: string[]; friendIds: string[] }>;
+  serverTimeouts: ServerTimeout[];
+  serverBans: ServerBan[];
+  serverFolders: ServerFolder[];
+  serverListState: ServerListState[];
+  loadServerOrganization: () => Promise<void>;
+  createFolder: (name: string, color: string) => Promise<string | null>;
+  renameFolder: (folderId: string, name: string) => Promise<string | null>;
+  setFolderColor: (folderId: string, color: string) => Promise<string | null>;
+  deleteFolder: (folderId: string) => Promise<string | null>;
+  reorderFolders: (orderedIds: string[]) => Promise<string | null>;
+  setServerSlot: (serverId: string, position: number, folderId: string | null) => Promise<string | null>;
+  reorderServers: (slots: { server_id: string; position: number; folder_id: string | null }[]) => Promise<string | null>;
   createRole: (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => Promise<string | null>;
   setMemberRoles: (userId: string, roleIds: string[]) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
@@ -251,33 +274,8 @@ interface AppContextValue {
   restrictions: string[];
   refreshRestrictions: () => Promise<void>;
   refreshPlatformAccess: () => Promise<void>;
-  serverPermissions: {
-    kick: boolean;
-    ban: boolean;
-    manage_roles: boolean;
-    manage_server: boolean;
-    manage_channels: boolean;
-    manage_messages: boolean;
-    manage_emojis: boolean;
-    mention_everyone: boolean;
-    send_messages: boolean;
-    add_reactions: boolean;
-    attach_files: boolean;
-  };
-  hasServerPermission: (
-    permission:
-      | "kick"
-      | "ban"
-      | "manage_roles"
-      | "manage_server"
-      | "manage_channels"
-      | "manage_messages"
-      | "manage_emojis"
-      | "mention_everyone"
-      | "send_messages"
-      | "add_reactions"
-      | "attach_files",
-  ) => boolean;
+  serverPermissions: Record<ServerPermissionKey, boolean>;
+  hasServerPermission: (permission: ServerPermissionKey) => boolean;
   channelEffects: Record<string, ChannelEffects>;
   updateRole: (
     roleId: string,
@@ -329,7 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [groupLoading, setGroupLoading] = useState(false);
   const [platformBan, setPlatformBan] = useState<{ banned: boolean; reason?: string; vpnBlocked?: boolean } | null>(null);
   const [restrictions, setRestrictions] = useState<string[]>([]);
-  const [serverPermissions, setServerPermissions] = useState({
+  const [serverPermissions, setServerPermissions] = useState<Record<ServerPermissionKey, boolean>>({
     kick: false,
     ban: false,
     manage_roles: false,
@@ -341,8 +339,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     send_messages: false,
     add_reactions: false,
     attach_files: false,
+    timeout_members: false,
+    pin_messages: false,
+    view_audit_log: false,
+    create_invites: false,
   });
   const [channelEffects, setChannelEffects] = useState<Record<string, ChannelEffects>>({});
+  const [serverTimeouts, setServerTimeouts] = useState<ServerTimeout[]>([]);
+  const [serverBans, setServerBans] = useState<ServerBan[]>([]);
+  const [serverFolders, setServerFolders] = useState<ServerFolder[]>([]);
+  const [serverListState, setServerListState] = useState<ServerListState[]>([]);
   const [messageReactions, setMessageReactions] = useState<MessageReaction[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -882,6 +888,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
     setServerRoles(serverRoles);
+    void (async () => {
+      const now = new Date().toISOString();
+      const [{ data: timeoutRows }, { data: banRows }] = await Promise.all([
+        supabase.from("server_timeouts").select("*").eq("server_id", serverId).gt("expires_at", now),
+        supabase.from("server_bans").select("server_id, user_id, banned_by, reason, created_at").eq("server_id", serverId),
+      ]);
+      setServerTimeouts((timeoutRows as ServerTimeout[]) ?? []);
+      const bans = (banRows ?? []) as Omit<ServerBan, "profile">[];
+      if (!bans.length) {
+        setServerBans([]);
+        return;
+      }
+      const profiles = await fetchProfilesByIds(supabase, bans.map((b) => b.user_id));
+      setServerBans(bans.map((b) => ({ ...b, profile: profiles.get(b.user_id) })));
+    })();
 
     const assignableRoleIds = new Set(
       serverRoles.filter((r) => !r.is_default).map((r) => r.id),
@@ -917,6 +938,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           send_messages: !!p.send_messages,
           add_reactions: !!p.add_reactions,
           attach_files: !!p.attach_files,
+          timeout_members: !!p.timeout_members,
+          pin_messages: !!p.pin_messages,
+          view_audit_log: !!p.view_audit_log,
+          create_invites: !!p.create_invites,
         });
       }
       const { data: effects } = await supabase.rpc("my_channel_effects", { p_server_id: serverId });
@@ -1157,8 +1182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   }, [activeDmThreadId, dmHasMore, dmMessages]);
 
-  const loadGroupChats = useCallback(async (uid: string) => {
-    const supabase = getSupabaseClient();
+  const loadGroupChats = useCallback(async (uid: string) => {    const supabase = getSupabaseClient();
     const { data: memberships } = await supabase
       .from("group_chat_members")
       .select("group_id")
@@ -1185,6 +1209,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })),
     );
   }, []);
+
+  const refreshGroupChats = useCallback(async () => {
+    if (!userId) return;
+    await loadGroupChats(userId);
+  }, [userId, loadGroupChats]);
 
   const loadGroupMessages = useCallback(async (groupId: string) => {
     const supabase = getSupabaseClient();
@@ -1265,6 +1294,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCustomEmojiMap(map);
   }, []);
 
+  const loadServerOrganization = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    const [{ data: folders }, { data: states }] = await Promise.all([
+      supabase.from("server_folders").select("*").order("position"),
+      supabase.from("server_list_state").select("*"),
+    ]);
+    setServerFolders((folders as ServerFolder[]) ?? []);
+    setServerListState((states as ServerListState[]) ?? []);
+  }, []);
+
   const refreshAll = useCallback(async () => {
     if (!userId) return;
     await Promise.all([
@@ -1274,6 +1313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadDmThreads(userId),
       loadGroupChats(userId),
       loadNotifications(userId),
+      loadServerOrganization(),
     ]);
 
     await seedUnread(userId);
@@ -1281,7 +1321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (activeChannelId) await loadMessages(activeChannelId);
     if (activeDmThreadId) await loadDmMessages(activeDmThreadId);
     if (activeGroupChatId) await loadGroupMessages(activeGroupChatId);
-  }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages, seedUnread]);
+  }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerOrganization, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages, seedUnread]);
 
   useEffect(() => {
     if (!configured) {
@@ -2836,6 +2876,186 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails]);
 
+  const unbanMember = useCallback(async (targetUserId: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("unban_server_member", {
+      p_server_id: activeServerId,
+      p_user_id: targetUserId,
+    });
+    if (error) return error.message;
+    await loadServerBans(activeServerId);
+    return null;
+  }, [activeServerId]);
+
+  const timeoutMember = useCallback(async (targetUserId: string, seconds: number, reason?: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("timeout_server_member", {
+      p_server_id: activeServerId,
+      p_user_id: targetUserId,
+      p_seconds: Math.floor(seconds),
+      p_reason: reason ?? "",
+    });
+    if (error) return error.message;
+    await loadServerTimeouts(activeServerId);
+    return null;
+  }, [activeServerId]);
+
+  const removeMemberTimeout = useCallback(async (targetUserId: string) => {
+    if (!activeServerId) return "No server selected";
+    const { error } = await getSupabaseClient().rpc("remove_timeout", {
+      p_server_id: activeServerId,
+      p_user_id: targetUserId,
+    });
+    if (error) return error.message;
+    await loadServerTimeouts(activeServerId);
+    return null;
+  }, [activeServerId]);
+
+  const loadServerTimeouts = useCallback(async (serverId: string) => {
+    const now = new Date().toISOString();
+    const { data } = await getSupabaseClient()
+      .from("server_timeouts")
+      .select("*")
+      .eq("server_id", serverId)
+      .gt("expires_at", now);
+    setServerTimeouts((data as ServerTimeout[]) ?? []);
+  }, []);
+
+  const loadServerBans = useCallback(async (serverId: string) => {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from("server_bans")
+      .select("server_id, user_id, banned_by, reason, created_at")
+      .eq("server_id", serverId);
+    const rows = (data ?? []) as Omit<ServerBan, "profile">[];
+    if (!rows.length) {
+      setServerBans([]);
+      return;
+    }
+    const profiles = await fetchProfilesByIds(supabase, rows.map((r) => r.user_id));
+    setServerBans(rows.map((r) => ({ ...r, profile: profiles.get(r.user_id) })));
+  }, []);
+
+  const removeGroupMember = useCallback(async (groupId: string, targetUserId: string) => {
+    const { error } = await getSupabaseClient().rpc("remove_group_member", {
+      p_group_id: groupId,
+      p_user_id: targetUserId,
+    });
+    if (error) return error.message;
+    return null;
+  }, []);
+
+  const createFolder = useCallback(async (name: string, color: string) => {
+    const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "Not signed in";
+    const { data, error } = await supabase.from("server_folders").insert({
+      user_id: user.id,
+      name: name.trim().slice(0, 32) || "Folder",
+      color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#5865f2",
+      position: serverFolders.length,
+    }).select("id").single();
+    if (error) return error.message;
+    await loadServerOrganization();
+    return (data as { id: string } | null)?.id ?? null;
+  }, [serverFolders.length, loadServerOrganization]);
+
+  const renameFolder = useCallback(async (folderId: string, name: string) => {
+    const trimmed = name.trim().slice(0, 32);
+    if (!trimmed) return "Name cannot be empty";
+    const { error } = await getSupabaseClient().from("server_folders")
+      .update({ name: trimmed }).eq("id", folderId);
+    if (error) return error.message;
+    setServerFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, name: trimmed } : f)));
+    return null;
+  }, []);
+
+  const setFolderColor = useCallback(async (folderId: string, color: string) => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return "Invalid color";
+    const { error } = await getSupabaseClient().from("server_folders")
+      .update({ color }).eq("id", folderId);
+    if (error) return error.message;
+    setServerFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, color } : f)));
+    return null;
+  }, []);
+
+  const deleteFolder = useCallback(async (folderId: string) => {
+    const { error } = await getSupabaseClient().from("server_folders").delete().eq("id", folderId);
+    if (error) return error.message;
+    await loadServerOrganization();
+    return null;
+  }, [loadServerOrganization]);
+
+  const reorderFolders = useCallback(async (orderedIds: string[]) => {
+    const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "Not signed in";
+    const prev = serverFolders;
+    setServerFolders((list) => {
+      const order = new Map(orderedIds.map((id, i) => [id, i]));
+      return [...list].sort((a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999))
+        .map((f, i) => ({ ...f, position: i }));
+    });
+    for (let i = 0; i < orderedIds.length; i++) {
+      const { error } = await supabase.from("server_folders")
+        .update({ position: i }).eq("id", orderedIds[i]).eq("user_id", user.id);
+      if (error) {
+        setServerFolders(prev);
+        return error.message;
+      }
+    }
+    return null;
+  }, [serverFolders]);
+
+  const setServerSlot = useCallback(async (serverId: string, position: number, folderId: string | null) => {
+    const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "Not signed in";
+    const { error } = await supabase.from("server_list_state").upsert({
+      user_id: user.id,
+      server_id: serverId,
+      position,
+      folder_id: folderId,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,server_id" });
+    if (error) return error.message;
+    setServerListState((prev) => {
+      const next = prev.filter((s) => s.server_id !== serverId);
+      next.push({ user_id: user.id, server_id: serverId, position, folder_id: folderId, updated_at: new Date().toISOString() });
+      return next;
+    });
+    return null;
+  }, []);
+
+  const reorderServers = useCallback(async (slots: { server_id: string; position: number; folder_id: string | null }[]) => {
+    const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "Not signed in";
+    const stamped = new Date().toISOString();
+    const { error } = await supabase.from("server_list_state").upsert(
+      slots.map((s) => ({ user_id: user.id, ...s, updated_at: stamped })),
+      { onConflict: "user_id,server_id" },
+    );
+    if (error) return error.message;
+    setServerListState((prev) => {
+      const ids = new Set(slots.map((s) => s.server_id));
+      return [...prev.filter((s) => !ids.has(s.server_id)), ...slots.map((s) => ({ user_id: user.id, ...s, updated_at: stamped }))];
+    });
+    return null;
+  }, []);
+
+  const loadMutuals = useCallback(async (targetUserId: string) => {
+    const supabase = getSupabaseClient();
+    const [serversRes, friendsRes] = await Promise.all([
+      supabase.rpc("mutual_server_ids", { p_user_id: targetUserId }),
+      supabase.rpc("mutual_friend_ids", { p_user_id: targetUserId }),
+    ]);
+    return {
+      serverIds: (serversRes.data as string[] | null) ?? [],
+      friendIds: (friendsRes.data as string[] | null) ?? [],
+    };
+  }, []);
+
   const createRole = useCallback(async (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => {
     if (!activeServerId) return "No server selected";
     const { error } = await getSupabaseClient().from("server_roles").insert({
@@ -2884,20 +3104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const hasServerPermission = useCallback(
-    (
-      permission:
-        | "kick"
-        | "ban"
-        | "manage_roles"
-        | "manage_server"
-        | "manage_channels"
-        | "manage_messages"
-        | "manage_emojis"
-        | "mention_everyone"
-        | "send_messages"
-        | "add_reactions"
-        | "attach_files",
-    ) => serverPermissions[permission],
+    (permission: ServerPermissionKey) => serverPermissions[permission],
     [serverPermissions],
   );
 
@@ -3868,6 +4075,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectChannel,
     selectDmThread,
     selectGroupChat,
+    refreshGroupChats,
     createGroupChat,
     leaveGroupChat,
     inviteToGroup,
@@ -3892,6 +4100,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     joinServerById,
     kickMember,
     banMember,
+    unbanMember,
+    timeoutMember,
+    removeMemberTimeout,
+    removeGroupMember,
+    loadMutuals,
+    serverTimeouts,
+    serverBans,
+    serverFolders,
+    serverListState,
+    loadServerOrganization,
+    createFolder,
+    renameFolder,
+    setFolderColor,
+    deleteFolder,
+    reorderFolders,
+    setServerSlot,
+    reorderServers,
     createRole,
     updateRole,
     setMemberRoles,

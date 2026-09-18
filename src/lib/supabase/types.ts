@@ -69,31 +69,71 @@ export interface ChannelEffects {
   can_attach: boolean;
 }
 
+export type ServerPermissionKey =
+  | "kick"
+  | "ban"
+  | "manage_roles"
+  | "manage_server"
+  | "manage_channels"
+  | "manage_messages"
+  | "manage_emojis"
+  | "mention_everyone"
+  | "send_messages"
+  | "add_reactions"
+  | "attach_files"
+  | "timeout_members"
+  | "pin_messages"
+  | "view_audit_log"
+  | "create_invites";
+
+export type ServerPermissions = Partial<Record<ServerPermissionKey, boolean>>;
+
 export interface ServerRole {
   id: string;
   server_id: string;
   name: string;
   color: string;
-
   gradient_to?: string | null;
-
   gradient_animated?: boolean;
-  permissions: {
-    kick?: boolean;
-    ban?: boolean;
-    manage_roles?: boolean;
-    manage_server?: boolean;
-    manage_channels?: boolean;
-    manage_messages?: boolean;
-    manage_emojis?: boolean;
-    mention_everyone?: boolean;
-    send_messages?: boolean;
-    add_reactions?: boolean;
-    attach_files?: boolean;
-  };
+  permissions: ServerPermissions;
   position: number;
   is_default: boolean;
   created_at: string;
+}
+
+export interface ServerFolder {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  position: number;
+  created_at: string;
+}
+
+export interface ServerListState {
+  user_id: string;
+  server_id: string;
+  position: number;
+  folder_id: string | null;
+  updated_at: string;
+}
+
+export interface ServerTimeout {
+  server_id: string;
+  user_id: string;
+  expires_at: string;
+  reason: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ServerBan {
+  server_id: string;
+  user_id: string;
+  banned_by: string | null;
+  reason: string | null;
+  created_at: string;
+  profile?: Profile;
 }
 
 export interface DbServerMember {
