@@ -60,7 +60,14 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
 }
 
 export function MemberList({ members, roles, onMemberClick, onMemberContext }: MemberListProps) {
-  const { presenceMap } = useApp();
+  const { presenceMap, serverTimeouts } = useApp();
+
+  const timedOutIds = useMemo(() => {
+    const now = Date.now();
+    return new Set(
+      serverTimeouts.filter((t) => Date.parse(t.expires_at) > now).map((t) => t.user_id),
+    );
+  }, [serverTimeouts]);
 
   const liveStatus = useCallback(
     (p: Profile): UserStatus => presenceMap.get(p.id) ?? "offline",
@@ -188,6 +195,7 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
               m={item.member}
               roles={roles}
               live={liveStatus(item.member.profile)}
+              timedOut={timedOutIds.has(item.member.user_id)}
               onClick={onMemberClick}
               onContext={onMemberContext}
             />
@@ -216,11 +224,12 @@ function binarySearch(offsets: number[], y: number, count: number): number {
 }
 
 function Row({
-  m, roles, live, onClick, onContext,
+  m, roles, live, timedOut, onClick, onContext,
 }: {
   m: Member;
   roles: ServerRole[];
   live: UserStatus;
+  timedOut: boolean;
   onClick?: (m: Member) => void;
   onContext?: (m: Member, x: number, y: number) => void;
 }) {
@@ -260,6 +269,13 @@ function Row({
         {m.role === "admin" && (
           <Tooltip label="Admin" side="top" as="span">
             <IconCrown size={14} className="shrink-0 text-[#f0b232]" />
+          </Tooltip>
+        )}
+        {timedOut && (
+          <Tooltip label="Timed out" side="top" as="span">
+            <span className="shrink-0 rounded bg-status-dnd/20 px-1 py-px text-[10px] font-bold uppercase text-status-dnd">
+              Muted
+            </span>
           </Tooltip>
         )}
       </span>

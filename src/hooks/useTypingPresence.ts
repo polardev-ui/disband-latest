@@ -14,7 +14,8 @@ export interface TypingUser {
 
 export type TypingScope =
   | { kind: "channel"; id: string; serverId?: string }
-  | { kind: "dm"; id: string };
+  | { kind: "dm"; id: string }
+  | { kind: "group"; id: string };
 
 export function formatTypingLabel(typers: TypingUser[], useSeveralRule: boolean): string | null {
   if (typers.length === 0) return null;
@@ -67,7 +68,7 @@ export function useTypingPresence(
     if (!scopeKind || !scopeId || !selfId || !selfName) return;
 
     const supabase = getSupabaseClient();
-    const topic = scopeKind === "channel" ? `typing:ch:${scopeId}` : `typing:dm:${scopeId}`;
+    const topic = scopeKind === "channel" ? `typing:ch:${scopeId}` : scopeKind === "group" ? `typing:group:${scopeId}` : `typing:dm:${scopeId}`;
     const ch = supabase.channel(topic, { config: { broadcast: { self: false } } });
 
     ch.on("broadcast", { event: "typing" }, ({ payload }) => {

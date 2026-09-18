@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ServerPermissionKey, ServerRole } from "@/lib/supabase/types";
 import {
   catalystLevel,
   sanitizeVanity,
@@ -10,6 +11,8 @@ import {
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus, IconChevron, IconGripVertical } from "@/components/icons";
+import { RoleManager } from "@/components/modals/RoleManager";
+import { AuditLogPanel } from "@/components/modals/AuditLogPanel";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { getInviteUrl, serverInitials, displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
@@ -23,14 +26,16 @@ interface ServerSettingsModalProps {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
 }
 
-type Section = "overview" | "invite" | "channels" | "members" | "roles" | "emoji" | "appearance" | "danger";
+type Section = "overview" | "invite" | "channels" | "members" | "roles" | "bans" | "audit" | "emoji" | "appearance" | "danger";
 
-const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean; permission?: "manage_channels" | "manage_roles" }[] = [
+const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean; permission?: ServerPermissionKey }[] = [
   { id: "overview", label: "Overview", icon: IconSettings },
   { id: "invite", label: "Invites", icon: IconLink },
   { id: "channels", label: "Channels", icon: IconHash, permission: "manage_channels" },
   { id: "members", label: "Members", icon: IconShield, permission: "manage_roles" },
   { id: "roles", label: "Roles", icon: IconShield, permission: "manage_roles" },
+  { id: "bans", label: "Bans", icon: IconAlert, permission: "ban" },
+  { id: "audit", label: "Audit Log", icon: IconHash, permission: "view_audit_log" },
   { id: "emoji", label: "Emoji", icon: IconEmoji, ownerOnly: true },
   { id: "appearance", label: "Appearance", icon: IconPalette, ownerOnly: true },
   { id: "danger", label: "Danger Zone", icon: IconAlert, ownerOnly: true },
@@ -43,8 +48,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     deleteServer,
     user,
     serverRoles,
-    createRole,
-    updateRole,
     channels,
     categories,
     members,
@@ -52,11 +55,11 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     createChannel,
     renameChannel,
     deleteChannel,
-    deleteRole,
-    moveRole,
     setMemberRoles,
     kickMember,
     banMember,
+    unbanMember,
+    serverBans,
     catalystCounts,
   } = useApp();
   const { upload } = useMediaUpload();
@@ -67,8 +70,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   const [vanitySaved, setVanitySaved] = useState(false);
   const [discoverable, setDiscoverable] = useState(false);
   const [discoverableError, setDiscoverableError] = useState<string | null>(null);
-  const [roleName, setRoleName] = useState("");
-  const [roleColor, setRoleColor] = useState("#5865f2");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -83,8 +84,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   const [emojiName, setEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
   const [emojiUploading, setEmojiUploading] = useState(false);
-  const [dragRoleId, setDragRoleId] = useState<string | null>(null);
-  const [overRoleId, setOverRoleId] = useState<string | null>(null);
   const { plan, entitlements } = useSubscription(user?.id);
 
   useEffect(() => {
@@ -120,14 +119,15 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   const isOwner = activeServer.owner_id === user?.id;
   const canManageChannels = isOwner || serverPermissions.manage_channels;
   const canManageRoles = isOwner || serverPermissions.manage_roles;
+  const canBan = isOwner || serverPermissions.ban;
+  const canViewAuditLog = isOwner || serverPermissions.view_audit_log;
   const catalystCount = catalystCounts[activeServer.id] ?? 0;
   const catalystLvl = catalystLevel(catalystCount);
   const inviteCode = activeServer.vanity_code || activeServer.invite_code;
   const inviteUrl = inviteCode ? getInviteUrl(inviteCode) : null;
   const navItems = NAV.filter((n) => {
     if (n.ownerOnly && !isOwner) return false;
-    if (n.permission === "manage_channels" && !canManageChannels) return false;
-    if (n.permission === "manage_roles" && !canManageRoles) return false;
+    if (n.permission && !(isOwner || serverPermissions[n.permission])) return false;
     return true;
   });
 
@@ -234,52 +234,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     setCustomEmoji((prev) => prev.filter((e) => e.id !== id));
   }
 
-  async function handleCreateRole() {
-    if (!roleName.trim()) return;
-    setLoading(true);
-    const err = await createRole({ name: roleName.trim(), color: roleColor });
-    if (err) setError(err);
-    else setRoleName("");
-    setLoading(false);
-  }
-
-  async function togglePermission(
-    roleId: string,
-    current: {
-      kick?: boolean;
-      ban?: boolean;
-      manage_roles?: boolean;
-      manage_server?: boolean;
-      manage_channels?: boolean;
-      manage_messages?: boolean;
-      manage_emojis?: boolean;
-      mention_everyone?: boolean;
-      send_messages?: boolean;
-      add_reactions?: boolean;
-      attach_files?: boolean;
-    },
-    permission:
-      | "kick"
-      | "ban"
-      | "manage_roles"
-      | "manage_server"
-      | "manage_channels"
-      | "manage_messages"
-      | "manage_emojis"
-      | "mention_everyone"
-      | "send_messages"
-      | "add_reactions"
-      | "attach_files",
-  ) {
-    setLoading(true);
-    setError(null);
-    const err = await updateRole(roleId, {
-      permissions: { ...current, [permission]: !current[permission] },
-    });
-    if (err) setError(err);
-    setLoading(false);
-  }
-
   async function handleCreateChannel() {
     if (!channelName.trim()) return;
     setLoading(true);
@@ -312,43 +266,6 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     const err = await deleteChannel(channel.id);
     if (err) setError(err);
     setLoading(false);
-  }
-
-  async function handleRenameRole(roleId: string, currentName: string) {
-    const next = prompt("Rename role", currentName);
-    if (!next || next.trim() === currentName) return;
-    setLoading(true);
-    setError(null);
-    const err = await updateRole(roleId, { name: next.trim() });
-    if (err) setError(err);
-    setLoading(false);
-  }
-
-  async function handleRoleGradient(roleId: string, patch: { gradient_to?: string | null; gradient_animated?: boolean }) {
-    setLoading(true);
-    setError(null);
-    const err = await updateRole(roleId, patch);
-    if (err) setError(err);
-    setLoading(false);
-  }
-
-  async function handleDeleteRole(role: { id: string; name: string }) {
-    if (!confirm(`Delete role "${role.name}"? Members with this role will lose it.`)) return;
-    setLoading(true);
-    setError(null);
-    const err = await deleteRole(role.id);
-    if (err) setError(err);
-    setLoading(false);
-  }
-
-  async function handleMoveRole(roleId: string, targetIndex: number) {
-    setLoading(true);
-    setError(null);
-    const err = await moveRole(roleId, targetIndex);
-    if (err) setError(err);
-    setLoading(false);
-    setDragRoleId(null);
-    setOverRoleId(null);
   }
 
   async function handleToggleRole(memberUserId: string, roleId: string) {
@@ -808,222 +725,66 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
             )}
 
             {section === "roles" && canManageRoles && (
-              <div className="space-y-5">
-                <h2 className="text-xl font-bold">Roles</h2>
-                <p className="text-sm text-text-muted">
-                  Create roles, set permissions, and assign them from the Members tab or by right-clicking members. Drag
-                  a role (or use the arrows) to reorder it — higher roles appear first in the member list.
-                  {catalystLvl.level >= 3 ? (
-                    <> <span className="font-medium text-brand">Level {catalystLvl.level}: gradient role styling unlocked.</span></>
-                  ) : (
-                    <> Boost this server to Level 3 (6 catalysts) for animated gradient roles.</>
-                  )}
-                </p>
-                <ul className="space-y-3">
-                  {[...serverRoles]
-                    .sort((a, b) => b.position - a.position)
-                    .map((r) => {
-                    const perms = r.permissions ?? {};
-                    const PERMS: {
-                      key:
-                        | "kick"
-                        | "ban"
-                        | "manage_roles"
-                        | "manage_server"
-                        | "manage_channels"
-                        | "manage_messages"
-                        | "manage_emojis"
-                        | "mention_everyone"
-                        | "send_messages"
-                        | "add_reactions"
-                        | "attach_files";
-                      label: string;
-                    }[] = [
-                      { key: "send_messages", label: "Send Messages" },
-                      { key: "add_reactions", label: "Add Reactions" },
-                      { key: "attach_files", label: "Attach Files" },
-                      { key: "kick", label: "Kick Members" },
-                      { key: "ban", label: "Ban Members" },
-                      { key: "manage_roles", label: "Manage Roles" },
-                      { key: "manage_server", label: "Manage Server" },
-                      { key: "manage_channels", label: "Manage Channels" },
-                      { key: "manage_messages", label: "Manage Messages" },
-                      { key: "manage_emojis", label: "Manage Emoji" },
-                      { key: "mention_everyone", label: "Mention @everyone / @here" },
-                    ];
-                    return (
-                      <li
-                        key={r.id}
-                        draggable={!r.is_default}
-                        onDragStart={(e) => {
-                          if (r.is_default) return;
-                          setDragRoleId(r.id);
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", r.id);
-                        }}
-                        onDragEnd={() => {
-                          setDragRoleId(null);
-                          setOverRoleId(null);
-                        }}
-                        onDragOver={(e) => {
-                          if (r.is_default) return;
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          setOverRoleId(r.id);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (!dragRoleId || dragRoleId === r.id) return;
-                          void handleMoveRole(dragRoleId, r.position);
-                        }}
-                        className={`rounded-lg border border-divider bg-bg-secondary p-4 transition-all ${
-                          overRoleId === r.id && dragRoleId && dragRoleId !== r.id
-                            ? "ring-2 ring-brand"
-                            : ""
-                        } ${dragRoleId === r.id ? "opacity-40" : ""}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {!r.is_default && (
-                            <span className="cursor-grab text-text-muted active:cursor-grabbing" title="Drag to reorder">
-                              <IconGripVertical size={16} />
-                            </span>
-                          )}
-                          <span className="h-4 w-4 rounded-full" style={{ backgroundColor: r.color }} />
-                          <span className="font-medium">{r.name}</span>
-                          {r.is_default && <span className="text-xs text-text-muted">Default</span>}
-                          {r.gradient_to && (
-                            <span
-                              title="Gradient role styling"
-                              aria-label="Gradient role styling"
-                              className={`bg-clip-text text-sm font-black text-transparent ${r.gradient_animated ? "animate-role-gradient" : ""}`}
-                              style={{
-                                backgroundImage: `linear-gradient(90deg, ${r.color}, ${r.gradient_to})`,
-                                backgroundSize: r.gradient_animated ? "200% 100%" : undefined,
-                              }}
-                            >
-                              Aa
-                            </span>
-                          )}
-                          <div className="ml-auto flex shrink-0 items-center gap-1">
-                            {!r.is_default && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleMoveRole(r.id, r.position + 1)}
-                                  disabled={loading || r.position >= serverRoles.length - 1}
-                                  className="rounded p-1 text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
-                                  aria-label="Move role up"
-                                >
-                                  <IconChevron size={16} className="rotate-180" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleMoveRole(r.id, r.position - 1)}
-                                  disabled={loading || r.position <= 1}
-                                  className="rounded p-1 text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
-                                  aria-label="Move role down"
-                                >
-                                  <IconChevron size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleRenameRole(r.id, r.name)}
-                                  className="rounded p-1 text-text-muted transition-colors hover:text-text-normal"
-                                  aria-label={`Rename ${r.name}`}
-                                >
-                                  <IconEdit size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleDeleteRole(r)}
-                                  className="rounded p-1 text-text-muted transition-colors hover:text-status-dnd"
-                                  aria-label={`Delete ${r.name}`}
-                                >
-                                  <IconTrash size={16} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2 rounded bg-bg-accent px-3 py-2">
-                          <span className="text-xs font-bold uppercase text-text-muted">Gradient</span>
-                          <input
-                            type="color"
-                            value={r.gradient_to ?? r.color}
-                            disabled={loading || catalystLvl.level < 3}
-                            title={catalystLvl.level >= 3 ? "Gradient end color" : "Level 3 unlocks gradients"}
-                            onChange={(e) => void handleRoleGradient(r.id, { gradient_to: e.target.value })}
-                            className="h-7 w-10 cursor-pointer rounded disabled:cursor-not-allowed disabled:opacity-40"
-                          />
-                          {r.gradient_to && (
-                            <button
-                              type="button"
-                              disabled={loading}
-                              onClick={() => void handleRoleGradient(r.id, { gradient_to: null, gradient_animated: false })}
-                              className="text-xs text-text-muted hover:text-text-normal disabled:opacity-40"
-                            >
-                              Clear
-                            </button>
-                          )}
-                          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-text-muted">
-                            <input
-                              type="checkbox"
-                              checked={!!r.gradient_animated}
-                              disabled={loading || !r.gradient_to || catalystLvl.level < 3}
-                              onChange={(e) => void handleRoleGradient(r.id, { gradient_animated: e.target.checked })}
-                              className="h-3.5 w-3.5 accent-brand disabled:opacity-40"
-                            />
-                            Animated
-                          </label>
-                          {catalystLvl.level < 3 && (
-                            <span className="w-full text-[11px] text-text-muted/70">Level 3 unlocks gradient roles.</span>
-                          )}
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          {PERMS.map((p) => {
-                            const isMemberAction =
-                              p.key === "send_messages" ||
-                              p.key === "add_reactions" ||
-                              p.key === "attach_files";
-                            return (
-                              <label
-                                key={p.key}
-                                className="flex cursor-pointer items-center gap-2 rounded bg-bg-accent px-3 py-2 text-sm"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!!perms[p.key]}
-                                  disabled={loading || (r.is_default && !isMemberAction)}
-                                  onChange={() => void togglePermission(r.id, perms, p.key)}
-                                  className="h-4 w-4 accent-brand"
-                                />
-                                {p.label}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {r.is_default && (
-                          <p className="mt-2 text-xs text-text-muted">
-                            {perms.send_messages ? "The default role's message permissions act as channel defaults for everyone." : "The default @everyone role cannot hold moderation permissions; its message permissions act as channel defaults for everyone."}
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    value={roleName}
-                    onChange={(e) => setRoleName(e.target.value)}
-                    placeholder="Role name"
-                    className="min-w-[160px] flex-1 rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
-                  />
-                  <input type="color" value={roleColor} onChange={(e) => setRoleColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded" />
-                  <button type="button" onClick={() => void handleCreateRole()} disabled={loading} className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white">
-                    Create Role
-                  </button>
+              <RoleManager />
+            )}
+
+            {section === "bans" && canBan && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-text-normal">Bans</h2>
+                  <p className="mt-1 text-sm text-text-muted">
+                    Banned users cannot rejoin. Unbanning lets them back with a fresh invite.
+                  </p>
                 </div>
+                {error && <p className="rounded-md bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">{error}</p>}
+                {serverBans.length === 0 ? (
+                  <p className="rounded-lg border border-divider bg-bg-secondary px-4 py-6 text-center text-sm text-text-muted">
+                    Nobody is banned from this server.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {serverBans.map((b) => (
+                      <li
+                        key={b.user_id}
+                        className="flex items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-3 py-2"
+                      >
+                        <Avatar
+                          profile={b.profile ?? { display_name: "Banned user" }}
+                          size="sm"
+                          className="h-8 w-8 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-text-normal">
+                            {b.profile ? displayName(b.profile) : "Banned user"}
+                          </p>
+                          {b.reason && <p className="truncate text-xs text-text-muted">{b.reason}</p>}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={loading}
+                          onClick={() => {
+                            if (confirm("Unban this user? They will still need an invite to return.")) {
+                              setLoading(true);
+                              setError(null);
+                              void unbanMember(b.user_id).then((err) => {
+                                if (err) setError(err);
+                                setLoading(false);
+                              });
+                            }
+                          }}
+                          className="shrink-0 rounded-md border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-40"
+                        >
+                          Unban
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
+            )}
+
+            {section === "audit" && canViewAuditLog && (
+              <AuditLogPanel serverId={activeServer.id} members={members} />
             )}
 
             {section === "emoji" && isOwner && (

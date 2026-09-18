@@ -50,6 +50,10 @@ import {
   Compass,
   Sparkles,
   GripVertical,
+  Folder,
+  FolderPlus,
+  FolderMinus,
+  Timer,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -124,6 +128,10 @@ export const IconSparkle = icon(Sparkles);
 export const IconPin = icon(Pin);
 export const IconPinOff = icon(PinOff);
 export const IconGripVertical = icon(GripVertical);
+export const IconFolder = icon(Folder);
+export const IconFolderPlus = icon(FolderPlus);
+export const IconFolderMinus = icon(FolderMinus);
+export const IconTimer = icon(Timer);
 
 export const IconVerified = function IconVerified({ size = 16, className }: IconProps) {
   return (

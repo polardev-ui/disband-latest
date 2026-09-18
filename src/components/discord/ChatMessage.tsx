@@ -61,6 +61,7 @@ interface ChatMessageProps {
   authorColor?: string | null;
   reactions?: MessageReaction[];
   onAuthorClick?: (profile: Profile) => void;
+  onAuthorContextMenu?: (profile: Profile, e: React.MouseEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onToggleReaction?: (emoji: string) => void;
   onReplyClick?: (messageId: string) => void;
@@ -201,6 +202,7 @@ export function ChatMessage({
   authorColor,
   reactions = [],
   onAuthorClick,
+  onAuthorContextMenu,
   onContextMenu,
   onToggleReaction,
   onJumpToReply,
@@ -229,6 +231,15 @@ export function ChatMessage({
 
   function openAuthor() {
     if (author && onAuthorClick) onAuthorClick(author);
+  }
+
+  // Right-clicking the author opens moderation for that member. It must not
+  // fall through to the row handler, which opens the *message* menu.
+  function authorContextMenu(e: React.MouseEvent) {
+    if (!author || !onAuthorContextMenu) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onAuthorContextMenu(author, e);
   }
 
   const attachment = message.attachment_url && message.uploadProgress !== undefined ? (
@@ -351,7 +362,12 @@ export function ChatMessage({
     >
       {showHeader ? (
         canOpenProfile ? (
-          <button type="button" onClick={openAuthor} className="mt-0.5 shrink-0 self-start rounded-full focus:outline-none focus:ring-2 focus:ring-brand">
+          <button
+            type="button"
+            onClick={openAuthor}
+            onContextMenu={authorContextMenu}
+            className="mt-0.5 shrink-0 self-start rounded-full focus:outline-none focus:ring-2 focus:ring-brand"
+          >
             <Avatar profile={author} size="md" />
           </button>
         ) : (
@@ -374,6 +390,7 @@ export function ChatMessage({
               <button
                 type="button"
                 onClick={openAuthor}
+                onContextMenu={authorContextMenu}
                 className="text-[15px] font-medium hover:underline focus:outline-none"
                 style={nameStyle}
               >

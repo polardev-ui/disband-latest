@@ -13,6 +13,7 @@ import { useServerVoicePresence } from "@/hooks/useServerVoicePresence";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { setCallIndicatorState } from "@/lib/call-status";
 import { ServerList } from "./ServerList";
+import { TimeoutModal } from "@/components/modals/TimeoutModal";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
 import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPanel";
@@ -52,10 +53,15 @@ import {
   IconMenu,
   IconPlus,
   IconEdit,
+  IconFolder,
+  IconFolderPlus,
+  IconFolderMinus,
+  IconTimer,
 } from "@/components/icons";
 const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
-import type { Channel, ChannelCategory, Profile, Server } from "@/lib/supabase/types";
+import type { Channel, ChannelCategory, Profile, Server, ServerFolder } from "@/lib/supabase/types";
+import { ServerFolderDialog } from "@/components/discord/ServerFolderDialog";
 import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 import { ForwardModal, type ForwardDestination } from "./ForwardModal";
@@ -66,12 +72,15 @@ import { CatalystModal } from "./CatalystModal";
 export function DiscordApp() {
   const app = useApp();
   const { openMenu } = useContextMenu();
+  const [timeoutTarget, setTimeoutTarget] = useState<{ userId: string; profile: Profile } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("popular");
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
+  const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
+  const [pendingFolderServer, setPendingFolderServer] = useState<Server | null>(null);
   const [channelSettingsChannel, setChannelSettingsChannel] = useState<Channel | null>(null);
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
@@ -140,6 +149,12 @@ export function DiscordApp() {
       void app.loadPinnedMessages("dm", app.activeDmThreadId);
     }
   }, [app.activeDmThreadId, app.loadPinnedMessages]);
+
+  useEffect(() => {
+    if (app.activeChannelId) {
+      void app.loadPinnedMessages("channel", app.activeChannelId);
+    }
+  }, [app.activeChannelId, app.loadPinnedMessages]);
 
   useEffect(() => {
     if (isMobile) setMobileMenuOpen(false);
@@ -269,6 +284,19 @@ export function DiscordApp() {
 
   const canKick = app.serverPermissions.kick;
   const canBan = app.serverPermissions.ban;
+  const myServerTimeout = app.user
+    ? app.serverTimeouts.find((t) => t.user_id === app.user!.id && Date.parse(t.expires_at) > Date.now())
+    : undefined;
+  const myTimeoutLabel = myServerTimeout
+    ? (() => {
+        const mins = Math.max(1, Math.ceil((Date.parse(myServerTimeout.expires_at) - Date.now()) / 60000));
+        return mins >= 1440
+          ? `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h`
+          : mins >= 60
+            ? `${Math.floor(mins / 60)}h ${mins % 60}m`
+            : `${mins}m`;
+      })()
+    : null;
   const canManageRoles = app.serverPermissions.manage_roles;
   const canManageChannels = app.serverPermissions.manage_channels;
   const isServerOwner = app.activeServer?.owner_id === app.user?.id;
@@ -312,6 +340,10 @@ export function DiscordApp() {
   const handleServerContext = useCallback(
     (server: Server, x: number, y: number) => {
       const isOwner = server.owner_id === app.user?.id;
+      const canInvite = isOwner || !!app.serverPermissions.create_invites;
+      const inFolder = app.serverFolders.find((f) =>
+        app.serverListState.some((s) => s.server_id === server.id && s.folder_id === f.id),
+      );
       const items: ContextMenuItem[] = [
         {
           id: "settings",
@@ -326,14 +358,16 @@ export function DiscordApp() {
           onClick: () => void navigator.clipboard.writeText(server.id),
         },
           ...(server.invite_code || server.vanity_code
-            ? [
-                {
-                  id: "invite",
-                  label: "Copy Invite Link",
-                  icon: <IconCopy size={16} />,
-                  onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.vanity_code || server.invite_code!)),
-                },
-              ]
+            ? canInvite
+              ? [
+                  {
+                    id: "invite",
+                    label: "Copy Invite Link",
+                    icon: <IconCopy size={16} />,
+                    onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.vanity_code || server.invite_code!)),
+                  },
+                ]
+              : []
             : []),
           ...[
             {
@@ -348,6 +382,39 @@ export function DiscordApp() {
           label: "Leave Server",
           icon: <IconLeave size={16} />,
           onClick: () => void app.leaveServer(server.id),
+        },
+        ...(inFolder
+          ? [
+              {
+                id: "unfolder",
+                label: `Remove from ${inFolder.name}`,
+                icon: <IconFolderMinus size={16} />,
+                onClick: () => {
+                  const state = app.serverListState.find((s) => s.server_id === server.id);
+                  void app.setServerSlot(server.id, state?.position ?? 9999, null);
+                },
+              } as ContextMenuItem,
+            ]
+          : []),
+        ...app.serverFolders
+          .filter((f) => f.id !== inFolder?.id)
+          .map((f) => ({
+            id: `move-folder-${f.id}`,
+            label: `Move to ${f.name}`,
+            icon: <IconFolder size={16} />,
+            onClick: () => {
+              const members = app.serverListState.filter((s) => s.folder_id === f.id);
+              void app.setServerSlot(server.id, members.length, f.id);
+            },
+          }) as ContextMenuItem),
+        {
+          id: "new-folder",
+          label: "Create Folder with Server",
+          icon: <IconFolderPlus size={16} />,
+          onClick: () => {
+            setPendingFolderServer(server);
+            setFolderDialog({ mode: "create", folderId: null });
+          },
         },
         ...(isOwner
           ? [
@@ -366,6 +433,51 @@ export function DiscordApp() {
       openMenu(x, y, items);
     },
     [app, openMenu, subPlan],
+  );
+
+  const handleFolderContext = useCallback(
+    (folder: ServerFolder, x: number, y: number) => {
+      openMenu(x, y, [
+        {
+          id: "rename",
+          label: "Rename Folder",
+          icon: <IconEdit size={16} />,
+          onClick: () => {
+            setPendingFolderServer(null);
+            setFolderDialog({ mode: "edit", folderId: folder.id });
+          },
+        },
+        {
+          id: "delete",
+          label: "Delete Folder",
+          icon: <IconTrash size={16} />,
+          danger: true,
+          onClick: () => {
+            if (confirm(`Delete folder "${folder.name}"? Servers stay where they are.`)) {
+              void app.deleteFolder(folder.id);
+            }
+          },
+        },
+      ]);
+    },
+    [app, openMenu],
+  );
+
+  const handleReorderServers = useCallback(
+    (slots: { server_id: string; position: number; folder_id: string | null }[]) => {
+      if (!slots.length) return;
+      void app.reorderServers(slots).then((err) => {
+        if (err) void app.loadServerOrganization();
+      });
+    },
+    [app],
+  );
+
+  const handleReorderFolders = useCallback(
+    (orderedIds: string[]) => {
+      void app.reorderFolders(orderedIds);
+    },
+    [app],
   );
 
   const boostServer = useCallback(
@@ -567,8 +679,11 @@ export function DiscordApp() {
         context === "dm" ? dmChatRef : context === "group" ? groupChatRef : channelChatRef;
       const pinnedForSource = app.activeDmThreadId
         ? app.pinnedBySource[`dm:${app.activeDmThreadId}`]
-        : undefined;
+        : context === "channel" && app.activeChannelId
+          ? app.pinnedBySource[`channel:${app.activeChannelId}`]
+          : undefined;
       const isPinned = pinnedForSource?.some((p) => p.message_id === message.id) ?? false;
+      const canPin = app.activeServer?.owner_id === app.user?.id || !!app.serverPermissions.pin_messages;
 
       openMenu(x, y, [
         {
@@ -604,6 +719,26 @@ export function DiscordApp() {
                     void app.unpinMessage("dm", app.activeDmThreadId!, message.id);
                   } else {
                     void app.pinMessage("dm", app.activeDmThreadId!, {
+                      id: message.id,
+                      author_id: message.author_id,
+                      content: message.content,
+                    });
+                  }
+                },
+              },
+            ]
+          : []),
+        ...(context === "channel" && app.activeChannelId && canPin
+          ? [
+              {
+                id: "pin",
+                label: isPinned ? "Unpin Message" : "Pin Message",
+                icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
+                onClick: () => {
+                  if (isPinned) {
+                    void app.unpinMessage("channel", app.activeChannelId!, message.id);
+                  } else {
+                    void app.pinMessage("channel", app.activeChannelId!, {
                       id: message.id,
                       author_id: message.author_id,
                       content: message.content,
@@ -656,6 +791,51 @@ export function DiscordApp() {
       ]);
     },
     [app, openMenu],
+  );
+
+  const handleGroupMemberContext = useCallback(
+    (member: Profile, x: number, y: number) => {
+      if (!activeGroup) return;
+      const isOwner = activeGroup.owner_id === app.user?.id;
+      const items: ContextMenuItem[] = [
+        {
+          id: "profile",
+          label: "View Profile",
+          icon: <IconFriends size={16} />,
+          onClick: () => openProfile(member),
+        },
+        {
+          id: "dm",
+          label: "Message",
+          icon: <IconFriends size={16} />,
+          onClick: () => void app.openDmWithFriend(member.id),
+        },
+        {
+          id: "copy",
+          label: "Copy User ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(member.id),
+        },
+      ];
+      if (isOwner && member.id !== app.user?.id && member.id !== activeGroup.owner_id) {
+        items.push({
+          id: "remove",
+          label: `Remove ${displayName(member)}`,
+          icon: <IconLeave size={16} />,
+          danger: true,
+          onClick: () => {
+            if (confirm(`Remove ${displayName(member)} from "${activeGroup.name}"?`)) {
+              void app.removeGroupMember(activeGroup.id, member.id).then((err) => {
+                if (err) alert(err);
+                else void app.refreshGroupChats();
+              });
+            }
+          },
+        });
+      }
+      openMenu(x, y, items);
+    },
+    [activeGroup, app, openMenu, openProfile],
   );
 
   const handleGroupContext = useCallback(
@@ -786,6 +966,39 @@ export function DiscordApp() {
             },
           });
         }
+        if (app.serverPermissions.timeout_members || app.activeServer?.owner_id === app.user?.id) {
+          const existing = app.serverTimeouts.find(
+            (t) => t.user_id === member.user_id && Date.parse(t.expires_at) > Date.now(),
+          );
+          if (existing) {
+            const mins = Math.max(1, Math.ceil((Date.parse(existing.expires_at) - Date.now()) / 60000));
+            const remaining = mins >= 1440 ? `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h` : mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+            items.push({
+              id: "timeout-info",
+              label: `Timed out · ${remaining} left`,
+              icon: <IconTimer size={16} />,
+              disabled: true,
+              onClick: () => {},
+            });
+            items.push({
+              id: "timeout-remove",
+              label: "Remove Timeout",
+              icon: <IconTimer size={16} />,
+              onClick: () => {
+                void app.removeMemberTimeout(member.user_id).then((err) => { if (err) alert(err); });
+              },
+            });
+          } else {
+            items.push({
+              id: "timeout",
+              label: "Time out…",
+              icon: <IconTimer size={16} />,
+              onClick: () => {
+                if (member.profile) setTimeoutTarget({ userId: member.user_id, profile: member.profile });
+              },
+            });
+          }
+        }
       }
 
       if (canManageRoles && app.serverRoles.length > 0) {
@@ -827,6 +1040,41 @@ export function DiscordApp() {
       openMenu(x, y, items);
     },
     [app, canKick, canBan, canManageRoles, openMenu, openProfile],
+  );
+
+  // Right-clicking a message author. When they are a member of the server we
+  // are viewing, this is the same menu as the member list, so moderation is
+  // permission-gated in exactly one place. Otherwise (a DM, or someone who has
+  // since left) it degrades to the profile actions only.
+  const handleAuthorContext = useCallback(
+    (profile: Profile, e: React.MouseEvent) => {
+      const member = app.members.find((m) => m.user_id === profile.id);
+      if (app.viewMode === "server" && member) {
+        handleMemberContext(member, e.clientX, e.clientY);
+        return;
+      }
+      openMenu(e.clientX, e.clientY, [
+        {
+          id: "profile",
+          label: "View Profile",
+          icon: <IconFriends size={16} />,
+          onClick: () => openProfile(profile),
+        },
+        {
+          id: "dm",
+          label: "Message",
+          icon: <IconFriends size={16} />,
+          onClick: () => void app.openDmWithFriend(profile.id),
+        },
+        {
+          id: "copy",
+          label: "Copy User ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(profile.id),
+        },
+      ]);
+    },
+    [app, handleMemberContext, openMenu, openProfile],
   );
 
   const handleFriendContext = useCallback(
@@ -1137,12 +1385,17 @@ export function DiscordApp() {
                 dmUnreads={app.dmUnreads}
                 activeDmThreadId={app.activeDmThreadId}
                 serverUnreadIds={app.serverUnreadIds}
+                folders={app.serverFolders}
+                listState={app.serverListState}
                 onSelectHome={app.setViewHome}
                 onSelectServer={(id) => void app.selectServer(id)}
                 onSelectDmThread={(id) => void app.selectDmThread(id)}
                 onCreateServer={() => setCreateServerOpen(true)}
                 onDiscover={app.setViewDiscover}
                 onServerContext={handleServerContext}
+                onFolderContext={handleFolderContext}
+                onReorderServers={handleReorderServers}
+                onReorderFolders={handleReorderFolders}
               />
 
               {app.viewMode === "discover" ? (
@@ -1206,12 +1459,17 @@ export function DiscordApp() {
             dmUnreads={app.dmUnreads}
             activeDmThreadId={app.activeDmThreadId}
             serverUnreadIds={app.serverUnreadIds}
+            folders={app.serverFolders}
+            listState={app.serverListState}
             onSelectHome={app.setViewHome}
             onSelectServer={(id) => void app.selectServer(id)}
             onSelectDmThread={(id) => void app.selectDmThread(id)}
             onCreateServer={() => setCreateServerOpen(true)}
             onDiscover={app.setViewDiscover}
             onServerContext={handleServerContext}
+            onFolderContext={handleFolderContext}
+            onReorderServers={handleReorderServers}
+            onReorderFolders={handleReorderFolders}
           />
 
           {app.viewMode === "discover" ? (
@@ -1338,17 +1596,146 @@ export function DiscordApp() {
         </>
       )}
 
+      {app.viewMode === "group" && activeGroup && (
+        <>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {groupCall.joined && groupCall.groupId === activeGroup.id ? (
+              <GroupCallStage
+                groupName={activeGroup.name}
+                members={activeGroup.members}
+                presence={groupCall.presence}
+                ringingIds={groupCall.ringingIds}
+                joined={groupCall.joined}
+                inCallUserIds={groupCall.inCallUserIds}
+                selfId={app.user?.id ?? ""}
+                localStream={groupCall.localStream}
+                remoteStreams={groupCall.remoteStreams}
+                remoteScreens={groupCall.remoteScreens}
+                localScreen={groupCall.localScreen}
+                cameraEnabled={groupCall.cameraEnabled}
+                micMuted={app.micMuted}
+                deafened={app.deafened}
+                onJoin={() => void groupCall.joinGroupCall(activeGroup.id, activeGroup.name)}
+                onLeave={() => void groupCall.endGroupCall()}
+                onToggleCamera={() => void groupCall.toggleCamera()}
+                onToggleMic={toggleMic}
+              />
+            ) : (
+              <ChatCanvas
+                key={app.activeGroupChatId}
+                ref={groupChatRef}
+                channelName={activeGroup.name}
+                messages={groupMessages}
+                loading={app.groupLoading}
+                members={activeGroup.members}
+                currentUserId={app.user?.id}
+                currentUserName={app.profile ? displayName(app.profile) : undefined}
+                messageContext="group"
+                reactions={app.messageReactions}
+                typingScope={{ kind: "group", id: app.activeGroupChatId! }}
+                readCursorScope={{ kind: "group", id: app.activeGroupChatId! }}
+                headerTrailing={
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPinnedOpen(true);
+                        if (app.activeGroupChatId) void app.loadPinnedMessages("group", app.activeGroupChatId);
+                      }}
+                      title="Pinned messages"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
+                    >
+                      <IconPin size={18} />
+                    </button>
+                    <HeaderCallButton
+                      disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+                      onClick={startGroupVoiceCall}
+                    />
+                  </div>
+                }
+                onSend={app.sendGroupMessage}
+                onEdit={app.editGroupMessage}
+                onToggleReaction={(id, emoji) => void app.toggleReaction("group", id, emoji)}
+                onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "group")}
+                onForward={(m) => setForwardMessage(m)}
+                onAuthorClick={handleAuthorClick}
+                hasMore={app.groupHasMore}
+                onLoadMore={app.loadMoreGroupMessages}
+              />
+            )}
+          </div>
+          <div className="hidden min-h-0 w-60 shrink-0 flex-col bg-bg-secondary lg:flex">
+            <GroupMemberList
+              members={activeGroup.members}
+              ownerId={activeGroup.owner_id}
+              inCallUserIds={groupCall.inCallUserIds}
+              currentUserId={app.user?.id}
+              onMemberClick={(p) => openProfile(p)}
+              onMemberContext={handleGroupMemberContext}
+            />
+          </div>
+        </>
+      )}
+
+      {app.viewMode === "notes" && (
+        <ChatCanvas
+          key="notes"
+          ref={notesChatRef}
+          channelName="Notes"
+          channelIcon={<IconNotes size={22} className="text-text-muted" />}
+          introText="Your private Notes — only you can see this"
+          placeholder="Write a note, or drop in an image, video or file…"
+          messages={noteMessages}
+          members={app.profile ? [app.profile] : []}
+          currentUserId={app.user?.id}
+          messageContext="notes"
+          headerTrailing={
+            pinnedNoteIds.size > 0 ? (
+              <span className="flex items-center gap-1 rounded-full bg-bg-accent px-2 py-0.5 text-[11px] font-medium text-text-muted">
+                <IconPin size={12} />
+                {pinnedNoteIds.size} pinned
+              </span>
+            ) : null
+          }
+          onSend={app.sendNote}
+          onEdit={app.editNote}
+          onMessageContext={handleNoteContext}
+          onAuthorClick={handleAuthorClick}
+          hasMore={app.notesHasMore}
+          onLoadMore={app.loadMoreNotes}
+        />
+      )}
+
+      {app.viewMode === "home" && (
+        <>
+          <FriendsPanel onOpenProfile={openProfile} onFriendContext={handleFriendContext} />
+          <ActiveNowPanel />
+        </>
+      )}
+
+      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} />}
+
+      {app.viewMode === "server" && activeChannel && isVoice && (
+        <VoicePanel
+          channelId={activeChannel.id}
+          channelName={activeChannel.name}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      )}
+
       {app.viewMode === "server" && activeChannel && !isVoice && (
         <ChatCanvas
           key={app.activeChannelId}
           ref={channelChatRef}
           channelName={activeChannel.name}
           composerLockedReason={
-            activeChannel.read_only && !canManageChannels
-              ? "This is an announcement channel. Only people who can manage channels may post here."
-              : !canManageChannels && activeChannelEffect && !activeChannelEffect.can_post
-                ? "You don't have permission to post in this channel."
-                : null
+            myTimeoutLabel
+              ? `You are timed out in this server for ${myTimeoutLabel}.`
+              : activeChannel.read_only && !canManageChannels
+                ? "This is an announcement channel. Only people who can manage channels may post here."
+                : !canManageChannels && activeChannelEffect && !activeChannelEffect.can_post
+                  ? "You don't have permission to post in this channel."
+                  : null
           }
           messages={channelMessages}
           loading={app.messagesLoading}
@@ -1371,8 +1758,26 @@ export function DiscordApp() {
           onMessageContext={(m, x, y) => handleMessageContext(m, x, y, "channel")}
           onForward={(m) => setForwardMessage(m)}
           onAuthorClick={handleAuthorClick}
+          onAuthorContextMenu={handleAuthorContext}
           hasMore={app.channelHasMore}
           onLoadMore={app.loadMoreChannelMessages}
+        />
+      )}
+
+      {app.viewMode === "server" && !activeChannel && (
+        <div className="flex min-w-0 flex-1 items-center justify-center bg-bg-primary px-6 text-center">
+          <p className="text-[15px] text-text-muted">
+            {app.channels.length ? "Pick a channel to start talking." : "This server has no channels yet."}
+          </p>
+        </div>
+      )}
+
+      {app.viewMode === "server" && !isMobile && (
+        <MemberList
+          members={app.members}
+          roles={app.serverRoles}
+          onMemberClick={(m) => openProfile(m.profile)}
+          onMemberContext={handleMemberContext}
         />
       )}
 
@@ -1391,6 +1796,59 @@ export function DiscordApp() {
             ? () => {
                 void app.openDmWithFriend(profileTarget.id);
                 setProfileTarget(null);
+              }
+            : undefined
+        }
+        onVoiceCall={
+          profileTarget && profileFriend
+            ? () => {
+                void startVoiceCall(profileTarget);
+                setProfileTarget(null);
+              }
+            : undefined
+        }
+        onAddFriend={
+          profileTarget?.username
+            ? () => {
+                void app.sendFriendRequest(profileTarget.username!).then((err) => {
+                  if (err) alert(err);
+                  else setProfileTarget(null);
+                });
+              }
+            : undefined
+        }
+        onAcceptFriend={
+          profileIncomingRequestId
+            ? () => {
+                void app.respondFriendRequest(profileIncomingRequestId, true).then(() => setProfileTarget(null));
+              }
+            : undefined
+        }
+        onDeclineFriend={
+          profileIncomingRequestId
+            ? () => {
+                void app.respondFriendRequest(profileIncomingRequestId, false).then(() => setProfileTarget(null));
+              }
+            : undefined
+        }
+        onRemoveFriend={
+          profileTarget && profileFriend
+            ? () => {
+                if (confirm(`Remove ${displayName(profileTarget)} as a friend?`)) {
+                  void app.removeFriend(profileTarget.id).then(() => setProfileTarget(null));
+                }
+              }
+            : undefined
+        }
+        onBlock={
+          profileTarget && !app.isBlocked(profileTarget.id)
+            ? () => {
+                if (confirm(`Block ${displayName(profileTarget)}?`)) {
+                  void app.blockUser(profileTarget.id).then((err) => {
+                    if (err) alert(err);
+                    else setProfileTarget(null);
+                  });
+                }
               }
             : undefined
         }
@@ -1436,7 +1894,50 @@ export function DiscordApp() {
         onClose={() => setSubscriptionOpen(false)}
         userId={app.user?.id}
       />
+      <TimeoutModal
+        open={!!timeoutTarget}
+        profile={timeoutTarget?.profile ?? null}
+        onClose={() => setTimeoutTarget(null)}
+        onSubmit={async (seconds, reason) =>
+          timeoutTarget ? app.timeoutMember(timeoutTarget.userId, seconds, reason || undefined) : null
+        }
+      />
+
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
+      {folderDialog && (
+        <ServerFolderDialog
+          title={folderDialog.mode === "create" ? "Create Folder" : "Edit Folder"}
+          initialName={
+            folderDialog.mode === "edit"
+              ? (app.serverFolders.find((f) => f.id === folderDialog.folderId)?.name ?? "")
+              : pendingFolderServer
+                ? `${pendingFolderServer.name}`
+                : ""
+          }
+          initialColor={
+            folderDialog.mode === "edit"
+              ? (app.serverFolders.find((f) => f.id === folderDialog.folderId)?.color ?? "#5865f2")
+              : "#5865f2"
+          }
+          onClose={() => {
+            setFolderDialog(null);
+            setPendingFolderServer(null);
+          }}
+          onSave={async (name, color) => {
+            if (folderDialog.mode === "create") {
+              const id = await app.createFolder(name, color);
+              if (typeof id === "string" && pendingFolderServer) {
+                const members = app.serverListState.filter((s) => s.folder_id === id);
+                await app.setServerSlot(pendingFolderServer.id, members.length, id);
+              }
+            } else if (folderDialog.folderId) {
+              const err = await app.renameFolder(folderDialog.folderId, name);
+              if (!err) await app.setFolderColor(folderDialog.folderId, color);
+              if (err) throw new Error(err);
+            }
+          }}
+        />
+      )}
       <ServerSettingsModal
         open={serverSettingsOpen}
         onClose={() => setServerSettingsOpen(false)}

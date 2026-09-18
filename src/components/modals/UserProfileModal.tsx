@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
@@ -13,8 +13,81 @@ import { presenceStatusFor, activeStatusNote, statusExpiryLabel } from "@/lib/pr
 import { roleIsGradientAnimated } from "@/lib/profileColor";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { UserBadges } from "@/components/ui/UserBadges";
-import type { Profile, ServerRole } from "@/lib/supabase/types";
+import type { Profile, Server, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
+
+function MutualsSection({
+  serverIds,
+  friendIds,
+  servers,
+  friends,
+  mutedColor,
+}: {
+  serverIds: string[];
+  friendIds: string[];
+  servers: Server[];
+  friends: Profile[];
+  mutedColor: string;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const toggle = (key: string) => setOpen((prev) => (prev === key ? null : key));
+  const row = "flex w-full items-center justify-between py-1 text-left";
+  return (
+    <div className="mt-3 space-y-1 border-t border-black/15 pt-2">
+      {serverIds.length > 0 && (
+        <div>
+          <button type="button" onClick={() => toggle("servers")} className={row}>
+            <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
+              Mutual Servers · {serverIds.length}
+            </span>
+            <span className={`text-xs text-text-muted transition-transform ${open === "servers" ? "" : "-rotate-90"}`}>
+              ▾
+            </span>
+          </button>
+          {open === "servers" && (
+            <div className="flex flex-wrap gap-1.5 pb-1.5">
+              {serverIds.map((id) => {
+                const s = servers.find((x) => x.id === id);
+                if (!s) return null;
+                return (
+                  <span key={id} className="rounded-md bg-black/25 px-2 py-0.5 text-xs font-medium">
+                    {s.name}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      {friendIds.length > 0 && (
+        <div>
+          <button type="button" onClick={() => toggle("friends")} className={row}>
+            <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
+              Mutual Friends · {friendIds.length}
+            </span>
+            <span className={`text-xs text-text-muted transition-transform ${open === "friends" ? "" : "-rotate-90"}`}>
+              ▾
+            </span>
+          </button>
+          {open === "friends" && (
+            <div className="flex flex-wrap items-center gap-1.5 pb-1.5">
+              {friendIds.map((id) => {
+                const f = friends.find((x) => x.id === id);
+                if (!f) return null;
+                return (
+                  <span key={id} className="flex items-center gap-1.5 rounded-md bg-black/25 py-0.5 pl-0.5 pr-2 text-xs font-medium">
+                    <Avatar profile={f} size="sm" className="h-5 w-5" />
+                    {displayName(f)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface UserProfileModalProps {
   profile: Profile | null;
@@ -43,8 +116,7 @@ interface UserProfileModalProps {
   onSetRoles?: (roleIds: string[]) => void;
 }
 
-function ProfileBanner({ profile }: { profile: Profile }) {
-  const [failed, setFailed] = useState(false);
+function ProfileBanner({ profile }: { profile: Profile }) {  const [failed, setFailed] = useState(false);
   const url = safeImageUrl(profile.banner_url);
   const show = url && !failed;
   return (
@@ -86,7 +158,25 @@ export function UserProfileModal({
   memberIsOwner,
   onSetRoles,
 }: UserProfileModalProps) {
-  const { friends, presenceMap } = useApp();
+  const { friends, presenceMap, servers, loadMutuals } = useApp();
+  const [mutualServerIds, setMutualServerIds] = useState<string[]>([]);
+  const [mutualFriendIds, setMutualFriendIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open || !profile || profile.id === undefined) {
+      setMutualServerIds([]);
+      setMutualFriendIds([]);
+      return;
+    }
+    let live = true;
+    void loadMutuals(profile.id).then((m) => {
+      if (!live) return;
+      setMutualServerIds(m.serverIds);
+      setMutualFriendIds(m.friendIds);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, profile?.id, loadMutuals]);
   if (!open || !profile) return null;
 
   const friend = friends.some((f) => f.id === profile.id);
@@ -179,7 +269,17 @@ export function UserProfileModal({
             </span>
           </div>
 
-          {isServerMember && !isSelf && (
+          {!isSelf && (mutualServerIds.length > 0 || mutualFriendIds.length > 0) && (
+            <MutualsSection
+              serverIds={mutualServerIds}
+              friendIds={mutualFriendIds}
+              servers={servers}
+              friends={friends}
+              mutedColor={mutedColor}
+            />
+          )}
+
+          {isServerMember && (
             <div className="mt-4 border-t border-black/15 pt-3">
               <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
                 Roles
@@ -206,12 +306,12 @@ export function UserProfileModal({
                       {role.name}
                     </span>
                   ))}
-                  {memberRoles.length === 0 && !canManageRoles && (
+                  {memberRoles.length === 0 && (!canManageRoles || isSelf) && (
                     <p className="text-xs" style={{ color: mutedColor }}>
                       No roles assigned.
                     </p>
                   )}
-                  {canManageRoles && onSetRoles && (
+                  {canManageRoles && !isSelf && onSetRoles && (
                     <RolePicker
                       roles={assignableRoles}
                       selected={memberRoleIds}

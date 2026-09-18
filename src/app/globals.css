@@ -310,6 +310,34 @@ img.twemoji {
   animation: call-enter 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-pop {
+  animation: modal-pop 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.overlay-fade {
+  animation: overlay-fade 0.2s ease-out forwards;
+}
+
 @keyframes call-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
