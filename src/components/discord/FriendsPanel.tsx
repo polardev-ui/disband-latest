@@ -491,6 +491,11 @@ function PendingList({
             </p>
             <p className="text-[13px] text-text-muted">Outgoing friend request</p>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <RowAction label="Cancel request" onClick={() => void onRespond(f.id, false)}>
+              <IconClose size={18} />
+            </RowAction>
+          </div>
         </li>
       ))}
     </ul>

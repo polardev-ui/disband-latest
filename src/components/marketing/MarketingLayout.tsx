@@ -63,6 +63,7 @@ export function MarketingFooter() {
           <Link href="/bug-report" className="hover:text-white">Bug Report</Link>
           <Link href="/downloads" className="hover:text-white">Downloads</Link>
           <Link href="/review" className="hover:text-white">Reviews</Link>
+          <Link href="/legal" className="hover:text-white">Legal</Link>
           <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
           <Link href="/terms" className="hover:text-white">Terms of Service</Link>
           <Link href="/login" className="hover:text-white">Log in</Link>
