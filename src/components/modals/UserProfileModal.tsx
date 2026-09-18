@@ -199,7 +199,7 @@ export function UserProfileModal({
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-sm rounded-xl shadow-2xl" style={panelStyle}>
+      <div className="relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
         <ProfileBanner profile={profile} />
 
         <button
@@ -258,7 +258,7 @@ export function UserProfileModal({
           </div>
 
           {profile.bio && (
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-snug opacity-90">{profile.bio}</p>
+            <p className="mt-2 max-h-44 overflow-y-auto whitespace-pre-wrap text-sm leading-snug opacity-90">{profile.bio}</p>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: mutedColor }}>

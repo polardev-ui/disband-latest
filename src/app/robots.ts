@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
           "/app",
           "/login",
           "/reset-password",
+          "/verification",
           "/bot-invite",
           "/bug-report",
         ],

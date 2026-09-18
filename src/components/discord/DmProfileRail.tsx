@@ -17,8 +17,33 @@ import {
   getAccentBackground,
 } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Profile } from "@/lib/supabase/types";
+
+function BioPreview({ bio, onMore }: { bio: string; onMore: () => void }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [truncated, setTruncated] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) setTruncated(el.scrollHeight > el.clientHeight + 1);
+  }, [bio]);
+  return (
+    <div className="mt-2.5">
+      <p ref={ref} className="line-clamp-3 whitespace-pre-wrap text-[13px] leading-snug opacity-90">
+        {bio}
+      </p>
+      {truncated && (
+        <button
+          type="button"
+          onClick={onMore}
+          className="mt-0.5 text-xs font-semibold text-brand hover:underline"
+        >
+          more
+        </button>
+      )}
+    </div>
+  );
+}
 
 interface DmProfileRailProps {
   friend: Profile;
@@ -106,9 +131,7 @@ export function DmProfileRail({ friend, onClose, onVoiceCall, onOpenFullProfile 
         )}
 
         {friend.bio?.trim() && (
-          <p className="mt-2.5 whitespace-pre-wrap text-[13px] leading-snug opacity-90">
-            {friend.bio.trim()}
-          </p>
+          <BioPreview bio={friend.bio.trim()} onMore={onOpenFullProfile} />
         )}
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" style={{ color: mutedColor }}>
