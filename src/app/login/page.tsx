@@ -15,7 +15,10 @@ function LoginGate() {
   const router = useRouter();
 
   useEffect(() => {
-    if (ready && session && !mfaRequired) router.replace("/app");
+    if (ready && session && !mfaRequired) {
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/app");
+    }
   }, [ready, session, mfaRequired, router]);
 
   if (ready && session && !mfaRequired) {
