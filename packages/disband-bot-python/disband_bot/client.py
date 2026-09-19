@@ -2,6 +2,7 @@
 
 import threading
 import time
+from urllib.parse import urlsplit
 
 from .errors import AuthError
 from .message import Message
@@ -19,9 +20,16 @@ class Client:
     the Disband API with a bot token created in Settings -> Bots.
     """
 
-    def __init__(self, token, base_url="https://www.disband.dev", gateway_timeout=20):
+    def __init__(self, token, base_url="https://www.disband.dev", gateway_timeout=20,
+                 allow_insecure_localhost=False):
         if not token:
             raise ValueError("A bot token is required (Client(token=...))")
+        parsed = urlsplit(base_url)
+        loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("Bot API URLs cannot contain credentials or fragments")
+        if parsed.scheme != "https" and not (parsed.scheme == "http" and allow_insecure_localhost and loopback):
+            raise ValueError("Bot API URLs must use HTTPS (or explicitly enabled loopback HTTP)")
         self.token = token
         self.base_url = base_url.rstrip("/")
         self.gateway_timeout = gateway_timeout

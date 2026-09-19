@@ -40,6 +40,8 @@ export class REST {
       method,
       headers: this.headers(),
       body: body === undefined ? undefined : JSON.stringify(body),
+      redirect: "error",
+      signal: AbortSignal.timeout(this.client.requestTimeout),
     });
     return this._parse(res);
   }

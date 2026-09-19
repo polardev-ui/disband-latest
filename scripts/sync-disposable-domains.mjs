@@ -1,10 +1,75 @@
 #!/usr/bin/env node
+/**
+ * Refreshes the disposable-email blocklist.
+ *
+ * The upstream list gains domains every week, and a blocklist that is only as
+ * good as the day it was seeded stops working quietly rather than loudly. Run
+ * this whenever it is worth topping up:
+ *
+ *   node scripts/sync-disposable-domains.mjs
+ *
+ * Needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (read from
+ * .env.local when present). Only ever adds rows — a domain removed upstream is
+ * left blocked, since nothing good comes of un-blocking one automatically.
+ */
 
 import fs from "node:fs";
 import path from "node:path";
 
+// Review and deliberately update this commit before ingesting upstream changes.
+const SOURCE_COMMIT = "c7484050d2a5054a2eaa4409adb6e03a48ca0c53";
 const SOURCE =
-  "https:(HTTP ${res.status}).`);
+  `https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/${SOURCE_COMMIT}/disposable_email_blocklist.conf`;
+
+// A compromised or mistaken upstream list must never permanently block major
+// mailbox providers. Keep this deliberately conservative and append-only.
+const SAFE_PROVIDER_DOMAINS = new Set([
+  "aol.com",
+  "fastmail.com",
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "icloud.com",
+  "live.com",
+  "mac.com",
+  "me.com",
+  "outlook.com",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com",
+  "ymail.com",
+]);
+
+const DOMAIN_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+const BATCH = 1000;
+
+function loadEnv() {
+  const file = path.join(process.cwd(), ".env.local");
+  if (fs.existsSync(file)) {
+    for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+      const i = line.indexOf("=");
+      if (i < 0 || line.trim().startsWith("#")) continue;
+      const key = line.slice(0, i).trim();
+      if (!process.env[key]) {
+        process.env[key] = line.slice(i + 1).trim().replace(/^"|"$/g, "");
+      }
+    }
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+    process.exit(1);
+  }
+  return { url, key };
+}
+
+async function main() {
+  const { url, key } = loadEnv();
+
+  const res = await fetch(SOURCE);
+  if (!res.ok) {
+    console.error(`Could not fetch the blocklist (HTTP ${res.status}).`);
     process.exit(1);
   }
 
@@ -16,7 +81,15 @@ const SOURCE =
         .filter((line) => line && !line.startsWith("#") && DOMAIN_RE.test(line)),
     ),
   ];
+  const protectedDomains = domains.filter((domain) => SAFE_PROVIDER_DOMAINS.has(domain));
+  if (protectedDomains.length) {
+    console.error(
+      `Refusing upstream list ${SOURCE_COMMIT}: protected provider domain(s) present: ${protectedDomains.join(", ")}`,
+    );
+    process.exit(1);
+  }
   console.log(`Upstream list: ${domains.length} domains`);
+  console.log(`Pinned upstream commit: ${SOURCE_COMMIT}`);
 
   for (let i = 0; i < domains.length; i += BATCH) {
     const rows = domains.slice(i, i + BATCH).map((domain) => ({ domain }));

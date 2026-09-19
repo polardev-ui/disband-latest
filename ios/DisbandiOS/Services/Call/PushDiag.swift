@@ -17,10 +17,12 @@ enum PushDiag {
     private static var client: SupabaseClient { SupabaseManager.client }
 
     static func log(_ event: String, _ detail: String? = nil) {
+#if DEBUG
         guard let uid = client.auth.currentUser?.id.uuidString.lowercased() else { return }
         let row = Row(user_id: uid, event: event, detail: detail)
         Task {
             try? await client.from("push_diagnostics").insert(row).execute()
         }
+#endif
     }
 }

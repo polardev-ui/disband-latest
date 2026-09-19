@@ -11,8 +11,17 @@ import {
 const ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function giftCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(10));
-  return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
+  const max = Math.floor(256 / ALPHABET.length) * ALPHABET.length;
+  let code = "";
+  while (code.length < 10) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    for (const byte of bytes) {
+      if (byte >= max) continue;
+      code += ALPHABET[byte % ALPHABET.length];
+      if (code.length === 10) break;
+    }
+  }
+  return code;
 }
 
 export async function POST(req: Request) {
