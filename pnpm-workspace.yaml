@@ -6,8 +6,8 @@ packages:
 # non-zero on every install with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
   esbuild: true
-  sharp: set this to true or false
-  workerd: set this to true or false
+  sharp: true
+  workerd: true
 
 minimumReleaseAgeExclude:
   - '@tauri-apps/plugin-notification@2.4.0'
