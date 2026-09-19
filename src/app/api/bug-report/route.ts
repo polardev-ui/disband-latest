@@ -57,22 +57,32 @@ export async function POST(request: Request) {
 
   }
 
-  let body: Partial<BugReportInput>;
+  let parsedBody: unknown;
   try {
-    body = (await request.json()) as Partial<BugReportInput>;
+    parsedBody = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
+  if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+  const body = parsedBody as Record<string, unknown>;
+  if (["reporterName", "reporterEmail", "title", "description", "steps"].some(
+    (field) => body[field] != null && typeof body[field] !== "string",
+  ) || (body.attachments != null && !Array.isArray(body.attachments))) {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+  const field = (value: unknown) => typeof value === "string" ? value.trim() : "";
 
   const report: BugReportInput = {
-    reporterName: body.reporterName?.trim() || userName || null,
-    reporterEmail: (body.reporterEmail?.trim() || userEmail || "").toLowerCase() || null,
+    reporterName: field(body.reporterName) || userName || null,
+    reporterEmail: (field(body.reporterEmail) || userEmail || "").toLowerCase() || null,
     reporterUserId: userId,
-    title: body.title?.trim() ?? "",
-    description: body.description?.trim() ?? "",
-    steps: body.steps?.trim() ?? "",
+    title: field(body.title),
+    description: field(body.description),
+    steps: field(body.steps),
     attachments: Array.isArray(body.attachments)
-      ? (body.attachments as BugReportAttachment[]).slice(0, 6)
+      ? body.attachments as BugReportAttachment[]
       : [],
   };
 

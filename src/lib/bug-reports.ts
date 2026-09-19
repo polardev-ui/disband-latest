@@ -1,4 +1,6 @@
 
+import { PUBLIC_ENV } from "@/lib/public-env";
+
 export const BUG_REPORT_EMAIL = "it@disband.dev";
 
 export const BUG_REPORT_LIMITS = {
@@ -48,12 +50,25 @@ export function validateBugReport(input: BugReportInput): string | null {
     return "Steps to reproduce are too long.";
   }
   const attachments = input.attachments ?? [];
+  if (!Array.isArray(attachments)) return "Attachments are invalid.";
   if (attachments.length > BUG_REPORT_LIMITS.attachmentsMax) {
     return `Attach at most ${BUG_REPORT_LIMITS.attachmentsMax} files.`;
   }
+  const cdn = new URL(PUBLIC_ENV.cdnUrl);
+  const imagePath = `${cdn.pathname.replace(/\/$/, "")}/images/`;
   for (const a of attachments) {
-    if (!/^https:\/\//i.test(a.url)) {
-      return "Attachment URLs must be https://.";
+    if (!a || typeof a !== "object" || typeof a.url !== "string") return "Attachment is invalid.";
+    let url: URL;
+    try { url = new URL(a.url); } catch { return "Attachment URL is invalid."; }
+    if (url.protocol !== "https:" || url.origin !== cdn.origin || !url.pathname.startsWith(imagePath)
+      || url.pathname.length <= imagePath.length || url.search || url.hash || url.username || url.password) {
+      return "Attachments must be uploaded through Disband.";
+    }
+    if (typeof a.name !== "string" || !a.name || a.name.length > 180 || /[\r\n]/.test(a.name)) {
+      return "Attachment name is invalid.";
+    }
+    if (typeof a.type !== "string" || a.type.length > 100 || /[\r\n]/.test(a.type)) {
+      return "Attachment type is invalid.";
     }
   }
   return null;
