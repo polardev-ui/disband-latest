@@ -6,8 +6,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="disband_sessions.xml" />
+        <exclude domain="sharedpref" path="disband_prefs.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="disband_sessions.xml" />
+        <exclude domain="sharedpref" path="disband_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>
