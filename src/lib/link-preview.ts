@@ -16,6 +16,17 @@ const GIFT_IN_URL_RE = /\/gift\/[a-zA-Z0-9]{10}\b/;
 
 const cache = new Map<string, LinkPreview | null>();
 const inflight = new Map<string, Promise<LinkPreview | null>>();
+const CACHE_MAX = 200;
+
+function cachePreview(url: string, preview: LinkPreview | null): void {
+  cache.delete(url);
+  cache.set(url, preview);
+  while (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
 
 export function extractPreviewUrls(text: string, max = 3): string[] {
   const inviteCodes = new Set(extractInviteCodes(text));
@@ -90,14 +101,14 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
         try {
           const preview = await fetchFromEndpoint(base, url);
           if (preview) {
-            cache.set(url, preview);
+            cachePreview(url, preview);
             return preview;
           }
         } catch {
 
         }
       }
-      cache.set(url, null);
+      cachePreview(url, null);
       return null;
     } finally {
       inflight.delete(url);
