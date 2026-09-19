@@ -48,6 +48,20 @@ const nextConfig: NextConfig = {
         trailingSlash: true,
       }
     : {
+        async redirects() {
+          return [
+            {
+              source: "/docs",
+              destination: "https://docs.disband.dev/",
+              permanent: true,
+            },
+            {
+              source: "/docs/:path*",
+              destination: "https://docs.disband.dev/docs/:path*",
+              permanent: true,
+            },
+          ];
+        },
         async headers() {
           return [
             {

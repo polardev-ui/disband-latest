@@ -219,7 +219,7 @@ export function BotsPanel() {
               Use it to connect the client:{" "}
               <code className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[11.5px]">new Client(&#123; token: "…" &#125;)</code>.
               See the{" "}
-              <a href="/docs/bots" className="text-brand hover:underline">
+              <a href="https://docs.disband.dev/docs/bots/" target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
                 bot docs
               </a>{" "}
               for setup.
