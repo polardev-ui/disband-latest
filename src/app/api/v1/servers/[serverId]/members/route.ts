@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { authenticateBot, botJsonError } from "@/lib/bot-auth";
+import { authenticateBot, botJsonError, publicBotError } from "@/lib/bot-auth";
 
 export async function GET(
   request: NextRequest,
@@ -20,7 +20,7 @@ export async function GET(
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
+      return NextResponse.json({ error: publicBotError(error) }, { status: botJsonError(error) });
     }
 
     return NextResponse.json({ members: members ?? [] });

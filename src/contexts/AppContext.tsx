@@ -396,7 +396,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const lastActivityRef = useRef<number>(typeof window !== "undefined" ? Date.now() : 0);
   const autoAwayRef = useRef(false);
   const inCallRef = useRef(false);
-  const signingOutRef = useRef(false);
   sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
@@ -1384,13 +1383,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-
-      if (!s) {
-        const current = sessionRef.current;
-
-        if (current && !signingOutRef.current) return;
-      }
-      signingOutRef.current = false;
       setSession(s);
 
       if (_e === "SIGNED_IN" && s) {
@@ -2319,7 +2311,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    signingOutRef.current = true;
     if (userId) {
       await getSupabaseClient().from("profiles").update({ status: "offline" }).eq("id", userId);
     }
@@ -2339,29 +2330,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const switchAccount = useCallback(async (account: SavedSession) => {
-    resetSupabaseClient();
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.auth.setSession({
-      access_token: account.access_token,
-      refresh_token: account.refresh_token,
-    });
-    if (error || !data.session) {
-      dropSavedSession(account.user_id);
-      setSavedSessions(getSavedSessions());
-      setSession(null);
-      return error?.message ?? "That saved session could not be restored.";
+    const { error } = await getSupabaseClient().auth.signOut({ scope: "local" });
+    if (error) {
+      return mapAuthError(error.message);
     }
-    setSession(data.session);
-    rememberSession(data.session);
-    void refreshSessionOnce().then((r) => {
-      if ("session" in r && r.session) {
-        const refreshed = r.session as Session;
-        setSession(refreshed);
-        rememberSession(refreshed);
-      }
-    });
+    resetSupabaseClient();
+    setSession(null);
+    if (typeof window !== "undefined") {
+      if (account.email) window.sessionStorage.setItem("disband:switch-account-email", account.email);
+      window.location.assign("/login");
+    }
     return null;
-  }, [rememberSession]);
+  }, []);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     if (!userId || !profile) return "Not signed in";

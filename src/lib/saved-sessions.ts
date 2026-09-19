@@ -9,8 +9,6 @@ export interface SavedSession {
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
-  access_token: string;
-  refresh_token: string;
   saved_at: number;
 }
 
@@ -23,13 +21,24 @@ export function getSavedSessions(): SavedSession[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return (parsed as SavedSession[]).filter(
-      (s): s is SavedSession =>
+    const safe = (parsed as Array<SavedSession & Record<string, unknown>>).filter(
+      (s): s is SavedSession & Record<string, unknown> =>
         typeof s === "object" &&
         s !== null &&
         typeof (s as SavedSession).user_id === "string" &&
-        typeof (s as SavedSession).refresh_token === "string",
-    );
+        typeof (s as SavedSession).saved_at === "number",
+    ).map(({ user_id, email, username, display_name, avatar_url, saved_at }) => ({
+      user_id,
+      email: typeof email === "string" ? email : null,
+      username: typeof username === "string" ? username : null,
+      display_name: typeof display_name === "string" ? display_name : null,
+      avatar_url: typeof avatar_url === "string" ? avatar_url : null,
+      saved_at,
+    }));
+    // Rewrite legacy entries immediately so previously stored bearer tokens
+    // are removed instead of surviving until the next account update.
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
+    return safe;
   } catch {
     return [];
   }
@@ -44,7 +53,7 @@ function persist(list: SavedSession[]) {
 }
 
 export function saveSession(session: Session | null | undefined, profile?: Profile | null): void {
-  if (!session?.user?.id || !session.refresh_token) return;
+  if (!session?.user?.id) return;
   const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
   const existing = getSavedSessions().find((s) => s.user_id === session.user.id);
   const entry: SavedSession = {
@@ -57,8 +66,6 @@ export function saveSession(session: Session | null | undefined, profile?: Profi
       (typeof meta.display_name === "string" ? meta.display_name : null)
       ?? existing?.display_name ?? profile?.display_name ?? null,
     avatar_url: profile?.avatar_url ?? existing?.avatar_url ?? null,
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
     saved_at: existing?.saved_at ?? Date.now(),
   };
   const list = getSavedSessions();

@@ -38,11 +38,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { count } = await service
+    const { count, error: countError } = await service
       .from("bots")
       .select("id", { count: "exact", head: true })
       .eq("owner_id", user.id)
       .is("revoked_at", null);
+    if (countError) return NextResponse.json({ error: "Bot registration is temporarily unavailable." }, { status: 503 });
     if ((count ?? 0) >= MAX_BOTS_PER_OWNER) {
       return NextResponse.json(
         { error: `You can create at most ${MAX_BOTS_PER_OWNER} bots.` },
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
       await rollback();
 
       return NextResponse.json(
-        { error: profileError?.message ?? "Could not set up the bot profile." },
+        { error: "Could not set up the bot profile." },
         { status: 500 },
       );
     }
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
     if (botError || !bot) {
       await rollback();
       return NextResponse.json(
-        { error: botError?.message ?? "Could not register the bot." },
+        { error: "Could not register the bot." },
         { status: 500 },
       );
     }
