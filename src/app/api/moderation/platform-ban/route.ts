@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
     if (body.action === "unban") {
       const { error } = await service.from("platform_bans").delete().eq("user_id", targetUserId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return NextResponse.json({ error: "Could not remove the platform ban." }, { status: 500 });
       return NextResponse.json({ ok: true, action: "unban" });
     }
 
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Could not apply the platform ban." }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, action: "ban", userId: targetUserId });
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       .limit(100);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Could not load platform bans." }, { status: 500 });
     }
 
     return NextResponse.json({ bans: data ?? [] });
