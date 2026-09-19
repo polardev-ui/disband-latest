@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.rpc("check_username_available", { p_username: username });
   if (error) {
-    return NextResponse.json({ available: false, reason: error.message }, { status: 400 });
+    return NextResponse.json({ available: false, reason: "That username is unavailable." }, { status: 400 });
   }
 
   return NextResponse.json(data);

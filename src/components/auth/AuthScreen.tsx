@@ -64,6 +64,11 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
   useEffect(() => {
     if (overlay) return;
+    const selectedEmail = window.sessionStorage.getItem("disband:switch-account-email");
+    if (selectedEmail) {
+      setEmail(selectedEmail);
+      window.sessionStorage.removeItem("disband:switch-account-email");
+    }
     const ref = new URLSearchParams(window.location.search).get("ref");
     if (ref && /^[0-9a-zA-Z]{9}$/.test(ref)) {
       setAppliedRef(ref);
@@ -208,7 +213,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         {!overlay && mode === "login" && savedSessions.length > 0 && !success && (
           <div className="mb-4">
             <p className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">
-              Continue as
+              Previous accounts
             </p>
             <div className="flex flex-col gap-0.5">
               {savedSessions.map((acct) => {
@@ -237,7 +242,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                       {busy ? (
                         <span className="ml-auto h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />
                       ) : (
-                        <span className="ml-auto shrink-0 text-xs font-semibold text-brand">Switch</span>
+                        <span className="ml-auto shrink-0 text-xs font-semibold text-brand">Sign in</span>
                       )}
                     </button>
                     <button

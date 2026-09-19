@@ -24,9 +24,9 @@ export async function POST(
         return NextResponse.json({ error: "Only the server owner can approve a bot invite." }, { status: 403 });
       }
       if (/not found|already been used|expired|revoked/.test(error.message)) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ error: "The bot invite is invalid or expired." }, { status: 400 });
       }
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Could not approve the bot invite." }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
