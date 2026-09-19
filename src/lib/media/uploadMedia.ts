@@ -5,6 +5,25 @@ const CDN_URL = PUBLIC_ENV.cdnUrl;
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+export function isTrustedUploadUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const result = new URL(value);
+    const cdn = new URL(CDN_URL);
+    const imagePath = `${cdn.pathname.replace(/\/$/, "")}/images/`;
+    const key = result.pathname.startsWith(imagePath)
+      ? result.pathname.slice(imagePath.length)
+      : "";
+    return result.protocol === "https:"
+      && result.origin === cdn.origin
+      && !result.username && !result.password
+      && !result.search && !result.hash
+      && !!key && !key.includes("..") && /^[a-zA-Z0-9._-]+$/.test(key);
+  } catch {
+    return false;
+  }
+}
+
 export interface MediaUploadResult {
   url: string;
   key: string;
@@ -43,7 +62,7 @@ export async function uploadMedia(
   file: File,
   options: UploadMediaOptions = {},
 ): Promise<MediaUploadResult> {
-  const { signal, onProgress, maxUploadBytes = 50 * 1024 * 1024 } = options;
+  const { signal, onProgress, maxUploadBytes = MAX_UPLOAD_BYTES } = options;
 
   if (!file) {
     throw new MediaUploadError("No file provided to uploadMedia().");
@@ -79,11 +98,11 @@ export async function uploadMedia(
       }
 
       if (xhr.status >= 200 && xhr.status < 300 && data?.url) {
-        if (!data.url.startsWith("https://")) {
-          reject(new MediaUploadError("Upload returned an invalid URL (only https:// is allowed)."));
+        if (!isTrustedUploadUrl(data.url)) {
+          reject(new MediaUploadError("Upload returned an invalid CDN URL."));
           return;
         }
-        resolve({ url: data.url, key: data.key ?? "" });
+        resolve({ url: data.url, key: typeof data.key === "string" ? data.key : "" });
       } else {
         const detail =
           data?.message || data?.error || `Upload failed (HTTP ${xhr.status})`;
