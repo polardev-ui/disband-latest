@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: main
+      verifyOnly:
+        description: "Check runner dependency installation without building or publishing a release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -111,6 +116,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        if: ${{ !inputs.verifyOnly }}
         env:
           # Publishing the release failed with "self-signed certificate" while
           # calling the GitHub API. The bundles build fine; only the upload
