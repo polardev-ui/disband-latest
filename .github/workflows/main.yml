@@ -46,7 +46,7 @@ jobs:
             name: Windows
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -62,7 +62,7 @@ jobs:
 
       - name: Checkout build ref
         if: steps.build.outputs.checkout_ref != github.ref_name
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ steps.build.outputs.checkout_ref }}
           fetch-depth: 0
@@ -75,15 +75,15 @@ jobs:
           BUILD_MODE: branch
         run: node scripts/resolve-release-build.mjs --phase=post
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -92,7 +92,7 @@ jobs:
         if: steps.build.outputs.mode == 'tag'
         run: node scripts/set-version.mjs "${{ steps.build.outputs.release_tag }}"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable 2026-09-18
         with:
           targets: ${{ matrix.target }}
 
@@ -110,7 +110,7 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           # Publishing the release failed with "self-signed certificate" while
           # calling the GitHub API. The bundles build fine; only the upload

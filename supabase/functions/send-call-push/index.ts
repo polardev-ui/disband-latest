@@ -40,6 +40,19 @@ function pemToPkcs8(pem: string): Uint8Array {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
+async function constantTimeEqual(provided: string | null, expected: string | undefined): Promise<boolean> {
+  if (!provided || !expected) return false;
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(provided)),
+    crypto.subtle.digest("SHA-256", enc.encode(expected)),
+  ]);
+  const left = new Uint8Array(providedHash);
+  const right = new Uint8Array(expectedHash);
+  let difference = 0;
+  for (let i = 0; i < left.length; i++) difference |= left[i] ^ right[i];
+  return difference === 0;
+}
+
 // MARK: - APNs (iOS)
 
 // Cache the APNs JWT (valid up to ~1h; refresh well within that).
@@ -147,8 +160,17 @@ async function fcmAccessToken(cfg: FcmConfig): Promise<string> {
       assertion,
     }),
   });
-  const json = await res.json();
-  cachedFcmToken = { token: json.access_token, exp: now + (json.expires_in ?? 3600) };
+  if (!res.ok) throw new Error(`FCM OAuth token request failed (${res.status})`);
+  const json: unknown = await res.json();
+  if (!json || typeof json !== "object" || !("access_token" in json) ||
+    typeof json.access_token !== "string" || !json.access_token) {
+    throw new Error("FCM OAuth token response did not include an access token");
+  }
+  const expiresIn = "expires_in" in json && typeof json.expires_in === "number" &&
+      Number.isFinite(json.expires_in) && json.expires_in > 0
+    ? json.expires_in
+    : 3600;
+  cachedFcmToken = { token: json.access_token, exp: now + expiresIn };
   return json.access_token;
 }
 
@@ -205,7 +227,7 @@ Deno.serve(async (req) => {
   );
   let callerId = "";
   const webhookSecret = req.headers.get("x-webhook-secret");
-  if (webhookSecret && webhookSecret === Deno.env.get("WEBHOOK_SECRET")) {
+  if (await constantTimeEqual(webhookSecret, Deno.env.get("WEBHOOK_SECRET"))) {
     callerId = from ?? "server";
   } else {
     const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
@@ -314,7 +336,7 @@ Deno.serve(async (req) => {
     };
 
     // VoIP pushes use the `.voip` topic; a normal .p8 APNs key signs them too.
-    const voipPayload = JSON.stringify(dataPayload);
+    const voipPayload = JSON.stringify({ aps: {}, ...dataPayload });
     // The alert carries the same data, so tapping it opens the same call.
     const alertPayload = JSON.stringify({
       aps: {

@@ -2,7 +2,7 @@
 -- Disband — App Store review demo data
 --
 -- Seeds a self-contained sandbox for the App Review demo account:
---     disband@apple.com / REMOVED_REVIEW_PASSWORD
+-- The review account credential is managed outside source control.
 --
 -- Everything created here uses deterministic ids in the de00.../5e00.../a000...
 -- ranges, so the script is safe to re-run: it tears down its own previous
@@ -110,7 +110,7 @@ begin
   insert into public.subscriptions
     (user_id, plan, status, current_period_start, current_period_end)
   values
-    (demo, 'super', 'active', now_ts - interval '10 days', now_ts + interval '355 days');
+    (demo, 'aero', 'active', now_ts - interval '10 days', now_ts + interval '355 days');
 
   -- --------------------------------------------------------------------------
   -- 2. Synthetic companion accounts

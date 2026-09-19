@@ -34,8 +34,17 @@ export class Client {
   constructor(options = {}) {
     if (!options.token) throw new Error("A bot token is required (new Client({ token }))");
     this.token = options.token;
-    this.baseUrl = (options.baseUrl || "https://www.disband.dev").replace(/\/+$/, "");
+    const baseUrl = new URL(options.baseUrl || "https://www.disband.dev");
+    const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]).has(baseUrl.hostname);
+    if (baseUrl.username || baseUrl.password || baseUrl.hash) {
+      throw new Error("Bot API URLs cannot contain credentials or fragments");
+    }
+    if (baseUrl.protocol !== "https:" && !(baseUrl.protocol === "http:" && options.allowInsecureLocalhost === true && loopback)) {
+      throw new Error("Bot API URLs must use HTTPS (or explicitly enabled loopback HTTP)");
+    }
+    this.baseUrl = baseUrl.href.replace(/\/+$/, "");
     this.gatewayTimeout = options.gatewayTimeout ?? 20;
+    this.requestTimeout = options.requestTimeout ?? Math.max((this.gatewayTimeout + 10) * 1000, 30_000);
     this._rest = new REST(this);
     this._listeners = new Map();
     this._stopped = false;

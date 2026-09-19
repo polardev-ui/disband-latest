@@ -1495,11 +1495,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshRestrictions = useCallback(async () => {
     const supabase = getSupabaseClient();
+    const userId = session?.user.id;
+    if (!userId) {
+      setRestrictions([]);
+      return;
+    }
+    // Only this account's rows. The staff RLS policy permits reading all rows;
+    // without this filter an operator account inherits every user's
+    // restriction set and locks itself out of the app.
     const { data } = await supabase
       .from("account_restrictions")
-      .select("restriction");
+      .select("restriction")
+      .eq("user_id", userId);
     setRestrictions((data as { restriction: string }[] | null)?.map((r) => r.restriction) ?? []);
-  }, []);
+  }, [session?.user.id]);
 
   const hasRestriction = useCallback(
     (restriction: string) => restrictions.includes(restriction),

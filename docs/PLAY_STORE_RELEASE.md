@@ -396,13 +396,13 @@ instruction set:
 - Name: `Demo account`
 - Login required: yes
 - Username / Email: `disband@apple.com`
-- Password: `REMOVED_REVIEW_PASSWORD`
+- Password: copy the current value from the restricted release secret manager
 - Other instructions: "Sign in with the credentials above. The account is
   already a member of demo servers with seeded conversations, so no invite code
   is needed. Voice and video need a device with a mic/camera; on an emulator,
   audio is silent but the call UI works."
 
-Keep that account alive and its password unchanged. If it stops working mid-review
+Keep that account alive and rotate the password after each review window. If it stops working mid-review
 you get rejected for something unrelated to your code.
 
 ### 7.3 Ads
