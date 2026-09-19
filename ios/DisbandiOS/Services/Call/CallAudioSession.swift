@@ -36,7 +36,7 @@ enum CallAudioSession {
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.allowBluetoothHFP, .allowBluetoothA2DP]
+                options: [.allowBluetooth, .allowBluetoothA2DP]
             )
             try session.setActive(true)
             session.isAudioEnabled = true
@@ -60,7 +60,7 @@ enum CallAudioSession {
         try? session.setCategory(
             .playAndRecord,
             mode: .voiceChat,
-            options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker]
+            options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]
         )
         try? session.setActive(true)
         session.unlockForConfiguration()

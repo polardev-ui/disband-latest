@@ -3,6 +3,7 @@ import { Message } from "./message.js";
 import { AuthError } from "./errors.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const pathSegment = (value) => encodeURIComponent(String(value));
 
 const EVENT_NAMES = new Set(["ready", "messageCreate", "messageUpdate", "messageDelete", "error", "debug"]);
 
@@ -63,7 +64,7 @@ export class Client {
   once(event, handler) {
     const wrapped = (...args) => {
       this.off(event, wrapped);
-      handler(...args);
+      return handler(...args);
     };
     return this.on(event, wrapped);
   }
@@ -74,14 +75,24 @@ export class Client {
     return this;
   }
 
+  _reportHandlerError(event, error) {
+    if (event === "error" || !this._listeners.get("error")?.size) {
+      console.error(`[disband-bot] error in "${event}" handler`, error);
+      return;
+    }
+    this._emit("error", error instanceof Error ? error : new Error(String(error)));
+  }
+
   _emit(event, ...args) {
     const set = this._listeners.get(event);
     if (!set) return;
     for (const handler of set) {
       try {
-        void handler(...args);
+        Promise.resolve(handler(...args)).catch((err) => {
+          this._reportHandlerError(event, err);
+        });
       } catch (err) {
-        console.error(`[disband-bot] error in "${event}" handler`, err);
+        this._reportHandlerError(event, err);
       }
     }
   }
@@ -140,7 +151,7 @@ export class Client {
   // ------------------------------------------------------------ REST helpers
 
   async sendMessage(channelId, content, options = {}) {
-    const { message } = await this._rest.post(`/api/v1/channels/${channelId}/messages`, {
+    const { message } = await this._rest.post(`/api/v1/channels/${pathSegment(channelId)}/messages`, {
       content,
       reply_to_id: options.replyToId ?? null,
     });
@@ -153,23 +164,23 @@ export class Client {
     if (options.before) params.set("before", options.before);
     const qs = params.toString();
     const { messages } = await this._rest.get(
-      `/api/v1/channels/${channelId}/messages${qs ? `?${qs}` : ""}`,
+      `/api/v1/channels/${pathSegment(channelId)}/messages${qs ? `?${qs}` : ""}`,
     );
     return (messages ?? []).map((m) => new Message(m, this));
   }
 
   async listChannels(serverId) {
-    const { channels } = await this._rest.get(`/api/v1/servers/${serverId}/channels`);
+    const { channels } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/channels`);
     return channels ?? [];
   }
 
   async listMembers(serverId) {
-    const { members } = await this._rest.get(`/api/v1/servers/${serverId}/members`);
+    const { members } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/members`);
     return members ?? [];
   }
 
   async createChannel(serverId, name, options = {}) {
-    const { channel_id } = await this._rest.post(`/api/v1/servers/${serverId}/channels`, {
+    const { channel_id } = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/channels`, {
       name,
       type: options.type ?? "text",
       category_id: options.categoryId ?? null,
@@ -178,15 +189,15 @@ export class Client {
   }
 
   async renameChannel(channelId, name) {
-    return this._rest.patch(`/api/v1/channels/${channelId}`, { name });
+    return this._rest.patch(`/api/v1/channels/${pathSegment(channelId)}`, { name });
   }
 
   async deleteChannel(channelId) {
-    return this._rest.delete(`/api/v1/channels/${channelId}`);
+    return this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}`);
   }
 
   async leaveServer(serverId) {
-    return this._rest.post(`/api/v1/servers/${serverId}/leave`);
+    return this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/leave`);
   }
 
   /**
@@ -195,7 +206,7 @@ export class Client {
    */
   async createInvite(serverId, scopes) {
     if (!this.user?.id) throw new Error("Client is not connected — call connect() first.");
-    return this._rest.post(`/api/v1/bots/${this.user.id}/invites`, {
+    return this._rest.post(`/api/v1/bots/${pathSegment(this.user.id)}/invites`, {
       server_id: serverId,
       scopes,
     });

@@ -20,7 +20,9 @@ export interface GatewayEvent {
 export interface ClientOptions {
   token: string;
   baseUrl?: string;
+  allowInsecureLocalhost?: boolean;
   gatewayTimeout?: number;
+  requestTimeout?: number;
 }
 
 export type MessageHandler = (message: Message) => void | Promise<void>;
@@ -32,6 +34,7 @@ export class Client {
   token: string;
   baseUrl: string;
   gatewayTimeout: number;
+  requestTimeout: number;
   user: ClientUser | null;
   readonly connected: boolean;
 
