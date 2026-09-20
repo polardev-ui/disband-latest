@@ -42,7 +42,7 @@ export function MarketingHomePage() {
                 Disband for desktop, mobile &amp; web
               </p>
 
-              <h1 className="mt-5 text-[2.75rem] font-semibold leading-[1.05] tracking-[-0.03em] text-white sm:text-[3.5rem]">
+              <h1 className="mt-5 text-4xl font-semibold leading-[1.05] tracking-[-0.03em] text-white sm:text-[3.5rem]">
                 A place for your
                 <br />
                 people to talk.
@@ -78,9 +78,11 @@ export function MarketingHomePage() {
 
         {}
         <section className="border-b border-white/[0.06] px-6">
-          <dl className="mx-auto grid max-w-6xl grid-cols-2 divide-x divide-white/[0.06] lg:grid-cols-4">
+          {/* Dividers only on desktop: in the 2-col mobile layout a single
+              divide-x draws a stray border on the second row's first cell. */}
+          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-y-2 lg:grid-cols-4 lg:gap-y-0 lg:divide-x lg:divide-white/[0.06]">
             {platformSpecs.map((spec) => (
-              <div key={spec.label} className="px-5 py-7 first:pl-0 last:pr-0">
+              <div key={spec.label} className="px-5 py-7 lg:first:pl-0 lg:last:pr-0">
                 <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
                   {spec.label}
                 </dt>

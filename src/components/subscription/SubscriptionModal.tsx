@@ -80,12 +80,33 @@ function PlanCard({ currentPlan, onSubscribe }: {
 }
 
 function MobileNotice() {
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <div className="flex flex-col items-center gap-4 p-8 text-center">
       <p className="text-lg font-bold">Mobile Not Supported</p>
       <p className="text-sm text-text-muted">
-        In-app purchases are not available on mobile. Please visit Disband from a desktop web browser to manage your subscription.
+        In-app purchases are not available on mobile. Open Disband in a desktop
+        web browser to manage your subscription — or copy this page&apos;s link
+        and send it to yourself.
       </p>
+      <button
+        type="button"
+        onClick={() => void copyLink()}
+        className="rounded-md border border-divider px-4 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+      >
+        {copied ? "Copied" : "Copy page link"}
+      </button>
     </div>
   );
 }
@@ -157,7 +178,7 @@ function ActivationScreen({
   return (
     <div className="px-6 pb-6 pt-8">
       <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#57f287]/20">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-status-online/20">
           <svg
             className="h-6 w-6 text-status-online"
             fill="none"
@@ -191,7 +212,7 @@ function ActivationScreen({
       </div>
 
       {tier && (
-        <div className="mt-6 rounded-xl border border-[#57f287]/25 bg-[#57f287]/[0.04] p-4">
+        <div className="mt-6 rounded-xl border border-status-online/25 bg-status-online/[0.04] p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
             Now unlocked
           </p>
@@ -302,18 +323,18 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
             onCancel={handleCheckoutCancel}
           />
         ) : loading ? (
-          <div className="flex items-center justify-center p-16">
+          <div className="flex items-center justify-center p-16" role="status" aria-label="Loading subscription">
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
           </div>
         ) : (
           <div className="px-6 pt-3 pb-6">
             {checkoutError && (
-              <div className="mb-4 rounded-lg bg-red-500/10 px-3.5 py-2.5">
-                <p className="text-sm text-red-400">{checkoutError}</p>
+              <div className="mb-4 rounded-lg bg-status-dnd/10 px-3.5 py-2.5">
+                <p className="text-sm text-status-dnd">{checkoutError}</p>
               </div>
             )}
             {isAero ? (
-              <div className="rounded-xl border border-[#57f287]/25 bg-[#57f287]/[0.04] p-5">
+              <div className="rounded-xl border border-status-online/25 bg-status-online/[0.04] p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold">Disband Aero</h3>
                   <span className="rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-semibold text-status-online">
