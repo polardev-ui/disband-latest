@@ -327,7 +327,7 @@ export function ChatMessage({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative ${COMPACT_INDENT} pr-4 py-0 ${rowBgClass} ${highlightClass}`}
+        className={`group relative ${COMPACT_INDENT} pr-4 py-0 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""}`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -371,7 +371,7 @@ export function ChatMessage({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass}`}
+      className={`group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >

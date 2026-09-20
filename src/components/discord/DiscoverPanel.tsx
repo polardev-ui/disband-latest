@@ -244,7 +244,7 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
           </div>
         ) : (
           <>
-            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ul key={tab} className="view-enter grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {visible.map((server) => {
                 const joined = memberIds.has(server.id);
                 const banner = safeImageUrl(server.banner_url);

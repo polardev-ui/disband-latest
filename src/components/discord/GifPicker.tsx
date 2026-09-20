@@ -186,7 +186,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             return next;
           });
         }}
-        className="flex h-8 items-center rounded px-2 text-xs font-bold uppercase tracking-wide text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-8 items-center rounded px-2 text-xs font-bold uppercase tracking-wide text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
       >
         GIF
       </button>

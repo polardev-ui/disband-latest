@@ -46,7 +46,7 @@ export function MessageActionBar({
           key={emoji}
           type="button"
           onClick={() => onToggleReaction?.(emoji)}
-          className="flex h-7 w-7 items-center justify-center rounded text-base leading-none transition-colors hover:bg-interactive-hover"
+          className="flex h-7 w-7 items-center justify-center rounded text-base leading-none transition-all hover:bg-interactive-hover active:scale-90"
           title={emoji}
         >
           {emoji}
@@ -58,7 +58,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={onOpenReactionPicker}
-        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Add Reaction"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -72,7 +72,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={() => onReply?.(replyPreview!)}
-        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Reply"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -84,7 +84,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={onForward}
-        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Forward"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -96,7 +96,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={onMoreActions}
-        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+        className="flex h-7 w-7 items-center justify-center rounded text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="More"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -249,7 +249,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
             setHovered({ emoji: r.emoji, el: e.currentTarget });
           }}
           onMouseLeave={scheduleClose}
-          className={`inline-flex h-[26px] items-center gap-1.5 rounded-lg border px-2 text-[13px] transition-colors ${
+          className={`inline-flex h-[26px] items-center gap-1.5 rounded-lg border px-2 text-[13px] transition-all active:scale-95 ${
             r.reacted
               ? "border-brand/50 bg-brand/20 text-text-normal"
               : "border-divider bg-bg-secondary text-text-muted hover:border-brand/30 hover:bg-interactive-hover"
