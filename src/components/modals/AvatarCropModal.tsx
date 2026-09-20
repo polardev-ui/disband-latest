@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useRef, useState } from "react";
 import { IconClose } from "@/components/icons";
 import type { AvatarCrop } from "@/lib/utils";
@@ -16,6 +18,8 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
   const [posX, setPosX] = useState(0);
   const [posY, setPosY] = useState(0);
 
+  useOverlayDismiss(onClose, open);
+
   if (!open) return null;
 
   const previewStyle = {
@@ -27,8 +31,8 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/80" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-md rounded-lg bg-bg-primary p-6 shadow-2xl">
+      <button type="button" className="absolute inset-0 bg-overlay-scrim-strong overlay-fade" onClick={onClose} aria-label="Close" />
+      <div role="dialog" aria-modal="true" aria-label="Adjust profile picture" className="modal-pop relative w-full max-w-md rounded-lg bg-bg-primary p-6 shadow-2xl">
         <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted">
           <IconClose size={24} />
         </button>

@@ -13,6 +13,7 @@ import {
   IconZoomOut,
 } from "@/components/icons";
 import { formatMessageTime, displayName } from "@/lib/utils";
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { getUsernameStyle } from "@/lib/profileColor";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -46,28 +47,26 @@ export function ImageLightbox({
   const [zoomIndex, setZoomIndex] = useState(0);
   const zoom = ZOOM_STEPS[zoomIndex];
 
+  // Scroll lock + topmost-only Escape come from the shared hook (replacing
+  // the local body-overflow effect); zoom keys stay local.
+  useOverlayDismiss(onClose, open);
+
   useEffect(() => {
     if (!open) {
       setZoomIndex(0);
       return;
     }
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
       if (e.key === "+" || e.key === "=") setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1));
       if (e.key === "-") setZoomIndex((i) => Math.max(i - 1, 0));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   const zoomIn = useCallback(() => {
     setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1));
@@ -89,7 +88,7 @@ export function ImageLightbox({
     <div className="fixed inset-0 z-[150]" role="dialog" aria-modal="true" aria-label="Image preview">
       <button
         type="button"
-        className="absolute inset-0 bg-black/85 backdrop-blur-md"
+        className="absolute inset-0 bg-overlay-scrim-strong overlay-fade backdrop-blur-md"
         onClick={onClose}
         aria-label="Close preview"
       />
@@ -123,7 +122,7 @@ export function ImageLightbox({
 
         <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-8 pt-2">
           <div
-            className="pointer-events-auto flex max-h-full max-w-[min(56rem,92vw)] flex-col overflow-hidden rounded-lg bg-[#2b2d31] shadow-2xl ring-1 ring-white/10"
+            className="modal-pop pointer-events-auto flex max-h-full max-w-[min(56rem,92vw)] flex-col overflow-hidden rounded-lg bg-overlay-media shadow-2xl ring-1 ring-divider"
             onClick={(e) => e.stopPropagation()}
           >
             {author && (

@@ -1374,7 +1374,7 @@ export function DiscordApp() {
         mobileMenuOpen && (
           <div className="absolute inset-0 z-40">
             <div
-              className="absolute inset-0 bg-black/60"
+              className="absolute inset-0 bg-overlay-scrim overlay-fade"
               onClick={() => setMobileMenuOpen(false)}
             />
             <div className="relative flex h-full w-[min(86vw,22rem)] shadow-2xl">

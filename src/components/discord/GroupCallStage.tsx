@@ -45,7 +45,7 @@ function ParticipantTile({
 
   return (
     <div
-      className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-[#2b2d31] ${ringClass}`}
+      className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-overlay-media ${ringClass}`}
     >
       {hasVideo && stream ? (
         <video

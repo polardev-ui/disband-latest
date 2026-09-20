@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
@@ -18,6 +20,8 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useOverlayDismiss(onClose, open);
 
   if (!open) return null;
 
@@ -45,8 +49,8 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
-      <form onSubmit={submit} className="w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade p-4">
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Create a group chat" className="modal-pop w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-text-normal">Create Group Chat</h2>
           <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">

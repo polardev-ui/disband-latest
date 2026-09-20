@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createPoll } from "@/lib/poll";
@@ -30,6 +32,8 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
     setError(null);
   }, [open]);
 
+  useOverlayDismiss(onClose, open);
+
   if (!open || !mounted) return null;
 
   const validOptions = options.map((o) => o.trim()).filter(Boolean);
@@ -54,11 +58,14 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-overlay-scrim overlay-fade p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create a poll"
+        className="modal-pop w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

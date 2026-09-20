@@ -18,6 +18,11 @@
   --color-status-offline: var(--status-offline);
   --color-divider: var(--divider);
   --color-super: var(--super);
+  --color-overlay-surface: var(--overlay-surface);
+  --color-overlay-panel: var(--overlay-panel);
+  --color-overlay-media: var(--overlay-media);
+  --color-overlay-scrim: var(--overlay-scrim);
+  --color-overlay-scrim-strong: var(--overlay-scrim-strong);
 
   --radius-sm: var(--skin-radius-sm, 0.125rem);
   --radius-md: var(--skin-radius-md, 0.375rem);
@@ -63,6 +68,14 @@
   --divider: #3f4147;
   --font-discord: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial,
     sans-serif;
+  /* Overlay layer tokens (web UI revamp, patch 2). Dark defaults preserve the
+     old hardcoded surfaces (#111214 menus, #1e1f22 modals, #2b2d31 media);
+     light themes override below so overlays stop rendering near-black. */
+  --overlay-surface: #111214;
+  --overlay-panel: #1e1f22;
+  --overlay-media: #2b2d31;
+  --overlay-scrim: rgb(0 0 0 / 0.7);
+  --overlay-scrim-strong: rgb(0 0 0 / 0.85);
 }
 
 [data-theme="midnight"] {
@@ -101,6 +114,11 @@
   --status-dnd: #f23f43;
   --status-offline: #80848e;
   --divider: #e3e5e8;
+  --overlay-surface: #ffffff;
+  --overlay-panel: #ffffff;
+  --overlay-media: #f2f3f5;
+  --overlay-scrim: rgb(0 0 0 / 0.45);
+  --overlay-scrim-strong: rgb(0 0 0 / 0.6);
 }
 
 [data-theme="sunset"] {
@@ -238,13 +256,15 @@ body {
 @keyframes tooltip-enter {
   from {
     opacity: 0;
-    transform: translateY(2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
+
+/* Opacity-only on purpose: tooltip position comes from an inline transform
+   (centering per side), and an animation that writes `transform` would
+   override it when the fill mode holds the end frame. */
 
 .tooltip-content {
   animation: tooltip-enter 0.12s ease-out forwards;
@@ -425,6 +445,28 @@ img.twemoji {
     animation: none;
     width: 100%;
     opacity: 0.5;
+  }
+  /* Revamp enter animations + ambient motion: render the end state
+     instantly. marketing-fade-up starts at opacity 0, so it needs an
+     explicit visible fallback or content would stay invisible. */
+  .modal-pop,
+  .overlay-fade,
+  .tooltip-content,
+  .call-enter,
+  .avatar-pop,
+  .call-ring,
+  .marketing-float,
+  .marketing-glow {
+    animation: none;
+  }
+  .marketing-fade-up {
+    animation: none;
+    opacity: 1;
+  }
+  .animate-pulse,
+  .animate-ping,
+  .animate-spin {
+    animation: none;
   }
 }
 
@@ -940,15 +982,19 @@ img.twemoji {
  --bg-primary:#faf5e9; --bg-secondary:#eee8dc; --bg-tertiary:#ded6c6; --bg-accent:#ded6c6;
  --interactive-hover:color-mix(in srgb,#faf5e9 85%,#35664f); --interactive-selected:color-mix(in srgb,#faf5e9 75%,#35664f);
  --brand:#35664f; --brand-hover:color-mix(in srgb,#35664f 85%,#342f27); --brand-foreground:#ffffff;
- --text-normal:#342f27; --text-muted:#6c6254; --text-link:#35664f; --divider:#c9beac;
- --status-online:#27804a; --status-idle:#856100; --status-dnd:#b62e41; --status-offline:#6c6254;
+  --text-normal:#342f27; --text-muted:#6c6254; --text-link:#35664f; --divider:#c9beac;
+  --status-online:#27804a; --status-idle:#856100; --status-dnd:#b62e41; --status-offline:#6c6254;
+  --overlay-surface:#fffdf7; --overlay-panel:#fffdf7; --overlay-media:#eee8dc;
+  --overlay-scrim:rgb(0 0 0 / 0.45); --overlay-scrim-strong:rgb(0 0 0 / 0.6);
 }
 [data-theme="porcelain"] {
  --bg-primary:#fafcfe; --bg-secondary:#ecf1f7; --bg-tertiary:#dce5ed; --bg-accent:#dce5ed;
  --interactive-hover:color-mix(in srgb,#fafcfe 85%,#295e9e); --interactive-selected:color-mix(in srgb,#fafcfe 75%,#295e9e);
  --brand:#295e9e; --brand-hover:color-mix(in srgb,#295e9e 85%,#22344a); --brand-foreground:#ffffff;
- --text-normal:#22344a; --text-muted:#53657a; --text-link:#295e9e; --divider:#bdcbd9;
- --status-online:#27804a; --status-idle:#856100; --status-dnd:#b62e41; --status-offline:#53657a;
+  --text-normal:#22344a; --text-muted:#53657a; --text-link:#295e9e; --divider:#bdcbd9;
+  --status-online:#27804a; --status-idle:#856100; --status-dnd:#b62e41; --status-offline:#53657a;
+  --overlay-surface:#ffffff; --overlay-panel:#ffffff; --overlay-media:#ecf1f7;
+  --overlay-scrim:rgb(0 0 0 / 0.45); --overlay-scrim-strong:rgb(0 0 0 / 0.6);
 }
 [data-theme="orchid"] {
  --bg-primary:#36263f; --bg-secondary:#2a1e32; --bg-tertiary:#1c1421; --bg-accent:#1c1421;

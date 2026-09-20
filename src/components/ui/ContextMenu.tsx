@@ -5,9 +5,17 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
+import {
+  OVERLAY_Z,
+  handleTopmostEscape,
+  pushEscapeHandler,
+} from "@/lib/overlay";
 
 export interface ContextMenuItem {
   id: string;
@@ -33,6 +41,11 @@ const ContextMenuContext = createContext<ContextMenuContextValue | null>(null);
 
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const menuId = useId();
+  const firstItemRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -40,18 +53,28 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     setMenu({ x, y, items });
   }, []);
 
+  // Focus the first item when the menu opens so keyboard users land inside
+  // it; Escape is routed through the topmost-only stack.
   useEffect(() => {
     if (!menu) return;
+    const removeEscape = pushEscapeHandler(closeMenu);
+    const t = requestAnimationFrame(() => firstItemRef.current?.focus());
     const onDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement).closest("[data-context-menu]")) return;
+      // Don't close when the press starts on the opener: the click that
+      // opened the menu would otherwise instantly dismiss it.
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-context-menu]")) return;
+      if (target?.closest("[data-context-menu-trigger-open]")) return;
       closeMenu();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeMenu();
+      handleTopmostEscape(e);
     };
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
     return () => {
+      cancelAnimationFrame(t);
+      removeEscape();
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
     };
@@ -60,20 +83,30 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   return (
     <ContextMenuContext.Provider value={{ openMenu, closeMenu }}>
       {children}
-      {menu && (
-        <div
-          data-context-menu
-          className="fixed z-[100] min-w-[188px] rounded-md border border-black/20 bg-[#111214] py-1.5 shadow-2xl"
-          style={{
-            left: Math.min(menu.x, window.innerWidth - 200),
-            top: Math.min(menu.y, window.innerHeight - menu.items.length * 36 - 16),
-          }}
-        >
-          {menu.items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              disabled={item.disabled}
+      {mounted &&
+        menu &&
+        createPortal(
+          <div
+            data-context-menu
+            role="menu"
+            aria-labelledby={menuId}
+            className="modal-pop fixed min-w-[188px] rounded-md border border-divider bg-overlay-surface py-1.5 shadow-2xl"
+            style={{
+              zIndex: OVERLAY_Z.contextMenu,
+              left: Math.min(menu.x, window.innerWidth - 200),
+              top: Math.min(menu.y, window.innerHeight - menu.items.length * 36 - 16),
+            }}
+          >
+            <span id={menuId} className="sr-only">
+              Context menu
+            </span>
+            {menu.items.map((item, i) => (
+              <button
+                key={item.id}
+                ref={i === 0 ? firstItemRef : undefined}
+                type="button"
+                role="menuitem"
+                disabled={item.disabled}
               onClick={() => {
                 if (!item.disabled) item.onClick();
                 closeMenu();
@@ -88,8 +121,9 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
               {item.label}
             </button>
           ))}
-        </div>
-      )}
+        </div>,
+        document.body,
+        )}
     </ContextMenuContext.Provider>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useApp } from "@/contexts/AppContext";
@@ -174,12 +176,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setLinkPreviews(profile.link_previews_enabled ?? true);
   }, [profile]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  // Routed through the overlay Escape stack so nested layers (avatar crop,
+  // subscription) close one per press instead of all at once.
+  useOverlayDismiss(onClose, open);
 
   const exportHistory = useCallback(async () => {
     if (!profile?.id) return;
@@ -361,8 +360,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <button type="button" aria-label="Close" className="absolute inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative flex max-h-[88vh] w-full max-w-[920px] overflow-hidden rounded-xl bg-bg-primary shadow-2xl">
+        <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
+        <div role="dialog" aria-modal="true" aria-label="Settings" className="modal-pop relative flex max-h-[88vh] w-full max-w-[920px] overflow-hidden rounded-xl bg-bg-primary shadow-2xl">
           <nav className="hidden w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary p-3 sm:flex">
             {profile && (
               <div className="mb-3 flex items-center gap-2.5 rounded-lg px-2 py-2">

@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -26,7 +28,7 @@ interface CatalystModalProps {
 function Check({ locked }: { locked?: boolean }) {
   return (
     <svg
-      className={`h-3.5 w-3.5 shrink-0 ${locked ? "text-text-muted/50" : "text-[#57f287]"}`}
+      className={`h-3.5 w-3.5 shrink-0 ${locked ? "text-text-muted/50" : "text-status-online"}`}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -151,12 +153,17 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
     void poll();
   }, [server, user, refreshCatalysts, servers]);
 
+  useOverlayDismiss(onClose, open);
+
   if (!open || !server) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="overlay-fade fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim p-4" onClick={onClose}>
       <div
-        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-[#1e1f22] shadow-2xl"
+        className="modal-pop flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Server catalysts"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-1">
@@ -204,7 +211,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
                 <div
                   key={l.level}
                   className={`rounded-lg border p-3 ${
-                    unlocked ? "border-[#57f287]/25 bg-[#57f287]/[0.04]" : "border-divider bg-white/[0.02]"
+                    unlocked ? "border-status-online/25 bg-status-online/[0.04]" : "border-divider bg-white/[0.02]"
                   }`}
                 >
                   <p className="mb-1.5 text-[13px] font-bold">

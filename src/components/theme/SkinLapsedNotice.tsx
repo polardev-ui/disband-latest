@@ -37,7 +37,7 @@ export function SkinLapsedNotice() {
         type="button"
         aria-label="Close"
         onClick={acknowledge}
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-overlay-scrim overlay-fade"
       />
       <div
         role="dialog"

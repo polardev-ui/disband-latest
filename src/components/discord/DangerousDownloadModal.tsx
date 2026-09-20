@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 interface DangerousDownloadModalProps {
   open: boolean;
   fileName: string;
@@ -13,15 +15,18 @@ export function DangerousDownloadModal({
   onClose,
   onContinue,
 }: DangerousDownloadModalProps) {
+  useOverlayDismiss(onClose, open);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
       <div
         role="dialog"
+        aria-modal="true"
         aria-labelledby="download-warning-title"
-        className="relative w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl"
+        className="modal-pop relative w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl"
       >
         <h2 id="download-warning-title" className="text-lg font-semibold text-text-normal">
           Potentially dangerous download

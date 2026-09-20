@@ -52,7 +52,7 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
     return (
       <div className="flex items-center justify-between gap-3 rounded-lg border border-[#57f287]/30 bg-[#57f287]/10 px-3 py-2.5">
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-semibold text-[#57f287]">
+          <p className="truncate text-[13px] font-semibold text-status-online">
             {applied.displayName || applied.promotionCode}
           </p>
           <p className="text-[12px] text-text-muted">
@@ -128,7 +128,7 @@ function OrderSummary({ checkout }: { checkout: StripeCheckoutElementsValue }) {
         <span>{subtotal.amount}</span>
       </div>
       {hasDiscount && (
-        <div className="flex justify-between text-[#57f287]">
+        <div className="flex justify-between text-status-online">
           <span>Discount</span>
           <span>&minus;{discount.amount}</span>
         </div>

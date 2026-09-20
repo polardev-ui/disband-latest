@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { handleTopmostEscape, pushEscapeHandler } from "@/lib/overlay";
 import { IconPlus } from "@/components/icons";
 import type { ServerRole } from "@/lib/supabase/types";
 
@@ -22,13 +23,17 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
 
   useEffect(() => {
     if (!open) return;
+    // Join the overlay Escape stack so closing the picker doesn't also close
+    // the settings modal behind it. No scroll lock: this is a dropdown.
+    const release = pushEscapeHandler(() => setOpen(false));
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => handleTopmostEscape(e);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
+      release();
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };

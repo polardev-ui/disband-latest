@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLANS, isGranting, type SubscriptionPlan } from "@/lib/subscription";
@@ -16,7 +17,7 @@ interface SubscriptionModalProps {
 
 function CheckIcon() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0 text-[#57f287]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <svg className="h-3.5 w-3.5 shrink-0 text-status-online" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
@@ -39,7 +40,7 @@ function PlanCard({ currentPlan, onSubscribe }: {
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold">{plan.name}</h3>
           {isCurrentPlan && (
-            <span className="rounded-full bg-[#57f287]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#57f287]">
+            <span className="rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-semibold text-status-online">
               Current
             </span>
           )}
@@ -158,7 +159,7 @@ function ActivationScreen({
       <div className="flex flex-col items-center gap-3 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#57f287]/20">
           <svg
-            className="h-6 w-6 text-[#57f287]"
+            className="h-6 w-6 text-status-online"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -254,12 +255,17 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
     setCheckoutClientSecret(null);
   }, []);
 
+  useOverlayDismiss(onClose, open);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="overlay-fade fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim" onClick={onClose}>
       <div
-        className="mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl bg-[#1e1f22] shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Disband Aero subscription"
+        className="modal-pop mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
@@ -310,7 +316,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               <div className="rounded-xl border border-[#57f287]/25 bg-[#57f287]/[0.04] p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold">Disband Aero</h3>
-                  <span className="rounded-full bg-[#57f287]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#57f287]">
+                  <span className="rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-semibold text-status-online">
                     Active
                   </span>
                 </div>
