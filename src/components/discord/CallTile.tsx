@@ -27,14 +27,14 @@ export function CallTile({
     void el.play().catch(() => {});
   }, [stream]);
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-bg-tertiary transition-shadow ${
-        speaking ? "ring-2 ring-status-online" : "ring-1 ring-white/5"
-      } ${onClick ? "cursor-pointer" : "cursor-default"}`}
-    >
+  // Tiles without an action render as plain containers: a focusable button
+  // with cursor-default and no behavior is keyboard/screen-reader noise.
+  const tileClass = `group relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-bg-tertiary transition-shadow ${
+    speaking ? "ring-2 ring-status-online" : "ring-1 ring-white/5"
+  } ${onClick ? "cursor-pointer" : "cursor-default"}`;
+
+  const content = (
+    <>
       {stream ? (
         <video
           ref={videoRef}
@@ -51,7 +51,7 @@ export function CallTile({
           <Avatar
             profile={profile ?? { display_name: label }}
             size="lg"
-            className="h-20 w-20 text-2xl"
+            className="h-16 w-16 text-xl"
           />
         </span>
       )}
@@ -72,14 +72,23 @@ export function CallTile({
           </span>
         )}
       </span>
-    </button>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={tileClass}>
+        {content}
+      </button>
+    );
+  }
+  return <div className={tileClass}>{content}</div>;
 }
 
 const TILE_ASPECT = 16 / 9;
 const TILE_GAP = 12;
 
-const MIN_TILE_WIDTH = 128;
+const MIN_TILE_WIDTH = 96;
 
 const FIT_SLACK = 1;
 
@@ -111,6 +120,9 @@ export function CallGrid({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
 
+  // Deps intentionally empty: the box measures the container (not the
+  // children), and size changes arrive via ResizeObserver + window resize.
+  // The old missing-deps version re-subscribed both on every render.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -135,7 +147,7 @@ export function CallGrid({ children }: { children: React.ReactNode }) {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  });
+  }, []);
 
   const tiles = Children.toArray(children);
   const tile = bestTileSize(tiles.length, box.width, box.height);
@@ -143,7 +155,7 @@ export function CallGrid({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={ref}
-      className="flex min-h-0 w-full flex-1 flex-wrap content-center items-center justify-center gap-3 overflow-y-auto"
+      className="flex min-h-0 w-full flex-1 flex-wrap content-center items-center justify-center gap-3 overflow-auto"
     >
       {tiles.map((child, i) => (
         <div

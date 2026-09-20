@@ -17,6 +17,7 @@ function ParticipantTile({
   label,
   mirrored,
   ring,
+  ringing,
   forceScreen,
 }: {
   profile?: Profile;
@@ -24,7 +25,9 @@ function ParticipantTile({
   label: string;
   mirrored?: boolean;
   ring?: boolean;
-
+  // Ringing is not speaking: the green ring is kept for layout stability,
+  // but the tile says what it means instead of looking like live audio.
+  ringing?: boolean;
   forceScreen?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -69,6 +72,11 @@ function ParticipantTile({
 
       <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
         <span className="truncate">{label}</span>
+        {ringing && (
+          <span className="shrink-0 animate-pulse rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
+            Ringing
+          </span>
+        )}
         {isScreen && (
           <span className="shrink-0 rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
             Live
@@ -79,12 +87,14 @@ function ParticipantTile({
   );
 }
 
+// Shared shape with CallUI's timer: h:mm:ss past the hour, mm:ss within it.
 function formatElapsed(ms: number): string {
   const total = Math.floor(ms / 1000);
-  const m = Math.floor(total / 60);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${pad(m)}:${pad(s)}`;
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
 interface GroupCallStageProps {
@@ -103,6 +113,9 @@ interface GroupCallStageProps {
   cameraEnabled: boolean;
   micMuted: boolean;
   deafened: boolean;
+  // Manager-owned join timestamp: survives stage remounts (the old local
+  // joinedAtRef reset the visible timer every remount).
+  connectedAt?: number | null;
   onJoin: () => void;
   onLeave: () => void;
   onToggleCamera: () => void;
@@ -112,7 +125,7 @@ interface GroupCallStageProps {
 export function GroupCallStage({
   groupName, members, presence, ringingIds, joined,
   selfId, localStream, remoteStreams, remoteScreens, localScreen, cameraEnabled,
-  micMuted, deafened, onJoin, onLeave, onToggleCamera, onToggleMic,
+  micMuted, deafened, connectedAt, onJoin, onLeave, onToggleCamera, onToggleMic,
 }: GroupCallStageProps) {
   const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
   const [elapsed, setElapsed] = useState(0);
@@ -120,7 +133,8 @@ export function GroupCallStage({
 
   useEffect(() => {
     if (joined) {
-      joinedAtRef.current = Date.now();
+      // Prefer the manager timestamp so remounts don't restart the clock.
+      joinedAtRef.current = connectedAt ?? Date.now();
       const tick = () => setElapsed(Math.max(0, Date.now() - joinedAtRef.current));
       tick();
       const id = setInterval(tick, 1000);
@@ -128,9 +142,10 @@ export function GroupCallStage({
     } else {
       setElapsed(0);
     }
-  }, [joined]);
+  }, [joined, connectedAt]);
 
-  if (presence.length === 0) return null;
+  // Nothing happening and not in the call: render nothing (the chat shows).
+  if (presence.length === 0 && !joined) return null;
 
   const people = presence.map((p) => ({
     id: p.user_id,
@@ -176,6 +191,13 @@ export function GroupCallStage({
 
       {}
       <div className="flex min-h-0 w-full max-w-4xl flex-1 flex-col py-3">
+        {joined && displayMembers.length === 0 ? (
+          <p className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white/50">
+            You&apos;re the only one here.
+            <br />
+            Others can join from the group.
+          </p>
+        ) : (
         <CallGrid>
           {displayMembers.map((m) => (
             <ParticipantTile
@@ -184,11 +206,13 @@ export function GroupCallStage({
               stream={m.stream}
               mirrored={m.mirrored}
               ring={m.ringing}
+              ringing={m.ringing}
               forceScreen={m.isScreen}
               label={m.label}
             />
           ))}
         </CallGrid>
+        )}
       </div>
 
       {}
@@ -203,14 +227,26 @@ export function GroupCallStage({
         </button>
 
         {!joined ? (
-          <button
-            type="button"
-            onClick={onJoin}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
-            title="Join voice"
-          >
-            <IconPhone size={22} />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onToggleMic}
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-white/80 transition-colors ${
+                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-white/10 hover:bg-white/20"
+              }`}
+              title={micMuted ? "Unmute before joining" : "Mute before joining"}
+            >
+              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
+            </button>
+            <button
+              type="button"
+              onClick={onJoin}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
+              title="Join voice"
+            >
+              <IconPhone size={22} />
+            </button>
+          </>
         ) : (
           <>
             <button
@@ -240,7 +276,10 @@ export function GroupCallStage({
         <audio
           key={uid}
           ref={(el) => {
-            if (el) {
+            // Guard identity: the old version re-set srcObject and re-played
+            // on every render, which restarts audible playback (stutter /
+            // double-volume against the context-level element).
+            if (el && el.srcObject !== stream) {
               el.srcObject = stream;
               el.muted = deafened;
               void applyAudioOutputToElement(el, getPreferredAudioOutputId());

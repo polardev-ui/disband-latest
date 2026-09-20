@@ -124,6 +124,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           key={uid}
           ref={(el) => {
             if (!el) return;
+            // Only attach on change: re-setting srcObject every render
+            // restarts playback and stacks volume against per-view elements.
+            if (el.srcObject === stream) return;
             el.srcObject = stream;
             el.muted = deafened;
             audioRefs.current.set(uid, el);

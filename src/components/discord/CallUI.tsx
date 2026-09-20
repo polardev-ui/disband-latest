@@ -41,7 +41,9 @@ export function CallControls({
 }: CallControlsProps) {
   const items = [
     { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff },
-    { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff },
+    // Deafen gets the brand treatment (not the mic's red): at a glance,
+    // red ring = muted mic, blue ring = deafened.
+    { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff, brand: true },
     ...(onToggleCamera ? [{ onClick: onToggleCamera, title: cameraEnabled ? "Stop video" : "Start video", active: !!cameraEnabled, on: IconVideo, off: IconVideoOff }] : []),
     ...(onToggleScreenShare ? [{ onClick: onToggleScreenShare, title: screenShareEnabled ? "Stop sharing" : "Share screen", active: !!screenShareEnabled, on: IconScreenShare, off: IconScreenShareOff }] : []),
     { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, danger: true },
@@ -62,7 +64,9 @@ export function CallControls({
               "danger" in item && item.danger
                 ? "bg-status-dnd text-white shadow-lg shadow-status-dnd/30 hover:scale-105 hover:brightness-110"
                 : item.active
-                  ? "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
+                  ? "brand" in item && item.brand
+                    ? "bg-brand/25 text-brand ring-2 ring-brand/40"
+                    : "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
                   : "bg-white/10 text-white/80 hover:bg-white/20 hover:scale-105"
             }`}
           >
@@ -94,7 +98,6 @@ function ParticipantTile({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(stream);
-  const dim = size === "lg" ? "h-36 w-36" : "h-28 w-28";
   const textSize = size === "lg" ? "text-4xl" : "text-3xl";
   const ringClass = ring
     ? "ring-[3px] ring-status-online"
@@ -183,7 +186,7 @@ export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
   groupName: string; onJoin: () => void; onDismiss: () => void;
 }) {
   return (
-    <div className="call-enter fixed bottom-6 right-6 z-[100] w-80 rounded-xl border border-status-online/40 bg-bg-secondary p-4 shadow-2xl">
+    <div className="call-enter fixed bottom-4 left-4 right-4 z-[100] rounded-xl border border-status-online/40 bg-bg-secondary p-4 shadow-2xl sm:left-auto sm:w-80">
       <p className="text-xs font-bold uppercase text-status-online">Group call</p>
       <p className="mt-1 font-semibold text-text-normal">{groupName}</p>
       <p className="text-sm text-text-muted">Someone started a call in this group</p>
@@ -250,7 +253,7 @@ export function CallPanel({
     return (
       <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black py-10">
         <p className="mb-6 text-xs font-bold uppercase tracking-widest text-white/30">Calling</p>
-        <div className="flex h-56 w-full max-w-3xl flex-col py-3">
+        <div className="flex h-44 w-full max-w-3xl flex-col py-3 sm:h-56">
           <CallGrid>
             {selfProfile && (
               <ParticipantTile profile={selfProfile} label="You" size="md" />
@@ -261,7 +264,7 @@ export function CallPanel({
           </CallGrid>
         </div>
         <p className="mb-6 text-lg font-semibold text-white">{title}</p>
-        <p className="mb-8 text-sm text-white/40">Ringing...</p>
+        <p className="mb-8 text-sm text-white/40">{subtitle || "Ringing..."}</p>
         <CallControls
           micMuted={micMuted} deafened={deafened}
           cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
@@ -289,12 +292,6 @@ export function CallPanel({
       {}
       <div className="flex min-h-0 w-full max-w-3xl flex-1 flex-col py-3">
         <CallGrid>
-          {selfProfile && (
-            <ParticipantTile
-              profile={selfProfile} stream={localStream} label="You"
-              mirrored size="md"
-            />
-          )}
           {localScreen && (
             <ParticipantTile
               profile={selfProfile ?? undefined} stream={localScreen} isScreen
@@ -305,6 +302,12 @@ export function CallPanel({
             <ParticipantTile
               profile={peer} stream={remoteScreen} isScreen
               label={`${displayName(peer)}'s screen`} size="md"
+            />
+          )}
+          {selfProfile && (
+            <ParticipantTile
+              profile={selfProfile} stream={localStream} label="You"
+              mirrored size="md"
             />
           )}
           {peer && (
