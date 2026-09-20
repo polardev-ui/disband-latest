@@ -1,8 +1,9 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { OVERLAY_Z } from "@/lib/overlay";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type ReactionSummary } from "@/lib/messages";
 import { twemojiUrl } from "@/components/ui/Twemoji";
@@ -42,10 +43,10 @@ function reactorSentence(names: string[], total: number): string {
 }
 
 function ReactionHoverCard({
-  summary, anchor, onOpenList, onEnter, onLeave,
+  summary, anchorEl, onOpenList, onEnter, onLeave,
 }: {
   summary: ReactionSummary;
-  anchor: DOMRect;
+  anchorEl: HTMLElement;
   onOpenList: () => void;
   onEnter: () => void;
   onLeave: () => void;
@@ -57,12 +58,46 @@ function ReactionHoverCard({
     return p ? displayName(p) : "Someone";
   });
 
+  // Track the anchor element (not a one-time rect snapshot): chat scrolls
+  // and resizes under the card, and a stale rect leaves it floating detached.
+  // Flips below the pill when there is no room above; clamped horizontally.
+  const measure = () => {
+    const rect = anchorEl.getBoundingClientRect();
+    const HALF_W = 170;
+    const ABOVE_H = 96;
+    const left = Math.min(Math.max(rect.left + rect.width / 2, HALF_W + 8), window.innerWidth - HALF_W - 8);
+    const below = rect.top < ABOVE_H + 8;
+    return { left, top: below ? rect.bottom + 8 : rect.top - 8, below };
+  };
+  const [pos, setPos] = useState(measure);
+
+  useLayoutEffect(() => {
+    setPos(measure());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorEl]);
+
+  useEffect(() => {
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setPos(measure()));
+    };
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorEl]);
+
   return createPortal(
     <div
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
-      className="fixed z-[200] w-max max-w-xs -translate-x-1/2 -translate-y-full pb-2"
-      style={{ left: anchor.left + anchor.width / 2, top: anchor.top }}
+      className={`fixed w-max max-w-xs -translate-x-1/2 ${pos.below ? "pt-2" : "-translate-y-full pb-2"}`}
+      style={{ left: pos.left, top: pos.top, zIndex: OVERLAY_Z.tooltip }}
     >
       <button
         type="button"
@@ -175,7 +210,7 @@ function ReactionListDialog({
 }
 
 export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageReactionsProps) {
-  const [hovered, setHovered] = useState<{ emoji: string; rect: DOMRect } | null>(null);
+  const [hovered, setHovered] = useState<{ emoji: string; el: HTMLElement } | null>(null);
   const [listFor, setListFor] = useState<string | null>(null);
 
   const closeTimer = useRef<number | null>(null);
@@ -211,7 +246,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
           onClick={() => onToggle(r.emoji)}
           onMouseEnter={(e) => {
             keepOpen();
-            setHovered({ emoji: r.emoji, rect: e.currentTarget.getBoundingClientRect() });
+            setHovered({ emoji: r.emoji, el: e.currentTarget });
           }}
           onMouseLeave={scheduleClose}
           className={`inline-flex h-[26px] items-center gap-1.5 rounded-lg border px-2 text-[13px] transition-colors ${
@@ -238,7 +273,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
       {hovered && hoveredSummary && !listFor && (
         <ReactionHoverCard
           summary={hoveredSummary}
-          anchor={hovered.rect}
+          anchorEl={hovered.el}
           onEnter={keepOpen}
           onLeave={scheduleClose}
           onOpenList={() => { setListFor(hoveredSummary.emoji); setHovered(null); }}
@@ -269,6 +304,9 @@ export function ReactionPicker({
   const q = search.trim().toLowerCase();
   const searched = useMemo(() => (q ? searchEmojis(q, 60) : []), [q]);
 
+  // Stack-routed Escape + scroll lock + focus back (was: no Escape handling).
+  useOverlayDismiss(onClose, open);
+
   if (!open) return null;
 
   const handleSelect = (emoji: string) => {
@@ -280,7 +318,7 @@ export function ReactionPicker({
     <>
       <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
 
-      <div className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
         <div className="border-b border-divider px-4 py-3">
           <input
             type="text"
