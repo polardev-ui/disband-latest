@@ -194,7 +194,10 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
             >
               {t}
               {t === "pending" && pendingCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white">
+                <span
+                  key={pendingCount}
+                  className="badge-pop ml-1.5 rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white"
+                >
                   {pendingCount > 99 ? "99+" : pendingCount}
                 </span>
               )}
@@ -278,7 +281,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
       )}
 
       {!addOpen && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        <div key={tab} className="view-enter min-h-0 flex-1 overflow-y-auto px-6 pb-6">
           <p className="sticky top-0 z-10 bg-bg-primary py-3 text-xs font-bold uppercase tracking-wide text-text-muted">
             {heading}
           </p>

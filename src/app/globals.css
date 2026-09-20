@@ -468,6 +468,117 @@ img.twemoji {
   .animate-spin {
     animation: none;
   }
+  /* Animation-pass additions (patch 14): same instant end-state rule. */
+  .view-enter,
+  .msg-enter,
+  .divider-in,
+  .badge-pop {
+    animation: none;
+  }
+}
+
+/* Manual preference override (Settings > Appearance > Animations). Mirrors
+   the OS reduced-motion block above for every motion class, so "Reduced"
+   behaves identically regardless of the OS setting. */
+[data-motion="reduced"] .modal-pop,
+[data-motion="reduced"] .overlay-fade,
+[data-motion="reduced"] .tooltip-content,
+[data-motion="reduced"] .call-enter,
+[data-motion="reduced"] .avatar-pop,
+[data-motion="reduced"] .call-ring,
+[data-motion="reduced"] .marketing-float,
+[data-motion="reduced"] .marketing-glow,
+[data-motion="reduced"] .view-enter,
+[data-motion="reduced"] .msg-enter,
+[data-motion="reduced"] .divider-in,
+[data-motion="reduced"] .badge-pop,
+[data-motion="reduced"] .animate-pulse,
+[data-motion="reduced"] .animate-ping,
+[data-motion="reduced"] .animate-spin {
+  animation: none;
+}
+[data-motion="reduced"] .marketing-fade-up {
+  animation: none;
+  opacity: 1;
+}
+[data-motion="reduced"] .loading-bar {
+  animation: none;
+  width: 100%;
+  opacity: 0.5;
+}
+
+/* ---- Animation pass (patch 14): polished, Discord-plus intensity. ----
+   Enter/ambient motion only; all of it is neutered by the reduced-motion
+   blocks above. No animation libraries: keyframes + existing utilities. */
+
+/* View swap: plays when a keyed container remounts (channel switch,
+   settings/panel tabs), never on data updates. */
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-enter {
+  animation: view-enter 0.18s ease-out forwards;
+}
+
+/* Fresh chat message: own optimistic sends only (message.sending), so
+   history loads and paginates never flash the whole list. */
+@keyframes msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-enter {
+  animation: msg-enter 0.2s ease-out forwards;
+}
+
+/* New-messages divider draws itself in. */
+@keyframes divider-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+.divider-in {
+  animation: divider-in 0.25s ease-out forwards;
+}
+
+/* Unread count pills pop when the count changes (remounted via key). */
+@keyframes badge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.badge-pop {
+  animation: badge-pop 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 
 :root,

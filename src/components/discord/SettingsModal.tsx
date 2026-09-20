@@ -33,6 +33,7 @@ import Link from "next/link";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { useZoom, MIN_ZOOM, MAX_ZOOM } from "@/hooks/useZoom";
+import { getStoredMotion, setStoredMotion, type MotionPreference } from "@/lib/motion";
 import { getDisbandUserMedia } from "@/lib/media";
 import {
   getPreferredAudioInputId,
@@ -108,6 +109,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [giftLink, setGiftLink] = useState<string | null>(null);
   const { upload, isUploading } = useMediaUpload();
   const [zoom, setZoom] = useZoom();
+  const [motion, setMotion] = useState<MotionPreference>(() => getStoredMotion());
   const [tab, setTab] = useState<SettingsTab>("profile");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -435,7 +437,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div key={tab} className="view-enter flex-1 overflow-y-auto px-6 py-6">
               {tab === "profile" && (
                 <div className="pb-20">
                   {profile && (
@@ -876,6 +878,40 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <p className="mt-2 text-xs text-text-muted">
                       Tip: use Ctrl/Cmd + and Ctrl/Cmd − (or Ctrl/Cmd 0 to reset) anywhere in the app.
                     </p>
+                  </div>
+
+                  <div className="mb-5">
+                    <p className="mb-1 text-sm font-semibold">Animations</p>
+                    <p className="mb-3 text-xs text-text-muted">
+                      Interface motion: message arrivals, view transitions, badges and ambient effects.
+                    </p>
+                    <div className="flex gap-1 rounded-lg bg-bg-accent p-1" role="group" aria-label="Animation preference">
+                      {(
+                        [
+                          { id: "system", label: "System", hint: "Follow your OS setting" },
+                          { id: "full", label: "Full", hint: "Always animate" },
+                          { id: "reduced", label: "Reduced", hint: "Calm interface" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          title={opt.hint}
+                          aria-pressed={motion === opt.id}
+                          onClick={() => {
+                            setMotion(opt.id);
+                            setStoredMotion(opt.id);
+                          }}
+                          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                            motion === opt.id
+                              ? "bg-bg-secondary text-text-normal shadow"
+                              : "text-text-muted hover:text-text-normal"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>

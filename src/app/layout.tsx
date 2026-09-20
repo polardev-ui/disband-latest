@@ -105,6 +105,12 @@ export default function RootLayout({
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.colorScheme = themes.find(function(t){return t.id===theme;}).mode;
   } catch (e) {}
+  try {
+    var motion = localStorage.getItem('disband:motion');
+    if (motion === 'reduced' || motion === 'full') {
+      document.documentElement.setAttribute('data-motion', motion);
+    }
+  } catch (e) {}
 })();
           `}
         </Script>

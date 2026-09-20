@@ -30,7 +30,7 @@ import type { Profile, ServerRole } from "@/lib/supabase/types";
 function NewMessagesDivider() {
   return (
     <div
-      className="relative my-3 flex items-center px-4"
+      className="divider-in relative my-3 flex items-center px-4"
       role="separator"
       aria-label="New messages"
     >
@@ -350,7 +350,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
+    <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         {channelIcon ?? <IconHash size={24} className="text-text-muted" />}
         <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{channelName}</h1>

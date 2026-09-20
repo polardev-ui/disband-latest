@@ -70,7 +70,10 @@ function DmRowBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   const label = count > 99 ? "99+" : String(count);
   return (
-    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white">
+    <span
+      key={count}
+      className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
+    >
       {label}
     </span>
   );
@@ -127,7 +130,10 @@ export function HomePanel({
           onClick={() => setViewHome()}
           trailing={
             pendingIncoming.length > 0 ? (
-              <span className="rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white">
+              <span
+                key={pendingIncoming.length}
+                className="badge-pop rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white"
+              >
                 {pendingIncoming.length > 99 ? "99+" : pendingIncoming.length}
               </span>
             ) : null
@@ -195,7 +201,10 @@ export function HomePanel({
                       <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
                     )}
                     {unreadCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white">
+                      <span
+                        key={unreadCount}
+                        className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
+                      >
                         {unreadCount > 99 ? "99+" : String(unreadCount)}
                       </span>
                     )}

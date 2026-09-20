@@ -716,7 +716,7 @@ export function ChatInput({
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
               }}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <IconPlus size={22} />
             </button>
