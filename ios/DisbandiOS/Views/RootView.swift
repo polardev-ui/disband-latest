@@ -17,7 +17,7 @@ struct RootView: View {
             case .mfaRequired:
                 MfaChallengeView()
             case .signedIn:
-                MainTabView()
+                AppShell()
             }
         }
         .animation(.easeInOut(duration: 0.25), value: app.phase)

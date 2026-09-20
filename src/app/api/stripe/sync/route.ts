@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     const admin = getServiceSupabase();
     if (!admin) {
       return NextResponse.json(
-        { error: "Server is missing SUPABASE_SERVICE_ROLE_KEY" },
+        { error: "Space is missing SUPABASE_SERVICE_ROLE_KEY" },
         { status: 500 },
       );
     }

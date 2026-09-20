@@ -2,7 +2,7 @@ import { BotInviteCard } from "@/components/bot/BotInviteCard";
 
 export const metadata = {
   title: "Bot Invite — Disband",
-  description: "Approve or decline a bot that wants to join your server.",
+  description: "Approve or decline a bot that wants to join your space.",
 };
 
 export default async function BotInvitePage({

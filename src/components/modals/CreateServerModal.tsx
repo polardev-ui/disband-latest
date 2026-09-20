@@ -72,12 +72,12 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
           <>
             <h2 className="text-xl font-bold text-text-normal">Create your space</h2>
             <p className="mt-1 text-sm text-text-muted">
-              Name your server first — you can customize it right after.
+              Name your space first — you can customize it right after.
             </p>
 
             <div className="mt-4">
               <label className="block">
-                <span className="text-xs font-bold uppercase text-text-muted">Server name</span>
+                <span className="text-xs font-bold uppercase text-text-muted">Space name</span>
                 <input
                   required
                   autoFocus
@@ -151,7 +151,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
               <div className="flex gap-3">
                 <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded border border-dashed border-divider p-3 text-center transition-all duration-150 hover:border-brand">
                   <IconUpload className="text-text-muted" />
-                  <span className="text-xs text-text-muted">Server icon</span>
+                  <span className="text-xs text-text-muted">Space icon</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
                   {safeImageUrl(iconUrl) && <img src={safeImageUrl(iconUrl)!} alt="" className="mt-1 h-10 w-10 rounded-[30%] object-cover" />}
                 </label>
@@ -171,7 +171,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
               disabled={loading || isUploading}
               className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-brand-hover disabled:opacity-50"
             >
-              {loading ? "Creating..." : "Create Server"}
+              {loading ? "Creating..." : "Create Space"}
             </button>
           </>
         )}

@@ -1,0 +1,38 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.116.0"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.116.0": "a38014743786a06c7dbf095a99e9ef3b38c0ec16bff076fc7cd403991192b34e"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@electric-sql/pglite@~0.5.8",
+        "npm:@opennextjs/cloudflare@^1.20.6",
+        "npm:@stripe/react-stripe-js@^6.6.0",
+        "npm:@stripe/stripe-js@^9.8.0",
+        "npm:@supabase/ssr@0.12",
+        "npm:@supabase/supabase-js@^2.108.2",
+        "npm:@tailwindcss/postcss@^4.3.1",
+        "npm:@tauri-apps/api@^2.11.1",
+        "npm:@tauri-apps/cli@^2.11.3",
+        "npm:@tauri-apps/plugin-notification@2.4",
+        "npm:@twemoji/api@^17.0.3",
+        "npm:@types/node@26",
+        "npm:@types/react-dom@^19.2.3",
+        "npm:@types/react@^19.2.17",
+        "npm:emojibase-data@17",
+        "npm:lucide-react@^1.21.0",
+        "npm:next@^16.3.4",
+        "npm:react-dom@^19.2.7",
+        "npm:react@^19.2.7",
+        "npm:stripe@^22.3.0",
+        "npm:tailwindcss@^4.3.1",
+        "npm:tauri-plugin-macos-permissions-api@2.3.0",
+        "npm:typescript@^6.0.3"
+      ]
+    }
+  }
+}

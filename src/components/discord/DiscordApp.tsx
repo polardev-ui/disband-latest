@@ -223,7 +223,7 @@ export function DiscordApp() {
   const activeChannel = app.channels.find((c) => c.id === app.activeChannelId);
 
   useEffect(() => {
-    if (app.viewMode !== "server") return;
+    if (app.viewMode !== "space") return;
     const serverId = app.activeServerId;
     if (!serverId || app.activeChannelId || app.channels.length === 0) return;
 
@@ -255,8 +255,8 @@ export function DiscordApp() {
         return dmFriend ? displayName(dmFriend) : "Messages";
       case "group":
         return activeGroup?.name ?? "Group";
-      case "server":
-        return activeChannel ? `#${activeChannel.name}` : (app.activeServer?.name ?? "Server");
+      case "space":
+        return activeChannel ? `#${activeChannel.name}` : (app.activeServer?.name ?? "Space");
       default:
         return "Disband";
     }
@@ -309,7 +309,7 @@ export function DiscordApp() {
     ? app.members.find((m) => m.user_id === profileTarget.id)
     : undefined;
   const profileCanManageRoles =
-    app.viewMode === "server" && (isServerOwner || app.serverPermissions.manage_roles);
+    app.viewMode === "space" && (isServerOwner || app.serverPermissions.manage_roles);
 
   const getAuthorColor = useCallback(
     (authorId: string) => {
@@ -347,13 +347,13 @@ export function DiscordApp() {
       const items: ContextMenuItem[] = [
         {
           id: "settings",
-          label: "Server Settings",
+          label: "Space Settings",
           icon: <IconSettings size={16} />,
           onClick: () => setServerSettingsOpen(true),
         },
         {
           id: "copy-id",
-          label: "Copy Server ID",
+          label: "Copy Space ID",
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(server.id),
         },
@@ -372,14 +372,14 @@ export function DiscordApp() {
           ...[
             {
               id: "boost",
-              label: "Boost Server",
+              label: "Boost Space",
               icon: <IconStar size={16} />,
               onClick: () => void boostServer(server.id),
             } as ContextMenuItem,
           ],
         {
           id: "leave",
-          label: "Leave Server",
+          label: "Leave Space",
           icon: <IconLeave size={16} />,
           onClick: () => void app.leaveServer(server.id),
         },
@@ -409,7 +409,7 @@ export function DiscordApp() {
           }) as ContextMenuItem),
         {
           id: "new-folder",
-          label: "Create Folder with Server",
+          label: "Create Folder with Space",
           icon: <IconFolderPlus size={16} />,
           onClick: () => {
             setPendingFolderServer(server);
@@ -420,7 +420,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "delete",
-                label: "Delete Server",
+                label: "Delete Space",
                 icon: <IconTrash size={16} />,
                 danger: true,
                 onClick: () => {
@@ -453,7 +453,7 @@ export function DiscordApp() {
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm(`Delete folder "${folder.name}"? Servers stay where they are.`)) {
+            if (confirm(`Delete folder "${folder.name}"? Spaces stay where they are.`)) {
               void app.deleteFolder(folder.id);
             }
           },
@@ -535,7 +535,7 @@ export function DiscordApp() {
         },
         {
           id: "copy-server-id",
-          label: "Copy Server ID",
+          label: "Copy Space ID",
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(category.server_id),
         },
@@ -673,7 +673,7 @@ export function DiscordApp() {
     (message: ChatMessageData, x: number, y: number, context: MessageContext) => {
       const isOwn = message.author_id === app.user?.id;
       const canModerateMessages =
-        app.viewMode === "server"
+        app.viewMode === "space"
         && (app.activeServer?.owner_id === app.user?.id || !!app.serverPermissions.manage_messages);
       const chatRef =
         context === "dm" ? dmChatRef : context === "group" ? groupChatRef : channelChatRef;
@@ -1049,7 +1049,7 @@ export function DiscordApp() {
   const handleAuthorContext = useCallback(
     (profile: Profile, e: React.MouseEvent) => {
       const member = app.members.find((m) => m.user_id === profile.id);
-      if (app.viewMode === "server" && member) {
+      if (app.viewMode === "space" && member) {
         handleMemberContext(member, e.clientX, e.clientY);
         return;
       }
@@ -1422,7 +1422,7 @@ export function DiscordApp() {
                 />
               ) : (
                 <ChannelList
-                  title={app.activeServer?.name ?? "Server"}
+                  title={app.activeServer?.name ?? "Space"}
                   verified={app.activeServer?.verified}
                   categories={app.categories}
                   channels={visibleChannels}
@@ -1496,7 +1496,7 @@ export function DiscordApp() {
             />
           ) : (
             <ChannelList
-              title={app.activeServer?.name ?? "Server"}
+              title={app.activeServer?.name ?? "Space"}
               verified={app.activeServer?.verified}
               categories={app.categories}
               channels={app.channels}
@@ -1715,7 +1715,7 @@ export function DiscordApp() {
 
       {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} />}
 
-      {app.viewMode === "server" && activeChannel && isVoice && (
+      {app.viewMode === "space" && activeChannel && isVoice && (
         <VoicePanel
           channelId={activeChannel.id}
           channelName={activeChannel.name}
@@ -1723,14 +1723,14 @@ export function DiscordApp() {
         />
       )}
 
-      {app.viewMode === "server" && activeChannel && !isVoice && (
+      {app.viewMode === "space" && activeChannel && !isVoice && (
         <ChatCanvas
           key={app.activeChannelId}
           ref={channelChatRef}
           channelName={activeChannel.name}
           composerLockedReason={
             myTimeoutLabel
-              ? `You are timed out in this server for ${myTimeoutLabel}.`
+              ? `You are timed out in this space for ${myTimeoutLabel}.`
               : activeChannel.read_only && !canManageChannels
                 ? "This is an announcement channel. Only people who can manage channels may post here."
                 : !canManageChannels && activeChannelEffect && !activeChannelEffect.can_post
@@ -1764,15 +1764,15 @@ export function DiscordApp() {
         />
       )}
 
-      {app.viewMode === "server" && !activeChannel && (
+      {app.viewMode === "space" && !activeChannel && (
         <div className="flex min-w-0 flex-1 items-center justify-center bg-bg-primary px-6 text-center">
           <p className="text-[15px] text-text-muted">
-            {app.channels.length ? "Pick a channel to start talking." : "This server has no channels yet."}
+            {app.channels.length ? "Pick a channel to start talking." : "This space has no channels yet."}
           </p>
         </div>
       )}
 
-      {app.viewMode === "server" && !isMobile && (
+      {app.viewMode === "space" && !isMobile && (
         <MemberList
           members={app.members}
           roles={app.serverRoles}

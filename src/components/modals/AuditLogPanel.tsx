@@ -73,7 +73,7 @@ export function AuditLogPanel({ serverId, members }: { serverId: string; members
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-bold text-text-normal">Audit Log</h2>
-        <p className="mt-1 text-sm text-text-muted">The last 100 moderation actions on this server.</p>
+        <p className="mt-1 text-sm text-text-muted">The last 100 moderation actions on this space.</p>
       </div>
       {rows.length === 0 ? (
         <p className="rounded-lg border border-divider bg-bg-secondary px-4 py-6 text-center text-sm text-text-muted">

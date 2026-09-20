@@ -244,25 +244,7 @@ struct MessageRow: View {
                 // Opened in the app rather than handed to Safari, so it can be
                 // scrubbed, zoomed and saved without leaving the conversation.
                 Button { viewingMedia = ViewedMedia(url: url, kind: .video) } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 26))
-                            .foregroundStyle(Brand.accent)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(message.attachmentName ?? "Video")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Brand.textPrimary)
-                                .lineLimit(1)
-                            if let size = FileSizeFormat.string(message.attachmentSize) {
-                                Text(size).font(.caption).foregroundStyle(Brand.textMuted)
-                            }
-                        }
-                        Spacer(minLength: 8)
-                    }
-                    .padding(10)
-                    .background(Brand.surface, in: .rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Brand.elevated, lineWidth: 1))
-                    .frame(maxWidth: 300, alignment: .leading)
+                    VideoThumbnail(url: url, maxWidth: 280)
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 4)

@@ -169,7 +169,7 @@ export function BotInviteCard({ code }: { code: string }) {
                 </div>
                 <p className="mt-3 text-[11.5px] leading-relaxed text-text-muted">
                   Bots are self-hosted. Approving this invite makes {invite.bot.name} a member with
-                  the permissions above and adds it to your server&apos;s member list.
+                  the permissions above and adds it to your space&apos;s member list.
                 </p>
               </div>
 

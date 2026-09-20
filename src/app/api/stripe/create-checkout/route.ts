@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 
     if (/STRIPE_SECRET_KEY/.test(message)) {
       return NextResponse.json(
-        { error: "Billing is not configured on this server yet." },
+        { error: "Billing is not configured on this space yet." },
         { status: 500 },
       );
     }

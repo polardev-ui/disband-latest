@@ -49,7 +49,7 @@ export function shouldShowNotification(
   switch (target.kind) {
     case "channel":
       if (focus.voiceJoinedChannelId === target.channelId) return false;
-      if (focus.viewMode === "server" && focus.activeChannelId === target.channelId) {
+      if (focus.viewMode === "space" && focus.activeChannelId === target.channelId) {
         return false;
       }
       return true;

@@ -37,15 +37,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Only the bot owner can generate invites." }, { status: 403 });
       }
       if (/not found|scopes/.test(error.message)) {
-        return NextResponse.json({ error: "The bot invite request is invalid." }, { status: 400 });
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
-      return NextResponse.json({ error: "Could not create the bot invite." }, { status: 500 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const inviteUrl = `${PUBLIC_ENV.webAppUrl}/bot-invite/${code}`;
     return NextResponse.json({ code, invite_url: inviteUrl });
   } catch (err) {
     console.error("bot/invites POST error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

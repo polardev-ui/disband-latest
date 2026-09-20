@@ -38,7 +38,7 @@ struct ServerInviteCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("YOU'VE BEEN INVITED TO JOIN A SERVER")
+            Text("YOU'VE BEEN INVITED TO JOIN A SPACE")
                 .font(.caption2.weight(.bold))
                 .tracking(0.6)
                 .foregroundStyle(Brand.textMuted)
@@ -75,7 +75,7 @@ struct ServerInviteCard: View {
                 Button {
                     Task { await join() }
                 } label: {
-                    Text(joined ? "Joined" : (joining ? "Joining\u{2026}" : "Join Server"))
+                    Text(joined ? "Joined" : (joining ? "Joining\u{2026}" : "Join Space"))
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
@@ -114,7 +114,7 @@ struct ServerInviteCard: View {
             try await DatabaseService.joinServer(invite: code)
             joined = true
         } catch {
-            self.error = "Couldn't join that server."
+            self.error = "Couldn't join that space."
         }
     }
 }

@@ -204,7 +204,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     const baseSlots = entitlements.customEmojiSlots;
     const slotLimit = typeof baseSlots === "number" && lvl >= 2 ? baseSlots + EMOJI_SLOTS_BONUS : baseSlots;
     if (typeof slotLimit === "number" && customEmoji.length >= slotLimit) {
-      setError(`This server allows up to ${slotLimit} custom emoji. Delete one first or upgrade.`);
+      setError(`This space allows up to ${slotLimit} custom emoji. Delete one first or upgrade.`);
       return;
     }
     setEmojiUploading(true);
@@ -286,7 +286,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   }
 
   async function handleKickMember(memberUserId: string, memberName: string) {
-    if (!confirm(`Kick ${memberName} from this server?`)) return;
+    if (!confirm(`Kick ${memberName} from this space?`)) return;
     setLoading(true);
     setError(null);
     const err = await kickMember(memberUserId);
@@ -396,7 +396,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
           )}
           <div>
             <h1 className="font-bold">{activeServer.name}</h1>
-            <p className="text-xs text-text-muted">Server Settings</p>
+            <p className="text-xs text-text-muted">Space Settings</p>
           </div>
         </div>
         <button
@@ -443,9 +443,9 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
             {section === "overview" && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Overview</h2>
-                <p className="text-sm text-text-muted">Basic information about your server.</p>
+                <p className="text-sm text-text-muted">Basic information about your space.</p>
                 <label className="block">
-                  <span className="text-xs font-bold uppercase text-text-muted">Server name</span>
+                  <span className="text-xs font-bold uppercase text-text-muted">Space name</span>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -460,7 +460,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                     onChange={(e) => setDescription(e.target.value)}
                     disabled={!isOwner}
                     rows={4}
-                    placeholder="Tell people what this server is about"
+                    placeholder="Tell people what this space is about"
                     className="mt-1 w-full resize-none rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
                   />
                 </label>
@@ -478,7 +478,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                           value={vanity}
                           onChange={(e) => setVanity(sanitizeVanity(e.target.value))}
                           disabled={!isOwner}
-                          placeholder="e.g. my-cool-server"
+                          placeholder="e.g. my-cool-space"
                           maxLength={24}
                           className="min-w-0 flex-1 rounded bg-bg-accent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-60"
                         />
@@ -496,21 +496,21 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                       <p className="mt-1 text-xs text-text-muted">
                         {activeServer.vanity_code
                           ? `Invite link: ${getInviteUrl(activeServer.vanity_code)}`
-                          : "Boost this server to Level 1 to claim a custom link. Clear and save to release it."}
+                          : "Boost this space to Level 1 to claim a custom link. Clear and save to release it."}
                       </p>
                     </>
                   ) : (
                     <p className="mt-1 text-xs text-text-muted">
-                      Boost this server to Level 1 (1 catalyst) to unlock a custom invite link.
+                      Boost this space to Level 1 (1 catalyst) to unlock a custom invite link.
                     </p>
                   )}
                 </div>
                 <div className="rounded-lg border border-divider bg-bg-secondary p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text-normal">Server Discovery</p>
+                      <p className="text-sm font-semibold text-text-normal">Space Discovery</p>
                       <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                        List this server publicly so anyone can find and join it from Discover.
+                        List this space publicly so anyone can find and join it from Discover.
                         It appears under <span className="font-medium">Popular</span> by member
                         count, and under <span className="font-medium">New</span> by when it was
                         created.
@@ -520,7 +520,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                       type="button"
                       role="switch"
                       aria-checked={discoverable}
-                      aria-label="Make server discoverable"
+                      aria-label="Make space discoverable"
                       disabled={!isOwner || loading}
                       onClick={() => void toggleDiscoverable()}
                       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -535,7 +535,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                   </div>
                   {discoverable && (
                     <p className="mt-3 text-xs text-text-muted">
-                      Anyone can see this server&apos;s name, description and member count in
+                      Anyone can see this space&apos;s name, description and member count in
                       Discover, and join without an invite.
                     </p>
                   )}
@@ -543,7 +543,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                     <p className="mt-2 text-xs text-status-dnd">{discoverableError}</p>
                   )}
                   {!isOwner && (
-                    <p className="mt-2 text-xs text-text-muted">Only the server owner can change this.</p>
+                    <p className="mt-2 text-xs text-text-muted">Only the space owner can change this.</p>
                   )}
                 </div>
 
@@ -564,7 +564,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
             {section === "invite" && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Invites</h2>
-                <p className="text-sm text-text-muted">Share this link to invite people to your server.</p>
+                <p className="text-sm text-text-muted">Share this link to invite people to your space.</p>
                 {inviteUrl ? (
                   <>
                     <div className="rounded-lg border border-divider bg-bg-secondary p-5">
@@ -577,7 +577,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                         <IconCopy size={16} /> {copied ? "Copied!" : "Copy Invite Link"}
                       </button>
                       <p className="mt-3 text-xs text-text-muted">
-                        Paste this link in chat to show a rich invite preview with Join Server button.
+                        Paste this link in chat to show a rich invite preview with Join Space button.
                       </p>
                     </div>
                     <div>
@@ -654,7 +654,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
             {section === "members" && canManageRoles && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Members</h2>
-                <p className="text-sm text-text-muted">Manage members, assign roles, and moderate the server.</p>
+                <p className="text-sm text-text-muted">Manage members, assign roles, and moderate the space.</p>
                 <ul className="space-y-2">
                   {members.map((m) => {
                     const memberRoleIds = m.role_ids && m.role_ids.length > 0
@@ -739,7 +739,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                 {error && <p className="rounded-md bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">{error}</p>}
                 {serverBans.length === 0 ? (
                   <p className="rounded-lg border border-divider bg-bg-secondary px-4 py-6 text-center text-sm text-text-muted">
-                    Nobody is banned from this server.
+                    Nobody is banned from this space.
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
@@ -855,17 +855,17 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
             {section === "appearance" && isOwner && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold">Appearance</h2>
-                <p className="text-sm text-text-muted">Customize how your server looks in invites and the sidebar.</p>
+                <p className="text-sm text-text-muted">Customize how your space looks in invites and the sidebar.</p>
                 <label className="flex cursor-pointer items-center justify-between rounded-lg border border-divider bg-bg-secondary p-4 hover:bg-interactive-hover">
                   <div>
-                    <p className="font-medium">Server icon</p>
+                    <p className="font-medium">Space icon</p>
                     <p className="text-xs text-text-muted">Recommended 512×512</p>
                   </div>
                   <input type="file" accept="image/*" className="text-sm" onChange={(e) => e.target.files?.[0] && void handleIcon(e.target.files[0])} />
                 </label>
                 <label className="flex cursor-pointer items-center justify-between rounded-lg border border-divider bg-bg-secondary p-4 hover:bg-interactive-hover">
                   <div>
-                    <p className="font-medium">Server banner</p>
+                    <p className="font-medium">Space banner</p>
                     <p className="text-xs text-text-muted">Shown on invite previews</p>
                   </div>
                   <input type="file" accept="image/*" className="text-sm" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
@@ -877,7 +877,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
               <div className="space-y-5">
                 <h2 className="text-xl font-bold text-status-dnd">Danger Zone</h2>
                 <div className="rounded-lg border border-status-dnd/30 bg-status-dnd/5 p-5">
-                  <p className="font-medium">Delete this server</p>
+                  <p className="font-medium">Delete this space</p>
                   <p className="mt-1 text-sm text-text-muted">Permanently delete all channels, messages, and members. This cannot be undone.</p>
                   <button
                     type="button"
@@ -885,7 +885,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                     disabled={loading}
                     className="mt-4 flex items-center gap-2 rounded bg-status-dnd px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                   >
-                    <IconTrash size={16} /> Delete Server
+                    <IconTrash size={16} /> Delete Space
                   </button>
                 </div>
               </div>

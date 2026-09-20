@@ -23,11 +23,11 @@ struct UserBadgesView: View {
             if let ent = entitlement, ent.plan != "free",
                let tier = SubscriptionTier.forMonths(ent.months) {
                 Button { showTiers = true } label: {
-                    SubscriptionMedallionView(tier: tier, isSuper: ent.plan == "super",
+                    SubscriptionMedallionView(tier: tier, topTier: SubscriptionPlan(normalizing: ent.plan).isPaid,
                                               size: size + 7)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(ent.plan == "super" ? "Super" : "Basic") subscriber, \(tier.label)")
+                .accessibilityLabel("Aero subscriber, \(tier.label)")
             }
 
             ForEach(badges) { badge in

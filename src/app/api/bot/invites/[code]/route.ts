@@ -11,12 +11,12 @@ export async function GET(
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
 
     const { data, error } = await service.rpc("bot_invite_info", { p_code: code });
-    if (error) return NextResponse.json({ error: "Could not load the bot invite." }, { status: 500 });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return NextResponse.json({ error: "Invite not found." }, { status: 404 });
 
     return NextResponse.json(data);
   } catch (err) {
     console.error("bot/invites/[code] GET error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

@@ -27,7 +27,7 @@ export default function TermsPage() {
 
           <h2 className="text-lg font-semibold text-white">1. The Service</h2>
           <p>
-            Disband provides servers and channels, direct messages, group chats, and voice and video
+            Disband provides spaces and channels, direct messages, group chats, and voice and video
             calling across desktop, mobile, and the web. The Service is provided as-is, may evolve
             over time, and some features may be made available only on certain platforms or to paid
             subscribers (&quot;basic&quot; and &quot;super&quot; plans). Nothing in these Terms grants you
@@ -60,7 +60,7 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold text-white">4. No illegal modifications</h2>
           <p>
             You must not modify, reverse engineer, decompile, disassemble, tamper with, or attempt to
-            defeat any part of Disband — including its client software, servers, configuration,
+            defeat any part of Disband — including its client software, spaces, configuration,
             databases, APIs, security measures, rate limits, or the experience of other users. You may
             not use scripts, automated tools, or unauthorized third-party software to modify the app,
             inject data, forge requests, access areas you are not permitted to access, or otherwise
@@ -101,7 +101,7 @@ export default function TermsPage() {
             violations of acceptable use; illegal modifications to the app or its infrastructure;
             attempts to evade moderation or bans; abuse of our staff or safety systems; or activity
             that harms other users, the Service, or its operation. Depending on the conduct, we may
-            also terminate or disable specific servers, restrict access, withhold or claw back
+            also terminate or disable specific spaces, restrict access, withhold or claw back
             features, or report unlawful activity to the appropriate authorities. You may delete your
             account at any time; some information may be retained where required by law.
           </p>

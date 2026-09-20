@@ -86,9 +86,14 @@ struct AuthView: View {
 
     private var header: some View {
         VStack(spacing: 10) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(Brand.accent)
+            // The Disband mark, template-rendered so it follows the theme's
+            // text colour instead of vanishing on a light background.
+            Image("DisbandMark")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 112, height: 112)
+                .foregroundStyle(Brand.textPrimary)
             Text("Disband")
                 .font(.largeTitle.bold())
                 .foregroundStyle(Brand.textPrimary)

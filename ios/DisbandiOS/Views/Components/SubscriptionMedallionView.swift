@@ -56,14 +56,15 @@ struct SubscriptionTier: Identifiable, Hashable {
  */
 struct SubscriptionMedallionView: View {
     let tier: SubscriptionTier
-    var isSuper: Bool = false
+    /// Aero's gold studs and halo.
+    var topTier: Bool = false
     var size: CGFloat = 20
 
     private var r: CGFloat { size / 2 }
 
     var body: some View {
         ZStack {
-            if isSuper {
+            if topTier {
                 Circle().fill(tier.base.opacity(0.18)).frame(width: size * 1.28, height: size * 1.28)
             }
 
@@ -100,7 +101,7 @@ struct SubscriptionMedallionView: View {
             DisbandMark(light: tier.light, deep: tier.deep)
                 .frame(width: size * 0.53, height: size * 0.53)
 
-            if isSuper {
+            if topTier {
                 ForEach(0..<4, id: \.self) { i in
                     let a = Double(i) * (.pi / 2) - .pi / 2
                     Diamond()
@@ -110,7 +111,7 @@ struct SubscriptionMedallionView: View {
                 }
             }
         }
-        .frame(width: size * (isSuper ? 1.3 : 1), height: size * (isSuper ? 1.3 : 1))
+        .frame(width: size * (topTier ? 1.3 : 1), height: size * (topTier ? 1.3 : 1))
     }
 }
 

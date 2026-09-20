@@ -137,7 +137,7 @@ export const PLANS: PlanTier[] = [
       { label: "2K video (1440p)", included: true, detail: "120 fps" },
       { label: "Animated avatar + banner", included: true },
       { label: "Unlimited custom emoji", included: true },
-      { label: "4 Catalysts every month", included: true, detail: "Boost any servers you like" },
+      { label: "4 Catalysts every month", included: true, detail: "Boost any spaces you like" },
       { label: "Max rate limits", included: true, detail: "20 msg / 5s" },
       { label: "Unlimited profile changes", included: true },
       { label: "Custom profile theme", included: true, detail: "Gradient + accent" },

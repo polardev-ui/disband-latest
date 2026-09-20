@@ -39,9 +39,7 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
 
   if (preview === undefined) {
     return (
-      <div className="mt-1 max-w-md rounded-lg border border-divider bg-bg-secondary p-3 text-xs text-text-muted">
-        Loading preview…
-      </div>
+      <div aria-label="Loading preview" className="mt-1 h-[104px] w-full max-w-md animate-pulse rounded-lg border border-divider bg-bg-secondary" />
     );
   }
 
@@ -66,7 +64,7 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
         <img
           src={safeImageUrl(preview.image)!}
           alt=""
-          className="max-h-48 w-full object-cover"
+          className="aspect-[1200/630] max-h-48 w-full bg-bg-accent object-cover"
           onLoad={onLoad}
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = "none";

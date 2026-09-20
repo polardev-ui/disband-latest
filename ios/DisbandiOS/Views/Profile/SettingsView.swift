@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Notification and chat preferences, plus account deletion. Status, the
+/// version and signing out live on the You page itself.
 struct SettingsView: View {
     @Environment(AppState.self) private var app
 
@@ -9,61 +11,59 @@ struct SettingsView: View {
     @State private var showDeleteConfirm = false
     @State private var deleting = false
     @State private var error: String?
+    @State private var loaded = false
 
     var body: some View {
-        Form {
-            Section("Notifications") {
-                Toggle("Sound Effects", isOn: $sound)
-                Toggle("Push Notifications", isOn: $notifications)
-            }
-            .onChange(of: sound) { _, v in save(.init(soundEnabled: v)) }
-            .onChange(of: notifications) { _, v in save(.init(desktopNotificationsEnabled: v)) }
+        ScrollView {
+            VStack(spacing: 0) {
+                SectionCaption("Notifications")
+                SettingsGroup {
+                    SettingsToggleRow(symbol: "speaker.wave.2.fill", tint: Color(hex: 0x5865F2),
+                                      title: "Sound effects", isOn: $sound)
+                    SettingsDivider()
+                    SettingsToggleRow(symbol: "bell.fill", tint: Color(hex: 0xF23F43),
+                                      title: "Push notifications", isOn: $notifications)
+                }
 
-            Section("Chat") {
-                Toggle("Link Previews", isOn: $linkPreviews)
-            }
-            .onChange(of: linkPreviews) { _, v in save(.init(linkPreviewsEnabled: v)) }
+                SectionCaption("Chat")
+                SettingsGroup {
+                    SettingsToggleRow(symbol: "link", tint: Color(hex: 0x1ABC9C),
+                                      title: "Link previews", isOn: $linkPreviews)
+                }
 
-            Section("Status") {
-                ForEach(UserStatus.allCases, id: \.self) { status in
-                    Button { Task { await app.setStatus(status) } } label: {
-                        HStack {
-                            Circle().fill(status.color).frame(width: 12, height: 12)
-                            Text(status.label).foregroundStyle(Brand.textPrimary)
-                            Spacer()
-                            if app.profile?.status == status {
-                                Image(systemName: "checkmark").foregroundStyle(Brand.accent)
-                            }
-                        }
+                SectionCaption("Danger zone")
+                SettingsGroup {
+                    Button { showDeleteConfirm = true } label: {
+                        SettingsRowLabel(symbol: "trash.fill", tint: Brand.dnd,
+                                         title: deleting ? "Deleting…" : "Delete account",
+                                         showsChevron: false, destructive: true)
                     }
+                    .buttonStyle(.plain)
+                    .disabled(deleting)
                 }
-            }
 
-            Section("About") {
-                LabeledContent("Version", value: Bundle.main.appVersionDisplay)
-                Link(destination: AppConfig.webAppURL) {
-                    HStack { Text("Website"); Spacer(); Image(systemName: "arrow.up.right") }
+                if let error {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(Brand.dnd)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-
-            Section("Account") {
-                Button(role: .destructive) { Task { await app.signOut() } } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                }
-                Button(role: .destructive) { showDeleteConfirm = true } label: {
-                    Label("Delete Account", systemImage: "trash")
-                }
-            }
-
-            if let error {
-                Text(error).foregroundStyle(Brand.dnd)
-            }
+            .padding(.bottom, 24)
         }
-        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
         .background(Brand.background)
-        .navigationTitle("Settings")
+        .navigationTitle("Notifications & chat")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { loadToggles() }
+        .solidNavigationBar()
+        .onAppear(perform: loadToggles)
+        // Only after the stored values are in, or seeding the toggles would
+        // write them straight back.
+        .onChange(of: sound) { _, v in if loaded { save(.init(soundEnabled: v)) } }
+        .onChange(of: notifications) { _, v in if loaded { save(.init(desktopNotificationsEnabled: v)) } }
+        .onChange(of: linkPreviews) { _, v in if loaded { save(.init(linkPreviewsEnabled: v)) } }
         .alert("Delete Account?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -79,6 +79,7 @@ struct SettingsView: View {
         sound = app.profile?.soundEnabled ?? true
         notifications = app.profile?.desktopNotificationsEnabled ?? true
         linkPreviews = app.profile?.linkPreviewsEnabled ?? true
+        DispatchQueue.main.async { loaded = true }
     }
 
     private func save(_ patch: DatabaseService.ProfilePatch) {

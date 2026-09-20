@@ -7,7 +7,7 @@ import { PUBLIC_ENV } from "@/lib/public-env";
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
 
 const homeDescription =
-  "Disband is a free, privacy-first chat app for your people — servers and channels, direct messages, group chats, and WebRTC voice and video calls across desktop, mobile, and the web.";
+  "Disband is a free, privacy-first chat app for your people — spaces and channels, direct messages, group chats, and WebRTC voice and video calls across desktop, mobile, and the web.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     "voice chat",
     "video calls",
     "free chat",
-    "servers and channels",
+    "spaces and channels",
     "group chat",
     "privacy-focused chat",
     "community chat",

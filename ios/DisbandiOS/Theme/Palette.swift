@@ -92,7 +92,7 @@ enum Themes {
                 textPrimary: Color(hex: 0xE2E8F0), textSecondary: Color(hex: 0xB6C2D1),
                 textMuted: Color(hex: 0x94A3B8), divider: Color(hex: 0x334155),
                 colorScheme: .dark),
-            requiredPlan: .basic),
+            requiredPlan: .aero),
 
         ThemeDefinition(
             id: .roseGold, label: "Rose Gold", detail: "Elegant rose tones, gold accent",
@@ -103,7 +103,7 @@ enum Themes {
                 textPrimary: Color(hex: 0xFCE7F0), textSecondary: Color(hex: 0xE0BECD),
                 textMuted: Color(hex: 0xC9A0B0), divider: Color(hex: 0x4A3035),
                 colorScheme: .dark),
-            requiredPlan: .super_),
+            requiredPlan: .aero),
 
         ThemeDefinition(
             id: .plasma, label: "Plasma", detail: "Deep purple with vibrant magenta",
@@ -114,7 +114,7 @@ enum Themes {
                 textPrimary: Color(hex: 0xEADAFF), textSecondary: Color(hex: 0xC0A9DA),
                 textMuted: Color(hex: 0x9D7CBF), divider: Color(hex: 0x2D1B45),
                 colorScheme: .dark),
-            requiredPlan: .super_),
+            requiredPlan: .aero),
 
         ThemeDefinition(
             id: .nord, label: "Nord", detail: "Arctic blues, frost accent",
@@ -125,19 +125,18 @@ enum Themes {
                 textPrimary: Color(hex: 0xECEFF4), textSecondary: Color(hex: 0xCBD2DC),
                 textMuted: Color(hex: 0xA5ABB6), divider: Color(hex: 0x4C566A),
                 colorScheme: .dark),
-            requiredPlan: .super_),
+            requiredPlan: .aero),
     ]
 
     static func definition(_ id: ThemeId) -> ThemeDefinition {
         all.first { $0.id == id } ?? all[0]
     }
 
-    /// Whether `plan` unlocks `theme`. Super unlocks everything.
+    /// Whether `plan` unlocks `theme`. Aero unlocks everything.
     static func isUnlocked(_ theme: ThemeDefinition, plan: SubscriptionPlan) -> Bool {
         guard let required = theme.requiredPlan else { return true }
         switch plan {
-        case .super_: return true
-        case .basic: return required == .basic
+        case .aero: return true
         case .free: return false
         }
     }

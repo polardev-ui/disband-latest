@@ -258,7 +258,7 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
                       <p className="flex min-w-0 items-center gap-1 text-[15px] font-semibold text-text-normal">
                         <span className="truncate">{server.name}</span>
                         {server.verified && (
-                          <Tooltip label="This server is officially verified by Disband">
+                          <Tooltip label="This space is officially verified by Disband">
                             <IconVerified size={15} className="shrink-0 text-sky-400" />
                           </Tooltip>
                         )}

@@ -14,9 +14,9 @@ struct SubscriptionTiersSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private var isSuper: Bool { plan == "super" }
-    private var accent: Color { isSuper ? Color(hexString: "fee75c") : Color(hexString: "57f287") }
-    private var planName: String { isSuper ? "Disband Super" : "Disband Basic" }
+    private var isAero: Bool { SubscriptionPlan(normalizing: plan).isPaid }
+    private var accent: Color { SubscriptionPlan.aeroGold }
+    private var planName: String { "Disband Aero" }
     private var current: SubscriptionTier? { SubscriptionTier.forMonths(months) }
     private var next: SubscriptionTier? { SubscriptionTier.next(after: months) }
 
@@ -40,7 +40,7 @@ struct SubscriptionTiersSheet: View {
                         ForEach(SubscriptionTier.all) { tier in
                             let reached = months >= tier.months
                             VStack(spacing: 5) {
-                                SubscriptionMedallionView(tier: tier, isSuper: isSuper, size: 54)
+                                SubscriptionMedallionView(tier: tier, topTier: isAero, size: 54)
                                     .opacity(reached ? 1 : 0.3)
                                     .saturation(reached ? 1 : 0)
                                 Text(tier.label)

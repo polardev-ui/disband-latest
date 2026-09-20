@@ -38,12 +38,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { count, error: countError } = await service
+    const { count } = await service
       .from("bots")
       .select("id", { count: "exact", head: true })
       .eq("owner_id", user.id)
       .is("revoked_at", null);
-    if (countError) return NextResponse.json({ error: "Bot registration is temporarily unavailable." }, { status: 503 });
     if ((count ?? 0) >= MAX_BOTS_PER_OWNER) {
       return NextResponse.json(
         { error: `You can create at most ${MAX_BOTS_PER_OWNER} bots.` },
@@ -81,7 +80,7 @@ export async function POST(request: NextRequest) {
       await rollback();
 
       return NextResponse.json(
-        { error: "Could not set up the bot profile." },
+        { error: profileError?.message ?? "Could not set up the bot profile." },
         { status: 500 },
       );
     }
@@ -102,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (botError || !bot) {
       await rollback();
       return NextResponse.json(
-        { error: "Could not register the bot." },
+        { error: botError?.message ?? "Could not register the bot." },
         { status: 500 },
       );
     }
@@ -113,6 +112,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("bot/register error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

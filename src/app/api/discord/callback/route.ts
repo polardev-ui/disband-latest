@@ -63,6 +63,7 @@ export async function GET(req: Request) {
     return backTo(payload.guild, { linked: "1" });
   } catch (err) {
     console.error("Discord callback error:", err);
-    return backTo(payload.guild, { error: "connect-failed" });
+    const message = err instanceof Error ? err.message : "connect-failed";
+    return backTo(payload.guild, { error: message.slice(0, 120) });
   }
 }

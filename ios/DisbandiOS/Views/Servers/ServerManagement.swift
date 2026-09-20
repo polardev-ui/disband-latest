@@ -119,7 +119,7 @@ struct InviteSheet: View {
                             .foregroundStyle(Brand.textPrimary)
                     }
                 } else {
-                    Text("No invite code available for this server.")
+                    Text("No invite code available for this space.")
                         .foregroundStyle(Brand.textMuted)
                 }
                 Spacer()
@@ -180,7 +180,7 @@ struct ServerSettingsSheet: View {
                 } header: {
                     Text("Description")
                 } footer: {
-                    Text("Shown to people who find this server through discovery.")
+                    Text("Shown to people who find this space through discovery.")
                 }
 
                 if let error {
@@ -193,7 +193,7 @@ struct ServerSettingsSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Brand.background)
-            .navigationTitle("Server Settings")
+            .navigationTitle("Space Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -218,15 +218,12 @@ struct ServerSettingsSheet: View {
         VStack(spacing: 0) {
             PhotosPicker(selection: $bannerItem, matching: .images) {
                 ZStack {
-                    RemoteImage(url: bannerUrl, contentMode: .fill) {
+                    BannerImage(url: bannerUrl, height: 112) {
                         LinearGradient(
                             colors: [Color(seed: server.id), Color(seed: server.id + "2")],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                     }
-                    .frame(height: 112)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
 
                     if uploadingBanner {
                         Color.black.opacity(0.35)

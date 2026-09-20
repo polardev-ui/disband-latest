@@ -3,12 +3,31 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 /// Shared conversation screen used for channels, DMs, and group chats.
+struct ChatContentBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+struct ChatViewportKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct ChatView: View {
     @Environment(AppState.self) private var app
     @Environment(CallManager.self) private var call
     @Environment(DmUnreadStore.self) private var unreadStore
+    @Environment(VoiceSession.self) private var voice
+    @Environment(DirectMessagesViewModel.self) private var directMessages
     @State private var model: ChatViewModel
     @State private var draft = ""
+    @State private var stickToBottom = true
+    @State private var contentBottom: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+
+    private func updateStick() {
+        stickToBottom = contentBottom - viewportHeight < 100
+    }
     @State private var showGifPicker = false
     @State private var showPhotoPicker = false
     @State private var photoItem: PhotosPickerItem?
@@ -27,26 +46,53 @@ struct ChatView: View {
     /// server owner, or a role with manage_messages. Only meaningful for a
     /// server channel; nobody moderates a DM or a group chat.
     var canModerate: Bool = false
+    /// Set when you can't post here (read-only, no permission, timed out);
+    /// the composer is replaced by this explanation, as on the web.
+    var composerLockedReason: String?
 
-    init(source: ChatSource, callPeer: Profile? = nil, canModerate: Bool = false) {
+    init(source: ChatSource, callPeer: Profile? = nil, canModerate: Bool = false,
+         composerLockedReason: String? = nil) {
         _model = State(initialValue: ChatViewModel(source: source))
         self.canModerate = canModerate
         self.callPeer = callPeer
+        self.composerLockedReason = composerLockedReason
     }
 
     var body: some View {
         VStack(spacing: 0) {
             messageList
-            if let replyingTo { replyBanner(replyingTo) }
-            // Progress now shows on the message itself, so the composer stays usable.
-            MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
-                            onGif: { showGifPicker = true },
-                            onPhoto: { showPhotoPicker = true })
+            TypingBubble(
+                typers: model.typers,
+                profiles: model.typingProfiles,
+                groupContext: model.isGroupScope
+            )
+            .animation(.easeOut(duration: 0.2), value: model.typers.map(\.userId))
+            if let error = model.sendError { sendErrorBanner(error) }
+            if let composerLockedReason {
+                lockedComposer(composerLockedReason)
+            } else {
+                if let replyingTo { replyBanner(replyingTo) }
+                // Progress shows on the message itself, so the composer stays usable.
+                MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
+                                onGif: { showGifPicker = true },
+                                onPhoto: { showPhotoPicker = true })
+                                .onChange(of: draft) {
+                                    if let name = app.profile?.name, !draft.isEmpty {
+                                        model.notifyTyping(displayName: name)
+                                    }
+                                }
+            }
         }
         .background(Brand.surfaceRaised)
         .navigationTitle(model.source.title)
         .navigationBarTitleDisplayMode(.inline)
+        .solidNavigationBar()
         .toolbar {
+            if case .group(let groupId, let name) = model.source {
+                ToolbarItem(placement: .topBarTrailing) {
+                    groupCallButton(groupId: groupId, name: name)
+                }
+            }
             if case .dm = model.source {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -61,6 +107,7 @@ struct ChatView: View {
             }
         }
         .overlay { reactionBar }
+        .hidesDock()
         .task {
             switch model.source {
             case .dm(let threadId, _):
@@ -98,11 +145,75 @@ struct ChatView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem,
+                      matching: .any(of: [.images, .videos]))
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task { await uploadAndSend(item) }
         }
+    }
+
+    private func lockedComposer(_ reason: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.fill").foregroundStyle(Brand.textMuted)
+            Text(reason)
+                .font(.subheadline)
+                .foregroundStyle(Brand.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Brand.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Brand.divider, lineWidth: 1))
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+
+    private func sendErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Brand.dnd)
+            Text(message).font(.subheadline).foregroundStyle(Brand.textPrimary)
+            Spacer(minLength: 0)
+            Button { withAnimation { model.sendError = nil } } label: {
+                Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(Brand.textMuted)
+            }
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Brand.dnd.opacity(0.15), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .task(id: message) {
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            withAnimation { if model.sendError == message { model.sendError = nil } }
+        }
+    }
+
+    /// Joins the group's call if one is running, otherwise starts one and
+    /// rings everyone — the same behaviour as the web.
+    private func groupCallButton(groupId: String, name: String) -> some View {
+        let inThisCall = voice.isIn(groupId)
+        return Button {
+            if inThisCall {
+                voice.minimized = false
+                return
+            }
+            let group = directMessages.groups.first { $0.id == groupId }
+            Task {
+                await voice.startGroupCall(groupId: groupId, name: name,
+                                           iconUrl: group?.iconUrl,
+                                           memberIds: group?.members?.map(\.id) ?? [])
+            }
+        } label: {
+            Image(systemName: inThisCall ? "phone.connection.fill" : "phone.fill")
+                .foregroundStyle(call.phase == .idle ? Brand.online : Brand.textMuted)
+        }
+        .disabled(call.phase != .idle)
+        .accessibilityLabel(inThisCall ? "Return to call" : "Start group call")
     }
 
     private var messageList: some View {
@@ -140,10 +251,35 @@ struct ChatView: View {
                         }
                     }
                     .padding(.vertical, 12)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ChatContentBottomKey.self,
+                                value: geo.frame(in: .named("chatScroll")).maxY
+                            )
+                        }
+                    )
                 }
             }
+            .coordinateSpace(name: "chatScroll")
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: ChatViewportKey.self, value: geo.size.height)
+                }
+            )
+            .onPreferenceChange(ChatContentBottomKey.self) { maxY in
+                contentBottom = maxY
+                updateStick()
+                if stickToBottom, let last = model.messages.last {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
+            .onPreferenceChange(ChatViewportKey.self) { height in
+                viewportHeight = height
+                updateStick()
+            }
             .onChange(of: model.messages.count) {
-                if let last = model.messages.last {
+                if stickToBottom, let last = model.messages.last {
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
@@ -249,17 +385,26 @@ struct ChatView: View {
         guard let uid = app.currentUserId else { return }
         let reply = replyingTo?.id
         defer { photoItem = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
         withAnimation { replyingTo = nil }
 
-        // The progress row lives in the conversation now, so the composer no
-        // longer has to sit disabled behind a spinner while it uploads.
-        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+        // Videos travel as files, never as one big `Data`: see `PickedMovie`.
+        if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
+            guard let movie = try? await item.loadTransferable(type: PickedMovie.self) else {
+                model.loadError = "Couldn't open that video."
+                return
+            }
+            await model.uploadAndSendVideo(source: movie.url, replyToId: reply, authorId: uid)
+            return
+        }
+
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        // The progress row lives in the conversation, so the composer stays
+        // usable while it uploads.
         await model.uploadAndSendAttachment(
             data: data,
-            filename: isVideo ? "video.mp4" : "image.jpg",
-            mimeType: isVideo ? "video/mp4" : "image/jpeg",
-            type: isVideo ? .video : .image,
+            filename: "image.jpg",
+            mimeType: "image/jpeg",
+            type: .image,
             replyToId: reply,
             authorId: uid,
         )

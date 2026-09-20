@@ -10,7 +10,6 @@ import {
 } from "@/lib/subscription";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { apiFetch } from "@/lib/api";
-import { stripePortalDestination } from "@/lib/stripe-portal-url";
 
 let idCounter = 0;
 
@@ -147,9 +146,7 @@ export function useSubscription(userId: string | undefined) {
     const res = await apiFetch("/api/stripe/portal");
     const json = (await res.json()) as { url?: string; error?: string };
     if (json.url) {
-      const destination = stripePortalDestination(json.url);
-      if (!destination) return "Billing returned an invalid destination.";
-      window.location.assign(destination);
+      window.location.href = json.url;
     }
     return json.error ?? null;
   }, []);

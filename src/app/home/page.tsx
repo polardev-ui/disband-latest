@@ -5,12 +5,12 @@ import { SITE_URL } from "@/app/layout";
 export const metadata: Metadata = {
   title: "Free voice & text chat for your people",
   description:
-    "Disband is a free, privacy-first chat app — servers and channels, direct messages, group chats, and voice and video calls across desktop, mobile, and the web.",
+    "Disband is a free, privacy-first chat app — spaces and channels, direct messages, group chats, and voice and video calls across desktop, mobile, and the web.",
   alternates: { canonical: "/home" },
   openGraph: {
     title: "Disband — A place for your people to talk",
     description:
-      "Servers and channels, DMs, group chats, and WebRTC voice and video calls in one free, privacy-first app — desktop, mobile, and web.",
+      "Spaces and channels, DMs, group chats, and WebRTC voice and video calls in one free, privacy-first app — desktop, mobile, and web.",
     url: "/home",
     type: "website",
   },
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Disband — A place for your people to talk",
     description:
-      "Servers and channels, DMs, group chats, and WebRTC voice and video calls in one free, privacy-first app — desktop, mobile, and web.",
+      "Spaces and channels, DMs, group chats, and WebRTC voice and video calls in one free, privacy-first app — desktop, mobile, and web.",
   },
 };
 
@@ -31,14 +31,14 @@ const structuredData = {
       url: SITE_URL,
       inLanguage: "en",
       description:
-        "Free, privacy-first chat for your people — servers, direct messages, group chats, and voice and video calls.",
+        "Free, privacy-first chat for your people — spaces, direct messages, group chats, and voice and video calls.",
     },
     {
       "@type": "SoftwareApplication",
       name: "Disband",
       url: SITE_URL,
       description:
-        "Disband is a free, privacy-first chat app for servers and channels, direct messages, group chats, and WebRTC voice and video calls.",
+        "Disband is a free, privacy-first chat app for spaces and channels, direct messages, group chats, and WebRTC voice and video calls.",
       applicationCategory: "CommunicationApplication",
       operatingSystem: "macOS, Windows, Linux, iOS, Web",
       offers: {

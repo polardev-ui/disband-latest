@@ -11,7 +11,7 @@ export const BOT_SCOPE_LABELS: Record<BotScope, { label: string; description: st
   },
   "members.read": {
     label: "Read members",
-    description: "See the member list of servers the bot has joined.",
+    description: "See the member list of spaces the bot has joined.",
   },
   "channels.manage": {
     label: "Manage channels",

@@ -11,8 +11,25 @@ final class ChatViewModel {
 
     var messages: [DisplayMessage] = []
     var reactions: [String: [ReactionSummary]] = [:]   // messageId -> summaries
+    var typers: [TypingService.Event] = []
+    var typingProfiles: [String: Profile] = [:]
+    var isGroupScope: Bool {
+        switch source {
+        case .channel, .group: return true
+        case .dm: return false
+        }
+    }
+    private var typingChannel: RealtimeChannelV2?
+    private var typingTask: Task<Void, Never>?
+    private var typingTimers: [String: Task<Void, Never>] = [:]
+    private var lastTypingSentAt: Date = .distantPast
+    private var isSelfDm = false
     var loading = true
     var loadError: String?
+    /// A send that the server refused. Shown above the composer; `loadError`
+    /// only appears in an empty conversation, so a rejected send in a busy
+    /// channel used to fail with no sign at all.
+    var sendError: String?
     var currentUserId: String?
     var currentUserProfile: Profile?
 
@@ -65,6 +82,74 @@ final class ChatViewModel {
         await loadReactions()
         await subscribe()
         await subscribeReactions()
+        await detectSelfDm()
+        await subscribeTyping()
+    }
+
+    private var typingTopic: String? {
+        switch source {
+        case .channel(let id, _): return TypingService.topic(kind: "ch", id: id)
+        case .dm(let threadId, _): return TypingService.topic(kind: "dm", id: threadId)
+        case .group(let id, _): return TypingService.topic(kind: "group", id: id)
+        }
+    }
+
+    private func detectSelfDm() async {
+        guard case .dm(let threadId, _) = source, let me = currentUserId else {
+            isSelfDm = false
+            return
+        }
+        struct ThreadMembers: Decodable { let userA: String; let userB: String
+            enum CodingKeys: String, CodingKey { case userA = "user_a"; case userB = "user_b" }
+        }
+        let rows: [ThreadMembers] = (try? await SupabaseManager.client
+            .from("dm_threads").select("user_a,user_b").eq("id", value: threadId)
+            .execute().value) ?? []
+        isSelfDm = rows.first.map { $0.userA == me && $0.userB == me } ?? false
+    }
+
+    private func subscribeTyping() async {
+        guard let topic = typingTopic, let me = currentUserId else { return }
+        let (ch, stream) = await TypingService.watch(topic: topic)
+        typingChannel = ch
+        typingTask = Task { [weak self] in
+            for await event in stream {
+                guard let self else { continue }
+                if event.userId == me { continue }
+                await self.receiveTyper(event)
+            }
+        }
+    }
+
+    private func receiveTyper(_ event: TypingService.Event) async {
+        typingTimers[event.userId]?.cancel()
+        if !typers.contains(where: { $0.userId == event.userId }) {
+            typers.append(event)
+        }
+        if typingProfiles[event.userId] == nil {
+            if let profiles = try? await DatabaseService.profiles(ids: [event.userId]) {
+                typingProfiles[event.userId] = profiles[event.userId]
+            }
+        }
+        typingTimers[event.userId] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard let self else { return }
+            self.typers.removeAll { $0.userId == event.userId }
+            self.typingTimers[event.userId] = nil
+        }
+    }
+
+    func notifyTyping(displayName: String) {
+        guard let me = currentUserId, let topic = typingTopic else { return }
+        if isSelfDm {
+            Task { await self.receiveTyper(TypingService.Event(userId: me, name: displayName)) }
+        }
+        let now = Date()
+        guard now.timeIntervalSince(lastTypingSentAt) >= 1.5 else { return }
+        lastTypingSentAt = now
+        Task {
+            await TypingService.send(topic: topic, userId: me, name: displayName)
+        }
     }
 
     private func cacheNow() {
@@ -74,9 +159,12 @@ final class ChatViewModel {
     func stop() {
         listenTask?.cancel()
         reactionTask?.cancel()
-        let ch = channel, rc = reactionChannel
-        channel = nil; reactionChannel = nil
-        Task { await ch?.unsubscribe(); await rc?.unsubscribe() }
+        typingTask?.cancel()
+        for task in typingTimers.values { task.cancel() }
+        typingTimers = [:]
+        let ch = channel, rc = reactionChannel, tc = typingChannel
+        channel = nil; reactionChannel = nil; typingChannel = nil
+        Task { await ch?.unsubscribe(); await rc?.unsubscribe(); await tc?.unsubscribe() }
     }
 
     /// Resolve a replied-to message from the loaded set (for inline previews).
@@ -184,6 +272,62 @@ final class ChatViewModel {
         }
     }
 
+    /// Sends a video picked from Photos: converted to MP4 so every client can
+    /// play it, then streamed up from disk. The progress card covers both
+    /// steps — conversion is the first 30%, the upload the rest.
+    func uploadAndSendVideo(source: URL, replyToId: String? = nil, authorId: String) async {
+        let placeholderId = "uploading-\(UUID().uuidString)"
+        let size = (try? FileManager.default.attributesOfItem(atPath: source.path)[.size] as? Int) ?? nil
+        messages.append(DisplayMessage(
+            id: placeholderId, authorId: authorId, author: currentUserProfile,
+            content: "",
+            attachmentUrl: nil, attachmentType: .video,
+            attachmentName: "video.mp4", attachmentSize: size,
+            replyToId: replyToId,
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            editedAt: nil, pending: true, uploadProgress: 0,
+        ))
+        let report: @Sendable (Double) -> Void = { [weak self] fraction in
+            Task { @MainActor in
+                guard let self,
+                      let index = self.messages.firstIndex(where: { $0.id == placeholderId }) else { return }
+                self.messages[index].uploadProgress = fraction
+            }
+        }
+
+        var converted: URL?
+        defer {
+            try? FileManager.default.removeItem(at: source)
+            if let converted { try? FileManager.default.removeItem(at: converted) }
+        }
+        do {
+            let mp4 = try await MediaService.prepareVideo(source) { report($0 * 0.3) }
+            converted = mp4
+            let result = try await MediaService.uploadFile(at: mp4, filename: "video.mp4", mimeType: "video/mp4") {
+                report(0.3 + $0 * 0.7)
+            }
+            messages.removeAll { $0.id == placeholderId }
+            await sendAttachment(
+                OutgoingAttachment(url: result.url, type: AttachmentType.video.rawValue, key: result.key),
+                caption: "", replyToId: replyToId, authorId: authorId,
+            )
+        } catch {
+            messages.removeAll { $0.id == placeholderId }
+            loadError = error.localizedDescription
+        }
+    }
+
+    static func friendlySendError(_ error: Error) -> String {
+        let text = error.localizedDescription
+        let lower = text.lowercased()
+        if lower.contains("timed out") { return "You're timed out in this space." }
+        if lower.contains("row-level security") || lower.contains("permission") || lower.contains("42501") {
+            return "You don't have permission to post here."
+        }
+        if lower.contains("rate") && lower.contains("limit") { return "Slow down — you're sending too fast." }
+        return text.count <= 120 ? text : "Your message couldn't be sent."
+    }
+
     private func dispatch(content: String, attachment: OutgoingAttachment?,
                           replyToId: String?, authorId: String) async {
         // Optimistic row — appears immediately in gray ("sending").
@@ -213,7 +357,10 @@ final class ChatViewModel {
             }
             // The realtime INSERT echoes the row back and appends it.
         } catch {
-            loadError = error.localizedDescription
+            // Without this the grey "sending" bubble stayed forever, looking
+            // like a slow send rather than a refused one.
+            messages.removeAll { $0.id == optimistic.id }
+            sendError = Self.friendlySendError(error)
         }
     }
 

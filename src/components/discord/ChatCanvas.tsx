@@ -15,7 +15,8 @@ import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
 import { ReactionPicker } from "./MessageReactions";
 import { IconHash, IconShield } from "@/components/icons";
-import { formatTypingLabel, useTypingPresence } from "@/hooks/useTypingPresence";
+import { useTypingPresence } from "@/hooks/useTypingPresence";
+import { TypingIndicator } from "./TypingIndicator";
 import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
 import {
@@ -132,6 +133,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const programmaticScrollRef = useRef(0);
   const scrollRestoreRef = useRef<number | null>(null);
   const prevFirstIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
@@ -152,7 +154,27 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     [currentUserId, currentUserName],
   );
   const { typers, notifyTyping } = useTypingPresence(typingScope, typingSelf);
-  const typingLabel = formatTypingLabel(typers, typingScope?.kind === "channel");
+
+  const isSelfChat =
+    messageContext === "dm" && members.length > 0 && members.every((m) => m.id === currentUserId);
+  const [selfTyping, setSelfTyping] = useState(false);
+  const selfTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const stash = selfTypingTimer.current;
+    return () => {
+      if (stash) clearTimeout(stash);
+    };
+  }, []);
+  const handleTypingActivity = useCallback(() => {
+    notifyTyping();
+    if (!isSelfChat) return;
+    setSelfTyping(true);
+    if (selfTypingTimer.current) clearTimeout(selfTypingTimer.current);
+    selfTypingTimer.current = setTimeout(() => setSelfTyping(false), 5000);
+  }, [notifyTyping, isSelfChat]);
+  const visibleTypers = selfTyping && currentUserId && currentUserName && !typers.some((t) => t.userId === currentUserId)
+    ? [...typers, { userId: currentUserId, name: currentUserName }]
+    : typers;
 
   useImperativeHandle(ref, () => ({
     setReplyTo,
@@ -165,6 +187,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = scrollRef.current;
     if (!el || !stickToBottomRef.current) return;
+    stickToBottomRef.current = true;
+    programmaticScrollRef.current = Date.now();
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
@@ -227,6 +251,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = () => {
+      if (Date.now() - programmaticScrollRef.current < 250) return;
       stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
       if (el.scrollTop < 96) void requestLoadMore();
     };
@@ -397,9 +422,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       />
 
       <div className="shrink-0">
-        {typingLabel && (
-          <p className="truncate px-4 pb-1 text-xs font-medium text-text-muted">{typingLabel}</p>
-        )}
+        <TypingIndicator
+          typers={visibleTypers}
+          members={members}
+          groupContext={messageContext === "channel" || messageContext === "group"}
+        />
         {composerLockedReason ? (
           <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg border border-divider bg-bg-secondary px-4 py-3">
             <IconShield size={15} className="shrink-0 text-text-muted" />
@@ -417,7 +444,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           editingContent={editing?.content}
           onCancelEdit={() => setEditing(null)}
           onSend={handleSend}
-          onTypingActivity={notifyTyping}
+          onTypingActivity={handleTypingActivity}
           maxUploadBytes={maxUploadBytes}
           serverId={typingScope?.serverId}
           allowPolls={messageContext === "channel" || messageContext === "group"}

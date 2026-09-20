@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
       if (error.message.includes("Only staff members")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
       }
-      return NextResponse.json({ error: "Could not load restrictions." }, { status: 500 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ restrictions: restrictions ?? [] });
   } catch (err) {
     console.error("moderation/restrict GET error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         p_user_id: body.userId,
         p_restriction: body.restriction,
       });
-      if (error) return NextResponse.json({ error: "Could not remove the restriction." }, { status: 500 });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true });
     }
 
@@ -63,10 +63,10 @@ export async function POST(request: NextRequest) {
       p_restriction: body.restriction,
       p_reason: body.reason?.trim() || null,
     });
-    if (error) return NextResponse.json({ error: "Could not apply the restriction." }, { status: 500 });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("moderation/restrict POST error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

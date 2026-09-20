@@ -330,12 +330,35 @@ enum DatabaseService {
             .execute().value
         let ids = rows.map(\.groupId)
         guard !ids.isEmpty else { return [] }
-        return try await client
+        var groups: [GroupChat] = try await client
             .from("group_chats")
             .select("*")
             .in("id", values: ids)
             .order("created_at")
             .execute().value
+
+        // `group_chats` has no members column, so `members` was always nil —
+        // groups read "0 members" and a group call rang nobody. One query for
+        // every group's roster, profiles embedded.
+        struct MemberRow: Decodable {
+            let groupId: String
+            let profile: Profile?
+            enum CodingKeys: String, CodingKey {
+                case profile
+                case groupId = "group_id"
+            }
+        }
+        let members: [MemberRow] = (try? await client
+            .from("group_chat_members")
+            .select("group_id, profile:profiles(*)")
+            .in("group_id", values: ids)
+            .execute().value) ?? []
+        let byGroup = Dictionary(grouping: members.compactMap { row in row.profile.map { (row.groupId, $0) } },
+                                 by: \.0)
+        for index in groups.indices {
+            groups[index].members = byGroup[groups[index].id]?.map(\.1) ?? []
+        }
+        return groups
     }
 
     static func groupMessages(groupId: String, limit: Int = 50) async throws -> [GroupMessage] {

@@ -3,7 +3,6 @@ import { Message } from "./message.js";
 import { AuthError } from "./errors.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const pathSegment = (value) => encodeURIComponent(String(value));
 
 const EVENT_NAMES = new Set(["ready", "messageCreate", "messageUpdate", "messageDelete", "error", "debug"]);
 
@@ -35,17 +34,8 @@ export class Client {
   constructor(options = {}) {
     if (!options.token) throw new Error("A bot token is required (new Client({ token }))");
     this.token = options.token;
-    const baseUrl = new URL(options.baseUrl || "https://www.disband.dev");
-    const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]).has(baseUrl.hostname);
-    if (baseUrl.username || baseUrl.password || baseUrl.hash) {
-      throw new Error("Bot API URLs cannot contain credentials or fragments");
-    }
-    if (baseUrl.protocol !== "https:" && !(baseUrl.protocol === "http:" && options.allowInsecureLocalhost === true && loopback)) {
-      throw new Error("Bot API URLs must use HTTPS (or explicitly enabled loopback HTTP)");
-    }
-    this.baseUrl = baseUrl.href.replace(/\/+$/, "");
+    this.baseUrl = (options.baseUrl || "https://www.disband.dev").replace(/\/+$/, "");
     this.gatewayTimeout = options.gatewayTimeout ?? 20;
-    this.requestTimeout = options.requestTimeout ?? Math.max((this.gatewayTimeout + 10) * 1000, 30_000);
     this._rest = new REST(this);
     this._listeners = new Map();
     this._stopped = false;
@@ -64,7 +54,7 @@ export class Client {
   once(event, handler) {
     const wrapped = (...args) => {
       this.off(event, wrapped);
-      return handler(...args);
+      handler(...args);
     };
     return this.on(event, wrapped);
   }
@@ -75,24 +65,14 @@ export class Client {
     return this;
   }
 
-  _reportHandlerError(event, error) {
-    if (event === "error" || !this._listeners.get("error")?.size) {
-      console.error(`[disband-bot] error in "${event}" handler`, error);
-      return;
-    }
-    this._emit("error", error instanceof Error ? error : new Error(String(error)));
-  }
-
   _emit(event, ...args) {
     const set = this._listeners.get(event);
     if (!set) return;
     for (const handler of set) {
       try {
-        Promise.resolve(handler(...args)).catch((err) => {
-          this._reportHandlerError(event, err);
-        });
+        void handler(...args);
       } catch (err) {
-        this._reportHandlerError(event, err);
+        console.error(`[disband-bot] error in "${event}" handler`, err);
       }
     }
   }
@@ -151,7 +131,7 @@ export class Client {
   // ------------------------------------------------------------ REST helpers
 
   async sendMessage(channelId, content, options = {}) {
-    const { message } = await this._rest.post(`/api/v1/channels/${pathSegment(channelId)}/messages`, {
+    const { message } = await this._rest.post(`/api/v1/channels/${channelId}/messages`, {
       content,
       reply_to_id: options.replyToId ?? null,
     });
@@ -164,23 +144,23 @@ export class Client {
     if (options.before) params.set("before", options.before);
     const qs = params.toString();
     const { messages } = await this._rest.get(
-      `/api/v1/channels/${pathSegment(channelId)}/messages${qs ? `?${qs}` : ""}`,
+      `/api/v1/channels/${channelId}/messages${qs ? `?${qs}` : ""}`,
     );
     return (messages ?? []).map((m) => new Message(m, this));
   }
 
   async listChannels(serverId) {
-    const { channels } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/channels`);
+    const { channels } = await this._rest.get(`/api/v1/servers/${serverId}/channels`);
     return channels ?? [];
   }
 
   async listMembers(serverId) {
-    const { members } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/members`);
+    const { members } = await this._rest.get(`/api/v1/servers/${serverId}/members`);
     return members ?? [];
   }
 
   async createChannel(serverId, name, options = {}) {
-    const { channel_id } = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/channels`, {
+    const { channel_id } = await this._rest.post(`/api/v1/servers/${serverId}/channels`, {
       name,
       type: options.type ?? "text",
       category_id: options.categoryId ?? null,
@@ -189,15 +169,15 @@ export class Client {
   }
 
   async renameChannel(channelId, name) {
-    return this._rest.patch(`/api/v1/channels/${pathSegment(channelId)}`, { name });
+    return this._rest.patch(`/api/v1/channels/${channelId}`, { name });
   }
 
   async deleteChannel(channelId) {
-    return this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}`);
+    return this._rest.delete(`/api/v1/channels/${channelId}`);
   }
 
   async leaveServer(serverId) {
-    return this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/leave`);
+    return this._rest.post(`/api/v1/servers/${serverId}/leave`);
   }
 
   /**
@@ -206,7 +186,7 @@ export class Client {
    */
   async createInvite(serverId, scopes) {
     if (!this.user?.id) throw new Error("Client is not connected — call connect() first.");
-    return this._rest.post(`/api/v1/bots/${pathSegment(this.user.id)}/invites`, {
+    return this._rest.post(`/api/v1/bots/${this.user.id}/invites`, {
       server_id: serverId,
       scopes,
     });

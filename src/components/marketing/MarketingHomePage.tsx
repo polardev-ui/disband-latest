@@ -6,7 +6,7 @@ import { ProductFrame } from "./ProductFrame";
 const capabilities = [
   {
     index: "01",
-    title: "Servers and channels",
+    title: "Spaces and channels",
     body: "Text and voice channels grouped into categories, with roles, permissions, invite codes, bans, and moderation tools that work the way you expect.",
   },
   {
@@ -49,7 +49,7 @@ export function MarketingHomePage() {
               </h1>
 
               <p className="mt-6 max-w-md text-[17px] leading-relaxed text-[#9aa0a8]">
-                Servers, direct messages, group chats, and voice calls — in one app that runs
+                Spaces, direct messages, group chats, and voice calls — in one app that runs
                 natively on your machine and in the browser, from a single account.
               </p>
 

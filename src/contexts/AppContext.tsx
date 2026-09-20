@@ -396,6 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const lastActivityRef = useRef<number>(typeof window !== "undefined" ? Date.now() : 0);
   const autoAwayRef = useRef(false);
   const inCallRef = useRef(false);
+  const signingOutRef = useRef(false);
   sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
@@ -1383,6 +1384,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+
+      if (!s) {
+        const current = sessionRef.current;
+
+        if (current && !signingOutRef.current) return;
+      }
+      signingOutRef.current = false;
       setSession(s);
 
       if (_e === "SIGNED_IN" && s) {
@@ -1487,20 +1495,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshRestrictions = useCallback(async () => {
     const supabase = getSupabaseClient();
-    const userId = session?.user.id;
-    if (!userId) {
-      setRestrictions([]);
-      return;
-    }
-    // Only this account's rows. The staff RLS policy permits reading all rows;
-    // without this filter an operator account inherits every user's
-    // restriction set and locks itself out of the app.
     const { data } = await supabase
       .from("account_restrictions")
-      .select("restriction")
-      .eq("user_id", userId);
+      .select("restriction");
     setRestrictions((data as { restriction: string }[] | null)?.map((r) => r.restriction) ?? []);
-  }, [session?.user.id]);
+  }, []);
 
   const hasRestriction = useCallback(
     (restriction: string) => restrictions.includes(restriction),
@@ -2140,7 +2139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (msg.author_id === userId) return;
           const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
           const viewingChannel =
-            viewModeRef.current === "server" && activeChannelRef.current === msg.channel_id;
+            viewModeRef.current === "space" && activeChannelRef.current === msg.channel_id;
           if (channel && !viewingChannel) {
             setChannelUnreadMap((prev) => {
               const next = new Map(prev);
@@ -2188,7 +2187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const p = payload as { userId?: string; channelId?: string };
         if (!p.userId || p.userId === userId) return;
         const viewing =
-          viewModeRef.current === "server"
+          viewModeRef.current === "space"
           && activeServerRef.current === server.id
           && activeChannelRef.current === p.channelId;
         if (viewing) return;
@@ -2311,6 +2310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    signingOutRef.current = true;
     if (userId) {
       await getSupabaseClient().from("profiles").update({ status: "offline" }).eq("id", userId);
     }
@@ -2330,18 +2330,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const switchAccount = useCallback(async (account: SavedSession) => {
-    const { error } = await getSupabaseClient().auth.signOut({ scope: "local" });
-    if (error) {
-      return mapAuthError(error.message);
-    }
     resetSupabaseClient();
-    setSession(null);
-    if (typeof window !== "undefined") {
-      if (account.email) window.sessionStorage.setItem("disband:switch-account-email", account.email);
-      window.location.assign("/login");
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.setSession({
+      access_token: account.access_token,
+      refresh_token: account.refresh_token,
+    });
+    if (error || !data.session) {
+      dropSavedSession(account.user_id);
+      setSavedSessions(getSavedSessions());
+      setSession(null);
+      return error?.message ?? "That saved session could not be restored.";
     }
+    setSession(data.session);
+    rememberSession(data.session);
+    void refreshSessionOnce().then((r) => {
+      if ("session" in r && r.session) {
+        const refreshed = r.session as Session;
+        setSession(refreshed);
+        rememberSession(refreshed);
+      }
+    });
     return null;
-  }, []);
+  }, [rememberSession]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
     if (!userId || !profile) return "Not signed in";
@@ -2412,7 +2423,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectServer = useCallback(async (serverId: string) => {
     markActivity();
     persistActiveServerChannel();
-    setViewMode("server");
+    setViewMode("space");
     setActiveServerId(serverId);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
@@ -2444,7 +2455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMessages([]);
     setMessagesLoading(true);
     setChannelHasMore(false);
-    if (viewMode !== "server") setViewMode("server");
+    if (viewMode !== "space") setViewMode("space");
     const channel = channelsRef.current.find((c) => c.id === channelId);
     if (channel) {
       clearServerIndicator(channel.server_id);
@@ -2777,7 +2788,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createServer = useCallback(async (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => {
     if (!userId) return "Not signed in";
-    if (hasRestriction("join_servers")) return "Your account is restricted from creating or joining servers.";
+    if (hasRestriction("join_servers")) return "Your account is restricted from creating or joining spaces.";
     await ensureProfile(userId, user?.email);
     const { data: id, error } = await getSupabaseClient().rpc("create_server", {
       p_name: data.name,
@@ -2811,7 +2822,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const owned = servers.find((s) => s.id === serverId)?.owner_id === userId;
     if (owned) {
-      return "You created this server, so you can't leave it. Transfer ownership to someone else, or delete the server.";
+      return "You created this space, so you can't leave it. Transfer ownership to someone else, or delete the space.";
     }
     const { error } = await getSupabaseClient().from("server_members").delete().eq("server_id", serverId).eq("user_id", userId);
     if (error) return error.message;
@@ -2822,7 +2833,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const joinServerByInvite = useCallback(async (code: string) => {
     if (!userId) return "Not signed in";
-    if (hasRestriction("join_servers")) return "Your account is restricted from joining servers.";
+    if (hasRestriction("join_servers")) return "Your account is restricted from joining spaces.";
     await ensureProfile(userId, user?.email);
     const { data: id, error } = await getSupabaseClient().rpc("join_server_by_invite", { p_code: code });
     if (error) return error.message;
@@ -2833,7 +2844,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const joinServerById = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
-    if (hasRestriction("join_servers")) return "Your account is restricted from joining servers.";
+    if (hasRestriction("join_servers")) return "Your account is restricted from joining spaces.";
     await ensureProfile(userId, user?.email);
     const { error } = await getSupabaseClient().rpc("join_server_by_id", { p_server_id: serverId });
     if (error) return error.message;
@@ -2843,7 +2854,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
 
   const kickMember = useCallback(async (targetUserId: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("kick_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -2854,7 +2865,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const banMember = useCallback(async (targetUserId: string, reason?: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("ban_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -2866,7 +2877,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const unbanMember = useCallback(async (targetUserId: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("unban_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -2877,7 +2888,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId]);
 
   const timeoutMember = useCallback(async (targetUserId: string, seconds: number, reason?: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("timeout_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -2890,7 +2901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId]);
 
   const removeMemberTimeout = useCallback(async (targetUserId: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("remove_timeout", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -3046,7 +3057,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createRole = useCallback(async (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().from("server_roles").insert({
       server_id: activeServerId,
       name: data.name.trim(),
@@ -3063,7 +3074,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     roleId: string,
     patch: Partial<Pick<ServerRole, "name" | "color" | "permissions" | "gradient_to" | "gradient_animated">>,
   ) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const update: Record<string, unknown> = {};
     if (patch.name !== undefined) update.name = patch.name.trim();
     if (patch.color !== undefined) update.color = patch.color;
@@ -3081,7 +3092,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const setMemberRoles = useCallback(async (targetUserId: string, roleIds: string[]) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("set_member_roles", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -3098,7 +3109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const createChannel = useCallback(async (data: { name: string; type?: ChannelType; categoryId?: string | null }) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { data: id, error } = await getSupabaseClient().rpc("create_channel", {
       p_server_id: activeServerId,
       p_name: data.name.trim(),
@@ -3112,7 +3123,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails, selectChannel]);
 
   const setChannelReadOnly = useCallback(async (channelId: string, readOnly: boolean) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient()
       .from("channels")
       .update({ read_only: readOnly })
@@ -3123,7 +3134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const renameChannel = useCallback(async (channelId: string, name: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("rename_channel", {
       p_channel_id: channelId,
       p_name: name.trim(),
@@ -3134,7 +3145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const deleteChannel = useCallback(async (channelId: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("delete_channel", {
       p_channel_id: channelId,
     });
@@ -3145,7 +3156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, activeChannelId, loadServerDetails]);
 
   const createCategory = useCallback(async (name: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { data: id, error } = await getSupabaseClient().rpc("create_category", {
       p_server_id: activeServerId,
       p_name: name.trim(),
@@ -3156,7 +3167,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const renameCategory = useCallback(async (categoryId: string, name: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("rename_category", {
       p_category_id: categoryId,
       p_name: name.trim(),
@@ -3167,7 +3178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("delete_category", {
       p_category_id: categoryId,
     });
@@ -3177,7 +3188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const moveChannel = useCallback(async (channelId: string, categoryId: string | null, index: number) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("move_channel", {
       p_channel_id: channelId,
       p_category_id: categoryId,
@@ -3189,7 +3200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const moveCategory = useCallback(async (categoryId: string, index: number) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("move_category", {
       p_category_id: categoryId,
       p_index: index,
@@ -3200,7 +3211,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const deleteRole = useCallback(async (roleId: string) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("delete_server_role", {
       p_role_id: roleId,
     });
@@ -3210,7 +3221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeServerId, loadServerDetails]);
 
   const moveRole = useCallback(async (roleId: string, position: number) => {
-    if (!activeServerId) return "No server selected";
+    if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("move_role", {
       p_role_id: roleId,
       p_new_position: position,

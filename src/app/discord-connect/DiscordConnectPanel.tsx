@@ -67,7 +67,7 @@ export function DiscordConnectPanel() {
         Connect Discord
       </h1>
       <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-[#9aa0a8]">
-        Link your Discord account to Disband. You will get a role in the server carrying your
+        Link your Discord account to Disband. You will get a role in the space carrying your
         Disband username.
       </p>
 
@@ -76,9 +76,9 @@ export function DiscordConnectPanel() {
           <p className="text-sm text-[#6e727a]">Checking…</p>
         ) : !validGuild ? (
           <p className="text-sm leading-relaxed text-status-dnd">
-            This link did not come with a Discord server. Ask for a fresh connect link with
+            This link did not come with a Discord space. Ask for a fresh connect link with
             <span className="font-mono"> ,disband </span>
-            in the server.
+            in the space.
           </p>
         ) : linked ? (
           <div>

@@ -6,5 +6,4 @@
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="disband_sessions.xml" />
-    <exclude domain="sharedpref" path="disband_prefs.xml" />
 </full-backup-content>

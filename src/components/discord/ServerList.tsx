@@ -49,7 +49,7 @@ export function computeRailLayout(servers: Server[], folders: ServerFolder[], li
 }
 
 type DropTarget =
-  | { kind: "server"; id: string; before: boolean }
+  | { kind: "space"; id: string; before: boolean }
   | { kind: "folder"; id: string }
   | { kind: "top-end" }
   | { kind: "folder-end"; id: string };
@@ -66,7 +66,7 @@ export function resolveServerDrop(
 
   let destFolder: string | null = null;
   let destIds: string[];
-  if (target.kind === "server") {
+  if (target.kind === "space") {
     destFolder = layout.folders.find((f) => f.servers.some((s) => s.id === target.id))?.folder.id ?? null;
     destIds = removeFrom(destFolder ? (folderMembers.get(destFolder) ?? []) : [...topIds]);
     const idx = destIds.indexOf(target.id);
@@ -88,7 +88,7 @@ export function resolveServerDrop(
   if (sourceFolder !== destFolder) {
     const srcIds = removeFrom(sourceFolder ? [...(folderMembers.get(sourceFolder) ?? [])] : [...topIds]);
     reindex(srcIds, sourceFolder);
-  } else if (target.kind === "server") {
+  } else if (target.kind === "space") {
     // same-list reorder already covered by destIds
   }
   return slots;
@@ -227,7 +227,7 @@ function ServerButton({
             )}
             {server.verified && (
               <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-bg-tertiary">
-                <Tooltip label="This server is officially verified by Disband">
+                <Tooltip label="This space is officially verified by Disband">
                   <IconVerified size={12} className="shrink-0 text-sky-400" />
                 </Tooltip>
               </span>
@@ -273,11 +273,11 @@ export function ServerList({
     if (holder) setExpanded((prev) => new Set(prev).add(holder.folder.id));
   }, [activeServerId, layout]);
 
-  const dragRef = useRef<{ kind: "server" | "folder"; id: string } | null>(null);
+  const dragRef = useRef<{ kind: "space" | "folder"; id: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
 
   const startServerDrag = (e: React.DragEvent, id: string) => {
-    dragRef.current = { kind: "server", id };
+    dragRef.current = { kind: "space", id };
     e.dataTransfer.setData("application/x-disband-server", id);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -292,22 +292,22 @@ export function ServerList({
   };
 
   const serverDragOver = (e: React.DragEvent, id: string) => {
-    if (dragRef.current?.kind !== "server" && !e.dataTransfer.types.includes("application/x-disband-server")) return;
+    if (dragRef.current?.kind !== "space" && !e.dataTransfer.types.includes("application/x-disband-server")) return;
     e.preventDefault();
     // Without this the event keeps bubbling to the list (and to the enclosing
     // folder), whose own handler overwrites the target we just set — so the
     // line showed up at the end of the rail instead of beside this server.
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDropTarget({ kind: "server", id, before: e.clientY < rect.top + rect.height / 2 });
+    setDropTarget({ kind: "space", id, before: e.clientY < rect.top + rect.height / 2 });
   };
   const dropOnServer = (e: React.DragEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const dragId = dragRef.current?.kind === "server" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-server");
+    const dragId = dragRef.current?.kind === "space" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-server");
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     if (dragId && dragId !== id) {
-      onReorderServers(resolveServerDrop(layout, dragId, { kind: "server", id, before: e.clientY < rect.top + rect.height / 2 }));
+      onReorderServers(resolveServerDrop(layout, dragId, { kind: "space", id, before: e.clientY < rect.top + rect.height / 2 }));
     }
     endDrag();
   };
@@ -318,9 +318,9 @@ export function ServerList({
       const dragId = dragRef.current?.kind === "folder" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-folder");
       if (dragId && dragId !== folderId) onReorderFolders(resolveFolderDrop(folders, dragId, targetId ?? folderId, before ?? false));
     } else {
-      const dragId = dragRef.current?.kind === "server" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-server");
+      const dragId = dragRef.current?.kind === "space" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-server");
       if (dragId) {
-        onReorderServers(resolveServerDrop(layout, dragId, asReorder && targetId ? { kind: "server", id: targetId, before: before ?? false } : { kind: "folder", id: folderId }));
+        onReorderServers(resolveServerDrop(layout, dragId, asReorder && targetId ? { kind: "space", id: targetId, before: before ?? false } : { kind: "folder", id: folderId }));
         setExpanded((prev) => new Set(prev).add(folderId));
       }
     }
@@ -328,7 +328,7 @@ export function ServerList({
   };
 
   const renderServerButton = (server: Server) => {
-    const active = activeServerId === server.id && viewMode === "server";
+    const active = activeServerId === server.id && viewMode === "space";
     const hasUnread = serverUnreadSet.has(server.id) && !active;
     const dt = dropTarget;
     return (
@@ -338,8 +338,8 @@ export function ServerList({
         active={active}
         hasUnread={hasUnread}
         draggable
-        dropBefore={dt?.kind === "server" && dt.id === server.id && dt.before}
-        dropAfter={dt?.kind === "server" && dt.id === server.id && !dt.before}
+        dropBefore={dt?.kind === "space" && dt.id === server.id && dt.before}
+        dropAfter={dt?.kind === "space" && dt.id === server.id && !dt.before}
         onSelect={() => onSelectServer(server.id)}
         onContext={(x, y) => onServerContext(server, x, y)}
         onDragStart={(e) => startServerDrag(e, server.id)}
@@ -434,7 +434,7 @@ export function ServerList({
         }}
         onDrop={(e) => {
           e.preventDefault();
-          const serverId = dragRef.current?.kind === "server" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-server");
+          const serverId = dragRef.current?.kind === "space" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-server");
           const folderId = dragRef.current?.kind === "folder" ? dragRef.current.id : e.dataTransfer.getData("application/x-disband-folder");
           if (serverId) onReorderServers(resolveServerDrop(layout, serverId, { kind: "top-end" }));
           else if (folderId) onReorderFolders(resolveFolderDrop(folders, folderId, null, false));
@@ -445,8 +445,8 @@ export function ServerList({
 
         {layout.folders.map(({ folder, servers: members }) => {
           const isOpen = expanded.has(folder.id);
-          const hasActive = members.some((s) => s.id === activeServerId && viewMode === "server");
-          const hasUnread = members.some((s) => serverUnreadSet.has(s.id) && !(s.id === activeServerId && viewMode === "server"));
+          const hasActive = members.some((s) => s.id === activeServerId && viewMode === "space");
+          const hasUnread = members.some((s) => serverUnreadSet.has(s.id) && !(s.id === activeServerId && viewMode === "space"));
           const isDrop = dropTarget?.kind === "folder" && dropTarget.id === folder.id;
           return (
             <div
@@ -502,7 +502,7 @@ export function ServerList({
                 <div className="flex w-full flex-col items-center gap-2 border-l-2 pl-1" style={{ borderColor: `${folder.color}88` }}>
                   {members.map((server) => renderServerButton(server))}
                   {members.length === 0 && (
-                    <p className="px-1 text-center text-[10px] leading-tight text-text-muted">Drop servers here</p>
+                    <p className="px-1 text-center text-[10px] leading-tight text-text-muted">Drop spaces here</p>
                   )}
                 </div>
               )}
@@ -514,7 +514,7 @@ export function ServerList({
       <Tooltip label="Add a Space">
         <button
           type="button"
-          aria-label="Create server"
+          aria-label="Create space"
           onClick={onCreateServer}
           className="group flex h-12 w-12 items-center justify-center rounded-[50%] bg-bg-primary text-status-online transition-all duration-150 ease-in-out hover:rounded-[30%] hover:bg-status-online hover:text-white"
         >
@@ -525,7 +525,7 @@ export function ServerList({
       <Tooltip label="Discover">
         <button
           type="button"
-          aria-label="Discover servers"
+          aria-label="Discover spaces"
           onClick={onDiscover}
           className="group flex h-12 w-12 items-center justify-center rounded-[50%] bg-bg-primary text-text-muted transition-all duration-150 ease-in-out hover:rounded-[30%] hover:bg-brand hover:text-white"
         >

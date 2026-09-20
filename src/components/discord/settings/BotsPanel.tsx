@@ -142,7 +142,7 @@ export function BotsPanel() {
   async function generateInvite() {
     if (!invitingBot) return;
     if (!inviteServerId) {
-      setInviteError("Pick a server for the bot to join.");
+      setInviteError("Pick a space for the bot to join.");
       return;
     }
     if (inviteScopes.length === 0) {
@@ -219,7 +219,7 @@ export function BotsPanel() {
               Use it to connect the client:{" "}
               <code className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[11.5px]">new Client(&#123; token: "…" &#125;)</code>.
               See the{" "}
-              <a href="https://docs.disband.dev/docs/bots/" target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
+              <a href="/docs/bots" className="text-brand hover:underline">
                 bot docs
               </a>{" "}
               for setup.
@@ -270,7 +270,7 @@ export function BotsPanel() {
                 ))}
               </div>
               <p className="mt-2 text-[11.5px] leading-relaxed text-text-muted">
-                A bot's reach in a server is the intersection of these scopes and what the server
+                A bot's reach in a space is the intersection of these scopes and what the space
                 owner approves when they accept the invite.
               </p>
             </div>
@@ -353,7 +353,7 @@ export function BotsPanel() {
                   Invite {invitingBot.name}
                 </h3>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
-                  Generate a link and send it to the server's owner. They decide whether the bot
+                  Generate a link and send it to the space's owner. They decide whether the bot
                   joins.
                 </p>
               </div>
@@ -369,16 +369,16 @@ export function BotsPanel() {
 
             <div className="mt-4 space-y-4">
               <div>
-                <label className="mb-1.5 block text-[12.5px] font-medium text-text-normal" htmlFor="bot-invite-server">
-                  Server
+                <label className="mb-1.5 block text-[12.5px] font-medium text-text-normal" htmlFor="bot-invite-space">
+                  Space
                 </label>
                 <select
-                  id="bot-invite-server"
+                  id="bot-invite-space"
                   value={inviteServerId}
                   onChange={(e) => setInviteServerId(e.target.value)}
                   className={settingsInputClass}
                 >
-                  {servers.length === 0 && <option value="">No servers — join one first</option>}
+                  {servers.length === 0 && <option value="">No spaces — join one first</option>}
                   {servers.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}

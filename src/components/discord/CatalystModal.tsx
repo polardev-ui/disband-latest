@@ -160,7 +160,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-1">
-          <h2 className="text-lg font-bold">Server Catalysts</h2>
+          <h2 className="text-lg font-bold">Space Catalysts</h2>
           <button
             type="button"
             onClick={onClose}
@@ -246,7 +246,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
                 title={!isAero ? "Aero members only" : balance <= 0 ? "No credits left this month" : "Spend a monthly credit"}
                 className="flex-1 rounded-lg bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy ? "Working…" : "Boost this server"}
+                {busy ? "Working…" : "Boost this space"}
               </button>
               {myHere > 0 && (
                 <button

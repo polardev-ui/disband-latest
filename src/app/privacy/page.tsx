@@ -48,7 +48,7 @@ export default function PrivacyPage() {
           <p>
             Account data is retained while your account is active. You may delete your account at any
             time through settings or by contacting support. Encrypted message payloads are not stored
-            in decryptable form on our servers.
+            in decryptable form on our spaces.
           </p>
 
           <h2 className="text-lg font-semibold text-white">Contact</h2>

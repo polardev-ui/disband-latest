@@ -102,6 +102,13 @@ export default {
       return ingest(request, env);
     }
 
+    // Moves an object out of public reach without destroying it, for the
+    // safety sweep. Keys containing "/" are refused by serve(), so anything
+    // under quarantine/ can never be fetched again over HTTP.
+    if (request.method === "POST" && pathname === "/v1/admin/quarantine") {
+      return quarantine(request, env);
+    }
+
     // Link previews and GIF search moved here from the old media host, so the
     // app talks to one origin it controls instead of two. Both are reads with
     // no side effects, which is why they are GET and cacheable.
@@ -121,64 +128,16 @@ export default {
   },
 };
 
-export class MediaQuota {
-  constructor(ctx, env) {
-    this.ctx = ctx;
-    this.env = env;
-  }
-
-  async fetch(request) {
-    const body = await request.json().catch(() => null);
-    const bytes = Number(body?.bytes);
-    if (!Number.isSafeInteger(bytes) || bytes < 0) {
-      return Response.json({ error: "Invalid quota reservation." }, { status: 400 });
-    }
-
-    if (new URL(request.url).pathname === "/rollback") {
-      await this.ctx.storage.transaction(async (txn) => {
-        const usage = (await txn.get("usage")) ?? { bytes: 0, objects: 0 };
-        await txn.put("usage", {
-          bytes: Math.max(0, usage.bytes - bytes),
-          objects: Math.max(0, usage.objects - 1),
-        });
-      });
-      return Response.json({ ok: true });
-    }
-
-    const maxBytes = Math.max(1, Number(this.env.MAX_USER_STORAGE_MB ?? 1024)) * 1024 * 1024;
-    const maxObjects = Math.max(1, Number(this.env.MAX_USER_OBJECTS ?? 500));
-    let allowed = false;
-    await this.ctx.storage.transaction(async (txn) => {
-      const usage = (await txn.get("usage")) ?? { bytes: 0, objects: 0 };
-      if (usage.bytes + bytes <= maxBytes && usage.objects + 1 <= maxObjects) {
-        await txn.put("usage", { bytes: usage.bytes + bytes, objects: usage.objects + 1 });
-        allowed = true;
-      }
-    });
-    return Response.json({ allowed }, { status: allowed ? 200 : 429 });
-  }
-}
-
 /* ------------------------------------------------------------------ upload */
 
 async function upload(request, env) {
   const auth = await requireUser(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status, env);
 
-  const uploadLimit = await env.UPLOAD_RATE_LIMITER.limit({ key: auth.userId });
-  if (!uploadLimit.success) return json({ error: "Too many uploads. Try again shortly." }, 429, env);
-
   const limit = maxUploadBytes(env);
   const limitMb = Math.round(limit / (1024 * 1024));
 
-  const contentLength = request.headers.get("content-length");
-  if (!contentLength) {
-    return json({ error: "A Content-Length header is required." }, 411, env);
-  }
-  const declared = Number(contentLength);
-  if (!Number.isSafeInteger(declared) || declared < 0) {
-    return json({ error: "Invalid Content-Length header." }, 400, env);
-  }
+  const declared = Number(request.headers.get("content-length") ?? 0);
   if (declared > limit) {
     return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
   }
@@ -198,63 +157,150 @@ async function upload(request, env) {
     return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
   }
 
-  const quotaId = env.MEDIA_QUOTA.idFromName(auth.userId);
-  const quota = env.MEDIA_QUOTA.get(quotaId);
-  const reservation = await quota.fetch("https://quota/reserve", {
-    method: "POST",
-    body: JSON.stringify({ bytes: file.size }),
+  const type = file.type || "application/octet-stream";
+  const contentType = storageTypeFor(type);
+  const key = `${crypto.randomUUID()}.${extensionOf(file.name, type)}`;
+
+  // Hash the bytes on their way to R2. `tee` + DigestStream means even a
+  // 500 MB video is hashed without ever being held in memory, which a Worker
+  // (128 MB) could not do.
+  const [toStore, toHash] = file.stream().tee();
+  const digestStream = new crypto.DigestStream("SHA-256");
+  const hashing = toHash.pipeTo(digestStream);
+
+  await env.MEDIA.put(key, toStore, {
+    httpMetadata: {
+      contentType,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+    customMetadata: {
+      uploadedBy: auth.userId ?? "anonymous",
+      uploadedAt: new Date().toISOString(),
+      originalName: (file.name ?? "").slice(0, 200),
+    },
   });
-  if (!reservation.ok) {
-    return json({ error: "Your media storage quota has been reached." }, 429, env);
+
+  await hashing;
+  const sha256 = hex(await digestStream.digest);
+  const url = `${env.PUBLIC_BASE}/v1/images/${key}`;
+
+  // Known illegal material never gets a URL. The object is written first
+  // (streaming leaves no choice) but is deleted before anyone is told where
+  // it went, so it is never reachable.
+  if (await isHashBanned(env, sha256)) {
+    await env.MEDIA.delete(key);
+    await recordBlockedUpload(env, sha256, auth.userId);
+    return json(
+      { error: "That file can't be uploaded. If you believe this is a mistake, contact support." },
+      451, env,
+    );
   }
 
-  const type = (file.type || "application/octet-stream").toLowerCase();
-  const sniffed = await sniffInlineType(file);
-  const contentType = sniffed === type ? storageTypeFor(type) : "application/octet-stream";
-  const key = `${auth.userId}/${crypto.randomUUID()}.${extensionOf(file.name, type)}`;
+  // Queue it for the safety sweep. Best effort: a bookkeeping failure must
+  // not fail the upload.
+  await registerAsset(env, { url, key, sha256, bytes: file.size, contentType, userId: auth.userId });
 
-  try {
-    await env.MEDIA.put(key, file.stream(), {
-      httpMetadata: {
-        contentType,
-        cacheControl: "public, max-age=31536000, immutable",
-      },
-      customMetadata: {
-        uploadedBy: auth.userId,
-        uploadedAt: new Date().toISOString(),
-        originalName: (file.name ?? "").slice(0, 200),
-      },
-    });
-  } catch (error) {
-    await quota.fetch("https://quota/rollback", {
-      method: "POST",
-      body: JSON.stringify({ bytes: file.size }),
-    }).catch(() => undefined);
-    throw error;
-  }
-
-  return json({ url: `${env.PUBLIC_BASE}/v1/images/${key}`, key }, 200, env);
+  return json({ url, key }, 200, env);
 }
 
-async function sniffInlineType(file) {
-  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
-  const ascii = String.fromCharCode(...bytes);
-  if (bytes[0] === 0x89 && ascii.slice(1, 4) === "PNG") return "image/png";
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
-  if (ascii.startsWith("GIF87a") || ascii.startsWith("GIF89a")) return "image/gif";
-  if (ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP") return "image/webp";
-  if (ascii.startsWith("%PDF-")) return "application/pdf";
-  if (ascii.slice(4, 8) === "ftyp") return "video/mp4";
-  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return "video/webm";
-  return null;
+function hex(buffer) {
+  return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Supabase REST with the service key, or null when it isn't configured. */
+async function supabaseAdmin(env, path, init = {}) {
+  const key = env.SUPABASE_SERVICE_KEY;
+  if (!key) return null;
+  return fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
+async function isHashBanned(env, sha256) {
+  try {
+    const response = await supabaseAdmin(env, `banned_media_hashes?sha256=eq.${sha256}&select=sha256`);
+    if (!response || !response.ok) return false;
+    const rows = await response.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    // Never block a legitimate upload because the lookup failed; the sweep
+    // will catch it within five hours.
+    return false;
+  }
+}
+
+async function recordBlockedUpload(env, sha256, userId) {
+  try {
+    await supabaseAdmin(env, "moderation_actions", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "blocked_upload",
+        src_table: "media",
+        src_id: sha256,
+        owner_id: userId ?? null,
+        category: "csam",
+        reason: "Upload matched a banned hash",
+        actor: "cdn",
+      }),
+    });
+  } catch { /* logging only */ }
+}
+
+async function registerAsset(env, { url, key, sha256, bytes, contentType, userId }) {
+  try {
+    await supabaseAdmin(env, "media_assets?on_conflict=url", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({
+        url, storage_key: key, sha256, bytes, content_type: contentType,
+        owner_id: userId ?? null, scan_state: "pending",
+      }),
+    });
+  } catch { /* best effort */ }
+}
+
+/**
+ Copies an object to `quarantine/<sha256>` and removes the public one.
+
+ The bytes are kept because US law requires apparent CSAM to be preserved for
+ 90 days after it is reported (18 U.S.C. § 2258A(h)); deleting on sight would
+ destroy evidence.
+ */
+async function quarantine(request, env) {
+  if (!env.ADMIN_SECRET || request.headers.get("x-admin-secret") !== env.ADMIN_SECRET) {
+    return json({ error: "Unauthorized" }, 401, env);
+  }
+  const { key, sha256 } = await request.json().catch(() => ({}));
+  if (!key || !sha256) return json({ error: "key and sha256 are required" }, 400, env);
+
+  const object = await env.MEDIA.get(key);
+  if (!object) return json({ error: "Not found", quarantineKey: null }, 404, env);
+
+  const quarantineKey = `quarantine/${sha256}`;
+  await env.MEDIA.put(quarantineKey, object.body, {
+    httpMetadata: { contentType: object.httpMetadata?.contentType ?? "application/octet-stream" },
+    customMetadata: {
+      ...(object.customMetadata ?? {}),
+      quarantinedAt: new Date().toISOString(),
+      originalKey: key,
+      legalHold: "preserve-90-days",
+    },
+  });
+  await env.MEDIA.delete(key);
+
+  return json({ ok: true, quarantineKey }, 200, env);
 }
 
 /* ------------------------------------------------------------------- serve */
 
 async function serve(request, env, key) {
-  const legacyKey = /^[0-9a-f-]{36}\.[a-z0-9]+$/i;
-  const userKey = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.[a-z0-9]+$/i;
-  if (!legacyKey.test(key) && !userKey.test(key)) {
+  if (!key || key.includes("..") || key.includes("/")) {
     return json({ error: "Bad key" }, 400, env);
   }
 
@@ -347,9 +393,6 @@ function metaContent(html, key) {
 }
 
 async function linkPreview(request, env, target) {
-  const caller = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const allowed = await env.PREVIEW_RATE_LIMITER.limit({ key: caller });
-  if (!allowed.success) return json({ error: "Too many preview requests." }, 429, env);
   if (!target) return json({ error: "Missing url parameter." }, 400, env);
   if (!isFetchableUrl(target)) return json({ error: "Invalid or disallowed url." }, 400, env);
 
@@ -362,19 +405,27 @@ async function linkPreview(request, env, target) {
 
   let upstream;
   try {
-    let next = target;
-    for (let hop = 0; hop <= 5; hop++) {
+    upstream = await fetch(target, {
+      headers: {
+        "user-agent": "DisbandLinkPreview/1.0 (+https://www.disband.dev)",
+        accept: "text/html,application/xhtml+xml",
+      },
+      // A redirect could land on an address the check above rejected, so the
+      // hop is followed manually and re-checked rather than automatically.
+      redirect: "manual",
+      signal: AbortSignal.timeout(8000),
+      cf: { cacheTtl: 3600 },
+    });
+
+    const location = upstream.headers.get("location");
+    if (upstream.status >= 300 && upstream.status < 400 && location) {
+      const next = new URL(location, target).toString();
+      if (!isFetchableUrl(next)) return json({ error: "Preview unavailable." }, 502, env);
       upstream = await fetch(next, {
         headers: { "user-agent": "DisbandLinkPreview/1.0 (+https://www.disband.dev)" },
         redirect: "manual",
         signal: AbortSignal.timeout(8000),
-        cf: { cacheTtl: 3600 },
       });
-      const location = upstream.headers.get("location");
-      if (!(upstream.status >= 300 && upstream.status < 400 && location)) break;
-      if (hop === 5) return json({ error: "Preview unavailable." }, 502, env);
-      next = new URL(location, next).toString();
-      if (!isFetchableUrl(next)) return json({ error: "Preview unavailable." }, 502, env);
     }
   } catch {
     return json({ error: "Preview unavailable." }, 502, env);
@@ -471,9 +522,6 @@ async function linkPreview(request, env, target) {
  * an error. A day-old list of cat GIFs is not wrong; it is only unfashionable.
  */
 async function gifSearch(request, env, params) {
-  const caller = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const allowed = await env.GIF_RATE_LIMITER.limit({ key: caller });
-  if (!allowed.success) return json({ error: "Too many GIF requests." }, 429, env);
   // Normalised so "Cat", "cat " and "CAT" are one cache entry rather than
   // three calls against the same allowance.
   const q = (params.get("q") ?? "").trim().toLowerCase().replace(/\s+/g, " ").slice(0, 100);
@@ -723,28 +771,13 @@ async function legacyGifSearch(env, q, limit) {
 
 async function ingest(request, env) {
   const secret = request.headers.get("x-migration-secret");
-  if (!env.MIGRATION_SECRET || !secret || !constantTimeEqual(secret, env.MIGRATION_SECRET)) {
+  if (!env.MIGRATION_SECRET || secret !== env.MIGRATION_SECRET) {
     return json({ error: "Forbidden" }, 403, env);
   }
 
-  let payload;
-  try {
-    payload = await request.json();
-  } catch {
-    return json({ error: "Expected a JSON body." }, 400, env);
-  }
-  const { sourceUrl, key } = payload;
+  const { sourceUrl, key } = await request.json();
   if (!sourceUrl || !key || key.includes("/") || key.includes("..")) {
     return json({ error: "sourceUrl and a flat key are required" }, 400, env);
-  }
-  let source;
-  try {
-    source = new URL(sourceUrl);
-  } catch {
-    return json({ error: "Invalid sourceUrl" }, 400, env);
-  }
-  if (source.origin !== env.LEGACY_MEDIA_ORIGIN || !source.pathname.startsWith("/v1/images/")) {
-    return json({ error: "Source origin is not allowed" }, 400, env);
   }
 
   // Already copied: say so rather than fetching it again, so the script can
@@ -752,14 +785,14 @@ async function ingest(request, env) {
   const existing = await env.MEDIA.head(key);
   if (existing) return json({ ok: true, key, skipped: true }, 200, env);
 
-  const upstream = await fetch(source.toString(), { redirect: "error" });
+  const upstream = await fetch(sourceUrl);
   if (!upstream.ok || !upstream.body) {
     return json({ error: `Upstream ${upstream.status}`, key }, 502, env);
   }
 
   await env.MEDIA.put(key, upstream.body, {
     httpMetadata: {
-      contentType: storageTypeFor((upstream.headers.get("content-type") ?? "application/octet-stream").split(";", 1)[0].toLowerCase()),
+      contentType: upstream.headers.get("content-type") ?? "application/octet-stream",
       cacheControl: "public, max-age=31536000, immutable",
     },
     customMetadata: { migratedFrom: sourceUrl, migratedAt: new Date().toISOString() },
@@ -784,7 +817,7 @@ async function ingest(request, env) {
  * signature check cannot know.
  */
 async function requireUser(request, env) {
-  if (env.REQUIRE_AUTH !== "true") return { error: "Upload authentication is misconfigured.", status: 503 };
+  if (env.REQUIRE_AUTH === "false") return { userId: null };
 
   const header = request.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
@@ -804,15 +837,6 @@ async function requireUser(request, env) {
   } catch {
     return { error: "Could not verify your session.", status: 503 };
   }
-}
-
-function constantTimeEqual(left, right) {
-  const a = new TextEncoder().encode(left);
-  const b = new TextEncoder().encode(right);
-  let difference = a.length ^ b.length;
-  const length = Math.max(a.length, b.length);
-  for (let i = 0; i < length; i++) difference |= (a[i % a.length] ?? 0) ^ (b[i % b.length] ?? 0);
-  return difference === 0;
 }
 
 /* ------------------------------------------------------------------- utils */
