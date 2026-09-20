@@ -18,7 +18,7 @@ export function getDiscordClientId(): string {
 
 async function hmacKey(): Promise<CryptoKey> {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!secret) throw new Error("Server signing key is not configured");
+  if (!secret) throw new Error("Space signing key is not configured");
   return crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(`discord-oauth:${secret}`),
@@ -113,9 +113,9 @@ export async function ensureGuildRole(guildId: string, roleName: string): Promis
   const list = await fetch(`${API}/guilds/${guildId}/roles`, { headers: botHeaders() });
   if (!list.ok) {
     if (list.status === 403 || list.status === 401) {
-      throw new Error("The bot cannot see that server — check its token and permissions");
+      throw new Error("The bot cannot see that space — check its token and permissions");
     }
-    throw new Error("Could not read the server's roles");
+    throw new Error("Could not read the space's roles");
   }
   const roles = (await list.json()) as { id: string; name: string }[];
   const existing = roles.find((r) => r.name.toLowerCase() === roleName.toLowerCase());
@@ -127,7 +127,7 @@ export async function ensureGuildRole(guildId: string, roleName: string): Promis
   });
   if (!created.ok) {
     if (created.status === 403) {
-      throw new Error("The bot needs the Manage Roles permission in that server");
+      throw new Error("The bot needs the Manage Roles permission in that space");
     }
     throw new Error("Could not create the role — the bot's own role may sit too low");
   }
@@ -141,7 +141,7 @@ export async function assignGuildRole(guildId: string, discordUserId: string, ro
     headers: botHeaders(),
   });
   if (!res.ok) {
-    if (res.status === 404) throw new Error("You are not in that Discord server — join it first");
+    if (res.status === 404) throw new Error("You are not in that Discord space — join it first");
     if (res.status === 403) {
       throw new Error("The bot cannot assign the role — its own role must sit above it");
     }

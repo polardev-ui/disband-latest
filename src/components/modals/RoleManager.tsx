@@ -10,7 +10,7 @@ export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; la
   {
     title: "Moderation",
     perms: [
-      { key: "kick", label: "Kick Members", hint: "Remove members from the server" },
+      { key: "kick", label: "Kick Members", hint: "Remove members from the space" },
       { key: "ban", label: "Ban Members", hint: "Ban members and manage the ban list" },
       { key: "timeout_members", label: "Timeout Members", hint: "Temporarily mute members in chat" },
       { key: "manage_messages", label: "Manage Messages", hint: "Delete anyone's messages" },
@@ -31,7 +31,7 @@ export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; la
     perms: [
       { key: "manage_roles", label: "Manage Roles", hint: "Create roles and assign them" },
       { key: "manage_channels", label: "Manage Channels", hint: "Create, edit and delete channels" },
-      { key: "manage_server", label: "Manage Server", hint: "Edit server settings and invites" },
+      { key: "manage_server", label: "Manage Space", hint: "Edit space settings and invites" },
       { key: "create_invites", label: "Create Invites", hint: "Share invite links" },
       { key: "manage_emojis", label: "Manage Emoji", hint: "Add and remove custom emoji" },
       { key: "view_audit_log", label: "View Audit Log", hint: "See who did what" },

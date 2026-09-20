@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       quantity?: unknown;
     };
     if (typeof server_id !== "string" || !server_id) {
-      return NextResponse.json({ error: "Pick a server." }, { status: 400 });
+      return NextResponse.json({ error: "Pick a space." }, { status: 400 });
     }
     const qty = typeof quantity === "number" ? Math.floor(quantity) : NaN;
     if (!Number.isFinite(qty) || qty < 1 || qty > 99) {
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "";
     if (/STRIPE_SECRET_KEY/.test(message)) {
       return NextResponse.json(
-        { error: "Billing is not configured on this server yet." },
+        { error: "Billing is not configured on this space yet." },
         { status: 500 },
       );
     }

@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 
     const guild = new URL(req.url).searchParams.get("guild") ?? "";
     if (!/^\d{5,25}$/.test(guild)) {
-      return NextResponse.json({ error: "Missing Discord server." }, { status: 400 });
+      return NextResponse.json({ error: "Missing Discord space." }, { status: 400 });
     }
 
     const state = await signOAuthState({

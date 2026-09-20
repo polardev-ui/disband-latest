@@ -36,15 +36,15 @@ function MutualsSection({
     <div className="mt-3 space-y-1 border-t border-black/15 pt-2">
       {serverIds.length > 0 && (
         <div>
-          <button type="button" onClick={() => toggle("servers")} className={row}>
+          <button type="button" onClick={() => toggle("spaces")} className={row}>
             <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
-              Mutual Servers · {serverIds.length}
+              Mutual Spaces · {serverIds.length}
             </span>
-            <span className={`text-xs text-text-muted transition-transform ${open === "servers" ? "" : "-rotate-90"}`}>
+            <span className={`text-xs text-text-muted transition-transform ${open === "spaces" ? "" : "-rotate-90"}`}>
               ▾
             </span>
           </button>
-          {open === "servers" && (
+          {open === "spaces" && (
             <div className="flex flex-wrap gap-1.5 pb-1.5">
               {serverIds.map((id) => {
                 const s = servers.find((x) => x.id === id);
@@ -285,7 +285,7 @@ export function UserProfileModal({
                 Roles
               </p>
               {memberIsOwner ? (
-                <p className="text-sm font-semibold">Server Owner</p>
+                <p className="text-sm font-semibold">Space Owner</p>
               ) : (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {memberRoles.map((role) => (

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { authenticateBot, botJsonError, publicBotError } from "@/lib/bot-auth";
+import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 
 export async function POST(
   request: NextRequest,
@@ -20,12 +20,12 @@ export async function POST(
     });
 
     if (error) {
-      return NextResponse.json({ error: publicBotError(error) }, { status: botJsonError(error) });
+      return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("v1/servers/[serverId]/leave error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

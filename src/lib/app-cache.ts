@@ -18,10 +18,7 @@ function store(): Map<string, CacheEntry<unknown>> {
 function persist(key: string, data: unknown): void {
   try {
     const raw = JSON.stringify(data);
-    const bytes = new TextEncoder().encode(raw);
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    localStorage.setItem(CACHE_PREFIX + key, btoa(binary));
+    localStorage.setItem(CACHE_PREFIX + key, btoa(raw));
   } catch {
 
   }
@@ -31,9 +28,7 @@ function loadPersisted(key: string): unknown | null {
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + key);
     if (!raw) return null;
-    const binary = atob(raw);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
+    return JSON.parse(atob(raw));
   } catch {
     localStorage.removeItem(CACHE_PREFIX + key);
     return null;

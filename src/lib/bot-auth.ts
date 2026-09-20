@@ -62,11 +62,3 @@ export function botJsonError(error: { message?: string } | null | undefined): nu
   if (/too quickly|rate limit/.test(msg)) return 429;
   return 500;
 }
-
-export function publicBotError(error: { message?: string } | null | undefined): string {
-  const status = botJsonError(error);
-  if (status === 403) return "The bot is not allowed to perform that action.";
-  if (status === 429) return "The bot is sending requests too quickly.";
-  if (status === 400) return "The request is invalid or references a missing resource.";
-  return "The bot request could not be completed.";
-}

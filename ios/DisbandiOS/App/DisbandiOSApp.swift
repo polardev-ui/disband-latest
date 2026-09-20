@@ -11,6 +11,7 @@ struct DisbandiOSApp: App {
     @State private var notes: NotesService
     @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
+    @State private var voice: VoiceSession
 
     init() {
         CallAudioSession.prepare()
@@ -26,6 +27,7 @@ struct DisbandiOSApp: App {
         _notes = State(initialValue: NotesService())
         _directMessages = State(initialValue: DirectMessagesViewModel())
         _themeManager = State(initialValue: ThemeManager.shared)
+        _voice = State(initialValue: VoiceSession())
     }
 
     var body: some Scene {
@@ -39,6 +41,7 @@ struct DisbandiOSApp: App {
                 .environment(notes)
                 .environment(directMessages)
                 .environment(themeManager)
+                .environment(voice)
                 .preferredColorScheme(themeManager.palette.colorScheme)
                 .tint(themeManager.palette.accent)
                 .task(id: appState.currentUserId) {
@@ -62,6 +65,10 @@ struct DisbandiOSApp: App {
                     guard appState.currentUserId != nil else { return }
                     await directMessages.start(currentUserId: appState.currentUserId,
                                                unread: dmUnread)
+                }
+                // Voice channels and group calls; also listens for group rings.
+                .task(id: appState.currentUserId) {
+                    voice.start(userId: appState.currentUserId, displayName: appState.profile?.name)
                 }
                 .onChange(of: appState.profile?.theme) { _, _ in
                     themeManager.adopt(from: appState.profile)

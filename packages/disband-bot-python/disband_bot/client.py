@@ -1,10 +1,7 @@
 """The Disband bot client."""
 
-import asyncio
-import inspect
 import threading
 import time
-from urllib.parse import quote, urlencode, urlsplit
 
 from .errors import AuthError
 from .message import Message
@@ -15,14 +12,6 @@ EVENT_NAMES = frozenset(
 )
 
 
-def _path_segment(value):
-    return quote(str(value), safe="")
-
-
-async def _await_handler(result):
-    return await result
-
-
 class Client:
     """A Disband bot.
 
@@ -30,16 +19,9 @@ class Client:
     the Disband API with a bot token created in Settings -> Bots.
     """
 
-    def __init__(self, token, base_url="https://www.disband.dev", gateway_timeout=20,
-                 allow_insecure_localhost=False):
+    def __init__(self, token, base_url="https://www.disband.dev", gateway_timeout=20):
         if not token:
             raise ValueError("A bot token is required (Client(token=...))")
-        parsed = urlsplit(base_url)
-        loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-        if parsed.username or parsed.password or parsed.fragment:
-            raise ValueError("Bot API URLs cannot contain credentials or fragments")
-        if parsed.scheme != "https" and not (parsed.scheme == "http" and allow_insecure_localhost and loopback):
-            raise ValueError("Bot API URLs must use HTTPS (or explicitly enabled loopback HTTP)")
         self.token = token
         self.base_url = base_url.rstrip("/")
         self.gateway_timeout = gateway_timeout
@@ -75,18 +57,12 @@ class Client:
         return register
 
     def once(self, event, handler=None):
-        def register(fn):
-            def wrapped(*args):
-                with self._lock:
-                    self._listeners[event].remove(wrapped)
-                return fn(*args)
+        def wrapped(*args):
+            with self._lock:
+                self._listeners[event].remove(wrapped)
+            handler(*args)
 
-            self.on(event, wrapped)
-            return fn
-
-        if handler is not None:
-            return register(handler)
-        return register
+        return self.on(event, wrapped)
 
     def _emit(self, event, *args):
         with self._lock:
@@ -94,29 +70,14 @@ class Client:
         for handler in handlers:
             try:
                 result = handler(*args)
-                if inspect.isawaitable(result):
-                    try:
-                        loop = asyncio.get_running_loop()
-                    except RuntimeError:
-                        asyncio.run(_await_handler(result))
-                    else:
-                        task = loop.create_task(_await_handler(result))
-                        task.add_done_callback(lambda finished: self._report_task_error(event, finished))
-            except Exception as exc:
-                self._report_handler_error(event, exc)
+                if hasattr(result, "close"):
+                    import asyncio
 
-    def _report_task_error(self, event, task):
-        try:
-            task.result()
-        except Exception as exc:
-            self._report_handler_error(event, exc)
+                    asyncio.ensure_future(result)
+            except Exception:
+                import traceback
 
-    def _report_handler_error(self, event, exc):
-        if event == "error" or not self._listeners["error"]:
-            import traceback
-            traceback.print_exception(type(exc), exc, exc.__traceback__)
-        else:
-            self._emit("error", exc)
+                traceback.print_exc()
 
     # ------------------------------------------------------------ lifecycle
 
@@ -186,7 +147,7 @@ class Client:
 
     def send_message(self, channel_id, content, reply_to_id=None):
         data = self._rest.post(
-            "/api/v1/channels/%s/messages" % _path_segment(channel_id),
+            "/api/v1/channels/%s/messages" % channel_id,
             {"content": content, "reply_to_id": reply_to_id},
         )
         return Message(data["message"], self)
@@ -194,41 +155,41 @@ class Client:
     def list_messages(self, channel_id, limit=None, before=None):
         params = []
         if limit is not None:
-            params.append(("limit", str(limit)))
+            params.append("limit=%d" % limit)
         if before is not None:
-            params.append(("before", str(before)))
-        qs = ("?" + urlencode(params)) if params else ""
-        data = self._rest.get("/api/v1/channels/%s/messages%s" % (_path_segment(channel_id), qs))
+            params.append("before=%s" % before)
+        qs = ("?" + "&".join(params)) if params else ""
+        data = self._rest.get("/api/v1/channels/%s/messages%s" % (channel_id, qs))
         return [Message(m, self) for m in data.get("messages", [])]
 
     def list_channels(self, server_id):
-        data = self._rest.get("/api/v1/servers/%s/channels" % _path_segment(server_id))
+        data = self._rest.get("/api/v1/servers/%s/channels" % server_id)
         return data.get("channels", [])
 
     def list_members(self, server_id):
-        data = self._rest.get("/api/v1/servers/%s/members" % _path_segment(server_id))
+        data = self._rest.get("/api/v1/servers/%s/members" % server_id)
         return data.get("members", [])
 
     def create_channel(self, server_id, name, type="text", category_id=None):
         data = self._rest.post(
-            "/api/v1/servers/%s/channels" % _path_segment(server_id),
+            "/api/v1/servers/%s/channels" % server_id,
             {"name": name, "type": type, "category_id": category_id},
         )
         return data.get("channel_id")
 
     def rename_channel(self, channel_id, name):
-        return self._rest.patch("/api/v1/channels/%s" % _path_segment(channel_id), {"name": name})
+        return self._rest.patch("/api/v1/channels/%s" % channel_id, {"name": name})
 
     def delete_channel(self, channel_id):
-        return self._rest.delete("/api/v1/channels/%s" % _path_segment(channel_id))
+        return self._rest.delete("/api/v1/channels/%s" % channel_id)
 
     def leave_server(self, server_id):
-        return self._rest.post("/api/v1/servers/%s/leave" % _path_segment(server_id))
+        return self._rest.post("/api/v1/servers/%s/leave" % server_id)
 
     def create_invite(self, server_id, scopes):
         if not self.user:
             raise RuntimeError("Client is not connected - call connect() first.")
         return self._rest.post(
-            "/api/v1/bots/%s/invites" % _path_segment(self.user["id"]),
+            "/api/v1/bots/%s/invites" % self.user["id"],
             {"server_id": server_id, "scopes": scopes},
         )

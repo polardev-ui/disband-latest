@@ -29,7 +29,7 @@ export function sanitizeCustomCss(input: string): SanitizedCss {
   }
 
   if (AT_IMPORT.test(css)) {
-    removed.push("@import rules (they load a stylesheet from another server).");
+    removed.push("@import rules (they load a stylesheet from another space).");
   }
   css = css.replace(AT_IMPORT, "");
 

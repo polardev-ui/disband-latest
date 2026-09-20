@@ -26,7 +26,7 @@ export default function NotFound() {
         </h1>
         <p className="mt-4 max-w-md text-base leading-relaxed text-[#b5bac1]">
           The page you were looking for doesn&apos;t exist, was moved, or never
-          got a seat in the server. No one here can hear you.
+          got a seat in the space. No one here can hear you.
         </p>
 
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">

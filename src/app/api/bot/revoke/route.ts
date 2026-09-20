@@ -20,23 +20,21 @@ export async function POST(request: NextRequest) {
       .select("owner_id")
       .eq("id", body.botId)
       .maybeSingle();
-    if (fetchError) return NextResponse.json({ error: "Could not look up the bot." }, { status: 503 });
+    if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
     if (!bot) return NextResponse.json({ error: "Bot not found." }, { status: 404 });
     if (bot.owner_id !== user.id) {
       return NextResponse.json({ error: "Only the bot owner can revoke it." }, { status: 403 });
     }
 
-    const { error } = await service.from("bots")
+    const { error } = await service
+      .from("bots")
       .update({ revoked_at: new Date().toISOString() })
-      .eq("id", body.botId).eq("owner_id", user.id);
-    if (error) {
-      console.error("bot/revoke failed", { code: error.code });
-      return NextResponse.json({ error: "Could not revoke the bot account." }, { status: 500 });
-    }
+      .eq("id", body.botId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("bot/revoke error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

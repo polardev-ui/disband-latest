@@ -21,17 +21,17 @@ export async function POST(
 
     if (error) {
       if (/Only the server owner/.test(error.message)) {
-        return NextResponse.json({ error: "Only the server owner can decline a bot invite." }, { status: 403 });
+        return NextResponse.json({ error: "Only the space owner can decline a bot invite." }, { status: 403 });
       }
       if (/not found/.test(error.message)) {
-        return NextResponse.json({ error: "The bot invite was not found." }, { status: 404 });
+        return NextResponse.json({ error: error.message }, { status: 404 });
       }
-      return NextResponse.json({ error: "Could not decline the bot invite." }, { status: 500 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("bot/invites/[code]/decline error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

@@ -16,7 +16,7 @@ export async function GET(
   if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
 
   const { data, error } = await service.rpc("get_server_by_invite", { p_code: code });
-  if (error) return NextResponse.json({ error: "Invite could not be resolved." }, { status: 400 });
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   const rows = (data ?? []) as Record<string, unknown>[];
   if (!rows[0]) return NextResponse.json({ error: "Invite not found." }, { status: 404 });

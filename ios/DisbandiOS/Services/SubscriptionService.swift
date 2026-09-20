@@ -1,19 +1,43 @@
 import Foundation
 import Observation
+import SwiftUI
 import Realtime
 import Supabase
 
-/// Plans, mirroring the web app's `SubscriptionPlan`.
+/// Plans, mirroring the web app's `SubscriptionPlan`: Free, and Disband Aero.
+///
+/// Basic and Super were merged into Aero (migration 0072). Rows written before
+/// that still say "basic" or "super", and gifts may too, so every raw value
+/// goes through `init(normalizing:)` — the port of the web's `normalizePlan`.
+/// Decoding "aero" with the old enum failed, which made every Aero subscriber
+/// look unsubscribed on iPhone.
 enum SubscriptionPlan: String, Codable, Sendable {
-    case free, basic, super_ = "super"
+    case free, aero
+
+    init(normalizing raw: String?) {
+        switch raw?.lowercased() {
+        case "aero", "basic", "super": self = .aero
+        default: self = .free
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(normalizing: try? decoder.singleValueContainer().decode(String.self))
+    }
+
+    var isPaid: Bool { self == .aero }
 
     var label: String {
         switch self {
         case .free: return "Free"
-        case .basic: return "Basic"
-        case .super_: return "Super"
+        case .aero: return "Aero"
         }
     }
+
+    var productName: String { self == .aero ? "Disband Aero" : "Disband Free" }
+
+    /// The Aero gold, shared with the web (`#fee75c`).
+    static let aeroGold = Color(hex: 0xFEE75C)
 }
 
 struct Subscription: Codable, Sendable {
@@ -46,12 +70,7 @@ struct Entitlements: Sendable {
         animatedAvatar: false, animatedBanner: false, screenShare: false,
         historyExport: false, prioritySupport: false
     )
-    static let basic = Entitlements(
-        maxUploadBytes: 150 * 1024 * 1024, maxMessageChars: 4000, maxBioLength: 230,
-        animatedAvatar: true, animatedBanner: false, screenShare: false,
-        historyExport: false, prioritySupport: false
-    )
-    static let superTier = Entitlements(
+    static let aero = Entitlements(
         maxUploadBytes: 500 * 1024 * 1024, maxMessageChars: 4000, maxBioLength: 230,
         animatedAvatar: true, animatedBanner: true, screenShare: true,
         historyExport: true, prioritySupport: true
@@ -60,8 +79,7 @@ struct Entitlements: Sendable {
     static func forPlan(_ plan: SubscriptionPlan) -> Entitlements {
         switch plan {
         case .free: return .free
-        case .basic: return .basic
-        case .super_: return .superTier
+        case .aero: return .aero
         }
     }
 }
@@ -135,7 +153,7 @@ final class SubscriptionService {
             plan = .free
             return
         }
-        plan = SubscriptionPlan(rawValue: row.plan) ?? .free
+        plan = SubscriptionPlan(normalizing: row.plan)
     }
 
     /// Picks up upgrades the moment the webhook or /api/stripe/sync writes them,

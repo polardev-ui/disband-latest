@@ -139,7 +139,7 @@ function badgeDetail(badge: AwardedBadge): string | null {
   const members = n("members");
   if (members) return `${members} members`;
   const servers = n("servers");
-  if (servers) return `${servers} servers`;
+  if (servers) return `${servers} spaces`;
   const joined = n("joined");
   if (joined) return `${joined} joined`;
   const uploaded = n("uploaded");

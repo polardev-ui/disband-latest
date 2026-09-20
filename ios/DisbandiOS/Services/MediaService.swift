@@ -1,4 +1,7 @@
+import AVFoundation
+import CoreTransferable
 import Foundation
+import UniformTypeIdentifiers
 
 struct MediaUploadResult {
     let url: String
@@ -86,15 +89,107 @@ enum MediaService {
         } else {
             (respData, response) = try await URLSession.shared.upload(for: request, from: body)
         }
+        return try decodeUpload(respData, response)
+    }
+
+    private static func decodeUpload(_ respData: Data, _ response: URLResponse) throws -> MediaUploadResult {
+        struct APIResponse: Codable { let success: Bool?; let url: String?; let key: String?; let message: String?; let error: String? }
+        let decoded = try? JSONDecoder().decode(APIResponse.self, from: respData)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw MediaError.uploadFailed("Upload failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))")
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 413 { throw MediaError.uploadFailed("That file is bigger than your upload limit.") }
+            throw MediaError.uploadFailed(decoded?.message ?? decoded?.error ?? "Upload failed (HTTP \(status))")
         }
-        struct APIResponse: Codable { let success: Bool?; let url: String?; let key: String?; let message: String? }
-        let decoded = try JSONDecoder().decode(APIResponse.self, from: respData)
-        guard let url = decoded.url, decoded.success != false else {
-            throw MediaError.uploadFailed(decoded.message ?? "Upload failed")
+        guard let decoded, let url = decoded.url, decoded.success != false else {
+            throw MediaError.uploadFailed(decoded?.message ?? "Upload failed")
         }
         return MediaUploadResult(url: url, key: decoded.key)
+    }
+
+    // MARK: - Files (video)
+
+    /**
+     Uploads a file from disk, streaming it rather than loading it into memory.
+
+     The multipart body is assembled into a temporary file and handed to
+     `URLSession` as a file upload. Building it as `Data` meant holding the
+     whole video in memory twice, and a large one got the app terminated.
+     */
+    static func uploadFile(at fileURL: URL, filename: String, mimeType: String,
+                           onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> MediaUploadResult {
+        var request = URLRequest(url: cdnBase.appendingPathComponent("images"))
+        request.httpMethod = "POST"
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = try? await SupabaseManager.client.auth.session.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let bodyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upload-\(UUID().uuidString).multipart")
+        defer { try? FileManager.default.removeItem(at: bodyURL) }
+        try writeMultipart(from: fileURL, to: bodyURL, boundary: boundary,
+                           filename: filename, mimeType: mimeType)
+
+        let reporter = UploadProgressReporter(onProgress: onProgress ?? { _ in })
+        let session = URLSession(configuration: .default, delegate: reporter, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        let (respData, response) = try await session.upload(for: request, fromFile: bodyURL)
+        return try decodeUpload(respData, response)
+    }
+
+    private static func writeMultipart(from source: URL, to destination: URL, boundary: String,
+                                       filename: String, mimeType: String) throws {
+        FileManager.default.createFile(atPath: destination.path, contents: nil)
+        let out = try FileHandle(forWritingTo: destination)
+        defer { try? out.close() }
+        var head = Data()
+        head.append("--\(boundary)\r\n")
+        head.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        head.append("Content-Type: \(mimeType)\r\n\r\n")
+        try out.write(contentsOf: head)
+
+        let input = try FileHandle(forReadingFrom: source)
+        defer { try? input.close() }
+        while let chunk = try input.read(upToCount: 4 * 1024 * 1024), !chunk.isEmpty {
+            try out.write(contentsOf: chunk)
+        }
+        var tail = Data()
+        tail.append("\r\n--\(boundary)--\r\n")
+        try out.write(contentsOf: tail)
+    }
+
+    /**
+     Re-encodes a picked video as H.264 MP4, at most 1080p.
+
+     iPhones record HEVC in a QuickTime container, which Safari plays and
+     Chrome and Firefox don't — so a video sent from a phone showed as a black
+     box to everyone on the web and desktop apps. MP4/H.264 plays everywhere,
+     and is usually smaller than the camera original.
+     */
+    static func prepareVideo(_ source: URL, onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
+        let asset = AVURLAsset(url: source)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1920x1080) else {
+            throw MediaError.uploadFailed("This video can't be converted.")
+        }
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("video-\(UUID().uuidString).mp4")
+        export.outputURL = output
+        export.outputFileType = .mp4
+        export.shouldOptimizeForNetworkUse = true
+
+        let ticker = Task {
+            while !Task.isCancelled {
+                onProgress?(Double(export.progress))
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+        defer { ticker.cancel() }
+        await withCheckedContinuation { cont in export.exportAsynchronously { cont.resume() } }
+        guard export.status == .completed else {
+            throw MediaError.uploadFailed(export.error?.localizedDescription ?? "Couldn't prepare the video.")
+        }
+        return output
     }
 
     /// Searches GIFs via the media-API Giphy proxy.
@@ -122,7 +217,7 @@ enum MediaService {
 private final class UploadProgressReporter: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let onProgress: @Sendable (Double) -> Void
 
-    private init(onProgress: @escaping @Sendable (Double) -> Void) {
+    init(onProgress: @escaping @Sendable (Double) -> Void) {
         self.onProgress = onProgress
     }
 
@@ -149,5 +244,25 @@ private final class UploadProgressReporter: NSObject, URLSessionTaskDelegate, @u
 private extension Data {
     mutating func append(_ string: String) {
         if let d = string.data(using: .utf8) { append(d) }
+    }
+}
+
+/// A video chosen in the photo picker, delivered as a file on disk.
+///
+/// Loading a video as `Data` reads the whole thing into memory; a file
+/// representation hands over a copy on disk instead. The copy is ours to
+/// keep, because the picker deletes its own once this returns.
+struct PickedMovie: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { received in
+            let copy = FileManager.default.temporaryDirectory
+                .appendingPathComponent("picked-\(UUID().uuidString).\(received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension)")
+            try FileManager.default.copyItem(at: received.file, to: copy)
+            return PickedMovie(url: copy)
+        }
     }
 }

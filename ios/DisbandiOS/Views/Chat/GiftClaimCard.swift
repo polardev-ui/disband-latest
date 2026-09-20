@@ -42,10 +42,10 @@ struct GiftClaimCard: View {
     @State private var celebrate = false
 
     private var accent: Color {
-        gift?.plan == "super" ? Color(hexString: "fee75c") : Color(hexString: "57f287")
+        SubscriptionPlan.aeroGold
     }
     private var planName: String {
-        gift?.plan == "super" ? "Disband Super" : "Disband Basic"
+        "Disband Aero"
     }
     private var monthsLabel: String {
         guard let m = gift?.months else { return "" }

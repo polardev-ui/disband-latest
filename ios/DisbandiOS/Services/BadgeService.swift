@@ -124,7 +124,7 @@ final class BadgeService {
         }
         if let n = num("reports") { return "\(n) confirmed report\(n == 1 ? "" : "s")" }
         if let n = num("members") { return "\(n) members" }
-        if let n = num("servers") { return "\(n) servers" }
+        if let n = num("servers") { return "\(n) spaces" }
         if let n = num("joined") { return "\(n) joined" }
         if let n = num("uploaded") { return "\(n) emoji" }
         if let n = num("minutes") { return "\(n / 60) hours in calls" }

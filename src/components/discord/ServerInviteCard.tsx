@@ -104,12 +104,12 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase text-text-muted">Server Invite</p>
+          <p className="text-xs font-bold uppercase text-text-muted">Space Invite</p>
           {}
           <div className="flex min-w-0 items-center gap-1 font-semibold">
             <span className="truncate">{info.name}</span>
             {info.verified && (
-              <Tooltip as="span" label="This server is officially verified by Disband">
+              <Tooltip as="span" label="This space is officially verified by Disband">
                 <IconVerified size={14} className="shrink-0 text-sky-400" />
               </Tooltip>
             )}
@@ -121,11 +121,11 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
       <div className="border-t border-divider px-3 py-2">
         {isMember ? (
           <button type="button" onClick={() => void handleGo()} className="w-full rounded bg-interactive-hover py-1.5 text-sm font-semibold text-text-normal hover:bg-interactive-selected">
-            Go to Server
+            Go to Space
           </button>
         ) : (
           <button type="button" disabled={joining || !user} onClick={() => void handleJoin()} className="w-full rounded bg-brand py-1.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
-            {joining ? "Joining…" : "Join Server"}
+            {joining ? "Joining…" : "Join Space"}
           </button>
         )}
         {error && <p className="mt-1 text-xs text-status-dnd">{error}</p>}

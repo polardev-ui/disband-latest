@@ -52,6 +52,11 @@ struct Profile: Codable, Identifiable, Hashable {
     var displayName: String?
     var avatarUrl: String?
     var bio: String?
+    var pronouns: String?
+    /// The custom status line ("low-key lurking"). Read through
+    /// `activeStatusNote`, which respects `statusExpiresAt`.
+    var statusNote: String?
+    var statusExpiresAt: String?
     var status: UserStatus
     var preferredStatus: UserStatus?
     var bannerUrl: String?
@@ -68,7 +73,9 @@ struct Profile: Codable, Identifiable, Hashable {
     var createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, username, bio, status, theme
+        case id, username, bio, status, theme, pronouns
+        case statusNote = "status_note"
+        case statusExpiresAt = "status_expires_at"
         case displayName = "display_name"
         case avatarUrl = "avatar_url"
         case preferredStatus = "preferred_status"
@@ -85,7 +92,27 @@ struct Profile: Codable, Identifiable, Hashable {
         case createdAt = "created_at"
     }
 
-    var name: String { displayName ?? username ?? "Unknown" }
+    /// Display name, else username. A name made only of invisible
+    /// characters (a lone U+200E is common) counts as no name — it rendered
+    /// as a blank row instead of falling back to the username.
+    var name: String { Profile.visible(displayName) ?? Profile.visible(username) ?? "Unknown" }
+
+    static func visible(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters)),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    /// The custom status, or nil once it has expired — the port of the web's
+    /// `activeStatusNote`. Expired notes are not deleted server-side the
+    /// instant they lapse, so every reader has to check.
+    var activeStatusNote: String? {
+        guard let note = statusNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+            return nil
+        }
+        if let expires = RelativeTime.date(from: statusExpiresAt), expires <= Date() { return nil }
+        return note
+    }
     var handle: String { username ?? "user" }
     var initials: String {
         let base = name.trimmingCharacters(in: .whitespaces)
@@ -159,9 +186,12 @@ struct Channel: Codable, Identifiable, Hashable {
     var type: ChannelType
     var position: Int
     let createdAt: String?
+    /// Announcement channel: only people who can manage channels may post.
+    var readOnly: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, position
+        case readOnly = "read_only"
         case serverId = "server_id"
         case categoryId = "category_id"
         case createdAt = "created_at"

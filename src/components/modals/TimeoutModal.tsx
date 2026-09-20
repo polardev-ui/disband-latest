@@ -121,7 +121,7 @@ export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalP
         </div>
 
         <p className="mt-4 text-sm text-text-muted">
-          They stay in the server but cannot send messages, react, or speak until the
+          They stay in the space but cannot send messages, react, or speak until the
           timeout expires.
         </p>
 

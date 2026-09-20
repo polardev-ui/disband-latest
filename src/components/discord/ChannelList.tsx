@@ -500,7 +500,7 @@ export function ChannelList({
             <span className="flex min-w-0 items-center gap-1">
               <span className="truncate text-[15px] font-semibold">{title}</span>
               {verified && (
-                <Tooltip label="This server is officially verified by Disband">
+                <Tooltip label="This space is officially verified by Disband">
                   <IconVerified size={15} className="shrink-0 text-sky-400" />
                 </Tooltip>
               )}
@@ -526,7 +526,7 @@ export function ChannelList({
         <button
           type="button"
           onClick={onOpenCatalysts}
-          title="View server Catalysts"
+          title="View space Catalysts"
           className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-brand/25 bg-brand/[0.06] px-2.5 py-1.5 text-left transition-colors hover:bg-brand/[0.12]"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">

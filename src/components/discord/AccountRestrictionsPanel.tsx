@@ -19,7 +19,7 @@ interface RestrictionRow {
 }
 
 const RESTRICTION_LABELS: Record<string, string> = {
-  join_servers: "Cannot join servers",
+  join_servers: "Cannot join spaces",
   send_messages: "Cannot send messages",
   send_friend_requests: "Cannot send friend requests",
   create_groups: "Cannot create groups",

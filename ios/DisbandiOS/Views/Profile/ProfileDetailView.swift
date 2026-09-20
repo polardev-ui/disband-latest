@@ -58,10 +58,7 @@ struct ProfileDetailView: View {
 
     private var banner: some View {
         ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: profile.bannerUrl, contentMode: .fill) { accentGradient }
-            .frame(height: 140)
-            .frame(maxWidth: .infinity)
-            .clipped()
+            BannerImage(url: profile.bannerUrl, height: 140) { accentGradient }
 
             AvatarView(url: profile.avatarUrl, name: profile.name, size: 88,
                        status: liveStatus, ringColors: accentColors, ringWidth: 5)
@@ -84,7 +81,24 @@ struct ProfileDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(profile.name).font(.title2.bold()).foregroundStyle(Brand.textPrimary)
-            Text("@\(profile.handle)").font(.subheadline).foregroundStyle(Brand.textMuted)
+            HStack(spacing: 6) {
+                Text("@\(profile.handle)")
+                if let pronouns = profile.pronouns, !pronouns.isEmpty {
+                    Text("·")
+                    Text(pronouns)
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(Brand.textMuted)
+            if let note = profile.activeStatusNote {
+                Text(note)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Brand.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.top, 8)
+            }
             // On its own line, with the full width to wrap into. Beside the
             // name it had whatever the name left over, which on a long name was
             // room for about two badges.

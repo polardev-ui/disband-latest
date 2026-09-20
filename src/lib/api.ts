@@ -11,11 +11,6 @@ export function apiUrl(path: string): string {
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const url = apiUrl(path);
-  const expectedOrigin = isTauri() ? new URL(PUBLIC_ENV.webAppUrl).origin : window.location.origin;
-  if (new URL(url, window.location.href).origin !== expectedOrigin) {
-    throw new Error("API requests must stay on the configured Disband origin");
-  }
   const headers = new Headers(init.headers);
 
   if (!headers.has("Authorization")) {
@@ -28,7 +23,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     }
   }
 
-  return fetch(url, { ...init, headers });
+  return fetch(apiUrl(path), { ...init, headers });
 }
 
 export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T | { error: string }> {
@@ -36,7 +31,7 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
   try {
     res = await apiFetch(path, init);
   } catch {
-    return { error: "Couldn't reach the server. Check your connection and try again." };
+    return { error: "Couldn't reach the space. Check your connection and try again." };
   }
 
   const text = await res.text();
@@ -45,7 +40,7 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
   } catch {
     return {
       error: res.ok
-        ? "The server returned an unexpected response."
+        ? "The space returned an unexpected response."
         : `Request failed (${res.status}).`,
     };
   }

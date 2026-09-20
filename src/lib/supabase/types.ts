@@ -340,7 +340,7 @@ export interface CustomEmoji {
   created_at: string;
 }
 
-export type ViewMode = "home" | "server" | "dm" | "group" | "notes" | "discover";
+export type ViewMode = "home" | "space" | "dm" | "group" | "notes" | "discover";
 
 export interface Database {
   public: {

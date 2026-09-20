@@ -86,7 +86,7 @@ export default function LegalPage() {
             </p>
             <p>
               You may not copy, redistribute, reverse-engineer, or misrepresent Disband or its
-              assets without prior written permission. Usernames, server names, and community
+              assets without prior written permission. Usernames, space names, and community
               content created by users remain the responsibility of the users who post them, as
               described in Section 7.
             </p>
@@ -102,7 +102,7 @@ export default function LegalPage() {
             <p>In practice this means:</p>
             <ul className="list-disc space-y-1.5 pl-5">
               <li>Account data (email, username, profile) exists to operate your account and nothing else.</li>
-              <li>Messages, servers, and media you create are stored so the service functions and are never mined for advertising.</li>
+              <li>Messages, spaces, and media you create are stored so the service functions and are never mined for advertising.</li>
               <li>We do not sell, rent, or trade personal information, and we do not share it with data brokers.</li>
               <li>Limited operational data (e.g. error logs, rate-limit counters) is kept only as long as needed for security and reliability.</li>
             </ul>
@@ -117,7 +117,7 @@ export default function LegalPage() {
           <Section id="security" title="4. Security">
             <p>
               Content on Disband is encrypted within 7 custom layers of encryption, along with
-              redaction of sensitive data and server randomization. In plain terms: data is
+              redaction of sensitive data and space randomization. In plain terms: data is
               protected in multiple independent stages rather than a single point of failure,
               sensitive fields are stripped or masked wherever they are not strictly needed, and
               infrastructure placement is randomized to avoid predictable targets.
@@ -179,7 +179,7 @@ export default function LegalPage() {
               <li>Automate access outside the documented bot API and your granted scopes.</li>
             </ul>
             <p>
-              Server owners and moderators set additional rules for their own communities; violating
+              Space owners and moderators set additional rules for their own communities; violating
               them may lead to removal from those communities under Section 8.
             </p>
           </Section>
@@ -189,7 +189,7 @@ export default function LegalPage() {
               You retain whatever rights you already hold in content you post. By posting, you grant
               Disband a limited, worldwide license to store, display, and transmit that content
               solely to operate the service (for example, showing your messages to members of the
-              same server or conversation).
+              same space or conversation).
             </p>
             <p>
               You are solely responsible for content you post. Disband does not pre-screen
@@ -200,7 +200,7 @@ export default function LegalPage() {
 
           <Section id="termination" title="8. Suspension & Termination">
             <p>
-              We may suspend or terminate accounts, servers, or content that violate these terms,
+              We may suspend or terminate accounts, spaces, or content that violate these terms,
               the law, or the safety of the community — including platform bans for severe or
               repeated abuse. You may delete your account at any time; deletion ends your license
               for future use but does not retroactively erase copies others lawfully made (such as

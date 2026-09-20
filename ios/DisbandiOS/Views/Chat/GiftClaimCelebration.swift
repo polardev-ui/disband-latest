@@ -21,15 +21,15 @@ struct GiftClaimCelebration: View {
     @State private var launch = false
     @State private var flameUp = false
 
-    private var isSuper: Bool { plan == "super" }
-    private var accent: Color { isSuper ? Color(hexString: "fee75c") : Color(hexString: "57f287") }
-    private var planName: String { isSuper ? "Disband Super" : "Disband Basic" }
+    private var isAero: Bool { SubscriptionPlan(normalizing: plan).isPaid }
+    private var accent: Color { SubscriptionPlan.aeroGold }
+    private var planName: String { "Disband Aero" }
     private var tier: SubscriptionTier? { SubscriptionTier.forMonths(months) }
 
     private var perks: [String] {
-        isSuper
+        isAero
             ? ["500 MB file uploads", "2K video at 120 fps", "Animated avatar and banner",
-               "Unlimited custom emoji", "2 server boosts a month", "Screen sharing"]
+               "Unlimited custom emoji", "2 space boosts a month", "Screen sharing"]
             : ["150 MB file uploads", "1080p video at 60 fps", "Animated avatar",
                "5 custom emoji slots", "Faster rate limits", "Exclusive theme"]
     }
@@ -64,7 +64,7 @@ struct GiftClaimCelebration: View {
     private var reveal: some View {
         VStack(spacing: 6) {
             if let tier {
-                SubscriptionMedallionView(tier: tier, isSuper: isSuper, size: 96)
+                SubscriptionMedallionView(tier: tier, topTier: isAero, size: 96)
                     .padding(.bottom, 8)
             }
             Text("\(from) gifted you")

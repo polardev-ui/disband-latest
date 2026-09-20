@@ -40,9 +40,9 @@ export async function POST(
 
     if (error) {
       if (/not found|scopes/.test(error.message)) {
-        return NextResponse.json({ error: "The bot invite request is invalid." }, { status: 400 });
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
-      return NextResponse.json({ error: "Could not create the bot invite." }, { status: 500 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -51,6 +51,6 @@ export async function POST(
     });
   } catch (err) {
     console.error("v1/bots/[botId]/invites error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

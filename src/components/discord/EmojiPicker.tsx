@@ -142,7 +142,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
               )}
               {!q && customEmoji.length > 0 && (
                 <div className="mb-2">
-                  <p className="mb-1 px-1 text-[11px] font-bold uppercase text-text-muted">Server Emoji</p>
+                  <p className="mb-1 px-1 text-[11px] font-bold uppercase text-text-muted">Space Emoji</p>
                   <div className="grid grid-cols-8 gap-0.5">
                     {customEmoji.map((e) => (
                       <button
