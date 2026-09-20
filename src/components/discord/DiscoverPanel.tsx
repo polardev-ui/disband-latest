@@ -29,6 +29,7 @@ function useDiscoverableServers() {
   const [items, setItems] = useState<DiscoverableServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,9 +51,9 @@ function useDiscoverableServers() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
-  return { items, loading, error };
+  return { items, loading, error, reload: () => setAttempt((a) => a + 1) };
 }
 
 interface DiscoverSidebarProps {
@@ -157,9 +158,9 @@ export function DiscoverSidebar({
 
 export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string }) {
   const { servers, joinServerById } = useApp();
-  const { items, loading, error } = useDiscoverableServers();
+  const { items, loading, error, reload } = useDiscoverableServers();
   const [joiningId, setJoiningId] = useState<string | null>(null);
-  const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<{ id: string; message: string } | null>(null);
 
   const memberIds = useMemo(() => new Set(servers.map((s) => s.id)), [servers]);
 
@@ -186,7 +187,7 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
     setJoinError(null);
     const err = await joinServerById(server.id);
     setJoiningId(null);
-    if (err) setJoinError(err);
+    if (err) setJoinError({ id: server.id, message: err });
   }
 
   return (
@@ -205,9 +206,31 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         {loading ? (
-          <p className="text-sm text-text-muted">Loading spaces…</p>
+          <ul aria-label="Loading spaces" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <li key={i} className="animate-pulse overflow-hidden rounded-lg border border-divider bg-bg-secondary">
+                <div className="h-16 w-full bg-bg-accent" />
+                <div className="p-4 pt-0">
+                  <div className="-mt-6 mb-3 h-12 w-12 rounded-xl bg-bg-accent" />
+                  <div className="h-4 w-2/3 rounded bg-bg-accent" />
+                  <div className="mt-2 h-3 w-full rounded bg-bg-accent" />
+                  <div className="mt-4 h-9 w-full rounded-md bg-bg-accent" />
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : error ? (
-          <p className="text-sm text-status-dnd">{error}</p>
+          <div className="max-w-sm rounded-lg border border-status-dnd/30 bg-status-dnd/10 p-4" role="alert">
+            <h2 className="text-[15px] font-semibold text-text-normal">Couldn&apos;t load spaces</h2>
+            <p className="mt-1 text-sm text-text-muted">{error}</p>
+            <button
+              type="button"
+              onClick={reload}
+              className="mt-3 rounded-md bg-brand px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-hover"
+            >
+              Try again
+            </button>
+          </div>
         ) : visible.length === 0 ? (
           <div className="max-w-sm">
             <h2 className="text-lg font-semibold text-text-normal">
@@ -221,7 +244,6 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
           </div>
         ) : (
           <>
-            {joinError && <p className="mb-4 text-sm text-status-dnd">{joinError}</p>}
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {visible.map((server) => {
                 const joined = memberIds.has(server.id);
@@ -287,6 +309,9 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
                       >
                         {joined ? "Joined" : joiningId === server.id ? "Joining…" : "Join"}
                       </button>
+                      {joinError?.id === server.id && (
+                        <p role="alert" className="mt-2 text-xs text-status-dnd">{joinError.message}</p>
+                      )}
                     </div>
                   </li>
                 );

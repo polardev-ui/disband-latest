@@ -45,7 +45,7 @@ function RowAction({
   children,
 }: {
   label: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   children: React.ReactNode;
 }) {
   return (
@@ -55,7 +55,7 @@ function RowAction({
       aria-label={label}
       onClick={(e) => {
         e.stopPropagation();
-        onClick();
+        onClick(e);
       }}
       className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-tertiary text-text-muted transition-colors hover:bg-interactive-selected hover:text-text-normal"
     >
@@ -110,6 +110,15 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
   const [sending, setSending] = useState(false);
 
   const pendingCount = pendingIncoming.length;
+  // Search applies to every tab (previously the box only showed on some
+  // tabs, so pending/blocked lists couldn't be filtered at all).
+  const matchQuery = (p: Profile | null | undefined) => {
+    const q = query.trim().toLowerCase();
+    if (!q || !p) return !q;
+    return displayName(p).toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
+  };
+  const visiblePendingIncoming = pendingIncoming.filter((f) => matchQuery(f.requester));
+  const visiblePendingOutgoing = pendingOutgoing.filter((f) => matchQuery(f.addressee));
 
   const blocked = useMemo(
     () =>
@@ -120,6 +129,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
         .sort((a, b) => displayName(a).localeCompare(displayName(b))),
     [friendships, blockedUserIds],
   );
+  const visibleBlocked = blocked.filter((p) => matchQuery(p));
 
   const visible = useMemo(() => {
     const base = tab === "online" ? friends.filter((f) => (presenceMap.get(f.id) ?? "offline") !== "offline") : friends;
@@ -161,7 +171,6 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      {}
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         <IconFriends size={22} className="shrink-0 text-text-muted" />
         <h1 className="shrink-0 text-[15px] font-semibold text-text-normal">My Friends</h1>
@@ -186,7 +195,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               {t}
               {t === "pending" && pendingCount > 0 && (
                 <span className="ml-1.5 rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white">
-                  {pendingCount}
+                  {pendingCount > 99 ? "99+" : pendingCount}
                 </span>
               )}
             </button>
@@ -241,7 +250,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
         </div>
       )}
 
-      {!addOpen && tab !== "pending" && tab !== "blocked" && (
+      {!addOpen && (
         <div className="shrink-0 px-6 pb-2 pt-4">
           <div className="relative">
             <IconSearch
@@ -275,18 +284,30 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
           </p>
 
           {tab === "pending" ? (
-            <PendingList
-              incoming={pendingIncoming}
-              outgoing={pendingOutgoing}
-              onRespond={respondFriendRequest}
-              onOpenProfile={onOpenProfile}
-            />
+            visiblePendingIncoming.length === 0 && visiblePendingOutgoing.length === 0 ? (
+              <p className="py-10 text-sm text-text-muted">
+                {query.trim()
+                  ? `No pending requests match “${query.trim()}”.`
+                  : "There are no pending friend requests."}
+              </p>
+            ) : (
+              <PendingList
+                incoming={visiblePendingIncoming}
+                outgoing={visiblePendingOutgoing}
+                onRespond={respondFriendRequest}
+                onOpenProfile={onOpenProfile}
+              />
+            )
           ) : tab === "blocked" ? (
-            blocked.length === 0 ? (
-              <p className="py-10 text-sm text-text-muted">You haven&rsquo;t blocked anyone.</p>
+            visibleBlocked.length === 0 ? (
+              <p className="py-10 text-sm text-text-muted">
+                {query.trim()
+                  ? `No blocked users match “${query.trim()}”.`
+                  : "You haven’t blocked anyone."}
+              </p>
             ) : (
               <ul className="border-t border-divider">
-                {blocked.map((person) => (
+                {visibleBlocked.map((person) => (
                   <li
                     key={person.id}
                     className="flex items-center gap-3 border-b border-divider py-2.5"
@@ -341,7 +362,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                       <p className="truncate text-[15px] font-semibold text-text-normal">
                         {displayName(friend)}
                         {friend.username && (
-                          <span className="ml-1.5 text-sm font-normal text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="ml-1.5 text-sm font-normal text-text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                             @{friend.username}
                           </span>
                         )}
@@ -365,10 +386,12 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                       </RowAction>
                       <RowAction
                         label="More"
-                        onClick={() => {
-                          const el = document.activeElement as HTMLElement | null;
-                          const rect = el?.getBoundingClientRect();
-                          onFriendContext(friend, rect ? rect.left : 0, rect ? rect.bottom + 4 : 0);
+                        onClick={(e) => {
+                          // Anchor to the clicked button itself: the old code
+                          // read document.activeElement, which mispositions
+                          // the menu for keyboard users and focus jumps.
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          onFriendContext(friend, rect.left, rect.bottom + 4);
                         }}
                       >
                         <IconMore />

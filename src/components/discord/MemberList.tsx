@@ -171,6 +171,21 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   const padTop = offsets[first] ?? 0;
   const padBottom = Math.max(0, total - (offsets[last] ?? total));
 
+  // An empty server (or one whose members failed to load) used to render a
+  // blank rail with no explanation.
+  if (members.length === 0) {
+    return (
+      <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4">
+        <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          Members
+        </h2>
+        <p className="px-2 py-2 text-sm text-text-muted">
+          No members to show yet.
+        </p>
+      </aside>
+    );
+  }
+
   return (
 
     <aside
