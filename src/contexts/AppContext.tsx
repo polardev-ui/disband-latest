@@ -51,6 +51,7 @@ import {
   trimToLatestWindow,
 } from "@/lib/message-pagination";
 import { apiFetch } from "@/lib/api";
+import { checkMentionSend } from "@/lib/mention-guard";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type {
   AppNotification,
@@ -121,7 +122,7 @@ interface AppContextValue {
   setMicMuted: (v: boolean) => void;
   setDeafened: (v: boolean) => void;
   signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string, username: string, referralCode?: string | null) => Promise<SignUpResult>;
+  signUp: (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null) => Promise<SignUpResult>;
   requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
   mfaRequired: boolean;
@@ -238,7 +239,7 @@ interface AppContextValue {
 
   markNotificationRead: (id: string) => Promise<void>;
 
-  routeToNotification: (link: string | null) => Promise<boolean>;
+  routeToNotification: (link: string | null, at?: string | null) => Promise<boolean>;
   loadVoicePresence: (channelId: string) => Promise<void>;
   voiceJoinedChannelId: string | null;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
@@ -2256,6 +2257,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId, configured]);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    // Pre-gate: per-IP/email rate limit + VPN/proxy block (login only —
+    // saved sessions and active sessions are never re-checked).
+    try {
+      const gate = await apiFetch("/api/auth/login-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      if (!gate.ok) {
+        const json = (await gate.json().catch(() => null)) as { error?: string } | null;
+        return json?.error ?? "Sign-in is temporarily blocked. Try again later.";
+      }
+    } catch {
+      // Fail-open on network error here: the server gate itself is
+      // fail-closed when reachable, but a client that can't reach the
+      // API at all can't sign in anyway.
+    }
     const supabase = getSupabaseClient();
     await supabase.auth.signOut({ scope: "local" });
     resetSupabaseClient();
@@ -2271,7 +2289,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [refreshMfaStatus, rememberSession]);
 
-  const signUp = useCallback(async (email: string, password: string, username: string, referralCode?: string | null): Promise<SignUpResult> => {
+  const signUp = useCallback(async (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
     const normalized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
     const displayNameVal = username.trim();
@@ -2281,7 +2299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const checkRes = await apiFetch("/api/auth/signup-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), username: normalized }),
+        body: JSON.stringify({ email: email.trim(), username: normalized, ...(turnstileToken ? { turnstileToken } : {}) }),
       });
       if (!checkRes.ok) {
         const json = (await checkRes.json()) as { error?: string };
@@ -2537,7 +2555,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadGroupMessages(groupId);
   }, [loadGroupMessages, clearGroupUnread, persistActiveServerChannel, markActivity]);
 
-  const routeToNotification = useCallback(async (link: string | null) => {
+  const routeToNotification = useCallback(async (link: string | null, at?: string | null) => {
     const target = parseNotificationLink(link);
     if (!target) return false;
     if (target.kind === "dm") {
@@ -2550,7 +2568,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!dmThreadsRef.current.some((t) => t.id === target.threadId)) return false;
       }
       await selectDmThread(target.threadId);
-      requestUnreadJump("dm", target.threadId);
+      requestUnreadJump("dm", target.threadId, at);
       return true;
     }
     if (target.kind === "group") {
@@ -2560,7 +2578,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!groupChatsRef.current.some((g) => g.id === target.groupId)) return false;
       }
       await selectGroupChat(target.groupId);
-      requestUnreadJump("group", target.groupId);
+      requestUnreadJump("group", target.groupId, at);
       return true;
     }
     if (target.kind === "call") {
@@ -2592,7 +2610,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await selectServer(channel.server_id);
     }
     selectChannel(target.channelId);
-    requestUnreadJump("channel", target.channelId);
+    requestUnreadJump("channel", target.channelId, at);
     return true;
   }, [userId, loadDmThreads, loadGroupChats, loadServerDetails, selectDmThread, selectGroupChat, selectServer, selectChannel]);
 
@@ -3353,6 +3371,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!normalized && !attachment && !pendingFile) return "Empty message";
     const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
+    if (userId) {
+      const pingErr = checkMentionSend(userId, parseMentions(normalized, members.map((m) => m.profile), userId), normalized);
+      if (pingErr) return pingErr;
+    }
 
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -3476,6 +3498,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const thread = dmThreads.find((t) => t.id === activeDmThreadId);
     const other = thread ? [thread.friend] : [];
+    if (userId) {
+      const pingErr = checkMentionSend(userId, parseMentions(normalized, other, userId), normalized);
+      if (pingErr) return pingErr;
+    }
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     let blobUrl: string | null = null;
@@ -3598,6 +3624,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (wordErr) return wordErr;
 
     const group = groupChats.find((g) => g.id === activeGroupChatId);
+    if (userId) {
+      const pingErr = checkMentionSend(userId, parseMentions(normalized, group?.members ?? [], userId), normalized);
+      if (pingErr) return pingErr;
+    }
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     let blobUrl: string | null = null;
