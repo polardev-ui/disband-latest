@@ -28,6 +28,7 @@ import {
 import {
   clearUnreadJump,
   isSeekingUnreadJump,
+  seekingTimestamp,
 } from "@/lib/notification-jump";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 
@@ -326,19 +327,49 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     return () => ro.disconnect();
   }, [scrollToBottom]);
 
-  // Notification-click seek: land on the first unread message (where the
-  // ping sits), paging back until its row is loaded. Runs only for the
-  // scope the notification targeted; anything else ignores it.
+  // Notification-click seek: land on the ping itself when we know its
+  // timestamp (first message at/after it), else the first unread divider.
+  // Pages back until the target row is loaded. Runs only for the scope the
+  // notification targeted; anything else ignores it.
   useEffect(() => {
     if (!readCursorScope || loading || messages.length === 0) return;
     if (!isSeekingUnreadJump(readCursorScope.kind, readCursorScope.id)) return;
-    const dividerId = findNewMessagesDividerId(messages, readCursorScope);
-    if (!dividerId) {
+    const at = seekingTimestamp();
+    let targetId: string | null = null;
+    if (at) {
+      const newest = messages[messages.length - 1];
+      if (newest && newest.created_at < at) {
+        // Target is newer than everything loaded (clock skew, or it just
+        // arrived): the newest message is the closest row. Never page
+        // backwards for a target that sits ahead of the window.
+        targetId = newest.id;
+      } else {
+        const hit = messages.find((m) => m.created_at >= at);
+        if (hit) {
+          targetId = hit.id;
+        } else if (hasMore && onLoadMore && !loadingMoreRef.current) {
+          // Everything loaded so far is newer than the ping: keep paging back.
+          void requestLoadMore();
+          return;
+        } else {
+          // Ping is older than all history: the oldest loaded message is
+          // the closest we can get.
+          targetId = messages[0]?.id ?? null;
+        }
+      }
+    } else {
+      targetId = findNewMessagesDividerId(messages, readCursorScope);
+      if (!targetId) {
+        clearUnreadJump();
+        return;
+      }
+    }
+    if (!targetId) {
       clearUnreadJump();
       return;
     }
-    if (document.getElementById(`msg-${dividerId}`)) {
-      jumpToMessage(dividerId);
+    if (document.getElementById(`msg-${targetId}`)) {
+      jumpToMessage(targetId);
       clearUnreadJump();
       return;
     }

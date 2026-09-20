@@ -14,16 +14,24 @@
 export interface UnreadSeek {
   kind: string;
   id: string;
+  // Notification timestamp (server clock, same clock as message
+  // created_at): land on the ping itself, not just the first unread.
+  // Absent for old call sites → falls back to the unread divider.
+  at?: string | null;
 }
 
 let seek: UnreadSeek | null = null;
 
-export function requestUnreadJump(kind: string, id: string) {
-  seek = { kind, id };
+export function requestUnreadJump(kind: string, id: string, at?: string | null) {
+  seek = { kind, id, at: at ?? null };
 }
 
 export function isSeekingUnreadJump(kind: string, id: string): boolean {
   return seek !== null && seek.kind === kind && seek.id === id;
+}
+
+export function seekingTimestamp(): string | null {
+  return seek?.at ?? null;
 }
 
 export function clearUnreadJump() {
