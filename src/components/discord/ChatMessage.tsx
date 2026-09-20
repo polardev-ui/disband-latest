@@ -257,7 +257,11 @@ export function ChatMessage({
     onAuthorContextMenu(author, e);
   }
 
-  const attachment = message.attachment_url && message.uploadProgress !== undefined ? (
+  // Uploading sends render the labelled UploadCard (with its own proper
+  // progressbar) only while progress is live. The separate thin bar below
+  // used to duplicate it, and a progress value stuck at exactly 100 would
+  // never swap to the finished attachment: < 100 guarantees the swap.
+  const attachment = message.attachment_url && message.uploadProgress !== undefined && message.uploadProgress < 100 ? (
     <AttachmentUploadCard
       name={message.attachment_name || "File"}
       size={message.attachment_size}
@@ -358,11 +362,6 @@ export function ChatMessage({
           </div>
         )}
         {attachment}
-        {message.uploadProgress != null && message.uploadProgress < 100 && (
-          <div className="mt-1 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-bg-accent">
-            <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${message.uploadProgress}%` }} />
-          </div>
-        )}
         {reactionBlock}
       </article>
     );
@@ -432,11 +431,6 @@ export function ChatMessage({
         {replyBlock}
         {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />}
         {attachment}
-        {message.uploadProgress != null && message.uploadProgress < 100 && (
-          <div className="mt-1 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-bg-accent">
-            <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${message.uploadProgress}%` }} />
-          </div>
-        )}
         {reactionBlock}
       </div>
     </article>

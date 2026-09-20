@@ -378,13 +378,32 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
   });
 
+  // Scoped to this canvas's own scroll container: the old global
+  // getElementById + scrollIntoView scrolled the whole page and missed when
+  // the chat scrolled inside a nested container. Falls back to centering in
+  // the viewport only if the row somehow isn't inside our scroller.
   function jumpToMessage(messageId: string) {
-    const node = document.getElementById(`msg-${messageId}`);
-    if (node) {
+    const scroller = scrollRef.current;
+    const node = scroller?.querySelector(`#msg-${CSS.escape(messageId)}`)
+      ?? document.getElementById(`msg-${messageId}`);
+    if (!node || !(node instanceof HTMLElement)) return;
+    programmaticScrollRef.current = Date.now();
+    if (scroller && scroller.contains(node)) {
+      // offsetTop is relative to the offsetParent chain, not the scroller:
+      // walk up accumulating so intermediate positioned rows don't skew it.
+      let top = 0;
+      let el: HTMLElement | null = node;
+      while (el && el !== scroller) {
+        top += el.offsetTop;
+        el = el.offsetParent as HTMLElement | null;
+      }
+      top += node.clientHeight / 2 - scroller.clientHeight / 2;
+      scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    } else {
       node.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightId(messageId);
-      setTimeout(() => setHighlightId(null), 2000);
     }
+    setHighlightId(messageId);
+    setTimeout(() => setHighlightId(null), 2000);
   }
 
   async function handleSend(content: string, options?: MessageSendOptions) {

@@ -28,6 +28,16 @@ interface MessageAttachmentProps {
 const mediaClass =
   "block max-h-[min(20rem,35vh)] max-w-full w-auto rounded-lg border border-black/20 object-contain";
 
+// Natural dimensions remembered per URL: rows remount constantly
+// (reactions, presence, pagination), and a repeat view can reserve the
+// exact box instead of the 16/10 fallback. First view still guesses, but
+// the guess is capped with the same max-h as the final media.
+const dimCache = new Map<string, { w: number; h: number }>();
+
+function rememberDims(url: string, w: number, h: number) {
+  if (w > 0 && h > 0) dimCache.set(url, { w, h });
+}
+
 export function MessageAttachment({
   url,
   type,
@@ -45,6 +55,7 @@ export function MessageAttachment({
   const [imgError, setImgError] = useState(false);
 
   const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [dims, setDims] = useState(() => dimCache.get(url) ?? null);
 
   const [mp4Error, setMp4Error] = useState(false);
   const mp4 = type === "gif" && !mp4Error ? giphyMp4Url(url) : null;
@@ -64,7 +75,10 @@ export function MessageAttachment({
   const skeleton = (
     <div
       aria-label="Loading attachment"
-      className="flex aspect-[16/10] w-full max-w-md items-center justify-center rounded-lg border border-black/20 bg-bg-accent"
+      className={`flex w-full max-w-md items-center justify-center rounded-lg border border-black/20 bg-bg-accent ${
+        dims ? "" : "aspect-[16/10]"
+      } max-h-[min(20rem,35vh)] min-h-24`}
+      style={dims ? { aspectRatio: `${dims.w} / ${dims.h}` } : undefined}
     >
       <span className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted/30 border-t-text-muted" />
     </div>
@@ -167,7 +181,12 @@ export function MessageAttachment({
                 playsInline
                 webkit-playsinline=""
                 className={`${mediaClass} cursor-zoom-in ${mediaLoaded ? "" : "hidden"}`}
-                onLoadedData={handleMediaLoad}
+                onLoadedData={(e) => {
+                  const v = e.currentTarget;
+                  rememberDims(url, v.videoWidth, v.videoHeight);
+                  setDims(dimCache.get(url) ?? null);
+                  handleMediaLoad();
+                }}
                 onError={() => setMp4Error(true)}
               />
             </button>
@@ -199,7 +218,12 @@ export function MessageAttachment({
               alt={type === "gif" ? "GIF" : fileName}
               className={`${mediaClass} cursor-zoom-in`}
               loading="eager"
-              onLoad={handleMediaLoad}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                rememberDims(url, img.naturalWidth, img.naturalHeight);
+                setDims(dimCache.get(url) ?? null);
+                handleMediaLoad();
+              }}
               onError={() => setImgError(true)}
             />
           </button>
