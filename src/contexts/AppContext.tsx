@@ -973,23 +973,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("messages")
-      .select("*, author:profiles(*)")
-      .eq("channel_id", channelId)
-      .order("created_at", { ascending: false })
-      .limit(MESSAGE_PAGE_SIZE + 1);
-    if (activeChannelRef.current !== channelId) return;
+    // A failed fetch must never leave the skeleton up forever: fail open
+    // to an empty list (the view then shows its empty state, and a retry
+    // happens on the next navigation or realtime event).
+    try {
+      const { data } = await supabase
+        .from("messages")
+        .select("*, author:profiles(*)")
+        .eq("channel_id", channelId)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE + 1);
+      if (activeChannelRef.current !== channelId) return;
 
-    const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
-    setMessages(rows);
-    setChannelHasMore(hasMore);
-    setMessagesLoading(false);
+      const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
+      setMessages(rows);
+      setChannelHasMore(hasMore);
+      setMessagesLoading(false);
 
-    const ids = rows.map((m) => m.id);
-    const rxn = await loadReactionsForMessages(supabase, "channel", ids);
-    if (activeChannelRef.current !== channelId) return;
-    setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
+      const ids = rows.map((m) => m.id);
+      const rxn = await loadReactionsForMessages(supabase, "channel", ids);
+      if (activeChannelRef.current !== channelId) return;
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
+    } catch {
+      if (activeChannelRef.current !== channelId) return;
+      setMessages([]);
+      setChannelHasMore(false);
+      setMessagesLoading(false);
+    }
   }, []);
 
   const loadMoreChannelMessages = useCallback(async () => {
@@ -1129,22 +1139,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadDmMessages = useCallback(async (threadId: string) => {
     const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("dm_messages")
-      .select("*, author:profiles(*)")
-      .eq("thread_id", threadId)
-      .order("created_at", { ascending: false })
-      .limit(MESSAGE_PAGE_SIZE + 1);
+    try {
+      const { data } = await supabase
+        .from("dm_messages")
+        .select("*, author:profiles(*)")
+        .eq("thread_id", threadId)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE + 1);
 
-    if (activeDmRef.current !== threadId) return;
-    const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
-    setDmMessages(rows);
-    setDmHasMore(hasMore);
-    setDmLoading(false);
-    const ids = rows.map((m) => m.id);
-    const rxn = await loadReactionsForMessages(supabase, "dm", ids);
-    if (activeDmRef.current !== threadId) return;
-    setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", rxn));
+      if (activeDmRef.current !== threadId) return;
+      const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
+      setDmMessages(rows);
+      setDmHasMore(hasMore);
+      setDmLoading(false);
+      const ids = rows.map((m) => m.id);
+      const rxn = await loadReactionsForMessages(supabase, "dm", ids);
+      if (activeDmRef.current !== threadId) return;
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", rxn));
+    } catch {
+      if (activeDmRef.current !== threadId) return;
+      setDmMessages([]);
+      setDmHasMore(false);
+      setDmLoading(false);
+    }
   }, []);
 
   const loadMoreDmMessages = useCallback(async () => {
@@ -1218,22 +1235,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadGroupMessages = useCallback(async (groupId: string) => {
     const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("group_messages")
-      .select("*, author:profiles(*)")
-      .eq("group_id", groupId)
-      .order("created_at", { ascending: false })
-      .limit(MESSAGE_PAGE_SIZE + 1);
+    try {
+      const { data } = await supabase
+        .from("group_messages")
+        .select("*, author:profiles(*)")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE + 1);
 
-    if (activeGroupRef.current !== groupId) return;
-    const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
-    setGroupMessages(rows);
-    setGroupHasMore(hasMore);
-    setGroupLoading(false);
-    const ids = rows.map((m) => m.id);
-    const rxn = await loadReactionsForMessages(supabase, "group", ids);
-    if (activeGroupRef.current !== groupId) return;
-    setMessageReactions((prev) => replaceReactionsForContext(prev, "group", rxn));
+      if (activeGroupRef.current !== groupId) return;
+      const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
+      setGroupMessages(rows);
+      setGroupHasMore(hasMore);
+      setGroupLoading(false);
+      const ids = rows.map((m) => m.id);
+      const rxn = await loadReactionsForMessages(supabase, "group", ids);
+      if (activeGroupRef.current !== groupId) return;
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "group", rxn));
+    } catch {
+      if (activeGroupRef.current !== groupId) return;
+      setGroupMessages([]);
+      setGroupHasMore(false);
+      setGroupLoading(false);
+    }
   }, []);
 
   const loadMoreGroupMessages = useCallback(async () => {
