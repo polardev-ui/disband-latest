@@ -1596,6 +1596,24 @@ export function DiscordApp() {
         </>
       )}
 
+      {/* The conversation may be gone (deleted, access revoked, stale link):
+          render an honest dead-end instead of a blank pane. */}
+      {app.viewMode === "dm" && !dmFriend && (
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-bg-primary px-6 text-center">
+          <p className="text-[15px] font-semibold text-text-normal">Conversation unavailable</p>
+          <p className="max-w-sm text-sm text-text-muted">
+            This conversation may have been deleted, or you may no longer have access to it.
+          </p>
+          <button
+            type="button"
+            onClick={() => app.setViewHome()}
+            className="mt-1 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+          >
+            Back to friends
+          </button>
+        </div>
+      )}
+
       {app.viewMode === "group" && activeGroup && (
         <>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -1676,6 +1694,22 @@ export function DiscordApp() {
             />
           </div>
         </>
+      )}
+
+      {app.viewMode === "group" && !activeGroup && (
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-bg-primary px-6 text-center">
+          <p className="text-[15px] font-semibold text-text-normal">Conversation unavailable</p>
+          <p className="max-w-sm text-sm text-text-muted">
+            This group may have been deleted, or you may no longer be a member.
+          </p>
+          <button
+            type="button"
+            onClick={() => app.setViewHome()}
+            className="mt-1 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+          >
+            Back to friends
+          </button>
+        </div>
       )}
 
       {app.viewMode === "notes" && (

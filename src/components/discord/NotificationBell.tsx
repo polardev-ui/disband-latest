@@ -28,6 +28,7 @@ export function NotificationBell() {
     routeToNotification,
   } = useApp();
   const [open, setOpen] = useState(false);
+  const [navError, setNavError] = useState<string | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, right: 0 });
@@ -39,7 +40,10 @@ export function NotificationBell() {
     // component's setState inside a setOpen updater runs during render and
     // throws ("Cannot update a component while rendering"). It would also
     // double-fire under StrictMode's double-invoked updaters.
-    if (!open) void markNotificationsSeen();
+    if (!open) {
+      setNavError(null);
+      void markNotificationsSeen();
+    }
     setOpen(!open);
   }, [markNotificationsSeen, open]);
 
@@ -73,9 +77,16 @@ export function NotificationBell() {
   }, [open ]);
 
   const handleItemClick = useCallback(async (n: AppNotification) => {
-    setOpen(false);
+    setNavError(null);
     if (!n.read) void markNotificationRead(n.id);
-    await routeToNotification(n.link);
+    // Stay open with an explanation when the target is gone (deleted,
+    // revoked, stale link) instead of dropping the user on a blank pane.
+    const ok = await routeToNotification(n.link);
+    if (!ok) {
+      setNavError("Couldn’t open that conversation. It may have been deleted.");
+      return;
+    }
+    setOpen(false);
   }, [markNotificationRead, routeToNotification]);
 
   const drawer =
@@ -98,6 +109,11 @@ export function NotificationBell() {
                 </button>
               )}
             </div>
+            {navError && (
+              <p role="alert" className="border-b border-divider bg-status-dnd/10 px-3 py-2 text-xs text-status-dnd">
+                {navError}
+              </p>
+            )}
             {notifications.length === 0 ? (
               <p className="px-4 py-6 text-center text-[13px] text-text-muted">
                 Nothing here yet — mentions and replies will land here.

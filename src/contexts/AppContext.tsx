@@ -2516,10 +2516,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const target = parseNotificationLink(link);
     if (!target) return false;
     if (target.kind === "dm") {
+      // The thread may reference a conversation that never loaded (or was
+      // deleted): refresh once, and stay put instead of opening a blank
+      // pane with a stuck spinner.
+      if (!dmThreadsRef.current.some((t) => t.id === target.threadId)) {
+        if (!userId) return false;
+        await loadDmThreads(userId);
+        if (!dmThreadsRef.current.some((t) => t.id === target.threadId)) return false;
+      }
       await selectDmThread(target.threadId);
       return true;
     }
     if (target.kind === "group") {
+      if (!groupChatsRef.current.some((g) => g.id === target.groupId)) {
+        if (!userId) return false;
+        await loadGroupChats(userId);
+        if (!groupChatsRef.current.some((g) => g.id === target.groupId)) return false;
+      }
       await selectGroupChat(target.groupId);
       return true;
     }
@@ -2527,13 +2540,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       return false;
     }
-    const channel = channelsRef.current.find((c) => c.id === target.channelId);
-    if (channel && channel.server_id !== activeServerRef.current) {
+    let channel = channelsRef.current.find((c) => c.id === target.channelId);
+    if (!channel) {
+      // Maybe a space whose details never loaded: discover its server and
+      // load that space first. Deleted or inaccessible → stay put.
+      const { data } = await getSupabaseClient()
+        .from("channels")
+        .select("id, server_id")
+        .eq("id", target.channelId)
+        .maybeSingle();
+      if (!data) return false;
+      const serverId = (data as { server_id: string }).server_id;
+      const rows = await loadServerDetails(serverId);
+      if (!rows.some((c) => c.id === target.channelId)) return false;
+      await selectServer(serverId);
+      channel = channelsRef.current.find((c) => c.id === target.channelId) ?? undefined;
+      if (!channel) return false;
+    } else if (channel.server_id !== activeServerRef.current) {
       await selectServer(channel.server_id);
     }
     selectChannel(target.channelId);
     return true;
-  }, [selectDmThread, selectGroupChat, selectServer, selectChannel]);
+  }, [userId, loadDmThreads, loadGroupChats, loadServerDetails, selectDmThread, selectGroupChat, selectServer, selectChannel]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
