@@ -35,11 +35,13 @@ export function NotificationBell() {
   const unseen = notifications.filter((n) => !n.seen_at).length;
 
   const toggle = useCallback(() => {
-    setOpen((prev) => {
-      if (!prev) void markNotificationsSeen();
-      return !prev;
-    });
-  }, [markNotificationsSeen]);
+    // Side effect lives in the handler, not the updater: calling another
+    // component's setState inside a setOpen updater runs during render and
+    // throws ("Cannot update a component while rendering"). It would also
+    // double-fire under StrictMode's double-invoked updaters.
+    if (!open) void markNotificationsSeen();
+    setOpen(!open);
+  }, [markNotificationsSeen, open]);
 
   useEffect(() => {
     if (!open) return;
