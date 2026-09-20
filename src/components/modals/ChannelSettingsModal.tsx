@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -76,6 +78,8 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
     void loadRows(channel.id);
   }, [channel, loadRows]);
 
+  useOverlayDismiss(onClose, channel !== null);
+
   if (!channel) return null;
 
   const rolePerms = (roleId: string) => {
@@ -94,6 +98,39 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
       [roleId]: { ...(prev[roleId] ?? { can_view: null, can_post: null, can_react: null, can_attach: null }), [key]: value },
     }));
     setSaved(false);
+  };
+
+  // Shared by the desktop permission table and the mobile stacked cards so
+  // the two layouts can't drift (same labels, tones, tooltips, cycling).
+  const cellStateLabel = (value: boolean | null) =>
+    value === null ? "Default" : value ? "Allow" : "Deny";
+  const cellTitle = (value: boolean | null, fallback: boolean) =>
+    value === null
+      ? `Default (${fallback ? "allowed" : "denied"} by role settings)`
+      : value
+        ? "Override: allowed"
+        : "Override: denied";
+  const cellTone = (value: boolean | null) =>
+    value === null
+      ? "bg-bg-accent text-text-muted"
+      : value
+        ? "bg-status-online/15 text-status-online"
+        : "bg-status-dnd/15 text-status-dnd";
+  const renderCell = (roleId: string, a: { key: ActionKey; label: string }, extraClass = "") => {
+    const value = draft[roleId]?.[a.key] ?? null;
+    const fallback = rolePerms(roleId)[a.key];
+    return (
+      <button
+        key={a.key}
+        type="button"
+        title={cellTitle(value, fallback)}
+        aria-label={`${a.label}: ${cellStateLabel(value)}`}
+        onClick={() => setCell(roleId, a.key, cycle(value))}
+        className={`flex items-center justify-center rounded px-1.5 py-1 text-[11px] font-semibold transition-colors ${cellTone(value)} ${extraClass}`}
+      >
+        {cellStateLabel(value)}
+      </button>
+    );
   };
 
   const save = async () => {
@@ -135,8 +172,8 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-bg-primary shadow-2xl">
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Channel settings" className="modal-pop relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-bg-primary shadow-2xl">
         <header className="flex items-center gap-2 border-b border-divider px-5 py-4">
           {channel.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
           <div className="min-w-0 flex-1">
@@ -197,7 +234,9 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
               Tap a cell to cycle Default → Allow → Deny. "Default" follows the role's own settings; once any
               role has an override here, channels not allowed for a role are hidden and read-only.
             </p>
-            <div className="mt-2 overflow-x-auto">
+            {/* Desktop: permission table. Hidden on small screens where its
+                520px minimum would force sideways scrolling. */}
+            <div className="mt-2 hidden overflow-x-auto sm:block">
               <div className="min-w-[520px]">
                 <div className="grid grid-cols-[1fr_repeat(4,72px)] items-center gap-1 border-b border-divider pb-1">
                   <span className="text-[11px] font-bold uppercase text-text-muted">Role</span>
@@ -216,38 +255,38 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
                         <span className="min-w-0 truncate text-sm" style={{ color: r.role_color }}>
                           {r.role_name}
                         </span>
-                        {ACTIONS.map((a) => {
-                          const value = draft[r.role_id]?.[a.key] ?? null;
-                          const fallback = rolePerms(r.role_id)[a.key];
-                          return (
-                            <button
-                              key={a.key}
-                              type="button"
-                              title={
-                                value === null
-                                  ? `Default (${fallback ? "allowed" : "denied"} by role settings)`
-                                  : value
-                                    ? "Override: allowed"
-                                    : "Override: denied"
-                              }
-                              onClick={() => setCell(r.role_id, a.key, cycle(value))}
-                              className={`mx-auto flex items-center justify-center rounded px-1.5 py-1 text-[11px] font-semibold transition-colors ${
-                                value === null
-                                  ? "bg-bg-accent text-text-muted"
-                                  : value
-                                    ? "bg-emerald-500/15 text-emerald-400"
-                                    : "bg-status-dnd/15 text-status-dnd"
-                              }`}
-                            >
-                              {value === null ? "Default" : value ? "Allow" : "Deny"}
-                            </button>
-                          );
-                        })}
+                        {ACTIONS.map((a) => renderCell(r.role_id, a, "mx-auto"))}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            </div>
+            {/* Mobile: stacked role cards with labeled toggles instead of a
+                sideways-scrolling table. Same state via renderCell. */}
+            <div className="mt-2 space-y-2 sm:hidden">
+              {rows === null ? (
+                <p className="py-4 text-center text-sm text-text-muted">Loading permissions…</p>
+              ) : (
+                rows.map((r) => (
+                  <div key={r.role_id} className="rounded-lg border border-divider bg-bg-secondary p-3">
+                    <p className="mb-2 truncate text-sm font-semibold" style={{ color: r.role_color }}>
+                      {r.role_name}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ACTIONS.map((a) => (
+                        <div
+                          key={a.key}
+                          className="flex items-center justify-between gap-2 rounded bg-bg-accent px-2 py-1.5"
+                        >
+                          <span className="text-[11px] font-bold uppercase text-text-muted">{a.label}</span>
+                          {renderCell(r.role_id, a, "min-w-[64px]")}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
 
@@ -278,7 +317,7 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
         <footer className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3">
           <div className="min-w-0">
             {error && <p className="text-xs text-status-dnd">{error}</p>}
-            {!error && saved && <p className="text-xs text-emerald-400">Changes saved.</p>}
+            {!error && saved && <p className="text-xs text-status-online">Changes saved.</p>}
             {!error && !saved && <p className="text-xs text-text-muted">Hit save to apply your edits.</p>}
           </div>
           <button

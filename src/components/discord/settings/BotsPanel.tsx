@@ -343,10 +343,10 @@ export function BotsPanel() {
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-black/70"
+            className="absolute inset-0 bg-overlay-scrim overlay-fade"
             onClick={() => setInvitingBot(null)}
           />
-          <div className="relative w-full max-w-md rounded-xl bg-bg-primary p-5 shadow-2xl">
+          <div className="modal-pop relative w-full max-w-md rounded-xl bg-bg-primary p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[16px] font-semibold text-text-normal">

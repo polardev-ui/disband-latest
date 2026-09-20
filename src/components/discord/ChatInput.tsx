@@ -181,12 +181,20 @@ export function ChatInput({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const typingActivityRef = useRef(onTypingActivity);
+  typingActivityRef.current = onTypingActivity;
+  const textRef = useRef(text);
+  textRef.current = text;
+
+  // Mount-once interval. The old version depended on `text`, so every
+  // keystroke tore the timer down and recreated it (plus an extra immediate
+  // ping — redundant, since onChange already pings via onTypingActivity).
   useEffect(() => {
-    if (!onTypingActivity || !text.trim()) return;
-    onTypingActivity();
-    const id = window.setInterval(() => onTypingActivity(), 2000);
+    const id = window.setInterval(() => {
+      if (textRef.current.trim()) typingActivityRef.current?.();
+    }, 2000);
     return () => window.clearInterval(id);
-  }, [text, onTypingActivity]);
+  }, []);
 
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
@@ -253,12 +261,23 @@ export function ChatInput({
     return [...memberItems, ...roleItems].slice(0, 8);
   }, [mentionCtx, members, roles]);
 
+  // Validate at pick time so an oversize file never looks stageable only to
+  // fail at send (uploadMedia enforces the same limit as a backstop).
   const handleFiles = useCallback((files: FileList | File[]) => {
     setError(null);
+    const maxMb = Math.round(maxUploadBytes / (1024 * 1024));
     for (const file of Array.from(files)) {
+      if (file.size > maxUploadBytes) {
+        setError(`${file.name} is too large (max ${maxMb} MB).`);
+        continue;
+      }
+      if (file.size === 0) {
+        setError(`${file.name} is empty.`);
+        continue;
+      }
       add(file);
     }
-  }, [add]);
+  }, [add, maxUploadBytes]);
 
   const removeFile = useCallback((id: string) => {
     remove(id);
@@ -395,33 +414,56 @@ export function ChatInput({
 
     setError(null);
     const replyToId = replyTo?.id;
-    const pendingEntries = [...entries];
+    const pendingFiles = entries.map((e) => e.file);
 
+    // Clear the composer optimistically, but keep the reply chip until the
+    // first message lands: the parent owns reply state, so clearing it early
+    // would make it unrecoverable on failure.
     setText("");
-    onClearReply?.();
     clear();
 
-    for (let i = 0; i < pendingEntries.length; i++) {
-      const entry = pendingEntries[i];
+    let sentFiles = 0;
+    let fatalErr: string | null = null;
+    for (let i = 0; i < pendingFiles.length; i++) {
       const err = await onSend(i === 0 ? content : "", {
-        pendingFile: entry.file,
+        pendingFile: pendingFiles[i],
         maxUploadBytes,
         replyToId: i === 0 ? replyToId : undefined,
       });
       if (err) {
+        fatalErr = err;
+        break;
+      }
+      sentFiles++;
+    }
+
+    if (fatalErr) {
+      if (sentFiles === 0) {
+        // Nothing landed: full rollback. The reply chip was never cleared,
+        // and staged files are re-added from the snapshot (clear() revoked
+        // their object URLs, add() creates fresh ones for the same Files).
+        setText(content);
+        for (const f of pendingFiles) add(f);
+        setError(fatalErr);
+      } else {
+        // Partial multi-file send: content + first files landed (so the
+        // reply was consumed), only the unsent tail is restored.
+        for (let i = sentFiles; i < pendingFiles.length; i++) add(pendingFiles[i]);
+        onClearReply?.();
+        setError(`${fatalErr} (${sentFiles} of ${pendingFiles.length} attachments sent.)`);
+      }
+      return;
+    }
+
+    if (pendingFiles.length === 0 && content) {
+      const err = await onSend(content, { replyToId });
+      if (err) {
+        setText(content);
         setError(err);
-        if (i === 0) setText(content);
         return;
       }
     }
-
-    if (pendingEntries.length === 0 && content) {
-      const err = await onSend(content, { replyToId });
-      if (err) {
-        setError(err);
-        setText(content);
-      }
-    }
+    onClearReply?.();
   }
 
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -513,8 +555,8 @@ export function ChatInput({
     <div className="relative shrink-0 px-4 pb-6">
       {windowDrag
         && createPortal(
-          <div className="pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm">
-            <div className="flex w-full max-w-lg flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand/70 bg-bg-secondary/95 px-10 py-12 text-center">
+          <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8 backdrop-blur-sm">
+            <div className="modal-pop flex w-full max-w-lg flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand/70 bg-bg-secondary/95 px-10 py-12 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/15 text-brand">
                 <IconPlus size={30} />
               </span>
@@ -668,11 +710,13 @@ export function ChatInput({
               type="button"
               aria-label="Upload file"
               aria-expanded={plusMenuOpen}
+              disabled={!!editingMessageId}
+              title={editingMessageId ? "Finish editing before adding files" : "Upload file"}
               onClick={() => {
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
               }}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40"
             >
               <IconPlus size={22} />
             </button>
@@ -687,8 +731,10 @@ export function ChatInput({
                 </button>
                 <button
                   type="button"
+                  disabled={!!editingMessageId}
+                  title={editingMessageId ? "Finish editing before creating a poll" : undefined}
                   onClick={() => { setPlusMenuOpen(false); setPollOpen(true); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-interactive-hover"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Create a poll
                 </button>
@@ -699,6 +745,7 @@ export function ChatInput({
             ref={fileRef}
             type="file"
             multiple
+            disabled={!!editingMessageId}
             className="hidden"
             onChange={(e) => { if (e.target.files?.length) void handleFiles(e.target.files); e.target.value = ""; }}
           />
@@ -741,7 +788,11 @@ export function ChatInput({
           />
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
+            disabled={!!editingMessageId}
             onSelect={(url) => {
+              // Guarded twice (button is also disabled while editing): a GIF
+              // must never become a stray new message with an edit left open.
+              if (editingMessageId) return;
               void onSend("", { attachment: { url, type: "gif" }, replyToId: replyTo?.id });
               onClearReply?.();
             }}
@@ -755,6 +806,8 @@ export function ChatInput({
         onClose={() => setPollOpen(false)}
         onCreated={(pollId) => {
           setPollOpen(false);
+          // Same guard as GIFs: never fire a new-message send from edit mode.
+          if (editingMessageId) return;
           void onSend("", { attachment: { url: pollId, type: "poll" } }).then((err) => {
             if (err) setError(err);
           });

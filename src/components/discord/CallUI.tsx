@@ -110,7 +110,7 @@ function ParticipantTile({
   return (
     <div className="flex flex-col items-center gap-2.5">
       <div
-        className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-[#2b2d31] ${ringClass} ${
+        className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-overlay-media ${ringClass} ${
           ring ? "shadow-[0_0_24px_rgba(59,165,93,0.3)]" : ""
         }`}
       >
@@ -150,7 +150,7 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
   callerName: string; profile?: Profile; onAccept: () => void; onReject: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md">
+    <div className="overlay-fade fixed inset-0 z-[100] flex items-center justify-center bg-overlay-scrim-strong backdrop-blur-md">
       <div className="call-enter flex flex-col items-center px-8 text-center">
         <p className="mb-6 text-sm font-medium uppercase tracking-widest text-text-muted">Incoming voice call</p>
         <div className="relative mb-6">

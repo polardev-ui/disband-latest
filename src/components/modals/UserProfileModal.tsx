@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
@@ -177,6 +179,7 @@ export function UserProfileModal({
       live = false;
     };
   }, [open, profile?.id, loadMutuals]);
+  useOverlayDismiss(onClose, open);
   if (!open || !profile) return null;
 
   const friend = friends.some((f) => f.id === profile.id);
@@ -198,8 +201,8 @@ export function UserProfileModal({
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
+      <button type="button" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} aria-label="Close" />
+      <div role="dialog" aria-modal="true" aria-label={title} className="modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
         <ProfileBanner profile={profile} />
 
         <button

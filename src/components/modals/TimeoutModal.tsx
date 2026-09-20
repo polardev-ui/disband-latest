@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconTimer } from "@/components/icons";
@@ -78,6 +80,10 @@ export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalP
     return new Date(Date.now() + seconds * 1000);
   }, [valid, seconds]);
 
+  // Escape is disabled while the request is in flight so a stray keypress
+  // can't dismiss mid-submit (the scrim click is disabled the same way).
+  useOverlayDismiss(onClose, open && !busy);
+
   if (!open || !profile) return null;
 
   const submit = async () => {
@@ -92,12 +98,12 @@ export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalP
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={busy ? undefined : onClose} />
+      <div className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={busy ? undefined : onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Time out ${displayName(profile)}`}
-        className="relative w-full max-w-md rounded-lg bg-bg-primary p-6 shadow-2xl"
+        className="modal-pop relative w-full max-w-md rounded-lg bg-bg-primary p-6 shadow-2xl"
       >
         <button
           type="button"

@@ -7,6 +7,7 @@ import { IconClose } from "@/components/icons";
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
+  disabled?: boolean;
 }
 
 function GifThumb({ gif, onSelect }: {
@@ -49,7 +50,7 @@ function GifThumb({ gif, onSelect }: {
   );
 }
 
-export function GifPicker({ onSelect }: GifPickerProps) {
+export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [query, setQuery] = useState("");
@@ -176,6 +177,8 @@ export function GifPicker({ onSelect }: GifPickerProps) {
         type="button"
         aria-label="Send GIF"
         aria-expanded={open}
+        disabled={disabled}
+        title={disabled ? "Finish editing before sending a GIF" : "Send GIF"}
         onClick={() => {
           setOpen((v) => {
             const next = !v;
@@ -183,7 +186,7 @@ export function GifPicker({ onSelect }: GifPickerProps) {
             return next;
           });
         }}
-        className="flex h-8 items-center rounded px-2 text-xs font-bold uppercase tracking-wide text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+        className="flex h-8 items-center rounded px-2 text-xs font-bold uppercase tracking-wide text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40"
       >
         GIF
       </button>

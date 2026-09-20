@@ -1,6 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import {
   SubscriptionMedallion, TIERS, tierForMonths, nextTier, tierDuration,
 } from "@/components/gift/SubscriptionMedallion";
@@ -26,16 +27,19 @@ export function SubscriptionBadgeModal({
     : 1;
   const remaining = next ? next.months - tenureMonths : 0;
 
+  // Always mounted when rendered (no `open` prop).
+  useOverlayDismiss(onClose);
+
   const body = (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
+      className="overlay-fade fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-overlay-scrim p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={`${planName} subscription badge`}
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-white/10"
+        className="modal-pop relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         <button

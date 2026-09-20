@@ -116,7 +116,7 @@ export function Hint({ children, tone = "muted" }: { children: React.ReactNode; 
         tone === "super"
           ? "bg-super/20 text-super"
           : tone === "online"
-            ? "bg-[#57f287]/15 text-[#57f287]"
+            ? "bg-status-online/15 text-status-online"
             : "bg-bg-accent text-text-muted"
       }`}
     >

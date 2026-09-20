@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type ReactionSummary } from "@/lib/messages";
@@ -65,14 +67,14 @@ function ReactionHoverCard({
       <button
         type="button"
         onClick={onOpenList}
-        className="flex w-full items-center gap-2.5 rounded-lg bg-[#111214] px-3 py-2 text-left shadow-xl ring-1 ring-white/10 transition-colors hover:bg-[#1a1b1e]"
+        className="flex w-full items-center gap-2.5 rounded-lg bg-overlay-surface px-3 py-2 text-left shadow-xl ring-1 ring-divider transition-colors hover:bg-interactive-hover"
       >
         <EmojiImg emoji={summary.emoji} size="1.75em" />
         <span className="min-w-0">
-          <span className="block truncate text-[13px] font-semibold text-white">
+          <span className="block truncate text-[13px] font-semibold text-text-normal">
             {reactorSentence(names, summary.count)}
           </span>
-          <span className="block text-[11px] text-white/45">
+          <span className="block text-[11px] text-text-muted">
             reacted with {summary.emoji} · click to see everyone
           </span>
         </span>
@@ -93,11 +95,8 @@ function ReactionListDialog({
   const current = reactions.find((r) => r.emoji === active) ?? reactions[0];
   const profiles = useProfiles(current?.userIds ?? []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Always open when rendered; stack-routed Escape + scroll lock + focus back.
+  useOverlayDismiss(onClose);
 
   if (!current) return null;
 
@@ -107,12 +106,13 @@ function ReactionListDialog({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-overlay-scrim overlay-fade"
       />
       <div
         role="dialog"
+        aria-modal="true"
         aria-label="Reactions"
-        className="relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-white/10"
+        className="modal-pop relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider"
       >
         {}
         <div className="flex w-[104px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-divider p-2">
@@ -280,7 +280,7 @@ export function ReactionPicker({
     <>
       <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
 
-      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+      <div className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
         <div className="border-b border-divider px-4 py-3">
           <input
             type="text"

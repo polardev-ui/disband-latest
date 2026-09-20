@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbeddedCheckout";
@@ -21,6 +23,9 @@ export function GiftModal({ onClose, onPurchased }: {
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Always mounted when rendered (no `open` prop) — active unconditionally.
+  useOverlayDismiss(onClose);
 
   const accent = "#fee75c";
   const price = giftPrice(plan, months);
@@ -52,14 +57,14 @@ export function GiftModal({ onClose, onPurchased }: {
 
   const body = (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Gift a subscription"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-[440px] rounded-2xl bg-bg-secondary shadow-2xl"
+        className="modal-pop relative w-full max-w-[440px] rounded-2xl bg-bg-secondary shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <button

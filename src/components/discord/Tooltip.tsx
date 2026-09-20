@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { OVERLAY_Z } from "@/lib/overlay";
 
 interface TooltipProps {
 
@@ -89,18 +90,18 @@ export function Tooltip({ label, children, side = "right", as: Trigger = "div" }
         && createPortal(
           <div
             role="tooltip"
-            className="pointer-events-none fixed z-[200] max-w-xs rounded-md bg-[#111214] px-3 py-1.5 text-sm font-semibold text-white shadow-lg"
-            style={{ top: pos.top, left: pos.left, transform }}
+            className="tooltip-content pointer-events-none fixed max-w-xs rounded-md bg-overlay-surface px-3 py-1.5 text-sm font-semibold text-text-normal shadow-lg"
+            style={{ top: pos.top, left: pos.left, transform, zIndex: OVERLAY_Z.tooltip }}
           >
             {label}
             {side === "right" && (
-              <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#111214]" />
+              <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-overlay-surface" />
             )}
             {side === "left" && (
-              <span className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-[#111214]" />
+              <span className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-overlay-surface" />
             )}
             {side === "top" && (
-              <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-[#111214]" />
+              <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-overlay-surface" />
             )}
           </div>,
           document.body,

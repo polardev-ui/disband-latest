@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useCallback, useEffect, useState } from "react";
 import type { ServerPermissionKey, ServerRole } from "@/lib/supabase/types";
 import {
@@ -108,12 +110,8 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     });
   }, [activeServer, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  // Topmost-only Escape + scroll lock via the shared overlay hook.
+  useOverlayDismiss(onClose, open);
 
   if (!open || !activeServer) return null;
   const isOwner = activeServer.owner_id === user?.id;
@@ -383,7 +381,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-bg-primary">
+    <div role="dialog" aria-modal="true" aria-label="Space settings" className="overlay-fade fixed inset-0 z-[70] flex flex-col bg-bg-primary">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-divider px-6">
         <div className="flex items-center gap-3">
           {activeServer.icon_url ? (
@@ -409,18 +407,28 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
         </button>
       </header>
 
+      {/* Mobile section picker. This used to live inside the desktop-only
+          <nav> below (hidden + md:flex), so on small screens there was no way
+          to switch sections at all. */}
+      <div className="shrink-0 border-b border-divider bg-bg-secondary px-4 py-2 md:hidden">
+        <label className="sr-only" htmlFor="space-settings-section">
+          Settings section
+        </label>
+        <select
+          id="space-settings-section"
+          value={section}
+          onChange={(e) => setSection(e.target.value as Section)}
+          className="w-full rounded bg-bg-accent px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+        >
+          {navItems.map((n) => (
+            <option key={n.id} value={n.id}>{n.label}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex min-h-0 flex-1">
         <nav className="hidden w-56 shrink-0 flex-col border-r border-divider bg-bg-secondary p-4 md:flex">
           <label className="mb-2 px-2 text-xs font-bold uppercase text-text-muted">Settings</label>
-          <select
-            value={section}
-            onChange={(e) => setSection(e.target.value as Section)}
-            className="mb-4 w-full rounded bg-bg-accent px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand md:hidden"
-          >
-            {navItems.map((n) => (
-              <option key={n.id} value={n.id}>{n.label}</option>
-            ))}
-          </select>
           {navItems.map((n) => {
             const Icon = n.icon;
             return (

@@ -177,13 +177,13 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
     <div
       className={
         overlay
-          ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/70 px-6 py-12 backdrop-blur-sm"
+          ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade px-6 py-12 backdrop-blur-sm"
           : "flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12"
       }
       onClick={overlay ? onClose : undefined}
     >
       <div
-        className={overlay ? "relative w-full max-w-[400px] rounded-2xl bg-bg-tertiary p-6 shadow-2xl" : "w-full max-w-[400px]"}
+        className={overlay ? "modal-pop relative w-full max-w-[400px] rounded-2xl bg-bg-tertiary p-6 shadow-2xl" : "w-full max-w-[400px]"}
         onClick={overlay ? (e) => e.stopPropagation() : undefined}
       >
         {overlay && (

@@ -309,10 +309,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       if (!err) setEditing(null);
       return err;
     }
-    setNewMessagesDividerId(null);
+    // A failed own send must not erase the "New" divider for everyone else's
+    // messages: only clear once the send actually lands.
     const err = await onSend(content, options);
-    if (!err && readCursorScope) {
-      markChatReadNow(readCursorScope);
+    if (!err) {
+      setNewMessagesDividerId(null);
+      if (readCursorScope) markChatReadNow(readCursorScope);
     }
     return err;
   }

@@ -23,7 +23,7 @@ interface InviteData {
 
 const STATUS_COPY: Record<InviteData["status"], { label: string; tone: string }> = {
   pending: { label: "Waiting for approval", tone: "text-[#f0b232]" },
-  approved: { label: "Approved — the bot has joined", tone: "text-[#57f287]" },
+  approved: { label: "Approved — the bot has joined", tone: "text-status-online" },
   declined: { label: "Declined", tone: "text-[#f04747]" },
   expired: { label: "Expired", tone: "text-text-muted" },
 };
@@ -155,7 +155,7 @@ export function BotInviteCard({ code }: { code: string }) {
                 <div className="space-y-2">
                   {invite.scopes.map((scope) => (
                     <div key={scope} className="flex items-start gap-2.5 rounded-md bg-bg-secondary px-3 py-2.5">
-                      <span className="mt-0.5 text-[#57f287]">✓</span>
+                      <span className="mt-0.5 text-status-online">✓</span>
                       <div className="min-w-0">
                         <p className="text-[13.5px] font-medium text-text-normal">
                           {BOT_SCOPE_LABELS[scope]?.label ?? scope}

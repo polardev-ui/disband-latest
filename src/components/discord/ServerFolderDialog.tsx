@@ -1,5 +1,7 @@
 "use client";
 
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+
 import { useState } from "react";
 
 export const FOLDER_COLORS = [
@@ -28,6 +30,10 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Always mounted when rendered (no `open` prop) — active unconditionally.
+  // The input's local Escape handler is removed in favor of this stack.
+  useOverlayDismiss(onClose);
+
   const save = async () => {
     if (!name.trim()) {
       setError("Give the folder a name.");
@@ -46,9 +52,12 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade p-4" onClick={onClose}>
       <div
-        className="w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="modal-pop w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-bold text-text-normal">{title}</h2>
@@ -60,7 +69,6 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void save();
-              if (e.key === "Escape") onClose();
             }}
             maxLength={32}
             placeholder="My folder"
