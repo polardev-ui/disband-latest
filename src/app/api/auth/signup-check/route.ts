@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { getClientIp, hashIp } from "@/lib/request-ip";
-import { isVpnOrProxy } from "@/lib/vpn-check";
+import { getClientIp, hashIp, hashValue } from "@/lib/request-ip";
+import { checkVpnStrict } from "@/lib/vpn-check";
 import { usernameContainsBlockedWord, usernameFormatError } from "@/lib/username-policy";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { persistentRateLimitCheck } from "@/lib/auth-guard";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
+// Agreed limits: 3/hr + 5/day per IP, 3/hr per email, plus existing 15/min burst guard.
 export async function POST(request: Request) {
   const checkIp = getClientIp(request) || "unknown";
   const checkLimit = rateLimit(`signup-check:${checkIp}`, 15, 60_000);
   if (!checkLimit.allowed) return tooManyRequests(checkLimit.retryAfterSeconds);
 
-  let body: { email?: string; username?: string };
+  let body: { email?: string; username?: string; turnstileToken?: string };
   try {
-    body = (await request.json()) as { email?: string; username?: string };
+    body = (await request.json()) as { email?: string; username?: string; turnstileToken?: string };
   } catch {
     return NextResponse.json({ allowed: false, error: "Invalid request." }, { status: 400 });
   }
@@ -27,6 +30,37 @@ export async function POST(request: Request) {
   const service = getServiceSupabase();
   if (!service) {
     return NextResponse.json({ allowed: false, error: "Signup is unavailable." }, { status: 503 });
+  }
+
+  // Persistent account-creation limits (multi-instance safe).
+  const emailHash = email ? hashValue(email, "signup-email") : null;
+  const persistentHit = await persistentRateLimitCheck(service,
+    checkIp === "unknown"
+      ? emailHash
+        ? [{ key: `signup:email:${emailHash}:hr`, max: 3, windowSeconds: 3600 }]
+        : []
+      : [
+          { key: `signup:ip:${ipHash}:hr`, max: 3, windowSeconds: 3600 },
+          { key: `signup:ip:${ipHash}:day`, max: 5, windowSeconds: 86400 },
+          ...(emailHash
+            ? [{ key: `signup:email:${emailHash}:hr`, max: 3, windowSeconds: 3600 }]
+            : []),
+        ],
+  );
+  if (persistentHit) {
+    return NextResponse.json(
+      { allowed: false, error: "Too many accounts created from your network. Try again later." },
+      { status: 429, headers: { "Retry-After": "3600" } },
+    );
+  }
+
+  // Optional Turnstile: verified when a token is supplied and a secret is
+  // configured. Not yet mandatory so Tauri builds without the widget keep working.
+  if (body.turnstileToken && process.env.TURNSTILE_SECRET_KEY) {
+    const ok = await verifyTurnstileToken(body.turnstileToken, checkIp === "unknown" ? undefined : checkIp);
+    if (!ok) {
+      return NextResponse.json({ allowed: false, error: "Verification failed. Try again." }, { status: 403 });
+    }
   }
 
   if (ipHash) {
@@ -94,12 +128,17 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
-  if (process.env.BLOCK_VPN_SIGNUP === "true" && ip) {
-    const vpn = await isVpnOrProxy(ip);
-    if (vpn) {
+  // VPN/proxy block is always on for signup (fail-closed per policy).
+  // Local/private IPs bypass inside checkVpnStrict.
+  if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
+    const vpn = await checkVpnStrict(checkIp);
+    if (vpn.blocked) {
       return NextResponse.json({
         allowed: false,
-        error: "Sign up from VPN or proxy connections is not allowed.",
+        code: vpn.unavailable ? "VPN_DETECTION_UNAVAILABLE" : "VPN_BLOCKED",
+        error: vpn.unavailable
+          ? "Account creation is temporarily unavailable from your network. Try again shortly."
+          : "Sign up from VPN or proxy connections is not allowed.",
       }, { status: 403 });
     }
   }

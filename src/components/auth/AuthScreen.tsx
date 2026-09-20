@@ -112,7 +112,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
       if (sanitized.length < 2) {
         setError("Username must be at least 2 characters (letters, numbers, and underscores).");
       } else {
-        const result = await signUp(email, password, username, appliedRef);
+        const result = await signUp(email, password, username, appliedRef, turnstileToken);
         if (result.error) {
           setError(result.error);
         } else if (result.needsEmailConfirmation !== false) {
