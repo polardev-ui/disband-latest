@@ -221,7 +221,7 @@ export function GroupCallStage({
           type="button"
           onClick={onToggleCamera}
           title={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-text-normal/10 text-text-normal transition-colors hover:bg-text-normal/20"
         >
           {cameraEnabled ? <IconVideo size={20} /> : <IconVideoOff size={20} />}
         </button>
@@ -252,8 +252,8 @@ export function GroupCallStage({
             <button
               type="button"
               onClick={onToggleMic}
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-white/80 transition-colors ${
-                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-white/10 hover:bg-white/20"
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-text-normal transition-colors ${
+                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-text-normal/10 hover:bg-text-normal/20"
               }`}
               title={micMuted ? "Unmute" : "Mute"}
             >

@@ -624,7 +624,7 @@ export function ChannelList({
       {dragGhost && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-50 flex translate-x-2 translate-y-2 items-center gap-1.5 whitespace-nowrap rounded border border-white/10 bg-bg-tertiary px-3 py-1.5 text-sm font-medium text-text-normal shadow-lg"
+          className="pointer-events-none fixed z-50 flex translate-x-2 translate-y-2 items-center gap-1.5 whitespace-nowrap rounded border border-divider bg-bg-tertiary px-3 py-1.5 text-sm font-medium text-text-normal shadow-lg"
           style={{ left: dragGhost.x, top: dragGhost.y }}
         >
           {dragGhost.kind === "category" ? (

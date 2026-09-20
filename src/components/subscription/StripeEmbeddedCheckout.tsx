@@ -107,7 +107,7 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
           type="button"
           onClick={() => void apply()}
           disabled={busy || !code.trim()}
-          className="shrink-0 rounded-md bg-white/10 px-3.5 py-2 text-[13px] font-semibold hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0 rounded-md bg-bg-accent px-3.5 py-2 text-[13px] font-semibold hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Applying…" : "Apply"}
         </button>

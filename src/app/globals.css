@@ -1017,6 +1017,13 @@ img.twemoji {
 [data-theme="nord"] { --bg-primary:#363f50; --bg-secondary:#2e3645; --bg-tertiary:#242c38; --text-muted:#c1cad7; --divider:#536177; }
 
 .bg-brand.text-white { color:var(--brand-foreground,#fff); }
+/* Same guarantee for the state variants: hover:bg-brand + hover:text-white
+   (context menus, server list) and file: variant buttons never get a rule
+   of their own, so without these they stay white-on-brand and fail
+   contrast on every pastel-brand theme (graphite, forest, cobalt, ember,
+   orchid, copper). */
+.hover\:bg-brand:hover.hover\:text-white:hover { color:var(--brand-foreground,#fff); }
+.file\:bg-brand.file\:text-white::file-selector-button { color:var(--brand-foreground,#fff); }
 
 @keyframes role-gradient-pan {
  0% { background-position:0% 50%; }

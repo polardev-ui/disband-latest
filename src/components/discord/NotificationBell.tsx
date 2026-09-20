@@ -81,7 +81,7 @@ export function NotificationBell() {
       ? createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[120] max-h-[60vh] w-[min(20rem,calc(100vw-16px))] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-white/10"
+            className="fixed z-[120] max-h-[60vh] w-[min(20rem,calc(100vw-16px))] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-divider"
             style={{ top: pos.top, right: pos.right }}
           >
             <div className="sticky top-0 flex items-center justify-between border-b border-divider bg-bg-secondary px-3 py-2">

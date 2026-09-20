@@ -140,7 +140,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
               <span
                 aria-hidden
                 className={`absolute inset-y-0 left-0 transition-[width] duration-500 ease-out ${
-                  mine ? "bg-brand/25" : winning ? "bg-status-online/20" : "bg-white/[0.06]"
+                  mine ? "bg-brand/25" : winning ? "bg-status-online/20" : "bg-text-normal/[0.06]"
                 }`}
                 style={{ width: `${pct}%` }}
               />

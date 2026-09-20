@@ -30,7 +30,7 @@ export function CallTile({
   // Tiles without an action render as plain containers: a focusable button
   // with cursor-default and no behavior is keyboard/screen-reader noise.
   const tileClass = `group relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-bg-tertiary transition-shadow ${
-    speaking ? "ring-2 ring-status-online" : "ring-1 ring-white/5"
+    speaking ? "ring-2 ring-status-online" : "ring-1 ring-divider"
   } ${onClick ? "cursor-pointer" : "cursor-default"}`;
 
   const content = (

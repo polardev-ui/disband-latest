@@ -9,21 +9,21 @@ export function MessageSkeleton() {
       {widths.map((w, i) => (
         <div key={i} className="flex items-start gap-3">
           {}
-          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/5" />
+          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-bg-accent" />
           <div className="flex min-w-0 flex-col gap-2 pt-1">
             {}
             <div
-              className="h-3 animate-pulse rounded bg-white/10"
+              className="h-3 animate-pulse rounded bg-bg-accent"
               style={{ width: `${Math.min(w, 28)}%` }}
             />
             {}
             <div
-              className="h-3 animate-pulse rounded bg-white/5"
+              className="h-3 animate-pulse rounded bg-bg-accent"
               style={{ width: `${w}%` }}
             />
             {w > 80 && (
               <div
-                className="h-3 animate-pulse rounded bg-white/5"
+                className="h-3 animate-pulse rounded bg-bg-accent"
                 style={{ width: `${Math.max(w - 30, 30)}%` }}
               />
             )}

@@ -69,7 +69,7 @@ function PlanCard({ currentPlan, onSubscribe }: {
         onClick={onSubscribe}
         className={`w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
           isCurrentPlan
-            ? "cursor-not-allowed bg-white/5 text-text-muted"
+            ? "cursor-not-allowed bg-text-normal/5 text-text-muted"
             : "bg-[#fee75c] text-black hover:bg-[#f0d843] active:scale-[0.98]"
         }`}
       >
@@ -166,7 +166,7 @@ function ActivationScreen({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/15"
+            className="rounded bg-bg-accent px-4 py-2 text-sm font-semibold hover:bg-interactive-hover"
           >
             Close
           </button>
@@ -301,7 +301,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-white/10 hover:text-text-normal">
+          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal">
             <IconClose size={18} />
           </button>
         </div>
