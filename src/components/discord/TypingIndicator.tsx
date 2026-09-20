@@ -83,7 +83,11 @@ export function TypingIndicator({
     };
   }, []);
 
-  if (typers.length === 0) return null;
+  // The old code returned null as soon as `typers` emptied, so the tracked
+  // exit animation above never played and the composer jumped. Keep the
+  // container mounted while anyone is leaving and fade it out over EXIT_MS.
+  const active = typers.length > 0;
+  if (!active && leaving.size === 0) return null;
 
   const byId = new Map(members.map((m) => [m.id, m]));
   const shown = typers.slice(0, MAX_AVATARS);
@@ -92,7 +96,12 @@ export function TypingIndicator({
   ).slice(0, Math.max(0, MAX_AVATARS - shown.length));
 
   return (
-    <div className="flex items-end gap-2 px-4 pb-2">
+    <div
+      className={`flex items-end gap-2 px-4 pb-2 transition-opacity duration-300 ${
+        active ? "opacity-100" : "pointer-events-none opacity-0"
+      }`}
+      aria-hidden={!active}
+    >
       {groupContext && (
         <div className="flex shrink-0 items-center">
           {shown.map((t, i) => {
@@ -130,7 +139,7 @@ export function TypingIndicator({
       )}
       <div className="min-w-0">
         <TypingDots />
-        {groupContext && (
+        {groupContext && active && (
           <p className="mt-1 truncate text-[11px] text-text-muted">
             {formatTypingLabel(typers, true)}
           </p>

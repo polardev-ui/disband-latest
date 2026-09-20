@@ -135,6 +135,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const stickToBottomRef = useRef(true);
   const programmaticScrollRef = useRef(0);
   const scrollRestoreRef = useRef<number | null>(null);
+  // Holds the user's position while async content (images, link previews)
+  // settles after older messages load, so the view doesn't jump around.
+  const topAnchorRef = useRef<{ dist: number; until: number } | null>(null);
+  // Own-send intent: a user's own message must always come into view, even
+  // if they were reading slightly scrolled up (where the follow gate below
+  // would otherwise hold their position).
+  const followOnceRef = useRef(false);
+  const tickingRef = useRef(false);
   const prevFirstIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
   const loadingMoreRef = useRef(false);
@@ -145,7 +153,6 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
   const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
-  const dividerLockedRef = useRef(false);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -184,9 +191,15 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
   const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+  // Distance (px) from the bottom within which content growth (new messages,
+  // image/preview loads) follows the user down. Beyond this the user is
+  // considered to be reading and their position is held instead of yanked.
+  const NEAR_BOTTOM_PX = 40;
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto", force = false) => {
     const el = scrollRef.current;
-    if (!el || !stickToBottomRef.current) return;
+    if (!el) return;
+    if (!force && el.scrollHeight - el.scrollTop - el.clientHeight > NEAR_BOTTOM_PX) return;
     stickToBottomRef.current = true;
     programmaticScrollRef.current = Date.now();
     el.scrollTo({ top: el.scrollHeight, behavior });
@@ -228,14 +241,17 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
 
     readScopeRef.current = nextScope;
-    dividerLockedRef.current = false;
     setNewMessagesDividerId(null);
   }, [readCursorScope?.kind, readCursorScope?.id]);
 
+  // Recomputed on every message change with no once-per-scope lock: the
+  // stored read cursor can advance while the scope is active (e.g. new
+  // arrivals after a read), which previously left a stale divider behind.
+  // Recomputing is a no-op visually when the cursor hasn't moved, since the
+  // divider is keyed by message id.
   useEffect(() => {
-    if (!readCursorScope || dividerLockedRef.current || messages.length === 0) return;
+    if (!readCursorScope || messages.length === 0) return;
     setNewMessagesDividerId(findNewMessagesDividerId(messages, readCursorScope));
-    dividerLockedRef.current = true;
   }, [messages, readCursorScope]);
 
   useEffect(() => {
@@ -250,10 +266,20 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // Collapsed to one handling per frame: during momentum scrolling near
+    // the top the raw event fires dozens of times per second and used to
+    // re-evaluate (and re-fire) load-more on every one.
     const onScroll = () => {
-      if (Date.now() - programmaticScrollRef.current < 250) return;
-      stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-      if (el.scrollTop < 96) void requestLoadMore();
+      if (tickingRef.current) return;
+      tickingRef.current = true;
+      requestAnimationFrame(() => {
+        tickingRef.current = false;
+        if (Date.now() - programmaticScrollRef.current < 250) return;
+        stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        // The user took over: cancel any top-anchoring from a paginate.
+        topAnchorRef.current = null;
+        if (el.scrollTop < 96) void requestLoadMore();
+      });
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -274,20 +300,41 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     prevMessageCountRef.current = count;
 
     if (scrollRestoreRef.current !== null) {
-      el.scrollTop = el.scrollHeight - scrollRestoreRef.current;
+      const dist = scrollRestoreRef.current;
+      el.scrollTop = el.scrollHeight - dist;
+      // Keep holding this position briefly: images and link previews inside
+      // the newly loaded messages resolve async and grow the content, which
+      // would otherwise jump the view on every load. Any manual scroll
+      // cancels the anchor (see the scroll handler).
+      topAnchorRef.current = { dist, until: Date.now() + 1500 };
+      programmaticScrollRef.current = Date.now();
       scrollRestoreRef.current = null;
       return;
     }
 
     if (loadedOlder) return;
-    scrollToBottom();
+    // First population always lands at the bottom. Appends follow only when
+    // the user is near the bottom or just sent the message themselves;
+    // edits and reaction-only updates never steal the scroll.
+    const firstLoad = prevCount === 0 && count > 0;
+    const appended = count > prevCount;
+    scrollToBottom("auto", firstLoad || (appended && followOnceRef.current));
+    followOnceRef.current = false;
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
+    const el = scrollRef.current;
     const target = contentRef.current;
-    if (!target) return;
+    if (!el || !target) return;
     const ro = new ResizeObserver(() => {
-      if (stickToBottomRef.current) scrollToBottom();
+      const anchor = topAnchorRef.current;
+      if (anchor && Date.now() < anchor.until) {
+        el.scrollTop = el.scrollHeight - anchor.dist;
+        programmaticScrollRef.current = Date.now();
+        return;
+      }
+      topAnchorRef.current = null;
+      scrollToBottom();
     });
     ro.observe(target);
     return () => ro.disconnect();
@@ -303,12 +350,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   async function handleSend(content: string, options?: MessageSendOptions) {
-    stickToBottomRef.current = true;
     if (editing && onEdit) {
       const err = await onEdit(editing.id, content);
       if (!err) setEditing(null);
       return err;
     }
+    stickToBottomRef.current = true;
+    followOnceRef.current = true;
     // A failed own send must not erase the "New" divider for everyone else's
     // messages: only clear once the send actually lands.
     const err = await onSend(content, options);
