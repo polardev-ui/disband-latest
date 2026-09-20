@@ -161,27 +161,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     [currentUserId, currentUserName],
   );
   const { typers, notifyTyping } = useTypingPresence(typingScope, typingSelf);
-
-  const isSelfChat =
-    messageContext === "dm" && members.length > 0 && members.every((m) => m.id === currentUserId);
-  const [selfTyping, setSelfTyping] = useState(false);
-  const selfTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const stash = selfTypingTimer.current;
-    return () => {
-      if (stash) clearTimeout(stash);
-    };
-  }, []);
   const handleTypingActivity = useCallback(() => {
     notifyTyping();
-    if (!isSelfChat) return;
-    setSelfTyping(true);
-    if (selfTypingTimer.current) clearTimeout(selfTypingTimer.current);
-    selfTypingTimer.current = setTimeout(() => setSelfTyping(false), 5000);
-  }, [notifyTyping, isSelfChat]);
-  const visibleTypers = selfTyping && currentUserId && currentUserName && !typers.some((t) => t.userId === currentUserId)
-    ? [...typers, { userId: currentUserId, name: currentUserName }]
-    : typers;
+  }, [notifyTyping]);
 
   useImperativeHandle(ref, () => ({
     setReplyTo,
@@ -477,7 +459,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
       <div className="shrink-0">
         <TypingIndicator
-          typers={visibleTypers}
+          typers={typers}
           members={members}
           groupContext={messageContext === "channel" || messageContext === "group"}
         />
