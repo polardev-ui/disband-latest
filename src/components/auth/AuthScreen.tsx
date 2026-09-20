@@ -145,7 +145,10 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
     setError(null);
     try {
       const err = await switchAccount(acct);
-      if (err) setError(err);
+      if (err) {
+        setEmail(acct.email ?? "");
+        setError(err);
+      }
     } finally {
       setSwitchingId(null);
     }
