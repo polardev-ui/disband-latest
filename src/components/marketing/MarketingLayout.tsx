@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 
@@ -14,6 +15,7 @@ const links = [
 
 export function MarketingNav() {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#1e1f22]/80 backdrop-blur-md">
@@ -22,7 +24,7 @@ export function MarketingNav() {
           <Logo size={32} className="h-8 w-8" priority />
           Disband
         </Link>
-        <nav className="hidden items-center gap-5 sm:flex">
+        <nav aria-label="Marketing" className="hidden items-center gap-5 sm:flex">
           {links.map((l) => (
             <Link
               key={l.href}
@@ -35,15 +37,50 @@ export function MarketingNav() {
             </Link>
           ))}
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <Link
             href="/login"
             className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
           >
             Log in
           </Link>
+          {/* Mobile nav: the link row used to be hidden below sm with no
+              replacement, leaving phones with zero navigation. */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#b5bac1] transition-colors hover:bg-white/10 hover:text-white sm:hidden"
+          >
+            {menuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
+      {menuOpen && (
+        <nav aria-label="Marketing mobile" className="border-t border-white/5 px-6 py-3 sm:hidden">
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={() => setMenuOpen(false)}
+              className={`block rounded-md px-2 py-2.5 text-[15px] transition-colors ${
+                pathname === l.href ? "text-white" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   );
 }
