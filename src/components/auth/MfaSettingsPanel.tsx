@@ -20,6 +20,9 @@ export function MfaSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [totpSetup, setTotpSetup] = useState<TotpEnrollment | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  // Two-step removal: first click arms the confirm, second click removes.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -66,6 +69,16 @@ export function MfaSettingsPanel() {
   }
 
   async function removeFactor(factorId: string) {
+    if (confirmingId !== factorId) {
+      // Arm the confirm instead of removing one-click: deleting the last
+      // verified method strands you on the MFA challenge with nothing to
+      // verify with, so this must never happen by accident.
+      setConfirmingId(factorId);
+      setError(null);
+      setMessage(null);
+      return;
+    }
+    setConfirmingId(null);
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -77,6 +90,17 @@ export function MfaSettingsPanel() {
     }
     setMessage("Security method removed.");
     void reload();
+  }
+
+  async function copyManualKey() {
+    if (!totpSetup) return;
+    try {
+      await navigator.clipboard.writeText(totpSetup.secret);
+      setCopiedKey(true);
+      window.setTimeout(() => setCopiedKey(false), 2000);
+    } catch {
+      setError("Couldn’t copy the key — select and copy it manually.");
+    }
   }
 
   const verified = factors.filter((f) => f.status === "verified");
@@ -100,7 +124,10 @@ export function MfaSettingsPanel() {
               No two-factor methods are enabled yet.
             </p>
           )}
-          {[...verified, ...pending].map((factor) => (
+          {[...verified, ...pending].map((factor) => {
+            const isLastVerified = factor.status === "verified" && verified.length <= 1;
+            const confirming = confirmingId === factor.id;
+            return (
             <div
               key={factor.id}
               className="flex items-center justify-between gap-3 rounded-lg border border-divider bg-bg-secondary px-4 py-3"
@@ -116,16 +143,45 @@ export function MfaSettingsPanel() {
                   {factor.status !== "verified" ? " · setup incomplete" : ""}
                 </p>
               </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void removeFactor(factor.id)}
-                className="shrink-0 text-sm text-status-dnd hover:underline disabled:opacity-50"
-              >
-                Remove
-              </button>
+              {isLastVerified ? (
+                <span
+                  title="Your last verified method can’t be removed — add another one first."
+                  className="shrink-0 cursor-not-allowed text-sm text-text-muted/60"
+                >
+                  Remove
+                </span>
+              ) : confirming ? (
+                <span className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmingId(null)}
+                    className="text-sm text-text-muted hover:underline disabled:opacity-50"
+                  >
+                    Keep
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeFactor(factor.id)}
+                    className="shrink-0 rounded bg-status-dnd px-2.5 py-1 text-sm font-medium text-white disabled:opacity-50"
+                  >
+                    Confirm remove
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void removeFactor(factor.id)}
+                  className="shrink-0 text-sm text-status-dnd hover:underline disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -153,11 +209,22 @@ export function MfaSettingsPanel() {
           </div>
           <label className="block">
             <span className="text-xs font-bold uppercase text-text-muted">Manual entry key</span>
-            <input
-              readOnly
-              value={totpSetup.secret}
-              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 font-mono text-xs outline-none"
-            />
+            <span className="mt-1 flex items-center gap-2">
+              <input
+                readOnly
+                value={totpSetup.secret}
+                aria-label="Manual entry key"
+                onFocus={(e) => e.target.select()}
+                className="min-w-0 flex-1 rounded bg-bg-accent px-3 py-2 font-mono text-xs outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void copyManualKey()}
+                className="shrink-0 rounded bg-interactive-hover px-3 py-2 text-xs font-semibold text-text-normal transition-colors hover:bg-interactive-selected"
+              >
+                {copiedKey ? "Copied" : "Copy"}
+              </button>
+            </span>
           </label>
           <label className="block">
             <span className="text-xs font-bold uppercase text-text-muted">Verification code</span>

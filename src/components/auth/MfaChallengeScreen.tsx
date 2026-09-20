@@ -19,15 +19,29 @@ export function MfaChallengeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingFactors, setLoadingFactors] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoadingFactors(true);
+    setLoadError(null);
     void (async () => {
-      const list = await listVerifiedMfaFactors();
-      setFactors(list);
-      setSelectedFactorId(list.find((f) => f.factor_type === "totp")?.id ?? list[0]?.id ?? "");
-      setLoadingFactors(false);
+      try {
+        const list = await listVerifiedMfaFactors();
+        if (cancelled) return;
+        setFactors(list);
+        setSelectedFactorId(list.find((f) => f.factor_type === "totp")?.id ?? list[0]?.id ?? "");
+      } catch {
+        if (!cancelled) setLoadError("Couldn’t load your security methods.");
+      } finally {
+        if (!cancelled) setLoadingFactors(false);
+      }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   const totpFactors = factors.filter((f) => f.factor_type === "totp");
   const passkeyFactors = factors.filter((f) => f.factor_type === "webauthn");
@@ -61,7 +75,32 @@ export function MfaChallengeScreen() {
   if (loadingFactors) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-tertiary text-text-muted">
-        Loading…
+        Loading your security methods…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
+        <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 text-center shadow-xl">
+          <h1 className="text-xl font-bold text-text-normal">Something went wrong</h1>
+          <p className="mt-2 text-sm text-text-muted">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((a) => a + 1)}
+            className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="mt-3 w-full text-sm text-text-link hover:underline"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     );
   }
@@ -116,7 +155,7 @@ export function MfaChallengeScreen() {
               disabled={loading || code.length !== 6}
               className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
             >
-              {loading ? "..." : "Verify code"}
+              {loading ? "Verifying…" : "Verify code"}
             </button>
           </form>
         )}
@@ -134,7 +173,7 @@ export function MfaChallengeScreen() {
                 onClick={() => void usePasskey(factor.id)}
                 className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
               >
-                {loading ? "..." : `Use ${factorLabel(factor)}`}
+                {loading ? "Verifying…" : `Use ${factorLabel(factor)}`}
               </button>
             ))}
           </div>
@@ -146,7 +185,7 @@ export function MfaChallengeScreen() {
           </p>
         )}
 
-        {error && <p className="mt-3 text-sm text-status-dnd">{error}</p>}
+        {error && <p role="alert" aria-live="polite" className="mt-3 text-sm text-status-dnd">{error}</p>}
 
         <button
           type="button"
