@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { CallTile, CallGrid } from "./CallTile";
@@ -31,6 +31,12 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   const session = useVoiceSession();
   const inThisChannel = session.connectedChannelId === channelId;
 
+  // Join is two-phase (connect sets the channel, the actual media join
+  // happens in an effect), so the button needs its own pending state —
+  // otherwise it flips from "Join" to nothing with no feedback.
+  const [joining, setJoining] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const members = inThisChannel ? session.participants : voicePresence;
   const voice = {
     joined: session.joined && inThisChannel,
@@ -39,6 +45,13 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     join: () => session.connect(channelId, channelName),
     leave: () => session.disconnect(),
   };
+
+  useEffect(() => {
+    if (voice.joined || voice.error) {
+      setJoining(false);
+      if (voice.error) setActionError(null);
+    }
+  }, [voice.joined, voice.error]);
 
   const tiles = [
     ...members.map((p) => {
@@ -53,7 +66,9 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
           : null,
         kind: "camera" as const,
         self: isSelf,
-        muted: isSelf ? micMuted : false,
+        // Remote mute/deafen come from presence (previously dropped, so only
+        // the local user ever showed a mute icon). Deafened implies muted.
+        muted: isSelf ? micMuted : !!(p.muted || p.deafened),
       };
     }),
     ...members.flatMap((p) => {
@@ -77,11 +92,12 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
 
   useEffect(() => {
     void loadVoicePresence(channelId);
-  }, [channelId, loadVoicePresence, voice.participants.length]);
+  }, [channelId, loadVoicePresence]);
 
   useEffect(() => {
     if (!inThisChannel) session.peek(channelId);
-  }, [inThisChannel, channelId, session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inThisChannel, channelId]);
 
   return (
     <main className="call-enter flex min-w-0 flex-1 flex-col bg-gradient-to-b from-status-online/[0.06] to-bg-primary">
@@ -114,32 +130,47 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         </div>
 
         <CallGrid>
-          {tiles.map((t) => (
-            <CallTile
-              key={t.key}
-              profile={t.profile}
-              label={t.label}
-              stream={t.stream}
-              kind={t.kind}
-              self={t.self}
-              muted={t.muted}
-            />
-          ))}
+          {tiles.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-text-muted">
+              No one is here yet.
+              <br />
+              Join to start the conversation.
+            </p>
+          ) : (
+            tiles.map((t) => (
+              <CallTile
+                key={t.key}
+                profile={t.profile}
+                label={t.label}
+                stream={t.stream}
+                kind={t.kind}
+                self={t.self}
+                muted={t.muted}
+              />
+            ))
+          )}
         </CallGrid>
 
-        {voice.error && <p className="text-sm text-status-dnd">{voice.error}</p>}
+        {(voice.error || actionError) && (
+          <p role="alert" className="max-w-md rounded-lg border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-center text-sm text-status-dnd">
+            {actionError ?? voice.error}
+          </p>
+        )}
 
         <div className="flex flex-col items-center gap-4">
           {!voice.joined ? (
             <button
               type="button"
+              disabled={joining}
               onClick={() => {
+                setJoining(true);
+                setActionError(null);
                 void requestNotificationPermissionFromGesture();
                 void voice.join();
               }}
-              className="rounded-full bg-status-online px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-status-online/25 transition-all hover:scale-[1.03] hover:opacity-90"
+              className="rounded-full bg-status-online px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-status-online/25 transition-all hover:scale-[1.03] hover:opacity-90 disabled:cursor-wait disabled:opacity-60 disabled:hover:scale-100"
             >
-              Join Voice
+              {joining ? "Joining…" : "Join Voice"}
             </button>
           ) : (
             <>
@@ -158,34 +189,33 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void session.toggleCamera()}
+                  onClick={() => {
+                    setActionError(null);
+                    void session.toggleCamera().catch(() => setActionError("Couldn't access the camera."));
+                  }}
                   className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
                     session.cameraEnabled
                       ? "bg-status-online text-white"
-                      : "bg-white/10 text-text-normal hover:bg-white/20"
+                      : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
                   }`}
                 >
                   {session.cameraEnabled ? "Stop video" : "Turn on camera"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => void session.toggleScreenShare()}
+                  onClick={() => {
+                    setActionError(null);
+                    void session.toggleScreenShare().catch(() => setActionError("Couldn't start screen sharing."));
+                  }}
                   className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
                     session.screenEnabled
                       ? "bg-status-online text-white"
-                      : "bg-white/10 text-text-normal hover:bg-white/20"
+                      : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
                   }`}
                 >
                   {session.screenEnabled ? "Stop sharing" : "Share screen"}
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => void voice.leave()}
-                className="text-xs text-text-muted transition-colors hover:text-status-dnd"
-              >
-                Leave channel
-              </button>
             </>
           )}
         </div>

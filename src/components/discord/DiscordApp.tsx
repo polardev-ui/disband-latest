@@ -1615,6 +1615,7 @@ export function DiscordApp() {
                 cameraEnabled={groupCall.cameraEnabled}
                 micMuted={app.micMuted}
                 deafened={app.deafened}
+                connectedAt={groupCall.connectedAt}
                 onJoin={() => void groupCall.joinGroupCall(activeGroup.id, activeGroup.name)}
                 onLeave={() => void groupCall.endGroupCall()}
                 onToggleCamera={() => void groupCall.toggleCamera()}
