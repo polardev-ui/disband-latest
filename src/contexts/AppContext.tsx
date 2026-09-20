@@ -13,7 +13,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetSupabaseClient } from "@/lib/supabase/client";
-import { getSavedSessions, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
+import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { syncUserSettings } from "@/lib/user-settings";
@@ -2330,17 +2330,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const switchAccount = useCallback(async (account: SavedSession) => {
+    const tokens = getSavedSessionTokens(account.user_id);
+    if (!tokens) return "Sign in again to continue as this account.";
     resetSupabaseClient();
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.auth.setSession({
-      access_token: account.access_token,
-      refresh_token: account.refresh_token,
-    });
+    const { data, error } = await supabase.auth.setSession(tokens);
     if (error || !data.session) {
-      dropSavedSession(account.user_id);
-      setSavedSessions(getSavedSessions());
+      clearSavedSessionTokens(account.user_id);
       setSession(null);
-      return error?.message ?? "That saved session could not be restored.";
+      return "Sign in again to continue as this account.";
     }
     setSession(data.session);
     rememberSession(data.session);
