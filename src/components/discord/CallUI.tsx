@@ -63,11 +63,14 @@ export function CallControls({
             className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
               "danger" in item && item.danger
                 ? "bg-status-dnd text-white shadow-lg shadow-status-dnd/30 hover:scale-105 hover:brightness-110"
-                : item.active
-                  ? "brand" in item && item.brand
-                    ? "bg-brand/25 text-brand ring-2 ring-brand/40"
-                    : "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
-                  : "bg-white/10 text-white/80 hover:bg-white/20 hover:scale-105"
+                  : item.active
+                    ? "brand" in item && item.brand
+                      ? "bg-brand/25 text-brand ring-2 ring-brand/40"
+                      : "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
+                    // Inactive controls use the theme text color at low alpha
+                    // (not white): this component renders on black call
+                    // panels and on the themed voice lobby alike.
+                    : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20 hover:scale-105"
             }`}
           >
             <Icon size={16} />

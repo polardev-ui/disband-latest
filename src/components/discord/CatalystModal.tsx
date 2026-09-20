@@ -172,7 +172,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-text-muted hover:bg-white/10 hover:text-text-normal"
+            className="rounded-md p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={18} />
           </button>
@@ -191,7 +191,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
           </p>
           {next && (
             <div className="mt-3">
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-1.5 overflow-hidden rounded-full bg-bg-accent">
                 <div
                   className="h-full rounded-full bg-brand transition-[width]"
                   style={{ width: `${Math.round(progress * 100)}%` }}
@@ -211,7 +211,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
                 <div
                   key={l.level}
                   className={`rounded-lg border p-3 ${
-                    unlocked ? "border-status-online/25 bg-status-online/[0.04]" : "border-divider bg-white/[0.02]"
+                    unlocked ? "border-status-online/25 bg-status-online/[0.04]" : "border-divider bg-text-normal/5"
                   }`}
                 >
                   <p className="mb-1.5 text-[13px] font-bold">
@@ -231,7 +231,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
             })}
         </div>
 
-        <div className="border-t border-white/10 px-5 py-4">
+        <div className="border-t border-divider px-5 py-4">
           <p className="text-sm text-text-muted">
             Put free monthly Catalysts on <span className="font-semibold text-text-normal">{server.name}</span>
           </p>
@@ -268,7 +268,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
             </div>
           </div>
 
-        <div className="border-t border-white/10 px-5 py-4">
+        <div className="border-t border-divider px-5 py-4">
           <p className="text-sm font-bold">Buy Catalysts</p>
             <p className="mt-0.5 text-[13px] text-text-muted">
               One-time purchase, never expire · {formatCents(unitCents)} each

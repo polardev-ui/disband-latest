@@ -116,8 +116,8 @@ export function MaintenanceNotice() {
         aria-live="polite"
         className={`shrink-0 rounded-md px-3 py-1 text-[12.5px] font-semibold transition-colors ${
           locked
-            ? "cursor-not-allowed bg-white/5 text-text-muted"
-            : "bg-white/10 text-text-normal hover:bg-white/20"
+            ? "cursor-not-allowed bg-text-normal/5 text-text-muted"
+            : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20"
         }`}
       >
         {locked ? `Dismiss in ${secondsLeft}` : "Dismiss"}

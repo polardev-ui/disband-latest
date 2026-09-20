@@ -39,14 +39,14 @@ export function SubscriptionBadgeModal({
       onClick={onClose}
     >
       <div
-        className="modal-pop relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-white/10"
+        className="modal-pop relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-divider"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/10 hover:text-text-normal"
+          className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M18 6 6 18M6 6l12 12" />
@@ -85,7 +85,7 @@ export function SubscriptionBadgeModal({
                     {tenureMonths} / {next.months} months
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="h-2 overflow-hidden rounded-full bg-bg-accent">
                   <div
                     className="h-full rounded-full transition-[width] duration-500"
                     style={{ width: `${progress * 100}%`, background: accent }}
@@ -109,7 +109,7 @@ export function SubscriptionBadgeModal({
               <div
                 key={t.key}
                 className={`flex flex-col items-center rounded-xl px-1 py-2.5 text-center transition-colors ${
-                  isCurrent ? "bg-white/[0.07] ring-1 ring-inset" : ""
+                  isCurrent ? "bg-text-normal/10 ring-1 ring-inset" : ""
                 }`}
                 style={isCurrent ? { borderColor: accent, boxShadow: `inset 0 0 0 1px ${accent}59` } : undefined}
               >

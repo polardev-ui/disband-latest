@@ -149,7 +149,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className="fixed z-40 w-72 max-h-[calc(100vh-100px)] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-white/10"
+        className="fixed z-40 w-72 max-h-[calc(100vh-100px)] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-divider"
         style={{ left: pos.left, bottom: pos.bottom }}
       >
         {}
