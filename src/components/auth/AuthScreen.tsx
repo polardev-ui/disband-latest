@@ -58,6 +58,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [turnstileFailed, setTurnstileFailed] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [appliedRef, setAppliedRef] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const webOnly = !isTauri();
@@ -240,13 +241,13 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                         <span className="ml-auto shrink-0 text-xs font-semibold text-brand">Switch</span>
                       )}
                     </button>
-                    <button
-                      type="button"
-                      aria-label={`Forget ${display}'s saved login`}
-                      title="Forget this account"
-                      onClick={() => removeSavedAccount(acct.user_id)}
-                      className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-status-dnd group-hover:opacity-100"
-                    >
+                      <button
+                        type="button"
+                        aria-label={`Forget ${display}'s saved login`}
+                        title="Forget this account"
+                        onClick={() => removeSavedAccount(acct.user_id)}
+                        className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-status-dnd focus-visible:opacity-100 group-hover:opacity-100"
+                      >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
@@ -298,6 +299,17 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                     placeholder="nova_reyes"
                     className={fieldClass}
                   />
+                  {(() => {
+                    // Usernames are lowercased and stripped of anything but
+                    // letters/numbers/underscores: show the result live so
+                    // "Nova-Reyes" becoming "novareyes" is never a surprise.
+                    const preview = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+                    return username && preview !== username ? (
+                      <p className="mt-1 text-xs text-text-muted">
+                        Will be saved as <span className="font-mono text-text-normal">@{preview || "…"}</span>
+                      </p>
+                    ) : null;
+                  })()}
                 </Field>
               )}
 
@@ -328,16 +340,27 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                     ) : undefined
                   }
                 >
-                  <input
-                    required
-                    type="password"
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete={mode === "login" ? "current-password" : "new-password"}
-                    placeholder={mode === "signup" ? "At least 6 characters" : "••••••••"}
-                    className={fieldClass}
-                  />
+                  <div className="relative">
+                    <input
+                      required
+                      type={showPassword ? "text" : "password"}
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={mode === "login" ? "current-password" : "new-password"}
+                      placeholder={mode === "signup" ? "At least 6 characters" : "••••••••"}
+                      className={fieldClass + " pr-16"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-pressed={showPassword}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[13px] font-medium text-text-muted transition-colors hover:text-text-normal"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </Field>
               )}
 
@@ -387,9 +410,14 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               {}
               {needsConfirmation && <ResendConfirmation defaultEmail={email} lockEmail />}
 
+              {/* The Turnstile token is not consumed by the auth calls yet
+                  (backend TODO): it used to gate the submit button, which
+                  permanently dead-ended the form for anyone whose blocker
+                  stops the widget script without firing onError. The widget
+                  still renders; the button no longer depends on it. */}
               <button
                 type="submit"
-                disabled={loading || (webOnly && !turnstileToken && !turnstileFailed)}
+                disabled={loading}
                 className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
