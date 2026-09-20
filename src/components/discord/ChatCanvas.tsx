@@ -25,6 +25,10 @@ import {
   setReadCursor,
   type ReadCursorScope,
 } from "@/lib/read-cursors";
+import {
+  clearUnreadJump,
+  isSeekingUnreadJump,
+} from "@/lib/notification-jump";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 
 function NewMessagesDivider() {
@@ -321,6 +325,27 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     ro.observe(target);
     return () => ro.disconnect();
   }, [scrollToBottom]);
+
+  // Notification-click seek: land on the first unread message (where the
+  // ping sits), paging back until its row is loaded. Runs only for the
+  // scope the notification targeted; anything else ignores it.
+  useEffect(() => {
+    if (!readCursorScope || loading || messages.length === 0) return;
+    if (!isSeekingUnreadJump(readCursorScope.kind, readCursorScope.id)) return;
+    const dividerId = findNewMessagesDividerId(messages, readCursorScope);
+    if (!dividerId) {
+      clearUnreadJump();
+      return;
+    }
+    if (document.getElementById(`msg-${dividerId}`)) {
+      jumpToMessage(dividerId);
+      clearUnreadJump();
+      return;
+    }
+    if (hasMore && onLoadMore && !loadingMoreRef.current) {
+      void requestLoadMore();
+    }
+  });
 
   function jumpToMessage(messageId: string) {
     const node = document.getElementById(`msg-${messageId}`);
