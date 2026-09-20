@@ -12,7 +12,6 @@ import {
   IconHeadphonesOff,
   IconMicOff,
   IconPlus,
-  IconSearch,
   IconSpeaker,
   IconVerified,
 } from "@/components/icons";
@@ -479,7 +478,7 @@ export function ChannelList({
             type="button"
             onClick={() => startAddChannel(cat.id)}
             aria-label={`Add channel to ${cat.name}`}
-            className="shrink-0 rounded p-0.5 text-text-muted opacity-0 transition-opacity hover:text-text-normal group-hover/cat:opacity-100"
+            className="shrink-0 rounded p-0.5 text-text-muted opacity-0 transition-opacity hover:text-text-normal group-hover/cat:opacity-100 focus-visible:opacity-100"
           >
             <IconPlus size={12} />
           </button>
@@ -538,13 +537,6 @@ export function ChannelList({
           <span className="shrink-0 text-[11px] font-bold text-brand">Boost</span>
         </button>
       )}
-
-      <div className="px-2 pt-2">
-        <div className="flex h-7 items-center gap-2 rounded bg-bg-accent px-2 text-text-muted">
-          <IconSearch size={14} />
-          <span className="text-xs">Search</span>
-        </div>
-      </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {addingCategory && (
@@ -613,7 +605,7 @@ export function ChannelList({
                   type="button"
                   onClick={() => startAddChannel(null)}
                   aria-label="Add uncategorized channel"
-                  className="shrink-0 rounded p-0.5 text-text-muted opacity-0 transition-opacity hover:text-text-normal group-hover/cat:opacity-100"
+                  className="shrink-0 rounded p-0.5 text-text-muted opacity-0 transition-opacity hover:text-text-normal group-hover/cat:opacity-100 focus-visible:opacity-100"
                 >
                   <IconPlus size={12} />
                 </button>

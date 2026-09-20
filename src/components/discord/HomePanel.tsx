@@ -63,11 +63,14 @@ function NavRow({
   );
 }
 
-function DmUnreadBadge({ count }: { count: number }) {
+// Local row badge (not the toast-style DmUnreadBadge component): a small
+// count pill pinned to the avatar's top-right so it never covers the
+// presence dot at the bottom-right.
+function DmRowBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   const label = count > 99 ? "99+" : String(count);
   return (
-    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white">
+    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white">
       {label}
     </span>
   );
@@ -125,7 +128,7 @@ export function HomePanel({
           trailing={
             pendingIncoming.length > 0 ? (
               <span className="rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white">
-                {pendingIncoming.length}
+                {pendingIncoming.length > 99 ? "99+" : pendingIncoming.length}
               </span>
             ) : null
           }
@@ -160,6 +163,15 @@ export function HomePanel({
                 <IconPlus size={16} />
               </button>
             </div>
+            {groupChats.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setCreateGroupOpen(true)}
+                className="w-full rounded px-2 py-2 text-left text-sm text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              >
+                No group chats yet — <span className="font-semibold text-brand">start one</span>.
+              </button>
+            ) : null}
             {groupChats.map((g) => {
               const inCallCount = groupCallCounts.get(g.id) ?? 0;
               const unreadCount = getGroupUnreadCount(g.id);
@@ -215,10 +227,8 @@ export function HomePanel({
                 >
                   <div className="relative">
                     <Avatar profile={entry.friend} size="sm" />
-                    {entry.unreadCount <= 0 && (
-                      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[presenceMap.get(entry.friend.id) ?? "offline"]}`} />
-                    )}
-                    <DmUnreadBadge count={entry.unreadCount} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[presenceMap.get(entry.friend.id) ?? "offline"]}`} />
+                    <DmRowBadge count={entry.unreadCount} />
                   </div>
                   <span className="truncate text-sm">{displayName(entry.friend)}</span>
                 </button>
