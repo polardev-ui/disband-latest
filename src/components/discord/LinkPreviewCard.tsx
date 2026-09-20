@@ -13,12 +13,14 @@ interface LinkPreviewCardProps {
 export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
   const [preview, setPreview] = useState<LinkPreview | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       setPreview(undefined);
       setFailed(false);
+      setImgFailed(false);
       const data = await fetchLinkPreview(url);
       if (cancelled) return;
       if (!data) {
@@ -33,13 +35,20 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
     };
   }, [url]);
 
+  // Fire only when real preview data arrives. The old version fired on the
+  // failure path too (preview !== undefined includes null), which triggered
+  // a spurious scroll-to-bottom right before rendering nothing.
   useEffect(() => {
-    if (preview !== undefined) onLoad?.();
+    if (preview) onLoad?.();
   }, [preview, onLoad]);
 
   if (preview === undefined) {
     return (
-      <div aria-label="Loading preview" className="mt-1 h-[104px] w-full max-w-md animate-pulse rounded-lg border border-divider bg-bg-secondary" />
+      <div aria-label="Loading preview" className="mt-1 w-full max-w-md animate-pulse rounded-lg border border-divider bg-bg-secondary p-3">
+        <div className="h-3 w-1/3 rounded bg-bg-accent" />
+        <div className="mt-2 h-4 w-3/4 rounded bg-bg-accent" />
+        <div className="mt-1.5 h-3 w-full rounded bg-bg-accent" />
+      </div>
     );
   }
 
@@ -59,18 +68,22 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
       rel="noopener noreferrer"
       className="mt-1 block max-w-md overflow-hidden rounded-lg border border-divider bg-bg-secondary transition-colors hover:border-brand/40 hover:bg-interactive-hover/30"
     >
-      {safeImageUrl(preview.image) && (
+      {safeImageUrl(preview.image) && !imgFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={safeImageUrl(preview.image)!}
           alt=""
           className="aspect-[1200/630] max-h-48 w-full bg-bg-accent object-cover"
           onLoad={onLoad}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
+          onError={() => setImgFailed(true)}
         />
-      )}
+      ) : safeImageUrl(preview.image) ? (
+        // Broken image URLs keep the same aspect box (with an icon) instead
+        // of display:none collapsing the card and shifting the chat.
+        <div className="flex aspect-[1200/630] max-h-48 w-full items-center justify-center bg-bg-accent text-text-muted">
+          <IconLink size={24} />
+        </div>
+      ) : null}
       <div className="p-3">
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
           <IconLink size={12} />

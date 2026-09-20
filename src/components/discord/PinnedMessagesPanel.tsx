@@ -71,7 +71,7 @@ export function PinnedMessagesPanel({
                 <button
                   type="button"
                   onClick={() => onUnpin(pin.message_id)}
-                  className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:bg-brand/20 hover:text-brand group-hover:opacity-100"
+                  className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:bg-brand/20 hover:text-brand group-hover:opacity-100 focus-visible:opacity-100"
                   aria-label="Unpin message"
                 >
                   <IconPinOff size={16} />
