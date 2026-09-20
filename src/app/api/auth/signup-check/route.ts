@@ -4,7 +4,7 @@ import { getClientIp, hashIp, hashValue } from "@/lib/request-ip";
 import { checkVpnStrict } from "@/lib/vpn-check";
 import { usernameContainsBlockedWord, usernameFormatError } from "@/lib/username-policy";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { persistentRateLimitCheck } from "@/lib/auth-guard";
+import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 
 // Agreed limits: 3/hr + 5/day per IP, 3/hr per email, plus existing 15/min burst guard.
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
         ],
   );
   if (persistentHit) {
+    logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
     return NextResponse.json(
       { allowed: false, error: "Too many accounts created from your network. Try again later." },
       { status: 429, headers: { "Retry-After": "3600" } },
@@ -103,17 +104,36 @@ export async function POST(request: Request) {
 
   const formatErr = usernameFormatError(sanitized);
   if (formatErr) {
+    // Patch 4 (fail-soft): a single bad username no longer burns the whole
+    // network for 24h (griefable on schools/shared IPs, and responsible for
+    // 89 blocks across 86 IPs). Every offense records an immediately-expired
+    // strike row (blocks nothing — is_signup_ip_blocked only honors
+    // blocked_until > now()); the real 24h block lands on the 3rd+ offense
+    // from the same network in 24h.
     if (usernameContainsBlockedWord(sanitized) && ipHash) {
       await service.rpc("record_signup_ip_block", {
         p_ip_hash: ipHash,
-        p_hours: 24,
-        p_reason: "prohibited username",
+        p_hours: 0,
+        p_reason: "prohibited username (strike)",
       });
-      return NextResponse.json({
-        allowed: false,
-        blocked: true,
-        error: "That username is not allowed. Account creation from your network is blocked for 24 hours.",
-      }, { status: 403 });
+      const { count: recentStrikes } = await service
+        .from("signup_ip_blocks")
+        .select("ip_hash", { count: "exact", head: true })
+        .eq("ip_hash", ipHash)
+        .gt("blocked_until", new Date(Date.now() - 24 * 3600_000).toISOString());
+      if ((recentStrikes ?? 0) >= 3) {
+        await service.rpc("record_signup_ip_block", {
+          p_ip_hash: ipHash,
+          p_hours: 24,
+          p_reason: "prohibited username",
+        });
+        return NextResponse.json({
+          allowed: false,
+          blocked: true,
+          error: "That username is not allowed. Account creation from your network is blocked for 24 hours.",
+        }, { status: 403 });
+      }
+      return NextResponse.json({ allowed: false, error: formatErr }, { status: 400 });
     }
     return NextResponse.json({ allowed: false, error: formatErr }, { status: 400 });
   }
@@ -133,6 +153,7 @@ export async function POST(request: Request) {
   if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
     const vpn = await checkVpnStrict(checkIp);
     if (vpn.blocked) {
+      logGateEvent(service, "signup_vpn_blocked", ipHash, emailHash);
       return NextResponse.json({
         allowed: false,
         code: vpn.unavailable ? "VPN_DETECTION_UNAVAILABLE" : "VPN_BLOCKED",

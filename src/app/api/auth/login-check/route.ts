@@ -3,7 +3,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { getClientIp, hashIp, hashValue } from "@/lib/request-ip";
 import { checkVpnStrict } from "@/lib/vpn-check";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { persistentRateLimitCheck } from "@/lib/auth-guard";
+import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
 
 // Agreed limits: 5/min + 20/hr per IP and per email.
 const MIN_MAX = 5;
@@ -46,6 +46,7 @@ export async function POST(request: Request) {
         ],
   );
   if (hit) {
+    logGateEvent(service, "login_rate_limited", ipHash === "unknown" ? null : ipHash, emailHash);
     return NextResponse.json(
       { allowed: false, error: "Too many sign-in attempts. Try again later." },
       { status: 429, headers: { "Retry-After": "60" } },
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       .ilike("email", email)
       .maybeSingle();
     if (banned) {
+      logGateEvent(service, "login_banned", ipHash === "unknown" ? null : ipHash, emailHash);
       return NextResponse.json(
         { allowed: false, error: "This account cannot sign in right now." },
         { status: 403 },
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
   if (process.env.BLOCK_VPN_LOGIN !== "false" && ip !== "unknown") {
     const vpn = await checkVpnStrict(ip);
     if (vpn.blocked) {
+      logGateEvent(service, "login_vpn_blocked", ipHash === "unknown" ? null : ipHash, emailHash);
       return NextResponse.json(
         {
           allowed: false,
@@ -86,5 +89,6 @@ export async function POST(request: Request) {
     }
   }
 
+  logGateEvent(service, "login_allowed", ipHash === "unknown" ? null : ipHash, emailHash);
   return NextResponse.json({ allowed: true });
 }
