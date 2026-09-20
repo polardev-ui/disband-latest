@@ -175,6 +175,21 @@ function ReplyQuote({
   onJump?: (id: string) => void;
 }) {
   const label = reply.author ? displayName(reply.author as Profile) : "Unknown";
+
+  // The target may be outside the loaded window (paginated away) or deleted.
+  // buildReplyPreviews synthesizes a `deleted` placeholder in that case so
+  // the reply doesn't silently lose its quote — show an honest fallback.
+  if (reply.deleted) {
+    return (
+      <div
+        className="mb-1 flex max-w-full items-center gap-2 rounded border-l-2 border-divider bg-interactive-hover/40 px-2 py-1"
+        aria-label="Original message unavailable"
+      >
+        <span className="truncate text-xs italic text-text-muted">Original message unavailable</span>
+      </div>
+    );
+  }
+
   const preview =
     normalizeMessageContent(reply.content)
     || (reply.attachment_type === "file" ? "Attachment" : reply.attachment_type ?? "Attachment");
@@ -428,12 +443,36 @@ export function ChatMessage({
   );
 }
 
-export function shouldGroupMessages(prev: ChatMessageData | undefined, msg: ChatMessageData): boolean {
+export function shouldGroupMessages(
+  prev: ChatMessageData | undefined,
+  msg: ChatMessageData,
+  currentUserId?: string | null,
+  currentUserName?: string | null,
+): boolean {
   if (!prev || !prev.author_id || !msg.author_id) return false;
   if (prev.author_id !== msg.author_id) return false;
   if (msg.reply_to_id) return false;
+  // Grouped rows hide the header (avatar, name, full timestamp), so anything
+  // that changes how the row reads starts a new group instead.
+  if (new Date(prev.created_at).toDateString() !== new Date(msg.created_at).toDateString()) return false;
+  if (msg.edited_at) return false;
+  if (currentUserId && messagePingsUser(msg, currentUserId, currentUserName)) return false;
   const gap = new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime();
-  return gap <= 7 * 60 * 1000;
+  return gap >= 0 && gap <= 7 * 60 * 1000;
+}
+
+function messagePingsUser(
+  msg: ChatMessageData,
+  currentUserId: string,
+  currentUserName?: string | null,
+): boolean {
+  const body = normalizeMessageContent(msg.content);
+  return !!(
+    msg.mentions?.includes(currentUserId)
+    || mentionsEveryone(body)
+    || mentionsUsername(body, currentUserName)
+    || (msg.reply_to?.author_id === currentUserId && msg.author_id !== currentUserId)
+  );
 }
 
 export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[] {
@@ -441,7 +480,22 @@ export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[
   return messages.map((m) => {
     if (!m.reply_to_id) return m;
     const target = map.get(m.reply_to_id);
-    if (!target) return m;
+    if (!target) {
+      // Target outside the loaded window (paginated or trimmed away) or
+      // deleted: synthesize a placeholder so the reply keeps its quote.
+      // Callers that already resolved a richer preview keep it.
+      if (m.reply_to) return m;
+      return {
+        ...m,
+        reply_to: {
+          id: m.reply_to_id,
+          author_id: null,
+          content: "",
+          attachment_type: null,
+          deleted: true,
+        },
+      };
+    }
     return {
       ...m,
       reply_to: {

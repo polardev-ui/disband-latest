@@ -396,6 +396,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                 </div>
               )}
 
+              {/* Welcome banner only at true history start: while older
+                  messages can still load, this sits mid-history. */}
+              {!hasMore && (
               <div className="mb-4 flex items-center px-4">
                 <div className="h-px flex-1 bg-divider" />
                 <span className="mx-4 text-xs font-semibold text-text-muted">
@@ -403,10 +406,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                 </span>
                 <div className="h-px flex-1 bg-divider" />
               </div>
+              )}
 
               {enriched.map((msg, i) => {
             const prev = enriched[i - 1];
-            const grouped = shouldGroupMessages(prev, msg);
+            const grouped = shouldGroupMessages(prev, msg, currentUserId, currentUserName);
             const showHeader = !grouped;
             const msgReactions = reactions.filter(
               (r) => r.context_type === messageContext && r.message_id === msg.id,

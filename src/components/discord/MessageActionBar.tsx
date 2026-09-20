@@ -38,7 +38,7 @@ export function MessageActionBar({
 
   return (
     <div
-      className="absolute -top-4 right-0 z-10 flex items-center gap-0.5 rounded-lg border border-white/10 bg-bg-secondary px-0.5 py-0.5 shadow-lg opacity-0 transition-opacity duration-100 group-hover:opacity-100"
+      className="absolute -top-4 right-0 z-10 flex items-center gap-0.5 rounded-lg border border-white/10 bg-bg-secondary px-0.5 py-0.5 opacity-0 shadow-lg transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100"
       onClick={(e) => e.stopPropagation()}
     >
       {QUICK_EMOJIS.map((emoji) => (

@@ -40,6 +40,9 @@ export interface ReplyPreview {
   content: string;
   attachment_type?: AttachmentType | null;
   author?: Pick<Profile, "id" | "username" | "display_name">;
+  // Set when the target message isn't in the loaded window (paginated away
+  // or deleted): renders as an "unavailable" fallback instead of vanishing.
+  deleted?: boolean;
 }
 
 export function summarizeReactions(
