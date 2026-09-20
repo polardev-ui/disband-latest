@@ -2554,7 +2554,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const rows = await loadServerDetails(serverId);
       if (!rows.some((c) => c.id === target.channelId)) return false;
       await selectServer(serverId);
-      channel = channelsRef.current.find((c) => c.id === target.channelId) ?? undefined;
+      // Prefer the rows we just fetched over channelsRef: the ref only
+      // syncs on re-render, which may not have committed yet when this
+      // continuation runs (batched updates), causing a false miss.
+      channel = rows.find((c) => c.id === target.channelId)
+        ?? channelsRef.current.find((c) => c.id === target.channelId)
+        ?? undefined;
       if (!channel) return false;
     } else if (channel.server_id !== activeServerRef.current) {
       await selectServer(channel.server_id);
