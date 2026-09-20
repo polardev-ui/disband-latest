@@ -25,6 +25,7 @@ export function mapProfileError(message: string, code?: string): string {
 
 export function mapMessageError(message: string): string {
   const lower = message.toLowerCase();
+  if (lower.includes("pinging") || lower.includes("mention") || lower.includes("@everyone is rate limited")) return message;
   if (lower.includes("too quickly")) return "You are sending messages too quickly. Slow down.";
   if (lower.includes("rate limit reached")) return "Message rate limit reached. Try again in a minute.";
   if (lower.includes("cannot exceed")) return "Messages cannot exceed 4000 characters.";
@@ -34,6 +35,7 @@ export function mapMessageError(message: string): string {
 
 export function mapGroupChatError(message: string): string {
   const lower = message.toLowerCase();
+  if (lower.includes("pinging") || lower.includes("mention") || lower.includes("@everyone is rate limited")) return message;
   if (lower.includes("wait 20 seconds before creating")) {
     return "Wait 20 seconds before creating another group chat.";
   }
