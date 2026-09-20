@@ -14,11 +14,13 @@ export function isTrustedUploadUrl(value: unknown): value is string {
     const key = result.pathname.startsWith(imagePath)
       ? result.pathname.slice(imagePath.length)
       : "";
+    const validKey = /^[0-9a-f-]{36}\.[a-z0-9]+$/i.test(key)
+      || /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.[a-z0-9]+$/i.test(key);
     return result.protocol === "https:"
       && result.origin === cdn.origin
       && !result.username && !result.password
       && !result.search && !result.hash
-      && !!key && !key.includes("..") && /^[a-zA-Z0-9._-]+$/.test(key);
+      && validKey;
   } catch {
     return false;
   }
