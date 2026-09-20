@@ -30,7 +30,7 @@ async function hmacKey(): Promise<CryptoKey> {
 
 export async function signOAuthState(payload: { userId: string; guild: string; nonce: string }): Promise<string> {
   const key = await hmacKey();
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify({ ...payload, issuedAt: Date.now() });
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
   const bytes = new Uint8Array(sig);
   let hex = "";
@@ -38,7 +38,7 @@ export async function signOAuthState(payload: { userId: string; guild: string; n
   return `${Buffer.from(body).toString("base64url")}.${hex}`;
 }
 
-export async function verifyOAuthState(state: string): Promise<{ userId: string; guild: string; nonce: string } | null> {
+export async function verifyOAuthState(state: string): Promise<{ userId: string; guild: string; nonce: string; issuedAt: number } | null> {
   try {
     const [b64, hex] = state.split(".");
     if (!b64 || !hex) return null;
@@ -52,11 +52,14 @@ export async function verifyOAuthState(state: string): Promise<{ userId: string;
     let diff = 0;
     for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ hex.charCodeAt(i);
     if (diff !== 0) return null;
-    const payload = JSON.parse(body) as { userId?: unknown; guild?: unknown; nonce?: unknown };
-    if (typeof payload.userId !== "string" || typeof payload.guild !== "string" || typeof payload.nonce !== "string") {
+    const payload = JSON.parse(body) as { userId?: unknown; guild?: unknown; nonce?: unknown; issuedAt?: unknown };
+    if (typeof payload.userId !== "string" || typeof payload.guild !== "string" || typeof payload.nonce !== "string" ||
+        typeof payload.issuedAt !== "number" || !Number.isFinite(payload.issuedAt)) {
       return null;
     }
-    return { userId: payload.userId, guild: payload.guild, nonce: payload.nonce };
+    const age = Date.now() - payload.issuedAt;
+    if (age > 10 * 60_000 || age < -30_000) return null;
+    return { userId: payload.userId, guild: payload.guild, nonce: payload.nonce, issuedAt: payload.issuedAt };
   } catch {
     return null;
   }
