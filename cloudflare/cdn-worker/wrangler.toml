@@ -1,12 +1,42 @@
 name = "disband-cdn"
 main = "src/index.js"
 compatibility_date = "2026-01-15"
+compatibility_flags = ["global_fetch_strictly_public"]
+
+[[ratelimits]]
+name = "PREVIEW_RATE_LIMITER"
+namespace_id = "7133001"
+[ratelimits.simple]
+limit = 60
+period = 60
+
+[[ratelimits]]
+name = "GIF_RATE_LIMITER"
+namespace_id = "7133002"
+[ratelimits.simple]
+limit = 120
+period = 60
+
+[[ratelimits]]
+name = "UPLOAD_RATE_LIMITER"
+namespace_id = "7133003"
+[ratelimits.simple]
+limit = 30
+period = 60
 
 # The bucket the Worker reads and writes. `binding` is the name the code uses
 # (env.MEDIA); `bucket_name` is what the bucket is called in the dashboard.
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "disband-media"
+
+[[durable_objects.bindings]]
+name = "MEDIA_QUOTA"
+class_name = "MediaQuota"
+
+[[migrations]]
+tag = "v1-media-quota"
+new_sqlite_classes = ["MediaQuota"]
 
 [vars]
 # Used to build the URL that goes into the database, so it must be exactly the
@@ -16,6 +46,10 @@ PUBLIC_BASE = "https://cdn.disband.dev"
 # or the bucket becomes free storage for anyone who finds the endpoint.
 REQUIRE_AUTH = "true"
 ALLOWED_ORIGIN = "*"
+MAX_UPLOAD_MB = "50"
+MAX_USER_STORAGE_MB = "1024"
+MAX_USER_OBJECTS = "500"
+LEGACY_MEDIA_ORIGIN = "https://api.wsgpolar.me"
 # Used to check that an uploader is a real signed-in user. Both are already
 # public in every client, so neither is a secret.
 SUPABASE_URL = "https://mjqbrcabargylrimlafw.supabase.co"
