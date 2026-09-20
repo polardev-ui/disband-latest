@@ -16,6 +16,7 @@ import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshS
 import { getSavedSessions, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
+import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { preloadImages } from "@/lib/preload-images";
@@ -2525,6 +2526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!dmThreadsRef.current.some((t) => t.id === target.threadId)) return false;
       }
       await selectDmThread(target.threadId);
+      requestUnreadJump("dm", target.threadId);
       return true;
     }
     if (target.kind === "group") {
@@ -2534,6 +2536,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!groupChatsRef.current.some((g) => g.id === target.groupId)) return false;
       }
       await selectGroupChat(target.groupId);
+      requestUnreadJump("group", target.groupId);
       return true;
     }
     if (target.kind === "call") {
@@ -2565,6 +2568,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await selectServer(channel.server_id);
     }
     selectChannel(target.channelId);
+    requestUnreadJump("channel", target.channelId);
     return true;
   }, [userId, loadDmThreads, loadGroupChats, loadServerDetails, selectDmThread, selectGroupChat, selectServer, selectChannel]);
 
