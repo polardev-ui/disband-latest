@@ -34,3 +34,28 @@ export async function persistentRateLimitCheck(
   }
   return null;
 }
+
+export type AuthGateKind =
+  | "login_allowed"
+  | "login_rate_limited"
+  | "login_vpn_blocked"
+  | "login_banned"
+  | "signup_rate_limited"
+  | "signup_vpn_blocked";
+
+/**
+ * Patch 6: failed-login/abuse digest backing. Fire-and-forget — gate
+ * decisions must never fail because observability did.
+ */
+export function logGateEvent(
+  service: SupabaseClient | null,
+  kind: AuthGateKind,
+  ipHash: string | null,
+  emailHash: string | null,
+): void {
+  if (!service) return;
+  void service
+    .from("auth_gate_events")
+    .insert({ kind, ip_hash: ipHash, email_hash: emailHash })
+    .then(() => undefined, () => undefined);
+}
