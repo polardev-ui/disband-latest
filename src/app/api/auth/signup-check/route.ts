@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         ],
   );
   if (persistentHit) {
-    logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
+    await logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
     return NextResponse.json(
       { allowed: false, error: "Too many accounts created from your network. Try again later." },
       { status: 429, headers: { "Retry-After": "3600" } },
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
   if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
     const vpn = await checkVpnStrict(checkIp);
     if (vpn.blocked) {
-      logGateEvent(service, "signup_vpn_blocked", ipHash, emailHash);
+      await logGateEvent(service, "signup_vpn_blocked", ipHash, emailHash);
       return NextResponse.json({
         allowed: false,
         code: vpn.unavailable ? "VPN_DETECTION_UNAVAILABLE" : "VPN_BLOCKED",

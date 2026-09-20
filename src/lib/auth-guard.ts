@@ -44,18 +44,22 @@ export type AuthGateKind =
   | "signup_vpn_blocked";
 
 /**
- * Patch 6: failed-login/abuse digest backing. Fire-and-forget — gate
- * decisions must never fail because observability did.
+ * Patch 6: failed-login/abuse digest backing. Awaited, never throws —
+ * fire-and-forget promises are cancelled by the worker isolate once the
+ * response returns, so gates must await this.
  */
-export function logGateEvent(
+export async function logGateEvent(
   service: SupabaseClient | null,
   kind: AuthGateKind,
   ipHash: string | null,
   emailHash: string | null,
-): void {
+): Promise<void> {
   if (!service) return;
-  void service
-    .from("auth_gate_events")
-    .insert({ kind, ip_hash: ipHash, email_hash: emailHash })
-    .then(() => undefined, () => undefined);
+  try {
+    await service
+      .from("auth_gate_events")
+      .insert({ kind, ip_hash: ipHash, email_hash: emailHash });
+  } catch {
+    // Observability must never break the gate.
+  }
 }
