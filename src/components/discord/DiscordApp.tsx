@@ -17,6 +17,7 @@ import { TimeoutModal } from "@/components/modals/TimeoutModal";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
 import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPanel";
+import { UserPanel } from "./UserPanel";
 import dynamic from "next/dynamic";
 import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
@@ -1406,13 +1407,11 @@ export function DiscordApp() {
                   onQueryChange={setDiscoverQuery}
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-                  onUserPanelContext={handleUserPanelContext}
                 />
               ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
                 <HomePanel
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-                  onUserPanelContext={handleUserPanelContext}
                   onFriendClick={(id) => {
                     const f = app.friends.find((x) => x.id === id);
                     if (f) openProfile(f);
@@ -1438,7 +1437,6 @@ export function DiscordApp() {
                   onOpenServerSettings={() => setServerSettingsOpen(true)}
                   onChannelContext={handleChannelContext}
                   onCategoryContext={handleCategoryContext}
-                  onUserPanelContext={handleUserPanelContext}
                   onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
                   onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
                   onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
@@ -1452,27 +1450,29 @@ export function DiscordApp() {
         )
       ) : (
         <>
-          <ServerList
-            servers={app.servers}
-            activeServerId={app.activeServerId}
-            viewMode={app.viewMode}
-            dmUnreads={app.dmUnreads}
-            activeDmThreadId={app.activeDmThreadId}
-            serverUnreadIds={app.serverUnreadIds}
-            folders={app.serverFolders}
-            listState={app.serverListState}
-            onSelectHome={app.setViewHome}
-            onSelectServer={(id) => void app.selectServer(id)}
-            onSelectDmThread={(id) => void app.selectDmThread(id)}
-            onCreateServer={() => setCreateServerOpen(true)}
-            onDiscover={app.setViewDiscover}
-            onServerContext={handleServerContext}
-            onFolderContext={handleFolderContext}
-            onReorderServers={handleReorderServers}
-            onReorderFolders={handleReorderFolders}
-          />
+          <div className="relative flex flex-1 flex-col min-w-0">
+            <ServerList
+              servers={app.servers}
+              activeServerId={app.activeServerId}
+              viewMode={app.viewMode}
+              dmUnreads={app.dmUnreads}
+              activeDmThreadId={app.activeDmThreadId}
+              serverUnreadIds={app.serverUnreadIds}
+              folders={app.serverFolders}
+              listState={app.serverListState}
+              onSelectHome={app.setViewHome}
+              onSelectServer={(id) => void app.selectServer(id)}
+              onSelectDmThread={(id) => void app.selectDmThread(id)}
+              onCreateServer={() => setCreateServerOpen(true)}
+              onDiscover={app.setViewDiscover}
+              onServerContext={handleServerContext}
+              onFolderContext={handleFolderContext}
+              onReorderServers={handleReorderServers}
+              onReorderFolders={handleReorderFolders}
+            />
 
-          {app.viewMode === "discover" ? (
+            {app.viewMode === "discover" ? (
+              <div className="flex-1 min-h-0">
                 <DiscoverSidebar
                   tab={discoverTab}
                   onTabChange={setDiscoverTab}
@@ -1480,47 +1480,51 @@ export function DiscordApp() {
                   onQueryChange={setDiscoverQuery}
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-                  onUserPanelContext={handleUserPanelContext}
                 />
-              ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
-            <HomePanel
-              onOpenSettings={() => setSettingsOpen(true)}
-              onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-              onUserPanelContext={handleUserPanelContext}
-              onFriendClick={(id) => {
-                const f = app.friends.find((x) => x.id === id);
-                if (f) openProfile(f);
-              }}
-              onGroupContext={handleGroupContext}
-              onOpenSubscription={() => setSubscriptionOpen(true)}
-            />
-          ) : (
-            <ChannelList
-              title={app.activeServer?.name ?? "Space"}
-              verified={app.activeServer?.verified}
-              categories={app.categories}
-              channels={app.channels}
-              activeChannelId={app.activeChannelId}
-              getUnreadCount={app.getChannelUnreadCount}
-              getMentionCount={app.getChannelMentionCount}
-              canManageChannels={canManageChannels}
-              voicePresence={serverVoicePresence.byChannel}
-              voiceStartTimes={serverVoicePresence.startTimes}
-              onSelectChannel={handleSelectChannel}
-              onOpenSettings={() => setSettingsOpen(true)}
-              onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-              onOpenServerSettings={() => setServerSettingsOpen(true)}
-              onChannelContext={handleChannelContext}
-              onCategoryContext={handleCategoryContext}
-              onUserPanelContext={handleUserPanelContext}
-              onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
-              onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
-              onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
-              onCreateCategory={(name) => app.createCategory(name)}
-              catalystCount={app.activeServer ? app.catalystCounts[app.activeServer.id] ?? 0 : 0}
-              onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
-            />
-          )}
+              </div>
+            ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
+              <div className="flex-1 min-h-0">
+                <HomePanel
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  onFriendClick={(id) => {
+                    const f = app.friends.find((x) => x.id === id);
+                    if (f) openProfile(f);
+                  }}
+                  onGroupContext={handleGroupContext}
+                  onOpenSubscription={() => setSubscriptionOpen(true)}
+                />
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0">
+                <ChannelList
+                  title={app.activeServer?.name ?? "Space"}
+                  verified={app.activeServer?.verified}
+                  categories={app.categories}
+                  channels={app.channels}
+                  activeChannelId={app.activeChannelId}
+                  getUnreadCount={app.getChannelUnreadCount}
+                  getMentionCount={app.getChannelMentionCount}
+                  canManageChannels={canManageChannels}
+                  voicePresence={serverVoicePresence.byChannel}
+                  voiceStartTimes={serverVoicePresence.startTimes}
+                  onSelectChannel={handleSelectChannel}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  onOpenServerSettings={() => setServerSettingsOpen(true)}
+                  onChannelContext={handleChannelContext}
+                  onCategoryContext={handleCategoryContext}
+                  onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
+                  onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
+                  onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
+                  onCreateCategory={(name) => app.createCategory(name)}
+                  catalystCount={app.activeServer ? app.catalystCounts[app.activeServer.id] ?? 0 : 0}
+                  onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
+                />
+              </div>
+            )}
+            <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
+          </div>
         </>
       )}
 
