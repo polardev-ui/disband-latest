@@ -1472,7 +1472,7 @@ export function DiscordApp() {
             />
 
             {app.viewMode === "discover" ? (
-              <div className="min-h-0">
+              <div className="flex-1 min-h-0">
                 <DiscoverSidebar
                   tab={discoverTab}
                   onTabChange={setDiscoverTab}
@@ -1483,7 +1483,7 @@ export function DiscordApp() {
                 />
               </div>
             ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
-              <div className="min-h-0">
+              <div className="flex-1 min-h-0">
                 <HomePanel
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1496,7 +1496,7 @@ export function DiscordApp() {
                 />
               </div>
             ) : (
-              <div className="min-h-0">
+              <div className="flex-1 min-h-0">
                 <ChannelList
                   title={app.activeServer?.name ?? "Space"}
                   verified={app.activeServer?.verified}
