@@ -28,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import com.wsgpolar.disband.ui.main.hidesDock
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,7 +49,9 @@ import com.wsgpolar.disband.core.Palette
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.data.AttachmentType
 import com.wsgpolar.disband.data.Profile
+import com.wsgpolar.disband.data.Server
 import com.wsgpolar.disband.ui.AvatarImage
+import com.wsgpolar.disband.ui.main.ShellChromeState
 
 /** Display row for any message kind (DM / channel / group). */
 data class ChatRow(
@@ -96,6 +101,10 @@ fun ChatScaffold(
     onSend: (String) -> Unit,
     sendEnabled: Boolean = true,
     onBack: () -> Unit,
+    shellChrome: ShellChromeState? = null,
+    typingUsers: List<Profile> = emptyList(),
+    replyTo: ChatRow? = null,
+    onReplyDismiss: (() -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
@@ -108,6 +117,7 @@ fun ChatScaffold(
         Modifier
             .fillMaxSize()
             .background(palette.background)
+            .then(shellChrome?.let { Modifier.hidesDock(it) } ?: Modifier)
             .imePadding(),
     ) {
         ChatTopBar(
@@ -119,7 +129,12 @@ fun ChatScaffold(
             onBack = onBack,
         )
         HorizontalDivider(color = palette.divider)
-
+        if (replyTo != null) {
+            ReplyBanner(row = replyTo, onDismiss = onReplyDismiss ?: {})
+        }
+        if (typingUsers.isNotEmpty()) {
+            TypingBubble(users = typingUsers, palette = palette)
+        }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             when {
                 loading && rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -131,8 +146,9 @@ fun ChatScaffold(
                 else -> MessageList(listState, rows, ownUserId)
             }
         }
-
-        Composer(palette = palette, onSend = onSend, enabled = sendEnabled)
+        if (replyTo == null) {
+            Composer(palette = palette, onSend = onSend, enabled = sendEnabled)
+        }
     }
 }
 
@@ -192,6 +208,34 @@ private fun MessageList(listState: LazyListState, rows: List<ChatRow>, ownUserId
             )
         }
         item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun ReplyBanner(row: ChatRow, onDismiss: () -> Unit) {
+    val palette = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().background(palette.surfaceRaised).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Replying to ${row.author?.name ?: "Unknown"}", color = palette.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(row.content, color = palette.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton(onClick = onDismiss) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Dismiss reply", tint = palette.textMuted, modifier = Modifier.size(18.dp))
+        }
+    }
+    HorizontalDivider(color = palette.divider)
+}
+
+@Composable
+private fun TypingBubble(users: List<Profile>, palette: Palette) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("${users.firstOrNull()?.name ?: "Someone"} is typing...", color = palette.textMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
     }
 }
 
