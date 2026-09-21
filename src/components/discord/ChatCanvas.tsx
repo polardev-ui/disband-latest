@@ -305,7 +305,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     // edits and reaction-only updates never steal the scroll.
     const firstLoad = prevCount === 0 && count > 0;
     const appended = count > prevCount;
-    scrollToBottom("auto", firstLoad || followOnceRef.current);
+    scrollToBottom("auto", firstLoad || followOnceRef.current || (appended && stickToBottomRef.current));
     followOnceRef.current = false;
   }, [messages, scrollToBottom]);
 
@@ -414,12 +414,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
     stickToBottomRef.current = true;
     followOnceRef.current = true;
-    if (readCursorScope) markChatReadNow(readCursorScope);
     // A failed own send must not erase the "New" divider for everyone else's
     // messages: only clear once the send actually lands.
     const err = await onSend(content, options);
     if (!err) {
       setNewMessagesDividerId(null);
+      if (readCursorScope) markChatReadNow(readCursorScope);
     }
     return err;
   }
