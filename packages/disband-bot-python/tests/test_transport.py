@@ -1,3 +1,4 @@
+import asyncio
 import io
 import unittest
 
@@ -49,6 +50,35 @@ class TransportTests(unittest.TestCase):
 
     def test_redirect_handler_refuses_auth_token_forwarding(self):
         self.assertIsNone(_NoRedirect().redirect_request(None, io.BytesIO(), 302, "Found", {}, "https://other.example"))
+
+    def test_async_one_time_handler_runs_without_a_current_event_loop(self):
+        client = Client("token")
+        seen = []
+
+        @client.once("messageCreate")
+        async def receive(value):
+            seen.append(value)
+
+        client._emit("messageCreate", "first")
+        client._emit("messageCreate", "second")
+        self.assertEqual(seen, ["first"])
+
+    def test_async_handler_failure_reaches_error_listener_in_running_loop(self):
+        client = Client("token")
+        errors = []
+        client.on("error", lambda error: errors.append(str(error)))
+
+        @client.on("messageCreate")
+        async def fail(_value):
+            raise RuntimeError("handler failed")
+
+        async def emit_and_wait():
+            client._emit("messageCreate", "event")
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+
+        asyncio.run(emit_and_wait())
+        self.assertEqual(errors, ["handler failed"])
 
 
 if __name__ == "__main__":
