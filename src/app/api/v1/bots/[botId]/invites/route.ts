@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, isBotScope } from "@/lib/bot-auth";
+import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
 export async function POST(
@@ -18,6 +19,9 @@ export async function POST(
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const gate = await checkBotRateLimit(service, "invite", bot.botId);
+    if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
 
     const body = (await request.json().catch(() => ({}))) as {
       server_id?: string;

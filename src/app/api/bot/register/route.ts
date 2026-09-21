@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 import { hashBotToken, isBotScope } from "@/lib/bot-auth";
+import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 const MAX_BOTS_PER_OWNER = 5;
 
@@ -16,6 +17,11 @@ export async function POST(request: NextRequest) {
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    // Revoked bots don't count toward the cap, so without this the
+    // revoke/recreate loop mints unlimited auth users.
+    const regGate = await checkBotRateLimit(service, "register", `owner:${user.id}`);
+    if (regGate.limited) return botRateLimited(regGate.retryAfterSeconds);
 
     const body = (await request.json().catch(() => ({}))) as {
       name?: string;
