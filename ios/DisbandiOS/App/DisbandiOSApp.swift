@@ -12,6 +12,7 @@ struct DisbandiOSApp: App {
     @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
     @State private var voice: VoiceSession
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         CallAudioSession.prepare()
@@ -70,9 +71,32 @@ struct DisbandiOSApp: App {
                 .task(id: appState.currentUserId) {
                     voice.start(userId: appState.currentUserId, displayName: appState.profile?.name)
                 }
+                // The icon badge. DM and group counts are maintained locally by
+                // DmUnreadStore; server mentions have no inbox on iOS yet, so
+                // their count is fetched — on sign-in, and again whenever the
+                // app comes forward, which is when a push-written badge most
+                // likely needs correcting.
+                .task(id: appState.currentUserId) {
+                    guard let uid = appState.currentUserId else {
+                        dmUnread.reset()
+                        return
+                    }
+                    await refreshMentionBadge(uid)
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active, let uid = appState.currentUserId else { return }
+                    Task { await refreshMentionBadge(uid) }
+                }
                 .onChange(of: appState.profile?.theme) { _, _ in
                     themeManager.adopt(from: appState.profile)
                 }
         }
+    }
+
+    private func refreshMentionBadge(_ userId: String) async {
+        guard let count = try? await DatabaseService.unreadMentionCount(currentUserId: userId) else {
+            return
+        }
+        dmUnread.setMentionCount(count)
     }
 }

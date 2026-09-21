@@ -167,6 +167,13 @@ Deno.serve(async (req) => {
 
   let sent = 0;
 
+  // The number for the app icon. Computed here rather than incremented,
+  // because APNs has no "increment" and a device that missed a push would stay
+  // wrong forever. A failure here must not cost us the notification itself, so
+  // the badge is simply omitted when the count cannot be read.
+  const { data: badgeCount } = await supabase.rpc("badge_count_for", { p_user: user_id });
+  const badge = typeof badgeCount === "number" ? badgeCount : undefined;
+
   // iOS: APNs alert push.
   if (iosTokens?.length) {
     const jwt = await apnsJwt();
@@ -176,6 +183,10 @@ Deno.serve(async (req) => {
       aps: {
         alert: { title: title ?? "Disband", body },
         sound: "default",
+        // Omitted, not zeroed, when unknown: `badge: 0` clears the icon, so a
+        // failed count would wipe a legitimate number off the user's home
+        // screen.
+        ...(badge === undefined ? {} : { badge }),
         // Group delivered notifications per conversation so a new message in an
         // already-read thread updates its stack instead of spawning a fresh row.
         "thread-id": (source as string | null) ?? "disband",
