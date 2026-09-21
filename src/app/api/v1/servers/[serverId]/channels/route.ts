@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
+import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,9 @@ export async function GET(
     const { serverId } = await params;
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const listGate = await checkBotRateLimit(service, "read", bot.botId);
+    if (listGate.limited) return botRateLimited(listGate.retryAfterSeconds);
 
     const { data: channels, error } = await service.rpc("bot_list_channels", {
       p_bot_id: bot.botId,
@@ -47,6 +51,9 @@ export async function POST(
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const createGate = await checkBotRateLimit(service, "write", bot.botId);
+    if (createGate.limited) return botRateLimited(createGate.retryAfterSeconds);
 
     const { data: channelId, error } = await service.rpc("bot_create_channel", {
       p_bot_id: bot.botId,
