@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
+import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 export async function PATCH(
   request: NextRequest,
@@ -15,6 +16,9 @@ export async function PATCH(
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const renameGate = await checkBotRateLimit(service, "write", bot.botId);
+    if (renameGate.limited) return botRateLimited(renameGate.retryAfterSeconds);
 
     const { error } = await service.rpc("bot_rename_channel", {
       p_bot_id: bot.botId,
@@ -44,6 +48,9 @@ export async function DELETE(
     const { channelId } = await params;
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const deleteGate = await checkBotRateLimit(service, "write", bot.botId);
+    if (deleteGate.limited) return botRateLimited(deleteGate.retryAfterSeconds);
 
     const { error } = await service.rpc("bot_delete_channel", {
       p_bot_id: bot.botId,
