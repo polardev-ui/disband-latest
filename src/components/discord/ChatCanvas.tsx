@@ -32,10 +32,10 @@ import {
 } from "@/lib/notification-jump";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 
-function NewMessagesDivider() {
+function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
   return (
     <div
-      className="divider-in relative my-3 flex items-center px-4"
+      className={`${animate ? "divider-in " : ""}relative my-3 flex items-center px-4`}
       role="separator"
       aria-label="New messages"
     >
@@ -474,7 +474,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
             );
             return (
               <div key={msg.id}>
-                {newMessagesDividerId === msg.id && <NewMessagesDivider />}
+                {newMessagesDividerId === msg.id && (
+                  <NewMessagesDivider animate={!(currentUserId && msg.author_id === currentUserId)} />
+                )}
                 <ChatMessage
                   message={msg}
                   showHeader={showHeader}
