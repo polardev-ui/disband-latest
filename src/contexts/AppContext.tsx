@@ -875,7 +875,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [{ data: cats }, { data: chs }, { data: memRows }, { data: roles }, { data: roleRows }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
-      supabase.rpc("get_server_members", { p_server_id: serverId }),
+      supabase.rpc("get_server_members", { p_server_id: serverId, p_page: 1, p_page_size: 1000 }),
       supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
       supabase.from("member_roles").select("server_id, user_id, role_id").eq("server_id", serverId),
     ]);
@@ -906,12 +906,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setServerBans(bans.map((b) => ({ ...b, profile: profiles.get(b.user_id) })));
     })();
 
+    // Fetch all pages of members (PostgREST caps at db-max-rows, default 1000)
+    const allMemRows = [...(memRows as (ServerMember & { profile: Profile })[] ?? [])];
+    let page = 2;
+    while (true) {
+      const { data: pageRows } = await supabase.rpc("get_server_members", { p_server_id: serverId, p_page: page, p_page_size: 1000 });
+      if (!pageRows || (pageRows as any[]).length === 0) break;
+      allMemRows.push(...(pageRows as (ServerMember & { profile: Profile })[]));
+      if ((pageRows as any[]).length < 1000) break;
+      page++;
+    }
+
     const assignableRoleIds = new Set(
       serverRoles.filter((r) => !r.is_default).map((r) => r.id),
     );
     const sanitizeRoleIds = (ids: string[]) =>
       ids.filter((id) => assignableRoleIds.has(id));
-    const memberRows = ((memRows as (ServerMember & { profile: Profile })[] | null) ?? []).filter(
+    const memberRows = ((allMemRows as (ServerMember & { profile: Profile })[] | null) ?? []).filter(
       (m) => m.profile != null,
     );
     if (memberRows.length === 0) {
