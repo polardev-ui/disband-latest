@@ -1,11 +1,24 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-initOpenNextCloudflareForDev();
-
 const isProd = process.env.NODE_ENV === "production";
 /** Set for Tauri desktop packaging only — static `out/` bundle. Web (Vercel) omits this. */
 const isTauriStaticExport = process.env.TAURI_BUILD === "1";
+
+// Dev only, as the name says. It wires `next dev` up to the Cloudflare
+// bindings in wrangler.jsonc, and because the cache bucket there is marked
+// `remote: true` it opens a live session against the account — which needs
+// credentials.
+//
+// It used to run on import, so a *build* opened that session too. On a
+// developer's machine that is invisible (wrangler is logged in via OAuth), but
+// CI has no login: the desktop build died on a missing CLOUDFLARE_API_TOKEN,
+// for a binding a filesystem-loaded Tauri bundle never touches. Adding the
+// token to CI would paper over it — the connection has no business being in a
+// build at all.
+if (!isProd && !isTauriStaticExport) {
+  initOpenNextCloudflareForDev();
+}
 
 /**
  * Disband ships as both a hosted web app and a desktop binary (via Tauri).
