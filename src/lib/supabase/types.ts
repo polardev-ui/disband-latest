@@ -658,7 +658,7 @@ export interface Database {
         Returns: Record<string, boolean>;
       };
       get_server_members: {
-        Args: { p_server_id: string };
+        Args: { p_server_id: string; p_page?: number; p_page_size?: number };
         Returns: (Omit<DbServerMember, "role"> & {
           role: MemberRole;
           profile: Profile;
