@@ -1,6 +1,6 @@
 [package]
 name = "disband"
-version = "2.28.30"
+version = "2.28.31"
 description = "Disband — one codebase, every platform."
 authors = ["Disband"]
 edition = "2021"
