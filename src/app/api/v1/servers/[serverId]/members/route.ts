@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
+import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,9 @@ export async function GET(
     const { serverId } = await params;
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const gate = await checkBotRateLimit(service, "read", bot.botId);
+    if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
 
     const { data: members, error } = await service.rpc("bot_list_members", {
       p_bot_id: bot.botId,

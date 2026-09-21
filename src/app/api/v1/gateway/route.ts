@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot } from "@/lib/bot-auth";
+import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 export const maxDuration = 30;
 export const dynamic = "force-dynamic";
@@ -11,6 +12,11 @@ export async function GET(request: NextRequest) {
 
   const service = getServiceSupabase();
   if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+  // Long-polls hold a worker up to 20s each: cap polls per bot so one
+  // token cannot exhaust worker concurrency.
+  const gate = await checkBotRateLimit(service, "gateway", bot.botId);
+  if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
 
   const requested = Number(request.nextUrl.searchParams.get("timeout") ?? 20);
   const timeoutMs = Math.min(Math.max(Number.isFinite(requested) ? requested : 20, 1), 20) * 1000;
