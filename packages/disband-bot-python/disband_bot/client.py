@@ -1,7 +1,10 @@
 """The Disband bot client."""
 
+import asyncio
+import inspect
 import threading
 import time
+import traceback
 from urllib.parse import quote, urlencode, urlsplit
 
 from .errors import AuthError
@@ -15,6 +18,10 @@ EVENT_NAMES = frozenset(
 
 def _path_segment(value):
     return quote(str(value), safe="")
+
+
+async def _await_handler(result):
+    await result
 
 
 class Client:
@@ -69,12 +76,26 @@ class Client:
         return register
 
     def once(self, event, handler=None):
-        def wrapped(*args):
-            with self._lock:
-                self._listeners[event].remove(wrapped)
-            handler(*args)
+        def register(fn):
+            def wrapped(*args):
+                with self._lock:
+                    self._listeners[event].remove(wrapped)
+                return fn(*args)
 
-        return self.on(event, wrapped)
+            self.on(event, wrapped)
+            return fn
+
+        if handler is not None:
+            return register(handler)
+        return register
+
+    def _report_handler_error(self, event, error):
+        with self._lock:
+            has_error_handler = bool(self._listeners["error"])
+        if event == "error" or not has_error_handler:
+            traceback.print_exception(type(error), error, error.__traceback__)
+        else:
+            self._emit("error", error)
 
     def _emit(self, event, *args):
         with self._lock:
@@ -82,14 +103,23 @@ class Client:
         for handler in handlers:
             try:
                 result = handler(*args)
-                if hasattr(result, "close"):
-                    import asyncio
+                if inspect.isawaitable(result):
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        asyncio.run(_await_handler(result))
+                    else:
+                        task = loop.create_task(_await_handler(result))
+                        task.add_done_callback(lambda done, name=event: self._on_handler_done(name, done))
+            except Exception as error:
+                self._report_handler_error(event, error)
 
-                    asyncio.ensure_future(result)
-            except Exception:
-                import traceback
-
-                traceback.print_exc()
+    def _on_handler_done(self, event, task):
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None:
+            self._report_handler_error(event, error)
 
     # ------------------------------------------------------------ lifecycle
 
