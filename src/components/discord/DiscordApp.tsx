@@ -1450,7 +1450,7 @@ export function DiscordApp() {
         )
       ) : (
         <>
-          <div className="relative flex flex-col min-w-0">
+          <div className="relative flex flex-col h-full min-w-0">
             <ServerList
               servers={app.servers}
               activeServerId={app.activeServerId}
