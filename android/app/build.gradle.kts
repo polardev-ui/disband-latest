@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    // Reads app/google-services.json and generates the Firebase config the
+    // SDK initialises from. Without it FirebaseApp.getApps() is empty, so
+    // PushRegistrar bails and the device never registers for push at all.
+    alias(libs.plugins.google.services)
 }
 
 // Loaded from android/keystore.properties (git-ignored). Absent on fresh

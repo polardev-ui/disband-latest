@@ -11,6 +11,7 @@ supabase = "3.8.0"
 ktor = "3.5.2"
 webrtc = "125.6422.07"
 firebaseMessaging = "24.1.2"
+googleServices = "4.4.2"
 serialization = "1.8.1"
 coroutines = "1.10.2"
 datastore = "1.1.4"
@@ -53,6 +54,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
 [plugins]
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
