@@ -623,6 +623,21 @@ enum DatabaseService {
 
     // MARK: - Notifications
 
+    /// How many mentions are still unread, for the app icon badge.
+    ///
+    /// A count, not the rows: the badge needs one number and the inbox this
+    /// would otherwise populate does not exist on iOS yet.
+    static func unreadMentionCount(currentUserId: String) async throws -> Int {
+        let response = try await client
+            .from("notifications")
+            .select("id", head: true, count: .exact)
+            .eq("user_id", value: currentUserId)
+            .eq("type", value: "mention")
+            .eq("read", value: false)
+            .execute()
+        return response.count ?? 0
+    }
+
     static func notifications(currentUserId: String) async throws -> [AppNotification] {
         try await client
             .from("notifications")

@@ -14,13 +14,48 @@ final class DmUnreadStore {
     private(set) var groupUnread: [String: Int] = [:]
     private(set) var activeThreadId: String?
     private(set) var activeGroupId: String?
+    /// Unread mentions from servers, which this store does not own — the
+    /// notifications list sets it. Kept here so one place decides the badge.
+    private(set) var mentionCount: Int = 0
 
     private static let dmKey = "dmUnreadCounts"
     private static let groupKey = "groupUnreadCounts"
+    private static let mentionKey = "unreadMentionCount"
 
     init() {
         unread = UserDefaults.standard.dictionary(forKey: Self.dmKey) as? [String: Int] ?? [:]
         groupUnread = UserDefaults.standard.dictionary(forKey: Self.groupKey) as? [String: Int] ?? [:]
+        mentionCount = UserDefaults.standard.integer(forKey: Self.mentionKey)
+        syncBadge()
+    }
+
+    /// Everything the app icon should be counting.
+    var badgeTotal: Int {
+        unread.values.reduce(0, +) + groupUnread.values.reduce(0, +) + mentionCount
+    }
+
+    /// How many server mentions are outstanding, from the notifications list.
+    func setMentionCount(_ count: Int) {
+        let value = max(0, count)
+        guard value != mentionCount else { return }
+        mentionCount = value
+        UserDefaults.standard.set(value, forKey: Self.mentionKey)
+        syncBadge()
+    }
+
+    /// Signing out must not leave the previous account's number on the icon.
+    func reset() {
+        unread = [:]
+        groupUnread = [:]
+        mentionCount = 0
+        persistDm()
+        persistGroup()
+        UserDefaults.standard.set(0, forKey: Self.mentionKey)
+        syncBadge()
+    }
+
+    private func syncBadge() {
+        AppIconBadge.apply(badgeTotal)
     }
 
     /// The user opened `threadId` — zero its unread count and stop counting
@@ -82,11 +117,15 @@ final class DmUnreadStore {
         persistGroup()
     }
 
+    // Every mutation above persists, so the badge is refreshed from here
+    // rather than from each call site — one of which will otherwise be missed.
     private func persistDm() {
         UserDefaults.standard.set(unread, forKey: Self.dmKey)
+        syncBadge()
     }
 
     private func persistGroup() {
         UserDefaults.standard.set(groupUnread, forKey: Self.groupKey)
+        syncBadge()
     }
 }

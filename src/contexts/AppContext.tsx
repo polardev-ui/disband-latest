@@ -52,6 +52,7 @@ import {
 } from "@/lib/message-pagination";
 import { apiFetch } from "@/lib/api";
 import { checkMentionSend } from "@/lib/mention-guard";
+import { clearAppBadge, setAppBadge } from "@/lib/app-badge";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type {
   AppNotification,
@@ -4103,6 +4104,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (channelId: string) => channelUnreadMap.get(channelId) ?? 0,
     [channelUnreadMap],
   );
+
+  // Dock / taskbar / tab badge. Mentions are the things that addressed you by
+  // name — a channel ping, any DM, any group message — and get a count. Plain
+  // channel traffic is unread but not urgent, so it only lights the dot.
+  //
+  // `userId` gates it so a signed-out window does not inherit the last
+  // session's count, and the cleanup clears the badge on unmount (closing the
+  // last desktop window otherwise leaves a stale number on the dock icon).
+  const mentionTotal = useMemo(() => {
+    let total = 0;
+    for (const n of channelMentionMap.values()) total += n;
+    for (const entry of dmUnreadMap.values()) total += entry.count;
+    for (const n of groupUnreadMap.values()) total += n;
+    return total;
+  }, [channelMentionMap, dmUnreadMap, groupUnreadMap]);
+
+  const hasUnread = useMemo(() => {
+    if (mentionTotal > 0) return true;
+    if (serverIndicators.size > 0) return true;
+    for (const n of channelUnreadMap.values()) if (n > 0) return true;
+    return false;
+  }, [mentionTotal, serverIndicators, channelUnreadMap]);
+
+  useEffect(() => {
+    if (!userId) {
+      clearAppBadge();
+      return;
+    }
+    setAppBadge({ mentions: mentionTotal, unread: hasUnread });
+  }, [userId, mentionTotal, hasUnread]);
+
+  useEffect(() => () => clearAppBadge(), []);
 
   const handleVoiceJoinedChannel = useCallback((channelId: string | null) => {
     markActivity();
