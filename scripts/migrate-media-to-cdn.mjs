@@ -1,9 +1,48 @@
 #!/usr/bin/env node
+/**
+ * Move every stored image from api.wsgpolar.me to cdn.disband.dev.
+ *
+ * Runs in two separable phases so a half-finished copy can never leave the
+ * app pointing at files that are not there yet:
+ *
+ *   --copy     read every media URL out of the database and have the Worker
+ *              pull each object into R2. Changes nothing in the database, so
+ *              it is safe to run repeatedly and safe to run while the old
+ *              host is still live.
+ *   --rewrite  swap the hostname on every row. Only do this once --copy has
+ *              finished cleanly.
+ *   --verify   check that each new URL actually returns the bytes.
+ *
+ * The objects never pass through this machine: the Worker fetches them
+ * directly, so a thousand images is a thousand small requests rather than a
+ * gigabyte through a laptop.
+ *
+ * Usage:
+ *   node scripts/migrate-media-to-cdn.mjs --copy
+ *   node scripts/migrate-media-to-cdn.mjs --verify
+ *   node scripts/migrate-media-to-cdn.mjs --rewrite
+ *   node scripts/migrate-media-to-cdn.mjs --rewrite --undo    (roll back)
+ *
+ * Needs in the environment (.env.local is read automatically):
+ *   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, MIGRATION_SECRET
+ */
 
 import { readFileSync, existsSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
-const OLD_HOST = "https: ["group_messages", "id", "attachment_url"],
+const OLD_HOST = "https://api.wsgpolar.me";
+const NEW_HOST = "https://cdn.disband.dev";
+const CONCURRENCY = 8;
+
+/** Every column that can hold one of these URLs, and the table's primary key. */
+const COLUMNS = [
+  ["profiles", "id", "avatar_url"],
+  ["profiles", "id", "banner_url"],
+  ["servers", "id", "icon_url"],
+  ["servers", "id", "banner_url"],
+  ["messages", "id", "attachment_url"],
+  ["dm_messages", "id", "attachment_url"],
+  ["group_messages", "id", "attachment_url"],
   ["notes", "id", "attachment_url"],
   ["custom_emoji", "id", "url"],
   ["bots", "id", "avatar_url"],
@@ -46,6 +85,7 @@ if (!MODE) {
   process.exit(1);
 }
 
+/** Every distinct old URL currently referenced anywhere. */
 async function collectUrls() {
   const urls = new Set();
   for (const [table, , column] of COLUMNS) {
@@ -55,15 +95,12 @@ async function collectUrls() {
       const { data, error } = await db
         .from(table)
         .select(column)
-        .like(column, `${OLD_HOST}%`)
+        .like(column, `${OLD_HOST}/%`)
         .range(from, from + page - 1);
-      if (error) {
-        console.warn(`  ! ${table}.${column}: ${error.message}`);
-        break;
-      }
+      if (error) throw new Error(`Could not read ${table}.${column}: ${error.message}`);
       for (const row of data ?? []) {
         const v = row[column];
-        if (typeof v === "string" && v.startsWith(OLD_HOST)) urls.add(v);
+        if (typeof v === "string" && v.startsWith(`${OLD_HOST}/`)) urls.add(v);
       }
       if (!data || data.length < page) break;
       from += page;
@@ -72,6 +109,7 @@ async function collectUrls() {
   return [...urls];
 }
 
+/** `https://api.wsgpolar.me/v1/images/abc.png` -> `abc.png` */
 function keyFor(url) {
   const m = url.match(/\/v1\/images\/([^/?#]+)$/);
   return m ? decodeURIComponent(m[1]) : null;
@@ -172,19 +210,19 @@ async function rewrite() {
       const { data, error } = await db
         .from(table)
         .select(`${pk}, ${column}`)
-        .like(column, `${from}%`)
+        .like(column, `${from}/%`)
         .range(start, start + page - 1);
-      if (error) { console.warn(`  ! ${table}.${column}: ${error.message}`); break; }
+      if (error) throw new Error(`Could not read ${table}.${column}: ${error.message}`);
       if (!data || data.length === 0) break;
 
       for (const row of data) {
         const next = row[column].replace(from, to);
         const { error: upErr } = await db
           .from(table).update({ [column]: next }).eq(pk, row[pk]);
-        if (upErr) console.warn(`  ! ${table}.${row[pk]}: ${upErr.message}`);
-        else changed++;
+        if (upErr) throw new Error(`Could not rewrite ${table}.${row[pk]}: ${upErr.message}`);
+        changed++;
       }
-
+      // Rows just updated no longer match the filter, so the window stays at 0.
       if (data.length < page) break;
     }
     if (changed) console.log(`  ${table}.${column}: ${changed}`);
