@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,7 +59,11 @@ fun NotesScreen(app: AppState) {
         notes.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No notes yet", color = palette.textMuted, fontSize = 15.sp)
         }
-        else -> LazyColumn(Modifier.fillMaxSize().background(palette.background)) {
+        else -> LazyColumn(
+            Modifier.fillMaxSize().background(palette.background),
+            // Clears the floating dock, which would otherwise sit on the last note.
+            contentPadding = PaddingValues(bottom = 96.dp),
+        ) {
             items(notes, key = { it.id }) { note ->
                 NoteRow(note)
             }
@@ -104,7 +109,9 @@ fun YouScreen(app: AppState) {
         Modifier
             .fillMaxSize()
             .background(palette.background)
-            .padding(24.dp),
+            // Extra at the bottom so the sign-out button clears the dock, which
+            // was sitting right on top of it.
+            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 96.dp),
     ) {
         profile?.let { p ->
             Row(verticalAlignment = Alignment.CenterVertically) {
