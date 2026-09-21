@@ -8,27 +8,6 @@ import type { Profile } from "@/lib/supabase/types";
 const MAX_AVATARS = 3;
 const EXIT_MS = 300;
 
-function TypingDots() {
-  return (
-    <span
-      className="inline-flex items-center gap-[5px] rounded-full bg-bg-accent px-3 py-2"
-      role="status"
-      aria-label="Typing"
-    >
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          aria-hidden
-          className="typing-dot h-[7px] w-[7px] rounded-full bg-text-muted"
-          // A third of the cycle apart, so the pulse travels left to right
-          // evenly instead of the three dots drifting in and out of phase.
-          style={{ animationDelay: `${i * 0.16}s` }}
-        />
-      ))}
-    </span>
-  );
-}
-
 export function TypingIndicator({
   typers,
   members,
@@ -97,7 +76,7 @@ export function TypingIndicator({
 
   return (
     <div
-      className={`flex items-end gap-2 px-4 pb-2 transition-opacity duration-300 ${
+      className={`flex items-center gap-2 px-4 pb-2 transition-opacity duration-300 ${
         active ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
       aria-hidden={!active}
@@ -137,14 +116,13 @@ export function TypingIndicator({
           )}
         </div>
       )}
-      <div className="min-w-0">
-        <TypingDots />
-        {groupContext && active && (
-          <p className="mt-1 truncate text-[11px] text-text-muted">
-            {formatTypingLabel(typers, true)}
-          </p>
-        )}
-      </div>
+      {/* Animated dots are a phone affordance and live in the iOS and Android
+          clients only; web and desktop keep the written label. */}
+      {active && (
+        <p className="min-w-0 truncate text-[13px] leading-5 text-text-muted">
+          {formatTypingLabel(typers, groupContext)}
+        </p>
+      )}
     </div>
   );
 }

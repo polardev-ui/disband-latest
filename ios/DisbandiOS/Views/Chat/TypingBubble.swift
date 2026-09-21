@@ -65,8 +65,13 @@ struct TypingBubble: View {
 }
 
 private struct TypingDots: View {
-    @State private var phase = 0
-    @State private var timer: Timer?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulsing = false
+
+    /// A third of the cycle apart, so the pulse travels left to right evenly
+    /// instead of the three dots drifting in and out of phase.
+    private let cycle = 1.2
+    private let stagger = 0.16
 
     var body: some View {
         HStack(spacing: 4) {
@@ -74,22 +79,24 @@ private struct TypingDots: View {
                 Circle()
                     .fill(Brand.textMuted)
                     .frame(width: 6, height: 6)
-                    .opacity(phase == i ? 1 : 0.35)
-                    .offset(y: phase == i ? -3 : 0)
+                    // Scale and opacity rather than an offset: the old version
+                    // moved each dot up 3px, which shifted the baseline and read
+                    // as a jitter next to text. Reduce Motion keeps the fade —
+                    // it still says "someone is typing" — and drops the scale.
+                    .scaleEffect(reduceMotion ? 1 : (pulsing ? 1 : 0.72))
+                    .opacity(pulsing ? 1 : 0.35)
+                    .animation(
+                        .easeInOut(duration: cycle / 2)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * stagger),
+                        value: pulsing
+                    )
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(Brand.elevated, in: Capsule())
-        .onAppear {
-            timer?.invalidate()
-            timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
-                phase = (phase + 1) % 3
-            }
-        }
-        .onDisappear {
-            timer?.invalidate()
-            timer = nil
-        }
+        .onAppear { pulsing = true }
+        .onDisappear { pulsing = false }
     }
 }
