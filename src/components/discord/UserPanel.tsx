@@ -96,41 +96,37 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         </div>
       </button>
 
-      {/* Mic/deafen only act while in voice: outside a channel they muted
-          with no visible effect, which read as broken buttons. */}
-      {voiceJoinedChannelId ? (
-        <>
-          <Tooltip label={micMuted ? "Unmute" : "Mute"} side="top">
-            <button
-              type="button"
-              aria-pressed={micMuted}
-              onClick={() => setMicMuted(!micMuted)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
-                micMuted ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
-              }`}
-            >
-              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
-            </button>
-          </Tooltip>
+      {/* Mic/deafen controls always visible — work anywhere via app state */}
+      <Tooltip label={micMuted ? "Unmute" : "Mute"} side="top">
+        <button
+          type="button"
+          aria-pressed={micMuted}
+          onClick={() => setMicMuted(!micMuted)}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
+            micMuted ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
+          }`}
+        >
+          {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
+        </button>
+      </Tooltip>
 
-          <Tooltip label={deafened ? "Undeafen" : "Deafen"} side="top">
-            <button
-              type="button"
-              aria-pressed={deafened}
-              onClick={() => {
-                const next = !deafened;
-                setDeafened(next);
-                if (next) setMicMuted(true);
-              }}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
-                deafened ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
-              }`}
-            >
-              {deafened ? <IconHeadphonesOff size={20} /> : <IconHeadphones size={20} />}
-            </button>
-          </Tooltip>
-        </>
-      ) : null}
+      <Tooltip label={deafened ? "Undeafen" : "Deafen"} side="top">
+        <button
+          type="button"
+          aria-pressed={deafened}
+          onClick={() => {
+            const next = !deafened;
+            setDeafened(next);
+            if (next) setMicMuted(true);
+          }}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
+            deafened ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
+          }`}
+        >
+          {deafened ? <IconHeadphonesOff size={20} /> : <IconHeadphones size={20} />}
+        </button>
+      </Tooltip>
+
 
       <Tooltip label="User Settings" side="top">
         <button
