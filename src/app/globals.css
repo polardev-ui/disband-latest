@@ -330,39 +330,6 @@ img.twemoji {
   animation: call-enter 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 
-/* Dots breathe in place rather than hopping. The old version translated each
-   dot up 3px, which moved the baseline and read as a jitter next to text; a
-   scale and opacity pulse carries the same "still typing" meaning and sits
-   still. */
-@keyframes typing-dot {
-  0%, 70%, 100% {
-    transform: scale(0.72);
-    opacity: 0.35;
-  }
-  30% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.typing-dot {
-  animation: typing-dot 1.4s cubic-bezier(0.45, 0, 0.35, 1) infinite;
-  will-change: transform, opacity;
-}
-
-/* Motion-sensitive readers still need to know someone is typing, so the dots
-   stay visible and fade gently instead of pulsing. */
-@media (prefers-reduced-motion: reduce) {
-  @keyframes typing-dot {
-    0%, 100% { transform: scale(1); opacity: 0.4; }
-    50% { transform: scale(1); opacity: 0.75; }
-  }
-  .typing-dot {
-    animation-duration: 2.4s;
-    animation-timing-function: ease-in-out;
-  }
-}
-
 @keyframes avatar-pop {
   from {
     transform: scale(0.4);
