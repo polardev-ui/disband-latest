@@ -1450,79 +1450,92 @@ export function DiscordApp() {
         )
       ) : (
         <>
-          <div className="relative flex flex-col h-full min-w-0">
-            <ServerList
-              servers={app.servers}
-              activeServerId={app.activeServerId}
-              viewMode={app.viewMode}
-              dmUnreads={app.dmUnreads}
-              activeDmThreadId={app.activeDmThreadId}
-              serverUnreadIds={app.serverUnreadIds}
-              folders={app.serverFolders}
-              listState={app.serverListState}
-              onSelectHome={app.setViewHome}
-              onSelectServer={(id) => void app.selectServer(id)}
-              onSelectDmThread={(id) => void app.selectDmThread(id)}
-              onCreateServer={() => setCreateServerOpen(true)}
-              onDiscover={app.setViewDiscover}
-              onServerContext={handleServerContext}
-              onFolderContext={handleFolderContext}
-              onReorderServers={handleReorderServers}
-              onReorderFolders={handleReorderFolders}
-            />
+          {/* A column so the UserPanel can span the rail and the panel beside
+              it. The rail and the panel are a ROW inside it — nesting them
+              directly in the column stacked them vertically, which collapsed
+              the panel to its header.
 
-            {app.viewMode === "discover" ? (
-              <div className="flex-1 min-h-0">
-                <DiscoverSidebar
-                  tab={discoverTab}
-                  onTabChange={setDiscoverTab}
-                  query={discoverQuery}
-                  onQueryChange={setDiscoverQuery}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-                />
-              </div>
-            ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
-              <div className="flex-1 min-h-0">
-                <HomePanel
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-                  onFriendClick={(id) => {
-                    const f = app.friends.find((x) => x.id === id);
-                    if (f) openProfile(f);
-                  }}
-                  onGroupContext={handleGroupContext}
-                  onOpenSubscription={() => setSubscriptionOpen(true)}
-                />
-              </div>
-            ) : (
-              <div className="flex-1 min-h-0">
-                <ChannelList
-                  title={app.activeServer?.name ?? "Space"}
-                  verified={app.activeServer?.verified}
-                  categories={app.categories}
-                  channels={app.channels}
-                  activeChannelId={app.activeChannelId}
-                  getUnreadCount={app.getChannelUnreadCount}
-                  getMentionCount={app.getChannelMentionCount}
-                  canManageChannels={canManageChannels}
-                  voicePresence={serverVoicePresence.byChannel}
-                  voiceStartTimes={serverVoicePresence.startTimes}
-                  onSelectChannel={handleSelectChannel}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
-                  onOpenServerSettings={() => setServerSettingsOpen(true)}
-                  onChannelContext={handleChannelContext}
-                  onCategoryContext={handleCategoryContext}
-                  onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
-                  onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
-                  onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
-                  onCreateCategory={(name) => app.createCategory(name)}
-                  catalystCount={app.activeServer ? app.catalystCounts[app.activeServer.id] ?? 0 : 0}
-                  onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
-                />
-              </div>
-            )}
+              The width is pinned to the rail (72px) plus a panel (w-60 = 240px)
+              rather than left to auto. On auto the column takes its widest
+              child's max-content, and the UserPanel's name and custom status
+              have no natural limit — a long status widened the whole column and
+              opened a gap beside the chat. A definite width is also what lets
+              the `truncate` inside the UserPanel do anything at all. */}
+          <div className="relative flex h-full min-h-0 w-[312px] shrink-0 flex-col">
+            <div className="flex min-h-0 flex-1">
+              <ServerList
+                servers={app.servers}
+                activeServerId={app.activeServerId}
+                viewMode={app.viewMode}
+                dmUnreads={app.dmUnreads}
+                activeDmThreadId={app.activeDmThreadId}
+                serverUnreadIds={app.serverUnreadIds}
+                folders={app.serverFolders}
+                listState={app.serverListState}
+                onSelectHome={app.setViewHome}
+                onSelectServer={(id) => void app.selectServer(id)}
+                onSelectDmThread={(id) => void app.selectDmThread(id)}
+                onCreateServer={() => setCreateServerOpen(true)}
+                onDiscover={app.setViewDiscover}
+                onServerContext={handleServerContext}
+                onFolderContext={handleFolderContext}
+                onReorderServers={handleReorderServers}
+                onReorderFolders={handleReorderFolders}
+              />
+
+              {app.viewMode === "discover" ? (
+                <div className="flex min-h-0">
+                  <DiscoverSidebar
+                    tab={discoverTab}
+                    onTabChange={setDiscoverTab}
+                    query={discoverQuery}
+                    onQueryChange={setDiscoverQuery}
+                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                  />
+                </div>
+              ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
+                <div className="flex min-h-0">
+                  <HomePanel
+                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                    onFriendClick={(id) => {
+                      const f = app.friends.find((x) => x.id === id);
+                      if (f) openProfile(f);
+                    }}
+                    onGroupContext={handleGroupContext}
+                    onOpenSubscription={() => setSubscriptionOpen(true)}
+                  />
+                </div>
+              ) : (
+                <div className="flex min-h-0">
+                  <ChannelList
+                    title={app.activeServer?.name ?? "Space"}
+                    verified={app.activeServer?.verified}
+                    categories={app.categories}
+                    channels={app.channels}
+                    activeChannelId={app.activeChannelId}
+                    getUnreadCount={app.getChannelUnreadCount}
+                    getMentionCount={app.getChannelMentionCount}
+                    canManageChannels={canManageChannels}
+                    voicePresence={serverVoicePresence.byChannel}
+                    voiceStartTimes={serverVoicePresence.startTimes}
+                    onSelectChannel={handleSelectChannel}
+                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
+                    onOpenServerSettings={() => setServerSettingsOpen(true)}
+                    onChannelContext={handleChannelContext}
+                    onCategoryContext={handleCategoryContext}
+                    onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
+                    onMoveCategory={(categoryId, index) => void app.moveCategory(categoryId, index)}
+                    onCreateChannel={(name, type, categoryId) => app.createChannel({ name, type, categoryId })}
+                    onCreateCategory={(name) => app.createCategory(name)}
+                    catalystCount={app.activeServer ? app.catalystCounts[app.activeServer.id] ?? 0 : 0}
+                    onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
+                  />
+                </div>
+              )}
+            </div>
             <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
           </div>
         </>
