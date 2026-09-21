@@ -7,10 +7,16 @@ import urllib.request
 from .errors import AuthError, HttpError, PermissionError, RateLimitError
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class REST:
     def __init__(self, client):
         self.client = client
         self.base_url = client.base_url
+        self.opener = urllib.request.build_opener(_NoRedirect)
 
     def _headers(self):
         return {
@@ -52,7 +58,7 @@ class REST:
             method=method,
         )
         try:
-            with urllib.request.urlopen(req) as resp:
+            with self.opener.open(req, timeout=max(float(self.client.gateway_timeout) + 10.0, 30.0)) as resp:
                 return self._parse(resp, resp.read())
         except urllib.error.HTTPError as e:
             return self._parse(e, e.read())
