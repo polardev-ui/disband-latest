@@ -98,6 +98,7 @@ class CallManager(
     private var ringWatchdog: Job? = null
     private var engine: WebRTCEngine? = null
     private var sendChannel: RealtimeChannel? = null
+    private var ongoingNotificationId: Int? = null
 
     private val turnService = TurnService()
 
@@ -131,7 +132,7 @@ class CallManager(
                     // subscribes, which is what made this look one-directional.
                     val signals = ch.broadcastFlow<CallSignal>("call")
                     val pump = launch { signals.collect { handleSignal(it) } }
-                    ch.subscribe()
+                    ch.subscribe(blockUntilSubscribed = true)
                     backoff = 1_000L
                     pump.join()
                 } catch (_: Exception) {
@@ -168,10 +169,24 @@ class CallManager(
         _callNotice.value = null
         _error.value = null
         armRingWatchdog()
+        showOngoingNotification(title = "Calling ${peer.name}", body = peer.name, ongoing = true)
         if (soundEnabled()) CallTones.startCallingTone()
-        send(peer.id, CallSignal(type = "ring", from = uid, to = peer.id, callId = callId,
-            callerName = myName))
+        val ring = CallSignal(type = "ring", from = uid, to = peer.id, callId = callId, callerName = myName)
+        // Realtime ring + FCM push — either can wake the callee. Retry ring
+        // because a single broadcast is lossy on mobile (doze/brief disconnect).
+        send(peer.id, ring)
         fireCallPush(callId = callId, calleeId = peer.id, callerName = myName)
+        // Retry ring a couple times if still outgoing (callee didn't answer yet)
+        scope.launch {
+            repeat(2) { i ->
+                kotlinx.coroutines.delay(1800L + i * 1000L)
+                if (_phase.value == CallPhase.Outgoing && activeCallId == callId) {
+                    send(peer.id, ring)
+                    // re-push in case FCM was throttled the first time
+                    if (i == 1) fireCallPush(callId = callId, calleeId = peer.id, callerName = myName)
+                }
+            }
+        }
     }
 
     suspend fun acceptCall(call: IncomingCall) {
@@ -191,6 +206,17 @@ class CallManager(
             callId = call.callId, rejecterName = myName))
         send(uid, CallSignal(type = "handled", from = uid, to = uid, callId = call.callId))
         resetInternal()
+    }
+
+    /** "Hang up" on the call notification. */
+    fun hangUpFromNotification() {
+        scope.launch { runCatching { endCall() } }
+    }
+
+    /** "Answer" on an incoming-call notification. */
+    fun answerFromNotification() {
+        val call = _incoming.value ?: return
+        scope.launch { runCatching { acceptCall(call) } }
     }
 
     suspend fun endCall() {
@@ -249,6 +275,8 @@ class CallManager(
         _incoming.value = call
         _phase.value = CallPhase.Incoming
         armRingWatchdog()
+        showOngoingNotification(title = "Incoming call", body = call.callerName, ongoing = false, isIncoming = true,
+            callId = call.callId, fromId = call.fromId)
         if (soundEnabled()) {
             CallTones.startRingtone()
             CallHaptics.startRingVibration(appContext, scope)
@@ -310,15 +338,35 @@ class CallManager(
 
     private suspend fun send(targetId: String, signal: CallSignal) {
         val uid = userId ?: return
-        val channel = client.channel("call-user:$targetId") {
-            broadcast { acknowledgeBroadcasts = true }
+        var lastError: Exception? = null
+        repeat(2) { attempt ->
+            try {
+                val channel = client.channel("call-user:$targetId") {
+                    broadcast { acknowledgeBroadcasts = false }
+                }
+                // blockUntilSubscribed: supabase-kt's subscribe() returns
+                // before the JOIN completes by default, and a broadcast sent on
+                // a channel that has not joined yet is silently dropped. That
+                // is what made a desktop -> Android call connect on the phone
+                // and hang forever on the PC: the phone's "accept" never left.
+                kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                    channel.subscribe(blockUntilSubscribed = true)
+                }
+                try {
+                    channel.broadcast("call", signal)
+                    // Let the frame reach the socket before tearing the channel
+                    // down; unsubscribing immediately can cut it short.
+                    kotlinx.coroutines.delay(120)
+                } finally {
+                    runCatching { channel.unsubscribe() }
+                }
+                return
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt == 0) kotlinx.coroutines.delay(600)
+            }
         }
-        channel.subscribe()
-        try {
-            channel.broadcast("call", signal)
-        } finally {
-            channel.unsubscribe()
-        }
+        android.util.Log.w("CallManager", "send ${signal.type} to $targetId failed: ${lastError?.message}")
     }
 
     // MARK: - Signal bus
@@ -330,6 +378,7 @@ class CallManager(
         _phase.value = CallPhase.Active
         _connectedAt.value = System.currentTimeMillis()
         _error.value = null
+        showOngoingNotification(title = "Ongoing call", body = _activePeer.value?.name ?: peerId, ongoing = true)
         CallTones.playConnected()
 
         val servers = runCatching { turnService.iceServers() }.getOrElse { AppConfig.baseIceServers }
@@ -363,13 +412,19 @@ class CallManager(
         }
 
         try {
-            val signalChannel = client.channel("call:$callId") { broadcast { } }
-            signalChannel.subscribe()
+            val signalChannel = client.channel("call:$callId") { broadcast { acknowledgeBroadcasts = false } }
+            // Wait for the JOIN, rather than hoping a timeout covers it: the
+            // offer/answer and every ICE candidate ride this channel.
+            kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                signalChannel.subscribe(blockUntilSubscribed = true)
+            }
             sendChannel = signalChannel
             signalJob?.cancel()
             signalJob = scope.launch {
                 signalChannel.broadcastFlow<CallSignal>("call").collect { handleCallSignal(it) }
             }
+            // small yield so collector is running before we send
+            kotlinx.coroutines.delay(200)
             if (asCaller) {
                 val offer = engine.makeOffer()
                 sendOnSignalChannel(
@@ -384,6 +439,8 @@ class CallManager(
     }
 
     private suspend fun handleCallSignal(signal: CallSignal) {
+        // Ignore our own echoes (server may reflect with self:true).
+        if (signal.from == userId) return
         when (signal.type) {
             "offer" -> {
                 val sdp = signal.sdp ?: return
@@ -414,7 +471,11 @@ class CallManager(
 
     private suspend fun sendOnSignalChannel(signal: CallSignal) {
         val channel = sendChannel ?: return
-        runCatching { channel.broadcast("call", signal) }
+        var ok = runCatching { channel.broadcast("call", signal) }.isSuccess
+        if (!ok) {
+            kotlinx.coroutines.delay(400)
+            runCatching { channel.broadcast("call", signal) }
+        }
     }
 
     // MARK: - Watchdog / reset / helpers
@@ -439,11 +500,17 @@ class CallManager(
         ringWatchdog?.cancel()
         ringWatchdog = null
         stopAudioAlerts()
+        cancelOngoingNotification()
         runCatching { engine?.dispose() }
         engine = null
         signalJob?.cancel()
         signalJob = null
-        sendChannel?.let { ch -> scope.launch { runCatching { ch.unsubscribe() } } }
+        // Reusing a deterministic callId (alice:bob) immediately after hangup
+        // raced the async unsubscribe, so the second call's offer was sent on a
+        // stale channel. Best-effort synchronous unsubscribe with fallback.
+        try { kotlinx.coroutines.runBlocking { sendChannel?.unsubscribe() } } catch (_: Exception) {
+            sendChannel?.let { ch -> scope.launch { runCatching { ch.unsubscribe() } } }
+        }
         sendChannel = null
         _phase.value = CallPhase.Idle
         _incoming.value = null
@@ -454,6 +521,28 @@ class CallManager(
         _micMuted.value = false
         _deafened.value = false
         _speakerOn.value = false
+    }
+
+    private fun showOngoingNotification(title: String, body: String, ongoing: Boolean,
+                                         isIncoming: Boolean = false, callId: String? = null, fromId: String? = null) {
+        // A foreground service, not a bare notify(): Android freezes a
+        // backgrounded process and takes the call down with it, and only a
+        // CallStyle notification gets the system's call treatment on the lock
+        // screen. CallForegroundService owns both.
+        CallForegroundService.attach(this)
+        CallForegroundService.start(
+            context = appContext,
+            title = title,
+            caller = body,
+            incoming = isIncoming,
+        )
+        ongoingNotificationId = 3001
+    }
+
+    private fun cancelOngoingNotification() {
+        ongoingNotificationId = null
+        CallForegroundService.stop(appContext)
+        CallForegroundService.detach(this)
     }
 
     private fun soundEnabled(): Boolean = true

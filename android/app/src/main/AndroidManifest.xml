@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -53,6 +58,12 @@
                 <data android:scheme="disband" />
             </intent-filter>
         </activity>
+
+        <!-- Keeps a call running and visible while the app is backgrounded. -->
+        <service
+            android:name=".call.CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <service
             android:name=".data.MessagingService"
