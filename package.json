@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "2.29.11",
+  "version": "2.29.12",
   "author": "Josh Clark <joshclark@wsgpolar.me>",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
@@ -56,9 +56,11 @@
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3"
   },
-  "overrides": {
-    "postcss": "^8.5.28",
-    "nanoid@3": "^3.3.18",
-    "fast-uri@3": "^3.1.7"
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.28",
+      "nanoid@3": "^3.3.18",
+      "fast-uri@3": "^3.1.7"
+    }
   }
 }
