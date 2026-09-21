@@ -143,6 +143,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   // Holds the user's position while async content (images, link previews)
   // settles after older messages load, so the view doesn't jump around.
   const topAnchorRef = useRef<{ dist: number; until: number } | null>(null);
+  // Opening a channel scrolls to the bottom once, but avatars, images, link
+  // previews and embeds resolve afterwards and grow the content underneath
+  // that position. While this is set, growth re-pins to the bottom instead of
+  // leaving the view stranded part-way up. Any deliberate move away from the
+  // bottom — a scroll, a jump to a message, paginating older history — clears
+  // it, so it only ever covers the settling-in period.
+  const pinToBottomRef = useRef(false);
   // Own-send intent: a user's own message must always come into view, even
   // if they were reading slightly scrolled up (where the follow gate below
   // would otherwise hold their position).
@@ -209,6 +216,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     prevFirstIdRef.current = null;
     prevMessageCountRef.current = 0;
     scrollRestoreRef.current = null;
+    pinToBottomRef.current = false;
   }, [channelName, messageContext, typingScope?.id, readCursorScope?.kind, readCursorScope?.id]);
 
   useEffect(() => {
@@ -263,8 +271,10 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         tickingRef.current = false;
         if (Date.now() - programmaticScrollRef.current < 250) return;
         stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-        // The user took over: cancel any top-anchoring from a paginate.
+        // The user took over: cancel any top-anchoring from a paginate, and
+        // stop re-pinning to the bottom as late content loads.
         topAnchorRef.current = null;
+        pinToBottomRef.current = false;
         if (el.scrollTop < 96) void requestLoadMore();
       });
     };
@@ -294,6 +304,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       // would otherwise jump the view on every load. Any manual scroll
       // cancels the anchor (see the scroll handler).
       topAnchorRef.current = { dist, until: Date.now() + 1500 };
+      pinToBottomRef.current = false;
       programmaticScrollRef.current = Date.now();
       scrollRestoreRef.current = null;
       return;
@@ -305,6 +316,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     // edits and reaction-only updates never steal the scroll.
     const firstLoad = prevCount === 0 && count > 0;
     const appended = count > prevCount;
+    if (firstLoad) pinToBottomRef.current = true;
     scrollToBottom("auto", firstLoad || followOnceRef.current || (appended && stickToBottomRef.current));
     followOnceRef.current = false;
   }, [messages, scrollToBottom]);
@@ -321,7 +333,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         return;
       }
       topAnchorRef.current = null;
-      scrollToBottom();
+      // Still settling after opening the channel: follow the growth all the
+      // way down. Unforced, scrollToBottom gives up once the content has
+      // grown more than NEAR_BOTTOM_PX, which is why a channel with images
+      // used to land just short of the end.
+      scrollToBottom("auto", pinToBottomRef.current);
     });
     ro.observe(target);
     return () => ro.disconnect();
@@ -388,6 +404,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       ?? document.getElementById(`msg-${messageId}`);
     if (!node || !(node instanceof HTMLElement)) return;
     programmaticScrollRef.current = Date.now();
+    pinToBottomRef.current = false;
     if (scroller && scroller.contains(node)) {
       // offsetTop is relative to the offsetParent chain, not the scroller:
       // walk up accumulating so intermediate positioned rows don't skew it.
