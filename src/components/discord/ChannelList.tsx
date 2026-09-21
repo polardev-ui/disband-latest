@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserPanel } from "./UserPanel";
 import { NotificationBell } from "./NotificationBell";
 import { CallIndicator } from "./CallIndicator";
 import { Tooltip } from "./Tooltip";
@@ -41,7 +40,6 @@ interface ChannelListProps {
   onOpenServerSettings?: () => void;
   onChannelContext?: (channel: Channel, x: number, y: number) => void;
   onCategoryContext?: (category: ChannelCategory, x: number, y: number) => void;
-  onUserPanelContext?: (e: React.MouseEvent) => void;
   showServerHeader?: boolean;
   verified?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
@@ -100,7 +98,6 @@ export function ChannelList({
   onOpenServerSettings,
   onChannelContext,
   onCategoryContext,
-  onUserPanelContext,
   showServerHeader = true,
   verified,
   onMoveChannel,
@@ -637,7 +634,6 @@ export function ChannelList({
       )}
 
       <CallIndicator />
-      <UserPanel onOpenSettings={onOpenSettings} onOpenProfile={onOpenProfile} onContextMenu={onUserPanelContext} />
     </aside>
   );
 }

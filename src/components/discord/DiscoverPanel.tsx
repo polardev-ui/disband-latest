@@ -6,7 +6,6 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconClose, IconFriends, IconSearch, IconCompass, IconSparkle, IconVerified } from "@/components/icons";
 import { serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
-import { UserPanel } from "./UserPanel";
 import { CallIndicator } from "./CallIndicator";
 import { Tooltip } from "./Tooltip";
 
@@ -63,7 +62,6 @@ interface DiscoverSidebarProps {
   onQueryChange: (q: string) => void;
   onOpenSettings: () => void;
   onOpenProfile?: () => void;
-  onUserPanelContext?: (e: React.MouseEvent) => void;
 }
 
 export function DiscoverSidebar({
@@ -73,7 +71,6 @@ export function DiscoverSidebar({
   onQueryChange,
   onOpenSettings,
   onOpenProfile,
-  onUserPanelContext,
 }: DiscoverSidebarProps) {
   const tabs: { id: DiscoverTab; label: string; icon: React.ReactNode; hint: string }[] = [
     {
@@ -147,11 +144,6 @@ export function DiscoverSidebar({
       </nav>
 
       <CallIndicator />
-      <UserPanel
-        onOpenSettings={onOpenSettings}
-        onOpenProfile={onOpenProfile}
-        onContextMenu={onUserPanelContext}
-      />
     </aside>
   );
 }
@@ -323,3 +315,4 @@ export function DiscoverPanel({ tab, query }: { tab: DiscoverTab; query: string 
     </main>
   );
 }
+

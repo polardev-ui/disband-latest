@@ -5,7 +5,6 @@ import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { IconFriends, IconGroup, IconPlus, IconNotes, IconCrown } from "@/components/icons";
-import { UserPanel } from "./UserPanel";
 import { NotificationBell } from "./NotificationBell";
 import { CallIndicator } from "./CallIndicator";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
@@ -21,7 +20,6 @@ const STATUS_BG = {
 interface HomePanelProps {
   onOpenSettings: () => void;
   onOpenProfile?: () => void;
-  onUserPanelContext?: (e: React.MouseEvent) => void;
   onFriendClick?: (friendId: string) => void;
   onGroupContext?: (group: GroupChatWithMembers, x: number, y: number) => void;
   onOpenSubscription?: () => void;
@@ -82,7 +80,6 @@ function DmRowBadge({ count }: { count: number }) {
 export function HomePanel({
   onOpenSettings,
   onOpenProfile,
-  onUserPanelContext,
   onGroupContext,
   onOpenSubscription,
 }: HomePanelProps) {
@@ -251,8 +248,8 @@ export function HomePanel({
       </div>
 
       <CallIndicator />
-      <UserPanel onOpenSettings={onOpenSettings} onOpenProfile={onOpenProfile} onContextMenu={onUserPanelContext} />
       <CreateGroupChatModal open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </aside>
   );
 }
+
