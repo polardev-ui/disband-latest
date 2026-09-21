@@ -26,6 +26,14 @@ async function fetchJson(url: string, timeoutMs = 5000): Promise<{ ok: boolean; 
   }
 }
 
+function isVerdict(data: unknown): boolean {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as { success?: unknown }).success === true
+  );
+}
+
 /**
  * Strict VPN/proxy check with fail-closed semantics.
  *
@@ -49,7 +57,9 @@ export async function checkVpnStrict(ip: string): Promise<VpnCheckResult> {
     const r = await fetchJson(
       `https://ipqualityscore.com/api/json/ip/${apiKey}/${encodeURIComponent(ip)}?strictness=1&allow_public_access_points=false&fast=true`,
     );
-    if (r.ok) {
+    // NB: a 200 WITHOUT a verdict (success:false, quota exhausted, requestor
+    // blocklisted) must NOT read as clean — fall through to the secondary.
+    if (r.ok && isVerdict(r.data)) {
       const data = r.data as { vpn?: boolean; proxy?: boolean; tor?: boolean; active_vpn?: boolean };
       const blocked = !!(data.vpn || data.proxy || data.tor || data.active_vpn);
       vpnCache.set(ip, { result: blocked, expires: Date.now() + VPN_CACHE_TTL_MS });
@@ -83,7 +93,7 @@ export async function isVpnOrProxy(ip: string): Promise<boolean> {
     const r = await fetchJson(
       `https://ipqualityscore.com/api/json/ip/${apiKey}/${encodeURIComponent(ip)}?strictness=1&allow_public_access_points=false&fast=true`,
     );
-    if (r.ok) {
+    if (r.ok && isVerdict(r.data)) {
       const data = r.data as { vpn?: boolean; proxy?: boolean; tor?: boolean; active_vpn?: boolean };
       return !!(data.vpn || data.proxy || data.tor || data.active_vpn);
     }
