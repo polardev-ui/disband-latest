@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
-import { IconFriends, IconGroup, IconPlus, IconNotes, IconCrown } from "@/components/icons";
+import { IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
 import { NotificationBell } from "./NotificationBell";
 import { CallIndicator } from "./CallIndicator";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
@@ -23,6 +23,7 @@ interface HomePanelProps {
   onFriendClick?: (friendId: string) => void;
   onGroupContext?: (group: GroupChatWithMembers, x: number, y: number) => void;
   onOpenSubscription?: () => void;
+  onOpenShop?: () => void;
 }
 
 function NavRow({
@@ -82,6 +83,7 @@ export function HomePanel({
   onOpenProfile,
   onGroupContext,
   onOpenSubscription,
+  onOpenShop,
 }: HomePanelProps) {
   const {
     pendingIncoming,
@@ -147,6 +149,11 @@ export function HomePanel({
           label="Disband Aero"
           accent
           onClick={() => onOpenSubscription?.()}
+        />
+        <NavRow
+          icon={<IconSparkle size={18} />}
+          label="Disband Shop"
+          onClick={() => onOpenShop?.()}
         />
       </nav>
 

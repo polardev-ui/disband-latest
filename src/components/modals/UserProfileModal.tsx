@@ -3,6 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 
 import { useEffect, useState } from "react";
+import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconFriends, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
@@ -202,7 +203,11 @@ export function UserProfileModal({
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} aria-label="Close" />
-      <div role="dialog" aria-modal="true" aria-label={title} className="modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
+      <div role="dialog" aria-modal="true" aria-label={title} className="fx-overlay-host modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
+        {/* A purchased profile effect plays over the whole card while it is
+            open, and steps back to 45% on hover so what is underneath stays
+            readable. It never takes a click. */}
+        <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
         <ProfileBanner profile={profile} />
 
         <button

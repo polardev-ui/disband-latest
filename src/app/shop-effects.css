@@ -1,0 +1,829 @@
+/* Disband Shop — the cosmetics themselves.
+ *
+ * Three families, one file, keyed by the `className` in src/lib/shop.ts:
+ *   .fx-name-*     animate a display name wherever it renders
+ *   .fx-ring-*     a border around an avatar; idle is calm, hover animates
+ *   .fx-overlay-*  plays over a profile card; dims to 45% while hovered so the
+ *                  card underneath stays readable
+ *
+ * Everything here is GPU-cheap: gradients, transforms and opacity. No effect
+ * animates layout properties. Every family is disabled under
+ * prefers-reduced-motion, which leaves the colour but stops the movement.
+ */
+
+/* ============================================================ name effects */
+
+.fx-name {
+  display: inline-block;
+}
+
+/* Gradient-text effects share this base: the text is a window onto a moving
+   background, so the paint has to be clipped to the glyphs. */
+.fx-name-shimmer,
+.fx-name-rainbow,
+.fx-name-aurora,
+.fx-name-ember,
+.fx-name-frost,
+.fx-name-chrome,
+.fx-name-gold,
+.fx-name-toxic,
+.fx-name-sunset,
+.fx-name-starlight {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-size: 250% 100%;
+  animation: fx-slide 4s linear infinite;
+}
+
+@keyframes fx-slide {
+  to {
+    background-position: -250% 0;
+  }
+}
+
+.fx-name-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--text-normal) 40%,
+    #ffffff 50%,
+    var(--text-normal) 60%
+  );
+  animation-duration: 3.4s;
+}
+
+.fx-name-rainbow {
+  background-image: linear-gradient(
+    100deg,
+    #ff5f6d, #ffc371, #47e891, #3aa6ff, #a86bff, #ff5f6d
+  );
+  animation-duration: 6s;
+}
+
+.fx-name-aurora {
+  background-image: linear-gradient(100deg, #3ce0b0, #7a5cff, #3ce0b0);
+  animation-duration: 5s;
+}
+
+.fx-name-ember {
+  background-image: linear-gradient(100deg, #ff8a3d, #ff3d3d, #ffb347, #ff8a3d);
+  animation-duration: 4.5s;
+}
+
+.fx-name-frost {
+  background-image: linear-gradient(100deg, #a5e5ff, #ffffff, #7fc7ff, #a5e5ff);
+  animation-duration: 5s;
+}
+
+.fx-name-chrome {
+  background-image: linear-gradient(
+    100deg,
+    #8b93a5, #ffffff 45%, #c9d2e0 55%, #8b93a5
+  );
+  animation-duration: 4s;
+}
+
+.fx-name-gold {
+  background-image: linear-gradient(100deg, #b8860b, #ffe9a3 45%, #ffd24a 55%, #b8860b);
+  animation-duration: 5s;
+}
+
+.fx-name-toxic {
+  background-image: linear-gradient(100deg, #6cff3d, #b6ff7a, #35c400, #6cff3d);
+  animation-duration: 4s;
+  filter: drop-shadow(0 0 5px rgba(108, 255, 61, 0.45));
+}
+
+.fx-name-sunset {
+  background-image: linear-gradient(100deg, #ff9d4d, #ff5f8f, #6a5cff, #ff9d4d);
+  animation-duration: 6s;
+}
+
+.fx-name-starlight {
+  background-image: linear-gradient(
+    100deg,
+    #dfe7ff 35%, #ffffff 48%, #9fb4ff 60%, #dfe7ff
+  );
+  animation-duration: 4.5s;
+}
+
+/* Non-gradient name effects. */
+
+.fx-name-neon {
+  color: #7df9ff;
+  text-shadow:
+    0 0 4px rgba(125, 249, 255, 0.9),
+    0 0 12px rgba(125, 249, 255, 0.55);
+  animation: fx-neon-flicker 4s steps(1, end) infinite;
+}
+
+@keyframes fx-neon-flicker {
+  0%, 92%, 96%, 100% { opacity: 1; }
+  93% { opacity: 0.55; }
+  95% { opacity: 0.8; }
+}
+
+.fx-name-pulse {
+  color: var(--text-normal);
+  animation: fx-name-breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes fx-name-breathe {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+/* Channel-split judder, deliberately rare: it fires for a fraction of a long
+   cycle so a name list does not look broken. */
+.fx-name-glitch {
+  position: relative;
+  color: var(--text-normal);
+  animation: fx-glitch-shift 5s steps(1, end) infinite;
+}
+
+@keyframes fx-glitch-shift {
+  0%, 90%, 100% {
+    text-shadow: none;
+    transform: translateX(0);
+  }
+  91% {
+    text-shadow: -1.5px 0 #ff2f6d, 1.5px 0 #2ff0ff;
+    transform: translateX(1px);
+  }
+  93% {
+    text-shadow: 1.5px 0 #ff2f6d, -1.5px 0 #2ff0ff;
+    transform: translateX(-1px);
+  }
+  95% {
+    text-shadow: -1px 0 #ff2f6d, 1px 0 #2ff0ff;
+    transform: translateX(0.5px);
+  }
+}
+
+.fx-name-vhs {
+  color: #e8e8f0;
+  text-shadow: -1px 0 rgba(255, 0, 80, 0.7), 1px 0 rgba(0, 220, 255, 0.7);
+  animation: fx-vhs-track 3.2s linear infinite;
+}
+
+@keyframes fx-vhs-track {
+  0%, 100% { text-shadow: -1px 0 rgba(255, 0, 80, 0.7), 1px 0 rgba(0, 220, 255, 0.7); }
+  50% { text-shadow: -2px 0 rgba(255, 0, 80, 0.55), 2px 0 rgba(0, 220, 255, 0.55); }
+}
+
+/* Per-letter lift. The component splits the name into spans and sets
+   --fx-i on each, so the delay walks along the word. */
+.fx-name-wave > span {
+  display: inline-block;
+  animation: fx-wave-lift 1.8s ease-in-out infinite;
+  animation-delay: calc(var(--fx-i, 0) * 70ms);
+}
+
+@keyframes fx-wave-lift {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-2.5px); }
+}
+
+/* ============================================================ avatar rings */
+
+/* The ring is drawn by a wrapper around the avatar, not on the avatar itself,
+   so it works at every size the app renders one. */
+.fx-ring {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+  isolation: isolate;
+}
+
+.fx-ring::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  z-index: -1;
+  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
+}
+
+/* Idle is calm; hover is where each ring earns its price. */
+.fx-ring:hover::before {
+  filter: brightness(1.25);
+}
+
+.fx-ring-conic::before {
+  background: conic-gradient(from 0deg, #ff5f6d, #ffc371, #47e891, #3aa6ff, #a86bff, #ff5f6d);
+  animation: fx-spin 6s linear infinite;
+}
+
+.fx-ring-conic:hover::before {
+  animation-duration: 1.6s;
+}
+
+.fx-ring-aurora::before {
+  background: conic-gradient(from 90deg, #3ce0b0, #7a5cff, #1d9bff, #3ce0b0);
+  animation: fx-spin 9s linear infinite;
+}
+
+.fx-ring-aurora:hover::before {
+  animation-duration: 3s;
+}
+
+.fx-ring-gold::before {
+  background: conic-gradient(from 0deg, #8a6a12, #ffe9a3, #d4a92a, #fff3c4, #8a6a12);
+  animation: fx-spin 7s linear infinite;
+}
+
+.fx-ring-gold:hover::before {
+  animation-duration: 2s;
+}
+
+.fx-ring-void::before {
+  background: conic-gradient(from 210deg, #1a0b2e, #6a2fd6, #2a1150, #1a0b2e);
+  animation: fx-spin 11s linear infinite;
+  box-shadow: 0 0 10px rgba(106, 47, 214, 0.5);
+}
+
+.fx-ring-void:hover::before {
+  animation-duration: 3.5s;
+}
+
+.fx-ring-circuit::before {
+  background: repeating-conic-gradient(
+    from 0deg,
+    #17e0a0 0deg 8deg,
+    rgba(23, 224, 160, 0.15) 8deg 22deg
+  );
+  animation: fx-spin 8s linear infinite;
+}
+
+.fx-ring-circuit:hover::before {
+  animation-duration: 1.4s;
+}
+
+.fx-ring-bubble::before {
+  background: conic-gradient(
+    from 45deg,
+    rgba(255, 180, 255, 0.85), rgba(180, 255, 245, 0.85),
+    rgba(255, 245, 170, 0.85), rgba(190, 190, 255, 0.85),
+    rgba(255, 180, 255, 0.85)
+  );
+  animation: fx-spin 10s linear infinite;
+}
+
+.fx-ring-bubble:hover::before {
+  animation-duration: 2.6s;
+}
+
+.fx-ring-flame::before {
+  background: conic-gradient(from 270deg, #ff3d00, #ffb300, #ff6d00, #ff3d00);
+  animation: fx-spin 4s linear infinite, fx-flicker 0.9s ease-in-out infinite;
+}
+
+.fx-ring-flame:hover::before {
+  animation-duration: 1.2s, 0.5s;
+}
+
+@keyframes fx-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.78; }
+}
+
+.fx-ring-frost::before {
+  background: conic-gradient(from 160deg, #9fe0ff, #ffffff, #62b8ff, #9fe0ff);
+  animation: fx-spin 12s linear infinite;
+}
+
+.fx-ring-frost:hover::before {
+  animation-duration: 3s;
+  box-shadow: 0 0 12px rgba(159, 224, 255, 0.6);
+}
+
+.fx-ring-static::before {
+  background: repeating-conic-gradient(
+    from 0deg,
+    #b9c0cc 0deg 3deg,
+    #4a5160 3deg 6deg
+  );
+  animation: fx-spin 2.5s steps(12, end) infinite;
+}
+
+.fx-ring-static:hover::before {
+  animation-duration: 0.6s;
+}
+
+.fx-ring-dashed::before {
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--brand) 0deg 14deg,
+    transparent 14deg 28deg
+  );
+  animation: fx-spin 8s linear infinite;
+}
+
+.fx-ring-dashed:hover::before {
+  animation-duration: 1.2s;
+}
+
+.fx-ring-glow::before {
+  background: var(--brand);
+  filter: blur(5px);
+  opacity: 0.65;
+  animation: fx-halo 3s ease-in-out infinite;
+}
+
+.fx-ring-glow:hover::before {
+  opacity: 0.95;
+}
+
+@keyframes fx-halo {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.09); }
+}
+
+/* Sonar: a second ring expands outward and fades. */
+.fx-ring-pulse::before {
+  background: var(--brand);
+  opacity: 0.55;
+}
+
+.fx-ring-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--brand);
+  z-index: -1;
+  animation: fx-sonar 2.4s ease-out infinite;
+}
+
+.fx-ring-pulse:hover::after {
+  animation-duration: 1.1s;
+}
+
+@keyframes fx-sonar {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* Orbit and sparkle: a small body travelling the circumference. */
+.fx-ring-orbit::before,
+.fx-ring-sparkle::before {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.fx-ring-orbit::after,
+.fx-ring-sparkle::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  z-index: -1;
+  animation: fx-spin 3.5s linear infinite;
+}
+
+.fx-ring-orbit::after {
+  background: radial-gradient(circle at 50% 0%, #ffffff 0 2.5px, transparent 3px);
+}
+
+.fx-ring-sparkle::after {
+  background:
+    radial-gradient(circle at 50% 0%, #fff6b0 0 2px, transparent 2.5px),
+    radial-gradient(circle at 100% 50%, #ffffff 0 1.5px, transparent 2px),
+    radial-gradient(circle at 0% 50%, #cfe6ff 0 1.5px, transparent 2px);
+}
+
+.fx-ring-orbit:hover::after,
+.fx-ring-sparkle:hover::after {
+  animation-duration: 1.2s;
+}
+
+@keyframes fx-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========================================================= profile overlays */
+
+/* Sits over the profile card. Pointer-events off so it never eats a click,
+   and it steps back to 45% while the card is hovered so the content under it
+   stays readable — the transition is what keeps that from being a jolt. */
+.fx-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  opacity: 0.85;
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 5;
+}
+
+.fx-overlay-host:hover .fx-overlay {
+  opacity: 0.45;
+}
+
+.fx-overlay::before,
+.fx-overlay::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+}
+
+@keyframes fx-fall {
+  from { transform: translateY(-20%); }
+  to { transform: translateY(20%); }
+}
+
+@keyframes fx-rise {
+  from { transform: translateY(20%); }
+  to { transform: translateY(-20%); }
+}
+
+@keyframes fx-drift {
+  0% { transform: translate(-4%, -20%); }
+  50% { transform: translate(4%, 0%); }
+  100% { transform: translate(-4%, 20%); }
+}
+
+.fx-overlay-snow::before {
+  background-image:
+    radial-gradient(circle at 20% 10%, #fff 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 30%, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 40% 60%, #fff 0 2px, transparent 3px),
+    radial-gradient(circle at 85% 80%, #fff 0 1.5px, transparent 2.5px);
+  background-size: 140px 140px;
+  animation: fx-fall 9s linear infinite;
+}
+
+.fx-overlay-snow::after {
+  background-image:
+    radial-gradient(circle at 55% 20%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 15% 70%, #fff 0 1.5px, transparent 2px);
+  background-size: 90px 90px;
+  animation: fx-fall 6s linear infinite;
+  opacity: 0.7;
+}
+
+.fx-overlay-embers::before {
+  background-image:
+    radial-gradient(circle at 25% 80%, #ff9d3d 0 2px, transparent 3px),
+    radial-gradient(circle at 65% 60%, #ff5f1f 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 85% 90%, #ffc76b 0 2px, transparent 3px);
+  background-size: 120px 120px;
+  animation: fx-rise 7s linear infinite;
+  filter: blur(0.3px);
+}
+
+.fx-overlay-stars::before {
+  background-image:
+    radial-gradient(circle at 10% 20%, #fff 0 1.5px, transparent 2px),
+    radial-gradient(circle at 45% 55%, #dbe7ff 0 1px, transparent 1.5px),
+    radial-gradient(circle at 80% 15%, #fff 0 1.5px, transparent 2px),
+    radial-gradient(circle at 65% 85%, #cfe0ff 0 1px, transparent 1.5px);
+  background-size: 160px 160px;
+  animation: fx-spin 90s linear infinite;
+}
+
+.fx-overlay-stars::after {
+  background-image: radial-gradient(circle at 30% 40%, #fff 0 1px, transparent 1.5px);
+  background-size: 70px 70px;
+  animation: fx-twinkle 3.5s ease-in-out infinite;
+}
+
+@keyframes fx-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.9; }
+}
+
+.fx-overlay-rain::before {
+  background-image: repeating-linear-gradient(
+    105deg,
+    rgba(170, 210, 255, 0.55) 0 1px,
+    transparent 1px 9px
+  );
+  animation: fx-fall 1.1s linear infinite;
+}
+
+.fx-overlay-petals::before {
+  background-image:
+    radial-gradient(ellipse 4px 2.5px at 20% 15%, #ffb7d5 0 100%, transparent 101%),
+    radial-gradient(ellipse 3px 2px at 70% 45%, #ffd0e4 0 100%, transparent 101%),
+    radial-gradient(ellipse 4px 2.5px at 45% 75%, #ff9ec7 0 100%, transparent 101%);
+  background-size: 130px 130px;
+  animation: fx-drift 8s ease-in-out infinite;
+}
+
+/* Columns, not bands. A single vertical gradient tiles in phase across the
+   whole width and reads as solid horizontal bars, so the trails are split
+   across two layers on different column widths and speeds — which is what
+   makes them look like separate streams falling. */
+.fx-overlay-matrix::before {
+  background-image:
+    linear-gradient(180deg, transparent 0 55%, rgba(0, 255, 120, 0.7) 78%, rgba(180, 255, 210, 0.95) 100%);
+  background-size: 9px 62px;
+  background-repeat: repeat;
+  animation: fx-fall 2.1s linear infinite;
+}
+
+.fx-overlay-matrix::after {
+  background-image:
+    linear-gradient(180deg, transparent 0 60%, rgba(0, 220, 110, 0.5) 85%, rgba(140, 255, 190, 0.8) 100%);
+  background-size: 13px 94px;
+  background-position: 5px 0;
+  background-repeat: repeat;
+  animation: fx-fall 3.3s linear infinite;
+  opacity: 0.75;
+}
+
+.fx-overlay-bubbles::before {
+  background-image:
+    radial-gradient(circle at 25% 80%, rgba(180, 230, 255, 0.75) 0 5px, transparent 6px),
+    radial-gradient(circle at 60% 60%, rgba(200, 240, 255, 0.6) 0 3px, transparent 4px),
+    radial-gradient(circle at 85% 85%, rgba(160, 220, 255, 0.7) 0 4px, transparent 5px);
+  background-size: 140px 140px;
+  animation: fx-rise 8s linear infinite;
+}
+
+.fx-overlay-fireflies::before {
+  background-image:
+    radial-gradient(circle at 30% 40%, #d8ff7a 0 2.5px, transparent 4px),
+    radial-gradient(circle at 75% 65%, #b6ff5a 0 2px, transparent 3.5px);
+  background-size: 150px 150px;
+  animation: fx-drift 6s ease-in-out infinite, fx-twinkle 2.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(200, 255, 120, 0.8));
+}
+
+.fx-overlay-aurora::before {
+  background-image: linear-gradient(
+    160deg,
+    transparent 30%,
+    rgba(60, 224, 176, 0.45) 45%,
+    rgba(122, 92, 255, 0.4) 60%,
+    transparent 75%
+  );
+  background-size: 200% 200%;
+  animation: fx-aurora-drift 11s ease-in-out infinite;
+}
+
+@keyframes fx-aurora-drift {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 100% 60%; }
+}
+
+.fx-overlay-confetti::before {
+  background-image:
+    linear-gradient(45deg, #ff5f6d 0 4px, transparent 4px),
+    linear-gradient(-30deg, #3aa6ff 0 4px, transparent 4px),
+    linear-gradient(15deg, #ffc371 0 4px, transparent 4px),
+    linear-gradient(60deg, #47e891 0 4px, transparent 4px);
+  background-size: 110px 110px;
+  animation: fx-fall 5.5s linear infinite;
+}
+
+.fx-overlay-scanline::before {
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.07) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+.fx-overlay-scanline::after {
+  background-image: linear-gradient(
+    180deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 60%
+  );
+  animation: fx-fall 4s linear infinite;
+}
+
+.fx-overlay-sakura-night::before {
+  background-image:
+    radial-gradient(ellipse 4px 2.5px at 25% 20%, #ffb7d5 0 100%, transparent 101%),
+    radial-gradient(ellipse 3px 2px at 65% 55%, #ffd0e4 0 100%, transparent 101%);
+  background-size: 130px 130px;
+  animation: fx-drift 9s ease-in-out infinite;
+}
+
+.fx-overlay-sakura-night::after {
+  background-image:
+    radial-gradient(circle at 40% 35%, #d8ff7a 0 2px, transparent 3.5px),
+    radial-gradient(circle at 80% 70%, #b6ff5a 0 1.5px, transparent 3px);
+  background-size: 160px 160px;
+  animation: fx-drift 7s ease-in-out infinite reverse, fx-twinkle 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(200, 255, 120, 0.7));
+}
+
+/* =========================================================== reduced motion */
+
+/* Keep the colour, drop the movement. Someone who bought Rainbow should still
+   see a rainbow; they just should not have it swimming at them. */
+@media (prefers-reduced-motion: reduce) {
+  [class*="fx-name-"],
+  [class*="fx-name-"] > span,
+  [class*="fx-ring-"]::before,
+  [class*="fx-ring-"]::after,
+  [class*="fx-overlay-"]::before,
+  [class*="fx-overlay-"]::after {
+    animation: none !important;
+  }
+
+  .fx-overlay {
+    opacity: 0.35;
+  }
+}
+
+/* ==================================================== authored SVG scenes */
+
+/* Motion for the hand-built profile scenes in
+   components/shop/effects/ProfileEffect.tsx. Each element carries its own
+   --d delay so nothing in a scene moves in lockstep — that unison is what
+   made the first, gradient-based pass look automated. */
+
+/* Hydro ---------------------------------------------------------------- */
+
+.fx-svg-swell {
+  animation: fx-svg-swell 7s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes fx-svg-swell {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-8px) scaleY(1.06); }
+}
+
+/* Rise, stretch on the way up, then pop. The scale squash near the top is
+   what makes it read as a water blob rather than a floating circle. */
+.fx-svg-bubble-rise {
+  animation: fx-svg-bubble-rise 6.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: var(--d, 0s);
+  transform-origin: center;
+}
+
+@keyframes fx-svg-bubble-rise {
+  0% { transform: translateY(0) scale(0.4); opacity: 0; }
+  12% { transform: translateY(-20px) scale(1); opacity: 1; }
+  70% { transform: translateY(-190px) scale(1.05, 0.95); opacity: 0.9; }
+  88% { transform: translateY(-250px) scale(1.35, 1.1); opacity: 0.35; }
+  100% { transform: translateY(-270px) scale(1.7, 0.2); opacity: 0; }
+}
+
+/* Ember ---------------------------------------------------------------- */
+
+.fx-svg-coalbed {
+  animation: fx-svg-coalbed 3.4s ease-in-out infinite;
+}
+
+@keyframes fx-svg-coalbed {
+  0%, 100% { opacity: 0.75; }
+  40% { opacity: 1; }
+  60% { opacity: 0.85; }
+}
+
+.fx-svg-spark {
+  animation: fx-svg-spark-a 5.5s ease-out infinite;
+  animation-delay: var(--d, 0s);
+}
+
+/* A second path so sparks curl two different ways rather than all drifting
+   the same direction. */
+.fx-svg-spark-b {
+  animation-name: fx-svg-spark-b;
+  animation-duration: 6.8s;
+}
+
+@keyframes fx-svg-spark-a {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  10% { opacity: 1; }
+  45% { transform: translate(14px, -130px) scale(0.85); opacity: 0.9; }
+  75% { transform: translate(-6px, -215px) scale(0.5); opacity: 0.45; }
+  100% { transform: translate(6px, -280px) scale(0.2); opacity: 0; }
+}
+
+@keyframes fx-svg-spark-b {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  12% { opacity: 1; }
+  50% { transform: translate(-18px, -120px) scale(0.8); opacity: 0.85; }
+  78% { transform: translate(10px, -205px) scale(0.45); opacity: 0.4; }
+  100% { transform: translate(-8px, -275px) scale(0.15); opacity: 0; }
+}
+
+/* Petals --------------------------------------------------------------- */
+
+.fx-svg-petal-fall {
+  animation: fx-svg-petal-fall 11s linear infinite;
+  animation-delay: var(--d, 0s);
+  transform-box: fill-box;
+}
+
+/* Fall and sway are on the group; the spin is on the child, so a petal can
+   tumble on its own axis while the whole thing drifts sideways. */
+@keyframes fx-svg-petal-fall {
+  0% { transform: translate(var(--x, 0px), -40px); opacity: 0; }
+  8% { opacity: 1; }
+  35% { transform: translate(calc(var(--x, 0px) + 26px), 80px); }
+  65% { transform: translate(calc(var(--x, 0px) - 18px), 180px); }
+  92% { opacity: 1; }
+  100% { transform: translate(calc(var(--x, 0px) + 12px), 330px); opacity: 0; }
+}
+
+.fx-svg-petal-spin {
+  animation: fx-svg-petal-spin 3.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes fx-svg-petal-spin {
+  0%, 100% { transform: rotate(-25deg) scaleX(1); }
+  50% { transform: rotate(150deg) scaleX(0.35); }
+}
+
+/* Starfall ------------------------------------------------------------- */
+
+.fx-svg-twinkle {
+  animation: fx-svg-twinkle 3.6s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes fx-svg-twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+/* Meteors are rare on purpose — a sky full of them looks like a screensaver. */
+.fx-svg-meteor {
+  animation: fx-svg-meteor 9s linear infinite;
+  animation-delay: var(--d, 0s);
+  opacity: 0;
+}
+
+@keyframes fx-svg-meteor {
+  0% { transform: translate(-60px, -40px); opacity: 0; }
+  4% { opacity: 1; }
+  14% { transform: translate(300px, 190px); opacity: 0; }
+  100% { transform: translate(300px, 190px); opacity: 0; }
+}
+
+/* Tempest -------------------------------------------------------------- */
+
+.fx-svg-raindrop {
+  animation: fx-svg-raindrop 1.05s linear infinite;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes fx-svg-raindrop {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: 0.9; }
+  100% { transform: translate(-150px, 340px); opacity: 0.6; }
+}
+
+.fx-svg-bolt {
+  opacity: 0;
+  animation: fx-svg-bolt 7.5s linear infinite;
+  transform-origin: 210px 0;
+}
+
+@keyframes fx-svg-bolt {
+  0%, 84%, 100% { opacity: 0; }
+  85% { opacity: 0.95; transform: scaleX(1); }
+  87% { opacity: 0.15; }
+  89% { opacity: 0.8; transform: scaleX(1.04); }
+  92% { opacity: 0; }
+}
+
+.fx-svg-flash {
+  animation: fx-svg-flash 7.5s linear infinite;
+}
+
+@keyframes fx-svg-flash {
+  0%, 84%, 100% { opacity: 0; }
+  85.5% { opacity: 0.26; }
+  88% { opacity: 0.05; }
+  90% { opacity: 0.18; }
+  93% { opacity: 0; }
+}
+
+/* Rune ----------------------------------------------------------------- */
+
+.fx-svg-rune-ring {
+  animation: fx-spin 26s linear infinite;
+}
+
+.fx-svg-rune-ring-rev {
+  animation: fx-spin 18s linear infinite reverse;
+}
+
+.fx-svg-rune-core {
+  animation: fx-svg-rune-core 5s ease-in-out infinite;
+  transform-origin: 200px 150px;
+}
+
+@keyframes fx-svg-rune-core {
+  0%, 100% { opacity: 0.35; transform: scale(0.94); }
+  50% { opacity: 0.7; transform: scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="fx-svg-"] {
+    animation: none !important;
+  }
+}

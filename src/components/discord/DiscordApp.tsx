@@ -60,6 +60,7 @@ import {
   IconTimer,
 } from "@/components/icons";
 const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
+const ShopModal = dynamic(() => import("@/components/shop/ShopModal").then(m => m.ShopModal));
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import type { Channel, ChannelCategory, Profile, Server, ServerFolder } from "@/lib/supabase/types";
 import { ServerFolderDialog } from "@/components/discord/ServerFolderDialog";
@@ -78,6 +79,7 @@ export function DiscordApp() {
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("popular");
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
@@ -1418,6 +1420,7 @@ export function DiscordApp() {
                   }}
                   onGroupContext={handleGroupContext}
                   onOpenSubscription={() => setSubscriptionOpen(true)}
+                  onOpenShop={() => setShopOpen(true)}
                 />
               ) : (
                 <ChannelList
@@ -1945,6 +1948,17 @@ export function DiscordApp() {
         open={subscriptionOpen}
         onClose={() => setSubscriptionOpen(false)}
         userId={app.user?.id}
+      />
+      <ShopModal
+        open={shopOpen}
+        onClose={() => setShopOpen(false)}
+        self={{
+          name: app.profile ? displayName(app.profile) : "You",
+          avatarUrl: app.profile?.avatar_url,
+        }}
+        // Equipping is a profile UPDATE, and the profiles realtime
+        // subscription already reloads on that — every avatar and name on
+        // screen picks the new effect up without anything further here.
       />
       <TimeoutModal
         open={!!timeoutTarget}

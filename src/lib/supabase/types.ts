@@ -22,6 +22,10 @@ export interface Profile {
   is_bot?: boolean;
   theme: ThemePreference;
   avatar_crop: { zoom: number; x: number; y: number } | null;
+  /** Disband Shop cosmetics currently worn. Null when the slot is empty. */
+  equipped_name_effect?: string | null;
+  equipped_ring_effect?: string | null;
+  equipped_overlay_effect?: string | null;
   show_owner_badge: boolean;
   show_staff_badge: boolean;
   show_og_badge: boolean;
