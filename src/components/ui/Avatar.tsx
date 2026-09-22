@@ -6,6 +6,7 @@ import { getAvatarStyle, type ProfileAccentFields } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import { getCachedAvatarUrl, storeAvatar } from "@/lib/avatar-cache";
 import { effectClass } from "@/lib/shop";
+import { AvatarDecoration } from "@/components/shop/AvatarDecoration";
 
 interface AvatarProps {
   profile: ProfileAccentFields & {
@@ -63,9 +64,24 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   );
 
   // The ring is a wrapper rather than a border on the avatar itself: it has to
-  // sit outside the rounded clip, and it carries its own hover state.
-  if (!ring) return inner;
-  return <span className={`fx-ring ${ring} ${className}`}>{inner}</span>;
+  // sit outside the rounded clip, and it carries its own hover state. A drawn
+  // decoration mounts in the same wrapper, above the image.
+  const decoration = <AvatarDecoration itemId={profile.equipped_ring_effect} />;
+  if (!ring) {
+    if (!profile.equipped_ring_effect) return inner;
+    return (
+      <span className={`fx-ring relative ${className}`}>
+        {inner}
+        {decoration}
+      </span>
+    );
+  }
+  return (
+    <span className={`fx-ring ${ring} ${className}`}>
+      {inner}
+      {decoration}
+    </span>
+  );
 }
 
 export { displayName };

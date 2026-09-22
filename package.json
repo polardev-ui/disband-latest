@@ -30,6 +30,7 @@
     "test:security": "node --import ./scripts/test-typescript-loader.mjs --test tests/security/*.test.mjs"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.19.16",
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.8.0",
     "@supabase/ssr": "^0.12.0",
