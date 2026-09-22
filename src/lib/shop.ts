@@ -21,8 +21,26 @@ export interface ShopItem {
   category: ShopCategory;
   /** Minimum $2, per product decision. */
   priceCents: number;
-  /** The CSS class that renders it. */
+  /** The CSS class that renders it, when there is no artwork. */
   className: string;
+  /**
+   * Authored artwork, as a path under /public — the preferred renderer.
+   *
+   * Drop a .lottie or .json export at this path and the effect switches from
+   * the generated fallback to the real thing with no other change. Everything
+   * that renders a cosmetic checks here first.
+   */
+  lottie?: string;
+  /** Decorations mount over the avatar rather than behind it. */
+  overAvatar?: boolean;
+}
+
+/** Where shop artwork lives. Keep exports named after the item id. */
+export const LOTTIE_DIR = "/shop/lottie";
+
+/** The artwork path for an item, if it has one. */
+export function lottieSrc(id: string | null | undefined): string | null {
+  return shopItem(id)?.lottie ?? null;
 }
 
 export const SHOP_CATEGORIES: { id: ShopCategory; label: string; blurb: string }[] = [

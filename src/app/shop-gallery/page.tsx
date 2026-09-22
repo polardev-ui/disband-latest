@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
 import { PROFILE_SCENES } from "@/components/shop/effects/ProfileEffect";
+import { DECORATIONS } from "@/components/shop/effects/Decorations";
+import { LottieEffect } from "@/components/shop/effects/LottieEffect";
 import { SHOP_CATEGORIES, formatPrice, itemsIn, type ShopItem } from "@/lib/shop";
 
 /**
@@ -34,6 +36,59 @@ export default function ShopGalleryPage() {
           />
         </label>
       </header>
+
+      {/* Proves the Lottie path renders before any real artwork exists. */}
+      <section className="mx-auto mb-12 max-w-6xl">
+        <h2 className="text-lg font-bold">Lottie pipeline</h2>
+        <p className="mb-4 text-sm text-text-muted">
+          A wiring test, not artwork. Drop a real .lottie or .json export into
+          public/shop/lottie and name it on the catalogue entry, and it renders here and
+          on profiles with no other change.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <article className="rounded-xl border border-divider bg-bg-secondary p-3">
+            <div className="relative h-44 overflow-hidden rounded-lg bg-[#16181d]">
+              <LottieEffect src="/shop/lottie/wiring-test.json" />
+            </div>
+            <p className="mt-2 text-sm font-semibold">wiring-test.json</p>
+          </article>
+          <article className="rounded-xl border border-divider bg-bg-secondary p-3">
+            <div className="flex h-44 items-center justify-center rounded-lg bg-bg-primary">
+              <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-bg-accent text-xl font-bold">
+                {name.charAt(0).toUpperCase() || "?"}
+                <span className="pointer-events-none absolute" style={{ width: "150%", height: "150%", left: "-25%", top: "-25%" }}>
+                  <LottieEffect src="/shop/lottie/wiring-test.json" />
+                </span>
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-semibold">…as an avatar decoration</p>
+          </article>
+        </div>
+      </section>
+
+      {/* Drawn, for comparison against the generated ones below. */}
+      <section className="mx-auto mb-12 max-w-6xl">
+        <h2 className="text-lg font-bold">Illustrated decorations</h2>
+        <p className="mb-4 text-sm text-text-muted">
+          Hand-drawn paths with shading and a chosen palette, rather than shapes a formula
+          produced. Hover one.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {Object.entries(DECORATIONS).map(([id, Dec]) => (
+            <article key={id} className="rounded-xl border border-divider bg-bg-secondary p-3">
+              <div className="flex h-44 items-center justify-center rounded-lg bg-bg-primary">
+                <span className="fx-ring relative">
+                  <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-bg-accent text-xl font-bold">
+                    {name.charAt(0).toUpperCase() || "?"}
+                    <Dec />
+                  </span>
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-semibold">{id}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
       {SHOP_CATEGORIES.map((category) => (
         <section key={category.id} className="mx-auto mb-12 max-w-6xl">
