@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Disband Shop cosmetics: name effects, avatar rings, profile overlays. */
+@import "./shop-effects.css";
 
 @theme inline {
   --color-bg-primary: var(--bg-primary);

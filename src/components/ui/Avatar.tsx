@@ -5,6 +5,7 @@ import { displayName, avatarStyle, type AvatarCrop } from "@/lib/utils";
 import { getAvatarStyle, type ProfileAccentFields } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import { getCachedAvatarUrl, storeAvatar } from "@/lib/avatar-cache";
+import { effectClass } from "@/lib/shop";
 
 interface AvatarProps {
   profile: ProfileAccentFields & {
@@ -12,6 +13,8 @@ interface AvatarProps {
     display_name?: string | null;
     username?: string | null;
     avatar_crop?: AvatarCrop | null;
+    /** Shop ring the owner is wearing; drawn around every avatar of theirs. */
+    equipped_ring_effect?: string | null;
   };
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -25,6 +28,7 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   const style = avatarStyle(profile.avatar_url, crop);
   const accentStyle = getAvatarStyle(profile);
   const remote = safeImageUrl(profile.avatar_url);
+  const ring = effectClass(profile.equipped_ring_effect);
 
   const [cachedSrc, setCachedSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -44,9 +48,9 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
     };
   }, [remote]);
 
-  return (
+  const inner = (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${SIZES[size]} ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${SIZES[size]} ${ring ? "" : className}`}
       style={accentStyle}
     >
       {remote ? (
@@ -57,6 +61,11 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
       )}
     </div>
   );
+
+  // The ring is a wrapper rather than a border on the avatar itself: it has to
+  // sit outside the rounded clip, and it carries its own hover state.
+  if (!ring) return inner;
+  return <span className={`fx-ring ${ring} ${className}`}>{inner}</span>;
 }
 
 export { displayName };

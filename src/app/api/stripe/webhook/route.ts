@@ -122,6 +122,25 @@ export async function POST(req: Request) {
           break;
         }
 
+        if (session.metadata?.kind === "shop") {
+          const supabase = getServiceSupabase();
+          const buyerId = session.metadata.user_id;
+          const itemId = session.metadata.item_id;
+          if (supabase && buyerId && itemId && session.payment_status === "paid") {
+            // Ownership is permanent and one row per person per item, so the
+            // primary key already makes a retry a no-op. The session id is
+            // kept for the audit trail and for reconciling a refund.
+            const { error } = await supabase
+              .from("user_shop_items")
+              .upsert(
+                { user_id: buyerId, item_id: itemId, stripe_session_id: session.id },
+                { onConflict: "user_id,item_id", ignoreDuplicates: true },
+              );
+            if (error) throw new Error(error.message);
+          }
+          break;
+        }
+
         if (session.metadata?.kind === "catalyst") {
           const supabase = getServiceSupabase();
           const buyerId = session.metadata.user_id;
