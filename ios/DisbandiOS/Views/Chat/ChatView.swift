@@ -13,6 +13,22 @@ struct ChatViewportKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+/// Frames of the hold-to-react tray's cells, in `chatScroll` space, so the
+/// dragging finger can be hit-tested against them as it moves across the tray.
+struct ChatTrayEmojiKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+/// A reaction emoji mid-flight from the tray to the message it commits on.
+struct FlyingReact: Equatable {
+    var emoji: String
+    var from: CGPoint
+    var to: CGPoint
+}
+
 struct ChatView: View {
     @Environment(AppState.self) private var app
     @Environment(CallManager.self) private var call
@@ -39,6 +55,23 @@ struct ChatView: View {
     @State private var replyingTo: DisplayMessage?
 
     private let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"]
+
+    /// The trailing "⋯" cell of the hold-to-react tray; its string is also the
+    /// frame-key sentinel that tells it apart from the quick reactions.
+    private let trayMoreKey = "⋯"
+
+    // Hold-to-react tray state, all in the `chatScroll` coordinate space.
+    @State private var reactTrayAnchor: CGRect = .zero
+    @State private var reactTrayEmojiFrames: [String: CGRect] = [:]
+    @State private var reactHoverEmoji: String?
+    @State private var showTrayMenu = false
+    @State private var trayMenuTarget: DisplayMessage?
+    /// The emoji flying from the tray to the message, while the morph plays.
+    @State private var flyingReact: FlyingReact?
+    @State private var flyPosition: CGPoint = .zero
+    /// True once the finger has lifted without picking an emoji: the tray
+    /// stays up and reacts to plain taps until dismissed.
+    @State private var trayPersistent = false
 
     /// The DM peer, when `source` is `.dm`. Enables the header call button.
     var callPeer: Profile?
@@ -106,8 +139,35 @@ struct ChatView: View {
                 }
             }
         }
-        .overlay { reactionBar }
         .hidesDock()
+        .confirmationDialog(
+            "Message actions",
+            isPresented: $showTrayMenu,
+            titleVisibility: .visible
+        ) {
+            if let target = trayMenuTarget {
+                Button { withAnimation { replyingTo = target } } label: {
+                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                }
+                Button { Speaker.shared.speak(target.content) } label: {
+                    Label("Speak Message", systemImage: "speaker.wave.2.fill")
+                }
+                Button { UIPasteboard.general.string = target.content } label: {
+                    Label("Copy Text", systemImage: "doc.on.doc")
+                }
+                if target.authorId == app.currentUserId || canModerate {
+                    Button(role: .destructive) {
+                        Task { await model.deleteMessage(target) }
+                    } label: {
+                        Label(target.authorId == app.currentUserId ? "Delete" : "Delete Message",
+                              systemImage: "trash")
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(trayMenuTarget?.author?.name ?? "This message")
+        }
         .task {
             switch model.source {
             case .dm(let threadId, _):
@@ -239,13 +299,15 @@ struct ChatView: View {
                                 onTapMention: { openMention($0) },
                                 canModerate: canModerate,
                                 onTapAuthor: { openProfile = $0 },
-                                onReact: { reactingMessage = message },
                                 onReply: { withAnimation { replyingTo = message } },
                                 onSpeak: { Speaker.shared.speak(message.content) },
                                 onDelete: { Task { await model.deleteMessage(message) } },
                                 onToggleReaction: { emoji in
                                     Task { await model.toggleReaction(messageId: message.id, emoji: emoji) }
-                                }
+                                },
+                                onHoldReactStarted: { frame in holdReactStarted(frame, message: message) },
+                                onHoldReactDrag: { point in holdReactDrag(point) },
+                                onHoldReactEnded: { point in holdReactEnded(point) }
                             )
                             .id(message.id)
                         }
@@ -267,6 +329,8 @@ struct ChatView: View {
                     Color.clear.preference(key: ChatViewportKey.self, value: geo.size.height)
                 }
             )
+            .overlay { reactionTray }
+            .overlay { flyingReactLayer }
             .onPreferenceChange(ChatContentBottomKey.self) { maxY in
                 contentBottom = maxY
                 updateStick()
@@ -286,28 +350,199 @@ struct ChatView: View {
         }
     }
 
-    // MARK: - Reaction picker overlay
+    // MARK: - Hold-to-react tray
 
-    @ViewBuilder private var reactionBar: some View {
-        if let target = reactingMessage {
-            ZStack {
-                Color.black.opacity(0.4).ignoresSafeArea()
-                    .onTapGesture { reactingMessage = nil }
-                HStack(spacing: 10) {
+    /// The reaction tray: pinned dead-centre above the spot the row was held,
+/// always in the same place no matter where the finger wanders afterwards.
+/// Only the hovered emoji responds, popping up out of the tray. It floats in
+/// the message list's `chatScroll` space — the same space the row's frame and
+/// the drag points are reported in — so hit-testing is exact.
+    @ViewBuilder private var reactionTray: some View {
+        if reactingMessage != nil {
+            GeometryReader { geo in
+                let width = geo.size.width
+                let cellW: CGFloat = 34
+                let trayW = CGFloat(quickReactions.count + 1) * cellW
+                    + CGFloat(quickReactions.count) * 2 + 12
+                // Centred on the held message's horizontal middle, a little
+                // above it so the emoji clears the finger.
+                let x = min(max(reactTrayAnchor.midX, trayW / 2 + 6), width - trayW / 2 - 6)
+                let y = max(reactTrayAnchor.minY - 50, 10)
+                if trayPersistent {
+                    // Lift without an emoji: the tray stays for a plain tap.
+                    // Touches anywhere else dismiss it first.
+                    Color.clear.contentShape(Rectangle())
+                        .onTapGesture { dismissTray() }
+                }
+                HStack(spacing: 2) {
                     ForEach(quickReactions, id: \.self) { emoji in
-                        Button {
-                            Task { await model.toggleReaction(messageId: target.id, emoji: emoji) }
-                            reactingMessage = nil
-                        } label: {
-                            Text(emoji).font(.system(size: 30))
-                        }
+                        trayCell(key: emoji, emoji: emoji, hovered: reactHoverEmoji == emoji)
+                    }
+                    trayCell(key: trayMoreKey, emoji: "⋯", hovered: reactHoverEmoji == trayMoreKey)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 10)
+                .background(Brand.elevated, in: .capsule)
+                .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+                .position(x: x, y: y)
+                .onPreferenceChange(ChatTrayEmojiKey.self) { frames in
+                    reactTrayEmojiFrames = frames
+                }
+            }
+            // While the finger is still down the tray is inert and the drag
+            // gesture on the row owns the touch; once persistent it becomes
+            // interactive for taps.
+            .allowsHitTesting(trayPersistent)
+            .transition(.scale(scale: 0.7, anchor: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// One reaction (or the "⋯" more-actions button) in the tray, reporting
+    /// its `chatScroll` frame up to the tray for hit-testing. During a drag it
+    /// is purely visual; once the tray is persistent it is a plain tap target.
+    /// The hovered cell "genies" — scales up and lifts clear of the tray so it
+    /// reads above the finger with a soft shadow.
+    private func trayCell(key: String, emoji: String, hovered: Bool) -> some View {
+        let target = reactingMessage
+        return Button {
+            guard let target else { return }
+            if key == trayMoreKey {
+                trayMenuTarget = target
+                showTrayMenu = true
+                dismissTray()
+            } else if let frame = reactTrayEmojiFrames[key] {
+                flyReaction(emoji: emoji, to: target, from: CGPoint(x: frame.midX, y: frame.midY))
+                dismissTray()
+            }
+        } label: {
+            Text(emoji)
+                .font(.system(size: 20))
+                .frame(width: 34, height: 34)
+                .background(hovered ? Brand.accent.opacity(0.3) : Color.clear, in: .circle)
+                .scaleEffect(hovered ? 1.6 : 1, anchor: .center)
+                .offset(y: hovered ? -18 : 0)
+                .shadow(color: .black.opacity(hovered ? 0.35 : 0), radius: 8, y: 6)
+                .zIndex(hovered ? 10 : 0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.6), value: hovered)
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { g in
+                let base = g.frame(in: .named("chatScroll"))
+                // Aim the selection area where the emoji actually renders: a
+                // hovered emoji pops up and scales out of the tray, so its hit
+                // frame rides up with it instead of staying below the banner.
+                let hit = hovered
+                    ? base.insetBy(dx: -9, dy: -9).offsetBy(dx: 0, dy: -20)
+                    : base.insetBy(dx: -9, dy: -9)
+                Color.clear.preference(
+                    key: ChatTrayEmojiKey.self,
+                    value: [key: hit]
+                )
+            }
+        )
+    }
+
+    /// The committed emoji flying from the tray to the message row while the
+    /// morph plays; the reaction itself lands when the animation is nearly done.
+    @ViewBuilder private var flyingReactLayer: some View {
+        if let fly = flyingReact {
+            Text(fly.emoji)
+                .font(.system(size: 30))
+                .position(flyPosition)
+                .allowsHitTesting(false)
+                .onAppear {
+                    flyPosition = fly.from
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) {
+                        flyPosition = fly.to
+                    }
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.38))
+                        withAnimation { flyingReact = nil }
                     }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Brand.elevated, in: .capsule)
-                .shadow(radius: 12)
-            }
-            .transition(.opacity)
+        }
+    }
+
+    /// The hold completed: anchor the tray above the row and show it.
+    private func holdReactStarted(_ frame: CGRect, message: DisplayMessage) {
+        reactTrayAnchor = frame
+        reactTrayEmojiFrames = [:]
+        reactHoverEmoji = nil
+        trayPersistent = false
+        withAnimation(.easeOut(duration: 0.12)) { reactingMessage = message }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+    }
+
+    /// The finger moved: highlight the cell under it, ticking haptics
+    /// whenever the hovered emoji changes. Cells report generously-sized
+    /// (and, when hovered, popped-up) frames, so a small grace inset suffices.
+    private func holdReactDrag(_ point: CGPoint) {
+        let hit = reactTrayEmojiFrames
+            .first { $0.value.insetBy(dx: -4, dy: -4).contains(point) }?
+            .key
+        if hit != reactHoverEmoji {
+            reactHoverEmoji = hit
+            if hit != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        }
+    }
+
+    /// The finger lifted: commit the hovered reaction (morph + toggle) or the
+    /// ⋯ menu; anything else leaves the tray up for a plain tap instead of
+    /// fading it away.
+    private func holdReactEnded(_ point: CGPoint?) {
+        let target = reactingMessage
+        guard let target, let point else {
+            holdReactPersisted()
+            return
+        }
+
+        if let frame = reactTrayEmojiFrames[trayMoreKey],
+           frame.insetBy(dx: -4, dy: -4).contains(point) {
+            trayMenuTarget = target
+            showTrayMenu = true
+            dismissTray()
+            return
+        }
+        guard let (emoji, frame) = reactTrayEmojiFrames.first(where: {
+            $0.key != trayMoreKey && $0.value.insetBy(dx: -4, dy: -4).contains(point)
+        }) else {
+            holdReactPersisted()
+            return
+        }
+
+        flyReaction(emoji: emoji, to: target, from: CGPoint(x: frame.midX, y: frame.midY))
+        dismissTray()
+    }
+
+    /// The finger lifted somewhere that wasn't an emoji: keep the tray visible
+    /// so it can be tapped. The row's drag session is over, so the tray takes
+    /// over hit-testing for plain taps.
+    private func holdReactPersisted() {
+        guard trayPersistent == false else { return }
+        trayPersistent = true
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+    }
+
+    private func dismissTray() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            reactingMessage = nil
+            reactHoverEmoji = nil
+            trayPersistent = false
+        }
+    }
+
+    /// Plays the flying-emoji morph from the tray cell to the row, then lands
+    /// the reaction with a commit tick.
+    private func flyReaction(emoji: String, to message: DisplayMessage, from: CGPoint) {
+        let to = CGPoint(x: reactTrayAnchor.midX, y: reactTrayAnchor.midY)
+        flyingReact = FlyingReact(emoji: emoji, from: from, to: to)
+        flyPosition = from
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let messageID = message.id
+        Task {
+            try? await Task.sleep(for: .seconds(0.32))
+            await model.toggleReaction(messageId: messageID, emoji: emoji)
         }
     }
 

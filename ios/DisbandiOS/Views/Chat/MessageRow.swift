@@ -16,13 +16,26 @@ struct MessageRow: View {
     /// limited to your own messages.
     var canModerate: Bool = false
     var onTapAuthor: (Profile) -> Void = { _ in }
-    var onReact: () -> Void = {}
     var onReply: () -> Void = {}
     var onSpeak: () -> Void = {}
     var onDelete: () -> Void = {}
     var onToggleReaction: (String) -> Void = { _ in }
+    /// Hold-to-react tray lifecycle. The row reports its own frame (in the
+    /// `chatScroll` coordinate space) when the hold completes, then streams
+    /// the dragging finger's position, then the release point — `nil` when the
+    /// gesture was cancelled before the hold finished.
+    var onHoldReactStarted: (CGRect) -> Void = { _ in }
+    var onHoldReactDrag: (CGPoint) -> Void = { _ in }
+    var onHoldReactEnded: (CGPoint?) -> Void = { _ in }
 
     @State private var dragOffset: CGFloat = 0
+    /// True between the moment a hold completes and the finger lifts, while a
+    /// reaction tray session is live. Suppresses swipe-to-reply so scrubbing
+    /// across the tray cannot drag the message aside.
+    @State private var trayActive = false
+    /// The row's frame in `chatScroll` space, measured continuously so the
+    /// hold-to-react tray has a live anchor when the gesture begins.
+    @State private var selfFrame: CGRect = .zero
     /// The image or video opened full-screen from this row, if any.
     @State private var viewingMedia: ViewedMedia?
     /// The reaction whose reactor list is open, if any.
@@ -61,17 +74,16 @@ struct MessageRow: View {
                 .background(pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
                 .offset(x: dragOffset)
                 .gesture(swipeToReply)
-                .onTapGesture(count: 2) { onReact() }
-                .contextMenu {
-                    Button { onReply() } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-                    Button { onReact() } label: { Label("React", systemImage: "face.smiling") }
-                    Button { onSpeak() } label: { Label("Speak Message", systemImage: "speaker.wave.2.fill") }
-                    if isOwn || canModerate {
-                        Button(role: .destructive) { onDelete() } label: {
-                            Label(isOwn ? "Delete" : "Delete Message", systemImage: "trash")
-                        }
+                .highPriorityGesture(holdToReact)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { selfFrame = geo.frame(in: .named("chatScroll")) }
+                            .onChange(of: geo.frame(in: .named("chatScroll"))) { _, frame in
+                                selfFrame = frame
+                            }
                     }
-                }
+                )
         }
         .fullScreenCover(item: $viewingMedia) { media in
             MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName)
@@ -117,7 +129,6 @@ struct MessageRow: View {
                     let color = UIColor(message.pending ? Brand.textMuted : Brand.textPrimary)
                     Text(ChatMarkdown.render(message.content, baseFont: baseFont, baseColor: color,
                                              mentionColor: UIColor(Brand.accent)))
-                        .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .environment(\.openURL, OpenURLAction { url in
                             guard let name = ChatMarkdown.mentionedUsername(from: url) else {
@@ -203,13 +214,47 @@ struct MessageRow: View {
     private var swipeToReply: some Gesture {
         DragGesture(minimumDistance: 18)
             .onChanged { value in
+                guard !trayActive else { return }
                 if value.translation.width < 0 {
                     dragOffset = max(value.translation.width, -80)
                 }
             }
             .onEnded { value in
+                guard !trayActive else {
+                    withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+                    return
+                }
                 if value.translation.width < -55 { onReply() }
                 withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+            }
+    }
+
+    /// Press and hold for a second and a half, then drag anywhere — the chat view
+    /// shows a reaction tray above this row and tracks the finger against it.
+    /// The 10pt maximum-distance is deliberately tight: a deliberate hold keeps
+    /// still, while a reply swipe moves past it in the first moments and lets
+    /// the long press fail — so swiping never raises the tray.
+    private var holdToReact: some Gesture {
+        LongPressGesture(minimumDuration: 1.5, maximumDistance: 10)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named("chatScroll")))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    trayActive = true
+                    onHoldReactStarted(selfFrame)
+                case .second(true, let drag?):
+                    onHoldReactDrag(drag.location)
+                default:
+                    break
+                }
+            }
+            .onEnded { value in
+                trayActive = false
+                guard case .second(true, let drag?) = value else {
+                    onHoldReactEnded(nil)
+                    return
+                }
+                onHoldReactEnded(drag.location)
             }
     }
 
