@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, type ReactNode } from "react";
+import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
+import { readAttachments } from "@/lib/message-attachments";
 import {
   formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent,
   mentionsEveryone, mentionsUsername,
@@ -38,6 +40,7 @@ export interface ChatMessageData {
   author_id: string | null;
   content: string;
   attachment_url?: string | null;
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
@@ -261,6 +264,7 @@ export function ChatMessage({
   // progressbar) only while progress is live. The separate thin bar below
   // used to duplicate it, and a progress value stuck at exactly 100 would
   // never swap to the finished attachment: < 100 guarantees the swap.
+  const multi = readAttachments(message);
   const attachment = message.attachment_url && message.uploadProgress !== undefined && message.uploadProgress < 100 ? (
     <AttachmentUploadCard
       name={message.attachment_name || "File"}
@@ -269,6 +273,9 @@ export function ChatMessage({
       progress={message.uploadProgress}
       localUrl={message.attachment_url}
     />
+  ) : multi.length > 1 ? (
+    // Several files on one message: the mosaic, rather than a stack of cards.
+    <AttachmentGrid attachments={multi} />
   ) : message.attachment_url ? (
     <MessageAttachment
       url={message.attachment_url}

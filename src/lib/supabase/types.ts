@@ -196,6 +196,8 @@ export interface DbMessage {
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
+  /** Up to 10 attachments on one message; the legacy columns mirror the first. */
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
   mentions: string[];
   created_at: string;
@@ -219,6 +221,8 @@ export interface DbDmMessage {
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
+  /** Up to 10 attachments on one message; the legacy columns mirror the first. */
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
   mentions: string[];
   created_at: string;
@@ -240,6 +244,8 @@ export interface DbNote {
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
+  /** Up to 10 attachments on one message; the legacy columns mirror the first. */
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
   pinned: boolean;
   created_at: string;
@@ -286,6 +292,8 @@ export interface GroupMessage {
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
+  /** Up to 10 attachments on one message; the legacy columns mirror the first. */
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
   mentions: string[];
   created_at: string;
@@ -504,6 +512,8 @@ export interface Database {
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
+  /** Up to 10 attachments on one message; the legacy columns mirror the first. */
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
           reply_to_id?: string | null;
           pinned?: boolean;
         };
@@ -514,6 +524,8 @@ export interface Database {
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
+  /** Up to 10 attachments on one message; the legacy columns mirror the first. */
+  attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
           reply_to_id?: string | null;
           pinned?: boolean;
           edited_at?: string | null;

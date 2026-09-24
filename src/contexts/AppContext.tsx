@@ -52,6 +52,16 @@ import {
 } from "@/lib/message-pagination";
 import { apiFetch } from "@/lib/api";
 import { checkMentionSend } from "@/lib/mention-guard";
+import {
+  MAX_ATTACHMENTS,
+  attachmentKind,
+  legacyColumns,
+  uploadAttachments,
+  type StoredAttachment,
+} from "@/lib/message-attachments";
+import { useSubscription } from "@/hooks/useSubscription";
+import type { SubscriptionPlan } from "@/lib/subscription";
+import { askTether, mentionsTether, type TetherSurface } from "@/lib/tether-client";
 import { clearAppBadge, setAppBadge } from "@/lib/app-badge";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type {
@@ -91,6 +101,7 @@ interface AppContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  subscriptionPlan: SubscriptionPlan;
   servers: Server[];
   categories: ChannelCategory[];
   channels: Channel[];
@@ -457,6 +468,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const user = session?.user ?? null;
   const userId = user?.id ?? null;
+
+  // The authoritative plan source (subscriptions table). Tether is Aero-gated;
+  // we mirror it here so sending can decide to fire the ask without burning a
+  // server call for non-Aero users. The route stays authoritative regardless.
+  const { plan: subscriptionPlan } = useSubscription(userId ?? undefined);
 
   const activeServer = servers.find((s) => s.id === activeServerId) ?? null;
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
@@ -3372,13 +3388,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [serverRoles],
   );
 
+  // Tether: when an Aero user's message mentions @tether, fire the ask after
+  // the message is saved. Client-side gates are cosmetic cost savers only —
+  // the route re-checks plan, mention, and ownership with the service role.
+  const fireTetherAsk = useCallback((messageId: string, surface: TetherSurface, content: string) => {
+    if (!mentionsTether(content)) return;
+    if (subscriptionPlan !== "aero") return;
+    void askTether(messageId, surface);
+  }, [subscriptionPlan]);
+
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
     if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
     markActivity();
-    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
+    const { attachment, replyToId, pendingFile, pendingFiles, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
-    if (!normalized && !attachment && !pendingFile) return "Empty message";
+    if (!normalized && !attachment && !pendingFile && !pendingFiles?.length) return "Empty message";
     const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
     if (userId) {
@@ -3387,6 +3412,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // One message carries the whole set; `pendingFile` is the single-file
+    // form the GIF and poll callers still use.
+    const files = (pendingFiles?.length ? pendingFiles : pendingFile ? [pendingFile] : [])
+      .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
     let attUrl = attachment?.url ?? null;
@@ -3395,15 +3424,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let attSize = attachment?.size ?? null;
     let attKey = attachment?.key ?? null;
 
-    if (pendingFile) {
-      blobUrl = URL.createObjectURL(pendingFile);
-      attUrl = blobUrl;
-      if (pendingFile.type.startsWith("video/")) attType = "video";
-      else if (pendingFile.type.startsWith("image/")) attType = "image";
-      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
-      else attType = "file";
-      attName = pendingFile.name;
-      attSize = pendingFile.size;
+    // Local previews so the grid appears immediately; revoked once the real
+    // URLs come back.
+    const localUrls = files.map((f) => URL.createObjectURL(f));
+    let optimisticAttachments: StoredAttachment[] = files.map((f, i) => ({
+      url: localUrls[i],
+      type: attachmentKind(f),
+      name: f.name,
+      size: f.size,
+    }));
+    if (files.length > 0) {
+      blobUrl = localUrls[0];
+      attUrl = localUrls[0];
+      attType = attachmentKind(files[0]);
+      attName = files[0].name;
+      attSize = files[0].size;
+    } else if (attachment) {
+      optimisticAttachments = [{
+        url: attachment.url,
+        type: (attachment.type as StoredAttachment["type"]) ?? "file",
+        name: attachment.name ?? null,
+        size: attachment.size ?? null,
+      }];
     }
 
     const optimistic: Message & { author: Profile } & { uploadProgress?: number } = {
@@ -3416,13 +3458,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_key: attKey,
       attachment_name: attName,
       attachment_size: attSize,
+      attachments: optimisticAttachments,
       reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, members.map((m) => m.profile), userId),
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
       sending: true,
-      uploadProgress: pendingFile ? 0 : undefined,
+      uploadProgress: files.length > 0 ? 0 : undefined,
       display_id: 0,
     };
     setMessages((prev) => {
@@ -3432,32 +3475,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
-    if (pendingFile && blobUrl) {
+    if (files.length > 0) {
       try {
-        const result = await uploadMedia(pendingFile, {
+        const uploaded = await uploadAttachments(files, {
           maxUploadBytes,
-          onProgress: (progress) => {
+          onProgress: (percent) => {
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === tempId ? { ...m, uploadProgress: progress.percent } : m,
+                m.id === tempId ? { ...m, uploadProgress: percent } : m,
               ),
             );
           },
         });
+        optimisticAttachments = uploaded;
+        const legacy = legacyColumns(uploaded);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === tempId
-              ? { ...m, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              ? { ...m, ...legacy, attachments: uploaded, uploadProgress: undefined }
               : m,
           ),
         );
-        attUrl = result.url;
-        attKey = result.key;
-        URL.revokeObjectURL(blobUrl);
+        attUrl = legacy.attachment_url;
+        attKey = legacy.attachment_key;
+        attType = legacy.attachment_type;
+        attName = legacy.attachment_name;
+        attSize = legacy.attachment_size;
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        if (blobUrl) URL.revokeObjectURL(blobUrl);
-
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
         return uploadErrorMessage(err);
       }
     }
@@ -3474,6 +3521,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attachment_key: attKey,
         attachment_name: attName,
         attachment_size: attSize,
+        attachments: optimisticAttachments.length > 0 ? optimisticAttachments : null,
         reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
@@ -3493,16 +3541,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (trimmed) setChannelHasMore(true);
       return windowed;
     });
+    fireTetherAsk(saved.id, "server", normalized);
     return null;
-  }, [userId, activeChannelId, profile, members, markActivity]);
+  }, [userId, activeChannelId, profile, members, markActivity, fireTetherAsk]);
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
     if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
     markActivity();
-    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
+    const { attachment, replyToId, pendingFile, pendingFiles, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
-    if (!normalized && !attachment && !pendingFile) return "Empty message";
+    if (!normalized && !attachment && !pendingFile && !pendingFiles?.length) return "Empty message";
     const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
 
@@ -3513,6 +3562,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (pingErr) return pingErr;
     }
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // One message carries the whole set; `pendingFile` is the single-file
+    // form the GIF and poll callers still use.
+    const files = (pendingFiles?.length ? pendingFiles : pendingFile ? [pendingFile] : [])
+      .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
     let attUrl = attachment?.url ?? null;
@@ -3521,15 +3574,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let attSize = attachment?.size ?? null;
     let attKey = attachment?.key ?? null;
 
-    if (pendingFile) {
-      blobUrl = URL.createObjectURL(pendingFile);
-      attUrl = blobUrl;
-      if (pendingFile.type.startsWith("video/")) attType = "video";
-      else if (pendingFile.type.startsWith("image/")) attType = "image";
-      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
-      else attType = "file";
-      attName = pendingFile.name;
-      attSize = pendingFile.size;
+    // Local previews so the grid appears immediately; revoked once the real
+    // URLs come back.
+    const localUrls = files.map((f) => URL.createObjectURL(f));
+    let optimisticAttachments: StoredAttachment[] = files.map((f, i) => ({
+      url: localUrls[i],
+      type: attachmentKind(f),
+      name: f.name,
+      size: f.size,
+    }));
+    if (files.length > 0) {
+      blobUrl = localUrls[0];
+      attUrl = localUrls[0];
+      attType = attachmentKind(files[0]);
+      attName = files[0].name;
+      attSize = files[0].size;
+    } else if (attachment) {
+      optimisticAttachments = [{
+        url: attachment.url,
+        type: (attachment.type as StoredAttachment["type"]) ?? "file",
+        name: attachment.name ?? null,
+        size: attachment.size ?? null,
+      }];
     }
 
     const optimistic: DmMessage & { author: Profile } & { uploadProgress?: number } = {
@@ -3548,7 +3614,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
-      uploadProgress: pendingFile ? 0 : undefined,
+      uploadProgress: files.length > 0 ? 0 : undefined,
       display_id: 0,
     };
     setDmMessages((prev) => {
@@ -3559,31 +3625,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     bumpDmThreadActivity(activeDmThreadId, optimistic.created_at);
 
-    if (pendingFile && blobUrl) {
+    if (files.length > 0) {
       try {
-        const result = await uploadMedia(pendingFile, {
+        const uploaded = await uploadAttachments(files, {
           maxUploadBytes,
-          onProgress: (progress) => {
+          onProgress: (percent) => {
             setDmMessages((prev) =>
               prev.map((m) =>
-                m.id === tempId ? { ...m, uploadProgress: progress.percent } : m,
+                m.id === tempId ? { ...m, uploadProgress: percent } : m,
               ),
             );
           },
         });
+        optimisticAttachments = uploaded;
+        const legacy = legacyColumns(uploaded);
         setDmMessages((prev) =>
           prev.map((m) =>
             m.id === tempId
-              ? { ...m, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              ? { ...m, ...legacy, attachments: uploaded, uploadProgress: undefined }
               : m,
           ),
         );
-        attUrl = result.url;
-        attKey = result.key;
-        URL.revokeObjectURL(blobUrl);
+        attUrl = legacy.attachment_url;
+        attKey = legacy.attachment_key;
+        attType = legacy.attachment_type;
+        attName = legacy.attachment_name;
+        attSize = legacy.attachment_size;
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
       } catch (err) {
         setDmMessages((prev) => prev.filter((m) => m.id !== tempId));
-        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
         return uploadErrorMessage(err);
       }
     }
@@ -3600,6 +3671,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attachment_key: attKey,
         attachment_name: attName,
         attachment_size: attSize,
+        attachments: optimisticAttachments.length > 0 ? optimisticAttachments : null,
         reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
@@ -3620,16 +3692,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
     bumpDmThreadActivity(activeDmThreadId, saved.created_at);
+    fireTetherAsk(saved.id, "dm", normalized);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
     if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
     markActivity();
-    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
+    const { attachment, replyToId, pendingFile, pendingFiles, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
-    if (!normalized && !attachment && !pendingFile) return "Empty message";
+    if (!normalized && !attachment && !pendingFile && !pendingFiles?.length) return "Empty message";
     const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
 
@@ -3639,6 +3712,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (pingErr) return pingErr;
     }
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // One message carries the whole set; `pendingFile` is the single-file
+    // form the GIF and poll callers still use.
+    const files = (pendingFiles?.length ? pendingFiles : pendingFile ? [pendingFile] : [])
+      .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
     let attUrl = attachment?.url ?? null;
@@ -3647,15 +3724,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let attSize = attachment?.size ?? null;
     let attKey = attachment?.key ?? null;
 
-    if (pendingFile) {
-      blobUrl = URL.createObjectURL(pendingFile);
-      attUrl = blobUrl;
-      if (pendingFile.type.startsWith("video/")) attType = "video";
-      else if (pendingFile.type.startsWith("image/")) attType = "image";
-      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
-      else attType = "file";
-      attName = pendingFile.name;
-      attSize = pendingFile.size;
+    // Local previews so the grid appears immediately; revoked once the real
+    // URLs come back.
+    const localUrls = files.map((f) => URL.createObjectURL(f));
+    let optimisticAttachments: StoredAttachment[] = files.map((f, i) => ({
+      url: localUrls[i],
+      type: attachmentKind(f),
+      name: f.name,
+      size: f.size,
+    }));
+    if (files.length > 0) {
+      blobUrl = localUrls[0];
+      attUrl = localUrls[0];
+      attType = attachmentKind(files[0]);
+      attName = files[0].name;
+      attSize = files[0].size;
+    } else if (attachment) {
+      optimisticAttachments = [{
+        url: attachment.url,
+        type: (attachment.type as StoredAttachment["type"]) ?? "file",
+        name: attachment.name ?? null,
+        size: attachment.size ?? null,
+      }];
     }
 
     const optimistic: GroupMessage & { author: Profile } & { uploadProgress?: number } = {
@@ -3674,7 +3764,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited_at: null,
       author: profile,
       sending: true,
-      uploadProgress: pendingFile ? 0 : undefined,
+      uploadProgress: files.length > 0 ? 0 : undefined,
       display_id: 0,
     };
     setGroupMessages((prev) => {
@@ -3684,31 +3774,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
-    if (pendingFile && blobUrl) {
+    if (files.length > 0) {
       try {
-        const result = await uploadMedia(pendingFile, {
+        const uploaded = await uploadAttachments(files, {
           maxUploadBytes,
-          onProgress: (progress) => {
+          onProgress: (percent) => {
             setGroupMessages((prev) =>
               prev.map((m) =>
-                m.id === tempId ? { ...m, uploadProgress: progress.percent } : m,
+                m.id === tempId ? { ...m, uploadProgress: percent } : m,
               ),
             );
           },
         });
+        optimisticAttachments = uploaded;
+        const legacy = legacyColumns(uploaded);
         setGroupMessages((prev) =>
           prev.map((m) =>
             m.id === tempId
-              ? { ...m, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              ? { ...m, ...legacy, attachments: uploaded, uploadProgress: undefined }
               : m,
           ),
         );
-        attUrl = result.url;
-        attKey = result.key;
-        URL.revokeObjectURL(blobUrl);
+        attUrl = legacy.attachment_url;
+        attKey = legacy.attachment_key;
+        attType = legacy.attachment_type;
+        attName = legacy.attachment_name;
+        attSize = legacy.attachment_size;
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
       } catch (err) {
         setGroupMessages((prev) => prev.filter((m) => m.id !== tempId));
-        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
         return uploadErrorMessage(err);
       }
     }
@@ -3725,6 +3820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         attachment_key: attKey,
         attachment_name: attName,
         attachment_size: attSize,
+        attachments: optimisticAttachments.length > 0 ? optimisticAttachments : null,
         reply_to_id: replyToId ?? null,
         mentions: mentionIds,
       })
@@ -3744,8 +3840,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (trimmed) setGroupHasMore(true);
       return windowed;
     });
+    fireTetherAsk(saved.id, "group", normalized);
     return null;
-  }, [userId, activeGroupChatId, profile, groupChats, markActivity]);
+  }, [userId, activeGroupChatId, profile, groupChats, markActivity, fireTetherAsk]);
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
@@ -3761,13 +3858,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sendNote = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId) return "Not signed in";
     markActivity();
-    const { attachment, replyToId, pendingFile, maxUploadBytes } = options;
+    const { attachment, replyToId, pendingFile, pendingFiles, maxUploadBytes } = options;
     const normalized = normalizeMessageContent(content);
     if (!normalized && !attachment && !pendingFile) return "Empty note";
     const charErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (charErr) return charErr;
 
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // One message carries the whole set; `pendingFile` is the single-file
+    // form the GIF and poll callers still use.
+    const files = (pendingFiles?.length ? pendingFiles : pendingFile ? [pendingFile] : [])
+      .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
     let attUrl = attachment?.url ?? null;
@@ -3776,15 +3877,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let attSize = attachment?.size ?? null;
     let attKey = attachment?.key ?? null;
 
-    if (pendingFile) {
-      blobUrl = URL.createObjectURL(pendingFile);
-      attUrl = blobUrl;
-      if (pendingFile.type.startsWith("video/")) attType = "video";
-      else if (pendingFile.type.startsWith("image/")) attType = "image";
-      else if (pendingFile.type.startsWith("audio/")) attType = "audio";
-      else attType = "file";
-      attName = pendingFile.name;
-      attSize = pendingFile.size;
+    // Local previews so the grid appears immediately; revoked once the real
+    // URLs come back.
+    const localUrls = files.map((f) => URL.createObjectURL(f));
+    let optimisticAttachments: StoredAttachment[] = files.map((f, i) => ({
+      url: localUrls[i],
+      type: attachmentKind(f),
+      name: f.name,
+      size: f.size,
+    }));
+    if (files.length > 0) {
+      blobUrl = localUrls[0];
+      attUrl = localUrls[0];
+      attType = attachmentKind(files[0]);
+      attName = files[0].name;
+      attSize = files[0].size;
+    } else if (attachment) {
+      optimisticAttachments = [{
+        url: attachment.url,
+        type: (attachment.type as StoredAttachment["type"]) ?? "file",
+        name: attachment.name ?? null,
+        size: attachment.size ?? null,
+      }];
     }
 
     const optimistic: Note = {
@@ -3801,7 +3915,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       created_at: new Date().toISOString(),
       edited_at: null,
       sending: true,
-      uploadProgress: pendingFile ? 0 : undefined,
+      uploadProgress: files.length > 0 ? 0 : undefined,
     };
     setNotes((prev) => {
       const next = [...prev, optimistic];
@@ -3810,29 +3924,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
 
-    if (pendingFile && blobUrl) {
+    if (files.length > 0) {
       try {
-        const result = await uploadMedia(pendingFile, {
+        const uploaded = await uploadAttachments(files, {
           maxUploadBytes,
-          onProgress: (progress) => {
+          onProgress: (percent) => {
             setNotes((prev) =>
-              prev.map((n) => (n.id === tempId ? { ...n, uploadProgress: progress.percent } : n)),
+              prev.map((n) => (n.id === tempId ? { ...n, uploadProgress: percent } : n)),
             );
           },
         });
+        // Notes hold a single attachment, so only the first is kept.
+        const legacy = legacyColumns(uploaded);
         setNotes((prev) =>
           prev.map((n) =>
             n.id === tempId
-              ? { ...n, attachment_url: result.url, attachment_key: result.key, uploadProgress: undefined }
+              ? { ...n, ...legacy, uploadProgress: undefined }
               : n,
           ),
         );
-        attUrl = result.url;
-        attKey = result.key;
-        URL.revokeObjectURL(blobUrl);
+        attUrl = legacy.attachment_url;
+        attKey = legacy.attachment_key;
+        attType = legacy.attachment_type;
+        attName = legacy.attachment_name;
+        attSize = legacy.attachment_size;
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
       } catch (err) {
         setNotes((prev) => prev.filter((n) => n.id !== tempId));
-        URL.revokeObjectURL(blobUrl);
+        localUrls.forEach((u) => URL.revokeObjectURL(u));
         return uploadErrorMessage(err);
       }
     }
@@ -4154,6 +4273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     session,
     user,
     profile,
+    subscriptionPlan,
     servers,
     categories,
     channels,

@@ -1,5 +1,7 @@
 "use client";
 
+import { MAX_ATTACHMENTS } from "@/lib/message-attachments";
+
 import { useCallback, useRef, useState } from "react";
 import {
   MediaUploadError,
@@ -42,10 +44,19 @@ export function useMediaUpload(): UseMediaUploadReturn {
     const id = `up-${++nextId}`;
     const localUrl = URL.createObjectURL(file);
 
-    setEntries((prev) => [
-      ...prev,
-      { id, file, localUrl, status: "queued", progress: null, result: null, error: null },
-    ]);
+    setEntries((prev) => {
+      // One message carries at most MAX_ATTACHMENTS, matching the database
+      // constraint. Refusing here is kinder than accepting a file the send
+      // would silently drop.
+      if (prev.length >= MAX_ATTACHMENTS) {
+        URL.revokeObjectURL(localUrl);
+        return prev;
+      }
+      return [
+        ...prev,
+        { id, file, localUrl, status: "queued", progress: null, result: null, error: null },
+      ];
+    });
 
     return id;
   }, []);

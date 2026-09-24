@@ -14,6 +14,8 @@ import type { ChannelLite } from "@/lib/markdown";
 import { GifPicker } from "./GifPicker";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
+import { useApp } from "@/contexts/AppContext";
+import { mentionsTether, TETHER_AERO_NUDGE } from "@/lib/tether-client";
 
 interface ChatInputProps {
   placeholder: string;
@@ -26,7 +28,7 @@ interface ChatInputProps {
   editingMessageId?: string | null;
   editingContent?: string;
   onCancelEdit?: () => void;
-  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" | "poll" }; replyToId?: string | null; pendingFile?: File; maxUploadBytes?: number }) => Promise<string | null>;
+  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" | "poll" }; replyToId?: string | null; pendingFile?: File; pendingFiles?: File[]; maxUploadBytes?: number }) => Promise<string | null>;
   onTypingActivity?: () => void;
   maxUploadBytes?: number;
   serverId?: string | null;
@@ -34,6 +36,9 @@ interface ChatInputProps {
   allowPolls?: boolean;
 
   focusSignal?: number;
+
+  /** Whether this surface can invoke Tether ('@tether'). Notes cannot. */
+  tetherEnabled?: boolean;
 }
 
 interface MentionItem {
@@ -91,6 +96,9 @@ function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: 
   );
 }
 
+/** Visible lines before the composer starts scrolling, matching Discord. */
+const COMPOSER_MAX_LINES = 16;
+
 export function ChatInput({
   placeholder,
   members = [],
@@ -107,6 +115,7 @@ export function ChatInput({
   serverId,
   allowPolls = false,
   focusSignal,
+  tetherEnabled = false,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -122,6 +131,8 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
+
+  const { subscriptionPlan } = useApp();
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
@@ -228,11 +239,23 @@ export function ChatInput({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [plusMenuOpen]);
 
+  // The composer grows to COMPOSER_MAX_LINES before it starts scrolling. The
+  // old cap was a flat 84px — about four lines — which made pasting or
+  // drafting anything of length feel like typing through a letterbox.
+  // Measured from the element's own line-height rather than assumed, so it
+  // stays right if the font or density changes.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 84)}px`;
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 21;
+    const padding = el.offsetHeight - el.clientHeight
+      + parseFloat(getComputedStyle(el).paddingTop)
+      + parseFloat(getComputedStyle(el).paddingBottom);
+    const max = lineHeight * COMPOSER_MAX_LINES + padding;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    // Only scroll once it is actually capped, so short drafts never show a bar.
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [text, editingMessageId]);
 
   const mentionItems = useMemo((): MentionItem[] => {
@@ -422,36 +445,25 @@ export function ChatInput({
     setText("");
     clear();
 
-    let sentFiles = 0;
-    let fatalErr: string | null = null;
-    for (let i = 0; i < pendingFiles.length; i++) {
-      const err = await onSend(i === 0 ? content : "", {
-        pendingFile: pendingFiles[i],
+    // One message carries the caption and every file. This used to loop and
+    // send a message per file, which is why a caption and its images landed
+    // as separate messages in the wrong order.
+    if (pendingFiles.length > 0) {
+      const err = await onSend(content, {
+        pendingFiles,
         maxUploadBytes,
-        replyToId: i === 0 ? replyToId : undefined,
+        replyToId,
       });
       if (err) {
-        fatalErr = err;
-        break;
-      }
-      sentFiles++;
-    }
-
-    if (fatalErr) {
-      if (sentFiles === 0) {
-        // Nothing landed: full rollback. The reply chip was never cleared,
-        // and staged files are re-added from the snapshot (clear() revoked
-        // their object URLs, add() creates fresh ones for the same Files).
+        // Nothing landed — it is one insert now, so there is no partial
+        // state to reconcile. Restore the draft exactly as it was. (clear()
+        // revoked the preview URLs, so add() re-creates them.)
         setText(content);
         for (const f of pendingFiles) add(f);
-        setError(fatalErr);
-      } else {
-        // Partial multi-file send: content + first files landed (so the
-        // reply was consumed), only the unsent tail is restored.
-        for (let i = sentFiles; i < pendingFiles.length; i++) add(pendingFiles[i]);
-        onClearReply?.();
-        setError(`${fatalErr} (${sentFiles} of ${pendingFiles.length} attachments sent.)`);
+        setError(err);
+        return;
       }
+      onClearReply?.();
       return;
     }
 
@@ -799,6 +811,11 @@ export function ChatInput({
           />
         </div>
         {error && <p className="px-4 pb-2 text-xs text-status-dnd">{error}</p>}
+        {tetherEnabled && !editingMessageId && subscriptionPlan !== "aero" && mentionsTether(text) && (
+          <p className="flex items-center gap-1.5 px-4 pb-2 text-xs text-text-muted">
+            <span aria-hidden>🤖</span> {TETHER_AERO_NUDGE}
+          </p>
+        )}
       </form>
 
       <PollCreateModal
