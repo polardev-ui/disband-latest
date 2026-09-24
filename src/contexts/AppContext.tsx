@@ -2351,7 +2351,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { error: json.error ?? "Account creation is not allowed right now." };
       }
     } catch {
-
+      return { error: "We couldn't verify account eligibility. Check your connection and try again." };
     }
 
     const { data, error } = await supabase.auth.signUp({
