@@ -12,7 +12,7 @@
 <p align="center">
   A modern, cross-platform communication platform for friends and communities — with text chat, voice, video,
   and end-to-end encrypted messaging built in from the ground up. Runs natively on <strong>macOS, Windows, and
-  Linux</strong>, and in any modern browser.
+  Linux</strong>, and in any modern browser. iOS too!
 </p>
 
 <p align="center">
