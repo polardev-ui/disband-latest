@@ -15,6 +15,14 @@ export interface MessageSendOptions {
   attachment?: MessageAttachmentPayload;
   replyToId?: string | null;
   pendingFile?: File;
+  /**
+   * Several files on ONE message, up to MAX_ATTACHMENTS.
+   *
+   * The composer used to loop and send a message per file, which is why a
+   * caption and its images arrived as separate messages. Takes precedence
+   * over `pendingFile`, which stays for the single-file callers.
+   */
+  pendingFiles?: File[];
   maxUploadBytes?: number;
 }
 

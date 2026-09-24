@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "2.29.26",
+  "version": "2.30.0",
   "author": "Josh Clark <joshclark@wsgpolar.me>",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
@@ -41,6 +41,7 @@
     "emojibase-data": "^17.0.0",
     "lucide-react": "^1.21.0",
     "next": "^16.3.4",
+    "prism-react-renderer": "^2.4.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "stripe": "^22.3.0",

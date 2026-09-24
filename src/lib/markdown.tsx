@@ -1,6 +1,7 @@
 "use client";
 
 import { isValidMentionToken } from "@/lib/utils";
+import { CodeBlock } from "@/components/discord/CodeBlock";
 import type { Profile } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
 
@@ -219,14 +220,9 @@ export function renderMarkdown(
 
     } else if (i % 4 === 2) {
 
-      out.push(
-        <pre
-          key={k++}
-          className="my-1.5 overflow-x-auto rounded-md bg-bg-accent p-3 font-mono text-[13px] leading-relaxed text-text-normal"
-        >
-          <code className={segments[i - 1] ? `language-${segments[i - 1]}` : ""}>{seg}</code>
-        </pre>,
-      );
+      // Highlighted, with the language badge and a copy button. The fence's
+      // language (```ts) is segments[i - 1].
+      out.push(<CodeBlock key={k++} code={seg} language={segments[i - 1] ?? ""} />);
     }
   }
 
