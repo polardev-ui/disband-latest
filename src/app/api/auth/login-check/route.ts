@@ -70,8 +70,9 @@ export async function POST(request: Request) {
   }
 
   // VPN/proxy block — login only. Existing sessions are never re-checked,
-  // so already-signed-in users stay signed in. Fail-closed per policy:
-  // if detection is unavailable, block with a distinct code.
+  // so already-signed-in users stay signed in. Fail-OPEN on detection
+  // unavailability: checkVpnStrict returns blocked:false when no provider can
+  // answer, so a flaky provider can never become a global login outage.
   if (process.env.BLOCK_VPN_LOGIN !== "false" && ip !== "unknown") {
     const vpn = await checkVpnStrict(ip);
     if (vpn.blocked) {

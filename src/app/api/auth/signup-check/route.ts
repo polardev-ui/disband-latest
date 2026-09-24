@@ -37,13 +37,19 @@ export async function POST(request: Request) {
   const persistentHit = await persistentRateLimitCheck(service,
     checkIp === "unknown"
       ? emailHash
-        ? [{ key: `signup:email:${emailHash}:hr`, max: 3, windowSeconds: 3600 }]
+        ? [
+            { key: `signup:email:${emailHash}:hr`, max: 6, windowSeconds: 3600 },
+            { key: `signup:email:${emailHash}:day`, max: 12, windowSeconds: 86400 },
+          ]
         : []
       : [
-          { key: `signup:ip:${ipHash}:hr`, max: 3, windowSeconds: 3600 },
-          { key: `signup:ip:${ipHash}:day`, max: 5, windowSeconds: 86400 },
+          { key: `signup:ip:${ipHash}:hr`, max: 6, windowSeconds: 3600 },
+          { key: `signup:ip:${ipHash}:day`, max: 12, windowSeconds: 86400 },
           ...(emailHash
-            ? [{ key: `signup:email:${emailHash}:hr`, max: 3, windowSeconds: 3600 }]
+            ? [
+                { key: `signup:email:${emailHash}:hr`, max: 6, windowSeconds: 3600 },
+                { key: `signup:email:${emailHash}:day`, max: 12, windowSeconds: 86400 },
+              ]
             : []),
         ],
   );
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         allowed: false,
         blocked: true,
-        error: "Account creation is temporarily blocked from your network. Try again in 24 hours.",
+        error: "Account creation is temporarily blocked from your network. Try again in 6 hours.",
       }, { status: 403 });
     }
   }
@@ -108,7 +114,7 @@ export async function POST(request: Request) {
     // network for 24h (griefable on schools/shared IPs, and responsible for
     // 89 blocks across 86 IPs). Every offense records an immediately-expired
     // strike row (blocks nothing — is_signup_ip_blocked only honors
-    // blocked_until > now()); the real 24h block lands on the 3rd+ offense
+    // blocked_until > now()); the real 6h block lands on the 4th+ offense
     // from the same network in 24h.
     if (usernameContainsBlockedWord(sanitized) && ipHash) {
       await service.rpc("record_signup_ip_block", {
@@ -121,16 +127,16 @@ export async function POST(request: Request) {
         .select("ip_hash", { count: "exact", head: true })
         .eq("ip_hash", ipHash)
         .gt("blocked_until", new Date(Date.now() - 24 * 3600_000).toISOString());
-      if ((recentStrikes ?? 0) >= 3) {
+      if ((recentStrikes ?? 0) >= 4) {
         await service.rpc("record_signup_ip_block", {
           p_ip_hash: ipHash,
-          p_hours: 24,
+          p_hours: 6,
           p_reason: "prohibited username",
         });
         return NextResponse.json({
           allowed: false,
           blocked: true,
-          error: "That username is not allowed. Account creation from your network is blocked for 24 hours.",
+          error: "That username is not allowed. Account creation from your network is blocked for 6 hours.",
         }, { status: 403 });
       }
       return NextResponse.json({ allowed: false, error: formatErr }, { status: 400 });
@@ -148,7 +154,9 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
-  // VPN/proxy block is always on for signup (fail-closed per policy).
+  // VPN/proxy block is always on for signup. Fail-OPEN on detection
+  // unavailability: checkVpnStrict returns blocked:false when no provider can
+  // answer, so a flaky provider can never lock out signups.
   // Local/private IPs bypass inside checkVpnStrict.
   if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
     const vpn = await checkVpnStrict(checkIp);
