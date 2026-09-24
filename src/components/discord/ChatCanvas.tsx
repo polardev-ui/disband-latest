@@ -17,6 +17,7 @@ import { ReactionPicker } from "./MessageReactions";
 import { IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
 import { TypingIndicator } from "./TypingIndicator";
+import { useApp } from "@/contexts/AppContext";
 import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
 import {
@@ -176,6 +177,17 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const handleTypingActivity = useCallback(() => {
     notifyTyping();
   }, [notifyTyping]);
+
+  const { tetherProfile } = useApp();
+  // Tether is a mentionable entity but never a real server member: append its
+  // profile to the render list so "@tether" tokenizes as a blue mention chip
+  // in message bodies. Notes aren't a Tether surface, so leave those alone.
+  const renderMembers = useMemo(() => {
+    if (!tetherProfile || messageContext === "notes" || members.some((m) => m.id === tetherProfile.id)) {
+      return members;
+    }
+    return [...members, tetherProfile];
+  }, [members, tetherProfile, messageContext]);
 
   useImperativeHandle(ref, () => ({
     setReplyTo,
@@ -504,7 +516,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   reactions={msgReactions}
                   onAuthorClick={onAuthorClick}
                   onAuthorContextMenu={onAuthorContextMenu}
-                  members={members}
+                  members={renderMembers}
                   channels={channels}
                   customEmoji={customEmoji}
                   onChannelClick={onChannelClick}
@@ -554,7 +566,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       <div className="shrink-0">
         <TypingIndicator
           typers={typers}
-          members={members}
+          members={renderMembers}
           groupContext={messageContext === "channel" || messageContext === "group"}
         />
         {composerLockedReason ? (
@@ -579,6 +591,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           serverId={typingScope?.serverId}
           allowPolls={messageContext === "channel" || messageContext === "group"}
           focusSignal={composerFocus}
+          tetherEnabled={messageContext !== "notes"}
         />
         )}
       </div>

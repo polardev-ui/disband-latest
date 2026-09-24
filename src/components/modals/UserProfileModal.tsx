@@ -204,9 +204,7 @@ export function UserProfileModal({
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} aria-label="Close" />
       <div role="dialog" aria-modal="true" aria-label={title} className="fx-overlay-host modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
-        {/* A purchased profile effect plays over the whole card while it is
-            open, and steps back to 45% on hover so what is underneath stays
-            readable. It never takes a click. */}
+        {/* Artwork sits above the banner and below the readable profile content. */}
         <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
         <ProfileBanner profile={profile} />
 
@@ -219,7 +217,7 @@ export function UserProfileModal({
           <IconClose size={20} />
         </button>
 
-        <div className="px-5 pb-5">
+        <div className="relative z-10 px-5 pb-5">
           <div className="relative -mt-11 mb-3 w-fit">
             <Avatar profile={profile} size="lg" className="ring-4 ring-black/25" />
             <span
@@ -360,7 +358,12 @@ export function UserProfileModal({
             </div>
           ) : (
             <div className="mt-4 flex flex-wrap gap-2">
-              {(isFriend || friend) && onMessage && (
+              {profile?.is_bot && (
+                <p className="w-full rounded-lg bg-black/20 px-3 py-2 text-xs text-text-muted">
+                  This is Disband's assistant — it can't be messaged, friended, called, or blocked.
+                </p>
+              )}
+              {(isFriend || friend) && onMessage && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onMessage}
@@ -369,7 +372,7 @@ export function UserProfileModal({
                   <IconFriends size={16} /> Message
                 </button>
               )}
-              {onVoiceCall && (isFriend || friend) && (
+              {onVoiceCall && (isFriend || friend) && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onVoiceCall}
@@ -396,7 +399,7 @@ export function UserProfileModal({
                   </button>
                 </>
               )}
-              {!friend && !pendingIncoming && !pendingOutgoing && onAddFriend && (
+              {!friend && !pendingIncoming && !pendingOutgoing && onAddFriend && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onAddFriend}
@@ -410,7 +413,7 @@ export function UserProfileModal({
                   Friend request sent
                 </span>
               )}
-              {(isFriend || friend) && onRemoveFriend && (
+              {(isFriend || friend) && onRemoveFriend && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onRemoveFriend}
@@ -419,7 +422,7 @@ export function UserProfileModal({
                   Remove Friend
                 </button>
               )}
-              {onBlock && (
+              {onBlock && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onBlock}

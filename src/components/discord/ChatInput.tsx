@@ -132,7 +132,7 @@ export function ChatInput({
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
 
-  const { subscriptionPlan } = useApp();
+  const { subscriptionPlan, tetherProfile } = useApp();
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
@@ -261,6 +261,22 @@ export function ChatInput({
   const mentionItems = useMemo((): MentionItem[] => {
     if (!mentionCtx) return [];
     const q = mentionCtx.query.toLowerCase();
+    // Tether is a first-class mention, shown first whenever the query touches
+    // it (or the query is empty). It is not a server member, so it gets an
+    // explicit entry instead of riding along with the member list.
+    const tetherItems: MentionItem[] =
+      tetherEnabled && (q === "" || "tether".startsWith(q) || "tether".includes(q))
+        ? [
+            {
+              id: tetherProfile?.id ?? "tether",
+              kind: "member" as const,
+              label: tetherProfile?.display_name ?? "Tether",
+              sublabel: "@tether",
+              insert: "@tether",
+              profile: tetherProfile ?? undefined,
+            },
+          ]
+        : [];
     const memberItems: MentionItem[] = members
       .filter((m) => m.username && (q === "" || m.username!.toLowerCase().startsWith(q) || displayName(m).toLowerCase().includes(q)))
       .map((m) => ({
@@ -281,8 +297,8 @@ export function ChatInput({
         insert: `@${r.name.replace(/\s+/g, "-").toLowerCase()}`,
         color: r.color,
       }));
-    return [...memberItems, ...roleItems].slice(0, 8);
-  }, [mentionCtx, members, roles]);
+    return [...tetherItems, ...memberItems, ...roleItems].slice(0, 8);
+  }, [mentionCtx, members, roles, tetherEnabled, tetherProfile]);
 
   // Validate at pick time so an oversize file never looks stageable only to
   // fail at send (uploadMedia enforces the same limit as a backstop).

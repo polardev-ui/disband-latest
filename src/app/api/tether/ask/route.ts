@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
@@ -7,84 +6,25 @@ import { getClientIp, hashIp } from "@/lib/request-ip";
 import { planFromSubscription, type Subscription } from "@/lib/subscription";
 import { isTrustedUploadUrl } from "@/lib/media/uploadMedia";
 import { deepseekChat, DeepSeekError, DeepSeekUnavailableError } from "@/lib/deepseek";
+import {
+  ensureTetherUser,
+  broadcastTetherTyping,
+  typingTopic,
+} from "@/lib/tether-server";
 
 export const maxDuration = 90;
 export const dynamic = "force-dynamic";
 
-const TETHER_EMAIL = "tether@disband.dev";
-const TETHER_USERNAME = "tether";
-const TETHER_DISPLAY_NAME = "Tether";
 const TETHER_MENTION_RE = /@tether\b/i;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // DeepSeek's largest supported upload
 const IMAGE_FETCH_TIMEOUT_MS = 15_000;
+const TYPING_REPEAT_MS = 4000;
 
 type Surface = "server" | "dm" | "group";
 
 interface AskBody {
   messageId?: string;
   surface?: Surface;
-}
-
-// Cached per instance so provisioning happens once; harmless if another
-// instance provisions first (lookup is idempotent).
-let cachedTetherUserId: string | null = null;
-
-/**
- * The reply is authored by a fixed, bot-flagged system user so it renders
- * like any other message (own avatar bubble, reply chain, realtime push).
- * Provision idempotently: look up by username, else create the auth user
- * with a stable email that other instances can rediscover.
- */
-async function ensureTetherUser(service: NonNullable<ReturnType<typeof getServiceSupabase>>): Promise<string | null> {
-  if (cachedTetherUserId) return cachedTetherUserId;
-
-  const { data: existing } = await service
-    .from("profiles")
-    .select("id, username")
-    .eq("username", TETHER_USERNAME)
-    .maybeSingle();
-  if (existing?.id) {
-    cachedTetherUserId = existing.id;
-    return existing.id;
-  }
-
-  const password = randomBytes(24).toString("base64url");
-  const { data: created, error: createError } = await service.auth.admin.createUser({
-    email: TETHER_EMAIL,
-    password,
-    email_confirm: true,
-  });
-
-  if (createError || !created?.user?.id) {
-    // Already registered by a concurrent ask on another instance: rediscover.
-    const { data: retry } = await service
-      .from("profiles")
-      .select("id")
-      .eq("username", TETHER_USERNAME)
-      .maybeSingle();
-    if (retry?.id) {
-      cachedTetherUserId = retry.id;
-      return retry.id;
-    }
-    return null;
-  }
-
-  const id = created.user.id;
-  const { error: profileError } = await service.from("profiles").update({
-    display_name: TETHER_DISPLAY_NAME,
-    username: TETHER_USERNAME,
-    is_bot: true,
-  }).eq("id", id);
-
-  if (profileError) {
-    // Profile update is what makes the identity discoverable; clean up so a
-    // retry provisions cleanly instead of leaving a stray auth user.
-    await service.auth.admin.deleteUser(id).catch(() => {});
-    return null;
-  }
-
-  cachedTetherUserId = id;
-  return id;
 }
 
 function mimeForUrl(url: string): string {
@@ -261,6 +201,15 @@ export async function POST(request: NextRequest) {
   const isImage = loaded.attachmentType === "image" || loaded.attachmentType === "gif";
   const attachmentUrl = isImage && loaded.attachmentUrl ? loaded.attachmentUrl : null;
 
+  // Typing indicator: broadcast on the conversation's typing topic so every
+  // client (including the asker) sees "Tether is typing…" while we work. The
+  // client TTLs the indicator at 5s, so re-broadcast every few seconds.
+  const topic = typingTopic(surface, loaded.containerId);
+  const typingTimer = setInterval(() => {
+    void broadcastTetherTyping(service, topic, tetherUserId);
+  }, TYPING_REPEAT_MS);
+  void broadcastTetherTyping(service, topic, tetherUserId);
+
   let reply: string;
   try {
     const imageDataUrl = attachmentUrl && isTrustedUploadUrl(attachmentUrl)
@@ -274,11 +223,23 @@ export async function POST(request: NextRequest) {
 
     reply = await deepseekChat({
       system:
-        "You are Tether, Disband's in-app AI assistant built into the Disband app. " +
-        "Answer the user's message directly and concisely in 1-4 short sentences. " +
-        "Use plain text only (no markdown headings, bold, or bullet lists). If an image is attached, look at it. " +
-        "If the message is just a greeting or a nudge, respond briefly and warmly. " +
-        "Never mention that you are an AI model or your limitations unless directly asked.",
+        "You are Tether, Disband's built-in AI assistant. You live inside the Disband " +
+        "app and are triggered when someone writes @tether in a server channel, a direct " +
+        "message, or a group chat. " +
+        "Disband is a real-time messaging and community app: people create and join servers " +
+        "with text and voice channels, exchange DMs and group chats, write notes, share " +
+        "images and files, and make calls. You are developed and run by the Disband team. " +
+        "The person talking to you is a paying Disband Aero subscriber, which is what " +
+        "unlocks you. " +
+        "Answer directly and concisely in 1-4 short sentences, in plain text only (no " +
+        "markdown headings, bold, or bullet lists), and in the same language the user " +
+        "wrote in. If they attached an image, look at it and mention what you see when it " +
+        "is relevant. If asked who you are, say you are Tether, Disband's in-app AI " +
+        "assistant. If asked who owns Disband, say it is developed by the Disband team. " +
+        "Never claim to be human. Do not invent facts about the user or the app you don't " +
+        "actually know — it is better to say you don't have that information. " +
+        "If asked to do something you can't do yet (edit accounts, create servers, write " +
+        "notes), say briefly that those capabilities are on the way.",
       messages: [{ role: "user", content: userContent }],
     });
   } catch (err) {
@@ -288,8 +249,11 @@ export async function POST(request: NextRequest) {
       // Provider rejected the request (bad image, rate limit, etc.).
       reply = "Tether hit a snag on that one — try again in a moment.";
     } else {
+      clearInterval(typingTimer);
       return NextResponse.json({ error: "Tether could not answer right now." }, { status: 502 });
     }
+  } finally {
+    clearInterval(typingTimer);
   }
 
   const replyRow = {

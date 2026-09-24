@@ -61,7 +61,7 @@ import {
 } from "@/lib/message-attachments";
 import { useSubscription } from "@/hooks/useSubscription";
 import type { SubscriptionPlan } from "@/lib/subscription";
-import { askTether, mentionsTether, type TetherSurface } from "@/lib/tether-client";
+import { askTether, fetchTetherInfo, mentionsTether, type TetherSurface } from "@/lib/tether-client";
 import { clearAppBadge, setAppBadge } from "@/lib/app-badge";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type {
@@ -101,6 +101,7 @@ interface AppContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  tetherProfile: Profile | null;
   subscriptionPlan: SubscriptionPlan;
   servers: Server[];
   categories: ChannelCategory[];
@@ -317,6 +318,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [tetherProfile, setTetherProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
 
   const [catalystCounts, setCatalystCounts] = useState<Record<string, number>>({});
@@ -805,6 +807,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.rpc("ensure_user_profile");
     return error?.message ?? null;
   }, []);
+
+  // Resolve Tether's identity once per session so mention chips, the
+  // autocomplete entry, and the friend/message/block guards can treat Tether
+  // as a proper mention without it being a real server member.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void fetchTetherInfo().then((info) => {
+      if (cancelled || !info) return;
+      setTetherProfile(info as unknown as Profile);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const refreshCatalysts = useCallback(async (serverIds: string[], uid: string) => {
     if (serverIds.length === 0) {
@@ -2696,6 +2713,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
     if (!userId) return;
+    if (friendId === tetherProfile?.id) return;
     const token = ++dmOpenTokenRef.current;
     const supabase = getSupabaseClient();
     let { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -2744,7 +2762,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     await selectDmThread(threadId);
     void loadDmThreads(userId);
-  }, [userId, friends, selectDmThread, loadDmThreads]);
+  }, [userId, friends, selectDmThread, loadDmThreads, tetherProfile]);
 
   const sendInviteToFriend = useCallback(async (friendId: string, inviteUrl: string, serverName: string) => {
     if (!userId || !profile) return "Not signed in";
@@ -2774,13 +2792,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabaseClient();
     const { data: target, error: lookupError } = await supabase
       .from("profiles")
-      .select("id")
+      .select("id, is_bot")
       .eq("username", normalized)
       .maybeSingle();
 
     if (lookupError) return lookupError.message;
     if (!target) return `No user found with username "${normalized}"`;
     if (target.id === userId) return "Cannot friend yourself";
+    if (target.is_bot) return "Tether and other bots can't receive friend requests.";
 
     const { data: existingRows, error: existingError } = await supabase
       .from("friendships")
@@ -2870,6 +2889,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const blockUser = useCallback(async (targetUserId: string) => {
     if (!userId) return "Not signed in";
+    if (targetUserId === tetherProfile?.id) return "Tether can't be blocked.";
     const { error } = await getSupabaseClient().rpc("block_user", { p_user_id: targetUserId });
     if (error) return error.message;
     if (activeDmThreadId) {
@@ -2881,7 +2901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     await loadFriendships(userId);
     return null;
-  }, [userId, activeDmThreadId, dmThreads, loadFriendships]);
+  }, [userId, tetherProfile, activeDmThreadId, dmThreads, loadFriendships]);
 
   const unblockUser = useCallback(async (targetUserId: string) => {
     if (!userId) return "Not signed in";
@@ -4273,6 +4293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     session,
     user,
     profile,
+    tetherProfile,
     subscriptionPlan,
     servers,
     categories,
