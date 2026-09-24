@@ -95,39 +95,43 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
     setError(null);
     setSuccess(null);
 
-    if (mode === "login") {
-      const err = await signIn(email, password);
-      if (err) setError(err);
-    } else if (mode === "reset") {
-      const err = await requestPasswordReset(email);
-      if (err) {
-        setError(err);
-      } else {
-        setSuccess(
-          `If an account exists for ${email.trim()}, we sent a password reset link. Check your inbox and spam folder.`,
-        );
-      }
-    } else {
-      const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-      if (sanitized.length < 2) {
-        setError("Username must be at least 2 characters (letters, numbers, and underscores).");
-      } else {
-        const result = await signUp(email, password, username, appliedRef, turnstileToken);
-        if (result.error) {
-          setError(result.error);
-        } else if (result.needsEmailConfirmation !== false) {
+    try {
+      if (mode === "login") {
+        const err = await signIn(email, password);
+        if (err) setError(err);
+      } else if (mode === "reset") {
+        const err = await requestPasswordReset(email);
+        if (err) {
+          setError(err);
+        } else {
           setSuccess(
-            `Check your email to verify your account. We sent a link to ${email.trim()} — then log in at /login.`,
+            `If an account exists for ${email.trim()}, we sent a password reset link. Check your inbox and spam folder.`,
           );
         }
+      } else {
+        const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+        if (sanitized.length < 2) {
+          setError("Username must be at least 2 characters (letters, numbers, and underscores).");
+        } else {
+          const result = await signUp(email, password, username, appliedRef, turnstileToken);
+          if (result.error) {
+            setError(result.error);
+          } else if (result.needsEmailConfirmation !== false) {
+            setSuccess(
+              `Check your email to verify your account. We sent a link to ${email.trim()} — then log in at /login.`,
+            );
+          }
+        }
       }
+    } catch {
+      setError("We couldn't complete that request. Check your connection and try again.");
+    } finally {
+      setTurnstileToken(null);
+      setTurnstileFailed(false);
+      setTurnstileKey((k) => k + 1);
+      setLoading(false);
+      submittingRef.current = false;
     }
-
-    setTurnstileToken(null);
-    setTurnstileFailed(false);
-    setTurnstileKey((k) => k + 1);
-    setLoading(false);
-    submittingRef.current = false;
   }
 
   function switchMode(next: AuthMode) {

@@ -15,6 +15,9 @@ export function mapAuthError(message: string | undefined | null): string {
   if (lower.includes("duplicate_email_alias")) {
     return "An account already exists for this email address. Try logging in, or reset your password.";
   }
+  if (lower.includes("username is already taken")) {
+    return "That username is already taken. Choose another one and try again.";
+  }
 
   if (lower.includes("database error saving new user") || lower.includes("unexpected_failure")) {
     return "Account creation failed. Please try again later.";
