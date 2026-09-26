@@ -70,9 +70,15 @@ export async function POST(request: Request) {
   }
 
   // VPN/proxy block — login only. Existing sessions are never re-checked,
-  // so already-signed-in users stay signed in. Fail-OPEN on detection
-  // unavailability: checkVpnStrict returns blocked:false when no provider can
-  // answer, so a flaky provider can never become a global login outage.
+  // so already-signed-in users stay signed in.
+  //
+  // FAIL-OPEN, deliberately. `unavailable` means "we could not tell", which is
+  // NOT a verdict and must never be one: the free IPQS tier is capped at ~35
+  // lookups/day, so a quota-outage is an *expected* condition here, not an
+  // emergency. Failing closed on it would turn a third-party billing limit
+  // into a site-wide login outage for the whole community. So an inconclusive
+  // check is logged and let through. Only a *confirmed* block (both detectors
+  // agreeing the IP is a VPN/proxy) rejects.
   if (process.env.BLOCK_VPN_LOGIN !== "false" && ip !== "unknown") {
     const vpn = await checkVpnStrict(ip);
     if (vpn.blocked) {
@@ -80,13 +86,15 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           allowed: false,
-          code: vpn.unavailable ? "VPN_DETECTION_UNAVAILABLE" : "VPN_BLOCKED",
-          error: vpn.unavailable
-            ? "Sign-in is temporarily unavailable from your network. Try again shortly."
-            : "Signing in from a VPN or proxy is not allowed.",
+          code: "VPN_BLOCKED",
+          error: "Signing in from a VPN or proxy is not allowed.",
         },
         { status: 403 },
       );
+    }
+    if (vpn.unavailable) {
+      // Loud but harmless: this is how we notice if provider health degrades.
+      await logGateEvent(service, "login_vpn_detection_unavailable", ipHash === "unknown" ? null : ipHash, emailHash);
     }
   }
 
