@@ -108,3 +108,111 @@ export async function sendResendEmail(options: SendEmailOptions): Promise<void> 
     throw new Error(body || `Resend send failed (${res.status})`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Tracked send
+//
+// sendResendEmail above throws away the provider's message id, which is the
+// only handle on the eventual delivery outcome. For anything that must be
+// confirmed as *received* — the raffle winner, for instance — an accepted send
+// is not proof of anything: the address can bounce minutes later. These two
+// helpers keep the id and let the real outcome be polled back later.
+// ---------------------------------------------------------------------------
+
+export type ResendDeliveryStatus =
+  | "not_sent"
+  | "queued"
+  | "sent"
+  | "accepted"
+  | "delivered"
+  | "delivery_delayed"
+  | "bounced"
+  | "complained"
+  | "opened"
+  | "clicked"
+  | "failed"
+  | "unknown";
+
+export interface ResendEmailStatus {
+  id: string;
+  /** Resend's `last_event`, normalised. "unknown" when absent or unrecognised. */
+  lastEvent: Exclude<ResendDeliveryStatus, "not_sent">;
+  to: string[];
+  createdAt?: string;
+}
+
+/** Sends an email and returns the provider's message id for later status checks. */
+export async function sendTrackedResendEmail(options: SendEmailOptions): Promise<string> {
+  const from = options.from ?? process.env.RESEND_FROM_EMAIL ?? "Disband <onboarding@resend.dev>";
+  const res = await fetch(`${RESEND_API}/emails`, {
+    method: "POST",
+    headers: resendHeaders(),
+    body: JSON.stringify({
+      from,
+      to: [options.to],
+      subject: options.subject,
+      html: options.html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Resend send failed (${res.status})`);
+  }
+
+  const json = (await res.json().catch(() => ({}))) as { id?: string };
+  if (!json.id) throw new Error("Resend accepted the email but returned no id to track it with.");
+  return json.id;
+}
+
+const KNOWN_EVENTS = new Set<ResendDeliveryStatus>([
+  "queued",
+  "sent",
+  "accepted",
+  "delivered",
+  "delivery_delayed",
+  "bounced",
+  "complained",
+  "opened",
+  "clicked",
+  "failed",
+]);
+
+/**
+ * Reads the provider's current view of a sent email. This is the only way to
+ * answer "did it actually arrive?" without a webhook.
+ *
+ * Returns null when the id is unknown to the provider (or the API is
+ * unreachable) rather than throwing, so a status check can never be the thing
+ * that breaks a draw.
+ */
+export async function getResendEmailStatus(emailId: string): Promise<ResendEmailStatus | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${RESEND_API}/emails/${encodeURIComponent(emailId)}`, {
+      headers: resendHeaders(),
+      cache: "no-store",
+    });
+  } catch {
+    return null;
+  }
+
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+
+  const json = (await res.json().catch(() => null)) as {
+    id?: string;
+    last_event?: string;
+    to?: string[] | string;
+    created_at?: string;
+  } | null;
+  if (!json?.id) return null;
+
+  const raw = typeof json.last_event === "string" ? json.last_event.toLowerCase() : "";
+  return {
+    id: json.id,
+    lastEvent: (KNOWN_EVENTS.has(raw as ResendDeliveryStatus) ? raw : "unknown") as ResendEmailStatus["lastEvent"],
+    to: Array.isArray(json.to) ? json.to : json.to ? [json.to] : [],
+    createdAt: json.created_at,
+  };
+}
