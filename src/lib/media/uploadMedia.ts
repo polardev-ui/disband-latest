@@ -129,3 +129,57 @@ export async function uploadMedia(
     xhr.send(formData);
   });
 }
+
+/**
+ * Import an image by URL: the CDN fetches it (a catbox.moe link, a direct
+ * PNG off someone's site) and stores its own copy, returning the same
+ * `{ url, key }` shape as an upload.
+ *
+ * The worker enforces the SSRF guard, so the client only checks that the
+ * input is an https URL and that the answer is a trusted CDN URL. There are
+ * no upload-progress events — the bytes travel server-to-server, and the
+ * request simply takes as long as the remote host needs.
+ */
+export async function importMediaFromUrl(
+  sourceUrl: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<MediaUploadResult> {
+  let parsed: URL;
+  try {
+    parsed = new URL(String(sourceUrl).trim());
+  } catch {
+    throw new MediaUploadError("That doesn't look like a link.");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new MediaUploadError("Import needs a direct https:// image link.");
+  }
+
+  const { data: sessionData } = await getSupabaseClient().auth.getSession();
+  const token = sessionData.session?.access_token ?? null;
+  if (!token) throw new MediaUploadError("Sign in to import images.", 401);
+
+  let res: Response;
+  try {
+    res = await fetch(`${CDN_URL}/images/import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ url: parsed.toString() }),
+      signal: options.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new MediaUploadError("Network error while importing.");
+  }
+
+  const body = (await res.json().catch(() => null)) as MediaApiResponse | null;
+  if (!res.ok || !body?.url) {
+    throw new MediaUploadError(body?.error ?? `Import failed (HTTP ${res.status}).`, res.status);
+  }
+  if (!isTrustedUploadUrl(body.url)) {
+    throw new MediaUploadError("Import returned an invalid CDN URL.");
+  }
+  return { url: body.url, key: typeof body.key === "string" ? body.key : "" };
+}
