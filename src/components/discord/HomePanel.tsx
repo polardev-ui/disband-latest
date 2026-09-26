@@ -100,10 +100,20 @@ export function HomePanel({
     setViewNotes,
     presenceMap,
     getGroupUnreadCount,
+    tetherProfile,
+    subscriptionPlan,
   } = useApp();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   const onFriends = viewMode === "home";
+
+  // Aero users get a pinned Tether row so the assistant is discoverable: it
+  // opens a real DM thread (migration 0102) where every message is an ask.
+  // Once the thread exists it shows up in dmListEntries on its own.
+  const tetherThreadId = tetherProfile
+    ? dmListEntries.find((e) => e.threadId && e.friend.id === tetherProfile.id)?.threadId ?? null
+    : null;
+  const showTetherRow = subscriptionPlan === "aero" && tetherProfile && !tetherThreadId;
 
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
@@ -227,6 +237,24 @@ export function HomePanel({
             <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
               Direct Messages — {dmListEntries.length}
             </p>
+            {showTetherRow && tetherProfile && (
+              <button
+                key="tether-dm"
+                type="button"
+                onClick={() => void openDmWithFriend(tetherProfile.id)}
+                title="Message Tether directly"
+                className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
+              >
+                <div className="relative">
+                  <Avatar profile={tetherProfile} size="sm" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
+                </div>
+                <span className="truncate text-sm">{displayName(tetherProfile)}</span>
+                <span className="ml-auto shrink-0 rounded bg-super/15 px-1 text-[10px] font-bold uppercase tracking-wide text-super">
+                  Aero
+                </span>
+              </button>
+            )}
             {dmListEntries.map((entry) => {
               const active = viewMode === "dm" && entry.threadId && activeDmThreadId === entry.threadId;
               return (

@@ -5,12 +5,16 @@ import { persistentRateLimitCheck } from "@/lib/auth-guard";
 import { getClientIp, hashIp } from "@/lib/request-ip";
 import { planFromSubscription, type Subscription } from "@/lib/subscription";
 import { isTrustedUploadUrl } from "@/lib/media/uploadMedia";
-import { deepseekChat, DeepSeekError, DeepSeekUnavailableError } from "@/lib/deepseek";
+import { DeepSeekError, DeepSeekUnavailableError } from "@/lib/deepseek";
 import {
   ensureTetherUser,
   broadcastTetherTyping,
   typingTopic,
+  buildTetherContextWindow,
+  tetherHistoryMessages,
+  type TetherContextMessage,
 } from "@/lib/tether-server";
+import { chatWithTether } from "@/lib/tether-tools";
 
 export const maxDuration = 90;
 export const dynamic = "force-dynamic";
@@ -26,6 +30,37 @@ interface AskBody {
   messageId?: string;
   surface?: Surface;
 }
+
+const TETHER_SYSTEM_PROMPT =
+  "You are Tether, Disband's built-in AI assistant. You live inside the Disband app and are " +
+  "triggered when someone writes @tether in a server channel, a direct message, or a group " +
+  "chat, and when they reply to you. Disband is a real-time messaging and community app: people " +
+  "create and join servers with text and voice channels, exchange DMs and group chats, write " +
+  "notes, share images and files, and make calls. You are developed and run by the Disband team. " +
+  "The person talking to you is a paying Disband Aero subscriber, which is what unlocks you.\n\n" +
+  "You can take real actions on the account of the person talking to you by calling the tools " +
+  "available to you: update_my_profile, set_my_avatar, set_my_banner, create_note, " +
+  "list_my_notes, create_server, list_my_servers, update_my_server, create_server_invite, and " +
+  "search_servers. Use a tool whenever they ask you to DO something instead of explaining how — " +
+  "for example \"set my bio to ...\", \"make a note reminding me to ...\", \"what do my notes say " +
+  "about ...\", \"create a server called ...\", \"rename my server X to Y\", \"give me an invite link " +
+  "for my server\", \"find me a server about ...\", or \"use this image as my avatar/icon/banner\". " +
+  "When a server action needs a server_id, call list_my_servers first to find it — never guess " +
+  "an id. Only change the fields they actually asked you to change, and never " +
+  "invent a value they did not give you: if a required detail is missing, ask for it in plain " +
+  "text instead of calling the tool with a made-up value. You can only customize servers the " +
+  "user owns. After a tool runs, confirm in one short " +
+  "sentence what actually happened. Never claim you did something unless the tool reported " +
+  "success — if it failed, say briefly that it did not work and what you would need instead. " +
+  "These tools only ever touch the calling user's own account, so never describe somebody else's " +
+  "account as something you changed. Notes are private to the user, so do not write a password, " +
+  "card number, or API key into one unless they explicitly ask you to.\n\n" +
+  "Answer directly and concisely in 1-4 short sentences, in plain text only (no markdown " +
+  "headings, bold, or bullet lists), and in the same language the user wrote in. If they " +
+  "attached an image, look at it and mention what you see when it is relevant. If asked who you " +
+  "are, say you are Tether, Disband's in-app AI assistant. If asked who owns Disband, say it is " +
+  "developed by the Disband team. Never claim to be human. Do not invent facts about the user or " +
+  "the app you don't actually know — it is better to say you don't have that information.";
 
 function mimeForUrl(url: string): string {
   const clean = url.split("?")[0]?.toLowerCase() ?? "";
@@ -105,21 +140,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Tether could not be set up yet." }, { status: 500 });
   }
 
-  interface LoadedMessage {
-    authorId: string;
-    content: string;
-    attachmentUrl: string | null;
-    attachmentType: string | null;
-    containerId: string; // channel/thread/group id for the reply insert
-  }
+  // One shape across all three surfaces, so the context builder and the model
+  // don't need to know where the ask came from.
+  type LoadedMessage = TetherContextMessage;
 
   let loaded: LoadedMessage | null = null;
   let visible = false;
+  // A DM with Tether itself is a direct conversation: every message is an
+  // ask, no @tether required (you're already talking to it).
+  let isTetherDm = false;
 
   if (surface === "server") {
     const { data: msg } = await service
       .from("messages")
-      .select("id, channel_id, author_id, content, attachment_url, attachment_type")
+      .select("id, channel_id, author_id, content, attachment_url, attachment_type, created_at")
       .eq("id", messageId)
       .maybeSingle();
     if (msg) {
@@ -136,12 +170,13 @@ export async function POST(request: NextRequest) {
         attachmentUrl: msg.attachment_url,
         attachmentType: msg.attachment_type,
         containerId: msg.channel_id,
+        createdAt: msg.created_at,
       };
     }
   } else if (surface === "dm") {
     const { data: msg } = await service
       .from("dm_messages")
-      .select("id, thread_id, author_id, content, attachment_url, attachment_type")
+      .select("id, thread_id, author_id, content, attachment_url, attachment_type, created_at")
       .eq("id", messageId)
       .maybeSingle();
     if (msg) {
@@ -151,18 +186,20 @@ export async function POST(request: NextRequest) {
         .eq("id", msg.thread_id)
         .maybeSingle();
       visible = !!thread && (thread.user_a === user.id || thread.user_b === user.id);
+      isTetherDm = !!thread && (thread.user_a === tetherUserId || thread.user_b === tetherUserId);
       loaded = msg && {
         authorId: msg.author_id,
         content: msg.content ?? "",
         attachmentUrl: msg.attachment_url,
         attachmentType: msg.attachment_type,
         containerId: msg.thread_id,
+        createdAt: msg.created_at,
       };
     }
   } else {
     const { data: msg } = await service
       .from("group_messages")
-      .select("id, group_id, author_id, content, attachment_url, attachment_type")
+      .select("id, group_id, author_id, content, attachment_url, attachment_type, created_at")
       .eq("id", messageId)
       .maybeSingle();
     if (msg) {
@@ -178,6 +215,7 @@ export async function POST(request: NextRequest) {
         attachmentUrl: msg.attachment_url,
         attachmentType: msg.attachment_type,
         containerId: msg.group_id,
+        createdAt: msg.created_at,
       };
     }
   }
@@ -186,15 +224,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "That message is not available." }, { status: 404 });
   }
 
-  // The client only fires for @tether mentions; enforce here too so the
-  // endpoint cannot be used to burn model calls on arbitrary messages.
-  if (!TETHER_MENTION_RE.test(loaded.content)) {
-    return NextResponse.json({ error: "No Tether mention in that message." }, { status: 400 });
-  }
-
-  // Loop guard: never let Tether talk to itself.
+  // Runtime guard: never let Tether talk to itself.
   if (loaded.authorId === tetherUserId) {
     return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
+  // Tether's tool loop is intentionally bounded and always has a hard
+  // deadline — one concern with function calling is a model that loops forever.
+  const history = await buildTetherContextWindow(service, surface, loaded);
+
+  // Continuation: once Tether has spoken in this conversation, a reply keeps
+  // the thread going even without a fresh @tether. A DM with Tether itself is
+  // always an ask (you're already talking to it). Otherwise the ask must
+  // mention us, so the endpoint can't be used to burn model calls on
+  // arbitrary messages.
+  const continued = history.some((m) => m.authorId === tetherUserId);
+  if (!isTetherDm && !continued && !TETHER_MENTION_RE.test(loaded.content)) {
+    return NextResponse.json({ error: "No Tether mention in that message." }, { status: 400 });
   }
 
   // Vision: pass image/gif attachments as a data URL in the user content.
@@ -212,35 +258,23 @@ export async function POST(request: NextRequest) {
 
   let reply: string;
   try {
+    // Vision: the ask's own image rides along as a data URL on the final
+    // message. Tether only ever gets the picture that triggered the ask —
+    // older attachments stay as text placeholders.
     const imageDataUrl = attachmentUrl && isTrustedUploadUrl(attachmentUrl)
       ? await attachmentAsDataUrl(attachmentUrl)
       : null;
 
-    const userContent = [
-      { type: "text" as const, text: loaded.content || "What do you think?" },
-      ...(imageDataUrl ? [{ type: "image_url" as const, image_url: { url: imageDataUrl } }] : []),
-    ];
+    const messages = tetherHistoryMessages(history, tetherUserId, { finalImageDataUrl: imageDataUrl });
 
-    reply = await deepseekChat({
-      system:
-        "You are Tether, Disband's built-in AI assistant. You live inside the Disband " +
-        "app and are triggered when someone writes @tether in a server channel, a direct " +
-        "message, or a group chat. " +
-        "Disband is a real-time messaging and community app: people create and join servers " +
-        "with text and voice channels, exchange DMs and group chats, write notes, share " +
-        "images and files, and make calls. You are developed and run by the Disband team. " +
-        "The person talking to you is a paying Disband Aero subscriber, which is what " +
-        "unlocks you. " +
-        "Answer directly and concisely in 1-4 short sentences, in plain text only (no " +
-        "markdown headings, bold, or bullet lists), and in the same language the user " +
-        "wrote in. If they attached an image, look at it and mention what you see when it " +
-        "is relevant. If asked who you are, say you are Tether, Disband's in-app AI " +
-        "assistant. If asked who owns Disband, say it is developed by the Disband team. " +
-        "Never claim to be human. Do not invent facts about the user or the app you don't " +
-        "actually know — it is better to say you don't have that information. " +
-        "If asked to do something you can't do yet (edit accounts, create servers, write " +
-        "notes), say briefly that those capabilities are on the way.",
-      messages: [{ role: "user", content: userContent }],
+    reply = await chatWithTether({
+      service,
+      userId: user.id,
+      system: TETHER_SYSTEM_PROMPT,
+      history: messages,
+      // The avatar tool wants the original Disband-hosted URL, not the
+      // base64 copy we hand to the model.
+      attachedImageUrl: attachmentUrl && isTrustedUploadUrl(attachmentUrl) ? attachmentUrl : null,
     });
   } catch (err) {
     if (err instanceof DeepSeekUnavailableError) {

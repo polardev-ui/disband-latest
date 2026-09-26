@@ -8,6 +8,12 @@ struct DirectMessagesTab: View {
     // this tab is first opened.
     @Environment(DirectMessagesViewModel.self) private var vm
 
+    // Tether entry point (Aero only): identity for the row, and the thread id
+    // once opened, which drives programmatic navigation below.
+    @State private var tetherInfo: TetherService.TetherInfo?
+    @State private var isAero = false
+    @State private var tetherThreadId: String?
+
     var body: some View {
         NavigationStack {
             content
@@ -25,8 +31,32 @@ struct DirectMessagesTab: View {
                     // Usually a no-op by the time the tab is opened: `start`
                     // is idempotent and repaints from what is already loaded.
                     await vm.start(currentUserId: app.currentUserId, unread: unreadStore)
+                    await loadTetherEntry()
+                }
+                .navigationDestination(item: $tetherThreadId) { threadId in
+                    ChatView(source: .dm(threadId: threadId,
+                                         title: tetherInfo?.displayName ?? "Tether"),
+                             callPeer: nil)
                 }
         }
+    }
+
+    /// Resolve the Tether row state: Aero gate plus identity. Runs beside the
+    /// normal load; failure just hides the row.
+    private func loadTetherEntry() async {
+        guard let uid = app.currentUserId else { return }
+        async let aero = EntitlementService.shared.entitlement(for: uid).plan == "aero"
+        async let info = TetherService.shared.tetherInfo()
+        let (isAeroUser, tether) = await (aero, info)
+        isAero = isAeroUser
+        tetherInfo = tether
+    }
+
+    /// The pinned Tether row, shown to Aero users until a real thread with
+    /// Tether exists (which then renders as a normal DM row on its own).
+    private var showTetherRow: Bool {
+        guard isAero, let info = tetherInfo else { return false }
+        return !vm.threads.contains { $0.friend?.id == info.id }
     }
 
     @ViewBuilder
@@ -39,8 +69,28 @@ struct DirectMessagesTab: View {
                       systemImage: "bubble.left.and.bubble.right")
         } else {
             List {
-                if !vm.threads.isEmpty {
+                if !vm.threads.isEmpty || showTetherRow {
                     Section("Direct Messages") {
+                        if showTetherRow, let info = tetherInfo {
+                            Button {
+                                Task {
+                                    if let existing = vm.threads.first(where: { $0.friend?.id == info.id }) {
+                                        tetherThreadId = existing.id
+                                    } else if let opened = await TetherService.shared.openTetherThread() {
+                                        // Refresh the list so the new thread renders
+                                        // as a normal row from here on.
+                                        await vm.load(currentUserId: app.currentUserId)
+                                        tetherThreadId = opened
+                                    }
+                                }
+                            } label: {
+                                ConversationRow(
+                                    iconUrl: info.avatarUrl,
+                                    name: info.displayName ?? "Tether",
+                                    subtitle: "Ask anything — Aero"
+                                )
+                            }
+                        }
                         ForEach(sortedThreads) { thread in
                             NavigationLink {
                                 ChatView(source: .dm(threadId: thread.id,

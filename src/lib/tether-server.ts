@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DeepSeekChatMessage } from "@/lib/deepseek";
 
 /**
  * Tether's identity server-side.
@@ -55,6 +56,9 @@ async function syncTetherProfile(service: ServiceClient, id: string): Promise<bo
           display_name: TETHER_DISPLAY_NAME,
           is_bot: true,
           avatar_url: TETHER_AVATAR_URL,
+          // Aero subscribers can DM Tether directly (0102); without this the
+          // upsert would leave a freshly provisioned Tether un-DM-able.
+          bot_dm_enabled: true,
         },
         { onConflict: "id" },
       );
@@ -161,4 +165,143 @@ export async function broadcastTetherTyping(
   } catch {
     // Typing is cosmetic; never fail the ask over it.
   }
+}
+
+/** How many prior messages of a conversation to hand the model. */
+const CONTEXT_WINDOW = 20;
+
+/**
+ * One row of a Tether conversation, normalised across the three surfaces so the
+ * context builder and the model don't care whether the ask came from a channel,
+ * a DM thread, or a group chat.
+ */
+export interface TetherContextMessage {
+  authorId: string;
+  content: string;
+  attachmentUrl: string | null;
+  attachmentType: string | null;
+  containerId: string;
+  createdAt: string | null;
+}
+
+/**
+ * Load the conversation Tether is answering in, oldest-first, ending with the
+ * message that triggered the ask.
+ *
+ * Only `CONTEXT_WINDOW` messages are read and the query is keyed on the
+ * container's (id, created_at) index, so this stays cheap no matter how long
+ * the channel is. Read with the service role, so the caller must have already
+ * proven the user can see `current` — visibility of one message implies
+ * visibility of its container.
+ */
+export async function buildTetherContextWindow(
+  service: ServiceClient,
+  surface: TetherSurface,
+  current: TetherContextMessage,
+  limit: number = CONTEXT_WINDOW,
+): Promise<TetherContextMessage[]> {
+  // Each surface stores the same shape under a different table + container key.
+  const target =
+    surface === "server"
+      ? { table: "messages", key: "channel_id" as const }
+      : surface === "dm"
+        ? { table: "dm_messages", key: "thread_id" as const }
+        : { table: "group_messages", key: "group_id" as const };
+
+  type Row = {
+    author_id: string | null;
+    content: string | null;
+    attachment_url: string | null;
+    attachment_type: string | null;
+    created_at: string | null;
+  };
+
+  try {
+    let query = service
+      .from(target.table)
+      .select("author_id, content, attachment_url, attachment_type, created_at")
+      .eq(target.key, current.containerId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    // Never let the triggering message come back inside its own history.
+    if (current.createdAt) query = query.lt("created_at", current.createdAt);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const prior = ((data ?? []) as Row[])
+      .map((r): TetherContextMessage => ({
+        authorId: r.author_id ?? "",
+        content: r.content ?? "",
+        attachmentUrl: r.attachment_url,
+        attachmentType: r.attachment_type,
+        containerId: current.containerId,
+        createdAt: r.created_at,
+      }))
+      // The query is newest-first; the model wants oldest-first.
+      .reverse();
+
+    // A trigger message with no timestamp would also come back as its own
+    // neighbour, so drop anything sharing the exact instant we already hold.
+    const withoutDuplicates = current.createdAt
+      ? prior.filter((m) => m.createdAt !== current.createdAt)
+      : prior;
+
+    return [...withoutDuplicates, current];
+  } catch {
+    // History is an enhancement, not a requirement — answering the message in
+    // front of us is what matters.
+    return [current];
+  }
+}
+
+/**
+ * Flatten a conversation into model messages.
+ *
+ * Tether's own replies become `assistant` turns so the model can see what it
+ * already said instead of repeating itself, and everything else becomes a
+ * `user` turn. Consecutive same-role turns are merged: the OpenAI-shaped
+ * endpoints DeepSeek serves are happier with alternating roles, and it keeps
+ * the prompt smaller.
+ *
+ * `finalImageDataUrl`, when set, is attached to the last message — that is the
+ * ask, and it is the only turn allowed to carry a picture, because DeepSeek
+ * rejects image parts on non-user roles and on anything but the newest turn.
+ */
+export function tetherHistoryMessages(
+  rows: TetherContextMessage[],
+  tetherUserId: string,
+  opts: { finalImageDataUrl?: string | null } = {},
+): DeepSeekChatMessage[] {
+  const out: DeepSeekChatMessage[] = [];
+
+  rows.forEach((row, index) => {
+    const isLast = index === rows.length - 1;
+    const text = (row.content ?? "").trim();
+    const role: "user" | "assistant" = row.authorId === tetherUserId ? "assistant" : "user";
+
+    if (isLast && opts.finalImageDataUrl) {
+      out.push({
+        role: "user",
+        content: [
+          { type: "text", text: text || "What do you think?" },
+          { type: "image_url", image_url: { url: opts.finalImageDataUrl } },
+        ],
+      });
+      return;
+    }
+
+    // An attachment-only message still needs *something* in its turn.
+    const body = text || (row.attachmentUrl ? "(sent an attachment)" : "(sent an empty message)");
+
+    const previous = out[out.length - 1];
+    if (previous && previous.role === role && typeof previous.content === "string") {
+      previous.content = `${previous.content}\n${body}`;
+    } else {
+      out.push({ role, content: body });
+    }
+  });
+
+  return out;
 }

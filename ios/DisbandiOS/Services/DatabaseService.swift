@@ -176,11 +176,15 @@ enum DatabaseService {
 
     static func sendMessage(channelId: String, authorId: String, content: String,
                             attachment: OutgoingAttachment? = nil,
-                            replyToId: String? = nil) async throws {
+                            replyToId: String? = nil) async throws -> String {
         let payload = NewMessage(channelId: channelId, authorId: authorId, content: content,
                                  attachmentUrl: attachment?.url, attachmentType: attachment?.type,
                                  attachmentKey: attachment?.key, replyToId: replyToId)
-        try await client.from("messages").insert(payload).execute()
+        // Return the row id so callers can fire follow-ups (e.g. a Tether
+        // ask) against the exact message that was saved.
+        let row: InsertedId = try await client.from("messages").insert(payload)
+            .select("id").single().execute().value
+        return row.id
     }
 
     static func message(byId id: String) async throws -> Message {
@@ -313,11 +317,13 @@ enum DatabaseService {
 
     static func sendDmMessage(threadId: String, authorId: String, content: String,
                               attachment: OutgoingAttachment? = nil,
-                              replyToId: String? = nil) async throws {
+                              replyToId: String? = nil) async throws -> String {
         let payload = NewDmMessage(threadId: threadId, authorId: authorId, content: content,
                                    attachmentUrl: attachment?.url, attachmentType: attachment?.type,
                                    attachmentKey: attachment?.key, replyToId: replyToId)
-        try await client.from("dm_messages").insert(payload).execute()
+        let row: InsertedId = try await client.from("dm_messages").insert(payload)
+            .select("id").single().execute().value
+        return row.id
     }
 
     // MARK: - Group chats
@@ -374,11 +380,19 @@ enum DatabaseService {
 
     static func sendGroupMessage(groupId: String, authorId: String, content: String,
                                  attachment: OutgoingAttachment? = nil,
-                                 replyToId: String? = nil) async throws {
+                                 replyToId: String? = nil) async throws -> String {
         let payload = NewGroupMessage(groupId: groupId, authorId: authorId, content: content,
                                       attachmentUrl: attachment?.url, attachmentType: attachment?.type,
                                       attachmentKey: attachment?.key, replyToId: replyToId)
-        try await client.from("group_messages").insert(payload).execute()
+        let row: InsertedId = try await client.from("group_messages").insert(payload)
+            .select("id").single().execute().value
+        return row.id
+    }
+
+    /// The id column echoed back by an insert-`.select("id")`, so follow-ups
+    /// can target the exact row that was saved.
+    struct InsertedId: Decodable {
+        let id: String
     }
 
     // MARK: - Profiles & friends

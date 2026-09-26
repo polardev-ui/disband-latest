@@ -18,9 +18,31 @@ export interface DeepSeekContentPart {
   image_url?: { url: string };
 }
 
-export interface DeepSeekMessage {
-  role: "system" | "user" | "assistant";
-  content: string | DeepSeekContentPart[];
+export interface DeepSeekToolCall {
+  id: string;
+  name: string;
+  arguments: string; // raw JSON argument string
+}
+
+export interface DeepSeekChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content?: string | DeepSeekContentPart[] | null;
+  tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
+  tool_call_id?: string;
+}
+
+export interface DeepSeekTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface DeepSeekChatResult {
+  content: string;
+  toolCalls: DeepSeekToolCall[];
 }
 
 export class DeepSeekError extends Error {
@@ -51,13 +73,16 @@ function apiKey(): string {
 /**
  * Ask DeepSeek for a completion. Throws DeepSeekUnavailableError when the
  * model cannot be reached (missing key, transport failure, 4xx/5xx) so the
- * route can degrade. Returns the plain text reply.
+ * route can degrade. Tool calling is supported via the OpenAI-compatible
+ * `tools` array; when the model asks to call a tool, `toolCalls` is populated
+ * alongside (possibly empty) `content`.
  */
 export async function deepseekChat(opts: {
   system?: string;
-  messages: DeepSeekMessage[];
+  messages: DeepSeekChatMessage[];
   maxTokens?: number;
-}): Promise<string> {
+  tools?: DeepSeekTool[];
+}): Promise<DeepSeekChatResult> {
   const key = apiKey();
   if (!key) {
     throw new DeepSeekUnavailableError("DeepSeek API key is not configured.");
@@ -77,6 +102,7 @@ export async function deepseekChat(opts: {
       temperature: 0.4,
       stream: false,
     };
+    if (opts.tools?.length) body.tools = opts.tools;
 
     const res = await fetch(`${endpoint()}/chat/completions`, {
       method: "POST",
@@ -94,11 +120,24 @@ export async function deepseekChat(opts: {
     }
 
     const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+          tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments?: string } }>;
+        };
+      }>;
     };
-    const text = json.choices?.[0]?.message?.content?.trim() ?? "";
-    if (!text) throw new DeepSeekError("DeepSeek returned an empty reply.");
-    return text;
+    const msg = json.choices?.[0]?.message;
+    const toolCalls: DeepSeekToolCall[] = (msg?.tool_calls ?? []).map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      arguments: tc.function.arguments ?? "{}",
+    }));
+    const content = msg?.content?.trim() ?? "";
+    if (!content && toolCalls.length === 0) {
+      throw new DeepSeekError("DeepSeek returned an empty reply.");
+    }
+    return { content, toolCalls };
   } catch (err) {
     if (err instanceof DeepSeekError) throw err;
     throw new DeepSeekUnavailableError(

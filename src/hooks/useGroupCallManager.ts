@@ -183,7 +183,7 @@ export function useGroupCallManager(
       const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
 
-      if (initiator) ensureLanes(pc);
+      ensureLanes(pc);
 
       const local = localRef.current;
       if (local) {
@@ -204,8 +204,14 @@ export function useGroupCallManager(
         const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
           if (lane === LANE_SCREEN) {
-
-            setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
+            // Keep the entry only while the track is live, so a stopped share
+            // removes the tile instead of leaving a dead video element.
+            setRemoteScreens((prev) => {
+              const next = new Map(prev);
+              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+              else next.delete(remoteId);
+              return next;
+            });
             return;
           }
           setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, ev.streams[0]));
@@ -265,6 +271,18 @@ export function useGroupCallManager(
       if (payload.to && payload.to !== userId) return;
       if (!joinedRef.current) return;
 
+      // Screen-share announcements must not depend on a live peer connection:
+      // the sharer may have started (or stopped) while nobody else was in the
+      // call, so a late joiner needs this state even before the offer lands.
+      if (payload.type === "screen") {
+        setSharingIds((prev) => {
+          const next = new Set(prev);
+          if (payload.sharing) next.add(payload.from);
+          else next.delete(payload.from);
+          return next;
+        });
+      }
+
       if (payload.type === "leave") {
         const pc = peersRef.current.get(payload.from);
         pc?.close();
@@ -289,6 +307,16 @@ export function useGroupCallManager(
       if (!pc) return;
 
       if (payload.type === "offer" && payload.sdp) {
+        // Glare guard: if we already sent our own offer (both sides dialled at
+        // once), roll ours back and accept theirs instead of throwing
+        // InvalidStateError and silently killing the connection.
+        if (pc.signalingState === "have-local-offer") {
+          try {
+            await pc.setLocalDescription({ type: "rollback" });
+          } catch {
+            // Nothing pending to roll back; setRemoteDescription below.
+          }
+        }
         await pc.setRemoteDescription(payload.sdp);
         openLanesForSending(pc);
 
@@ -306,13 +334,6 @@ export function useGroupCallManager(
       } else if (payload.type === "answer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
         await flushIce(payload.from, pc);
-      } else if (payload.type === "screen") {
-        setSharingIds((prev) => {
-          const next = new Set(prev);
-          if (payload.sharing) next.add(payload.from);
-          else next.delete(payload.from);
-          return next;
-        });
       } else if (payload.type === "ice" && payload.candidate) {
         if (pc.remoteDescription) {
           await pc.addIceCandidate(payload.candidate);
@@ -357,7 +378,7 @@ export function useGroupCallManager(
     async (others: GroupCallParticipant[]) => {
       if (!userId) return;
       for (const p of others) {
-        if (p.user_id !== userId) await createPeer(p.user_id, true);
+        if (p.user_id !== userId) await createPeer(p.user_id, userId < p.user_id);
       }
     },
     [userId, createPeer],
@@ -424,7 +445,12 @@ export function useGroupCallManager(
           console.error("[send-group-call-push] invoke failed", err);
         });
       }
-      window.setTimeout(() => setRingingIds(new Set()), 30000);
+      // Auto-clear both the ringing UI *and* the tone: a stale ringtone
+      // that keeps pulsing after the caller gave up was a top annoyance.
+      window.setTimeout(() => {
+        setRingingIds(new Set());
+        stopRingtone();
+      }, 30000);
     },
     [userId, profile, joinGroupCall, sendToUser],
   );
@@ -623,7 +649,7 @@ export function useGroupCallManager(
     if (!joined || !userId) return;
     presence.forEach((p) => {
       if (p.user_id !== userId && !peersRef.current.has(p.user_id)) {
-        void createPeer(p.user_id, true);
+        void createPeer(p.user_id, userId < p.user_id);
       }
     });
   }, [presence, joined, userId, createPeer]);
@@ -647,7 +673,12 @@ export function useGroupCallManager(
     localStream,
     remoteStreams,
 
-    remoteScreens: new Map([...remoteScreens].filter(([id]) => sharingIds.has(id))),
+    // No sharingIds filter here: the map only ever contains entries created
+    // by a real LANE_SCREEN ontrack event, so it is already accurate. The old
+    // sharingIds gate relied on a broadcast that was dropped whenever the
+    // sharer had no peer connection yet — which is why a late joiner never
+    // saw the screen.
+    remoteScreens,
     localScreen,
     cameraEnabled,
     screenShareEnabled,

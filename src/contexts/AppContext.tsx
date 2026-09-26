@@ -13,7 +13,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetSupabaseClient } from "@/lib/supabase/client";
-import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
+import { getSavedSessions, getSavedSessionTokens, getSavedRefreshToken, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { requestUnreadJump } from "@/lib/notification-jump";
@@ -2418,26 +2418,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const switchAccount = useCallback(async (account: SavedSession) => {
-    const tokens = getSavedSessionTokens(account.user_id);
-    if (!tokens) return "Sign in again to continue as this account.";
     resetSupabaseClient();
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.auth.setSession(tokens);
-    if (error || !data.session) {
-      clearSavedSessionTokens(account.user_id);
-      setSession(null);
-      return "Sign in again to continue as this account.";
-    }
-    setSession(data.session);
-    rememberSession(data.session);
-    void refreshSessionOnce().then((r) => {
-      if ("session" in r && r.session) {
-        const refreshed = r.session as Session;
-        setSession(refreshed);
-        rememberSession(refreshed);
+    // Fast path: full token pair from this tab's session storage.
+    const tokens = getSavedSessionTokens(account.user_id);
+    if (tokens) {
+      const { data, error } = await supabase.auth.setSession(tokens);
+      if (!error && data.session) {
+        setSession(data.session);
+        rememberSession(data.session);
+        void refreshSessionOnce().then((r) => {
+          if ("session" in r && r.session) {
+            const refreshed = r.session as Session;
+            setSession(refreshed);
+            rememberSession(refreshed);
+          }
+        });
+        return null;
       }
-    });
-    return null;
+      clearSavedSessionTokens(account.user_id);
+    }
+    // Restart path: only the refresh token survives a reopen. Mint a fresh
+    // pair from it so switching doesn't demand the password again.
+    const refreshToken = getSavedRefreshToken(account.user_id);
+    if (refreshToken) {
+      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+      if (!error && data.session) {
+        setSession(data.session);
+        rememberSession(data.session);
+        return null;
+      }
+    }
+    setSession(null);
+    return "Sign in again to continue as this account.";
   }, [rememberSession]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
@@ -2713,7 +2726,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openDmWithFriend = useCallback(async (friendId: string) => {
     if (!userId) return;
-    if (friendId === tetherProfile?.id) return;
+    // Tether is not a friend and never can be (bots can't accept requests),
+    // so it gets its own gate: Aero subscribers may DM Tether directly, which
+    // get_or_create_dm_thread permits for flagged bots (migration 0102).
+    if (friendId === tetherProfile?.id && subscriptionPlan !== "aero") return;
     const token = ++dmOpenTokenRef.current;
     const supabase = getSupabaseClient();
     let { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -2762,7 +2778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     await selectDmThread(threadId);
     void loadDmThreads(userId);
-  }, [userId, friends, selectDmThread, loadDmThreads, tetherProfile]);
+  }, [userId, friends, selectDmThread, loadDmThreads, tetherProfile, subscriptionPlan]);
 
   const sendInviteToFriend = useCallback(async (friendId: string, inviteUrl: string, serverName: string) => {
     if (!userId || !profile) return "Not signed in";
@@ -3409,10 +3425,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   // Tether: when an Aero user's message mentions @tether, fire the ask after
-  // the message is saved. Client-side gates are cosmetic cost savers only —
+  // the message is saved. Inside a DM with Tether itself every message is an
+  // ask (force). Client-side gates are cosmetic cost savers only —
   // the route re-checks plan, mention, and ownership with the service role.
-  const fireTetherAsk = useCallback((messageId: string, surface: TetherSurface, content: string) => {
-    if (!mentionsTether(content)) return;
+  const fireTetherAsk = useCallback((messageId: string, surface: TetherSurface, content: string, opts?: { force?: boolean }) => {
+    if (!opts?.force && !mentionsTether(content)) return;
     if (subscriptionPlan !== "aero") return;
     void askTether(messageId, surface);
   }, [subscriptionPlan]);
@@ -3712,9 +3729,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return windowed;
     });
     bumpDmThreadActivity(activeDmThreadId, saved.created_at);
-    fireTetherAsk(saved.id, "dm", normalized);
+    // A DM with Tether itself is a direct conversation: every message asks.
+    const isTetherThread = !!tetherProfile?.id && thread?.friend?.id === tetherProfile.id;
+    fireTetherAsk(saved.id, "dm", normalized, isTetherThread ? { force: true } : undefined);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
