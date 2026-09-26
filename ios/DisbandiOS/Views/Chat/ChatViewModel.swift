@@ -341,21 +341,38 @@ final class ChatViewModel {
         messages.append(optimistic)
 
         do {
+            // The insert echoes the row id back so a Tether ask can target the
+            // exact message that was saved.
+            let messageId: String
+            let surface: String
+            let threadId: String?
             switch source {
             case .channel(let id, _):
-                try await DatabaseService.sendMessage(channelId: id, authorId: authorId,
-                                                      content: content, attachment: attachment,
-                                                      replyToId: replyToId)
-            case .dm(let threadId, _):
-                try await DatabaseService.sendDmMessage(threadId: threadId, authorId: authorId,
-                                                        content: content, attachment: attachment,
-                                                        replyToId: replyToId)
+                messageId = try await DatabaseService.sendMessage(channelId: id, authorId: authorId,
+                                                                  content: content, attachment: attachment,
+                                                                  replyToId: replyToId)
+                surface = "server"
+                threadId = nil
+            case .dm(let tid, _):
+                messageId = try await DatabaseService.sendDmMessage(threadId: tid, authorId: authorId,
+                                                                    content: content, attachment: attachment,
+                                                                    replyToId: replyToId)
+                surface = "dm"
+                threadId = tid
             case .group(let id, _):
-                try await DatabaseService.sendGroupMessage(groupId: id, authorId: authorId,
-                                                           content: content, attachment: attachment,
-                                                           replyToId: replyToId)
+                messageId = try await DatabaseService.sendGroupMessage(groupId: id, authorId: authorId,
+                                                                       content: content, attachment: attachment,
+                                                                       replyToId: replyToId)
+                surface = "group"
+                threadId = nil
             }
-            // The realtime INSERT echoes the row back and appends it.
+            // The realtime INSERT echoes the row back and appends it. A Tether
+            // ask rides along detached: its failure must never touch the send.
+            Task.detached {
+                await TetherService.shared.fireAskIfNeeded(messageId: messageId, content: content,
+                                                           surface: surface, threadId: threadId,
+                                                           userId: authorId)
+            }
         } catch {
             // Without this the grey "sending" bubble stayed forever, looking
             // like a slow send rather than a refused one.

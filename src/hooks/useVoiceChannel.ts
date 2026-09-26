@@ -113,11 +113,15 @@ export function useVoiceChannel(
       const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
       peersRef.current.set(remoteId, pc);
 
+      // Lanes must exist on BOTH sides. The initiator always used to get them,
+      // but a responder with zero transceivers had to hope createAnswer()
+      // auto-created matching ones — browser-dependent, i.e. "sometimes works".
+      ensureLanes(pc);
+
       const local = localStreamRef.current;
       if (local) {
         const mic = local.getAudioTracks()[0] ?? null;
         if (initiator) {
-          ensureLanes(pc);
           await setLaneTrack(pc, LANE_AUDIO, mic);
           await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
@@ -132,8 +136,14 @@ export function useVoiceChannel(
         const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
           if (lane === LANE_SCREEN) {
-
-            setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
+            // Drop the entry once the track ends so a stopped share removes
+            // the tile instead of leaving a dead video element.
+            setRemoteScreens((prev) => {
+              const next = new Map(prev);
+              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+              else next.delete(remoteId);
+              return next;
+            });
             return;
           }
           const stream = ev.streams[0];
@@ -161,7 +171,6 @@ export function useVoiceChannel(
       };
 
       if (initiator) {
-        ensureLanes(pc);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         signalRef.current?.send({
@@ -184,6 +193,17 @@ export function useVoiceChannel(
       if (!userId || payload.from === userId) return;
       if (payload.to && payload.to !== userId) return;
 
+      // Screen-share state must update even without a peer connection (the
+      // sharer may have started while nobody else was in the channel).
+      if (payload.type === "screen") {
+        setSharingIds((prev) => {
+          const next = new Set(prev);
+          if (payload.sharing) next.add(payload.from);
+          else next.delete(payload.from);
+          return next;
+        });
+      }
+
       let pc = peersRef.current.get(payload.from);
       if (!pc && (payload.type === "offer" || payload.type === "answer")) {
         await createPeer(payload.from, false);
@@ -192,6 +212,14 @@ export function useVoiceChannel(
       if (!pc) return;
 
       if (payload.type === "offer" && payload.sdp) {
+        // Glare guard: roll back our own pending offer before accepting theirs.
+        if (pc.signalingState === "have-local-offer") {
+          try {
+            await pc.setLocalDescription({ type: "rollback" });
+          } catch {
+            // Nothing pending to roll back.
+          }
+        }
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
 
         openLanesForSending(pc);
@@ -216,13 +244,6 @@ export function useVoiceChannel(
         });
       } else if (payload.type === "answer" && payload.sdp) {
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-      } else if (payload.type === "screen") {
-        setSharingIds((prev) => {
-          const next = new Set(prev);
-          if (payload.sharing) next.add(payload.from);
-          else next.delete(payload.from);
-          return next;
-        });
       } else if (payload.type === "ice" && payload.candidate) {
         await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
       } else if (payload.type === "leave") {
@@ -299,7 +320,7 @@ export function useVoiceChannel(
 
       const others = participants.filter((p) => p.user_id !== userId);
       for (const p of others) {
-        await createPeer(p.user_id, true);
+        await createPeer(p.user_id, userId < p.user_id);
       }
     } catch (e) {
       setError((e as Error).message || "Could not access microphone");
@@ -396,7 +417,7 @@ export function useVoiceChannel(
     if (!joined || !userId) return;
     participants.forEach((p) => {
       if (p.user_id !== userId && !peersRef.current.has(p.user_id)) {
-        void createPeer(p.user_id, true);
+        void createPeer(p.user_id, userId < p.user_id);
       }
     });
   }, [participants, joined, userId, createPeer]);
@@ -411,7 +432,9 @@ export function useVoiceChannel(
     joined,
     participants,
     remoteStreams,
-    remoteScreens: new Map([...remoteScreens].filter(([id]) => sharingIds.has(id))),
+    // No sharingIds filter: entries only exist from real LANE_SCREEN ontrack
+    // events, so the map is already accurate (see useGroupCallManager).
+    remoteScreens,
     localScreen,
     cameraEnabled,
     screenEnabled,

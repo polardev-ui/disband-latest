@@ -181,8 +181,11 @@ export function useCallManager(
 
       const mic0 = stream.getAudioTracks()[0] ?? null;
       const cam0 = stream.getVideoTracks()[0] ?? null;
+      // Both sides need the lane transceivers up front: the callee used to
+      // rely on the browser auto-creating them during createAnswer(), which is
+      // implementation-dependent and broke calls on some desktop browsers.
+      ensureLanes(pc);
       if (asCaller) {
-        ensureLanes(pc);
         await setLaneTrack(pc, LANE_AUDIO, mic0);
         await setLaneTrack(pc, LANE_CAMERA, cam0);
       } else {
