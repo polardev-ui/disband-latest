@@ -1,0 +1,12 @@
+.split-logo-loader { display:block; flex-shrink:0; overflow:hidden; max-width:100%; }
+.split-logo-loader [data-exit-strip],.split-logo-loader [data-enter-strip] { transform-box:view-box; transform-origin:0 0; }
+.split-logo-loader [data-enter-strip] { transform:translateY(-520px); }
+.split-logo-still { display:none; }
+.split-logo-loader[data-reduced="true"] .split-logo-still { display:block; }
+.split-logo-loader[data-reduced="true"] .split-logo-motion { display:none; }
+@media(prefers-reduced-motion:reduce) {
+  .split-logo-loader .split-logo-still { display:block; }
+  .split-logo-loader .split-logo-motion { display:none; }
+}
+[data-motion="reduced"] .split-logo-loader .split-logo-still { display:block; }
+[data-motion="reduced"] .split-logo-loader .split-logo-motion { display:none; }
