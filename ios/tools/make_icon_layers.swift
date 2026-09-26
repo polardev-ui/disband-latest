@@ -48,7 +48,7 @@ do {
                         bytesPerRow: 0, space: cs,
                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
     ctx.clear(CGRect(x: 0, y: 0, width: s, height: s))
-    let target: CGFloat = 860
+    let target: CGFloat = 920
     let scale = target / max(lw, lh)
     let w = lw * scale, h = lh * scale
     ctx.interpolationQuality = .high
