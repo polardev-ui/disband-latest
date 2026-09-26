@@ -15,12 +15,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
+# Minor-frozen (~) on purpose: Tauri refuses to build when the crate and NPM
+# package differ on major/minor, pnpm stays frozen to its lockfile, and there
+# is no Cargo.lock — so a bare "2" floats Rust to each new minor while JS
+# stands still. Patch updates still float on both sides.
+tauri = { version = "~2.12", features = ["devtools"] }
 tauri-plugin-opener = "2"
-# Pinned to the same minor as @tauri-apps/plugin-notification. Tauri refuses
-# to build when the crate and NPM package differ on major/minor, and a bare
-# "2" floats to each new minor while pnpm stays frozen to the lockfile.
-tauri-plugin-notification = "2.4"
+tauri-plugin-notification = "~2.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Pin transitive `time` — 0.3.50 fails to compile against published time-macros 0.2.29.
