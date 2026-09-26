@@ -26,6 +26,7 @@ import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
+import { OfficialBroadcastPanel } from "@/components/discord/OfficialBroadcastPanel";
 import { AccountRestrictionsPanel } from "@/components/discord/AccountRestrictionsPanel";
 import { BotsPanel } from "./settings/BotsPanel";
 import { MyReferralCard } from "@/components/referrals/MyReferralCard";
@@ -835,6 +836,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <PlatformModerationPanel />
 
                   <AccountRestrictionsPanel />
+
+                  <OfficialBroadcastPanel />
 
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>

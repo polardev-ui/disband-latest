@@ -16,16 +16,51 @@ interface RestrictionRow {
   created_at: string;
   username: string | null;
   display_name: string | null;
+  /** null means the restriction never lapses. */
+  expires_at: string | null;
+  /** False for a restriction whose time is up but whose row has not been swept yet. */
+  active: boolean;
 }
 
 const RESTRICTION_LABELS: Record<string, string> = {
   join_servers: "Cannot join spaces",
   send_messages: "Cannot send messages",
+  send_reactions: "Cannot react to messages",
   send_friend_requests: "Cannot send friend requests",
   create_groups: "Cannot create groups",
 };
 
-const ALL_RESTRICTIONS = ["join_servers", "send_messages", "send_friend_requests", "create_groups"];
+const ALL_RESTRICTIONS = [
+  "send_messages",
+  "send_reactions",
+  "join_servers",
+  "send_friend_requests",
+  "create_groups",
+];
+
+/**
+ * How long a restriction lasts, chosen before it is applied.
+ *
+ * A week is the default because "you cannot like or type for a week" is the
+ * common case; "forever" is still there for the cases that genuinely are
+ * permanent.
+ */
+const DURATIONS: Array<{ value: string; label: string }> = [
+  { value: "1", label: "1 day" },
+  { value: "7", label: "7 days" },
+  { value: "30", label: "30 days" },
+  { value: "forever", label: "No end date" },
+];
+
+function formatExpiry(expiresAt: string | null): string {
+  if (!expiresAt) return "no end date";
+  const when = new Date(expiresAt);
+  if (Number.isNaN(when.getTime())) return "no end date";
+  return `until ${when.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })}`;
+}
 
 export function AccountRestrictionsPanel() {
   const { profile, refreshRestrictions } = useApp();
@@ -38,6 +73,8 @@ export function AccountRestrictionsPanel() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<RestrictionRow[]>([]);
+  const [duration, setDuration] = useState("7");
+  const [reason, setReason] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isStaff = profile?.show_staff_badge || profile?.show_owner_badge;
@@ -114,11 +151,21 @@ export function AccountRestrictionsPanel() {
       const res = await apiFetch("/api/moderation/restrict", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ action: "apply", userId: selected.id, restriction }),
+        body: JSON.stringify({
+          action: "apply",
+          userId: selected.id,
+          restriction,
+          reason: reason.trim() || undefined,
+          duration,
+        }),
       });
-      const json = (await res.json()) as { error?: string; success?: boolean };
+      const json = (await res.json()) as { error?: string; success?: boolean; expiresAt?: string | null };
       if (json.error) { setError(json.error); return; }
-      setSuccess(`Applied: ${RESTRICTION_LABELS[restriction] ?? restriction}`);
+      setSuccess(
+        `Applied: ${RESTRICTION_LABELS[restriction] ?? restriction} (${formatExpiry(json.expiresAt ?? null)}). ` +
+        "They have been told automatically.",
+      );
+      setReason("");
       await loadRows();
       await refreshRestrictions();
     } catch {
@@ -200,27 +247,65 @@ export function AccountRestrictionsPanel() {
       </div>
 
       {selected && (
-        <div>
-          <span className="text-xs font-bold uppercase text-text-muted">Apply restriction</span>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {ALL_RESTRICTIONS.map((r) => {
-              const active = userRestrictions.includes(r);
-              return (
+        <div className="space-y-3">
+          <div>
+            <span className="text-xs font-bold uppercase text-text-muted">Apply restriction</span>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {ALL_RESTRICTIONS.map((r) => {
+                const active = userRestrictions.includes(r);
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    disabled={loading || active}
+                    onClick={() => void applyRestriction(r)}
+                    className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? "bg-status-online/20 text-status-online cursor-not-allowed"
+                        : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
+                    }`}
+                  >
+                    {RESTRICTION_LABELS[r] ?? r}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-text-muted">
+              Sending and reacting are enforced by the database, so a modified client cannot
+              work around them. The other three are still checked in the app only.
+            </p>
+          </div>
+
+          <div>
+            <span className="text-xs font-bold uppercase text-text-muted">For how long</span>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {DURATIONS.map((d) => (
                 <button
-                  key={r}
+                  key={d.value}
                   type="button"
-                  disabled={loading || active}
-                  onClick={() => void applyRestriction(r)}
+                  disabled={loading}
+                  onClick={() => setDuration(d.value)}
                   className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-                    active
-                      ? "bg-status-online/20 text-status-online cursor-not-allowed"
+                    duration === d.value
+                      ? "bg-brand text-white"
                       : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
                   }`}
                 >
-                  {RESTRICTION_LABELS[r] ?? r}
+                  {d.label}
                 </button>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-xs font-bold uppercase text-text-muted">Reason (optional)</span>
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={200}
+              placeholder="Kept on the moderation record. The user is not shown this."
+              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+            />
           </div>
         </div>
       )}
@@ -237,7 +322,10 @@ export function AccountRestrictionsPanel() {
                 <div className="min-w-0">
                   <p className="font-medium">{row.display_name || row.username || row.user_id}</p>
                   {row.username && <p className="text-xs text-text-muted">@{row.username}</p>}
-                  <p className="text-xs text-orange-400">{RESTRICTION_LABELS[row.restriction] ?? row.restriction}</p>
+                  <p className={`text-xs ${row.active === false ? "text-text-muted line-through" : "text-orange-400"}`}>
+                    {RESTRICTION_LABELS[row.restriction] ?? row.restriction}
+                    {row.active === false ? " — ended" : ` — ${formatExpiry(row.expires_at)}`}
+                  </p>
                   {row.reason && <p className="text-xs text-text-muted italic">{row.reason}</p>}
                 </div>
                 <button
@@ -246,7 +334,7 @@ export function AccountRestrictionsPanel() {
                   onClick={() => void removeRestriction(row.user_id, row.restriction)}
                   className="shrink-0 rounded border border-divider px-3 py-1 text-xs hover:bg-interactive-hover disabled:opacity-50"
                 >
-                  Remove
+                  {row.active === false ? "Clear" : "Remove"}
                 </button>
               </li>
             ))}
