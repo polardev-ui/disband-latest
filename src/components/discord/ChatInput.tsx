@@ -14,6 +14,7 @@ import type { ChannelLite } from "@/lib/markdown";
 import { GifPicker } from "./GifPicker";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
+import { ComposerMarkdown } from "./ComposerMarkdown";
 import { useApp } from "@/contexts/AppContext";
 import { mentionsTether, TETHER_AERO_NUDGE } from "@/lib/tether-client";
 
@@ -129,6 +130,7 @@ export function ChatInput({
   const [pollOpen, setPollOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
 
@@ -777,6 +779,16 @@ export function ChatInput({
             className="hidden"
             onChange={(e) => { if (e.target.files?.length) void handleFiles(e.target.files); e.target.value = ""; }}
           />
+          <div className="relative min-w-0 flex-1">
+            {/* The styled layer. aria-hidden: the textarea is the real input,
+                and a screen reader must not read the text twice. */}
+            <div
+              ref={highlightRef}
+              aria-hidden
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-0.5 text-[15px] leading-5 text-text-normal"
+            >
+              <ComposerMarkdown text={text} />
+            </div>
           <textarea
             ref={textareaRef}
             value={text}
@@ -812,8 +824,16 @@ export function ChatInput({
             onPaste={onPaste}
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             rows={1}
-            className="max-h-[84px] min-h-0 min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-5 text-text-normal placeholder:text-text-muted focus:outline-none"
+            className="relative z-[1] min-h-0 w-full resize-none bg-transparent py-0.5 text-[15px] leading-5 text-transparent caret-text-normal placeholder:text-text-muted focus:outline-none"
+            onScroll={(e) => {
+              // Keep the styled layer pinned to the textarea once the text is
+              // long enough to scroll, or the two drift apart.
+              if (highlightRef.current) {
+                highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+              }
+            }}
           />
+          </div>
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
             disabled={!!editingMessageId}
