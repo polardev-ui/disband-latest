@@ -13,7 +13,8 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetSupabaseClient } from "@/lib/supabase/client";
-import { getSavedSessions, getSavedSessionTokens, getSavedRefreshToken, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
+import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
+import { getSavedRefreshToken, saveSwitchRefreshToken, clearSavedRefreshToken } from "@/lib/switch-refresh-tokens";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
 import { requestUnreadJump } from "@/lib/notification-jump";
@@ -419,11 +420,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const rememberSession = useCallback((s: Session | null | undefined, p?: Profile | null) => {
     persistSavedSession(s, p);
+    // Persist the refresh token alongside the saved-account entry so the
+    // account stays switchable across restarts (see switch-refresh-tokens).
+    if (s?.user?.id && s.refresh_token) saveSwitchRefreshToken(s.user.id, s.refresh_token);
     setSavedSessions(getSavedSessions());
   }, []);
 
   const removeSavedAccount = useCallback((userId: string) => {
     dropSavedSession(userId);
+    clearSavedRefreshToken(userId);
     setSavedSessions(getSavedSessions());
   }, []);
 
