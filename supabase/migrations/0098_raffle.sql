@@ -19,7 +19,10 @@
 -- write the entry pool. That keeps the pool un-tamperable: a participant who
 -- could edit their own row could weight their own odds.
 
-begin;
+-- No explicit BEGIN/COMMIT: the migration runner already wraps this in a
+-- transaction, and the rest of this directory relies on that too. An explicit
+-- COMMIT here would close the runner's transaction early and take the
+-- scheduling block out of the migration's atomicity.
 
 -- ---------------------------------------------------------------------------
 -- Draws
@@ -523,10 +526,11 @@ grant execute on function public.raffle_promote_runner_up(uuid) to service_role;
 -- Setup, applied out of band because the endpoint and its secret live in the
 -- app's environment, not the database:
 --
---   select vault.create_secret('https://<project-ref>.supabase.co', 'raffle_url');
+--   select vault.create_secret('https://www.disband.dev/api/cron/raffle', 'raffle_url');
 --   select vault.create_secret('<same value as RAFFLE_CRON_SECRET>', 'raffle_cron_key');
---   update public.raffle_draws
---      set promo_start = '2026-09-26T00:00:00Z', promo_end = '2026-12-15T12:00:00Z';
+--
+-- Use the canonical host. The apex 308-redirects to www, and a cron job has no
+-- business spending a redirect to get there.
 --
 -- If the secrets are absent the jobs are simply not scheduled: a job that
 -- would 401 on every tick is worse than no job, and the owner can always run
@@ -556,36 +560,41 @@ begin
     return;
   end if;
 
+  -- The job body reads the secret from the vault *at run time* rather than
+  -- interpolating it here, matching the content-sentinel job. cron.job.command
+  -- is readable by anything that can select from cron.job, so a literal secret
+  -- in there would be a plaintext copy of a live credential. Reading it live
+  -- also means rotating raffle_cron_key takes effect on the next tick with no
+  -- reschedule.
+  --
   -- unschedule-then-schedule, so re-running this migration is a no-op rather
   -- than a pile of duplicate jobs.
   perform cron.unschedule(jobid) from cron.job where jobname = 'raffle-draw';
   perform cron.schedule('raffle-draw', '5 12 15 12 *',
-    format($job$
+    $job$
       select net.http_post(
-        url := %L,
+        url := (select decrypted_secret from vault.decrypted_secrets where name = 'raffle_url'),
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || %L
+          'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'raffle_cron_key')
         ),
         body := '{"job":"draw"}'::jsonb,
         timeout_milliseconds := 120000
       );
-    $job$, v_url, v_key));
+    $job$);
 
   perform cron.unschedule(jobid) from cron.job where jobname = 'raffle-upkeep';
   perform cron.schedule('raffle-upkeep', '17 * * * *',
-    format($job$
+    $job$
       select net.http_post(
-        url := %L,
+        url := (select decrypted_secret from vault.decrypted_secrets where name = 'raffle_url'),
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || %L
+          'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'raffle_cron_key')
         ),
         body := '{"job":"upkeep"}'::jsonb,
         timeout_milliseconds := 120000
       );
-    $job$, v_url, v_key));
+    $job$);
 end
 $$;
-
-commit;
