@@ -275,7 +275,13 @@ export function ChatMessage({
     />
   ) : multi.length > 1 ? (
     // Several files on one message: the mosaic, rather than a stack of cards.
-    <AttachmentGrid attachments={multi} />
+    <AttachmentGrid
+      attachments={multi}
+      author={author}
+      authorColor={authorColor}
+      isOwn={isOwn}
+      createdAt={message.created_at}
+    />
   ) : message.attachment_url ? (
     <MessageAttachment
       url={message.attachment_url}
