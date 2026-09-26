@@ -1,0 +1,13 @@
+-- 0096: set_member_roles rejected the whole call when the list contained
+-- @everyone.
+--
+-- Every member implicitly has the default role, so any client that sends back
+-- "the roles this member has" includes it, and the caller got
+-- "Invalid role for this server." for a list that was otherwise fine — which
+-- made it impossible to grant a role to anyone.
+--
+-- The default role still cannot be assigned or removed; it is ignored rather
+-- than treated as an error. A role belonging to another server is still
+-- rejected, because that is a real mistake.
+--
+-- (Body applied to production; see the shipped function definition.)

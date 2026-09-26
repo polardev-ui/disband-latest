@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { safeImageUrl } from "@/lib/safe-url";
+import { ImageLightbox } from "./ImageLightbox";
+import type { Profile } from "@/lib/supabase/types";
 
 export interface MessageAttachment {
   url: string;
@@ -48,13 +51,57 @@ const ROW_HEIGHT: Record<number, string> = {
 
 export function AttachmentGrid({
   attachments,
-  onOpen,
+  author,
+  authorColor,
+  isOwn,
+  createdAt,
 }: {
   attachments: MessageAttachment[];
-  onOpen?: (attachment: MessageAttachment, index: number) => void;
+  author?: Profile;
+  authorColor?: string | null;
+  isOwn?: boolean;
+  createdAt?: string;
 }) {
   const images = attachments.filter((a) => isImage(a));
   const others = attachments.filter((a) => !isImage(a));
+  // Which image the lightbox is showing; null when closed. Held here rather
+  // than per tile so the arrows can move between them.
+  const [openAt, setOpenAt] = useState<number | null>(null);
+  const onOpen = (_a: MessageAttachment, index: number) => setOpenAt(index);
+
+  // Left/right walk the set while the lightbox is open. Escape is the
+  // lightbox's own; this only adds what a gallery needs.
+  useEffect(() => {
+    if (openAt === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      setOpenAt((i) => {
+        if (i === null) return i;
+        const next = e.key === "ArrowRight" ? i + 1 : i - 1;
+        // Stop at the ends rather than wrapping, so holding a key does not
+        // spin through the set forever.
+        return Math.min(images.length - 1, Math.max(0, next));
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openAt, images.length]);
+
+  const current = openAt === null ? null : images[openAt] ?? null;
+  const lightbox = current ? (
+    <ImageLightbox
+      open
+      onClose={() => setOpenAt(null)}
+      src={safeImageUrl(current.url) ?? ""}
+      alt={current.name ?? ""}
+      fileName={current.name ?? undefined}
+      author={author}
+      authorColor={authorColor}
+      isOwn={isOwn}
+      createdAt={createdAt}
+    />
+  ) : null;
 
   const tile = (a: MessageAttachment, index: number, className: string) => {
     const src = safeImageUrl(a.url);
@@ -86,6 +133,7 @@ export function AttachmentGrid({
           </div>
         </div>
         {others.length > 0 && <OtherFiles others={others} />}
+        {lightbox}
       </div>
     );
   }
@@ -135,6 +183,7 @@ export function AttachmentGrid({
       )}
 
       {others.length > 0 && <OtherFiles others={others} />}
+      {lightbox}
     </div>
   );
 }

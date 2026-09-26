@@ -1137,6 +1137,10 @@ export function DiscordApp() {
     attachment_type: ChatMessageData["attachment_type"];
     attachment_name?: string | null;
     attachment_size?: number | null;
+    attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
+    display_id?: number;
+    sending?: boolean;
+    uploadProgress?: number;
     reply_to_id?: string | null;
     edited_at?: string | null;
     created_at: string;
@@ -1150,6 +1154,13 @@ export function DiscordApp() {
     attachment_type: m.attachment_type,
     attachment_name: m.attachment_name ?? null,
     attachment_size: m.attachment_size ?? null,
+    // Rebuilding the row field-by-field silently drops anything not listed
+    // here, which is what hid every extra attachment: a 5-image message
+    // arrived at the renderer with only the legacy single-attachment columns.
+    attachments: m.attachments ?? null,
+    display_id: m.display_id,
+    sending: m.sending,
+    uploadProgress: m.uploadProgress,
     reply_to_id: m.reply_to_id ?? null,
     edited_at: m.edited_at ?? null,
     created_at: m.created_at,

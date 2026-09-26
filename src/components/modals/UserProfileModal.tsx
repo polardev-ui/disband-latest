@@ -197,7 +197,11 @@ export function UserProfileModal({
     const next = memberRoleIds.includes(roleId)
       ? memberRoleIds.filter((id) => id !== roleId)
       : [...memberRoleIds, roleId];
-    onSetRoles(next);
+    // Every member implicitly holds @everyone, so it comes back in
+    // memberRoleIds — sending it made the whole call fail as an invalid role,
+    // which meant no role could be granted to anyone.
+    const defaultIds = new Set((serverRoles ?? []).filter((r) => r.is_default).map((r) => r.id));
+    onSetRoles(next.filter((id) => !defaultIds.has(id)));
   };
 
   return (

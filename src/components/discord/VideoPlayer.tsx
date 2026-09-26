@@ -60,23 +60,61 @@ export function VideoPlayer({ src, className = "", onLoad }: VideoPlayerProps) {
     v.currentTime = ratio * duration;
   }
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
+  /**
+   * Real fullscreen, not a full-viewport div.
+   *
+   * This used to just set `position: fixed; inset: 0`, which fills the browser
+   * window but leaves the tab bar and the OS around it — so the button looked
+   * like it did nothing. The Fullscreen API takes over the display properly,
+   * and on the desktop build it fills the window the same way.
+   */
   function toggleFullscreen() {
-    setFullscreen((f) => !f);
+    const el = containerRef.current;
+    if (!el) return;
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void>;
+    };
+    const target = el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+
+    const active = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+    if (active) {
+      void (document.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
+      return;
+    }
+    // Safari and older WebKit (which the desktop build uses) only have the
+    // prefixed form. A rejected promise means the gesture was not trusted;
+    // fall back to the in-page expansion rather than doing nothing.
+    const request = target.requestFullscreen?.bind(target) ?? target.webkitRequestFullscreen?.bind(target);
+    if (!request) {
+      setFullscreen(true);
+      return;
+    }
+    void request().catch(() => setFullscreen(true));
   }
 
+  // The browser owns the state — Escape and F11 change it without going
+  // through the button — so mirror it rather than tracking it ourselves.
   useEffect(() => {
-    if (!fullscreen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFullscreen(false);
+    const sync = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      const active = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      setFullscreen(!!active && active === containerRef.current);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen]);
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
 
   return (
     <div
+      ref={containerRef}
       className={`group relative overflow-hidden bg-black ${
         fullscreen
           ? "fixed inset-0 z-[200] border-0"
