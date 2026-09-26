@@ -13,18 +13,6 @@
       "hidden" : false,
       "layers" : [
         {
-          "glass" : false,
-          "hidden" : false,
-          "image-name" : "background.png",
-          "name" : "background"
-        }
-      ],
-      "name" : "Background"
-    },
-    {
-      "hidden" : false,
-      "layers" : [
-        {
           "fill-specializations" : [
             {
               "appearance" : "tinted",
@@ -48,6 +36,18 @@
         "enabled" : true,
         "value" : 0.5
       }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "background.png",
+          "name" : "background"
+        }
+      ],
+      "name" : "Background"
     }
   ],
   "supported-platforms" : {
