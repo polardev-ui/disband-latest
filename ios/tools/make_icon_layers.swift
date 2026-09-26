@@ -4,80 +4,54 @@ import Foundation
 
 // Layered source art for AppIcon.icon (Icon Composer, Liquid Glass).
 //
-// Same Disband mark as make_icon.swift — blurple gradient behind, white chat
-// bubbles in front — but split into two full-canvas layers so the system can
-// refract glass between them, and with the glyph drawn ~18% larger: at icon
-// sizes the old mark sat small inside the squircle ("make the icon a bit
-// larger"). Usage: swift tools/make_icon_layers.swift <output-dir>
+// The REAL Disband mark (ios/tools/logo.png, white triangle) — NOT the chat
+// bubbles from make_icon.swift. Two full-canvas layers so the system can
+// refract glass between them:
+//   background.png — solid black, opaque, full-bleed.
+//   glyph.png      — the mark on transparency, drawn at ~860pt vs the legacy
+//                    flat icon's 760pt ("make the icon a bit larger").
+//
+// Usage: swift tools/make_icon_layers.swift <logo.png> <output-dir>
+
+let logoPath = CommandLine.arguments[1]
+let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
+try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
 let s = 1024
 let cs = CGColorSpaceCreateDeviceRGB()
 
-func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor {
-    CGColor(colorSpace: cs, components: [r, g, b, a])!
-}
-
-func write(_ ctx: CGContext, to url: URL, alpha: Bool) {
+func write(_ ctx: CGContext, to url: URL) {
     guard let img = ctx.makeImage() else { fatalError("render failed") }
     let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil)!
     CGImageDestinationAddImage(dest, img, nil)
     guard CGImageDestinationFinalize(dest) else { fatalError("write failed: \(url.path)") }
-    print("wrote \(url.path) (\(img.width)x\(img.height)) alpha=\(alpha)")
+    print("wrote \(url.path) (\(img.width)x\(img.height))")
 }
 
-func makeContext(alpha: Bool) -> CGContext {
-    let bitmapInfo = alpha
-        ? CGImageAlphaInfo.premultipliedLast.rawValue
-        : CGImageAlphaInfo.noneSkipLast.rawValue
-    return CGContext(data: nil, width: s, height: s, bitsPerComponent: 8,
-                     bytesPerRow: 0, space: cs, bitmapInfo: bitmapInfo)!
-}
+let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: logoPath) as CFURL, nil)!
+let logo = CGImageSourceCreateImageAtIndex(src, 0, nil)!
+let lw = CGFloat(logo.width), lh = CGFloat(logo.height)
 
-func roundedRect(_ ctx: CGContext, _ r: CGRect, _ radius: CGFloat, _ c: CGColor) {
-    let path = CGPath(roundedRect: r, cornerWidth: radius, cornerHeight: radius, transform: nil)
-    ctx.addPath(path); ctx.setFillColor(c); ctx.fillPath()
-}
-
-let outDir = URL(fileURLWithPath: CommandLine.arguments[1])
-try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
-
-// Layer 1: background. Full-bleed blurple gradient, opaque. Glass refracts
-// against this; Icon Composer never scales it, so bleed to every edge.
+// Background: solid black, opaque.
 do {
-    let ctx = makeContext(alpha: false)
-    let grad = CGGradient(colorsSpace: cs,
-                          colors: [color(0.36, 0.40, 0.96), color(0.28, 0.32, 0.77)] as CFArray,
-                          locations: [0, 1])!
-    ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: s), end: CGPoint(x: 0, y: 0), options: [])
-    write(ctx, to: outDir.appendingPathComponent("background.png"), alpha: false)
+    let ctx = CGContext(data: nil, width: s, height: s, bitsPerComponent: 8,
+                        bytesPerRow: 0, space: cs,
+                        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+    ctx.setFillColor(CGColor(colorSpace: cs, components: [0, 0, 0, 1])!)
+    ctx.fill(CGRect(x: 0, y: 0, width: s, height: s))
+    write(ctx, to: outDir.appendingPathComponent("background.png"))
 }
 
-// Layer 2: glyph. White bubbles + blurple dots on transparency, drawn 18%
-// larger about the canvas center than the legacy flat icon.
+// Glyph: the mark on transparency, larger than the legacy icon.
 do {
-    let ctx = makeContext(alpha: true)
-    ctx.translateBy(x: CGFloat(s) / 2, y: CGFloat(s) / 2)
-    ctx.scaleBy(x: 1.18, y: 1.18)
-    ctx.translateBy(x: -CGFloat(s) / 2, y: -CGFloat(s) / 2)
-
-    // Back bubble (faint white) for depth
-    roundedRect(ctx, CGRect(x: 360, y: 380, width: 470, height: 380), 110, color(1, 1, 1, 0.32))
-
-    // Front bubble (solid white) + tail
-    let front = CGRect(x: 200, y: 320, width: 470, height: 380)
-    roundedRect(ctx, front, 110, color(1, 1, 1))
-    ctx.beginPath()
-    ctx.move(to: CGPoint(x: 300, y: 340))
-    ctx.addLine(to: CGPoint(x: 250, y: 230))
-    ctx.addLine(to: CGPoint(x: 405, y: 340))
-    ctx.closePath()
-    ctx.setFillColor(color(1, 1, 1)); ctx.fillPath()
-
-    // Three blurple dots inside the front bubble
-    ctx.setFillColor(color(0.34, 0.39, 0.95))
-    let cy = front.midY + 10, d: CGFloat = 60
-    for cx in [front.midX - 132, front.midX, front.midX + 132] {
-        ctx.fillEllipse(in: CGRect(x: cx - d / 2, y: cy - d / 2, width: d, height: d))
-    }
-    write(ctx, to: outDir.appendingPathComponent("glyph.png"), alpha: true)
+    let ctx = CGContext(data: nil, width: s, height: s, bitsPerComponent: 8,
+                        bytesPerRow: 0, space: cs,
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.clear(CGRect(x: 0, y: 0, width: s, height: s))
+    let target: CGFloat = 860
+    let scale = target / max(lw, lh)
+    let w = lw * scale, h = lh * scale
+    ctx.interpolationQuality = .high
+    ctx.draw(logo, in: CGRect(x: (CGFloat(s) - w) / 2, y: (CGFloat(s) - h) / 2, width: w, height: h))
+    write(ctx, to: outDir.appendingPathComponent("glyph.png"))
 }
