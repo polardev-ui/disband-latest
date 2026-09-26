@@ -40,8 +40,10 @@ export type AuthGateKind =
   | "login_rate_limited"
   | "login_vpn_blocked"
   | "login_banned"
+  | "login_vpn_detection_unavailable"
   | "signup_rate_limited"
-  | "signup_vpn_blocked";
+  | "signup_vpn_blocked"
+  | "signup_vpn_detection_unavailable";
 
 /**
  * Patch 6: failed-login/abuse digest backing. Awaited, never throws —

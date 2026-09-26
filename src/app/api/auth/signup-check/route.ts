@@ -154,21 +154,28 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
-  // VPN/proxy block is always on for signup. Fail-OPEN on detection
-  // unavailability: checkVpnStrict returns blocked:false when no provider can
-  // answer, so a flaky provider can never lock out signups.
-  // Local/private IPs bypass inside checkVpnStrict.
+  // VPN/proxy block is always on for signup — signup is the account-farming
+  // surface, so this gate matters most.
+  //
+  // FAIL-OPEN on detection unavailability, deliberately. `unavailable` means
+  // "no provider could tell us", which is not evidence of a VPN. The free IPQS
+  // tier caps at ~35 lookups/day, so quota exhaustion is an expected daily
+  // condition, not an attack — rejecting on it would convert a third-party
+  // billing limit into a total signup outage. Local/private IPs bypass inside
+  // checkVpnStrict. Only a confirmed two-provider block rejects.
   if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
     const vpn = await checkVpnStrict(checkIp);
     if (vpn.blocked) {
       await logGateEvent(service, "signup_vpn_blocked", ipHash, emailHash);
       return NextResponse.json({
         allowed: false,
-        code: vpn.unavailable ? "VPN_DETECTION_UNAVAILABLE" : "VPN_BLOCKED",
-        error: vpn.unavailable
-          ? "Account creation is temporarily unavailable from your network. Try again shortly."
-          : "Sign up from VPN or proxy connections is not allowed.",
+        code: "VPN_BLOCKED",
+        error: "Sign up from VPN or proxy connections is not allowed.",
       }, { status: 403 });
+    }
+    if (vpn.unavailable) {
+      // Logged, not enforced — see the fail-open note above.
+      await logGateEvent(service, "signup_vpn_detection_unavailable", ipHash, emailHash);
     }
   }
 

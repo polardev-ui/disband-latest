@@ -77,6 +77,21 @@ function blockedFromIpApi(data: unknown): boolean {
 }
 
 /**
+ * The strong-signal subset of the ip-api verdict: `proxy` only.
+ *
+ * ip-api's `hosting` flag is notoriously noisy on clean egress — carrier NAT,
+ * CGNAT, university and corporate pools, some mobile networks all answer
+ * `hosting: true` while being ordinary households. It is a *hint*, not proof.
+ * `proxy: true` is the field that actually means a forwarding/anonymising hop,
+ * so when ip-api is the only provider that answered we trust this subset alone
+ * and let the noisy `hosting` hint stand down.
+ */
+function proxyOnlyFromIpApi(data: unknown): boolean {
+  const d = data as { proxy?: boolean };
+  return !!d.proxy;
+}
+
+/**
  * Strict check used by the signup/login gates.
  *
  * Returns a verdict object. `unavailable: true` WITHOUT `blocked` means the
@@ -98,32 +113,70 @@ export async function checkVpnStrict(ip: string): Promise<VpnCheckResult> {
 
   const apiKey = process.env.IPQUALITYSCORE_API_KEY;
 
-  // Primary: IPQualityScore (strict). A config'd-but-unreachable key is NOT
-  // a verdict — fall through to the secondary before deciding anything.
+  // Ask BOTH providers before weighing anything. Each is given a fair shot and
+  // we record what it actually answered — a provider that is quota-exhausted
+  // (free IPQS caps at ~35 lookups/day), unreachable, or misconfig'd simply
+  // contributes no vote. That unavailability must never masquerade as a block.
+  let ipqs: VpnVerdict | undefined;   // answered with a real verdict
   if (apiKey) {
     const r = await fetchAny([
       `https://ipqualityscore.com/api/json/ip/${apiKey}/${encodeURIComponent(ip)}?strictness=1&allow_public_access_points=false&fast=true`,
     ], 4000);
     if (r.ok && isIpqsVerdict(r.data)) {
-      const blocked = blockedFromIpqs(r.data);
-      setCache(ip, { blocked, unavailable: false });
-      return { blocked, unavailable: false };
+      ipqs = { blocked: blockedFromIpqs(r.data), unavailable: false };
     }
-    // IPQS answered non-verdict (quota exhausted, requestor blocklisted) or
-    // didn't answer — keep walking; a flaky paid key must not ban the wall.
+    // Non-verdict (quota exhausted, caller blocklisted) or no answer: no vote.
+    // A flaky paid key must never be the only thing standing between a clean
+    // user and their account.
   }
 
-  // Secondary: ip-api.com. Free tier is HTTP-only — try https for paid
-  // installs, then http for the common self-host case. Verdicts cached so the
-  // ~45 req/min/IP cap doesn't cascade into a fail-closed outage.
   const fallback = await fetchAny([
     `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
     `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
   ], 4000);
+  let ipApi: VpnVerdict | undefined;   // answered with a real verdict
   if (fallback.ok && isCleanVerdict(fallback.data)) {
-    const blocked = blockedFromIpApi(fallback.data);
-    setCache(ip, { blocked, unavailable: false });
-    return { blocked, unavailable: false };
+    ipApi = { blocked: blockedFromIpApi(fallback.data), unavailable: false };
+  }
+
+  // TWO-PROVIDER CONSENSUS: we only hard-block an IP when both detectors
+  // independently agree it is a VPN/proxy. A real VPN trips BOTH (IPQS vpn/
+  // proxy+tors + ip-api hosting), so bad egress still gets walled. But a lone
+  // muddy signal — IPQS past quota, or ip-api's `hosting` flag lighting up on
+  // legit shared/CGNAT/carrier pools — can never, on its own, strand clean
+  // users. That single-voice false positive is exactly the regression that
+  // kept locking out people who aren't on proxies at all, and it is the
+  // thing we are killing here for $0.
+  if (ipqs && ipApi) {
+    const blocked = ipqs.blocked && ipApi.blocked;
+    const verdict: VpnVerdict = { blocked, unavailable: false };
+    setCache(ip, verdict);
+    return verdict;
+  }
+
+  // IPQS answered but ip-api did not. IPQS is the authoritative strict
+  // detector, so a CLEAN verdict from it stands on its own — that is a
+  // definite pass, not an outage, and reporting it as `unavailable` would
+  // flag every healthy lookup as a detector failure. A BLOCKED verdict is
+  // different: one positive from a single provider is not a conviction, so
+  // it degrades to inconclusive and fails open rather than banning on the
+  // word of one detector.
+  if (ipqs && !ipApi) {
+    const verdict: VpnVerdict = ipqs.blocked
+      ? { blocked: false, unavailable: true, reason: "VPN_DETECTION_UNAVAILABLE" }
+      : { blocked: false, unavailable: false };
+    setCache(ip, verdict);
+    return verdict;
+  }
+
+  // Only the fallback answered (no key, or IPQS down). Its `hosting` flag is
+  // notoriously noisy on clean ranges, so alone it may never block — but a
+  // plain `proxy` verdict from it IS a strong, real signal we still trust.
+  if (!ipqs && ipApi) {
+    const blocked = proxyOnlyFromIpApi(fallback.data);
+    const verdict: VpnVerdict = { blocked, unavailable: false };
+    setCache(ip, verdict);
+    return verdict;
   }
 
   // Nobody could answer. That is NOT the same as "the IP is a VPN" — report
