@@ -16,7 +16,7 @@ import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshS
 import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
 import { getSavedRefreshToken, saveSwitchRefreshToken, clearSavedRefreshToken } from "@/lib/switch-refresh-tokens";
 import { isTauri } from "@/lib/platform";
-import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission } from "@/lib/notifications";
+import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground } from "@/lib/notifications";
 import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
@@ -1476,10 +1476,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [configured, rememberSession]);
 
+  // Lightweight catch-up for anything the socket missed while the tab was
+  // hidden or the connection dropped: reload the open conversation plus the
+  // thread/group lists and unread state. Deliberately cheaper than
+  // refreshAll (no profile/servers/friendships reload) because this runs on
+  // every tab switch and window focus.
+  const refreshConversation = useCallback(async () => {
+    const uid = sessionRef.current?.user?.id;
+    if (!uid) return;
+    const dmId = activeDmRef.current;
+    const channelId = activeChannelRef.current;
+    const groupId = activeGroupRef.current;
+    await Promise.all([
+      dmId ? loadDmMessages(dmId) : Promise.resolve(),
+      channelId ? loadMessages(channelId) : Promise.resolve(),
+      groupId ? loadGroupMessages(groupId) : Promise.resolve(),
+      loadDmThreads(uid),
+      loadGroupChats(uid),
+    ]);
+    await seedUnread(uid);
+  }, [loadDmMessages, loadMessages, loadGroupMessages, loadDmThreads, loadGroupChats, seedUnread]);
+
   useEffect(() => {
     if (!configured) return;
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      // Coming back with a DM open means everything on screen was seen:
+      // clear its badge and advance the server read cursor.
+      if (viewModeRef.current === "dm" && activeDmRef.current) {
+        clearDmUnread(activeDmRef.current);
+        void markDmReadNow(activeDmRef.current);
+      }
+      void refreshConversation();
       void (async () => {
 
         const session = sessionRef.current;
@@ -1498,7 +1526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [configured, refreshAll]);
+  }, [configured, refreshAll, refreshConversation]);
 
   useEffect(() => {
     if (!configured) return;
@@ -1842,7 +1870,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
             if (msg.author_id !== userId && author) {
 
-              void markDmReadNow(msg.thread_id);
+              if (isAppInBackground()) {
+                // Tab hidden or app unfocused: this message was NOT seen.
+                // Never mark it read — count it unread so the badge (and a
+                // refresh) keeps it. The alert below still fires through the
+                // background rule.
+                setDmUnreadMap((prev) => {
+                  const next = new Map(prev);
+                  const cur = next.get(msg.thread_id);
+                  next.set(msg.thread_id, {
+                    friend: author,
+                    count: (cur?.count ?? 0) + 1,
+                    latestAt: msg.created_at,
+                  });
+                  return next;
+                });
+              } else {
+                void markDmReadNow(msg.thread_id);
+              }
               alertIncomingDm(
                 displayName(author),
                 msg.content.slice(0, 120) || undefined,

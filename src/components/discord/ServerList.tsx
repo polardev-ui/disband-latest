@@ -6,6 +6,7 @@ import { Tooltip } from "./Tooltip";
 import { IconVerified, IconHome, IconPlus, IconCompass, IconChevron } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile, Server, ServerFolder, ServerListState, ViewMode } from "@/lib/supabase/types";
 
 export interface DmRailUnread {
@@ -150,6 +151,12 @@ function DropIndicator({ edge }: { edge: "before" | "after" }) {
   );
 }
 
+// Hover member counts, cached per server id for the session. A request in
+// flight is marked with PENDING_COUNTS so rapid re-hovers share it.
+type ServerCounts = { total: number; online: number };
+const PENDING_COUNTS = { total: -1, online: -1 };
+const serverCountCache = new Map<string, ServerCounts>();
+
 function ServerButton({
   server,
   active,
@@ -177,15 +184,62 @@ function ServerButton({
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }) {
+  // Member counts are fetched lazily on first hover (one cheap RPC, cached
+  // per server) so the rail never pays for servers you only glance past.
+  const [counts, setCounts] = useState<{ total: number; online: number } | null>(() => {
+    const cached = serverCountCache.get(server.id);
+    return cached && cached !== PENDING_COUNTS ? cached : null;
+  });
+  const ensureCounts = () => {
+    if (serverCountCache.has(server.id)) {
+      const cached = serverCountCache.get(server.id);
+      if (cached && cached !== PENDING_COUNTS) setCounts(cached);
+      return;
+    }
+    // Sentinel so concurrent hovers share one request; cleared on failure.
+    serverCountCache.set(server.id, PENDING_COUNTS);
+    void getSupabaseClient()
+      .rpc("get_server_member_counts", { p_server_id: server.id })
+      .maybeSingle()
+      .then(
+        ({ data }) => {
+          const row = data as { total?: number | string; online?: number | string } | null;
+          if (row && row.total != null) {
+            const value = { total: Number(row.total), online: Number(row.online ?? 0) };
+            serverCountCache.set(server.id, value);
+            setCounts(value);
+          } else {
+            serverCountCache.delete(server.id);
+          }
+        },
+        () => {
+          serverCountCache.delete(server.id);
+        },
+      );
+  };
   return (
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onMouseEnter={ensureCounts}
       className="relative flex w-full justify-center rounded-lg"
     >
       {dropBefore && <DropIndicator edge="before" />}
       {dropAfter && <DropIndicator edge="after" />}
-      <Tooltip label={server.name}>
+      <Tooltip
+        label={
+          <span className="flex flex-col items-start gap-0.5">
+            <span>{server.name}</span>
+            {counts && (
+              <span className="text-xs font-medium">
+                <span className="text-text-muted">{counts.total} member{counts.total === 1 ? "" : "s"}</span>
+                <span className="text-text-muted"> · </span>
+                <span className="text-status-online">{counts.online} online</span>
+              </span>
+            )}
+          </span>
+        }
+      >
         <button
           type="button"
           aria-label={server.name}

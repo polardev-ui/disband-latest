@@ -53,6 +53,8 @@ interface ChannelListProps {
 
   catalystCount?: number;
   onOpenCatalysts?: () => void;
+  /** Server banner shown behind the header title with a fade. Null = plain header. */
+  bannerUrl?: string | null;
 }
 
 function MiniAvatar({ profile }: { profile?: Profile }) {
@@ -108,6 +110,7 @@ export function ChannelList({
   getMentionCount,
   catalystCount,
   onOpenCatalysts,
+  bannerUrl,
 }: ChannelListProps) {
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => getCollapsedCategories());
@@ -487,6 +490,48 @@ export function ChannelList({
   return (
     <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary">
       {showServerHeader && (
+        bannerUrl && safeImageUrl(bannerUrl) ? (
+          <div className="relative h-24 shrink-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={safeImageUrl(bannerUrl)!}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-bg-secondary" />
+            <div className="absolute right-2 top-2 flex items-center gap-1">
+              {canManageChannels && (
+                <button
+                  type="button"
+                  onClick={() => setAddingCategory((v) => !v)}
+                  aria-label="Create category"
+                  className="rounded bg-black/40 p-1 text-white/80 transition-colors hover:text-white"
+                >
+                  <IconPlus size={16} />
+                </button>
+              )}
+              <span className="[&_button]:text-white/80">
+                <NotificationBell />
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenServerSettings}
+              className="absolute inset-x-0 bottom-0 flex min-w-0 items-center justify-between px-4 pb-2 pt-6 text-left"
+            >
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="truncate text-[15px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{title}</span>
+                {verified && (
+                  <Tooltip label="This space is officially verified by Disband">
+                    <IconVerified size={15} className="shrink-0 text-sky-400" />
+                  </Tooltip>
+                )}
+              </span>
+              <IconChevron size={18} className="shrink-0 text-white/70" />
+            </button>
+          </div>
+        ) : (
         <div className="flex h-12 shrink-0 items-center border-b border-black/20 px-4 shadow-sm">
           <button
             type="button"
@@ -517,6 +562,7 @@ export function ChannelList({
             <NotificationBell />
           </span>
         </div>
+        )
       )}
       {onOpenCatalysts && (
         <button
