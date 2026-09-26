@@ -90,6 +90,14 @@ export default {
       return upload(request, env);
     }
 
+    // Import by URL: fetch a remote image (a catbox.moe link, a direct PNG
+    // off someone's site) straight into R2 so the app stores its own copy
+    // instead of hotlinking a host it doesn't control. Same auth, rate
+    // limit, quota, hash-ban, and asset-registration contract as `upload`.
+    if (request.method === "POST" && pathname === "/v1/images/import") {
+      return importFromUrl(request, env);
+    }
+
     if ((request.method === "GET" || request.method === "HEAD")
         && pathname.startsWith("/v1/images/")) {
       return serve(request, env, decodeURIComponent(pathname.slice("/v1/images/".length)));
@@ -267,6 +275,204 @@ async function upload(request, env) {
 
 function hex(buffer) {
   return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* ---------------------------------------------------------- import by url */
+
+/**
+ * Fetch a remote image into R2 on the user's behalf.
+ *
+ * SSRF shape, in layers (no single layer is trusted alone):
+ *   1. `isImportableUrl` refuses non-https URLs, credentials, odd ports, and
+ *      hostnames that obviously name private/loopback/link-local space —
+ *      re-checked on every redirect hop (max 3), same as link previews.
+ *   2. `global_fetch_strictly_public` (wrangler.toml) makes the runtime
+ *      refuse to connect to private/reserved IPs even if DNS lies to us
+ *      between the check and the fetch (TOCTOU).
+ *   3. The response must declare image/*, its first bytes must sniff as that
+ *      same image type, and the body is capped at the upload limit while
+ *      streaming — a header claiming 2 KB can still hide a 2 GB body.
+ */
+const IMPORT_UA = "DisbandImageImport/1.0 (+https://www.disband.dev)";
+const IMPORT_MAX_HOPS = 3;
+const IMPORT_TIMEOUT_MS = 15000;
+
+function isImportableUrl(raw) {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 2000) return false;
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+  // Imports become our bytes served from our origin: https only, so a
+  // plaintext hop can never launder itself into a trusted CDN URL.
+  if (parsed.protocol !== "https:") return false;
+  if (!isFetchableUrl(raw)) return false;
+  return true;
+}
+
+/** Read a body stream with a hard byte cap; null when it runs over. */
+async function readCappedBytes(body, cap) {
+  const reader = body?.getReader();
+  if (!reader) return null;
+  const chunks = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > cap) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+  const out = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+async function importFromUrl(request, env) {
+  const auth = await requireUser(request, env);
+  if (auth.error) return json({ error: auth.error }, auth.status, env);
+
+  const uploadLimit = await env.UPLOAD_RATE_LIMITER.limit({ key: auth.userId });
+  if (!uploadLimit.success) return json({ error: "Too many uploads. Try again shortly." }, 429, env);
+
+  const limit = maxUploadBytes(env);
+  const limitMb = Math.round(limit / (1024 * 1024));
+
+  let sourceUrl;
+  try {
+    sourceUrl = (await request.json())?.url;
+  } catch {
+    return json({ error: "Expected a JSON body with a url field." }, 400, env);
+  }
+  if (!isImportableUrl(sourceUrl)) {
+    return json({ error: "That URL can't be imported. Use a direct https:// image link." }, 400, env);
+  }
+
+  // Follow redirects manually so every hop is revalidated; fetch's automatic
+  // redirect following would not re-check the target.
+  let upstream;
+  try {
+    let next = sourceUrl;
+    for (let hop = 0; hop <= IMPORT_MAX_HOPS; hop++) {
+      upstream = await fetch(next, {
+        headers: {
+          "user-agent": IMPORT_UA,
+          accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(IMPORT_TIMEOUT_MS),
+      });
+      const location = upstream.headers.get("location");
+      if (!(upstream.status >= 300 && upstream.status < 400 && location)) break;
+      if (hop === IMPORT_MAX_HOPS) {
+        return json({ error: "The image redirected too many times." }, 502, env);
+      }
+      next = new URL(location, next).toString();
+      if (!isImportableUrl(next)) {
+        return json({ error: "The image redirected somewhere it shouldn't." }, 502, env);
+      }
+    }
+  } catch {
+    return json({ error: "Could not reach that URL." }, 502, env);
+  }
+
+  if (!upstream.ok || !upstream.body) {
+    return json({ error: `The image host answered ${upstream.status}.` }, 502, env);
+  }
+
+  const declared = (upstream.headers.get("content-type") ?? "application/octet-stream")
+    .split(";", 1)[0].trim().toLowerCase();
+  if (!declared.startsWith("image/")) {
+    return json({ error: "That URL isn't an image." }, 400, env);
+  }
+
+  const contentLength = Number(upstream.headers.get("content-length") ?? 0);
+  if (Number.isSafeInteger(contentLength) && contentLength > limit) {
+    return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
+  }
+
+  const bytes = await readCappedBytes(upstream.body, limit);
+  if (!bytes) {
+    return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
+  }
+
+  // Trust the bytes, not the header: the declared type must sniff as itself.
+  // Unknown bytes are refused outright — unlike `upload`, there is no
+  // original filename to fall back on for an extension.
+  const sniffed = await sniffInlineType(new Blob([bytes]));
+  if (!sniffed || sniffed !== declared) {
+    return json({ error: "That file isn't the image it claims to be." }, 400, env);
+  }
+
+  // From here the contract matches `upload`: quota, key, hash-ban, register.
+  const quotaId = env.MEDIA_QUOTA.idFromName(auth.userId);
+  const quota = env.MEDIA_QUOTA.get(quotaId);
+  const reservation = await quota.fetch("https://quota/reserve", {
+    method: "POST",
+    body: JSON.stringify({ bytes: bytes.byteLength }),
+  });
+  if (!reservation.ok) {
+    return json({ error: "Your media storage quota has been reached." }, 429, env);
+  }
+
+  let key;
+  let quotaReleased = false;
+  const rollbackQuota = () => quota.fetch("https://quota/rollback", {
+    method: "POST",
+    body: JSON.stringify({ bytes: bytes.byteLength }),
+  }).catch(() => undefined);
+  try {
+    const contentType = storageTypeFor(declared);
+    let filename = "image";
+    try {
+      const last = new URL(sourceUrl).pathname.split("/").pop();
+      if (last) filename = last.slice(0, 200);
+    } catch { /* keep the default */ }
+    key = `${auth.userId}/${crypto.randomUUID()}.${extensionOf(filename, declared)}`;
+    const url = `${env.PUBLIC_BASE}/v1/images/${key}`;
+
+    const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
+    if (await isHashBanned(env, sha256)) {
+      key = null;
+      await rollbackQuota();
+      quotaReleased = true;
+      await recordBlockedUpload(env, sha256, auth.userId);
+      return json({ error: "That file can't be uploaded. If you believe this is a mistake, contact support." }, 451, env);
+    }
+
+    await env.MEDIA.put(key, bytes, {
+      httpMetadata: {
+        contentType,
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+      customMetadata: {
+        uploadedBy: auth.userId,
+        uploadedAt: new Date().toISOString(),
+        importedFrom: sourceUrl.slice(0, 500),
+      },
+    });
+    await registerAsset(env, { url, key, sha256, bytes: bytes.byteLength, contentType, userId: auth.userId });
+    return json({ url, key }, 200, env);
+  } catch (error) {
+    if (key) await env.MEDIA.delete(key).catch(() => undefined);
+    if (!quotaReleased) await rollbackQuota();
+    throw error;
+  }
 }
 
 /** Supabase REST with the service key, or null when it isn't configured. */

@@ -14,6 +14,7 @@ reversed.
 | Route | What it does |
 | --- | --- |
 | `POST /v1/images` | Upload. Requires a signed-in user's bearer token. |
+| `POST /v1/images/import` | Import by URL (`{ "url": "https://…" }`). Fetches a remote image — a catbox.moe link, a direct PNG — with a browser-style user agent, SSRF-checked on every redirect hop, sniff-verified as the image type it claims, and stored under the same auth, rate-limit, quota, and hash-ban contract as an upload. |
 | `GET /v1/images/<key>` | Serve a stored object, with range support for video. |
 | `GET /v1/link/preview?url=` | Scrapes Open Graph tags, cached an hour at the edge. |
 | `GET /v1/giphy/search?q=&limit=` | GIF search via Klipy, cached six hours. |
