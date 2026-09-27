@@ -9,7 +9,7 @@ FPS=${2:-60}
 OUT=${3:-build/disband-commercial-16x9-1080p.mp4}
 FFMPEG=${FFMPEG:-ffmpeg}
 
-"$FFMPEG" -y -hide_banner -loglevel warning -stats \
+"$FFMPEG" -y -hide_banner -loglevel warning -nostats \
   -framerate "$FPS" -i "$FRAMES/f%05d.png" \
   -i build/audio/mix.wav \
   -map 0:v -map 1:a \
