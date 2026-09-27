@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Disband YouTube channel art, 2560×1440. Everything that must be seen sits
+     in YouTube's 1546×423 centre area, which every device shows; the rest is
+     only visible on TVs and wide desktops. ?theme=dark for the dark variant. -->
+<style>
+@font-face { font-family: "Inter"; src: url("../commercial/assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg: #ffffff; --ink: #0b0b0c; --ink2: #1d1d1f; --gray: #86868b; --rule: #d2d2d7; }
+:root[data-theme="dark"] { --bg: #000000; --ink: #ffffff; --ink2: #e8e8ed; --gray: #86868b; --rule: #3a3a3c; }
+html, body { width: 2560px; height: 1440px; overflow: hidden; background: var(--bg); }
+body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; color: var(--ink); }
+.safe { position: absolute; left: 507px; top: 508px; width: 1546px; height: 423px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.lockup { display: flex; align-items: center; gap: 56px; }
+.mark { width: 142px; height: 160px; color: var(--ink); }
+.mark svg { width: 100%; height: 100%; display: block; }
+.word { font-size: 118px; font-weight: 600; letter-spacing: 0.3em; margin-right: -0.3em; line-height: 1; }
+.tag { margin-top: 46px; display: flex; align-items: center; gap: 26px; font-size: 42px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink2); }
+.tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rule); }
+.tag .url { color: var(--gray); font-weight: 500; }
+.guide { position: absolute; outline: 3px dashed #ff3b30; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="safe">
+  <div class="lockup"><div class="mark"><svg><use href="#mark"/></svg></div><div class="word">DISBAND</div></div>
+  <div class="tag"><span>Privacy first, privacy always.</span><span class="dot"></span><span class="url">disband.dev</span></div>
+</div>
+<svg width="0" height="0" style="position:absolute"><defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol></defs></svg>
+<script type="module">
+const q = new URLSearchParams(location.search);
+if (q.get("theme") === "dark") document.documentElement.dataset.theme = "dark";
+if (q.has("guides")) {
+  // YouTube's crop areas: TV (full), desktop max 2560×423, tablet 1855×423, all devices 1546×423.
+  for (const [w, h] of [[2560, 423], [1855, 423], [1546, 423]]) {
+    const g = document.createElement("div");
+    g.className = "guide";
+    Object.assign(g.style, { left: `${(2560 - w) / 2}px`, top: `${(1440 - h) / 2}px`, width: `${w}px`, height: `${h}px` });
+    document.body.appendChild(g);
+  }
+}
+const svg = await fetch("../commercial/assets/logo/disband-mark.svg").then((r) => r.text());
+document.getElementById("markpath").setAttribute("d", svg.match(/ d="([^"]+)"/)[1]);
+await document.fonts.ready;
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>
