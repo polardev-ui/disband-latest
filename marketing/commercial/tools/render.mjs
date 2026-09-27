@@ -29,15 +29,30 @@ const t0 = Date.now();
 async function worker(id) {
   const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  page.setDefaultTimeout(180000);
   page.on("pageerror", (e) => console.error(`[w${id}] pageerror`, e.message));
   await page.goto(`${origin}/src/stage.html${preview ? "?preview" : ""}`);
   await page.waitForSelector("body[data-ready]", { timeout: 300000 });
   // Interleave frames across workers so heavy 3D stretches are shared.
   for (let i = id; i < todo.length; i += workers) {
     const { f, file } = todo[i];
-    await page.evaluate((t) => window.renderFrame(t), f / fps);
-    await page.screenshot({ path: file + ".tmp.png" });
-    fs.renameSync(file + ".tmp.png", file);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        // Finish the GL work inside the page first, so the capture itself
+        // never waits on a long software-rendered frame.
+        await page.evaluate(async (t) => {
+          await window.renderFrame(t);
+          const gl = document.getElementById("gl").getContext("webgl2");
+          if (gl) gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+        }, f / fps);
+        await page.screenshot({ path: file + ".tmp.png", timeout: 180000 });
+        fs.renameSync(file + ".tmp.png", file);
+        break;
+      } catch (e) {
+        if (attempt >= 3) throw e;
+        console.error(`[w${id}] frame ${f} attempt ${attempt} failed: ${e.message.split("\n")[0]}; retrying`);
+      }
+    }
     done++;
     if (done % 50 === 0) {
       const el = (Date.now() - t0) / 1000;
