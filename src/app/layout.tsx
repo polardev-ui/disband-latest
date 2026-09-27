@@ -1,8 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
+
+// Geist (Vercel) — self-hosted via next/font/google → woff2 bundled at build,
+// served from our own origin, no runtime font CDN hit (privacy-first).
+const GeistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
 
@@ -91,7 +96,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme="dark" suppressHydrationWarning
+          className={`${GeistSans.variable}`}>
       <head>
         <meta name="referrer" content="no-referrer" />
         <Script id="theme-init" strategy="beforeInteractive">

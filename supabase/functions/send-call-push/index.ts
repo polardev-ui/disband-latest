@@ -257,10 +257,25 @@ Deno.serve(async (req) => {
    * but it is a ring, so it is what those devices get.
    */
   const iosTokens = voipTokens ?? [];
-  const voipTokenSet = new Set(iosTokens.map((t) => t.token));
-  const fallbackTokens = (alertTokens ?? []).filter((t) => !voipTokenSet.has(t.token));
 
-  const registered = iosTokens.length + fallbackTokens.length + (androidTokens?.length ?? 0);
+  /**
+   * The alert push is a FALLBACK, and it was not behaving like one.
+   *
+   * It filtered the alert tokens against the set of VoIP token strings, which
+   * can never match: PushKit issues a device a completely different token
+   * from the one APNs issues the same app on the same device. So an iPhone
+   * holding both got the CallKit ring AND an "Incoming call" banner for the
+   * same call — two rings, one of which cannot be answered.
+   *
+   * It is now decided after the fact, below: the VoIP pushes go first, and
+   * the alerts are sent only if not one of them was accepted. That keeps the
+   * safety net for devices whose VoIP token is stale or missing without
+   * double-ringing everyone who has a working one. Sequencing costs one extra
+   * round trip on a path that is already a network call to Apple.
+   */
+  const alertCandidates = alertTokens ?? [];
+
+  const registered = iosTokens.length + alertCandidates.length + (androidTokens?.length ?? 0);
   if (!registered) {
     // Logged, because "the callee has no device registered" and "the push
     // failed" look identical from the caller and are fixed differently.
@@ -277,18 +292,20 @@ Deno.serve(async (req) => {
     type: "voice",
   };
 
-  // iOS: PushKit VoIP push, then a plain alert for devices without one.
-  if (iosTokens.length || fallbackTokens.length) {
+  // iOS: PushKit VoIP push, then a plain alert only if none of them landed.
+  let alertsSent = 0;
+  if (iosTokens.length || alertCandidates.length) {
     const jwt = await apnsJwt();
     const host = Deno.env.get("APNS_HOST") ?? "api.push.apple.com";
     const bundleId = Deno.env.get("APNS_BUNDLE_ID")!;
 
+    /** Resolves true when Apple accepted the push. */
     const push = async (
       token: string,
       topic: string,
       pushType: "voip" | "alert",
       payload: string,
-    ) => {
+    ): Promise<boolean> => {
       const res = await fetch(`https://${host}/3/device/${token}`, {
         method: "POST",
         headers: {
@@ -311,6 +328,7 @@ Deno.serve(async (req) => {
       } else {
         console.log("APNs error", pushType, res.status, await res.text());
       }
+      return res.ok;
     };
 
     // VoIP pushes use the `.voip` topic; a normal .p8 APNs key signs them too.
@@ -329,10 +347,19 @@ Deno.serve(async (req) => {
       ...dataPayload,
     });
 
-    await Promise.all([
-      ...iosTokens.map(({ token }) => push(token, `${bundleId}.voip`, "voip", voipPayload)),
-      ...fallbackTokens.map(({ token }) => push(token, bundleId, "alert", alertPayload)),
-    ]);
+    const voipAccepted = (
+      await Promise.all(
+        iosTokens.map(({ token }) => push(token, `${bundleId}.voip`, "voip", voipPayload)),
+      )
+    ).filter(Boolean).length;
+
+    // Only now, knowing whether CallKit will actually ring somewhere.
+    if (voipAccepted === 0 && alertCandidates.length) {
+      const results = await Promise.all(
+        alertCandidates.map(({ token }) => push(token, bundleId, "alert", alertPayload)),
+      );
+      alertsSent = results.filter(Boolean).length;
+    }
   }
 
   // Android: FCM v1 data push (data keys must be strings).
@@ -355,7 +382,7 @@ Deno.serve(async (req) => {
 
   console.log("send-call-push result", {
     calleeId, caller: callerId, registered, sent, statuses,
-    voip: iosTokens.length, alertFallback: fallbackTokens.length,
+    voip: iosTokens.length, alertCandidates: alertCandidates.length, alertsSent,
     android: androidTokens?.length ?? 0,
   });
 

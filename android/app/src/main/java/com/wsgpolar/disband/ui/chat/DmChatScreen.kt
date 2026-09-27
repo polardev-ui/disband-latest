@@ -105,6 +105,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
 private fun DmMessage.toRow(): ChatRow = ChatRow(
     id = id,
     author = author,
+    authorId = authorId,
     content = content,
     attachmentType = attachmentType,
     attachmentName = attachmentName,

@@ -54,6 +54,7 @@ object PushRegistrar {
         if (registeredToken != null) return
         try {
             val token = fetchToken()
+            if (token.isBlank()) return
             Database.registerDeviceToken(token, platform = "android")
             registeredToken = token
         } catch (_: Exception) {
@@ -64,10 +65,10 @@ object PushRegistrar {
         val task = FirebaseMessaging.getInstance().token
         task.addOnCompleteListener { t ->
             if (cont.isActive) {
-                if (t.isSuccessful && t.result != null) {
+                if (t.isSuccessful && t.result != null && t.result.isNotBlank()) {
                     cont.resume(t.result)
                 } else {
-                    cont.resume("")
+                    cont.resumeWith(Result.failure(IllegalStateException(t.exception?.message ?: "empty FCM token")))
                 }
             }
         }

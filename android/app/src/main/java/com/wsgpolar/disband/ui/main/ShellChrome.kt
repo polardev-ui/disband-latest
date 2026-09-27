@@ -13,6 +13,19 @@ enum class Destination {
     Home, Friends, Notes, You,
 }
 
+/**
+ * A deep link handed to the shell from outside (notification tap, server
+ * sheet, ...). Any of the three ids may be null; whatever is set is applied,
+ * with Home always the destination, exactly like iOS `ShellRouter.open`.
+ */
+data class PendingNav(
+    val serverId: String? = null,
+    val channelId: String? = null,
+    val threadId: String? = null,
+) {
+    val isBlank: Boolean get() = serverId == null && channelId == null && threadId == null
+}
+
 class ShellChromeState {
     var currentDestination by mutableStateOf(Destination.Home)
     var dockVisible by mutableStateOf(true)
@@ -31,6 +44,14 @@ class ShellChromeState {
         currentDestination = destination
         selectedServerId = serverId
         selectedChannelId = channelId
+    }
+
+    /** Routes the shell to a pending deep link; safe to call with a blank nav. */
+    fun applyPending(nav: PendingNav) {
+        if (nav.isBlank) return
+        currentDestination = Destination.Home
+        selectedServerId = nav.serverId
+        selectedChannelId = nav.channelId ?: nav.threadId
     }
 
     fun isChannelActive(serverId: String, channelId: String): Boolean {

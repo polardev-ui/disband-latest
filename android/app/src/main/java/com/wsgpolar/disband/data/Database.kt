@@ -124,10 +124,13 @@ object Database {
 
     // MARK: - Channel messages
 
-    suspend fun messages(channelId: String, limit: Int = 50): List<Message> {
+    suspend fun messages(channelId: String, limit: Int = 50, before: String? = null): List<Message> {
         val rows = client.from("messages")
             .select(columns(authorEmbed)) {
-                filter { eq("channel_id", channelId) }
+                filter {
+                    eq("channel_id", channelId)
+                    before?.let { lt("created_at", it) }
+                }
                 order("created_at", Order.DESCENDING)
                 limit(limit.toLong())
             }
@@ -269,10 +272,13 @@ object Database {
         postgrest.rpc("mark_group_read", buildJsonObject { put("p_group_id", groupId) })
     }
 
-    suspend fun dmMessages(threadId: String, limit: Int = 50): List<DmMessage> {
+    suspend fun dmMessages(threadId: String, limit: Int = 50, before: String? = null): List<DmMessage> {
         val rows = client.from("dm_messages")
             .select(columns(authorEmbed)) {
-                filter { eq("thread_id", threadId) }
+                filter {
+                    eq("thread_id", threadId)
+                    before?.let { lt("created_at", it) }
+                }
                 order("created_at", Order.DESCENDING)
                 limit(limit.toLong())
             }
@@ -310,10 +316,13 @@ object Database {
             .decodeList()
     }
 
-    suspend fun groupMessages(groupId: String, limit: Int = 50): List<GroupMessage> {
+    suspend fun groupMessages(groupId: String, limit: Int = 50, before: String? = null): List<GroupMessage> {
         val rows = client.from("group_messages")
             .select(columns(authorEmbed)) {
-                filter { eq("group_id", groupId) }
+                filter {
+                    eq("group_id", groupId)
+                    before?.let { lt("created_at", it) }
+                }
                 order("created_at", Order.DESCENDING)
                 limit(limit.toLong())
             }

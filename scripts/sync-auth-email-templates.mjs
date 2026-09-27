@@ -43,6 +43,29 @@ function readTemplate(name) {
   return readFileSync(join(templatesDir, name), "utf8").replace(/\r\n/g, "\n").trim();
 }
 
+/**
+ * Every template the sync owns, so `--verify` covers all of them.
+ *
+ * It used to check `confirmation` alone. That is the one template whose
+ * breakage is loud — nobody can sign up — while the quiet ones cause the
+ * worst confusion: a recovery slot holding the confirmation body sends
+ * "Confirm your email address" to someone who asked to reset a password, and
+ * every layer downstream (Resend's log included) reports a perfectly
+ * delivered email. Checking one template could never have caught that.
+ */
+const TEMPLATES = [
+  { key: "confirmation", file: "confirmation.html" },
+  { key: "magic_link", file: "magic_link.html" },
+  { key: "recovery", file: "recovery.html" },
+  { key: "invite", file: "invite.html" },
+  { key: "email_change", file: "email_change.html" },
+  { key: "reauthentication", file: "reauthentication.html" },
+];
+
+function normalize(s) {
+  return (s ?? "").replace(/\r\n/g, "\n").trim();
+}
+
 if (verifyOnly) {
   const res = await fetch(apiUrl, {
     headers: { Authorization: `Bearer ${token}` },
@@ -52,25 +75,41 @@ if (verifyOnly) {
     process.exit(1);
   }
   const cfg = await res.json();
-  const subject = cfg.mailer_subjects_confirmation;
-  const body = cfg.mailer_templates_confirmation_content ?? "";
 
   console.log("Project:", projectRef);
-  console.log("Stored confirmation subject:", JSON.stringify(subject));
-  console.log("Stored body length:", body.length, "chars");
-  console.log("Body preview:\n", body.slice(0, 400), "\n...");
+  let bad = 0;
 
-  if (body.includes(DEFAULT_SNIPPET)) {
-    console.log("\n❌ GoTrue is still configured with the DEFAULT confirmation template.");
-    console.log("   Dashboard edits may not have saved, or a Send Email hook is overriding templates.");
-    console.log("   Fix: pnpm sync:auth-emails");
-    console.log("   Also check: Authentication → Hooks → disable Send Email hook if enabled.");
-  } else if (body.includes("Welcome to Disband")) {
-    console.log("\n✅ Custom Disband template IS stored in auth config.");
-    console.log("   If emails still look default, check Authentication → Hooks (Send Email).");
-  } else {
-    console.log("\n⚠ Custom template stored but doesn't match repo — run pnpm sync:auth-emails to align.");
+  for (const { key, file } of TEMPLATES) {
+    const stored = normalize(cfg[`mailer_templates_${key}_content`]);
+    const expected = normalize(readTemplate(file));
+    const subject = cfg[`mailer_subjects_${key}`];
+
+    let verdict;
+    if (!stored) {
+      verdict = "❌ EMPTY — GoTrue will send its built-in default";
+    } else if (stored.includes(DEFAULT_SNIPPET) && key !== "confirmation") {
+      // The tell for a slot holding the wrong body: this sentence belongs to
+      // the confirmation mail and nowhere else.
+      verdict = "❌ holds the CONFIRMATION body — wrong template in this slot";
+    } else if (stored === expected) {
+      verdict = "✅ matches the repo";
+    } else {
+      verdict = "⚠ differs from the repo";
+    }
+
+    if (!verdict.startsWith("✅")) bad++;
+    console.log(
+      `  ${key.padEnd(16)} ${String(stored.length).padStart(6)} chars  ` +
+        `subject=${JSON.stringify(subject ?? null)}  ${verdict}`,
+    );
   }
+
+  if (bad) {
+    console.log(`\n${bad} template(s) need attention. Fix: pnpm sync:auth-emails`);
+    console.log("Also check: Authentication → Hooks → a Send Email hook overrides all of these.");
+    process.exit(1);
+  }
+  console.log("\n✅ All six templates match the repo.");
   process.exit(0);
 }
 

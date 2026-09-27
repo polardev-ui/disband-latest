@@ -1,168 +1,92 @@
 "use client";
 
-import { useState } from "react";
-import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
-import { PROFILE_SCENES } from "@/components/shop/effects/ProfileEffect";
-import { DECORATIONS } from "@/components/shop/effects/Decorations";
-import { LottieEffect } from "@/components/shop/effects/LottieEffect";
-import { SHOP_CATEGORIES, formatPrice, itemsIn, type ShopItem } from "@/lib/shop";
+import { useState, type CSSProperties } from "react";
+import Link from "next/link";
+import { ArrowLeft, ArrowUpRight, Check, Moon, Pause, Play, Sun } from "lucide-react";
+import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
+import { ShopModal } from "@/components/shop/ShopModal";
+import { CosmeticMotionContext } from "@/components/shop/AnimatedCosmetic";
+import { ART_COLLECTIONS, formatPrice, shopItem } from "@/lib/shop";
+import "./gallery.css";
 
-/**
- * Every cosmetic in the shop, on one page.
- *
- * Not a mock: each tile renders the same component the app renders, so this
- * doubles as the place to check a new effect before it ships. Rings and
- * overlays change on hover, so the page says so rather than leaving you to
- * find out.
- */
 export default function ShopGalleryPage() {
+  const [selected, setSelected] = useState(0);
+  const [category, setCategory] = useState<"ring" | "overlay">("ring");
+  const [playing, setPlaying] = useState(true);
+  const [light, setLight] = useState(false);
   const [name, setName] = useState("polar");
+  const [shopOpen, setShopOpen] = useState(false);
+  const collection = ART_COLLECTIONS[selected];
+  const item = shopItem(category === "ring" ? collection.ringId : collection.profileId)!;
+  const self = { name };
 
-  return (
-    <main className="min-h-screen bg-bg-primary px-6 py-8 text-text-normal">
-      <header className="mx-auto mb-8 max-w-6xl">
-        <h1 className="text-2xl font-bold">Disband Shop — every cosmetic</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          {itemsIn("name").length} name effects · {itemsIn("ring").length} avatar rings ·{" "}
-          {itemsIn("overlay").length} profile effects. Hover a ring or a profile card to see
-          what it does — that is where each one changes.
-        </p>
-        <label className="mt-4 flex w-fit items-center gap-2 text-sm text-text-muted">
-          Preview name
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-md bg-bg-secondary px-3 py-1.5 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
-          />
-        </label>
+  return <CosmeticMotionContext.Provider value={playing}><main className="shop-studio" data-playing={playing} style={{ "--collection-color": collection.color, "--collection-surface": collection.surface } as CSSProperties}>
+    <div className="shop-studio-shell">
+      <nav className="studio-nav" aria-label="Shop navigation">
+        <Link href="/app" className="studio-wordmark">disband<span>/</span><span>shop</span></Link>
+        <div className="studio-nav-actions">
+          <button className="studio-motion" type="button" onClick={() => setPlaying(!playing)} aria-pressed={!playing}>
+            {playing ? <Pause size={14} /> : <Play size={14} />}<span>{playing ? "Pause motion" : "Play motion"}</span>
+          </button>
+          <Link href="/app" className="studio-back"><ArrowLeft size={15} /> Back to app</Link>
+        </div>
+      </nav>
+
+      <header className="studio-intro">
+        <p className="studio-eyebrow">THE ILLUSTRATED COLLECTION / 01</p>
+        <h1>A profile with personality<span>.</span></h1>
+        <p>Little details. A whole different feeling. Find a frame and a world to go with it.</p>
       </header>
 
-      {/* Proves the Lottie path renders before any real artwork exists. */}
-      <section className="mx-auto mb-12 max-w-6xl">
-        <h2 className="text-lg font-bold">Lottie pipeline</h2>
-        <p className="mb-4 text-sm text-text-muted">
-          A wiring test, not artwork. Drop a real .lottie or .json export into
-          public/shop/lottie and name it on the catalogue entry, and it renders here and
-          on profiles with no other change.
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <article className="rounded-xl border border-divider bg-bg-secondary p-3">
-            <div className="relative h-44 overflow-hidden rounded-lg bg-[#16181d]">
-              <LottieEffect src="/shop/lottie/wiring-test.json" />
+      <div className="studio-layout">
+        <section className="studio-catalogue" aria-label="Cosmetic collections">
+          <div className="studio-catalogue-header">
+            <div className="studio-tabs" role="group" aria-label="Cosmetic type">
+              <button type="button" aria-pressed={category === "ring"} onClick={() => setCategory("ring")}>Avatar decorations <span>03</span></button>
+              <button type="button" aria-pressed={category === "overlay"} onClick={() => setCategory("overlay")}>Profile skins <span>03</span></button>
             </div>
-            <p className="mt-2 text-sm font-semibold">wiring-test.json</p>
-          </article>
-          <article className="rounded-xl border border-divider bg-bg-secondary p-3">
-            <div className="flex h-44 items-center justify-center rounded-lg bg-bg-primary">
-              <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-bg-accent text-xl font-bold">
-                {name.charAt(0).toUpperCase() || "?"}
-                <span className="pointer-events-none absolute" style={{ width: "150%", height: "150%", left: "-25%", top: "-25%" }}>
-                  <LottieEffect src="/shop/lottie/wiring-test.json" />
-                </span>
-              </span>
-            </div>
-            <p className="mt-2 text-sm font-semibold">…as an avatar decoration</p>
-          </article>
-        </div>
-      </section>
-
-      {/* Drawn, for comparison against the generated ones below. */}
-      <section className="mx-auto mb-12 max-w-6xl">
-        <h2 className="text-lg font-bold">Illustrated decorations</h2>
-        <p className="mb-4 text-sm text-text-muted">
-          Hand-drawn paths with shading and a chosen palette, rather than shapes a formula
-          produced. Hover one.
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {Object.entries(DECORATIONS).map(([id, Dec]) => (
-            <article key={id} className="rounded-xl border border-divider bg-bg-secondary p-3">
-              <div className="flex h-44 items-center justify-center rounded-lg bg-bg-primary">
-                <span className="fx-ring relative">
-                  <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-bg-accent text-xl font-bold">
-                    {name.charAt(0).toUpperCase() || "?"}
-                    <Dec />
-                  </span>
-                </span>
-              </div>
-              <p className="mt-2 text-sm font-semibold">{id}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      {SHOP_CATEGORIES.map((category) => (
-        <section key={category.id} className="mx-auto mb-12 max-w-6xl">
-          <h2 className="text-lg font-bold">{category.label}</h2>
-          <p className="mb-4 text-sm text-text-muted">{category.blurb}</p>
-
-          <div
-            className={
-              category.id === "overlay"
-                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                : "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-            }
-          >
-            {itemsIn(category.id).map((item) => (
-              <Tile key={item.id} item={item} name={name} />
-            ))}
           </div>
+          <div className={`studio-products ${category === "overlay" ? "studio-products-profiles" : ""}`}>
+            {ART_COLLECTIONS.map((set, index) => {
+              const product = shopItem(category === "ring" ? set.ringId : set.profileId)!;
+              return <button className={`studio-product ${selected === index ? "is-selected" : ""}`} type="button" key={set.id}
+                onClick={() => setSelected(index)} aria-pressed={selected === index}
+                aria-label={`Preview ${set.name} ${category === "ring" ? "avatar decoration" : "profile skin"}, ${formatPrice(product.priceCents)}`}
+                style={{ "--tile-surface": set.surface, "--tile-color": set.color } as CSSProperties}>
+                <div className="studio-product-art">
+                  {category === "ring" ? <CosmeticAvatar ringId={set.ringId} self={self} size={88} playing={playing} />
+                    : <CosmeticProfile overlayId={set.profileId} self={self} compact playing={playing} />}
+                  <span className="studio-selection" aria-hidden>{selected === index && <Check size={12} strokeWidth={3} />}</span>
+                </div>
+                <div className="studio-product-caption"><span>{set.name}</span><span>{formatPrice(product.priceCents)}</span></div>
+              </button>;
+            })}
+          </div>
+
+          <div className="studio-detail" aria-live="polite">
+            <div className="studio-detail-heading"><p className="studio-eyebrow">{category === "ring" ? "AVATAR DECORATION" : "PROFILE SKIN"}</p><span className="studio-loop-label"><span /> Animated</span></div>
+            <h2>{collection.name}</h2>
+            <p className="studio-tagline">{collection.line}</p>
+            <p className="studio-description">{collection.description}</p>
+            <div className="studio-purchase"><button type="button" className="studio-primary" onClick={() => setShopOpen(true)}>Open shop <ArrowUpRight size={17} /></button><span>{formatPrice(item.priceCents)}<small>One-time purchase</small></span></div>
+          </div>
+
+          <div className="studio-in-context">
+            <div><h3>Small detail. Everywhere.</h3><p>Your decoration follows you into conversations.</p></div>
+            <div className="studio-message"><CosmeticAvatar self={self} ringId={collection.ringId} size={36} playing={playing} /><div><p><strong>{name.trim() || "Your name"}</strong><span>Today at 9:41 PM</span></p><p>Okay, this one feels like me.</p></div></div>
+          </div>
+          <p className="studio-footnote">Permanent cosmetics · Matching pieces sold separately · Respects reduced motion</p>
         </section>
-      ))}
-    </main>
-  );
-}
 
-function Tile({ item, name }: { item: ShopItem; name: string }) {
-  const authored = item.id in PROFILE_SCENES;
-  return (
-    <article className="rounded-xl border border-divider bg-bg-secondary p-3">
-      {item.category === "name" && (
-        <div className="flex h-20 items-center justify-center rounded-lg bg-bg-primary px-3">
-          <span className={`fx-name ${item.className} text-lg font-semibold text-text-normal`}>
-            {item.id === "name-wave"
-              ? Array.from(name).map((c, i) => (
-                  <span key={i} style={{ ["--fx-i" as string]: i }}>
-                    {c === " " ? " " : c}
-                  </span>
-                ))
-              : name}
-          </span>
-        </div>
-      )}
-
-      {item.category === "ring" && (
-        <div className="flex h-24 items-center justify-center rounded-lg bg-bg-primary">
-          <span className={`fx-ring ${item.className}`}>
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-accent text-base font-bold text-text-normal">
-              {name.charAt(0).toUpperCase() || "?"}
-            </span>
-          </span>
-        </div>
-      )}
-
-      {item.category === "overlay" && (
-        // Same proportions as the real profile card, so the scene is judged at
-        // the size it actually plays at.
-        <div className="fx-overlay-host relative h-56 overflow-hidden rounded-lg bg-[#16181d]">
-          <ProfileOverlay itemId={item.id} />
-          <div className="relative z-10 flex h-full flex-col justify-end p-3">
-            <div className="h-12 w-12 rounded-full bg-bg-accent" />
-            <p className="mt-2 text-sm font-bold">{name}</p>
-            <p className="text-xs text-text-muted">@{name.toLowerCase()}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-2 flex items-baseline gap-2">
-        <h3 className="text-sm font-semibold">{item.name}</h3>
-        <span className="ml-auto text-sm font-bold">{formatPrice(item.priceCents)}</span>
+        <aside className="studio-fitting-room" aria-label="Live profile preview">
+          <div className="studio-preview-heading"><span>Your profile, dressed up</span><div role="group" aria-label="Preview appearance"><button type="button" aria-label="Dark preview" aria-pressed={!light} onClick={() => setLight(false)}><Moon size={14} /></button><button type="button" aria-label="Light preview" aria-pressed={light} onClick={() => setLight(true)}><Sun size={14} /></button></div></div>
+          <div className="studio-profile-stage"><CosmeticProfile ringId={collection.ringId} overlayId={collection.profileId} self={self} playing={playing} light={light} /></div>
+          <div className="studio-preview-bottom"><span>Matching set preview</span><span>{collection.name}</span></div>
+          <label className="studio-name-input">Try your name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Your name" /></label>
+        </aside>
       </div>
-      <p className="mt-0.5 text-[12px] leading-4 text-text-muted">{item.description}</p>
-      {item.category === "overlay" && (
-        <p className="mt-1 text-[11px] text-text-muted">
-          {authored ? "Authored scene" : "Awaiting the SVG pass"}
-        </p>
-      )}
-    </article>
-  );
+      <footer className="studio-footer"><span>Make yourself at home.</span><span>DISBAND SHOP</span></footer>
+    </div>
+    <ShopModal open={shopOpen} onClose={() => setShopOpen(false)} self={self} initialCategory={category} />
+  </main></CosmeticMotionContext.Provider>;
 }

@@ -25,6 +25,7 @@ struct ChannelPanel: View {
     @State private var lobby: Channel?
     @State private var showInvite = false
     @State private var showSettings = false
+    @State private var showCatalysts = false
     @State private var confirmLeave = false
     @State private var effects: [String: ChannelEffect] = [:]
     @State private var permissions: [String: Bool] = [:]
@@ -93,6 +94,9 @@ struct ChannelPanel: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(32)
         }
+        .sheet(isPresented: $showCatalysts) {
+            CatalystSheet(serverId: server.id, serverName: server.name)
+        }
         .sheet(isPresented: $showInvite) { InviteSheet(server: server) }
         .sheet(isPresented: $showSettings) { ServerSettingsSheet(server: server) { await onChanged() } }
         .confirmationDialog("Leave \(server.name)?", isPresented: $confirmLeave, titleVisibility: .visible) {
@@ -148,6 +152,9 @@ struct ChannelPanel: View {
     private var menu: some View {
         Menu {
             Button { showInvite = true } label: { Label("Invite People", systemImage: "person.badge.plus") }
+            // Open to every member, not just owners: anyone can Catalyst a
+            // space they are in, which is the whole point of the feature.
+            Button { showCatalysts = true } label: { Label("Catalysts", systemImage: "bolt.fill") }
             if isOwner {
                 Button { showSettings = true } label: { Label("Space Settings", systemImage: "gearshape") }
             } else {

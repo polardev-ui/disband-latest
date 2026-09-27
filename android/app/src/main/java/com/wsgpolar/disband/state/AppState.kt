@@ -100,6 +100,7 @@ class AppState(
                         _profile.value = null
                         _phase.value = AuthPhase.SignedOut
                         presence.stop()
+                        notes.stop()
                         calls.stop()
                     }
                     is SessionStatus.Authenticated -> {
@@ -136,6 +137,7 @@ class AppState(
             _profile.value = null
             _phase.value = AuthPhase.SignedOut
             presence.stop()
+            notes.stop()
             calls.stop()
             return
         }

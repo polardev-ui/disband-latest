@@ -60,6 +60,12 @@ struct StateView: View {
     let kind: Kind
     var title: String = ""
     var systemImage: String = "tray"
+    /// Shown under an error as a "Try again" button. Without one, a failure
+    /// that is only momentary — a database timeout, a dropped connection —
+    /// leaves the reader with nothing to do but back out of the screen.
+    var retry: (() async -> Void)? = nil
+
+    @State private var retrying = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -79,6 +85,28 @@ struct StateView: View {
                     .font(.subheadline)
                     .foregroundStyle(Brand.textSecondary)
                     .multilineTextAlignment(.center)
+                if let retry {
+                    Button {
+                        guard !retrying else { return }
+                        retrying = true
+                        Task {
+                            await retry()
+                            retrying = false
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if retrying { ProgressView().tint(Brand.textPrimary) }
+                            Text(retrying ? "Trying…" : "Try again")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 18)
+                        .frame(height: 40)
+                        .background(Brand.elevated, in: .capsule)
+                        .foregroundStyle(Brand.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(retrying)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

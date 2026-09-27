@@ -18,6 +18,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // immediately even on a cold start.
             CallKitAvailability.start()
             VoipPushService.shared.start()
+            // Before any await that could miss one: `Transaction.updates`
+            // delivers renewals, refunds, and purchases made on another
+            // device, and anything it emits before the listener exists is
+            // gone. It is unrelated to push, but this is the earliest
+            // reliable point in the launch.
+            StoreService.shared.start()
         }
         return true
     }
@@ -88,7 +94,15 @@ final class PushManager {
               client.auth.currentUser != nil else { return }
         do {
             try await client.rpc("register_device_token",
-                                 params: ["p_token": token, "p_platform": "ios"]).execute()
+                                 params: [
+                                    "p_token": token,
+                                    "p_platform": "ios",
+                                    // Which build a token came from is the
+                                    // difference between "old app" and
+                                    // "registration is broken", and those are
+                                    // fixed in different places.
+                                    "p_app_version": Bundle.main.appVersionDisplay,
+                                 ]).execute()
             pendingToken = nil
         } catch {
             print("storeToken error: \(error)")

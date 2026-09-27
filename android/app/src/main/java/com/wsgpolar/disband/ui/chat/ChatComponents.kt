@@ -57,6 +57,8 @@ import com.wsgpolar.disband.ui.main.ShellChromeState
 data class ChatRow(
     val id: String,
     val author: Profile?,
+    /** Raw author id — needed when realtime payloads arrive without the profiles embed. */
+    val authorId: String? = null,
     val content: String,
     val attachmentType: AttachmentType?,
     val createdAt: String,
@@ -79,7 +81,8 @@ internal fun formatFileSize(bytes: Int?): String? {
     else String.format("%.1f %s", value, units[unit])
 }
 
-private fun ChatRow.isMine(ownUserId: String?): Boolean = ownUserId != null && author?.id == ownUserId
+private fun ChatRow.isMine(ownUserId: String?): Boolean =
+    ownUserId != null && (author?.id == ownUserId || authorId == ownUserId)
 
 fun ChatRow.fromProfile() = author
 
@@ -146,9 +149,7 @@ fun ChatScaffold(
                 else -> MessageList(listState, rows, ownUserId)
             }
         }
-        if (replyTo == null) {
-            Composer(palette = palette, onSend = onSend, enabled = sendEnabled)
-        }
+        Composer(palette = palette, onSend = onSend, enabled = sendEnabled)
     }
 }
 

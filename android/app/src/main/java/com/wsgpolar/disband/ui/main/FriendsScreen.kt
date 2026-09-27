@@ -54,6 +54,7 @@ import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.UserStatus
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.AvatarImage
+import com.wsgpolar.disband.ui.collectAsStateValue
 import com.wsgpolar.disband.ui.components.CapsuleFilterBar
 import com.wsgpolar.disband.ui.components.CapsuleSearchField
 import com.wsgpolar.disband.ui.components.FriendRow
@@ -114,9 +115,10 @@ fun FriendsScreen(
     val incoming = friendships.filter { it.status == FriendshipStatus.Pending && it.addresseeId == uid }
     val outgoing = friendships.filter { it.status == FriendshipStatus.Pending && it.requesterId == uid }
 
+    val presenceMap by app.presence.statuses.collectAsStateValue()
     val onlineFriends = accepted.filter { f ->
         val peer = peerOf(f) ?: return@filter false
-        app.presence.status(peer.id) != UserStatus.Offline
+        (presenceMap[peer.id] ?: UserStatus.Offline) != UserStatus.Offline
     }
 
     val visibleFriends = when (filter) {
@@ -196,14 +198,14 @@ fun FriendsScreen(
                 if (query.isBlank() && onlineFriends.isNotEmpty()) {
                     ActiveNowStrip(
                         profiles = onlineFriends.mapNotNull { peerOf(it) },
-                        statusOf = { app.presence.status(it.id) },
+                        statusOf = { presenceMap[it.id] ?: UserStatus.Offline },
                         onSelect = onViewProfile,
                     )
                 }
                 FriendsList(
                     friends = matchedFriends,
                     peerOf = ::peerOf,
-                    statusOf = { app.presence.status(it.id) },
+                    statusOf = { presenceMap[it.id] ?: UserStatus.Offline },
                     onOpenDm = ::openDm,
                     onViewProfile = onViewProfile,
                 )

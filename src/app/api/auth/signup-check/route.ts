@@ -163,8 +163,22 @@ export async function POST(request: Request) {
   // condition, not an attack — rejecting on it would convert a third-party
   // billing limit into a total signup outage. Local/private IPs bypass inside
   // checkVpnStrict. Only a confirmed two-provider block rejects.
+  //
+  // It is also time-boxed. `checkVpnStrict` walks up to three provider URLs
+  // at 4s each, so a worst case of ~12s sat inside a request that the host
+  // kills around 10 — and a killed request answers with the platform's HTML
+  // error page, not this route's JSON. From the sign-up form that surfaced
+  // as "we couldn't verify account eligibility, check your connection", which
+  // blamed the user's network for a slow third-party IP lookup. Whatever has
+  // not answered in 3s contributes no vote, exactly like a provider that is
+  // over quota.
   if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
-    const vpn = await checkVpnStrict(checkIp);
+    const vpn = await Promise.race([
+      checkVpnStrict(checkIp),
+      new Promise<{ blocked: false; unavailable: true }>((resolve) =>
+        setTimeout(() => resolve({ blocked: false, unavailable: true }), 3000),
+      ),
+    ]);
     if (vpn.blocked) {
       await logGateEvent(service, "signup_vpn_blocked", ipHash, emailHash);
       return NextResponse.json({

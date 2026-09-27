@@ -133,6 +133,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
 private fun Message.toRow(): ChatRow = ChatRow(
     id = id,
     author = author,
+    authorId = authorId,
     content = content,
     attachmentType = attachmentType,
     attachmentName = attachmentName,
@@ -143,6 +144,7 @@ private fun Message.toRow(): ChatRow = ChatRow(
 private fun GroupMessage.toRow(): ChatRow = ChatRow(
     id = id,
     author = author,
+    authorId = authorId,
     content = content,
     attachmentType = attachmentType,
     attachmentName = attachmentName,

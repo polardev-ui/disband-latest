@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { ScatteredIcons } from "@/components/auth/ScatteredIcons";
 import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
+import { ResendResetLink } from "@/components/auth/ResendResetLink";
 import { EMAIL_NOT_CONFIRMED } from "@/lib/authErrors";
 import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
@@ -186,12 +188,13 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
       className={
         overlay
           ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade px-6 py-12 backdrop-blur-sm"
-          : "flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12"
+          : "relative flex min-h-screen items-center justify-center overflow-hidden bg-bg-tertiary px-6 py-12"
       }
       onClick={overlay ? onClose : undefined}
     >
+      {!overlay && <ScatteredIcons />}
       <div
-        className={overlay ? "modal-pop relative w-full max-w-[400px] rounded-2xl bg-bg-tertiary p-6 shadow-2xl" : "w-full max-w-[400px]"}
+        className={overlay ? "modal-pop relative w-full max-w-[400px] rounded-2xl bg-bg-tertiary p-6 shadow-2xl" : "relative z-10 w-full max-w-[400px]"}
         onClick={overlay ? (e) => e.stopPropagation() : undefined}
       >
         {overlay && (
@@ -280,7 +283,9 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               <p className="rounded-md border border-status-online/25 bg-status-online/[0.08] px-3.5 py-3 text-[14px] leading-relaxed text-text-normal">
                 {success}
               </p>
-              {mode !== "reset" && (
+              {mode === "reset" ? (
+                <ResendResetLink email={email.trim()} onResend={requestPasswordReset} />
+              ) : (
                 <p className="text-[13px] leading-relaxed text-text-muted">
                   Once verified, come back here and sign in with your email and password.
                 </p>

@@ -5,98 +5,76 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.PI
-import kotlin.math.exp
-import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.min
 
 /**
- * In-memory synthesized call tones (no asset files), mirroring the iOS
- * `CallSounds`. Ring/calling tones loop via a MODE_STATIC AudioTrack with
- * setLoopPoints; the chimes play once. Gated by `sound_enabled`.
+ * Custom warm phone tones. Prior attempts at 430Hz / 14% gain with 48kHz
+ * MODE_STATIC resampling on the emulator aliased into ear-piercing static.
+ * This version is intentionally muffled and calm: single low sine (400Hz),
+ * ~3.5% gain, slow attack/release, 44.1kHz (host-native) so no resampling
+ * on the emulator, and clean zero-crossing loops.
  */
 object CallTones {
     private const val SAMPLE_RATE = 44100
     private val trackRef = AtomicReference<AudioTrack?>(null)
 
-    /**
-     * A tone with a proper attack/sustain/release shape.
-     *
-     * The previous envelope was `exp(-3t)` across the whole buffer, so a 1.4s
-     * ring had collapsed to 5% of its amplitude almost immediately — it read as
-     * a buzzy pluck rather than a ring. It also ended mid-waveform, so every
-     * loop began with a discontinuity, which is heard as a click.
-     *
-     * `decay` keeps the plucked shape for the short chimes, where it is wanted.
-     * The release ramp always brings the signal to exactly zero.
-     */
-    private fun pcm(
-        seconds: Double,
-        oscillators: List<Pair<Double, Double>>,
-        decay: Double = 0.0,
-    ): ShortArray {
+    private fun pcm(seconds: Double, freq: Double, gain: Double): ShortArray {
         val n = (SAMPLE_RATE * seconds).toInt()
         val out = ShortArray(n)
-        val attack = (0.015 * SAMPLE_RATE).toInt().coerceAtLeast(1)
-        val release = (0.040 * SAMPLE_RATE).toInt().coerceAtLeast(1).coerceAtMost(n / 2)
+        // Muffled = slow attack, long release, no harsh transient
+        val attack = (0.030 * SAMPLE_RATE).toInt().coerceAtLeast(1)
+        val release = (0.080 * SAMPLE_RATE).toInt().coerceAtLeast(1).coerceAtMost(n / 2)
         for (i in 0 until n) {
-            var v = 0.0
-            for ((freq, amp) in oscillators) {
-                v += amp * sin(2.0 * PI * freq * i / SAMPLE_RATE)
-            }
-            val t = i.toDouble() / n
-            val body = if (decay > 0.0) exp(-decay * t) else 1.0
+            val raw = gain * sin(2.0 * PI * freq * i / SAMPLE_RATE)
             val rampIn = min(1.0, i.toDouble() / attack)
             val rampOut = min(1.0, (n - 1 - i).toDouble() / release)
-            val envelope = body * rampIn * rampOut
-            out[i] = (v * 32767.0 * envelope).toInt().coerceIn(-32768, 32767).toShort()
+            val s = raw * rampIn * rampOut
+            out[i] = (s * 32767.0).toInt().coerceIn(-32768, 32767).toShort()
         }
+        // Ensure true zero at loop boundary
+        if (n > 1) { out[0] = 0; out[n - 1] = 0 }
         return out
     }
 
     private fun silence(seconds: Double) = ShortArray((seconds * SAMPLE_RATE).toInt())
 
-    /**
-     * Ring: two short bursts then a pause, the cadence a phone actually uses.
-     * One long 1.4s tone read as a drone rather than a ring.
-     */
+    // Incoming ring you hear when someone calls you: warm double-burst,
+    // unhurried — like a modern soft phone, not a 90s desk phone.
     private val ringtone by lazy {
-        val burst = pcm(0.4, listOf(440.0 to 0.20, 550.0 to 0.10))
-        burst + silence(0.2) + burst + silence(1.6)
+        val burst = pcm(0.45, freq = 400.0, gain = 0.038)
+        burst + silence(0.25) + burst + silence(1.5)
     }
 
-    /** Calling: a single soft pulse every three seconds, as a ringback. */
+    // Outgoing ringback (caller hears while waiting): single gentle pulse
     private val calling by lazy {
-        pcm(0.45, listOf(400.0 to 0.16, 500.0 to 0.08)) + silence(2.55)
+        pcm(0.35, freq = 390.0, gain = 0.032) + silence(2.8)
     }
 
-    // Short chimes keep the plucked decay; that shape suits them.
-    private val connected by lazy { pcm(0.35, listOf(660.0 to 0.18, 990.0 to 0.09), decay = 3.0) }
-    private val join by lazy { pcm(0.3, listOf(520.0 to 0.16, 780.0 to 0.08), decay = 3.0) }
-    private val leave by lazy { pcm(0.3, listOf(780.0 to 0.16, 520.0 to 0.08), decay = 3.0) }
-    private val end by lazy { pcm(0.4, listOf(520.0 to 0.16, 390.0 to 0.12, 280.0 to 0.10), decay = 3.0) }
+    // Connected/join/leave chimes: brief, rounded, even softer
+    private val connected by lazy { pcm(0.18, freq = 620.0, gain = 0.040) }
+    private val joinChime by lazy { pcm(0.14, freq = 520.0, gain = 0.035) }
+    private val leaveChime by lazy { pcm(0.14, freq = 380.0, gain = 0.035) }
+    private val endChime by lazy { pcm(0.22, freq = 340.0, gain = 0.032) }
 
     fun startRingtone() = loop(ringtone)
     fun startCallingTone() = loop(calling)
     fun playConnected() = once(connected)
-    fun playJoin() = once(join)
-    fun playLeave() = once(leave)
-    fun playEnd() = once(end)
+    fun playJoin() = once(joinChime)
+    fun playLeave() = once(leaveChime)
+    fun playEnd() = once(endChime)
 
     fun stop() {
         trackRef.getAndSet(null)?.let {
-            runCatching {
-                it.pause()
-                it.flush()
-                it.release()
-            }
+            runCatching { it.pause(); it.flush(); it.release() }
         }
     }
 
     private fun loop(pcm: ShortArray) {
         stop()
-        val bytes = ShortArray(pcm.size).also { System.arraycopy(pcm, 0, it, 0, pcm.size) }
         runCatching {
-            val t = buildTrack(bytes, endless = true)
+            val t = buildTrack(pcm)
+            // Whole buffer loops: burst+silence+burst+silence — ends at zero (silence)
             t.setLoopPoints(0, pcm.size, -1)
             t.play()
             trackRef.set(t)
@@ -105,33 +83,24 @@ object CallTones {
 
     private fun once(pcm: ShortArray) {
         runCatching {
-            val t = buildTrack(pcm, endless = false)
+            val t = buildTrack(pcm)
+            t.setNotificationMarkerPosition(pcm.size)
             t.setPlaybackPositionUpdateListener(object : AudioTrack.OnPlaybackPositionUpdateListener {
-                override fun onMarkerReached(track: AudioTrack) {
-                    runCatching { track.release() }
-                    if (trackRef.get() === track) trackRef.set(null)
-                }
-
+                override fun onMarkerReached(track: AudioTrack) { runCatching { track.release() } }
                 override fun onPeriodicNotification(track: AudioTrack) {}
             })
-            t.setNotificationMarkerPosition(pcm.size)
             t.play()
+            // One-shots self-release on marker; keep no ref
         }
     }
 
-    private fun buildTrack(pcm: ShortArray, endless: Boolean): AudioTrack {
-        val minBuf = AudioTrack.getMinBufferSize(
-            SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
-        )
+    private fun buildTrack(pcm: ShortArray): AudioTrack {
+        val minBuf = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val size = (pcm.size * 2).coerceAtLeast(minBuf * 2)
         val t = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                    // Sonification, not speech: a synthesized tone declared as
-                    // speech invites the voice pipeline's processing — gain
-                    // control and noise suppression — which mangles a pure
-                    // sine into something harsh.
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build(),
             )
@@ -145,9 +114,25 @@ object CallTones {
             .setBufferSizeInBytes(size)
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
-        val bytes = java.nio.ByteBuffer.allocate(pcm.size * 2)
-        for (s in pcm) bytes.putShort(s)
-        t.write(bytes.array(), 0, pcm.size * 2)
+        // Native-order short → byte, no extra copy
+        val buf = java.nio.ByteBuffer.allocateDirect(pcm.size * 2).order(java.nio.ByteOrder.nativeOrder())
+        for (s in pcm) buf.putShort(s)
+        buf.flip()
+        // MODE_STATIC write: offset 0, size in bytes
+        t.write(buf, pcm.size * 2, AudioTrack.WRITE_NON_BLOCKING)
+        // Fallback blocking write if non-blocking wrote 0
+        if (t.bufferSizeInFrames < pcm.size) {
+            val fallback = java.nio.ByteBuffer.allocate(pcm.size * 2)
+            for (s in pcm) fallback.putShort(s)
+            t.write(fallback.array(), 0, pcm.size * 2)
+        }
         return t
+    }
+
+    private operator fun ShortArray.plus(other: ShortArray): ShortArray {
+        val r = ShortArray(size + other.size)
+        System.arraycopy(this, 0, r, 0, size)
+        System.arraycopy(other, 0, r, size, other.size)
+        return r
     }
 }

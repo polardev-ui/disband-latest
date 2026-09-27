@@ -2,25 +2,20 @@
 
 import { PROFILE_SCENES } from "@/components/shop/effects/ProfileEffect";
 import { LottieEffect } from "@/components/shop/effects/LottieEffect";
-import { effectClass, lottieSrc } from "@/lib/shop";
+import { effectClass, lottieSrc, shopItem } from "@/lib/shop";
+import { AnimatedCosmetic } from "./AnimatedCosmetic";
 
 /**
  * The equipped profile effect, over a profile card.
  *
- * Three renderers, in descending order of how good they look:
- *   1. Lottie artwork, when the item declares a `lottie` path — this is the
- *      one that looks drawn, because it is;
- *   2. an authored SVG scene, for items drawn in code;
- *   3. the CSS-class effect, for the items still on the original pass.
- *
- * Dropping an export into /public/shop/lottie and naming it on the catalogue
- * entry promotes an item from 3 to 1 with no other change.
- *
- * All three sit inside `.fx-overlay`, which is what holds them behind the card
- * content and eases them to 45% while it is hovered.
+ * Animated raster artwork takes priority. Lottie, SVG, and CSS renderers remain
+ * for older owned items. Keep profile content above this non-interactive layer.
  */
-export function ProfileOverlay({ itemId }: { itemId: string | null | undefined }) {
+export function ProfileOverlay({ itemId, playing = true }: { itemId: string | null | undefined; playing?: boolean }) {
   if (!itemId) return null;
+
+  const media = shopItem(itemId)?.art;
+  if (media) return <div className="fx-overlay fx-overlay-art" aria-hidden><AnimatedCosmetic art={media} playing={playing} /></div>;
 
   const art = lottieSrc(itemId);
   if (art) {

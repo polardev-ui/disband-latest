@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { isShopItemAvailable, shopItem } from "@/lib/shop";
 
 /**
  * Buy one shop cosmetic.
@@ -20,6 +21,10 @@ export async function POST(req: Request) {
     const { item_id } = (await req.json()) as { item_id?: unknown };
     if (typeof item_id !== "string" || !item_id) {
       return NextResponse.json({ error: "Pick an item." }, { status: 400 });
+    }
+    const catalogueItem = shopItem(item_id);
+    if (!catalogueItem || !isShopItemAvailable(catalogueItem)) {
+      return NextResponse.json({ error: "That item is no longer available." }, { status: 404 });
     }
 
     const limit = rateLimit(`checkout:shop:${user.id}`, 10, 60_000);

@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbeddedCheckout";
 import { IconClose } from "@/components/icons";
-import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
+import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
 import {
   SHOP_CATEGORIES,
   formatPrice,
   itemsIn,
+  isShopItemAvailable,
   type ShopCategory,
   type ShopItem,
 } from "@/lib/shop";
@@ -27,10 +28,11 @@ interface ShopModalProps {
   self: { name: string; avatarUrl?: string | null };
   /** Called after a purchase or equip so the app can refresh its profile. */
   onChanged?: () => void;
+  initialCategory?: ShopCategory;
 }
 
-export function ShopModal({ open, onClose, self, onChanged }: ShopModalProps) {
-  const [tab, setTab] = useState<ShopCategory>("name");
+export function ShopModal({ open, onClose, self, onChanged, initialCategory = "ring" }: ShopModalProps) {
+  const [tab, setTab] = useState<ShopCategory>("ring");
   const [inventory, setInventory] = useState<Inventory>(EMPTY);
   const [buying, setBuying] = useState<ShopItem | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -54,12 +56,13 @@ export function ShopModal({ open, onClose, self, onChanged }: ShopModalProps) {
     setError(null);
     setBuying(null);
     setClientSecret(null);
-  }, [open, refresh]);
+    setTab(initialCategory);
+  }, [open, refresh, initialCategory]);
 
   useOverlayDismiss(onClose, open && !clientSecret);
 
-  const items = useMemo(() => itemsIn(tab), [tab]);
   const owned = useMemo(() => new Set(inventory.owned), [inventory.owned]);
+  const items = useMemo(() => itemsIn(tab).filter((item) => isShopItemAvailable(item) || owned.has(item.id)), [tab, owned]);
 
   if (!open) return null;
 
@@ -296,9 +299,7 @@ function ShopCard({
 }
 
 /**
- * A live preview of the item, running the real CSS rather than a screenshot —
- * so what is on the card is exactly what gets worn. Rings and overlays are
- * previewed under hover too, since that is where they change.
+ * The same artwork and renderers used by equipped avatars and profiles.
  */
 function ShopPreview({
   item,
@@ -307,7 +308,6 @@ function ShopPreview({
   item: ShopItem;
   self: { name: string; avatarUrl?: string | null };
 }) {
-  const initial = self.name.charAt(0).toUpperCase();
 
   if (item.category === "name") {
     return (
@@ -326,36 +326,7 @@ function ShopPreview({
   }
 
   if (item.category === "ring") {
-    return (
-      <div className="flex h-20 items-center justify-center rounded-md bg-bg-primary">
-        <span className={`fx-ring ${item.className}`}>
-          <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-bg-accent text-sm font-bold text-text-normal">
-            {self.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={self.avatarUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              initial
-            )}
-          </span>
-        </span>
-      </div>
-    );
+    return <div className="shop-decoration-preview"><CosmeticAvatar ringId={item.id} self={self} /></div>;
   }
-
-  return (
-    <div className="fx-overlay-host relative h-20 overflow-hidden rounded-md bg-bg-primary">
-      <ProfileOverlay itemId={item.id} />
-      <div className="relative z-10 flex h-full items-center gap-2 px-3">
-        <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-bg-accent text-xs font-bold text-text-normal">
-          {self.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={self.avatarUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            initial
-          )}
-        </span>
-        <span className="text-sm font-semibold text-text-normal">{self.name}</span>
-      </div>
-    </div>
-  );
+  return <div className="shop-profile-preview"><CosmeticProfile overlayId={item.id} self={self} compact /></div>;
 }

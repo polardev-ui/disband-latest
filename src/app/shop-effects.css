@@ -1,4 +1,4 @@
-/* Disband Shop — the cosmetics themselves.
+/* Disband Shop — legacy effects and shared artwork presentation.
  *
  * Three families, one file, keyed by the `className` in src/lib/shop.ts:
  *   .fx-name-*     animate a display name wherever it renders

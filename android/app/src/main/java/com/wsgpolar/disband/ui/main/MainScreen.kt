@@ -5,50 +5,79 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.data.Channel
 import com.wsgpolar.disband.data.ChannelCategory
 import com.wsgpolar.disband.data.ChannelType
 import com.wsgpolar.disband.data.DmThread
 import com.wsgpolar.disband.data.GroupChat
+import com.wsgpolar.disband.data.Server
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.chat.DmChatScreen
 import com.wsgpolar.disband.ui.chat.GroupChatScreen
 import com.wsgpolar.disband.ui.calls.CallOverlay
 import com.wsgpolar.disband.ui.calls.VoiceStageView
-import kotlinx.coroutines.CoroutineScope
+import com.wsgpolar.disband.ui.collectAsStateValue
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
-fun MainScreen(app: AppState) {
+fun MainScreen(
+    app: AppState,
+    modifier: Modifier = Modifier,
+    // --- Wiring hooks for later agents (notification routing, server sheets) ---
+    /** Deep link from a notification tap; applied once, then reported consumed. */
+    pendingNav: PendingNav? = null,
+    onPendingNavConsumed: () -> Unit = {},
+    /** Server header actions — wire to the server sheets. */
+    onInvite: (Server) -> Unit = {},
+    onMembers: (Server) -> Unit = {},
+    onOverflow: (Server) -> Unit = {},
+    /** Per-server unread badge counts in the rail. */
+    unreadForServer: (String) -> Int = { 0 },
+    /** Live voice occupants per channel (count capsule + avatars on rows). */
+    occupantsFor: (Channel) -> List<VoiceOccupant> = { emptyList() },
+    /** Rail add/explore buttons. */
+    onAddServer: () -> Unit = {},
+    onExplore: () -> Unit = {},
+) {
     val shellChrome = remember { ShellChromeState() }
     val currentUserId = app.currentUserId
     val servers = app.servers.value
+    val palette = LocalPalette.current
 
     var allChannels by remember { mutableStateOf<List<Channel>>(emptyList()) }
     var allCategories by remember { mutableStateOf<List<ChannelCategory>>(emptyList()) }
     var dmThreads by remember { mutableStateOf<List<DmThread>>(emptyList()) }
     var groupChats by remember { mutableStateOf<List<GroupChat>>(emptyList()) }
 
-    val scope = remember { CoroutineScope(Dispatchers.Main) }
+    val scope = rememberCoroutineScope()
 
     // Loading used to be one long chain: two round-trips per server, one server
     // at a time, and only then the DMs — so with a dozen spaces the inbox, which
@@ -78,13 +107,30 @@ fun MainScreen(app: AppState) {
         }
     }
 
+    // --- Notification deep link: route once, then tell the caller it's done. ---
+    LaunchedEffect(pendingNav) {
+        if (pendingNav != null && !pendingNav.isBlank) {
+            shellChrome.applyPending(pendingNav)
+            onPendingNavConsumed()
+        }
+    }
+
     val selectedChannelId = shellChrome.selectedChannelId
     val selectedServerId = shellChrome.selectedServerId
     val hasChatOpen = selectedChannelId != null
 
-    LaunchedEffect(hasChatOpen) {
-        if (hasChatOpen) shellChrome.hideDock() else shellChrome.showDock()
+    // The dock hides for an open conversation AND while the keyboard is up
+    // (filters, note editors, ...), matching iOS.
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val dockBlocked = hasChatOpen || imeVisible
+    LaunchedEffect(dockBlocked) {
+        if (dockBlocked) shellChrome.hideDock() else shellChrome.showDock()
     }
+
+    // Dock badge: total unread across DM threads and group chats.
+    val dmUnreadMap by app.dmUnread.unread.collectAsStateValue()
+    val groupUnreadMap by app.dmUnread.groupUnread.collectAsStateValue()
+    val homeBadge = dmUnreadMap.values.sum() + groupUnreadMap.values.sum()
 
     val openChannel = allChannels.firstOrNull { it.id == selectedChannelId && it.serverId == selectedServerId }
     val openGroup = groupChats.firstOrNull { it.id == selectedChannelId }
@@ -106,39 +152,69 @@ fun MainScreen(app: AppState) {
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize()) {
         // Every destination sits under the status bar otherwise — the clock and
         // the notch were landing on top of headers. Applied once here rather
         // than repeated in each screen, so they cannot disagree.
+        //
+        // All four destinations stay composed: the inactive ones are simply
+        // faded out and layered behind the active one, so scroll positions and
+        // in-place navigation state survive tab switches, like iOS's kept-alive
+        // shell views.
         Box(Modifier.fillMaxSize().statusBarsPadding()) {
-        when (shellChrome.currentDestination) {
-            Destination.Friends -> FriendsScreen(
-                app = app,
-                onOpenDm = ::openDmThread,
-            )
-            Destination.Notes -> NotesScreen(app)
-            Destination.You -> YouScreen(app)
-            Destination.Home -> SpacesView(
-            state = shellChrome,
-            servers = servers,
-            categories = allCategories,
-            channels = allChannels,
-            dmThreads = dmThreads,
-            groupChats = groupChats,
-            onServerSelected = { server ->
-                shellChrome.navigateTo(Destination.Home, server.id)
-            },
-            onChannelSelected = { channel ->
-                shellChrome.selectedChannelId = channel.id
-            },
-            onThreadSelected = { id ->
-                shellChrome.selectedChannelId = id
-            },
-            onGroupSelected = { group ->
-                shellChrome.selectedChannelId = group.id
-            },
-            )
-        }
+            Destination.entries.forEach { destination ->
+                val isActive = shellChrome.currentDestination == destination
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(if (isActive) 1f else 0f)
+                        .alpha(if (isActive) 1f else 0f)
+                        .background(palette.background)
+                        // Backgrounds do not intercept touches in Compose, so
+                        // the active layer also carries an empty pointer-input
+                        // filter: it swallows taps/scrolls that fall between
+                        // its children so they never reach the kept-alive
+                        // screens layered behind it.
+                        .let { if (isActive) it.pointerInput(destination) { } else it },
+                ) {
+                    when (destination) {
+                        Destination.Friends -> FriendsScreen(
+                            app = app,
+                            onOpenDm = ::openDmThread,
+                        )
+                        Destination.Notes -> NotesScreen(app)
+                        Destination.You -> YouScreen(app)
+                        Destination.Home -> SpacesView(
+                            app = app,
+                            state = shellChrome,
+                            servers = servers,
+                            categories = allCategories,
+                            channels = allChannels,
+                            dmThreads = dmThreads,
+                            groupChats = groupChats,
+                            onServerSelected = { server ->
+                                shellChrome.navigateTo(Destination.Home, server.id)
+                            },
+                            onChannelSelected = { channel ->
+                                shellChrome.selectedChannelId = channel.id
+                            },
+                            onThreadSelected = { id ->
+                                shellChrome.selectedChannelId = id
+                            },
+                            onGroupSelected = { group ->
+                                shellChrome.selectedChannelId = group.id
+                            },
+                            onInvite = onInvite,
+                            onMembers = onMembers,
+                            onOverflow = onOverflow,
+                            unreadForServer = unreadForServer,
+                            occupantsFor = occupantsFor,
+                            onAddServer = onAddServer,
+                            onExplore = onExplore,
+                        )
+                    }
+                }
+            }
         }
 
         if (openChannel != null && currentUserId != null) {
@@ -176,7 +252,8 @@ fun MainScreen(app: AppState) {
         }
 
         // The dock sits above the shell but below an open chat, and slides away
-        // whenever a conversation takes the screen.
+        // whenever a conversation takes the screen or the keyboard appears. It
+        // floats: a ~6dp inset above the navigation bar, not edge-attached.
         AnimatedVisibility(
             visible = shellChrome.dockVisible,
             enter = slideInVertically { it } + fadeIn(),
@@ -188,7 +265,11 @@ fun MainScreen(app: AppState) {
                 onDestinationSelected = { destination ->
                     shellChrome.navigateTo(destination)
                 },
-                modifier = Modifier.navigationBarsPadding().padding(bottom = 12.dp),
+                homeBadge = homeBadge,
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(bottom = 6.dp)
+                    .background(Color.Transparent),
             )
         }
 

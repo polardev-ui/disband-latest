@@ -46,7 +46,7 @@ class MessagingService : FirebaseMessagingService() {
         if (source != null && ActiveChat.isShowing(source)) return
 
         val title = data["title"] ?: "Disband"
-        val body = data["body"] ?: return
+        val body = data["body"] ?: data["message"] ?: data["content"] ?: "New message"
         showMessageNotification(title, body, source)
     }
 
@@ -83,7 +83,10 @@ class MessagingService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
-        notify(2002, notification)
+        // Per-conversation ID so each thread stacks separately; same source
+        // replaces its own notification, different sources don't clobber.
+        val id = (source?.hashCode() ?: title.hashCode()).let { h -> 2002 + Math.floorMod(h, 10_000) }
+        notify(id, notification)
     }
 
     private fun launchIntent(data: Map<String, String>, channel: String): PendingIntent {
