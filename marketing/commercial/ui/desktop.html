@@ -1,0 +1,323 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Disband desktop (Tauri) window, rebuilt for the commercial's monitor and
+     laptop shots. Structure and sizes follow src/components/discord/*
+     (ServerList 72px rail, ChannelList w-60, 48px headers, UserPanel 52px,
+     MemberList w-60) with the Midnight theme tokens from globals.css — the
+     same theme the iOS captures use, since profiles.theme is shared. -->
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root {
+  --bg-primary: #060607; --bg-secondary: #0a0a0b; --bg-tertiary: #050506; --bg-accent: #111214;
+  --hover: #1a1b1e; --selected: #232428; --brand: #5865f2; --text: #dbdee1; --muted: #949ba4;
+  --link: #00a8fc; --online: #23a559; --idle: #f0b232; --dnd: #f23f43; --offline: #80848e; --divider: #2e3035;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg-tertiary); }
+body { font-family: "Inter", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
+.emoji { width: 1.3em; height: 1.3em; vertical-align: -0.3em; }
+.win { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.titlebar { height: 30px; flex: none; background: #0b0b0c; border-bottom: 1px solid #000; display: flex; align-items: center; position: relative; }
+.titlebar .lights { display: flex; gap: 8px; padding-left: 13px; }
+.titlebar .lights i { width: 12px; height: 12px; border-radius: 6px; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.25); }
+.titlebar .ttl { position: absolute; left: 0; right: 0; text-align: center; font-size: 13px; font-weight: 600; color: #8b8d92; }
+.app { flex: 1; display: flex; min-height: 0; }
+
+/* ServerList */
+.rail { width: 72px; flex: none; background: var(--bg-tertiary); display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 12px; }
+.rail .it { position: relative; width: 48px; height: 48px; flex: none; }
+.rail .ic { width: 48px; height: 48px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-size: 15px; font-weight: 600; color: #fff; }
+.rail .it.sel .ic { border-radius: 30%; }
+.rail .it.sel::before { content: ""; position: absolute; left: -12px; top: 4px; width: 4px; height: 40px; border-radius: 0 4px 4px 0; background: #fff; }
+.rail .it.unread::before { content: ""; position: absolute; left: -12px; top: 20px; width: 4px; height: 8px; border-radius: 0 4px 4px 0; background: #fff; }
+.rail .sep { width: 32px; height: 2px; border-radius: 1px; background: var(--divider); flex: none; }
+.rail .vb { position: absolute; right: -2px; bottom: -2px; width: 16px; height: 16px; border-radius: 8px; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg-tertiary); background: var(--bg-tertiary); }
+.rail .util { width: 48px; height: 48px; border-radius: 50%; background: var(--bg-primary); display: grid; place-items: center; flex: none; }
+
+/* ChannelList */
+.side { width: 240px; flex: none; background: var(--bg-secondary); display: flex; flex-direction: column; }
+.side .bnr { height: 96px; position: relative; flex: none; }
+.side .bnr .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.3), transparent 45%, var(--bg-secondary)); }
+.side .bnr .nm { position: absolute; left: 16px; right: 16px; bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+.side .search { margin: 10px 8px 4px; height: 28px; border-radius: 4px; background: var(--bg-tertiary); font-size: 13px; color: var(--muted); display: flex; align-items: center; padding: 0 8px; }
+.side .list { flex: 1; padding: 8px; overflow: hidden; }
+.cat { display: flex; align-items: center; gap: 2px; padding: 16px 0 4px 2px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+.ch { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 4px; margin: 1px 0; font-size: 15px; font-weight: 500; color: var(--muted); position: relative; }
+.ch.sel { background: var(--selected); color: #fff; }
+.ch.unread { color: #fff; }
+.ch.unread::before { content: ""; position: absolute; left: -8px; top: 12px; width: 4px; height: 8px; border-radius: 0 4px 4px 0; background: var(--text); }
+.ch .cnt { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); }
+.vp { display: flex; align-items: center; gap: 6px; padding: 3px 0 3px 32px; font-size: 13px; color: var(--muted); }
+.dmh { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 8px; border-radius: 4px; margin: 1px 0; font-size: 15px; font-weight: 500; color: var(--muted); }
+.dmh.sel { background: var(--selected); color: #fff; }
+.dmrow { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 8px; border-radius: 4px; margin: 1px 0; font-size: 15px; font-weight: 500; color: var(--muted); }
+.dmrow.sel { background: var(--selected); color: #fff; }
+.dmrow .s { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.userpanel { height: 52px; flex: none; background: var(--bg-tertiary); border-top: 1px solid var(--divider); display: flex; align-items: center; gap: 4px; padding: 0 8px; }
+.userpanel .who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.userpanel .who b { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
+.userpanel .who span { display: block; font-size: 12px; color: var(--muted); }
+.ib { width: 32px; height: 32px; display: grid; place-items: center; color: var(--muted); }
+
+/* Avatars */
+.av { position: relative; flex: none; border-radius: 50%; }
+.av .in { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; overflow: hidden; color: #fff; font-weight: 600; }
+.av .st { position: absolute; right: -3px; bottom: -3px; border-radius: 50%; }
+
+/* Chat */
+.main { flex: 1; min-width: 0; background: var(--bg-primary); display: flex; flex-direction: column; }
+.chhdr { height: 48px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid rgba(0,0,0,.6); box-shadow: 0 1px 0 rgba(255,255,255,.03); }
+.chhdr .t { font-size: 16px; font-weight: 600; color: #fff; }
+.chhdr .topic { font-size: 14px; color: var(--muted); padding-left: 10px; margin-left: 4px; border-left: 1px solid var(--divider); white-space: nowrap; overflow: hidden; }
+.chhdr .tools { margin-left: auto; display: flex; gap: 16px; align-items: center; color: #b5bac1; }
+.chhdr .sbox { width: 150px; height: 26px; border-radius: 4px; background: var(--bg-tertiary); font-size: 13px; color: var(--muted); display: flex; align-items: center; padding: 0 7px; justify-content: space-between; }
+.msgs { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 0 16px; overflow: hidden; }
+.day { display: flex; align-items: center; gap: 8px; margin: 12px 16px 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.day::before, .day::after { content: ""; flex: 1; height: 1px; background: var(--divider); }
+.m { display: flex; gap: 16px; padding: 4px 16px 4px 16px; margin-top: 13px; }
+.m .c { min-width: 0; flex: 1; }
+.m .h { display: flex; align-items: baseline; gap: 8px; }
+.m .h b { font-size: 16px; font-weight: 600; color: #f2f3f5; }
+.m .h i { font-style: normal; font-size: 12px; color: var(--muted); }
+.m .x { font-size: 16px; line-height: 1.375; color: var(--text); }
+.m .x + .x { margin-top: 2px; }
+.mention { color: #c9cdfb; background: rgba(88,101,242,.3); border-radius: 3px; padding: 0 2px; font-weight: 500; }
+.rx { display: inline-flex; gap: 4px; margin-top: 4px; }
+.rx span { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 7px; border-radius: 8px; background: var(--bg-accent); border: 1px solid transparent; font-size: 13px; font-weight: 600; color: #b5bac1; }
+.rx span.mine { background: rgba(88,101,242,.15); border-color: var(--brand); color: #c9cdfb; }
+.rx img { width: 16px; height: 16px; }
+.att { margin-top: 6px; width: 360px; height: 220px; border-radius: 8px; overflow: hidden; position: relative; }
+.inputwrap { padding: 0 16px 24px; flex: none; }
+.input { height: 44px; border-radius: 8px; background: var(--bg-accent); display: flex; align-items: center; gap: 14px; padding: 0 16px; }
+.input .ph { flex: 1; font-size: 16px; color: #6d7178; }
+.input .ph.on { color: var(--text); }
+.input .tools { display: flex; gap: 16px; color: #b5bac1; }
+.typing { height: 24px; padding: 0 16px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: -20px; }
+
+/* Members / profile rail */
+.members { width: 240px; flex: none; background: var(--bg-secondary); padding: 8px 8px 0; }
+.members h6 { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--muted); padding: 16px 8px 4px; text-transform: uppercase; }
+.mem { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 8px; border-radius: 4px; font-size: 15px; font-weight: 500; color: var(--muted); }
+.mem .n { display: block; }
+.mem .n.on { color: var(--text); }
+.mem .s { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.prail { width: 340px; flex: none; background: var(--bg-secondary); position: relative; }
+.prail .bn { height: 120px; background: linear-gradient(135deg, #f5a623, #e67e22 50%, #c0392b); }
+.prail .pav { position: absolute; left: 16px; top: 72px; }
+.prail .body { padding: 64px 16px 16px; }
+.prail .body b { font-size: 20px; font-weight: 700; color: #fff; display: block; }
+.prail .body .hd { font-size: 14px; color: var(--muted); }
+.prail .card { margin-top: 16px; border-radius: 8px; background: var(--bg-tertiary); padding: 12px; font-size: 13px; color: var(--text); line-height: 1.45; }
+.prail .card h5 { font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+
+/* Settings (Account & Security) */
+.settings { position: absolute; inset: 30px 0 0 0; display: flex; background: var(--bg-primary); }
+.settings nav { width: 38%; background: var(--bg-secondary); display: flex; justify-content: flex-end; padding: 60px 8px 0 20px; }
+.settings nav div { width: 218px; }
+.settings nav h6 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); padding: 6px 10px; }
+.settings nav a { display: block; font-size: 15px; font-weight: 500; color: var(--muted); padding: 7px 10px; border-radius: 4px; margin-bottom: 2px; }
+.settings nav a.sel { background: var(--selected); color: #fff; }
+.settings nav hr { border: 0; height: 1px; background: var(--divider); margin: 8px 10px; }
+.settings .content { flex: 1; padding: 60px 40px 0; max-width: 780px; }
+.settings h2 { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 20px; }
+.sec { border: 1px solid var(--divider); border-radius: 10px; background: var(--bg-secondary); padding: 18px 20px; margin-bottom: 18px; }
+.sec h3 { font-size: 16px; font-weight: 700; color: #fff; }
+.sec > p { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.factor { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--divider); background: var(--bg-primary); border-radius: 8px; padding: 12px 16px; margin-top: 10px; }
+.factor .l { display: flex; align-items: center; gap: 12px; }
+.factor .fi { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; background: rgba(35,165,89,.14); color: var(--online); }
+.factor b { font-size: 14px; font-weight: 600; color: var(--text); display: block; }
+.factor span { font-size: 12px; color: var(--muted); }
+.factor .ok { font-size: 12px; font-weight: 700; color: var(--online); background: rgba(35,165,89,.12); border-radius: 12px; padding: 4px 10px; }
+.btnrow { display: flex; gap: 8px; margin-top: 14px; }
+.btn { font-size: 14px; font-weight: 600; color: #fff; background: var(--brand); border-radius: 4px; padding: 8px 16px; }
+.btn.g { background: var(--hover); color: var(--text); }
+.srow { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--divider); font-size: 14px; }
+.srow:first-of-type { border-top: 0; }
+.srow b { font-weight: 600; color: var(--text); display: block; }
+.srow span { color: var(--muted); font-size: 13px; }
+.toggle { width: 40px; height: 24px; border-radius: 12px; background: var(--online); position: relative; flex: none; }
+.toggle::after { content: ""; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 9px; background: #fff; }
+.esc { position: absolute; right: 40px; top: 60px; width: 36px; height: 36px; border-radius: 18px; border: 2px solid var(--muted); display: grid; place-items: center; color: var(--muted); font-size: 18px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import { ME, PEOPLE, NOVA_DM, SYNC_MESSAGE } from "./demo-data.js";
+
+const params = new URLSearchParams(location.search);
+const screen = params.get("screen") || "chat";
+const E = (code) => `<img class="emoji" src="../assets/emoji/${code}.svg">`;
+const EMOJI = { "👋": "1f44b", "😍": "1f60d", "🔥": "1f525", "🎉": "1f389", "👀": "1f440" };
+const rich = (s) => s.replace(/👋|😍|🔥|🎉|👀/g, (m) => E(EMOJI[m]));
+const LOGO = (px, color = "#fff") => `<svg width="${px}" height="${px * 1.124}" style="color:${color}"><use href="#mark"/></svg>`;
+
+// Lucide-style stroke icons — the web app's icon set.
+const L = (d, s = 20, w = 2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const I = {
+  hash: (s) => L('<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>', s),
+  speaker: (s) => L('<path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>', s),
+  chevron: (s) => L('<path d="m6 9 6 6 6-6"/>', s),
+  users: (s) => L('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>', s),
+  bell: (s) => L('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', s),
+  pin: (s) => L('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>', s),
+  search: (s) => L('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', s),
+  inbox: (s) => L('<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>', s),
+  plusCircle: (s) => L('<circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/>', s),
+  gift: (s) => L('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>', s),
+  smile: (s) => L('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>', s),
+  sticker: (s) => L('<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/>', s),
+  mic: (s) => L('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>', s),
+  headphones: (s) => L('<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>', s),
+  gear: (s) => L('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>', s),
+  compass: (s) => L('<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>', s),
+  plus: (s) => L('<path d="M5 12h14M12 5v14"/>', s),
+  phone: (s) => L('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>', s),
+  video: (s) => L('<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>', s),
+  shield: (s) => L('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>', s),
+  key: (s) => L('<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>', s),
+  smartphone: (s) => L('<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>', s),
+  lock: (s) => L('<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', s),
+  friends: (s) => L('<path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/>', s),
+};
+
+const PRES = { online: "var(--online)", idle: "var(--idle)", offline: "var(--offline)", dnd: "var(--dnd)" };
+const person = (k) => (k === "me" ? { ...ME, status: "online" } : PEOPLE[k]);
+function av(p, size, ring = "var(--bg-primary)", status = true) {
+  const inner = p.logo ? `<div class="in" style="background:#000">${LOGO(size * 0.52)}</div>`
+    : `<div class="in" style="background:${p.color};font-size:${size * 0.4}px">${p.initials}</div>`;
+  const d = Math.max(10, Math.round(size * 0.3));
+  const st = status && p.status ? `<span class="st" style="width:${d}px;height:${d}px;background:${PRES[p.status]};box-shadow:0 0 0 3px ${ring}"></span>` : "";
+  return `<div class="av" style="width:${size}px;height:${size}px">${inner}${st}</div>`;
+}
+
+function rail(sel) {
+  const s = (id, inner, extra = "") => `<div class="it ${sel === id ? "sel" : ""} ${extra}">${inner}</div>`;
+  return `<div class="rail">
+    ${s("home", `<div class="ic" style="background:${sel === "home" ? "var(--brand)" : "var(--bg-primary)"}">${LOGO(26)}</div>`)}
+    <div class="sep"></div>
+    ${s("hq", `<div class="ic" style="background:#ed4245">DD</div>`)}
+    ${s("official", `<div class="ic" style="background:#000">${LOGO(26)}</div><div class="vb"><svg width="14" height="14" viewBox="0 0 24 24"><path fill="#38bdf8" d="M12 1.5l2.6 2 3.2-.4 1.2 3 3 1.2-.4 3.2 2 2.6-2 2.6.4 3.2-3 1.2-1.2 3-3.2-.4-2.6 2-2.6-2-3.2.4-1.2-3-3-1.2.4-3.2-2-2.6 2-2.6-.4-3.2 3-1.2 1.2-3 3.2.4z"/><path d="M8 12.3l2.7 2.7 5.4-5.8" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`, "unread")}
+    ${s("lab", `<div class="ic" style="background:#f5a623">DL</div>`)}
+    ${s("photo", `<div class="ic" style="background:#1f6feb"><img src="../assets/emoji/1f4f7.svg" width="24"></div>`)}
+    ${s("music", `<div class="ic" style="background:#8e44ad"><img src="../assets/emoji/1f3a7.svg" width="24"></div>`, "unread")}
+    ${s("art", `<div class="ic" style="background:#16a085"><img src="../assets/emoji/1f3a8.svg" width="24"></div>`)}
+    ${s("night", `<div class="ic" style="background:#2d3436">NS</div>`)}
+    <div class="util" style="color:var(--online)">${I.plus(24)}</div>
+    <div class="util" style="color:var(--online)">${I.compass(24)}</div>
+  </div>`;
+}
+
+function userPanel() {
+  return `<div class="userpanel"><div class="who">${av({ ...ME, status: "online" }, 32, "var(--bg-tertiary)")}<div><b>${ME.name}</b><span>Online</span></div></div>
+    <div class="ib">${I.mic(20)}</div><div class="ib">${I.headphones(20)}</div><div class="ib">${I.gear(20)}</div></div>`;
+}
+
+const msg = (k, time, lines, extra = "") => {
+  const p = person(k);
+  return `<div class="m">${av(p, 40, "", false)}<div class="c"><div class="h"><b style="${k === "me" ? "color:#9aa3ff" : ""}">${p.name}</b><i>${time}</i></div>
+    ${lines.map((l) => `<div class="x">${rich(l)}</div>`).join("")}${extra}</div></div>`;
+};
+
+function serverChat() {
+  const art = `<div class="att" style="background:radial-gradient(90% 120% at 20% 10%,#ffd8a8 0%,#f59f6b 35%,#c2410c 70%,#431407 100%)">
+      <div style="position:absolute;left:40px;top:40px;width:120px;height:120px;border-radius:60px;background:rgba(255,255,255,.85)"></div>
+      <div style="position:absolute;right:-40px;bottom:-60px;width:260px;height:260px;border-radius:50%;border:26px solid rgba(20,10,5,.55)"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(transparent,rgba(0,0,0,.35))"></div></div>`;
+  return `${rail("hq")}<div class="side">
+      <div class="bnr" style="background:linear-gradient(135deg,#ed4245,#a8284a)"><div class="shade"></div><div class="nm"><span>Disband Demo HQ</span>${I.chevron(18)}</div></div>
+      <div class="list">
+        <div class="cat">${I.chevron(12)} Text Channels</div>
+        <div class="ch">${I.hash(20)}welcome</div>
+        <div class="ch sel">${I.hash(20)}general</div>
+        <div class="ch unread">${I.hash(20)}random</div>
+        <div class="ch">${I.hash(20)}design-review</div>
+        <div class="ch">${I.hash(20)}support</div>
+        <div class="cat">${I.chevron(12)} Voice Channels</div>
+        <div class="ch" style="color:#dbdee1">${I.speaker(20)}Lounge<span class="cnt">3</span></div>
+        ${["nova", "kai", "mila"].map((k) => `<div class="vp">${av(PEOPLE[k], 22, "", false)}${PEOPLE[k].name}</div>`).join("")}
+        <div class="ch">${I.speaker(20)}Studio</div>
+      </div>${userPanel()}</div>
+    <div class="main"><div class="chhdr"><span style="color:var(--muted)">${I.hash(22)}</span><span class="t">general</span><span class="topic">Say hi, share what you're building.</span>
+      <div class="tools">${I.bell(22)}${I.pin(22)}${I.users(22)}<div class="sbox">Search ${I.search(14)}</div>${I.inbox(22)}</div></div>
+      <div class="msgs">
+        <div class="day">Today</div>
+        ${msg("mila", "Today at 9:12 AM", ["Community call is Friday at 4 — I'll drop a reminder in here", "anyone want the agenda slot after mine?"])}
+        ${msg("nova", "Today at 9:20 AM", ["pushed the sidebar fix — it holds up on the 11-inch now"])}
+        ${msg("kai", "Today at 9:26 AM", ["nice. p95 is down to 84ms after the batching change too"], `<div class="rx"><span class="mine">${E("1f525")}4</span><span>${E("1f440")}2</span></div>`)}
+        ${msg("iris", "Today at 9:31 AM", ["sketch dump from the weekend, ignore the rough edges"], art)}
+        ${msg("me", "Today at 9:40 AM", [`welcome to everyone who joined this week 🎉 <span class="mention">@everyone</span>`])}
+      </div>
+      <div class="inputwrap"><div class="input"><span style="color:#b5bac1">${I.plusCircle(22)}</span><span class="ph">Message #general</span>
+        <span class="tools">${I.gift(22)}${I.sticker(22)}${I.smile(22)}</span></div></div></div>
+    <div class="members"><h6>Online — 5</h6>
+      ${["me", "iris", "kai", "mila", "nova"].map((k) => { const p = person(k); return `<div class="mem">${av(p, 32, "var(--bg-secondary)")}<div><span class="n on">${p.name}</span>${k === "nova" ? '<span class="s">In Lounge</span>' : ""}</div></div>`; }).join("")}
+      <h6>Offline — 2</h6>
+      ${["sam", "theo"].map((k) => { const p = person(k); return `<div class="mem" style="opacity:.5">${av(p, 32, "var(--bg-secondary)", false)}<span class="n">${p.name}</span></div>`; }).join("")}
+    </div>`;
+}
+
+function dm({ sent = false, typing = false } = {}) {
+  const list = [...NOVA_DM, ...(sent ? [SYNC_MESSAGE] : [])];
+  const dms = [["nova", "Online"], ["mila", ""], ["disband", ""], ["iris", ""], ["sam", ""], ["theo", ""], ["kai", ""]];
+  return `${rail("home")}<div class="side"><div class="search">Find or start a conversation</div>
+      <div class="list" style="padding-top:4px">
+        <div class="dmh"><span style="width:32px;display:grid;place-items:center">${I.friends(22)}</span>Friends</div>
+        <div class="cat" style="justify-content:space-between;padding-right:4px">Direct Messages ${I.plus(14)}</div>
+        ${dms.map(([k, sub]) => { const p = person(k); return `<div class="dmrow ${k === "nova" ? "sel" : ""}">${av(p, 32, k === "nova" ? "var(--selected)" : "var(--bg-secondary)")}<div><span>${p.name}</span>${sub ? `<span class="s">${sub}</span>` : ""}</div></div>`; }).join("")}
+      </div>${userPanel()}</div>
+    <div class="main"><div class="chhdr">${av(PEOPLE.nova, 24, "var(--bg-primary)")}<span class="t" style="margin-left:4px">Nova Reyes</span>
+      <div class="tools">${I.phone(22)}${I.video(22)}${I.pin(22)}<div class="sbox">Search ${I.search(14)}</div></div></div>
+      <div class="msgs" data-list="1"><div class="day">Today</div>
+        ${list.map((m) => `<div ${m === SYNC_MESSAGE ? 'data-new="1"' : ""}>${msg(m.who, m.time, [m.text])}</div>`).join("")}
+      </div>
+      <div class="inputwrap"><div class="input"><span style="color:#b5bac1">${I.plusCircle(22)}</span><span class="ph">Message @Nova Reyes</span>
+        <span class="tools">${I.gift(22)}${I.sticker(22)}${I.smile(22)}</span></div></div></div>
+    <div class="prail"><div class="bn"></div><div class="pav">${av(PEOPLE.nova, 88, "var(--bg-secondary)")}</div>
+      <div class="body"><b>Nova Reyes</b><span class="hd">@nova · she/her</span>
+        <div class="card"><h5>About me</h5>Frontend at Design Lab. Collects mechanical keyboards and film cameras.</div>
+        <div class="card"><h5>Member since</h5>Aug 4, 2026</div>
+        <div class="card"><h5>Mutual spaces — 2</h5>Disband Demo HQ · Design Lab</div></div></div>`;
+}
+
+function security() {
+  return `<div class="settings"><nav><div>
+      <h6>User Settings</h6><a>Profile</a><a class="sel">Account &amp; Security</a><a>Subscription</a><a>Referrals</a><a>Bots</a>
+      <hr><h6>App Settings</h6><a>Appearance</a><a>Themes</a><a>Notifications</a><a>Voice &amp; Video</a><a>Text &amp; Media</a>
+      <hr><a style="color:var(--dnd)">Log Out</a></div></nav>
+    <div class="content"><h2>Account &amp; Security</h2>
+      <div class="sec"><h3>Password &amp; security</h3><p>Keep your account protected.</p>
+        <div style="margin-top:18px"><div style="font-size:14px;font-weight:600;color:var(--text)">Two-factor authentication</div>
+          <p style="font-size:14px;color:var(--muted);margin-top:4px">Add an authenticator app or passkey. After setup, sign-in requires your password plus a code or passkey.</p>
+          <div class="factor"><div class="l"><div class="fi">${I.smartphone(20)}</div><div><b>Authenticator</b><span>Authenticator app</span></div></div><span class="ok">Enabled</span></div>
+          <div class="factor"><div class="l"><div class="fi">${I.key(20)}</div><div><b>Riley’s laptop</b><span>Passkey</span></div></div><span class="ok">Enabled</span></div>
+          <div class="btnrow"><span class="btn">Add authenticator app</span><span class="btn g">Add passkey</span></div></div></div>
+      <div class="sec"><h3>Account</h3>
+        <div class="srow"><div><b>Email</b><span>r•••••@disband.dev</span></div><span class="btn g">Edit</span></div>
+        <div class="srow"><div><b>Change password</b><span>Set a new password while you are logged in.</span></div><span class="btn g">Update</span></div></div>
+    </div><div class="esc">✕</div></div>`;
+}
+
+const SCREENS = {
+  chat: serverChat,
+  dm: () => dm(),
+  "dm-sent": () => dm({ sent: true }),
+  security: () => `${rail("hq")}${security()}`,
+  friends: serverChat,
+};
+
+document.getElementById("root").innerHTML = `
+  <svg width="0" height="0" style="position:absolute"><defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol></defs></svg>
+  <div class="win"><div class="titlebar"><div class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="ttl">Disband</div></div>
+  <div class="app">${SCREENS[screen]()}</div></div>`;
+const mark = await fetch("../assets/logo/disband-mark.svg").then((r) => r.text());
+document.getElementById("markpath").setAttribute("d", mark.match(/ d="([^"]+)"/)[1]);
+await document.fonts.ready;
+await Promise.all([...document.images].map((i) => (i.complete ? 0 : new Promise((r) => (i.onload = i.onerror = r)))));
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>
