@@ -1,0 +1,56 @@
+{
+  "generator": "OpenAI built-in imagegen",
+  "created": "2026-09-22",
+  "assets": [
+    {
+      "name": "tideglass-ring",
+      "source": "/Users/joshclark/.codex/generated_images/01a08291-4cf6-7281-8b6d-32b9f7150d28/exec-2b67c2d1-c415-4ebb-926d-5d0d7e886d31.png"
+    },
+    {
+      "name": "moonmoth-ring",
+      "source": "/Users/joshclark/.codex/generated_images/01a08291-4cf6-7281-8b6d-32b9f7150d28/exec-ec2eb4ee-748c-4a5c-9e4e-6697e25f6933.png"
+    },
+    {
+      "name": "tideglass-profile",
+      "source": "/Users/joshclark/.codex/generated_images/01a08291-4cf6-7281-8b6d-32b9f7150d28/exec-ebff1e87-c070-4781-820c-1143dd967927.png"
+    },
+    {
+      "name": "moonmoth-profile",
+      "source": "/Users/joshclark/.codex/generated_images/01a08291-4cf6-7281-8b6d-32b9f7150d28/exec-af5647b1-b450-46a0-853d-cabe31163a90.png"
+    },
+    {
+      "name": "emberwing-ring",
+      "source": "/Users/joshclark/.codex/generated_images/01a08291-4cf6-7281-8b6d-32b9f7150d28/exec-7452d368-6041-49b5-93a3-af7349f075e7.png"
+    },
+    {
+      "name": "emberwing-profile",
+      "source": "/Users/joshclark/.codex/generated_images/01a08291-4cf6-7281-8b6d-32b9f7150d28/exec-75db7c7b-06f9-411b-b03b-a4bc17c6f92d.png"
+    }
+  ],
+  "prompts": [
+    [
+      "tideglass-ring",
+      "Use case: stylized-concept. Deliver a single production avatar decoration PNG, 1024x1024 with real transparent alpha background and a large completely transparent circular avatar opening centered exactly at (512,512), radius 310 pixels. Original premium chat-app collectible art, polished 2D hand-painted animation-cel aesthetic with purposeful clean contour lines and three-step shading, appealing expressive asymmetry. A circular turquoise sea-glass frame formed by a curling ocean wave, pearly foam crests at upper left and lower right, tiny suspended water drops along the outside, two small coral-pink seashells and a luminous ivory pearl clustered near the lower edge. Cool cyan highlights and deep sapphire outlines, tasteful glossy highlights, not a generic gradient ring. Art confined mostly to radius 330-455, clear center radius 310, all outer elements inside canvas with 30px padding. The center and outside are genuinely transparent, not black or checkerboard. Front-facing flat composition. NO text, no avatar portrait, no mockup, no UI, no watermark. The rendered image itself is the asset, not a presentation."
+    ],
+    [
+      "moonmoth-ring",
+      "Use case: stylized-concept. Deliver one original premium illustrated avatar-decoration PNG with real alpha transparency. Square 1024x1024. Large empty completely transparent circular opening centered exactly at (512,512), radius 310 pixels. A midnight-violet enamel and antique gold circular frame, elegant pale lavender moth wings hugging the outside of the ring at lower left and lower right, a little crescent moon jewel at 12 o'clock, a delicate hanging faceted amethyst at 6 o'clock. Refined anime game cosmetic, confident ink contours, hand-painted cel shading, clear silhouette readable at 64px. A few carefully placed four-point stars outside the ring, restrained mint accent jewels. Frame radius about 335-395, wings extend to radius 475 without crossing the transparent avatar opening. Keep all ornament inside canvas with 25px padding. Original design, no brand logos or recognizable existing characters. No text, no portrait, no UI, no checkerboard or opaque background. Do not fill the center."
+    ],
+    [
+      "tideglass-profile",
+      "Use case: stylized-concept. Create a production profile-card effect overlay asset, portrait 1024x1536 PNG with REAL transparent alpha. A premium original 2D hand-painted animation cel of curling turquoise ocean waves wrapping the corners and the extreme edges of a tall rectangular profile card. Big sculptural curling wave in upper left, a matching smaller crescent wave sweeping along bottom right, chunky pearlescent white foam, little clear cyan droplets with crisp illustrated highlights and sapphire contours, tiny coral-pink shells at bottom left. Build a generous completely transparent central window: all of x=180..844 and y=250..1290 must remain clear transparent for profile text, most of the entire canvas transparent. Ornamentation intentionally confined to the outer 15 percent and corner zones. No enclosing rigid rectangular line. Polished 2D animation background painting with designed shapes and restrained glints; not photorealistic water, not generic particles. No text, no person, no UI mockup, no black background, no checkerboard. Transparent foreground overlay only, calm and readable."
+    ],
+    [
+      "moonmoth-profile",
+      "Use case: stylized-concept. Create one portrait 1024x1536 PNG with genuine transparent alpha, a premium original profile-card skin foreground overlay. A midnight botanical moon garden painted as a polished 2D animation cel with clean intentional lines and elegant three-tone shading. Slender curling plum-purple branches and a few lavender moonflowers grow along the extreme left and right edges, two beautifully detailed pale violet moths near opposite corners, small antique gold crescent moons, sparse mint firefly glints. Top left and bottom right are the most elaborate, other corners quieter. Large completely transparent central window: x=190..834 and y=250..1290 stays completely empty so profile text and avatar remain readable; at least 70 percent of canvas is transparent. No opaque backdrop, no rectangular frame bar, no fog filling center, no lettering, no portrait or interface, no checkerboard. Distinct premium collectible illustration, beautiful readable silhouette, not procedural line art or a scatter of dots."
+    ],
+    [
+      "emberwing-ring",
+      "Use case: stylized-concept. A single premium chat avatar decoration, square 1024 PNG with real transparent alpha. Empty circular transparent hole centered exactly (512,512), radius 310. Original hand-painted 2D fantasy-game cosmetic: a burnished copper ring embraced by two gorgeous phoenix wings, scalloped coral-orange feathers with warm ivory tips along the left and right outer circumference, dark wine-red crisp outlines, a faceted golden sunstone pendant at bottom, little curling flame crest at top. Expressive confident shapes, cel animation style, visible brush shading carefully contained, readable silhouette. Ring radius 340-375, wings extend toward outer edges but never overlap the center opening, generous outer safe margin of 25px. No text, no portrait, no interface, no branded characters, no checkerboard, no opaque background. Genuine transparent center and exterior, lavish illustration rather than generic glow."
+    ],
+    [
+      "emberwing-profile",
+      "Use case: stylized-concept. Portrait 1024x1536 transparent PNG profile-card overlay art. Original 2D hand-painted phoenix garden fantasy illustration. Ornamental curling crimson and copper phoenix feathers sweep along extreme top-left and bottom-right corners, golden ember curls and tiny floating feathers hugging the outer edges, rich vermilion-red contours with coral-orange cel-shaded highlights and a few ivory gleams. Asymmetric opposing feather arcs frame a large untouched transparent center window. Keep all of x=190..834 and y=250..1290 completely transparent, at least 70 percent transparent overall. Rich game collectible animation art with purposeful shape design, no generated gradient panels, no geometric placeholder shapes. No person, no letters, no avatar, no screen mockup. No rectangular border bar. Real alpha transparent exterior and central window, no black or checkerboard backdrop."
+    ]
+  ]
+}

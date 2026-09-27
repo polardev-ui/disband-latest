@@ -121,6 +121,9 @@ data class Server(
     @SerialName("owner_id") val ownerId: String,
     @SerialName("invite_code") var inviteCode: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    /// Official "verified by Disband" mark. Nullable so a row without the
+    /// column still decodes, matching iOS.
+    var verified: Boolean? = null,
 )
 
 @Serializable
@@ -140,6 +143,8 @@ data class Channel(
     var type: ChannelType,
     var position: Int,
     @SerialName("created_at") val createdAt: String? = null,
+    /// Announcement channel: only people who can manage channels may post.
+    @SerialName("read_only") var readOnly: Boolean? = null,
 )
 
 @Serializable

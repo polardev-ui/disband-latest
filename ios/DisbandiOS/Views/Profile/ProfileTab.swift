@@ -11,6 +11,7 @@ struct ProfileTab: View {
     @State private var avatarItem: PhotosPickerItem?
     @State private var bannerItem: PhotosPickerItem?
     @State private var uploading = false
+    @State private var showPaywall = false
 
     private var profile: Profile? { app.profile }
 
@@ -94,6 +95,7 @@ struct ProfileTab: View {
             .statusBarScrim()
             .background(Brand.background)
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showPaywall) { AeroPaywallSheet() }
             .sheet(isPresented: $showEdit) { EditProfileSheet() }
             .sheet(isPresented: $showStatus) { StatusSheet() }
             .confirmationDialog("Sign out of Disband?", isPresented: $confirmSignOut, titleVisibility: .visible) {
@@ -232,8 +234,12 @@ struct ProfileTab: View {
 
     // MARK: - Plan
 
-    /// Aero gets the gold card; Free sees what Aero adds. Purchases happen
-    /// on the web, and App Store rules keep that a plain statement, not a link.
+    /// Aero gets the gold card; Free sees what Aero adds and can buy it.
+    ///
+    /// This used to end at "Available on disband.dev", because sending an iOS
+    /// user to a web checkout for a digital subscription is what guideline
+    /// 3.1.1 forbids — the honest way to sell it in the app is In-App
+    /// Purchase, which is what the button now opens.
     @ViewBuilder private var planCard: some View {
         if profile == nil {
             EmptyView()
@@ -259,29 +265,44 @@ struct ProfileTab: View {
                         .strokeBorder(SubscriptionPlan.aeroGold.opacity(0.45), lineWidth: 1))
             }
         } else {
-            SurfaceCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Disband Free").font(.headline).foregroundStyle(Brand.textPrimary)
-                        Spacer()
-                        Text("AERO")
-                            .font(.caption2.weight(.heavy))
-                            .padding(.horizontal, 8).frame(height: 20)
-                            .background(SubscriptionPlan.aeroGold.opacity(0.2), in: Capsule())
-                            .foregroundStyle(SubscriptionPlan.aeroGold)
+            Button { showPaywall = true } label: {
+                SurfaceCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Disband Free").font(.headline).foregroundStyle(Brand.textPrimary)
+                            Spacer()
+                            Text("AERO")
+                                .font(.caption2.weight(.heavy))
+                                .padding(.horizontal, 8).frame(height: 20)
+                                .background(SubscriptionPlan.aeroGold.opacity(0.2), in: Capsule())
+                                .foregroundStyle(SubscriptionPlan.aeroGold)
+                        }
+                        Text("Aero adds 500 MB uploads, 1440p video, animated avatars and banners, 4 Catalysts a month, and every theme.")
+                            .font(.subheadline).foregroundStyle(Brand.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 4) {
+                            Text("See Aero")
+                            Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SubscriptionPlan.aeroGold)
                     }
-                    Text("Aero adds 500 MB uploads, 1440p video, animated avatars and banners, 4 Catalysts a month, and every theme.")
-                        .font(.subheadline).foregroundStyle(Brand.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Available on disband.dev").font(.caption).foregroundStyle(Brand.textMuted)
                 }
             }
+            .buttonStyle(.plain)
         }
     }
 
     private var aeroDetail: String {
         guard let row = subscriptions.subscription else { return "Active" }
-        if row.status == "past_due" { return "Payment issue — update your card on the web" }
+        // Where to fix a failed payment depends on who is billing. Sending an
+        // App Store subscriber to the web billing page is a dead end: there is
+        // no Stripe customer behind it, and only Apple can take a new card.
+        if row.status == "past_due" {
+            return row.isApple
+                ? "Payment issue — update your Apple Account payment method"
+                : "Payment issue — update your card on the web"
+        }
         if let end = RelativeTime.date(from: row.currentPeriodEnd) {
             return "Active · renews \(end.formatted(date: .abbreviated, time: .omitted))"
         }

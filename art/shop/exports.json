@@ -1,0 +1,56 @@
+[
+  {
+    "name": "emberwing-profile",
+    "width": 320,
+    "height": 480,
+    "frames": 48,
+    "durationMs": 4000,
+    "bytes": 2455762,
+    "transparentCenter": true
+  },
+  {
+    "name": "emberwing-ring",
+    "width": 256,
+    "height": 256,
+    "frames": 48,
+    "durationMs": 4000,
+    "bytes": 1235346,
+    "transparentCenter": true
+  },
+  {
+    "name": "moonmoth-profile",
+    "width": 320,
+    "height": 480,
+    "frames": 48,
+    "durationMs": 4000,
+    "bytes": 2181594,
+    "transparentCenter": true
+  },
+  {
+    "name": "moonmoth-ring",
+    "width": 256,
+    "height": 256,
+    "frames": 48,
+    "durationMs": 4000,
+    "bytes": 1091912,
+    "transparentCenter": true
+  },
+  {
+    "name": "tideglass-profile",
+    "width": 320,
+    "height": 480,
+    "frames": 48,
+    "durationMs": 4000,
+    "bytes": 1966408,
+    "transparentCenter": true
+  },
+  {
+    "name": "tideglass-ring",
+    "width": 256,
+    "height": 256,
+    "frames": 48,
+    "durationMs": 4000,
+    "bytes": 1132168,
+    "transparentCenter": true
+  }
+]

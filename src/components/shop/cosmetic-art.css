@@ -1,0 +1,29 @@
+/* Illustrated media. Alpha is preserved in both the still and animated files. */
+.cosmetic-art { display:block; width:100%; height:100%; object-fit:fill; pointer-events:none; user-select:none; }
+.fx-ring-art::before,.fx-overlay-art::before,.fx-overlay-art::after { content:none!important; }
+.fx-overlay.fx-overlay-art,.fx-overlay-host:hover .fx-overlay.fx-overlay-art { opacity:1; }
+.cosmetic-avatar { flex-shrink:0; vertical-align:middle; }
+.cosmetic-avatar-face { display:flex; width:100%; height:100%; justify-content:center; align-items:center; overflow:hidden; border-radius:50%; background:#353c4c; color:#e6dfd5; font-weight:650; font-family:Georgia,serif; }
+.cosmetic-profile { position:relative; isolation:isolate; overflow:hidden; border:1px solid #ffffff12; border-radius:9px; background:#171d28; color:#e6e7ee; width:100%; height:450px; text-align:left; }
+.cosmetic-profile-banner { position:absolute; top:0; left:0; right:0; height:98px; background:#253044; }
+.cosmetic-profile-content { position:relative; z-index:10; height:100%; padding:64px 38px 28px; display:flex; flex-direction:column; align-items:flex-start; }
+.cosmetic-profile-content h3 { font-size:23px; line-height:1.2; margin-top:23px; font-weight:700; letter-spacing:-.4px; max-width:100%; overflow-wrap:anywhere; }
+.cosmetic-handle { font-size:11px; opacity:.56; margin-top:4px; max-width:100%; overflow-wrap:anywhere; }
+.cosmetic-profile-divider { height:1px; background:currentColor; opacity:.1; width:100%; margin:19px 0 17px; }
+.cosmetic-profile-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; opacity:.58; }
+.cosmetic-bio { font-size:12px; line-height:1.65; margin-top:8px; opacity:.85; }
+.cosmetic-interest { display:flex; flex-wrap:wrap; gap:5px; margin-top:16px; }
+.cosmetic-interest span { border:1px solid #ffffff18; border-radius:4px; font-size:9px; padding:4px 7px; opacity:.7; }
+.cosmetic-profile-footer { margin-top:auto; padding-top:18px; font-size:10px; opacity:.7; display:flex; align-items:center; gap:7px; }
+.cosmetic-online { width:6px; height:6px; background:#75c6a6; border-radius:50%; }
+.cosmetic-profile-light { background:#f0edf2; color:#282531; border-color:#ded7e4; }
+.cosmetic-profile-light .cosmetic-profile-banner { background:#d5dce6; }
+.cosmetic-profile-light .cosmetic-avatar-face { background:#dce0e8; color:#393543; }
+.cosmetic-profile-light .cosmetic-interest span { border-color:#34253826; }
+.cosmetic-profile-compact { height:320px; }
+.cosmetic-profile-compact .cosmetic-profile-content { padding:46px 30px 24px; }
+.cosmetic-profile-compact .cosmetic-profile-content h3 { margin-top:21px; font-size:19px; }
+.cosmetic-profile-compact .cosmetic-profile-banner { height:72px; }
+.cosmetic-profile-compact .cosmetic-profile-divider { margin:12px 0; }
+.shop-decoration-preview { display:flex; min-height:190px; align-items:center; justify-content:center; background:var(--bg-primary); border-radius:6px; }
+.shop-profile-preview { max-width:265px; margin:0 auto; }

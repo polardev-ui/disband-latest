@@ -9,6 +9,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.wsgpolar.disband.data.UserStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -220,12 +224,58 @@ fun DisbandTheme(content: @Composable () -> Unit) {
     }
 }
 
-/** Presence/destructive colours are fixed; they must not drift per theme. */
+/** Presence/destructive/badge colours are fixed; they must not drift per theme. */
 object Brand {
     val online = Color(0xFF23A55A)
     val idle = Color(0xFFF0B232)
     val dnd = Color(0xFFF23F43)
     val danger = Color(0xFFDA373C)
+    /** Verified-space seal. */
+    val verified = Color(0xFF38BDF8)
+    /** Aero gold accent (badges, highlights). */
+    val gold = Color(0xFFFEE75C)
+}
+
+/**
+ * Typography tokens mirroring `ios/DisbandiOS/Theme/Theme.swift`. Screens
+ * should adopt these instead of hand-picking sizes so the whole app stays in
+ * step with iOS.
+ */
+object DisbandType {
+    val largeTitle = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp)
+    val panelTitle = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    val sectionHeader = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
+    val body = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
+    val secondary = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    val caption = TextStyle(fontSize = 12.sp)
+}
+
+/**
+ * Corner-radius tokens. Capsules (half of the element's height) are used for
+ * pills, badges and the dock; the fixed values here cover everything else.
+ */
+object Radii {
+    val card = 22.dp
+    val hero = 26.dp
+    val notes = 20.dp
+    val sheet = 32.dp
+    val press = 12.dp
+    val pressLarge = 14.dp
+    val iconTile = 9.dp
+    /** The spaces panel rounds its top-leading corner only (uneven rounding). */
+    val panelTopLeading = 28.dp
+    /** Rail selection morph target: circle when idle, 16dp squircle when selected. */
+    val railSquircle = 16.dp
+}
+
+/** Row and screen spacing tokens shared across the shell. */
+object ShellMetrics {
+    val rowMinHeight = 52.dp
+    val rowHPadding = 14.dp
+    val iconTextGap = 12.dp
+    val screenHPadding = 18.dp
+    /** Extra bottom clearance every list carries so the floating dock never covers content. */
+    val listBottomMargin = 84.dp
 }
 
 fun UserStatus.color(palette: Palette): Color = when (this) {

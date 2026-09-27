@@ -1,6 +1,5 @@
 package com.wsgpolar.disband.ui.calls
 
-import android.graphics.RenderEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,13 +21,13 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,10 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +58,19 @@ import kotlinx.coroutines.launch
 fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
     val phase by app.calls.phase.collectAsStateValue()
     if (phase == CallPhase.Idle) return
+
+    // System back should end/hang-up, not just pop the overlay and leave the
+    // call in a phantom "connecting" state where the other side shows Active.
+    val scopeBack = rememberCoroutineScope()
+    BackHandler(enabled = phase != CallPhase.Idle) {
+        when (phase) {
+            CallPhase.Incoming -> {
+                val c = app.calls.incoming.value ?: return@BackHandler
+                scopeBack.launch { app.calls.rejectCall(c) }
+            }
+            else -> scopeBack.launch { app.calls.endCall() }
+        }
+    }
 
     val incoming by app.calls.incoming.collectAsStateValue()
     val peer by app.calls.activePeer.collectAsStateValue()
@@ -107,7 +116,6 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
     Box(
         Modifier.fillMaxSize()
             .background(Color.Black.copy(alpha = 0.85f))
-            .blur(25.dp)
             .statusBarsPadding(),
     ) {
         if (phase == CallPhase.Active && shellChrome != null) {

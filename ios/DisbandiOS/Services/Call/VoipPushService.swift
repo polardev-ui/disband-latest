@@ -1,6 +1,7 @@
 import Foundation
 import PushKit
 import Supabase
+import UIKit
 
 /// A VoIP push decoded from APNs. Fire-and-forget from the edge function; the
 /// topic carries everything needed to start ringing without a network round
@@ -27,7 +28,40 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
     var onReceiveIncomingPush: ((VoipPushPayload) -> Void)?
 
     private var registry: PKPushRegistry?
-    private var pendingToken: String?
+
+    /**
+     The VoIP token waiting to be written to the server, kept on disk.
+
+     It used to live only in memory, and that is a bet that one of two
+     unordered events lands second: PushKit handing over the token, and the
+     Supabase session finishing its restore from the keychain. Whichever
+     finishes first finds the other side not ready and does nothing; the
+     second one is what actually registers. When the losing path was the
+     token — the delegate fired, no session yet — the value sat in a property
+     that the next launch overwrote before anyone read it, and the device kept
+     a perfectly good APNs alert token and no VoIP token at all. Those are the
+     devices that ring as a plain banner instead of the system call UI.
+
+     On disk, the pending token survives the launch that failed to register
+     it, and `retry()` below gets another go at it every time the app comes
+     forward.
+     */
+    private static let pendingKey = "disband.voip.pendingToken"
+    /// The token the server is known to hold, so an unchanged one is not
+    /// rewritten on every single foreground.
+    private static let registeredKey = "disband.voip.registeredToken"
+
+    private var pendingToken: String? {
+        get { UserDefaults.standard.string(forKey: Self.pendingKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.pendingKey) }
+    }
+
+    private var registeredToken: String? {
+        get { UserDefaults.standard.string(forKey: Self.registeredKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.registeredKey) }
+    }
+
+    private var foregroundObserver: NSObjectProtocol?
 
     private var client: SupabaseClient { SupabaseManager.client }
 
@@ -47,6 +81,20 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
                 if enabled { self?.startRegistry() } else { self?.stopRegistry() }
             }
         }
+        // Anything that failed to register earlier gets another attempt every
+        // time the app comes forward — by then a session has almost always
+        // finished restoring, and a device that missed its registration once
+        // no longer stays unreachable for calls until it happens to reinstall.
+        if foregroundObserver == nil {
+            foregroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task { @MainActor in await VoipPushService.shared.flushToken() }
+            }
+        }
+
         guard CallKitAvailability.isEnabled else {
             PushDiag.log("voip.start", "skipped — CallKit unavailable in this storefront")
             return
@@ -70,8 +118,10 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
         PushDiag.log("voip.stop", "CallKit unavailable — unregistering")
         registry.desiredPushTypes = []
         self.registry = nil
+        let doomed = registeredToken ?? pendingToken
         pendingToken = nil
-        Task { await deleteStoredToken() }
+        registeredToken = nil
+        Task { await deleteStoredToken(doomed) }
     }
 
     /// PushKit handed us a VoIP device token — persist it for the signed-in user.
@@ -85,6 +135,7 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
         let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
         PushDiag.log("voip.token", "prefix=\(token.prefix(8))")
         Task { @MainActor in
+            if token != self.registeredToken { self.registeredToken = nil }
             self.pendingToken = token
             await self.flushToken()
         }
@@ -132,13 +183,18 @@ didReceiveIncomingPushWith payload: PKPushPayload,
      gets an app terminated. RLS lets a user delete their own tokens, so no
      privileged call is needed.
      */
-    private func deleteStoredToken() async {
-        guard let userId = client.auth.currentUser?.id.uuidString.lowercased() else { return }
+    private func deleteStoredToken(_ token: String?) async {
+        guard let userId = client.auth.currentUser?.id.uuidString.lowercased(),
+              let token else { return }
         do {
+            // Scoped to THIS device's token. Deleting every `ios-voip` row for
+            // the user would silently stop calls ringing on their other
+            // phones and iPads, none of which have lost anything.
             try await client.from("device_tokens")
                 .delete()
                 .eq("user_id", value: userId)
                 .eq("platform", value: "ios-voip")
+                .eq("token", value: token)
                 .execute()
         } catch {
             print("voip token cleanup error: \(error)")
@@ -151,11 +207,24 @@ didReceiveIncomingPushWith payload: PKPushPayload,
     func flushToken() async {
         guard let token = pendingToken,
               client.auth.currentUser != nil else { return }
+        // Already on the server and unchanged: nothing to say.
+        if token == registeredToken {
+            pendingToken = nil
+            return
+        }
         do {
             try await client.rpc("register_device_token",
-                                 params: ["p_token": token, "p_platform": "ios-voip"]).execute()
+                                 params: [
+                                    "p_token": token,
+                                    "p_platform": "ios-voip",
+                                    "p_app_version": Bundle.main.appVersionDisplay,
+                                 ]).execute()
+            registeredToken = token
             pendingToken = nil
+            PushDiag.log("voip.registered", "prefix=\(token.prefix(8))")
         } catch {
+            // Left pending on purpose — the next foreground tries again.
+            PushDiag.log("voip.register.failed", "\(error)")
             print("voip token error: \(error)")
         }
     }

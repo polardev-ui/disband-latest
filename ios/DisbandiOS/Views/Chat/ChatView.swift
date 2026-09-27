@@ -13,15 +13,6 @@ struct ChatViewportKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-/// Frames of the hold-to-react tray's cells, in `chatScroll` space, so the
-/// dragging finger can be hit-tested against them as it moves across the tray.
-struct ChatTrayEmojiKey: PreferenceKey {
-    static var defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
 /// A reaction emoji mid-flight from the tray to the message it commits on.
 struct FlyingReact: Equatable {
     var emoji: String
@@ -62,16 +53,12 @@ struct ChatView: View {
 
     // Hold-to-react tray state, all in the `chatScroll` coordinate space.
     @State private var reactTrayAnchor: CGRect = .zero
-    @State private var reactTrayEmojiFrames: [String: CGRect] = [:]
     @State private var reactHoverEmoji: String?
     @State private var showTrayMenu = false
     @State private var trayMenuTarget: DisplayMessage?
     /// The emoji flying from the tray to the message, while the morph plays.
     @State private var flyingReact: FlyingReact?
     @State private var flyPosition: CGPoint = .zero
-    /// True once the finger has lifted without picking an emoji: the tray
-    /// stays up and reacts to plain taps until dismissed.
-    @State private var trayPersistent = false
 
     /// The DM peer, when `source` is `.dm`. Enables the header call button.
     var callPeer: Profile?
@@ -282,7 +269,8 @@ struct ChatView: View {
                 if model.loading && model.messages.isEmpty {
                     StateView(kind: .loading).frame(height: 300)
                 } else if let error = model.loadError, model.messages.isEmpty {
-                    StateView(kind: .error, title: error).frame(height: 300)
+                    StateView(kind: .error, title: error, retry: { await model.load() })
+                        .frame(height: 300)
                 } else if model.messages.isEmpty {
                     StateView(kind: .empty, title: "No messages yet.\nSay hello! 👋",
                               systemImage: "bubble.left").frame(height: 300)
@@ -323,6 +311,11 @@ struct ChatView: View {
                     )
                 }
             }
+            // Frozen while the tray is up. The tray is anchored to where the
+            // row was when the hold completed, so a list that kept moving
+            // would slide the message out from under its own tray — and would
+            // drag the finger across cells it was never aimed at.
+            .scrollDisabled(reactingMessage != nil)
             .coordinateSpace(name: "chatScroll")
             .background(
                 GeometryReader { geo in
@@ -352,6 +345,69 @@ struct ChatView: View {
 
     // MARK: - Hold-to-react tray
 
+    /*
+     The tray's geometry is arithmetic, not measurement.
+
+     It used to report each cell's frame up through a SwiftUI preference and
+     hit-test the finger against whatever arrived. On the first layout pass
+     those frames are measured BEFORE `.position()` moves the tray, so for one
+     frame every cell claimed to be sitting in the middle of the scroll view —
+     which is exactly where the finger that just completed the hold already
+     is. A release in that window committed whichever emoji happened to land
+     under the touch, and that is the reaction that appeared "automatically"
+     while scrolling. Instrumented on device, the very first drag sample
+     reported `hit=😂` for a finger 104pt below the tray.
+
+     Computing both the drawn position and the hit frames from the same
+     numbers removes the window entirely: there is no first-frame state to be
+     wrong, and the two can never drift apart.
+     */
+    private static let trayCellW: CGFloat = 34
+    private static let trayGap: CGFloat = 2
+    private static let trayPadH: CGFloat = 6
+    /// How far above the held row the tray floats, so emoji clear the finger.
+    private static let trayRise: CGFloat = 50
+    /// How far a hovered cell lifts out of the tray. Its hit frame rides up
+    /// with it, or the selection area would stay below the raised emoji.
+    private static let trayHoverLift: CGFloat = -18
+
+    private var trayKeys: [String] { quickReactions + [trayMoreKey] }
+
+    private var trayWidth: CGFloat {
+        CGFloat(trayKeys.count) * Self.trayCellW
+            + CGFloat(trayKeys.count - 1) * Self.trayGap
+            + Self.trayPadH * 2
+    }
+
+    /// Centre of the tray in `chatScroll` space, clamped to stay on screen.
+    ///
+    /// The anchor is the held row's frame, and rows are full-bleed, so its
+    /// width is the viewport width — the value the clamp needs.
+    private func trayCentre(for anchor: CGRect) -> CGPoint {
+        let viewport = anchor.width > 0 ? anchor.width : UIScreen.main.bounds.width
+        return CGPoint(
+            x: min(max(anchor.midX, trayWidth / 2 + 6), viewport - trayWidth / 2 - 6),
+            y: max(anchor.minY - Self.trayRise, 10)
+        )
+    }
+
+    /// Hit area of every cell, in `chatScroll` space. Generous by 9pt so the
+    /// gaps between cells do not drop the hover as a finger crosses them.
+    private func trayHitFrames(for anchor: CGRect, hovered: String?) -> [String: CGRect] {
+        let centre = trayCentre(for: anchor)
+        let left = centre.x - trayWidth / 2 + Self.trayPadH
+        var out: [String: CGRect] = [:]
+        for (i, key) in trayKeys.enumerated() {
+            let x = left + CGFloat(i) * (Self.trayCellW + Self.trayGap)
+            var rect = CGRect(x: x, y: centre.y - Self.trayCellW / 2,
+                              width: Self.trayCellW, height: Self.trayCellW)
+                .insetBy(dx: -9, dy: -9)
+            if key == hovered { rect = rect.offsetBy(dx: 0, dy: Self.trayHoverLift) }
+            out[key] = rect
+        }
+        return out
+    }
+
     /// The reaction tray: pinned dead-centre above the spot the row was held,
 /// always in the same place no matter where the finger wanders afterwards.
 /// Only the hovered emoji responds, popping up out of the tray. It floats in
@@ -359,88 +415,48 @@ struct ChatView: View {
 /// the drag points are reported in — so hit-testing is exact.
     @ViewBuilder private var reactionTray: some View {
         if reactingMessage != nil {
-            GeometryReader { geo in
-                let width = geo.size.width
-                let cellW: CGFloat = 34
-                let trayW = CGFloat(quickReactions.count + 1) * cellW
-                    + CGFloat(quickReactions.count) * 2 + 12
-                // Centred on the held message's horizontal middle, a little
-                // above it so the emoji clears the finger.
-                let x = min(max(reactTrayAnchor.midX, trayW / 2 + 6), width - trayW / 2 - 6)
-                let y = max(reactTrayAnchor.minY - 50, 10)
-                if trayPersistent {
-                    // Lift without an emoji: the tray stays for a plain tap.
-                    // Touches anywhere else dismiss it first.
-                    Color.clear.contentShape(Rectangle())
-                        .onTapGesture { dismissTray() }
+            HStack(spacing: Self.trayGap) {
+                ForEach(quickReactions, id: \.self) { emoji in
+                    trayCell(emoji: emoji, hovered: reactHoverEmoji == emoji)
                 }
-                HStack(spacing: 2) {
-                    ForEach(quickReactions, id: \.self) { emoji in
-                        trayCell(key: emoji, emoji: emoji, hovered: reactHoverEmoji == emoji)
-                    }
-                    trayCell(key: trayMoreKey, emoji: "⋯", hovered: reactHoverEmoji == trayMoreKey)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 10)
-                .background(Brand.elevated, in: .capsule)
-                .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
-                .position(x: x, y: y)
-                .onPreferenceChange(ChatTrayEmojiKey.self) { frames in
-                    reactTrayEmojiFrames = frames
-                }
+                trayCell(emoji: "⋯", hovered: reactHoverEmoji == trayMoreKey)
             }
-            // While the finger is still down the tray is inert and the drag
-            // gesture on the row owns the touch; once persistent it becomes
-            // interactive for taps.
-            .allowsHitTesting(trayPersistent)
+            .padding(.horizontal, Self.trayPadH)
+            .padding(.vertical, 10)
+            .background(Brand.elevated, in: .capsule)
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+            // Positioned from the SAME numbers the hit frames are computed
+            // from, so what is drawn and what is hit-tested cannot disagree.
+            .position(
+                x: trayCentre(for: reactTrayAnchor).x,
+                y: trayCentre(for: reactTrayAnchor).y
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // The tray is purely a display. It only exists while a finger is
+            // down, and that finger already belongs to the row's drag
+            // gesture, so taking touches here could only steal them from the
+            // gesture that is driving it.
+            .allowsHitTesting(false)
             .transition(.scale(scale: 0.7, anchor: .bottom).combined(with: .opacity))
         }
     }
 
-    /// One reaction (or the "⋯" more-actions button) in the tray, reporting
-    /// its `chatScroll` frame up to the tray for hit-testing. During a drag it
-    /// is purely visual; once the tray is persistent it is a plain tap target.
-    /// The hovered cell "genies" — scales up and lifts clear of the tray so it
+    /// One reaction (or the "⋯" cell) in the tray. Display only — the tray
+    /// exists solely under a finger that already belongs to the row's drag
+    /// gesture, so it never takes a touch of its own.
+    ///
+    /// The hovered cell "genies": scales up and lifts clear of the tray so it
     /// reads above the finger with a soft shadow.
-    private func trayCell(key: String, emoji: String, hovered: Bool) -> some View {
-        let target = reactingMessage
-        return Button {
-            guard let target else { return }
-            if key == trayMoreKey {
-                trayMenuTarget = target
-                showTrayMenu = true
-                dismissTray()
-            } else if let frame = reactTrayEmojiFrames[key] {
-                flyReaction(emoji: emoji, to: target, from: CGPoint(x: frame.midX, y: frame.midY))
-                dismissTray()
-            }
-        } label: {
-            Text(emoji)
-                .font(.system(size: 20))
-                .frame(width: 34, height: 34)
-                .background(hovered ? Brand.accent.opacity(0.3) : Color.clear, in: .circle)
-                .scaleEffect(hovered ? 1.6 : 1, anchor: .center)
-                .offset(y: hovered ? -18 : 0)
-                .shadow(color: .black.opacity(hovered ? 0.35 : 0), radius: 8, y: 6)
-                .zIndex(hovered ? 10 : 0)
-                .animation(.spring(response: 0.22, dampingFraction: 0.6), value: hovered)
-        }
-        .buttonStyle(.plain)
-        .background(
-            GeometryReader { g in
-                let base = g.frame(in: .named("chatScroll"))
-                // Aim the selection area where the emoji actually renders: a
-                // hovered emoji pops up and scales out of the tray, so its hit
-                // frame rides up with it instead of staying below the banner.
-                let hit = hovered
-                    ? base.insetBy(dx: -9, dy: -9).offsetBy(dx: 0, dy: -20)
-                    : base.insetBy(dx: -9, dy: -9)
-                Color.clear.preference(
-                    key: ChatTrayEmojiKey.self,
-                    value: [key: hit]
-                )
-            }
-        )
+    private func trayCell(emoji: String, hovered: Bool) -> some View {
+        Text(emoji)
+            .font(.system(size: 20))
+            .frame(width: Self.trayCellW, height: Self.trayCellW)
+            .background(hovered ? Brand.accent.opacity(0.3) : Color.clear, in: .circle)
+            .scaleEffect(hovered ? 1.6 : 1, anchor: .center)
+            .offset(y: hovered ? Self.trayHoverLift : 0)
+            .shadow(color: .black.opacity(hovered ? 0.35 : 0), radius: 8, y: 6)
+            .zIndex(hovered ? 10 : 0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.6), value: hovered)
     }
 
     /// The committed emoji flying from the tray to the message row while the
@@ -467,9 +483,7 @@ struct ChatView: View {
     /// The hold completed: anchor the tray above the row and show it.
     private func holdReactStarted(_ frame: CGRect, message: DisplayMessage) {
         reactTrayAnchor = frame
-        reactTrayEmojiFrames = [:]
         reactHoverEmoji = nil
-        trayPersistent = false
         withAnimation(.easeOut(duration: 0.12)) { reactingMessage = message }
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
     }
@@ -478,8 +492,8 @@ struct ChatView: View {
     /// whenever the hovered emoji changes. Cells report generously-sized
     /// (and, when hovered, popped-up) frames, so a small grace inset suffices.
     private func holdReactDrag(_ point: CGPoint) {
-        let hit = reactTrayEmojiFrames
-            .first { $0.value.insetBy(dx: -4, dy: -4).contains(point) }?
+        let hit = trayHitFrames(for: reactTrayAnchor, hovered: reactHoverEmoji)
+            .first { $0.value.contains(point) }?
             .key
         if hit != reactHoverEmoji {
             reactHoverEmoji = hit
@@ -490,45 +504,37 @@ struct ChatView: View {
     /// The finger lifted: commit the hovered reaction (morph + toggle) or the
     /// ⋯ menu; anything else leaves the tray up for a plain tap instead of
     /// fading it away.
+    /// The finger lifted. Commit the emoji that was highlighted at that
+    /// moment — and nothing else.
+    ///
+    /// The release point used to be hit-tested afresh, which could commit an
+    /// emoji the reader had never seen light up: a finger sliding across the
+    /// tray on its way somewhere else lands on *a* cell, and that was taken
+    /// as a choice. Reading `reactHoverEmoji` instead means what commits is
+    /// exactly what was under the finger and visibly raised, and a release
+    /// anywhere else is simply not a choice.
+    ///
+    /// This is also the guard that makes an accidental tray harmless: a hold
+    /// that turned into a scroll drags the finger well clear of the tray, the
+    /// hover clears on the way out, and the lift commits nothing.
     private func holdReactEnded(_ point: CGPoint?) {
-        let target = reactingMessage
-        guard let target, let point else {
-            holdReactPersisted()
-            return
-        }
+        defer { dismissTray() }
+        guard let target = reactingMessage, point != nil,
+              let hovered = reactHoverEmoji else { return }
 
-        if let frame = reactTrayEmojiFrames[trayMoreKey],
-           frame.insetBy(dx: -4, dy: -4).contains(point) {
+        if hovered == trayMoreKey {
             trayMenuTarget = target
             showTrayMenu = true
-            dismissTray()
             return
         }
-        guard let (emoji, frame) = reactTrayEmojiFrames.first(where: {
-            $0.key != trayMoreKey && $0.value.insetBy(dx: -4, dy: -4).contains(point)
-        }) else {
-            holdReactPersisted()
-            return
-        }
-
-        flyReaction(emoji: emoji, to: target, from: CGPoint(x: frame.midX, y: frame.midY))
-        dismissTray()
-    }
-
-    /// The finger lifted somewhere that wasn't an emoji: keep the tray visible
-    /// so it can be tapped. The row's drag session is over, so the tray takes
-    /// over hit-testing for plain taps.
-    private func holdReactPersisted() {
-        guard trayPersistent == false else { return }
-        trayPersistent = true
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        guard let frame = trayHitFrames(for: reactTrayAnchor, hovered: hovered)[hovered] else { return }
+        flyReaction(emoji: hovered, to: target, from: CGPoint(x: frame.midX, y: frame.midY))
     }
 
     private func dismissTray() {
         withAnimation(.easeOut(duration: 0.15)) {
             reactingMessage = nil
             reactHoverEmoji = nil
-            trayPersistent = false
         }
     }
 

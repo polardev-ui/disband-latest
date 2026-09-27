@@ -33,7 +33,7 @@
   --radius-2xl: var(--skin-radius-2xl, 1rem);
   --radius-3xl: var(--skin-radius-3xl, 1.5rem);
 
-  --font-sans: var(--skin-font, var(--font-discord));
+  --font-sans: var(--skin-font, var(--font-geist-sans, var(--font-discord)));
 }
 
 @font-face {
@@ -231,7 +231,7 @@ body {
   overflow-x: hidden;
   background-color: var(--bg-tertiary);
   color: var(--text-normal);
-  font-family: var(--font-discord);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.375;
   -webkit-font-smoothing: antialiased;

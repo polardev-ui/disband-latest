@@ -2397,11 +2397,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email: email.trim(), username: normalized, ...(turnstileToken ? { turnstileToken } : {}) }),
       });
       if (!checkRes.ok) {
-        const json = (await checkRes.json()) as { error?: string };
-        return { error: json.error ?? "Account creation is not allowed right now." };
+        // Parsed defensively. The gate answers JSON, but the things in front
+        // of it — an edge runtime timing out, a proxy 502, a WAF challenge —
+        // answer HTML, and `.json()` throwing on that used to fall through to
+        // the catch below and report a connection problem to someone whose
+        // connection was fine. The status is what we actually know, so say
+        // something true from it when there is no message to quote.
+        const json = (await checkRes.json().catch(() => null)) as { error?: string } | null;
+        if (json?.error) return { error: json.error };
+        if (checkRes.status === 429) {
+          return { error: "Too many sign-up attempts from your network. Try again later." };
+        }
+        if (checkRes.status >= 500) {
+          return { error: "Sign-up is temporarily unavailable. Please try again in a few minutes." };
+        }
+        return { error: "Account creation is not allowed right now." };
       }
     } catch {
-      return { error: "We couldn't verify account eligibility. Check your connection and try again." };
+      // Only a genuine transport failure reaches here now, so the connection
+      // advice is finally accurate when it is given.
+      return { error: "We couldn't reach Disband to check this sign-up. Check your connection and try again." };
     }
 
     const { data, error } = await supabase.auth.signUp({

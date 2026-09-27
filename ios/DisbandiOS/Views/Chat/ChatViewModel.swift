@@ -175,18 +175,52 @@ final class ChatViewModel {
 
     // MARK: - Loading
 
+    /// Fetch the history once.
+    private func fetchMessages() async throws -> [DisplayMessage] {
+        switch source {
+        case .channel(let id, _):
+            return try await DatabaseService.messages(channelId: id).map(DisplayMessage.init)
+        case .dm(let threadId, _):
+            return try await DatabaseService.dmMessages(threadId: threadId).map(DisplayMessage.init)
+        case .group(let id, _):
+            return try await DatabaseService.groupMessages(groupId: id).map(DisplayMessage.init)
+        }
+    }
+
+    /**
+     Errors that are worth trying again on their own.
+
+     A statement timeout is the database saying "not right now", not "this
+     channel is broken" — it is transient by definition, and a channel that
+     hit one used to present a dead end with the raw Postgres sentence on it
+     ("canceling statement due to statement timeout") and no way forward but
+     backing out of the channel and re-entering. One quiet retry turns almost
+     all of those into a slightly slow open.
+
+     Matched on the message text because PostgREST surfaces these as a decoded
+     error body rather than a typed failure, so there is nothing else to match
+     on.
+     */
+    private func isTransient(_ error: Error) -> Bool {
+        let text = error.localizedDescription.lowercased()
+        return text.contains("statement timeout")
+            || text.contains("canceling statement")
+            || text.contains("timed out")
+            || text.contains("connection")
+            || text.contains("network")
+    }
+
     func load() async {
         loading = messages.isEmpty   // only spin when there's nothing to show
         loadError = nil
         do {
             let loaded: [DisplayMessage]
-            switch source {
-            case .channel(let id, _):
-                loaded = try await DatabaseService.messages(channelId: id).map(DisplayMessage.init)
-            case .dm(let threadId, _):
-                loaded = try await DatabaseService.dmMessages(threadId: threadId).map(DisplayMessage.init)
-            case .group(let id, _):
-                loaded = try await DatabaseService.groupMessages(groupId: id).map(DisplayMessage.init)
+            do {
+                loaded = try await fetchMessages()
+            } catch let first where isTransient(first) {
+                // One retry, after a beat long enough for a spike to pass.
+                try? await Task.sleep(for: .milliseconds(700))
+                loaded = try await fetchMessages()
             }
             for m in loaded { if let a = m.author { profileCache[a.id] = a } }
             // Keep any optimistic rows the server hasn't echoed back yet.
@@ -196,7 +230,11 @@ final class ChatViewModel {
             messages = loaded + stillPending
             cacheNow()
         } catch {
-            loadError = error.localizedDescription
+            // The retry above has already been spent, so this is what the
+            // reader sees. A Postgres internal sentence is not it.
+            loadError = isTransient(error)
+                ? "Couldn't load this conversation just now."
+                : error.localizedDescription
         }
         loading = false
     }

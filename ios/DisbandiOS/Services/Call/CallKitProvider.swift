@@ -57,6 +57,10 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     /// Register a call this device started or joined — a 1:1 call, a group
     /// call, or a voice channel. Without this the app is suspended on
     /// backgrounding and stops sending and receiving audio.
+    /// A call answered through the system UI has already been adopted under
+    /// its Disband id by the answer handler, so this is a no-op for it — the
+    /// `activeCalls[id] == nil` guard is what makes calling it from the
+    /// shared accept path safe.
     func startActiveCall(id: String, title: String, hasVideo: Bool = false) {
         guard Self.isEnabledForCurrentRegion else { return }
         guard activeCalls[id] == nil else { return }
@@ -151,7 +155,11 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     // MARK: - CXProviderDelegate
 
     func providerDidReset(_ provider: CXProvider) {
+        // The system has torn down every call it knew about, adopted ones
+        // included. Keeping those mappings would have us request an end for
+        // a UUID that no longer exists.
         calls.removeAll()
+        activeCalls.removeAll()
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -159,10 +167,26 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         action.fulfill()
         if let call {
             Task { @MainActor in
-                self.onAnswer?(call)
-                // Answering elsewhere kills the in-app ring on other sessions,
-                // but on THIS device the system UI is the ring.
+                /*
+                 The call that was ringing IS the active call now — adopt it
+                 rather than letting `startActiveCall` open a second one.
+
+                 `acceptCall` asks for an active call straight after this, and
+                 with `maximumCallGroups = 1` the system refuses a second one.
+                 The refusal cleared the mapping, so `endActiveCall` later had
+                 nothing to end and `dismissIncomingCall` could not find the
+                 call either (this handler had already dropped it) — the call
+                 stayed lit in the system UI and the Dynamic Island after it
+                 was over, with no way to clear it but killing the app.
+
+                 Adopting here, before `onAnswer` runs, also closes the race:
+                 `onAnswer` hands off to an async accept path, so anything
+                 that looked the call up afterwards was reading a map this
+                 method had already emptied.
+                 */
+                self.activeCalls[call.callId] = action.callUUID
                 self.calls.removeValue(forKey: action.callUUID)
+                self.onAnswer?(call)
             }
         }
     }
@@ -170,8 +194,15 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         let call = calls[action.callUUID]
         action.fulfill()
-        if let call {
-            Task { @MainActor in
+        Task { @MainActor in
+            // Also drop any adopted mapping for this UUID: ending from the
+            // system UI while the call is in progress goes through here, and
+            // a stale entry would make the next call with the same Disband id
+            // look like it was already active.
+            if let id = self.activeCalls.first(where: { $0.value == action.callUUID })?.key {
+                self.activeCalls.removeValue(forKey: id)
+            }
+            if let call {
                 self.onEnd?(call)
                 self.calls.removeValue(forKey: action.callUUID)
             }

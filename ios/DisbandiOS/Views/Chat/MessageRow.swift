@@ -73,8 +73,20 @@ struct MessageRow: View {
                 // traffic until it was marked.
                 .background(pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
                 .offset(x: dragOffset)
-                .gesture(swipeToReply)
-                .highPriorityGesture(holdToReact)
+                // Exclusive, and at ORDINARY priority.
+                //
+                // `highPriorityGesture` was the cause of two separate bugs.
+                // It beats gestures declared on child views, so pressing and
+                // holding a reaction chip raised the react tray instead of
+                // opening "who reacted" — the chip's own long press never got
+                // a look in. And it outranks the enclosing ScrollView, so a
+                // hold that had already won could not then be given up to a
+                // scroll.
+                //
+                // Exclusive rather than simultaneous: a hold and a sideways
+                // swipe are different intentions and must never both run, or
+                // the message slides away under the tray.
+                .gesture(ExclusiveGesture(holdToReact, swipeToReply))
                 .background(
                     GeometryReader { geo in
                         Color.clear
@@ -229,13 +241,32 @@ struct MessageRow: View {
             }
     }
 
-    /// Press and hold for a second and a half, then drag anywhere — the chat view
-    /// shows a reaction tray above this row and tracks the finger against it.
-    /// The 10pt maximum-distance is deliberately tight: a deliberate hold keeps
-    /// still, while a reply swipe moves past it in the first moments and lets
-    /// the long press fail — so swiping never raises the tray.
+    /**
+     Press and hold, keep holding, drag onto an emoji, let go.
+
+     One continuous touch from start to finish, which is the whole contract:
+     the tray exists only while the finger is down, and lifting anywhere that
+     is not an emoji simply closes it. It used to stay on screen after the
+     lift, waiting to be tapped, and that one decision produced every symptom
+     — a tray that would not go away, that re-aimed itself at whichever
+     message was pressed next, and that was still sitting there to catch a
+     later scroll.
+
+     The 10pt maximum distance is tight on purpose: a deliberate hold keeps
+     still, while a swipe or a flick moves past it within the first moments
+     and fails the press, so neither scrolling nor swipe-to-reply can raise
+     the tray.
+
+     The duration is a compromise and worth stating plainly. 1.5s was long
+     enough that people gave up on the gesture, but shortening it makes the
+     one case that cannot be told apart — finger down, pause, then scroll —
+     more frequent. That case is now harmless: the list is frozen while the
+     tray is up, releasing commits nothing unless an emoji is genuinely
+     highlighted, and the tray closes on release either way. So the worst
+     outcome is a brief flicker, and the gesture can afford to be responsive.
+     */
     private var holdToReact: some Gesture {
-        LongPressGesture(minimumDuration: 1.5, maximumDistance: 10)
+        LongPressGesture(minimumDuration: 0.45, maximumDistance: 10)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named("chatScroll")))
             .onChanged { value in
                 switch value {
@@ -249,7 +280,8 @@ struct MessageRow: View {
                 }
             }
             .onEnded { value in
-                trayActive = false
+                // Whatever happened, this touch is over and so is the tray.
+                defer { trayActive = false }
                 guard case .second(true, let drag?) = value else {
                     onHoldReactEnded(nil)
                     return

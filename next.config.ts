@@ -48,6 +48,9 @@ const botApiHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The desktop preview uses both loopback hostnames. Allow its development
+  // scripts/fonts to load when the server was started under the other alias.
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   distDir: isProd ? ".next" : ".next-dev",
   poweredByHeader: false,
   agentRules: false,

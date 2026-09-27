@@ -50,12 +50,22 @@ class NotesService(private val scope: CoroutineScope) {
         watchJob = null
         changeJob?.cancel()
         changeJob = null
+        // Channels are owned by the jobs' LiveChannels — unsubscribing here
+        // prevents a leak when stop() is called before the jobs assigned.
+        scope.launch {
+            runCatching { watchChannel?.unsubscribe() }
+            runCatching { changeChannel?.unsubscribe() }
+            watchChannel = null
+            changeChannel = null
+        }
     }
+
+    private var watchChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
+    private var changeChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
 
     suspend fun load() {
         val uid = userId ?: return
         if (!hasLoadedOnce) _loading.value = true
-        _loading.value = false
         try {
             val rows = Database.fetchNotes(uid, limit = 50)
             _notes.value = rows
@@ -63,6 +73,8 @@ class NotesService(private val scope: CoroutineScope) {
             hasLoadedOnce = true
         } catch (e: Exception) {
             _error.value = friendlyMessage(e)
+        } finally {
+            _loading.value = false
         }
     }
 
@@ -133,9 +145,14 @@ class NotesService(private val scope: CoroutineScope) {
     fun pinned(): List<Note> = _notes.value.filter { it.pinned }
 
     private fun subscribe(userId: String) {
+        // Assign channels synchronously so stop() can unsubscribe even if
+        // the subscribe hasn't completed yet (prevents leaked subscriptions).
+        watchChannel = null
+        changeChannel = null
         scope.launch {
             try {
                 val live = RealtimeService.observeInserts("notes", "user_id=eq.$userId", Note.serializer())
+                watchChannel = live.channel
                 watchJob = launch {
                     live.flow.collect { note ->
                         if (_notes.value.none { it.id == note.id }) {
@@ -150,6 +167,7 @@ class NotesService(private val scope: CoroutineScope) {
         scope.launch {
             try {
                 val changes = RealtimeService.observeChanges("notes", "user_id=eq.$userId")
+                changeChannel = changes.channel
                 changeJob = launch {
                     changes.flow.collect { reconcile() }
                 }

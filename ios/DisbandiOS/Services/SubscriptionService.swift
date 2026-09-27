@@ -45,9 +45,17 @@ struct Subscription: Codable, Sendable {
     let plan: String
     let status: String
     let currentPeriodEnd: String?
+    /// "stripe" or "apple". Null on rows written before migration 0045, which
+    /// all predate the App Store path and are therefore Stripe.
+    let provider: String?
+
+    /// Billed through the App Store, so only Apple can change the card,
+    /// cancel it, or refund it — every "manage your subscription" affordance
+    /// has to point at iOS Settings instead of the web billing page.
+    var isApple: Bool { provider == "apple" }
 
     enum CodingKeys: String, CodingKey {
-        case plan, status
+        case plan, status, provider
         case userId = "user_id"
         case currentPeriodEnd = "current_period_end"
     }

@@ -19,10 +19,15 @@ import com.wsgpolar.disband.ui.main.MainScreen
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
-fun AppRoot(app: AppState) {
+fun AppRoot(
+    app: AppState,
+    pendingNav: StateFlow<com.wsgpolar.disband.ui.main.PendingNav?>? = null,
+    onPendingNavConsumed: () -> Unit = {},
+) {
     DisbandTheme {
         val palette = LocalPalette.current
         val phase by app.phase.collectAsState()
+        val nav by (pendingNav?.collectAsState() ?: androidx.compose.runtime.remember { kotlinx.coroutines.flow.MutableStateFlow(null) }.collectAsState())
         Box(
             Modifier
                 .fillMaxSize()
@@ -34,7 +39,7 @@ fun AppRoot(app: AppState) {
                 }
                 AuthPhase.SignedOut -> AuthScreen(app)
                 AuthPhase.MfaRequired -> MfaScreen(app)
-                AuthPhase.SignedIn -> MainScreen(app)
+                AuthPhase.SignedIn -> MainScreen(app, pendingNav = nav, onPendingNavConsumed = onPendingNavConsumed)
             }
         }
     }

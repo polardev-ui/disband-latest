@@ -21,7 +21,7 @@ import kotlin.coroutines.resumeWithException
  * (offer/answer/ice over the `call:<callId>` bus), and the same track ids.
  */
 class WebRTCEngine(
-    appContext: Context,
+    private val appContext: Context,
     private val iceServers: List<PeerConnection.IceServer>,
     private val onSignal: (CallSignal) -> Unit,
     private val onRemoteAudioTrack: (AudioTrack?) -> Unit,
@@ -51,8 +51,9 @@ class WebRTCEngine(
         }
 
         override fun onConnectionChange(state: PeerConnection.PeerConnectionState) {
-            if (state == PeerConnection.PeerConnectionState.DISCONNECTED ||
-                state == PeerConnection.PeerConnectionState.FAILED ||
+            // DISCONNECTED is transient (ICE restart can recover) — only FAILED/CLOSED
+            // should tear down the call. Otherwise a brief network blip kills it.
+            if (state == PeerConnection.PeerConnectionState.FAILED ||
                 state == PeerConnection.PeerConnectionState.CLOSED
             ) {
                 onConnectionFailed()
@@ -170,7 +171,14 @@ class WebRTCEngine(
     }
 
     fun setSpeaker(on: Boolean) {
-        audioModule.setSpeakerMute(!on)
+        // setSpeakerMute only mutes the speaker; it doesn't route earpiece vs
+        // speaker. Route via AudioManager when available, fallback to mute.
+        try {
+            val am = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            am.isSpeakerphoneOn = on
+        } catch (_: Exception) { }
+        // Keep the WebRTC module in sync so its internal routing matches.
+        runCatching { audioModule.setSpeakerMute(!on) }
     }
 
     fun dispose() {

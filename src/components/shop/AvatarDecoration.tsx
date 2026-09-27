@@ -3,39 +3,40 @@
 import { DECORATIONS } from "@/components/shop/effects/Decorations";
 import { LottieEffect } from "@/components/shop/effects/LottieEffect";
 import { lottieSrc, shopItem } from "@/lib/shop";
+import { AnimatedCosmetic } from "./AnimatedCosmetic";
 
 /**
- * A decoration mounted over an avatar — the drawn frames (ears, wings, a
- * collar) rather than the generated rings.
+ * Artwork mounted over an avatar, with a transparent opening for the photo.
  *
  * Sized in percentages of the avatar rather than pixels, because the same
  * decoration has to sit correctly on a 24px row avatar and a 96px profile
- * one. Artwork is authored with the avatar filling the middle ~72% of the
- * canvas, so the frame overhangs on every side; `scale` is the knob for an
- * asset that does not follow that convention.
+ * one. Each raster asset declares its calibrated opening scale and offset.
  */
 export function AvatarDecoration({
   itemId,
-  scale = 1.38,
+  scale,
+  playing = true,
 }: {
   itemId: string | null | undefined;
   scale?: number;
+  playing?: boolean;
 }) {
   if (!itemId) return null;
   const item = shopItem(itemId);
   if (!item || !item.overAvatar) return null;
 
   const art = lottieSrc(itemId);
-  const percent = `${scale * 100}%`;
-  const offset = `${((scale - 1) / 2) * -100}%`;
+  const renderedScale = scale ?? item.art?.scale ?? 1.38;
+  const percent = `${renderedScale * 100}%`;
+  const offset = ((renderedScale - 1) / 2) * -100;
 
   return (
     <span
       className="pointer-events-none absolute"
-      style={{ width: percent, height: percent, left: offset, top: offset }}
+      style={{ width: percent, height: percent, left: `${offset}%`, top: `${offset + (item.art?.offsetY ?? 0) * 100}%`, zIndex: 2 }}
       aria-hidden
     >
-      {art ? <LottieEffect src={art} /> : <DrawnDecoration itemId={itemId} />}
+      {item.art ? <AnimatedCosmetic art={item.art} playing={playing} /> : art ? <LottieEffect src={art} /> : <DrawnDecoration itemId={itemId} />}
     </span>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 /**
  * Live markdown styling for the composer.
@@ -16,15 +16,37 @@ import { Fragment, type ReactNode } from "react";
  * Discord does: the text you are editing is still the text you typed, so the
  * caret never lands somewhere that does not exist.
  *
- * Nothing here changes font-size or font-family, including for code. A
- * different face or size changes glyph widths, and the caret then sits a
- * little further from its character on every subsequent column of that line.
- * Code is tinted rather than set in monospace for exactly that reason —
- * Discord can use monospace because its composer is a contenteditable where
- * the caret follows the real glyphs.
+ * THE RULE: nothing here may change a property that affects glyph advance
+ * width or line box geometry. Not font-size, not font-family, not
+ * font-weight, not font-style, not padding, not borders. The textarea draws
+ * the caret using ITS OWN metrics — every character is laid out at the
+ * regular weight of the regular face. The moment this layer asks for a
+ * heavier or slanted face, its glyphs get wider, the two layers disagree
+ * about where column N sits, and the caret lands further from its character
+ * on every subsequent column of the line. Past a long enough word the caret
+ * ends up sitting inside completely different text, which is exactly the bug
+ * this comment exists to prevent recurring.
  *
- * Headings deliberately do NOT change size. Enlarging a line while it is
- * being typed reflows the composer under the cursor.
+ * That rule has teeth because of skins: `--skin-font` swaps the composer to
+ * Georgia, Palatino, Tahoma or Helvetica, all of which ship real bold and
+ * real italic faces with genuinely different widths. Even where the default
+ * (Geist) would have gotten away with synthesis, a skinned client would not.
+ *
+ * So emphasis here is PAINT ONLY:
+ *   - bold           → `-webkit-text-stroke`, which thickens the strokes
+ *                      without touching advance widths
+ *   - underline /
+ *     strikethrough  → text-decoration, which draws over the line box
+ *   - code / spoiler → colour and background
+ *   - italic         → nothing but the dimmed `*` markers. There is no
+ *                      paint-only slant in CSS (`transform` does not apply to
+ *                      inline boxes, and `inline-block` would break wrapping),
+ *                      and a real italic face is precisely what breaks the
+ *                      caret. The visible markers carry the meaning instead.
+ *
+ * Headings deliberately do NOT change size, for the same reason plus one
+ * more: enlarging a line while it is being typed reflows the composer under
+ * the cursor.
  */
 
 /** Shared by the overlay and the textarea. Must stay identical. */
@@ -32,6 +54,18 @@ export const COMPOSER_TEXT_CLASS =
   "w-full resize-none bg-transparent text-[15px] leading-[22px] tracking-normal";
 
 const MARKER = "text-text-muted/60";
+
+/**
+ * Faux bold. `-webkit-text-stroke` paints an outline around each glyph in the
+ * glyph's own colour, so it reads as heavier while the font stays at weight
+ * 400 and every advance width is unchanged. Named `Webkit…` but implemented
+ * by Chrome, Safari and Firefox alike.
+ *
+ * 0.4px is about the visual weight of a 600; past ~0.6px the counters in
+ * small text start to fill in.
+ */
+const BOLD_STYLE: CSSProperties = { WebkitTextStroke: "0.4px currentColor" };
+const HEADING_STYLE: CSSProperties = { WebkitTextStroke: "0.35px currentColor" };
 
 /** Inline rules, applied in order — longest markers first so ** beats *. */
 const INLINE: { re: RegExp; render: (inner: ReactNode, marker: string, key: string) => ReactNode }[] = [
@@ -47,11 +81,11 @@ const INLINE: { re: RegExp; render: (inner: ReactNode, marker: string, key: stri
   },
   {
     re: /\*\*\*([\s\S]+?)\*\*\*/,
-    render: (inner, m, k) => wrap(k, m, <strong className="font-bold italic">{inner}</strong>),
+    render: (inner, m, k) => wrap(k, m, <span style={BOLD_STYLE}>{inner}</span>),
   },
   {
     re: /\*\*([\s\S]+?)\*\*/,
-    render: (inner, m, k) => wrap(k, m, <strong className="font-bold">{inner}</strong>),
+    render: (inner, m, k) => wrap(k, m, <span style={BOLD_STYLE}>{inner}</span>),
   },
   {
     re: /__([\s\S]+?)__/,
@@ -61,13 +95,14 @@ const INLINE: { re: RegExp; render: (inner: ReactNode, marker: string, key: stri
     re: /~~([\s\S]+?)~~/,
     render: (inner, m, k) => wrap(k, m, <span className="line-through">{inner}</span>),
   },
+  // Italic is marker-only: see the note at the top on why no slant is safe.
   {
     re: /\*([\s\S]+?)\*/,
-    render: (inner, m, k) => wrap(k, m, <em className="italic">{inner}</em>),
+    render: (inner, m, k) => wrap(k, m, <span className="text-text-normal">{inner}</span>),
   },
   {
     re: /_([\s\S]+?)_/,
-    render: (inner, m, k) => wrap(k, m, <em className="italic">{inner}</em>),
+    render: (inner, m, k) => wrap(k, m, <span className="text-text-normal">{inner}</span>),
   },
 ];
 
@@ -163,11 +198,13 @@ export function ComposerMarkdown({ text }: { text: string }) {
       return;
     }
 
-    // Block prefixes keep their marker and tint the rest of the line.
+    // Block prefixes keep their marker and tint the rest of the line. The
+    // quote bar is an inset shadow, not a border, and there is no indent:
+    // both would move the line's glyphs off the textarea's own layout.
     const quote = /^(>>> |> )/.exec(line);
     if (quote) {
       return void out.push(
-        <div key={key} className="border-l-2 border-text-muted/50 pl-2">
+        <div key={key} className="shadow-[inset_2px_0_0_0_var(--color-text-muted)]">
           <span className={MARKER}>{quote[1]}</span>
           {renderInline(line.slice(quote[1].length), key)}
         </div>,
@@ -184,13 +221,13 @@ export function ComposerMarkdown({ text }: { text: string }) {
       );
     }
 
-    // Headings are marked but not resized — see the note at the top.
+    // Headings are marked and thickened but never resized — see the top note.
     const heading = /^(#{1,3}) /.exec(line);
     if (heading) {
       return void out.push(
         <div key={key}>
           <span className={MARKER}>{heading[1]} </span>
-          <span className="font-semibold">{renderInline(line.slice(heading[0].length), key)}</span>
+          <span style={HEADING_STYLE}>{renderInline(line.slice(heading[0].length), key)}</span>
         </div>,
       );
     }
