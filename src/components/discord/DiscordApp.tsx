@@ -35,6 +35,7 @@ import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
+import { ReleaseModal } from "@/components/modals/ReleaseModal";
 const ServerSettingsModal = dynamic(() => import("@/components/modals/ServerSettingsModal").then(m => m.ServerSettingsModal));
 const ChannelSettingsModal = dynamic(() => import("@/components/modals/ChannelSettingsModal").then(m => m.ChannelSettingsModal));
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
@@ -1983,6 +1984,7 @@ export function DiscordApp() {
       />
 
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
+      <ReleaseModal />
       {folderDialog && (
         <ServerFolderDialog
           title={folderDialog.mode === "create" ? "Create Folder" : "Edit Folder"}
