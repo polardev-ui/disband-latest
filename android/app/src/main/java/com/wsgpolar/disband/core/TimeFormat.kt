@@ -26,6 +26,17 @@ object TimeFormat {
         }
     }
 
+    /**
+     * Whole minutes from `earlier` to `later`, or null when either is
+     * unparseable. Used to decide whether consecutive messages read as one
+     * run or deserve a fresh header.
+     */
+    fun minutesBetween(earlier: String?, later: String?): Long? {
+        val a = parse(earlier) ?: return null
+        val b = parse(later) ?: return null
+        return ChronoUnit.MINUTES.between(a, b)
+    }
+
     /** Compact relative timestamp: "now", "5m", "2h", "Yesterday", "Mon", "Aug 5". */
     fun compact(string: String?): String {
         val date = parse(string) ?: return ""

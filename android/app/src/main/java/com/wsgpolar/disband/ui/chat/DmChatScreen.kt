@@ -41,6 +41,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var rows by remember(thread.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
+    val reactions = remember { ReactionState("dm") }
     var loading by remember(thread.id) { mutableStateOf(true) }
 
     LaunchedEffect(thread.id) {
@@ -49,8 +50,9 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         runCatching { Database.markDmRead(thread.id) }
 
         val loaded = runCatching { Database.dmMessages(thread.id) }.getOrDefault(emptyList())
-        rows = loaded.map { it.toRow() }
+        rows = loaded.map { it.toRow(uid) }
         loading = false
+        reactions.load(rows.map { it.id }, uid)
 
         val live = runCatching {
             RealtimeService.observeInserts("dm_messages", "thread_id=eq.${thread.id}", DmMessage.serializer())
@@ -65,7 +67,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
                         // as unread on the next launch.
                         runCatching { Database.markDmRead(thread.id) }
                     }
-                    rows = rows.filterNot { it.id == msg.id } + msg.toRow()
+                    rows = rows.filterNot { it.id == msg.id } + msg.toRow(uid)
                 }
             } finally {
                 runCatching { live.channel.unsubscribe() }
@@ -86,7 +88,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         avatarUrl = friend?.avatarUrl,
         avatarName = friend?.name ?: "?",
         ownUserId = uid,
-        rows = rows,
+        rows = reactions.applyTo(rows),
         loading = loading,
         emptyText = "Say hi!",
         callAction = friend?.let { { CallActionButton(app, it) } },
@@ -98,11 +100,14 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
                 dmUnread.markActive(thread.id)
             }
         },
+        onToggleReaction = { messageId, emoji ->
+            scope.launch { reactions.toggle(messageId, emoji, uid) }
+        },
         onBack = onBack,
     )
 }
 
-private fun DmMessage.toRow(): ChatRow = ChatRow(
+private fun DmMessage.toRow(me: String? = null): ChatRow = ChatRow(
     id = id,
     author = author,
     authorId = authorId,
@@ -110,5 +115,14 @@ private fun DmMessage.toRow(): ChatRow = ChatRow(
     attachmentType = attachmentType,
     attachmentName = attachmentName,
     attachmentSize = attachmentSize,
+    // The url was never carried across, so the renderer only ever had a type
+    // to go on — which is why an image showed as the word "Photo".
+    attachmentUrl = attachmentUrl,
+    attachments = attachments,
+    replyToId = replyToId,
+    editedAt = editedAt,
+    pingsYou = me != null && authorId != me && (
+    false
+    ),
     createdAt = createdAt,
 )

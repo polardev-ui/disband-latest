@@ -26,6 +26,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
 
     var rows by remember(group.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
     var loading by remember(group.id) { mutableStateOf(true) }
+    val reactions = remember(group.id) { ReactionState("group") }
 
     LaunchedEffect(group.id) {
         dmUnread.markGroupActive(group.id)
@@ -33,8 +34,9 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         runCatching { Database.markGroupRead(group.id) }
 
         val loaded = runCatching { Database.groupMessages(group.id) }.getOrDefault(emptyList())
-        rows = loaded.map { it.toRow() }
+        rows = loaded.map { it.toRow(uid) }
         loading = false
+        reactions.load(rows.map { it.id }, uid)
 
         val live = runCatching {
             RealtimeService.observeInserts("group_messages", "group_id=eq.${group.id}", GroupMessage.serializer())
@@ -46,7 +48,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
                         dmUnread.incrementGroup(msg.groupId, msg.authorId, uid)
                         runCatching { Database.markGroupRead(group.id) }
                     }
-                    rows = rows.filterNot { it.id == msg.id } + msg.toRow()
+                    rows = rows.filterNot { it.id == msg.id } + msg.toRow(uid)
                 }
             } finally {
                 runCatching { live.channel.unsubscribe() }
@@ -67,7 +69,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         avatarUrl = group.iconUrl,
         avatarName = group.name,
         ownUserId = uid,
-        rows = rows,
+        rows = reactions.applyTo(rows),
         loading = loading,
         emptyText = "No messages yet",
         onSend = { text ->
@@ -75,6 +77,9 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
                 runCatching { Database.sendGroupMessage(group.id, uid, text) }
                 dmUnread.markGroupActive(group.id)
             }
+        },
+        onToggleReaction = { messageId, emoji ->
+            scope.launch { reactions.toggle(messageId, emoji, uid) }
         },
         onBack = onBack,
     )
@@ -86,13 +91,15 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     val scope = rememberCoroutineScope()
 
     var rows by remember(channel.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
+    val reactions = remember { ReactionState("channel") }
     var loading by remember(channel.id) { mutableStateOf(true) }
 
     LaunchedEffect(channel.id) {
         ActiveChat.show(channel.id)
         val loaded = runCatching { Database.messages(channel.id) }.getOrDefault(emptyList())
-        rows = loaded.map { it.toRow() }
+        rows = loaded.map { it.toRow(uid) }
         loading = false
+        reactions.load(rows.map { it.id }, uid)
 
         val live = runCatching {
             RealtimeService.observeInserts("messages", "channel_id=eq.${channel.id}", Message.serializer())
@@ -100,7 +107,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         if (live != null) {
             try {
                 live.flow.collect { msg ->
-                    rows = rows.filterNot { it.id == msg.id } + msg.toRow()
+                    rows = rows.filterNot { it.id == msg.id } + msg.toRow(uid)
                 }
             } finally {
                 runCatching { live.channel.unsubscribe() }
@@ -118,7 +125,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         avatarUrl = null,
         avatarName = "#" + channel.name,
         ownUserId = uid,
-        rows = rows,
+        rows = reactions.applyTo(rows),
         loading = loading,
         emptyText = "No messages yet",
         onSend = { text ->
@@ -126,11 +133,14 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
                 runCatching { Database.sendMessage(channel.id, uid, text) }
             }
         },
+        onToggleReaction = { messageId, emoji ->
+            scope.launch { reactions.toggle(messageId, emoji, uid) }
+        },
         onBack = onBack,
     )
 }
 
-private fun Message.toRow(): ChatRow = ChatRow(
+private fun Message.toRow(me: String? = null): ChatRow = ChatRow(
     id = id,
     author = author,
     authorId = authorId,
@@ -138,10 +148,19 @@ private fun Message.toRow(): ChatRow = ChatRow(
     attachmentType = attachmentType,
     attachmentName = attachmentName,
     attachmentSize = attachmentSize,
+    // The url was never carried across, so the renderer only ever had a type
+    // to go on — which is why an image showed as the word "Photo".
+    attachmentUrl = attachmentUrl,
+    attachments = attachments,
+    replyToId = replyToId,
+    editedAt = editedAt,
+    pingsYou = me != null && authorId != me && (
+    mentions?.contains(me) == true
+    ),
     createdAt = createdAt,
 )
 
-private fun GroupMessage.toRow(): ChatRow = ChatRow(
+private fun GroupMessage.toRow(me: String? = null): ChatRow = ChatRow(
     id = id,
     author = author,
     authorId = authorId,
@@ -149,5 +168,14 @@ private fun GroupMessage.toRow(): ChatRow = ChatRow(
     attachmentType = attachmentType,
     attachmentName = attachmentName,
     attachmentSize = attachmentSize,
+    // The url was never carried across, so the renderer only ever had a type
+    // to go on — which is why an image showed as the word "Photo".
+    attachmentUrl = attachmentUrl,
+    attachments = attachments,
+    replyToId = replyToId,
+    editedAt = editedAt,
+    pingsYou = me != null && authorId != me && (
+    false
+    ),
     createdAt = createdAt,
 )

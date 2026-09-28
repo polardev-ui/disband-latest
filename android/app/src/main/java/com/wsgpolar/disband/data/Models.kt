@@ -157,6 +157,59 @@ data class ServerMember(
     val id: String get() = "$serverId:$userId"
 }
 
+// MARK: - Attachments
+
+/**
+ * One attachment as it is stored in the `attachments` jsonb column.
+ *
+ * The shape is not ours to choose: it has to match what the web writes, field
+ * for field, or a message composed on a laptop arrives empty on a phone. The
+ * authority is `StoredAttachment` in `src/lib/message-attachments.ts`.
+ *
+ * `type` is a plain string rather than the [AttachmentType] enum because the
+ * web is free to add kinds we have never heard of, and an unknown value must
+ * not fail the whole message's decode.
+ */
+@Serializable
+data class StoredAttachment(
+    val url: String,
+    val key: String? = null,
+    val type: String = "file",
+    val name: String? = null,
+    val size: Int? = null,
+)
+
+/** The ceiling the composer enforces, matching the database constraint. */
+const val MAX_ATTACHMENTS = 10
+
+/**
+ * Everything a message carries, whichever column it came from.
+ *
+ * Messages written before the array column — and by any client that still
+ * only knows the old one — set `attachment_url` alone, so those are presented
+ * as a set of one rather than handled separately everywhere downstream. The
+ * array wins when it has anything in it, because the web mirrors the *first*
+ * attachment into the legacy columns for exactly this reason.
+ */
+fun resolveAttachments(
+    array: List<StoredAttachment>?,
+    url: String?,
+    type: AttachmentType?,
+    name: String?,
+    size: Int?,
+): List<StoredAttachment> {
+    if (!array.isNullOrEmpty()) return array
+    if (url == null) return emptyList()
+    return listOf(
+        StoredAttachment(
+            url = url,
+            type = type?.name?.lowercase() ?: "file",
+            name = name,
+            size = size,
+        )
+    )
+}
+
 // MARK: - Messages
 
 @Serializable
@@ -169,6 +222,8 @@ data class Message(
     @SerialName("attachment_type") var attachmentType: AttachmentType? = null,
     @SerialName("attachment_name") var attachmentName: String? = null,
     @SerialName("attachment_size") var attachmentSize: Int? = null,
+    /** Every attachment. The legacy fields above mirror the first one. */
+    var attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") var replyToId: String? = null,
     var mentions: List<String>? = null,
     @SerialName("created_at") val createdAt: String,
@@ -199,6 +254,8 @@ data class DmMessage(
     @SerialName("attachment_type") var attachmentType: AttachmentType? = null,
     @SerialName("attachment_name") var attachmentName: String? = null,
     @SerialName("attachment_size") var attachmentSize: Int? = null,
+    /** Every attachment. The legacy fields above mirror the first one. */
+    var attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") var replyToId: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("edited_at") var editedAt: String? = null,
@@ -227,6 +284,8 @@ data class GroupMessage(
     @SerialName("attachment_type") var attachmentType: AttachmentType? = null,
     @SerialName("attachment_name") var attachmentName: String? = null,
     @SerialName("attachment_size") var attachmentSize: Int? = null,
+    /** Every attachment. The legacy fields above mirror the first one. */
+    var attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") var replyToId: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("edited_at") var editedAt: String? = null,

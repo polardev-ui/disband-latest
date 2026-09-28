@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.wsgpolar.disband.core.Brand
+import com.wsgpolar.disband.core.Palette
+import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.Radii
 import com.wsgpolar.disband.data.Note
@@ -95,6 +97,9 @@ fun YouScreen(app: AppState) {
         ScreenHeader(title = "You")
         HorizontalDivider(color = palette.divider)
 
+        Spacer(Modifier.height(16.dp))
+
+        PlanCard(app, palette)
         Spacer(Modifier.height(16.dp))
 
         // Profile hero card — mirrors iOS ProfileTab hero (banner, avatar, name, handle, bio)
@@ -196,6 +201,96 @@ fun YouScreen(app: AppState) {
             palette = palette,
         )
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Which plan this account is on.
+ *
+ * Android showed nothing at all, so someone paying for Aero had no sign of it
+ * on their phone and quietly got the free limits. The card states the plan and
+ * — for a subscriber — where the next payment is going, which differs by who
+ * is billing: an App Store subscription can only be managed on the device that
+ * bought it, and offering a web link for one is a dead end.
+ */
+@Composable
+private fun PlanCard(app: AppState, palette: Palette) {
+    val subs = app.subscriptions
+    val plan = subs.plan
+    val row = subs.subscription
+
+    val detail = when {
+        row == null -> "Active"
+        row.status == "past_due" && row.isApple ->
+            "Payment issue — update your Apple Account payment method"
+        row.status == "past_due" -> "Payment issue — update your card on the web"
+        row.currentPeriodEnd != null -> "Active · renews ${TimeFormat.compact(row.currentPeriodEnd)}"
+        else -> "Active"
+    }
+
+    if (plan.isPaid) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.hero))
+                .background(
+                    Brush.horizontalGradient(listOf(Color(0xFF4A3B0A), palette.surface)),
+                )
+                .border(1.dp, Brand.gold.copy(alpha = 0.45f), RoundedCornerShape(Radii.hero))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brand.gold),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Color.Black)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text("Disband Aero", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(detail, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+            }
+        }
+    } else {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.hero))
+                .background(palette.surface)
+                .border(1.dp, palette.divider.copy(alpha = 0.5f), RoundedCornerShape(Radii.hero))
+                .padding(16.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Disband Free", color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "AERO",
+                    color = Brand.gold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Brand.gold.copy(alpha = 0.2f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Aero adds 500 MB uploads, 1440p video, animated avatars and banners, " +
+                    "4 Catalysts a month, and every theme.",
+                color = palette.textSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            // A plain statement, not a link. Play's billing rules are the
+            // mirror of Apple's: pointing an in-app user at an outside
+            // checkout for a digital subscription is what gets an app pulled.
+            Text("Available on disband.dev", color = palette.textMuted, fontSize = 12.sp)
+        }
     }
 }
 
