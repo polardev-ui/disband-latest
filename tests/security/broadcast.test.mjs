@@ -142,7 +142,7 @@ before(async () => {
       attachment_url text,
       mentions uuid[] not null default '{}'
     );
-    create table public.dm_threads (id uuid primary key, user_a uuid not null, user_b uuid not null);
+    create table public.dm_threads (id uuid primary key default gen_random_uuid(), user_a uuid not null, user_b uuid not null, unique (user_a, user_b));
     create table public.dm_messages (
       id uuid primary key default gen_random_uuid(),
       thread_id uuid not null,
@@ -229,6 +229,7 @@ before(async () => {
   await db.exec(await readFile("supabase/migrations/0099_restriction_expiry.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0100_official_broadcast.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0101_official_account_lockdown.sql", "utf8"));
+  await db.exec(await readFile("supabase/migrations/0105_broadcast_dm_thread.sql", "utf8"));
 
   await db.query(
     `insert into public.dm_threads (id, user_a, user_b)
@@ -329,6 +330,78 @@ test("targeted sends refuse a missing, unknown or bot recipient", async () => {
     () => send({ audience: "user", target: OFFICIAL }),
     /Cannot send an official notice to the official account/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// DM delivery (0105): the notice also lands as a conversation, not just a ping
+// ---------------------------------------------------------------------------
+
+async function officialThreads(userId) {
+  const { rows } = await db.query(
+    `select t.id from public.dm_threads t
+      where (t.user_a = $1 or t.user_b = $1)
+        and (t.user_a = $2 or t.user_b = $2)`,
+    [userId, OFFICIAL],
+  );
+  return rows.map((r) => r.id);
+}
+
+async function officialDmContents(userId) {
+  const { rows } = await db.query(
+    `select m.content, m.author_id from public.dm_messages m
+      join public.dm_threads t on t.id = m.thread_id
+      where (t.user_a = $1 or t.user_b = $1)
+        and (t.user_a = $2 or t.user_b = $2)`,
+    [userId, OFFICIAL],
+  );
+  return rows;
+}
+
+test("a targeted broadcast also lands as a DM from @disband", async () => {
+  await send({ audience: "user", target: CARA, title: "DM notice check", body: "Please read this." });
+  assert.equal((await officialThreads(CARA)).length, 1, "exactly one thread with the official account");
+  const msgs = (await officialDmContents(CARA)).filter((m) => m.content.includes("DM notice check"));
+  assert.equal(msgs.length, 1);
+  assert.equal(msgs[0].author_id, OFFICIAL);
+  assert.ok(msgs[0].content.includes("DM notice check"));
+  assert.ok(msgs[0].content.includes("Please read this."));
+  assert.ok(
+    !(await officialDmContents(BOB)).some((m) => m.content.includes("DM notice check")),
+    "nobody else gets the notice",
+  );
+});
+
+test("a broadcast to everyone opens a DM for every human and none for bots", async () => {
+  await send({ title: "DM for all check" });
+  for (const u of [ALICE, BOB, CARA, STAFF, SQUATTER]) {
+    assert.equal((await officialThreads(u)).length, 1, "exactly one official thread per human");
+    assert.ok(
+      (await officialDmContents(u)).some((m) => m.content.includes("DM for all check")),
+      "the notice is in the thread",
+    );
+  }
+  assert.equal((await officialThreads(BOT)).length, 0, "bots get no thread");
+  const { rows: selfThreads } = await db.query(
+    `select id from public.dm_threads where user_a = $1 and user_b = $1`,
+    [OFFICIAL],
+  );
+  assert.equal(selfThreads.length, 0, "no self thread");
+});
+
+test("a repeat notice reuses the thread instead of opening another", async () => {
+  await send({ audience: "user", target: BOB, title: "Second DM notice", body: "Again." });
+  assert.equal((await officialThreads(BOB)).length, 1);
+  const msgs = (await officialDmContents(BOB)).filter((m) => m.author_id === OFFICIAL);
+  assert.ok(msgs.some((m) => m.content.includes("DM for all check")));
+  assert.ok(msgs.some((m) => m.content.includes("Second DM notice")));
+});
+
+test("the official account is flagged DM-able through the bot gate", async () => {
+  const { rows } = await db.query(
+    `select bot_dm_enabled from public.profiles where id = $1`,
+    [OFFICIAL],
+  );
+  assert.equal(rows[0].bot_dm_enabled, true);
 });
 
 // ---------------------------------------------------------------------------
