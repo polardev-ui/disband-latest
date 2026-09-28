@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,6 +49,8 @@ import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.Palette
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.data.AttachmentType
+import com.wsgpolar.disband.data.StoredAttachment
+import com.wsgpolar.disband.data.resolveAttachments
 import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.Server
 import com.wsgpolar.disband.ui.AvatarImage
@@ -65,6 +68,29 @@ data class ChatRow(
     /** Original filename and byte size, so a file is not just "Attachment". */
     val attachmentName: String? = null,
     val attachmentSize: Int? = null,
+    /** The row carried no url at all, so an image could only ever be the
+     *  word "Photo". Everything the renderer needs is here now. */
+    val attachmentUrl: String? = null,
+    val attachments: List<StoredAttachment>? = null,
+    val replyToId: String? = null,
+    val editedAt: String? = null,
+    val pending: Boolean = false,
+    /** Replies to you and @mentions of you, which the row tints. */
+    val pingsYou: Boolean = false,
+    val reactions: List<ReactionSummaryRow> = emptyList(),
+) {
+    /** The array when there is one, otherwise a set of one from the legacy
+     *  columns — see `resolveAttachments`. */
+    fun resolvedAttachments(): List<StoredAttachment> =
+        resolveAttachments(attachments, attachmentUrl, attachmentType, attachmentName, attachmentSize)
+}
+
+/** One emoji on a message, with how many people used it. */
+data class ReactionSummaryRow(
+    val emoji: String,
+    val count: Int,
+    /** True when the signed-in user is one of them. */
+    val reacted: Boolean,
 )
 
 /** Human-readable byte counts, matching the other clients. */
@@ -80,9 +106,6 @@ internal fun formatFileSize(bytes: Int?): String? {
     return if (value >= 10 || unit == 0) "${value.toInt()} ${units[unit]}"
     else String.format("%.1f %s", value, units[unit])
 }
-
-private fun ChatRow.isMine(ownUserId: String?): Boolean =
-    ownUserId != null && (author?.id == ownUserId || authorId == ownUserId)
 
 fun ChatRow.fromProfile() = author
 
@@ -108,6 +131,8 @@ fun ChatScaffold(
     typingUsers: List<Profile> = emptyList(),
     replyTo: ChatRow? = null,
     onReplyDismiss: (() -> Unit)? = null,
+    /** Message id and emoji. Adds the reaction, or takes it back. */
+    onToggleReaction: (String, String) -> Unit = { _, _ -> },
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
@@ -146,7 +171,7 @@ fun ChatScaffold(
                 rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(emptyText, color = palette.textMuted, fontSize = 15.sp)
                 }
-                else -> MessageList(listState, rows, ownUserId)
+                else -> MessageList(listState, rows, ownUserId, onToggleReaction)
             }
         }
         Composer(palette = palette, onSend = onSend, enabled = sendEnabled)
@@ -193,23 +218,51 @@ private fun ChatTopBar(
 }
 
 @Composable
-private fun MessageList(listState: LazyListState, rows: List<ChatRow>, ownUserId: String?) {
+private fun MessageList(
+    listState: LazyListState,
+    rows: List<ChatRow>,
+    ownUserId: String?,
+    onToggleReaction: (String, String) -> Unit = { _, _ -> },
+) {
     val palette = LocalPalette.current
+    // Looked up once per list rather than per row: a reply preview needs the
+    // message it points at, and scanning the whole list for each row is
+    // quadratic on a long channel.
+    val byId = remember(rows) { rows.associateBy { it.id } }
+
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 12.dp),
+        Modifier.fillMaxSize(),
         state = listState,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        // No gap: a run of messages from one person should read as one block,
+        // and the row adds its own spacing when a run breaks.
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        items(rows, key = { it.id }) { row ->
-            MessageBubble(
+        itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->
+            MessageRow(
                 row = row,
-                isMine = row.isMine(ownUserId),
-                showName = row.author?.id != ownUserId,
                 palette = palette,
+                grouped = row.groupsWith(rows.getOrNull(index - 1)),
+                repliedTo = row.replyToId?.let { byId[it] },
+                onToggleReaction = { emoji -> onToggleReaction(row.id, emoji) },
             )
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
+}
+
+/**
+ * Whether this message continues a run from the same person.
+ *
+ * Same author, and close enough in time that it reads as one thought. Seven
+ * minutes is what the web uses; past that a new header makes the gap visible
+ * rather than pretending the conversation never paused.
+ */
+private fun ChatRow.groupsWith(previous: ChatRow?): Boolean {
+    if (previous == null) return false
+    if (previous.authorId != authorId || authorId == null) return false
+    if (replyToId != null) return false
+    val gap = TimeFormat.minutesBetween(previous.createdAt, createdAt) ?: return false
+    return gap in 0..7
 }
 
 @Composable
@@ -237,81 +290,6 @@ private fun TypingBubble(users: List<Profile>, palette: Palette) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("${users.firstOrNull()?.name ?: "Someone"} is typing...", color = palette.textMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-    }
-}
-
-@Composable
-private fun MessageBubble(row: ChatRow, isMine: Boolean, showName: Boolean, palette: Palette) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
-    ) {
-        if (!isMine) {
-            AvatarImage(url = row.author?.avatarUrl, name = row.author?.name ?: "?", size = 32.dp)
-            Spacer(Modifier.width(8.dp))
-        }
-        Column(
-            Modifier
-                .fillMaxWidth(if (isMine) 0.78f else 0.85f)
-                .padding(top = 2.dp),
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
-        ) {
-            if (!isMine && showName) {
-                Text(
-                    row.author?.name ?: "Unknown",
-                    color = palette.accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-            }
-            val bg = if (isMine) palette.accent else palette.surfaceRaised
-            val shape = RoundedCornerShape(14.dp)
-            Column(
-                Modifier
-                    .background(bg, shape)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                if (row.content.isNotBlank()) {
-                    Text(
-                        row.content,
-                        color = if (isMine) androidx.compose.ui.graphics.Color.White else palette.textPrimary,
-                        fontSize = 15.sp,
-                    )
-                }
-                row.attachmentType?.let { type ->
-                    // The filename and size, not the word "Attachment" — a save
-                    // file, a document and a zip all read the same without them.
-                    val label = row.attachmentName?.takeIf { it.isNotBlank() }
-                        ?: when (type) {
-                            AttachmentType.Image, AttachmentType.Gif -> "Photo"
-                            AttachmentType.Video -> "Video"
-                            else -> "File"
-                        }
-                    val tint = if (isMine) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f)
-                    else palette.textMuted
-                    Text(
-                        label,
-                        color = tint,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    formatFileSize(row.attachmentSize)?.let { size ->
-                        Text(size, color = tint.copy(alpha = 0.7f), fontSize = 11.sp)
-                    }
-                }
-            }
-            Text(
-                TimeFormat.short(row.createdAt),
-                color = palette.textMuted,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 3.dp, start = 4.dp, end = 4.dp),
-            )
-        }
     }
 }
 

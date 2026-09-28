@@ -46,6 +46,8 @@ class AppState(
     val notes: NotesService,
     val turnService: com.wsgpolar.disband.data.TurnService,
     val calls: com.wsgpolar.disband.call.CallManager,
+    val subscriptions: com.wsgpolar.disband.data.SubscriptionService =
+        com.wsgpolar.disband.data.SubscriptionService(),
 ) {
     private val client get() = DisbandSupabase.client
 
@@ -154,6 +156,7 @@ class AppState(
         themeManager.adopt(_profile.value?.theme)
         registerPush()
         startCallListeners()
+        subscriptions.start(currentUserId)
         loadServers()
     }
 
@@ -172,6 +175,7 @@ class AppState(
         themeManager.adopt(_profile.value?.theme)
         registerPush()
         startCallListeners()
+        subscriptions.start(currentUserId)
         loadServers()
     }
 
