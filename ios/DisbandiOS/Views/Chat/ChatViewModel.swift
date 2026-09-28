@@ -494,8 +494,28 @@ final class ChatViewModel {
                 surface = "group"
                 threadId = nil
             }
-            // The realtime INSERT echoes the row back and appends it. A Tether
-            // ask rides along detached: its failure must never touch the send.
+            /*
+             Promote the optimistic row the moment the insert answers.
+
+             The id came back all along and was used only for the Tether ask,
+             so the row kept its `optimistic-…` id and stayed `pending` until
+             a realtime echo turned up that matched it on *content*. When the
+             echo was late, dropped, or carried text the server had altered in
+             any way, the message sat there greyed as "Sending…" forever —
+             already sent, and saying otherwise.
+
+             Nothing needs to be matched now: the insert told us the id, so
+             the row becomes the real row here, and the echo (if it arrives)
+             dedupes against that id instead of guessing from the text.
+             */
+            if let index = messages.firstIndex(where: { $0.id == optimistic.id }) {
+                messages[index].id = messageId
+                messages[index].pending = false
+                cacheNow()
+            }
+
+            // A Tether ask rides along detached: its failure must never touch
+            // the send.
             Task.detached {
                 await TetherService.shared.fireAskIfNeeded(messageId: messageId, content: content,
                                                            surface: surface, threadId: threadId,
@@ -615,7 +635,15 @@ final class ChatViewModel {
             createdAt: row.createdAt, editedAt: row.editedAt,
             mentions: row.mentions
         )
-        // If this confirms one of our optimistic rows, swap it in place (gray → white).
+        // Already here under its real id — the send promoted it before the
+        // echo arrived, which is the normal order. Refresh it rather than
+        // appending a duplicate.
+        if let idx = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[idx] = message
+            cacheNow()
+            return
+        }
+        // Echo beat the insert's reply: still an optimistic row to confirm.
         if let idx = messages.firstIndex(where: {
             $0.pending && $0.authorId == message.authorId && $0.content == message.content
                 && ($0.attachmentUrl ?? "") == (message.attachmentUrl ?? "")

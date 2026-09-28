@@ -114,6 +114,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: "-"
+          # Signs the updater manifest. Without these the build still produces
+          # installers, but no latest.json — and the app falls back to telling
+          # people to download by hand. See docs/DESKTOP_UPDATES.md.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: https://mjqbrcabargylrimlafw.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qcWJyY2FiYXJneWxyaW1sYWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMDU2MzQsImV4cCI6MjA5NzU4MTYzNH0.wPZ49DaEv_NDyXovBwLcgyeoHxnvuSEa693zOmGMBbM
           NEXT_PUBLIC_GITHUB_REPO: polardev-ui/disband-latest
@@ -137,4 +142,7 @@ jobs:
             [All releases](https://github.com/${{ github.repository }}/releases)
           releaseDraft: false
           prerelease: ${{ steps.build.outputs.mode == 'branch' }}
+          # Publishes latest.json beside the installers — the manifest the
+          # in-app updater polls.
+          includeUpdaterJson: true
           args: --target ${{ matrix.target }}

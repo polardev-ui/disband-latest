@@ -12,6 +12,7 @@ struct ProfileTab: View {
     @State private var bannerItem: PhotosPickerItem?
     @State private var uploading = false
     @State private var showPaywall = false
+    @State private var showNotifications = false
 
     private var profile: Profile? { app.profile }
 
@@ -27,7 +28,15 @@ struct ProfileTab: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ScreenHeader("You") {
-                        HeaderIconButton(symbol: "pencil", label: "Edit profile") { showEdit = true }
+                        HStack(spacing: 6) {
+                            // The inbox for everything a push would have told
+                            // you about — and the only way to see what you
+                            // missed once a push has been swiped away.
+                            HeaderIconButton(symbol: "bell.fill", label: "Notifications") {
+                                showNotifications = true
+                            }
+                            HeaderIconButton(symbol: "pencil", label: "Edit profile") { showEdit = true }
+                        }
                     }
                     if profile == nil, let problem = app.profileError {
                         profileErrorCard(problem).padding(.horizontal, 16).padding(.bottom, 12)
@@ -101,6 +110,7 @@ struct ProfileTab: View {
             .background(Brand.background)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showPaywall) { AeroPaywallSheet() }
+            .sheet(isPresented: $showNotifications) { NotificationsSheet() }
             .sheet(isPresented: $showEdit) { EditProfileSheet() }
             .sheet(isPresented: $showStatus) { StatusSheet() }
             .confirmationDialog("Sign out of Disband?", isPresented: $confirmSignOut, titleVisibility: .visible) {

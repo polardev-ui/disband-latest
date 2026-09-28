@@ -10,7 +10,7 @@ import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
 import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
-import { DesktopUpdateOverlay } from "@/components/desktop/DesktopUpdateOverlay";
+import { UpdateToast } from "@/components/desktop/UpdateToast";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { MaintenanceNotice } from "@/components/maintenance/MaintenanceNotice";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -77,7 +77,7 @@ export function DisbandRoot() {
         {}
         <SkinBoundary>
         <ContextMenuProvider>
-          <DesktopUpdateOverlay />
+          <UpdateToast />
           {}
           <MobileAppPromo />
           {}

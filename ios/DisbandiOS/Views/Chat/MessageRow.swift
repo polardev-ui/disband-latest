@@ -162,9 +162,11 @@ struct MessageRow: View {
 
                 attachment
 
-                if message.pending {
-                    Text("Sending…").font(.caption2).foregroundStyle(Brand.textMuted)
-                } else if message.editedAt != nil {
+                // No "Sending…" label: the text itself is already greyed
+                // while pending and turns white the moment it lands, which
+                // says the same thing without a second line appearing and
+                // disappearing under every message.
+                if message.editedAt != nil {
                     Text("(edited)").font(.caption2).foregroundStyle(Brand.textMuted)
                 }
 

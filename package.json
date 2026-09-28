@@ -1,6 +1,6 @@
 {
   "name": "disband",
-  "version": "2.30.47",
+  "version": "2.30.44",
   "author": "Josh Clark <joshclark@wsgpolar.me>",
   "private": true,
   "description": "Disband — a cross-platform (macOS, Windows, Linux, Web) app built with Next.js + Tauri + Supabase.",
@@ -38,6 +38,8 @@
     "@supabase/supabase-js": "^2.108.2",
     "@tauri-apps/api": "~2.12.0",
     "@tauri-apps/plugin-notification": "~2.5.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.0",
     "@twemoji/api": "^17.0.3",
     "emojibase-data": "^17.0.0",
     "gifenc": "^1.0.3",

@@ -1,7 +1,17 @@
 import SwiftUI
 
-/// Typing indicator: a 3-dot bubble in DMs, avatar stack + dots + label in
-/// channels and groups. Avatars pop in on arrival and shrink out on departure.
+/**
+ Typing indicator: one pill that slides in above the composer.
+
+ It used to be a row in the chat's VStack, so someone starting to type
+ *reflowed the whole screen* — the composer and the last message jumped down
+ a line, and jumped back when they stopped. A pill that floats over the list
+ instead takes no layout height, so nothing moves but the pill.
+
+ Up to three avatars, overlapping, then the dots. Past three it counts the
+ rest rather than growing, because the pill has to stay one line wide enough
+ to read and narrow enough not to cover the conversation.
+ */
 struct TypingBubble: View {
     let typers: [TypingService.Event]
     let profiles: [String: Profile]
@@ -11,53 +21,60 @@ struct TypingBubble: View {
 
     var body: some View {
         if !typers.isEmpty {
-            HStack(alignment: .bottom, spacing: 8) {
-                if groupContext {
-                    avatarStack
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    TypingDots()
-                    if groupContext {
-                        Text(label)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Brand.textMuted)
-                            .lineLimit(1)
-                    }
-                }
+            HStack(spacing: 8) {
+                // Shown everywhere now, not just in groups: knowing *who* is
+                // typing matters in a DM too when you have several open.
+                avatarStack
+                TypingDots()
             }
-            .padding(.horizontal, 16)
+            .padding(.leading, 6)
+            .padding(.trailing, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(Brand.elevated)
+                    .shadow(color: .black.opacity(0.28), radius: 10, y: 3)
+            )
+            .overlay(Capsule().stroke(Brand.divider.opacity(0.6), lineWidth: 0.5))
+            .padding(.leading, 16)
             .padding(.bottom, 6)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // In and out from below, so it reads as rising off the composer
+            // rather than appearing from nowhere.
+            .transition(
+                .move(edge: .bottom)
+                    .combined(with: .opacity)
+                    .combined(with: .scale(scale: 0.92, anchor: .bottomLeading))
+            )
+            .allowsHitTesting(false)
         }
     }
 
     private var typerIds: [String] { typers.map(\.userId) }
 
-    private var label: String {
-        let names = typers.map(\.name)
-        switch names.count {
-        case 1: return "\(names[0]) is typing…"
-        case 2: return "\(names[0]) and \(names[1]) are typing…"
-        case 3: return "\(names[0]), \(names[1]), and \(names[2]) are typing…"
-        default: return "Several people are typing…"
-        }
-    }
-
     private var avatarStack: some View {
-        HStack(spacing: -6) {
+        HStack(spacing: -8) {
             ForEach(typers.prefix(Self.maxAvatars), id: \.userId) { typer in
-                if let profile = profiles[typer.userId] {
-                    AvatarView(url: profile.avatarUrl, name: profile.name, size: 24)
-                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                Group {
+                    if let profile = profiles[typer.userId] {
+                        AvatarView(url: profile.avatarUrl, name: profile.name, size: 22)
+                    } else {
+                        // The name arrives with the typing event even when the
+                        // profile has not been fetched yet, so the pill never
+                        // shows a gap where a face should be.
+                        AvatarView(url: nil, name: typer.name, size: 22)
+                    }
                 }
+                .overlay(Circle().stroke(Brand.elevated, lineWidth: 2))
+                .transition(.scale(scale: 0.4).combined(with: .opacity))
             }
             if typers.count > Self.maxAvatars {
                 Text("+\(typers.count - Self.maxAvatars)")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Brand.textMuted)
-                    .frame(width: 24, height: 24)
-                    .background(Brand.elevated, in: Circle())
-                    .overlay(Circle().stroke(Brand.divider, lineWidth: 1))
+                    .frame(width: 22, height: 22)
+                    .background(Brand.surfaceRaised, in: Circle())
+                    .overlay(Circle().stroke(Brand.elevated, lineWidth: 2))
             }
         }
         .animation(.spring(response: 0.25), value: typerIds)
@@ -93,9 +110,6 @@ private struct TypingDots: View {
                     )
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Brand.elevated, in: Capsule())
         .onAppear { pulsing = true }
         .onDisappear { pulsing = false }
     }

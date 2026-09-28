@@ -3,7 +3,9 @@ import Foundation
 /// A backend-agnostic message used by the shared chat UI. Channel, DM, and group
 /// messages are all projected into this shape.
 struct DisplayMessage: Identifiable, Hashable {
-    let id: String
+    /// Mutable so an optimistic row can take on the real row id the insert
+    /// returns, instead of waiting to be matched by its text.
+    var id: String
     let authorId: String
     var author: Profile?
     var content: String
