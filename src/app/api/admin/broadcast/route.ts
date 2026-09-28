@@ -19,6 +19,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// An everyone-send fans out ~40k rows in one statement (~10s at current
+// scale); the default serverless cap would kill the request first. 0108
+// gives the statement matching headroom on the database side.
+export const maxDuration = 120;
+
 /**
  * Owner-only control surface for the official @disband account.
  *
