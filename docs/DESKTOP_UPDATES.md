@@ -17,54 +17,42 @@ could not use Disband until you had gone and done that by hand.
 | Permissions | `src-tauri/capabilities/default.json` |
 | Manifest publishing | `.github/workflows/main.yml` → `includeUpdaterJson: true` |
 
-## It is not live yet — it needs a signing key
+## One step left: the private key in CI
+
+The keypair exists (`~/.tauri/disband.key`, key id `4FEDEFE8A3A66116`) and the
+**public** half is already committed in `src-tauri/tauri.conf.json`. That is
+the half that verifies, so it belongs in the repo.
 
 Tauri will not install an update it cannot verify, which is the right way
 round: the updater replaces the running binary, so an unsigned manifest is a
-remote code execution primitive. `pubkey` is currently empty, so every check
-fails closed.
+remote code execution primitive.
 
-**Until you do the three steps below, the app falls back** to a dismissible
-toast with a download link — the old GitHub-release check, minus the blocking
-wall. Nothing is broken in the meantime; it just is not automatic.
+**Until the private key is in GitHub Actions, releases are unsigned** and the
+app falls back to a dismissible toast with a download link — the old
+GitHub-release check, minus the blocking wall.
 
-### 1. Generate a keypair
-
-```bash
-pnpm tauri signer generate -w ~/.tauri/disband.key
-```
-
-Two things come out: a **private key** (the file, plus the password you set)
-and a **public key** it prints. The private key signs releases — it is not
-recoverable and losing it means every installed client stops accepting
-updates until they reinstall by hand.
-
-### 2. Put the public key in the config
-
-`src-tauri/tauri.conf.json`:
-
-```json
-"plugins": {
-  "updater": {
-    "pubkey": "<the public key it printed>"
-  }
-}
-```
-
-This one is safe to commit — it is the half that verifies, not the half that
-signs.
-
-### 3. Add the private key to GitHub Actions
+### Add the private key to GitHub Actions
 
 Repository → Settings → Secrets and variables → Actions:
 
 | Secret | Value |
 | --- | --- |
 | `TAURI_SIGNING_PRIVATE_KEY` | contents of `~/.tauri/disband.key` |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the password you set |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the password set when generating it |
 
-**Never commit the private key.** `*.key` is not currently in `.gitignore`;
-keep it outside the repo entirely, as above.
+```bash
+# Prints the private key so you can paste it into the secret.
+cat ~/.tauri/disband.key
+```
+
+The workflow already reads both (`.github/workflows/main.yml`), so the next
+release after adding them ships a signed `latest.json` and updates start
+flowing on their own.
+
+**Keep `~/.tauri/disband.key` out of the repo.** `*.key` is in `.gitignore`
+now, but the file lives outside the working tree and should stay there. It is
+not recoverable: lose it and every installed client stops accepting updates
+until people reinstall by hand. Back it up somewhere you trust.
 
 ## How a release reaches people
 
