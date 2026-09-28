@@ -22,8 +22,22 @@ data class PendingNav(
     val serverId: String? = null,
     val channelId: String? = null,
     val threadId: String? = null,
+    /**
+     * The raw `source` from a push, before anyone knows what kind of thing it
+     * is.
+     *
+     * Every push carries a bare uuid and nothing saying whether it is a
+     * channel, a DM thread or a group. It used to be dropped straight into
+     * [threadId], so a channel mention tried to open a DM with a channel id,
+     * found nothing, and left you on the home screen — which is what
+     * "notifications don't take me anywhere" meant. `resolve_notification_source`
+     * works the kind out server-side; this field holds it until that answer
+     * comes back.
+     */
+    val source: String? = null,
 ) {
-    val isBlank: Boolean get() = serverId == null && channelId == null && threadId == null
+    val isBlank: Boolean
+        get() = serverId == null && channelId == null && threadId == null && source == null
 }
 
 class ShellChromeState {

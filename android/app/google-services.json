@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "141163163114",
+    "project_id": "disband-d36bb",
+    "storage_bucket": "disband-d36bb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:141163163114:android:fa7c41f79b0cb978e61693",
+        "android_client_info": {
+          "package_name": "com.wsgpolar.disband"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_pYBtm8kiCEvDXNT8YyUGw_gBpYFRXB4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

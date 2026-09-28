@@ -1,8 +1,8 @@
 package com.wsgpolar.disband.ui.chat
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,10 +22,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +56,7 @@ import com.wsgpolar.disband.ui.AvatarImage
  */
 @Composable
 fun MessageRow(
+    modifier: Modifier = Modifier,
     row: ChatRow,
     palette: Palette,
     grouped: Boolean,
@@ -65,7 +68,7 @@ fun MessageRow(
     val attachments = remember(row.id, row.attachments) { row.resolvedAttachments() }
 
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             // A message aimed at you is tinted, the way a ping is on the web.
             .background(if (row.pingsYou) palette.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent)
@@ -271,8 +274,14 @@ private fun ReactionChips(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         reactions.forEach { reaction ->
+            val scale by animateFloatAsState(
+                targetValue = if (reaction.reacted) 1.06f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "reactionPop",
+            )
             Row(
                 Modifier
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
                     .clip(CircleShape)
                     .background(
                         if (reaction.reacted) palette.accent.copy(alpha = 0.2f) else palette.elevated

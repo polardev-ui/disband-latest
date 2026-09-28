@@ -10,6 +10,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Thin suspend wrapper around the Supabase REST (PostgREST) API, mirroring the
@@ -139,7 +141,7 @@ object Database {
     }
 
     suspend fun sendMessage(channelId: String, authorId: String, content: String,
-                            attachment: OutgoingAttachment? = null, replyToId: String? = null) {
+                            attachment: OutgoingAttachment? = null, replyToId: String? = null): String? {
         val payload = NewMessage(
             channelId = channelId,
             authorId = authorId,
@@ -149,7 +151,59 @@ object Database {
             attachmentKey = attachment?.key,
             replyToId = replyToId,
         )
-        client.from("messages").insert(payload)
+        // The row id comes back so callers can fire follow-ups — a Tether
+        // ask has to name the exact message that was saved.
+        return client.from("messages").insert(payload) { select() }
+            .decodeSingleOrNull<InsertedId>()?.id
+    }
+
+    /**
+     * Send one message carrying several attachments.
+     *
+     * The array goes in `attachments` AND the first one is mirrored into the
+     * legacy `attachment_*` columns. The mirror is not redundant: older
+     * clients read only those, so without it a five-image message arrives as
+     * an empty bubble on anything not yet updated. The web writes the same
+     * pair for the same reason (`legacyColumns` in message-attachments.ts).
+     */
+    suspend fun sendWithAttachments(
+        context: String,
+        parentId: String,
+        authorId: String,
+        content: String,
+        attachments: List<StoredAttachment>,
+        replyToId: String? = null,
+    ) {
+        val first = attachments.firstOrNull()
+        when (context) {
+            "channel" -> client.from("messages").insert(
+                NewMessage(
+                    channelId = parentId, authorId = authorId, content = content,
+                    attachmentUrl = first?.url, attachmentType = first?.type,
+                    attachmentKey = first?.key, attachmentName = first?.name,
+                    attachmentSize = first?.size, attachments = attachments,
+                    replyToId = replyToId,
+                )
+            )
+            "dm" -> client.from("dm_messages").insert(
+                NewDmMessage(
+                    threadId = parentId, authorId = authorId, content = content,
+                    attachmentUrl = first?.url, attachmentType = first?.type,
+                    attachmentKey = first?.key, attachmentName = first?.name,
+                    attachmentSize = first?.size, attachments = attachments,
+                    replyToId = replyToId,
+                )
+            )
+            else -> client.from("group_messages").insert(
+                NewGroupMessage(
+                    groupId = parentId, authorId = authorId, content = content,
+                    attachmentUrl = first?.url, attachmentType = first?.type,
+                    attachmentKey = first?.key, attachmentName = first?.name,
+                    attachmentSize = first?.size, attachments = attachments,
+                    replyToId = replyToId,
+                )
+            )
+        }
     }
 
     suspend fun messageById(id: String): Message {
@@ -287,7 +341,7 @@ object Database {
     }
 
     suspend fun sendDmMessage(threadId: String, authorId: String, content: String,
-                              attachment: OutgoingAttachment? = null, replyToId: String? = null) {
+                              attachment: OutgoingAttachment? = null, replyToId: String? = null): String? {
         val payload = NewDmMessage(
             threadId = threadId,
             authorId = authorId,
@@ -297,7 +351,10 @@ object Database {
             attachmentKey = attachment?.key,
             replyToId = replyToId,
         )
-        client.from("dm_messages").insert(payload)
+        // The row id comes back so callers can fire follow-ups — a Tether
+        // ask has to name the exact message that was saved.
+        return client.from("dm_messages").insert(payload) { select() }
+            .decodeSingleOrNull<InsertedId>()?.id
     }
 
     // MARK: - Group chats
@@ -331,7 +388,7 @@ object Database {
     }
 
     suspend fun sendGroupMessage(groupId: String, authorId: String, content: String,
-                                 attachment: OutgoingAttachment? = null, replyToId: String? = null) {
+                                 attachment: OutgoingAttachment? = null, replyToId: String? = null): String? {
         val payload = NewGroupMessage(
             groupId = groupId,
             authorId = authorId,
@@ -341,7 +398,10 @@ object Database {
             attachmentKey = attachment?.key,
             replyToId = replyToId,
         )
-        client.from("group_messages").insert(payload)
+        // The row id comes back so callers can fire follow-ups — a Tether
+        // ask has to name the exact message that was saved.
+        return client.from("group_messages").insert(payload) { select() }
+            .decodeSingleOrNull<InsertedId>()?.id
     }
 
     suspend fun leaveGroup(groupId: String) {
@@ -570,6 +630,28 @@ object Database {
                 .insert(NewReaction(contextType = context, messageId = messageId, userId = userId, emoji = emoji))
         }
     }
+
+    /**
+     * What kind of thing a push's `source` id refers to, and what is needed to
+     * open it.
+     *
+     * The server works it out (`resolve_notification_source`, migration 0108)
+     * rather than the client guessing, and it runs as the caller, so a source
+     * this user cannot see comes back as "unknown" instead of confirming that
+     * the row exists.
+     */
+    @Serializable
+    data class ResolvedSource(
+        val kind: String,
+        val id: String? = null,
+        val name: String? = null,
+        @SerialName("server_id") val serverId: String? = null,
+    )
+
+    suspend fun resolveNotificationSource(id: String): ResolvedSource? = runCatching {
+        postgrest.rpc("resolve_notification_source", buildJsonObject { put("p_id", id) })
+            .decodeAs<ResolvedSource>()
+    }.getOrNull()
 
     // MARK: - Notifications
 
