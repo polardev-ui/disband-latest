@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — commercial stage</title>
+<!-- Renders any frame of the commercial on demand: renderFrame(t). The frame
+     is 1920×1080 at CSS pixel ratio 1; tools/render.mjs screenshots it. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin-ext.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0100-024F, U+2000-206F, U+20A0-20CF, U+2100-214F; }
+:root { --ink: #0b0b0c; --ink2: #1d1d1f; --gray: #6e6e73; --gray2: #86868b; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #fff; }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--ink); font-kerning: normal; }
+#bg { position: absolute; inset: 0; background: #000; }
+#gl { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+.layer { position: absolute; inset: 0; display: none; }
+.center { position: absolute; left: 0; right: 0; top: 50%; text-align: center; transform: translateY(-50%); }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; will-change: transform, opacity, filter; }
+.w { display: inline-block; white-space: nowrap; }
+
+/* Scene 1 */
+#logo1 { position: absolute; left: 50%; top: 50%; width: 258px; height: 290px; margin: -145px 0 0 -129px; }
+#logo1 svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* Scene 2 */
+.statement { font-size: 94px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; }
+
+/* Scene 3 */
+#num { position: absolute; left: 0; right: 0; text-align: center; font-size: 248px; font-weight: 600; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; line-height: 1; }
+#usersText { position: absolute; left: 0; right: 0; text-align: center; font-size: 48px; font-weight: 500; line-height: 1.24; letter-spacing: -0.02em; color: var(--ink2); }
+
+/* Scenes 4/5 statements */
+.statement.md { font-size: 80px; letter-spacing: -0.028em; }
+.globe { display: inline-block; width: 0.84em; height: 0.84em; vertical-align: -0.09em; margin-left: 0.2em; }
+.globe svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* Scene 6 */
+#endGroup { position: absolute; inset: 0; transform-origin: 50% 45%; }
+#logo6 { position: absolute; left: 50%; top: 214px; width: 162px; height: 182px; margin-left: -81px; color: var(--ink); }
+#logo6 svg { width: 100%; height: 100%; display: block; }
+#title { position: absolute; left: 0; right: 0; top: 452px; text-align: center; font-size: 64px; font-weight: 600; letter-spacing: 0.34em; text-indent: 0.34em; line-height: 1; }
+#slogan { position: absolute; left: 0; right: 0; top: 552px; text-align: center; font-size: 38px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink2); }
+#cta { position: absolute; left: 0; right: 0; top: 682px; text-align: center; font-size: 36px; font-weight: 600; letter-spacing: -0.015em; color: var(--ink); }
+#url { position: absolute; left: 0; right: 0; top: 744px; text-align: center; font-size: 26px; font-weight: 500; letter-spacing: 0; color: var(--gray); }
+#legal { position: absolute; left: 0; right: 0; bottom: 30px; text-align: center; font-size: 15px; line-height: 1.55; font-weight: 400; letter-spacing: 0.005em; color: #7a7a80; }
+#legal .rule { width: 56px; height: 1px; background: #d2d2d7; margin: 0 auto 14px; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl" width="1920" height="1080"></canvas>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol>
+    <filter id="blurY" x="-20%" y="-60%" width="140%" height="220%" color-interpolation-filters="sRGB"><feGaussianBlur id="blurYv" stdDeviation="0 0"/></filter>
+    <filter id="blurX" x="-60%" y="-20%" width="220%" height="140%" color-interpolation-filters="sRGB"><feGaussianBlur id="blurXv" stdDeviation="0 0"/></filter>
+  </defs>
+</svg>
+
+<div class="layer" id="s1"><div id="logo1"><svg><use href="#mark"/></svg></div></div>
+<div class="layer" id="s2"><div class="center statement" id="privacy">A new gateway to privacy</div></div>
+<div class="layer" id="s3"><div id="s3group"><div id="num">0</div><div id="usersText"></div></div></div>
+<div class="layer" id="s4"><div class="center statement md" id="globeLine"></div></div>
+<div class="layer" id="s5"><div class="center statement md" id="syncLine">Cross-device support with live syncing</div></div>
+<div class="layer" id="s6">
+  <div id="endGroup">
+    <div id="logo6"><svg><use href="#mark"/></svg></div>
+    <div id="title">DISBAND</div>
+    <div id="slogan">Privacy first, privacy always.</div>
+    <div id="cta">Reserve your spot before it’s too late.</div>
+    <div id="url">https://www.disband.dev</div>
+  </div>
+  <div id="legal"><div class="rule"></div>© 2026 Genysis IQ. All rights reserved. Disband is protected by copyright and legally owned by Genysis IQ.<br>Copyright applies to all Disband code, software, designs, graphics, branding, and other associated assets.</div>
+</div>
+
+<script type="module" src="./stage.js"></script>
+</body>
+</html>
