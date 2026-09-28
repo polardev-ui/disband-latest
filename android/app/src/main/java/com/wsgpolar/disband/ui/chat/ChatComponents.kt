@@ -1,6 +1,20 @@
 package com.wsgpolar.disband.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.wsgpolar.disband.core.Brand
+import com.wsgpolar.disband.data.MAX_ATTACHMENTS
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -133,6 +147,9 @@ fun ChatScaffold(
     onReplyDismiss: (() -> Unit)? = null,
     /** Message id and emoji. Adds the reaction, or takes it back. */
     onToggleReaction: (String, String) -> Unit = { _, _ -> },
+    /** Staged images, and the caption-and-send that flushes them. */
+    attachments: AttachmentSender? = null,
+    onSendAttachments: ((String) -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
@@ -174,7 +191,13 @@ fun ChatScaffold(
                 else -> MessageList(listState, rows, ownUserId, onToggleReaction)
             }
         }
-        Composer(palette = palette, onSend = onSend, enabled = sendEnabled)
+        Composer(
+            palette = palette,
+            onSend = onSend,
+            enabled = sendEnabled,
+            attachments = attachments,
+            onSendAttachments = onSendAttachments,
+        )
     }
 }
 
@@ -239,6 +262,11 @@ private fun MessageList(
     ) {
         itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->
             MessageRow(
+                // A message arriving pops into place with no transition,
+                // which reads as a jump when the list is already at the
+                // bottom. Keyed items let Compose tween the insertion, and
+                // the same animation covers a message being deleted.
+                modifier = Modifier.animateItem(),
                 row = row,
                 palette = palette,
                 grouped = row.groupsWith(rows.getOrNull(index - 1)),
@@ -294,16 +322,67 @@ private fun TypingBubble(users: List<Profile>, palette: Palette) {
 }
 
 @Composable
-private fun Composer(palette: Palette, onSend: (String) -> Unit, enabled: Boolean) {
+private fun Composer(
+    palette: Palette,
+    onSend: (String) -> Unit,
+    enabled: Boolean,
+    attachments: AttachmentSender? = null,
+    onSendAttachments: ((String) -> Unit)? = null,
+) {
     var text by remember { mutableStateOf("") }
-    Row(
+    val picker = attachments?.let {
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.PickMultipleVisualMedia(MAX_ATTACHMENTS)
+        ) { uris -> if (uris.isNotEmpty()) it.stage(uris) }
+    }
+
+    Column(
         Modifier
             .fillMaxWidth()
             .background(palette.surface)
-            .navigationBarsPadding()
+            .navigationBarsPadding(),
+    ) {
+        // What is about to be sent, with a way to take any of it back out.
+        if (attachments != null && attachments.staged.isNotEmpty()) {
+            StagedStrip(attachments, palette)
+        }
+        attachments?.progress?.let { fraction ->
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = palette.accent,
+                trackColor = palette.elevated,
+            )
+        }
+        attachments?.error?.let { message ->
+            Text(
+                message,
+                color = Brand.dnd,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+            )
+        }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
+        if (picker != null) {
+            IconButton(
+                onClick = {
+                    picker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                    )
+                },
+                enabled = enabled,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Icon(Icons.Filled.AddPhotoAlternate, contentDescription = "Attach", tint = palette.textMuted)
+            }
+            Spacer(Modifier.width(2.dp))
+        }
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
@@ -313,18 +392,70 @@ private fun Composer(palette: Palette, onSend: (String) -> Unit, enabled: Boolea
             shape = RoundedCornerShape(18.dp),
         )
         Spacer(Modifier.width(6.dp))
+        val hasStaged = attachments?.staged?.isNotEmpty() == true
         IconButton(
             onClick = {
                 val trimmed = text.trim()
-                if (trimmed.isNotEmpty()) {
-                    onSend(trimmed)
-                    text = ""
+                when {
+                    hasStaged && onSendAttachments != null -> {
+                        onSendAttachments(trimmed)
+                        text = ""
+                    }
+                    trimmed.isNotEmpty() -> {
+                        onSend(trimmed)
+                        text = ""
+                    }
                 }
             },
-            enabled = enabled && text.isNotBlank(),
+            // An image on its own is a message; it does not need a caption.
+            enabled = enabled && (text.isNotBlank() || hasStaged),
             modifier = Modifier.size(44.dp),
         ) {
             Icon(Icons.Filled.Send, contentDescription = "Send", tint = palette.accent)
+        }
+    }
+    }
+}
+
+/** Thumbnails of what is about to be sent, each with a way to remove it. */
+@Composable
+private fun StagedStrip(attachments: AttachmentSender, palette: Palette) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        attachments.staged.forEach { uri ->
+            Box {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(palette.elevated),
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                        .size(18.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .clickable { attachments.unstage(uri) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Remove",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
         }
     }
 }

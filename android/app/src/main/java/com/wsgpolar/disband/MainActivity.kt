@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
             // Generic source navigation from push data that arrived as a VIEW intent
             val source = intent.getStringExtra("source")
             if (!source.isNullOrBlank()) {
-                postPending(PendingNav(threadId = source))
+                postPending(PendingNav(source = source))
                 return
             }
         }
@@ -69,12 +69,12 @@ class MainActivity : ComponentActivity() {
         }
         val source = intent.getStringExtra("source")
         if (!source.isNullOrBlank()) {
-            postPending(PendingNav(threadId = source))
+            postPending(PendingNav(source = source))
             return
         }
         // 3) Single "source" extra without URI (standard message push)
         intent.getStringExtra("source")?.takeIf { it.isNotBlank() }?.let { src ->
-            postPending(PendingNav(threadId = src))
+            postPending(PendingNav(source = src))
         }
     }
 }

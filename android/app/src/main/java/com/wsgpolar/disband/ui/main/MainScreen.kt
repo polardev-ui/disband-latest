@@ -109,10 +109,26 @@ fun MainScreen(
 
     // --- Notification deep link: route once, then tell the caller it's done. ---
     LaunchedEffect(pendingNav) {
-        if (pendingNav != null && !pendingNav.isBlank) {
-            shellChrome.applyPending(pendingNav)
-            onPendingNavConsumed()
-        }
+        if (pendingNav == null || pendingNav.isBlank) return@LaunchedEffect
+
+        // A raw push source has to be identified before it can be opened:
+        // it is a bare uuid, and a channel, a DM thread and a group all look
+        // the same. Anything already resolved goes straight through.
+        val resolved = pendingNav.source?.let { raw ->
+            when (val answer = Database.resolveNotificationSource(raw)) {
+                null -> null
+                else -> when (answer.kind) {
+                    "channel" -> PendingNav(serverId = answer.serverId, channelId = answer.id)
+                    "dm", "group" -> PendingNav(threadId = answer.id)
+                    // A friend request has no conversation to open, and an
+                    // unreadable source is not ours to guess at.
+                    else -> null
+                }
+            }
+        } ?: pendingNav.takeIf { it.source == null }
+
+        if (resolved != null) shellChrome.applyPending(resolved)
+        onPendingNavConsumed()
     }
 
     val selectedChannelId = shellChrome.selectedChannelId

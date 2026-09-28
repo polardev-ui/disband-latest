@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.data.ActiveChat
 import com.wsgpolar.disband.data.Database
+import com.wsgpolar.disband.data.TetherService
 import com.wsgpolar.disband.data.DmMessage
 import com.wsgpolar.disband.data.DmThread
 import com.wsgpolar.disband.data.Profile
@@ -42,6 +43,8 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
 
     var rows by remember(thread.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
     val reactions = remember { ReactionState("dm") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val attach = remember { AttachmentSender("dm", thread.id) }
     var loading by remember(thread.id) { mutableStateOf(true) }
 
     LaunchedEffect(thread.id) {
@@ -94,11 +97,24 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         callAction = friend?.let { { CallActionButton(app, it) } },
         onSend = { text ->
             scope.launch {
-                runCatching {
+                val messageId = runCatching {
                     Database.sendDmMessage(thread.id, uid, text)
-                }
+                }.getOrNull()
                 dmUnread.markActive(thread.id)
+                // Detached from the send on purpose: whatever Tether does or
+                // fails to do, the message has landed and stays landed.
+                if (messageId != null) {
+                    TetherService.fireAskIfNeeded(
+                        messageId = messageId, content = text, surface = "dm",
+                        threadId = thread.id, userId = uid,
+                        isAero = app.subscriptions.plan.isPaid,
+                    )
+                }
             }
+        },
+        attachments = attach,
+        onSendAttachments = { caption ->
+            scope.launch { attach.send(ctx, uid, caption) }
         },
         onToggleReaction = { messageId, emoji ->
             scope.launch { reactions.toggle(messageId, emoji, uid) }

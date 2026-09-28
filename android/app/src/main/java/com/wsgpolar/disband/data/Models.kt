@@ -359,6 +359,13 @@ data class NewMessage(
     @SerialName("attachment_url") val attachmentUrl: String? = null,
     @SerialName("attachment_type") val attachmentType: String? = null,
     @SerialName("attachment_key") val attachmentKey: String? = null,
+    /** Name and size of the first attachment, so a client that reads only
+     *  the legacy columns still shows a proper file card. */
+    @SerialName("attachment_name") val attachmentName: String? = null,
+    @SerialName("attachment_size") val attachmentSize: Int? = null,
+    /** Every attachment. Null for a single-attachment send, so the column
+     *  is left alone and behaves exactly as it did before. */
+    val attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") val replyToId: String? = null,
 )
 
@@ -370,6 +377,13 @@ data class NewDmMessage(
     @SerialName("attachment_url") val attachmentUrl: String? = null,
     @SerialName("attachment_type") val attachmentType: String? = null,
     @SerialName("attachment_key") val attachmentKey: String? = null,
+    /** Name and size of the first attachment, so a client that reads only
+     *  the legacy columns still shows a proper file card. */
+    @SerialName("attachment_name") val attachmentName: String? = null,
+    @SerialName("attachment_size") val attachmentSize: Int? = null,
+    /** Every attachment. Null for a single-attachment send, so the column
+     *  is left alone and behaves exactly as it did before. */
+    val attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") val replyToId: String? = null,
 )
 
@@ -381,6 +395,13 @@ data class NewGroupMessage(
     @SerialName("attachment_url") val attachmentUrl: String? = null,
     @SerialName("attachment_type") val attachmentType: String? = null,
     @SerialName("attachment_key") val attachmentKey: String? = null,
+    /** Name and size of the first attachment, so a client that reads only
+     *  the legacy columns still shows a proper file card. */
+    @SerialName("attachment_name") val attachmentName: String? = null,
+    @SerialName("attachment_size") val attachmentSize: Int? = null,
+    /** Every attachment. Null for a single-attachment send, so the column
+     *  is left alone and behaves exactly as it did before. */
+    val attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") val replyToId: String? = null,
 )
 
@@ -427,6 +448,10 @@ data class NewNote(
 )
 
 /** A media attachment to send with a message. */
+/** Just the id, for an insert that returns the row it wrote. */
+@Serializable
+data class InsertedId(val id: String)
+
 data class OutgoingAttachment(
     val url: String,
     val type: String,

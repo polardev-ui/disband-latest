@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import com.wsgpolar.disband.data.ActiveChat
 import com.wsgpolar.disband.data.Channel
 import com.wsgpolar.disband.data.Database
+import com.wsgpolar.disband.data.TetherService
 import com.wsgpolar.disband.data.GroupChat
 import com.wsgpolar.disband.data.GroupMessage
 import com.wsgpolar.disband.data.Message
@@ -27,6 +28,8 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
     var rows by remember(group.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
     var loading by remember(group.id) { mutableStateOf(true) }
     val reactions = remember(group.id) { ReactionState("group") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val attach = remember { AttachmentSender("group", group.id) }
 
     LaunchedEffect(group.id) {
         dmUnread.markGroupActive(group.id)
@@ -74,9 +77,20 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         emptyText = "No messages yet",
         onSend = { text ->
             scope.launch {
-                runCatching { Database.sendGroupMessage(group.id, uid, text) }
+                val messageId = runCatching { Database.sendGroupMessage(group.id, uid, text) }.getOrNull()
+                if (messageId != null) {
+                    TetherService.fireAskIfNeeded(
+                        messageId = messageId, content = text, surface = "group",
+                        threadId = null, userId = uid,
+                        isAero = app.subscriptions.plan.isPaid,
+                    )
+                }
                 dmUnread.markGroupActive(group.id)
             }
+        },
+        attachments = attach,
+        onSendAttachments = { caption ->
+            scope.launch { attach.send(ctx, uid, caption) }
         },
         onToggleReaction = { messageId, emoji ->
             scope.launch { reactions.toggle(messageId, emoji, uid) }
@@ -92,6 +106,8 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
 
     var rows by remember(channel.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
     val reactions = remember { ReactionState("channel") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val attach = remember { AttachmentSender("channel", channel.id) }
     var loading by remember(channel.id) { mutableStateOf(true) }
 
     LaunchedEffect(channel.id) {
@@ -130,8 +146,19 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         emptyText = "No messages yet",
         onSend = { text ->
             scope.launch {
-                runCatching { Database.sendMessage(channel.id, uid, text) }
+                val messageId = runCatching { Database.sendMessage(channel.id, uid, text) }.getOrNull()
+                if (messageId != null) {
+                    TetherService.fireAskIfNeeded(
+                        messageId = messageId, content = text, surface = "channel",
+                        threadId = null, userId = uid,
+                        isAero = app.subscriptions.plan.isPaid,
+                    )
+                }
             }
+        },
+        attachments = attach,
+        onSendAttachments = { caption ->
+            scope.launch { attach.send(ctx, uid, caption) }
         },
         onToggleReaction = { messageId, emoji ->
             scope.launch { reactions.toggle(messageId, emoji, uid) }
