@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- App Store screenshots in the commercial's 3D style. Renders one shot at the
+     viewport size: screenshots.html?shot=1..7 (viewport 1320×2868 for 6.9",
+     1284×2778 for 6.5"). Reuses the commercial's renderer, phone model and
+     iOS 1.13 screen recreations (demo personas only). -->
+<script type="importmap">{"imports":{"three":"../commercial/node_modules/three/build/three.module.js","three/addons/":"../commercial/node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../commercial/assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100vw; height: 100vh; overflow: hidden; background: #fff; }
+body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; color: #0b0b0c; }
+#gl { position: absolute; left: 0; top: 0; }
+.copy { position: absolute; left: 0; right: 0; text-align: center; padding: 0 7vw; }
+.lockup { display: flex; align-items: center; justify-content: center; gap: 2.4vw; margin-bottom: 5.2vw; }
+.lockup svg { width: 7.4vw; height: 8.3vw; display: block; }
+.lockup span { font-size: 5.3vw; font-weight: 600; letter-spacing: 0.3em; margin-right: -0.3em; }
+h1 { font-size: 8.3vw; font-weight: 600; line-height: 1.04; letter-spacing: -0.032em; white-space: pre-line; }
+p { margin-top: 3vw; font-size: 3.85vw; font-weight: 500; line-height: 1.3; letter-spacing: -0.012em; color: #6e6e73; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="copy" id="copy"></div>
+<svg width="0" height="0" style="position:absolute"><defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol></defs></svg>
+<script type="module">
+import * as THREE from "three";
+import { Engine3D } from "../commercial/src/engine3d.js";
+import { makePhone, makeMonitor, makeLaptop, panel } from "../commercial/src/devices.js";
+import { softBlob, bakeContactShadow } from "../commercial/src/contact-shadow.js";
+
+const W = innerWidth, H = innerHeight;
+const q = new URLSearchParams(location.search);
+const n = Number(q.get("shot") || 1);
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const tex = (name) => `../commercial/build/textures/${name}.png`;
+
+// Captions only claim what the iOS app does (checked against ios/DisbandiOS).
+const SHOTS = {
+  1: { logo: true, title: "Privacy first.\nPrivacy always.", sub: "Your space to talk, hang out, and belong.",
+       phones: [{ screen: "ios-inbox", pos: [0, -3.2, 0], rot: [0.06, -0.42, 0.03] }],
+       cam: { pos: [2.5, 3, 54], target: [0, 0.4, 0], fov: 26 } },
+  2: { title: "All your spaces,\none tap away.", sub: "Servers, channels and voice rooms in a single rail.",
+       phones: [{ screen: "ios-server", pos: [-2.1, -3.8, 0], rot: [0.05, 0.32, -0.02], focus: true }, { screen: "ios-inbox", pos: [3.9, -1.6, -11], rot: [0.02, -0.34, 0] }],
+       cam: { pos: [0, 2, 58.5], target: [0.2, 0.2, 0], fov: 26, aperture: 0.28 } },
+  3: { title: "Conversations\nthat feel alive.", sub: "Reactions, replies and GIFs in every channel.",
+       phones: [{ screen: "ios-random", pos: [0.3, -3.2, 0], rot: [0.04, 0.3, 0.01] }],
+       cam: { pos: [-2, 3, 54], target: [0, 0.4, 0], fov: 26 } },
+  4: { title: "Stay close\nto your people.", sub: "Direct messages and group chats, always in sync.",
+       phones: [{ screen: "ios-dm-sent", pos: [-0.8, -3.4, 0], rot: [0.05, -0.3, 0] }],
+       card: { pos: [1.5, -1.2, 6], rot: [0.02, -0.16, 0.02], scale: 1.08 },
+       cam: { pos: [1, 2, 54], target: [0, 0.4, 0], fov: 26, aperture: 0.25 } },
+  5: { title: "Find your\npeople.", sub: "Discover spaces for everything you're into.",
+       phones: [{ screen: "ios-discover", pos: [0, -3.2, 0], rot: [0.06, 0.36, -0.02] }],
+       cam: { pos: [-1.5, 3, 54], target: [0, 0.4, 0], fov: 26 } },
+  6: { title: "Make it\nyours.", sub: "Profiles, status, badges and themes.",
+       phones: [{ screen: "ios-you", pos: [0, -3.2, 0], rot: [0.05, -0.36, 0.02] }],
+       cam: { pos: [2, 3, 54], target: [0, 0.4, 0], fov: 26 } },
+  7: { title: "Pick up right where\nyou left off.", sub: "Live syncing across iPhone, desktop and web.",
+       phones: [{ screen: "ios-dm-sent", pos: [-1.7, -5.4, 8], rot: [0.04, 0.3, 0], focus: true }],
+       laptop: { screen: "laptop-dm-sent", pos: [4.6, -16, -40], rot: [0, -0.6, 0] },
+       cam: { pos: [0, 5, 62], target: [0.4, -3.2, -6], fov: 28, aperture: 0.22 } },
+};
+const S = SHOTS[n];
+
+// Copy block.
+const copy = document.getElementById("copy");
+copy.style.top = `${S.logo ? 0.064 * H : 0.078 * H}px`;
+copy.innerHTML = `${S.logo ? `<div class="lockup"><svg><use href="#mark"/></svg><span>DISBAND</span></div>` : ""}<h1>${S.title}</h1><p>${S.sub}</p>`;
+await Promise.all(["600 100px Inter", "500 50px Inter"].map((f) => document.fonts.load(f)));
+const mark = await fetch("../commercial/assets/logo/disband-mark.svg").then((r) => r.text());
+document.getElementById("markpath").setAttribute("d", mark.match(/ d="([^"]+)"/)[1]);
+
+// 3D scene.
+const canvas = document.getElementById("gl");
+canvas.width = W; canvas.height = H;
+canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+const eng = new Engine3D(canvas, W, H);
+const scene = eng.scene;
+const add = (obj, pos, rot) => { obj.position.set(...pos); obj.rotation.set(...rot); scene.add(obj); return obj; };
+
+let focusPoint = null;
+for (const p of S.phones) {
+  const phone = makePhone(await eng.texture(tex(p.screen)));
+  add(phone.group, p.pos, p.rot);
+  if (p.focus || !focusPoint) focusPoint = V(...p.pos);
+  // Soft grounding shadow on an unseen floor below the phone.
+  const floor = new THREE.Object3D();
+  floor.position.set(p.pos[0], p.pos[1] - 10.5, p.pos[2]);
+  scene.add(floor);
+  softBlob(floor, { floorY: 0, width: 13, depth: 5, opacity: 0.16 });
+}
+if (S.monitor) {
+  const mon = makeMonitor(await eng.texture(tex(S.monitor.screen)));
+  add(mon.group, S.monitor.pos, S.monitor.rot);
+  softBlob(mon.group, { floorY: mon.floorY, width: 95, depth: 46, opacity: 0.2, offsetZ: 2 });
+}
+if (S.laptop) {
+  const lap = makeLaptop(await eng.texture(tex(S.laptop.screen)));
+  add(lap.group, S.laptop.pos, S.laptop.rot);
+  bakeContactShadow(eng.renderer, lap.group, { floorY: 0, width: 50, depth: 44, height: 5, blur: 1.2, opacity: 0.75 });
+  softBlob(lap.group, { floorY: 0, width: 62, depth: 52, opacity: 0.26, offsetZ: -1 });
+}
+if (S.card) {
+  // The sent message, lifted off the screen as a floating card.
+  const t = await eng.texture(tex("sync-card"));
+  const cm = 6.74 / 402;
+  const card = new THREE.Mesh(panel(380 * cm, 84 * cm, 0.01), new THREE.MeshBasicMaterial({ map: t, toneMapped: false, transparent: true, depthWrite: false }));
+  card.scale.setScalar(S.card.scale);
+  add(card, S.card.pos, S.card.rot);
+}
+// Honour each material's own envMapIntensity (see commercial/src/shots.js).
+scene.traverse((o) => {
+  if (o.isMesh && o.material && o.material.isMeshStandardMaterial && !o.material.envMap) {
+    o.material.envMap = scene.environment;
+    o.material.needsUpdate = true;
+  }
+});
+
+const c = S.cam;
+const pose = () => {
+  const pos = V(...c.pos), target = V(...c.target);
+  return { pos, target, fov: c.fov, aperture: c.aperture ?? 0.12, focus: pos.distanceTo(focusPoint) };
+};
+eng.renderFrame(pose, 0, { samples: 36, shutter: 0 });
+const gl = canvas.getContext("webgl2");
+gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+document.body.dataset.fontOk = String(document.fonts.check("600 100px Inter"));
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>
