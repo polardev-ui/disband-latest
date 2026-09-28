@@ -103,6 +103,7 @@ interface AppContextValue {
   user: User | null;
   profile: Profile | null;
   tetherProfile: Profile | null;
+  officialProfile: Profile | null;
   subscriptionPlan: SubscriptionPlan;
   servers: Server[];
   categories: ChannelCategory[];
@@ -320,6 +321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tetherProfile, setTetherProfile] = useState<Profile | null>(null);
+  const [officialProfile, setOfficialProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
 
   const [catalystCounts, setCatalystCounts] = useState<Record<string, number>>({});
@@ -823,6 +825,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (cancelled || !info) return;
       setTetherProfile(info as unknown as Profile);
     });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Resolve the official account the same way, so the DM thread with
+  // @disband can be recognised (locked composer, embed rendering) without
+  // hardcoding its id in components. Display logic only — the read-only
+  // enforcement lives in RLS (official_dm_readonly).
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await getSupabaseClient()
+        .from("profiles")
+        .select("*")
+        .eq("username", "disband")
+        .eq("is_bot", true)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setOfficialProfile(data as Profile);
+    })();
     return () => {
       cancelled = true;
     };
@@ -4378,6 +4402,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     user,
     profile,
     tetherProfile,
+    officialProfile,
     subscriptionPlan,
     servers,
     categories,
