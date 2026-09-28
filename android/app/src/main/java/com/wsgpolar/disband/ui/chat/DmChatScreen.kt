@@ -14,10 +14,10 @@ import androidx.compose.runtime.setValue
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.data.ActiveChat
 import com.wsgpolar.disband.data.Database
+import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.TetherService
 import com.wsgpolar.disband.data.DmMessage
 import com.wsgpolar.disband.data.DmThread
-import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.RealtimeService
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.calls.rememberAudioPermissionTrigger
@@ -44,6 +44,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
     var rows by remember(thread.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
     val reactions = remember { ReactionState("dm") }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val typing = remember { TypingState("dm", thread.id, scope) }
     val attach = remember { AttachmentSender("dm", thread.id) }
     var loading by remember(thread.id) { mutableStateOf(true) }
 
@@ -56,6 +57,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         rows = loaded.map { it.toRow(uid) }
         loading = false
         reactions.load(rows.map { it.id }, uid)
+        typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
 
         val live = runCatching {
             RealtimeService.observeInserts("dm_messages", "thread_id=eq.${thread.id}", DmMessage.serializer())
@@ -112,6 +114,8 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
                 }
             }
         },
+        typingUsers = typing.typers,
+        onTyping = { typing.noteTyping(uid, app.profile.value?.name ?: "Someone") },
         attachments = attach,
         onSendAttachments = { caption ->
             scope.launch { attach.send(ctx, uid, caption) }

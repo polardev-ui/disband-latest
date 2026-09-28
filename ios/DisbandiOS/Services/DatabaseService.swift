@@ -700,6 +700,35 @@ enum DatabaseService {
         return response.count ?? 0
     }
 
+    /// Mark one notification read.
+    static func markNotificationRead(id: String, currentUserId: String) async throws {
+        try await client.from("notifications")
+            .update(["read": true])
+            .eq("id", value: id)
+            .eq("user_id", value: currentUserId)
+            .execute()
+    }
+
+    /// Mark everything read — the "clear" the inbox offers.
+    static func markAllNotificationsRead(currentUserId: String) async throws {
+        try await client.from("notifications")
+            .update(["read": true])
+            .eq("user_id", value: currentUserId)
+            .eq("read", value: false)
+            .execute()
+    }
+
+    /// How many are still unread, for the bell's badge.
+    static func unreadNotificationCount(currentUserId: String) async throws -> Int {
+        let response = try await client
+            .from("notifications")
+            .select("id", head: true, count: .exact)
+            .eq("user_id", value: currentUserId)
+            .eq("read", value: false)
+            .execute()
+        return response.count ?? 0
+    }
+
     static func notifications(currentUserId: String) async throws -> [AppNotification] {
         try await client
             .from("notifications")

@@ -58,6 +58,9 @@ struct ChatView: View {
     /// The emoji flying from the tray to the message, while the morph plays.
     @State private var flyingReact: FlyingReact?
     @State private var flyPosition: CGPoint = .zero
+    /// Height of the software keyboard, so the message list can keep the
+    /// newest message above the composer when it opens.
+    @State private var keyboardHeight: CGFloat = 0
 
     /// The DM peer, when `source` is `.dm`. Enables the header call button.
     var callPeer: Profile?
@@ -80,12 +83,18 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messageList
-            TypingBubble(
-                typers: model.typers,
-                profiles: model.typingProfiles,
-                groupContext: model.isGroupScope
-            )
-            .animation(.easeOut(duration: 0.2), value: model.typers.map(\.userId))
+                // Floating, not stacked: the pill must not take layout height
+                // or the composer and the last message jump every time
+                // somebody starts and stops typing.
+                .overlay(alignment: .bottomLeading) {
+                    TypingBubble(
+                        typers: model.typers,
+                        profiles: model.typingProfiles,
+                        groupContext: model.isGroupScope
+                    )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.82),
+                               value: model.typers.map(\.userId))
+                }
             if let error = model.sendError { sendErrorBanner(error) }
             if let composerLockedReason {
                 lockedComposer(composerLockedReason)
@@ -103,6 +112,17 @@ struct ChatView: View {
             }
         }
         .background(Brand.surfaceRaised)
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+        ) { note in
+            let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+            keyboardHeight = frame?.height ?? 0
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+        ) { _ in
+            keyboardHeight = 0
+        }
         .navigationTitle(model.source.title)
         .navigationBarTitleDisplayMode(.inline)
         .solidNavigationBar()
@@ -334,6 +354,30 @@ struct ChatView: View {
             .onChange(of: model.messages.count) {
                 if stickToBottom, let last = model.messages.last {
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+            /*
+             Follow the keyboard.
+
+             Opening the keyboard shrinks this list — the composer rides up on
+             the keyboard's safe area and takes the bottom of the screen with
+             it — but the scroll offset stays where it was, so the newest
+             messages slide up behind the composer and you type blind. Every
+             other chat app keeps the last message sitting just above the bar,
+             and that is all this does: when the keyboard's height changes,
+             re-pin to the bottom.
+
+             Only when already at the bottom. Someone who has scrolled up to
+             read something older and then taps the composer to reply to it
+             should not be yanked back down, losing the thing they were
+             replying to.
+             */
+            .onChange(of: keyboardHeight) { _, height in
+                guard height > 0, stickToBottom, let last = model.messages.last else { return }
+                // After the keyboard's own animation has laid things out;
+                // scrolling into a frame that is still moving lands short.
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
         }

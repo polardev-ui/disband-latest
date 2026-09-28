@@ -44,6 +44,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init());
 
+    // Desktop only. The updater replaces the running binary and `process`
+    // restarts it, neither of which means anything on a phone — and the
+    // mobile targets have no updater artifacts to look for.
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_process::init());
+    }
+
     #[cfg(target_os = "macos")]
     {
         builder = builder.plugin(tauri_plugin_macos_permissions::init());

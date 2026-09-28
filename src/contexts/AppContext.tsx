@@ -1493,6 +1493,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signingOutRef.current = false;
       setSession(s);
 
+      /*
+       Keep the saved-account copy in step with token rotation.
+
+       Supabase refresh tokens are single-use: every refresh consumes the old
+       one and issues a new one, and `TOKEN_REFRESHED` arrives here. The saved
+       copy was only written at sign-in, so an hour later the stored token was
+       one the server had already retired — and switching away and back asked
+       for the password again. That is the "occasionally" in the bug report:
+       it only happened once the active session had rotated at least once.
+      */
+      if (s) rememberSession(s);
+
       if (_e === "SIGNED_IN" && s) {
         void refreshOwnBadges(s.user.id);
       }
@@ -2538,7 +2550,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
       }
     }
-    setSession(null);
+    // Both paths failed. Do NOT drop the session we already had: a failed
+    // switch used to sign the user out of the account they were happily
+    // using, turning "that other account needs a password" into "you are now
+    // signed out of everything".
+    if (sessionRef.current) {
+      await supabase.auth.setSession({
+        access_token: sessionRef.current.access_token,
+        refresh_token: sessionRef.current.refresh_token,
+      }).catch(() => undefined);
+      setSession(sessionRef.current);
+    }
     return "Sign in again to continue as this account.";
   }, [rememberSession]);
 

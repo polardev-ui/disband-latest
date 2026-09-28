@@ -1,6 +1,18 @@
 package com.wsgpolar.disband.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.border
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -150,6 +162,8 @@ fun ChatScaffold(
     /** Staged images, and the caption-and-send that flushes them. */
     attachments: AttachmentSender? = null,
     onSendAttachments: ((String) -> Unit)? = null,
+    /** Fired on every keystroke; the caller throttles the broadcast. */
+    onTyping: () -> Unit = {},
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
@@ -177,9 +191,6 @@ fun ChatScaffold(
         if (replyTo != null) {
             ReplyBanner(row = replyTo, onDismiss = onReplyDismiss ?: {})
         }
-        if (typingUsers.isNotEmpty()) {
-            TypingBubble(users = typingUsers, palette = palette)
-        }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             when {
                 loading && rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -190,6 +201,17 @@ fun ChatScaffold(
                 }
                 else -> MessageList(listState, rows, ownUserId, onToggleReaction)
             }
+            // Floating, not stacked: as a row it pushed the composer and the
+            // last message down a line every time somebody started typing,
+            // and back up when they stopped.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = typingUsers.isNotEmpty(),
+                enter = fadeIn() + slideInVertically { it / 2 } + scaleIn(initialScale = 0.92f),
+                exit = fadeOut() + slideOutVertically { it / 2 } + scaleOut(targetScale = 0.92f),
+                modifier = Modifier.align(Alignment.BottomStart),
+            ) {
+                TypingBubble(users = typingUsers, palette = palette)
+            }
         }
         Composer(
             palette = palette,
@@ -197,6 +219,7 @@ fun ChatScaffold(
             enabled = sendEnabled,
             attachments = attachments,
             onSendAttachments = onSendAttachments,
+            onTyping = onTyping,
         )
     }
 }
@@ -314,10 +337,50 @@ private fun ReplyBanner(row: ChatRow, onDismiss: () -> Unit) {
 @Composable
 private fun TypingBubble(users: List<Profile>, palette: Palette) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        Modifier
+            .padding(start = 16.dp, bottom = 6.dp)
+            .clip(RoundedCornerShape(50))
+            .background(palette.elevated)
+            .padding(start = 6.dp, end = 10.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("${users.firstOrNull()?.name ?: "Someone"} is typing...", color = palette.textMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+        // Up to three faces, overlapping. Past three it counts the rest
+        // rather than growing — the pill has to stay narrow enough not to
+        // cover the conversation it sits on.
+        Row(horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+            users.take(3).forEach { person ->
+                Box(Modifier.border(2.dp, palette.elevated, RoundedCornerShape(50))) {
+                    AvatarImage(url = person.avatarUrl, name = person.name, size = 22.dp)
+                }
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        TypingDots(palette)
+    }
+}
+
+/** Three dots pulsing a third of a cycle apart, so the pulse travels. */
+@Composable
+private fun TypingDots(palette: Palette) {
+    val transition = rememberInfiniteTransition(label = "typing")
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        repeat(3) { index ->
+            val alpha by transition.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600, delayMillis = index * 160),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "dot$index",
+            )
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(palette.textMuted.copy(alpha = alpha))
+            )
+        }
     }
 }
 
@@ -328,6 +391,7 @@ private fun Composer(
     enabled: Boolean,
     attachments: AttachmentSender? = null,
     onSendAttachments: ((String) -> Unit)? = null,
+    onTyping: () -> Unit = {},
 ) {
     var text by remember { mutableStateOf("") }
     val picker = attachments?.let {
@@ -385,7 +449,13 @@ private fun Composer(
         }
         OutlinedTextField(
             value = text,
-            onValueChange = { text = it },
+            onValueChange = {
+                val wasEmpty = text.isEmpty()
+                text = it
+                // Only while actually writing something. Clearing the field
+                // is not typing, and neither is the deletion that empties it.
+                if (it.isNotEmpty() && !(wasEmpty && it.isEmpty())) onTyping()
+            },
             modifier = Modifier.weight(1f),
             placeholder = { Text("Message", color = palette.textMuted) },
             maxLines = 4,

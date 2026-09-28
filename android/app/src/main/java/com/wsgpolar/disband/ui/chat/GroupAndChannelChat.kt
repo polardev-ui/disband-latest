@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import com.wsgpolar.disband.data.ActiveChat
 import com.wsgpolar.disband.data.Channel
 import com.wsgpolar.disband.data.Database
+import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.TetherService
 import com.wsgpolar.disband.data.GroupChat
 import com.wsgpolar.disband.data.GroupMessage
@@ -29,6 +30,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
     var loading by remember(group.id) { mutableStateOf(true) }
     val reactions = remember(group.id) { ReactionState("group") }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val typing = remember { TypingState("group", group.id, scope) }
     val attach = remember { AttachmentSender("group", group.id) }
 
     LaunchedEffect(group.id) {
@@ -40,6 +42,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         rows = loaded.map { it.toRow(uid) }
         loading = false
         reactions.load(rows.map { it.id }, uid)
+        typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
 
         val live = runCatching {
             RealtimeService.observeInserts("group_messages", "group_id=eq.${group.id}", GroupMessage.serializer())
@@ -88,6 +91,8 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
                 dmUnread.markGroupActive(group.id)
             }
         },
+        typingUsers = typing.typers,
+        onTyping = { typing.noteTyping(uid, app.profile.value?.name ?: "Someone") },
         attachments = attach,
         onSendAttachments = { caption ->
             scope.launch { attach.send(ctx, uid, caption) }
@@ -107,6 +112,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     var rows by remember(channel.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
     val reactions = remember { ReactionState("channel") }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val typing = remember { TypingState("ch", channel.id, scope) }
     val attach = remember { AttachmentSender("channel", channel.id) }
     var loading by remember(channel.id) { mutableStateOf(true) }
 
@@ -116,6 +122,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         rows = loaded.map { it.toRow(uid) }
         loading = false
         reactions.load(rows.map { it.id }, uid)
+        typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
 
         val live = runCatching {
             RealtimeService.observeInserts("messages", "channel_id=eq.${channel.id}", Message.serializer())
@@ -156,6 +163,8 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
                 }
             }
         },
+        typingUsers = typing.typers,
+        onTyping = { typing.noteTyping(uid, app.profile.value?.name ?: "Someone") },
         attachments = attach,
         onSendAttachments = { caption ->
             scope.launch { attach.send(ctx, uid, caption) }
