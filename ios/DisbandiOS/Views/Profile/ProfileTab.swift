@@ -78,6 +78,11 @@ struct ProfileTab: View {
                             SettingsRowLabel(symbol: "globe", tint: Color(hex: 0x1ABC9C),
                                              title: "disband.dev", detail: nil)
                         }
+                        SettingsDivider()
+                        Link(destination: ReviewPrompter.writeReviewURL) {
+                            SettingsRowLabel(symbol: "star.fill", tint: Color(hex: 0xF0B232),
+                                             title: "Rate Disband", detail: nil)
+                        }
                     }
 
                     SettingsGroup {
