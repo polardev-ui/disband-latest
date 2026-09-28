@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
 import { IconBell } from "@/components/icons";
@@ -31,7 +31,7 @@ export function NotificationBell() {
   const [navError, setNavError] = useState<string | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const [pos, setPos] = useState({ top: 0, right: 0, maxHeight: 0 });
 
   const unseen = notifications.filter((n) => !n.seen_at).length;
 
@@ -47,14 +47,27 @@ export function NotificationBell() {
     setOpen(!open);
   }, [markNotificationsSeen, open]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
       const r = btnRef.current?.getBoundingClientRect();
-      if (!r) return;
+      const panel = panelRef.current;
+      if (!r || !panel) return;
 
-      const right = Math.max(8, window.innerWidth - r.right);
-      setPos({ top: r.bottom + 8, right });
+      // The sidebar bell can be closer to the left edge than the panel's
+      // width. Clamp both edges using the rendered width (including rem sizing).
+      const margin = 8;
+      const width = panel.getBoundingClientRect().width;
+      const right = Math.max(margin, Math.min(
+        window.innerWidth - r.right,
+        window.innerWidth - width - margin,
+      ));
+      const top = Math.max(margin, Math.min(r.bottom + margin, window.innerHeight - margin));
+      const maxHeight = Math.max(0, Math.min(
+        window.innerHeight * 0.6,
+        window.innerHeight - top - margin,
+      ));
+      setPos({ top, right, maxHeight });
     };
     place();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -74,7 +87,7 @@ export function NotificationBell() {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open ]);
+  }, [open]);
 
   const handleItemClick = useCallback(async (n: AppNotification) => {
     setNavError(null);
@@ -96,8 +109,8 @@ export function NotificationBell() {
       ? createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[120] max-h-[60vh] w-[min(20rem,calc(100vw-16px))] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-divider"
-            style={{ top: pos.top, right: pos.right }}
+            className="fixed z-[120] w-[min(20rem,calc(100vw-16px))] overflow-x-hidden overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-divider"
+            style={pos}
           >
             <div className="sticky top-0 flex items-center justify-between border-b border-divider bg-bg-secondary px-3 py-2">
               <p className="text-sm font-bold text-text-normal">Notifications</p>
@@ -137,11 +150,11 @@ export function NotificationBell() {
                         }`}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block line-clamp-2 text-[13px] font-semibold leading-snug text-text-normal">
+                        <span className="block line-clamp-2 break-words text-[13px] font-semibold leading-snug text-text-normal">
                           {n.title}
                         </span>
                         {n.body && (
-                          <span className="mt-0.5 block line-clamp-3 text-[13px] leading-snug text-text-muted">
+                          <span className="mt-0.5 block line-clamp-3 break-words text-[13px] leading-snug text-text-muted">
                             {n.body}
                           </span>
                         )}
