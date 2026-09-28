@@ -233,6 +233,7 @@ before(async () => {
   await db.exec(await readFile("supabase/migrations/0105_broadcast_dm_thread.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0106_official_dm_readonly.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0107_official_bulk_rate_exempt.sql", "utf8"));
+  await db.exec(await readFile("supabase/migrations/0108_broadcast_timeout.sql", "utf8"));
 
   await db.query(
     `insert into public.dm_threads (id, user_a, user_b)
@@ -405,6 +406,16 @@ test("the official account is flagged DM-able through the bot gate", async () =>
     [OFFICIAL],
   );
   assert.equal(rows[0].bot_dm_enabled, true);
+});
+
+test("broadcast_send carries its own statement timeout for the fanout", async () => {
+  const { rows } = await db.query(
+    `select pg_get_functiondef(oid) as def from pg_proc where proname = 'broadcast_send'`,
+  );
+  // Later copies of this body must keep the headroom: without it an
+  // everyone-send dies with "canceling statement due to statement timeout"
+  // when reached through the pooler instead of a direct session.
+  assert.match(rows[0].def, /set local statement_timeout/i);
 });
 
 test("the readonly guard is restrictive, so it can only ever deny", async () => {
