@@ -12,6 +12,7 @@ struct DisbandiOSApp: App {
     @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
     @State private var voice: VoiceSession
+    @State private var showReviewPrompt = false
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -86,9 +87,21 @@ struct DisbandiOSApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active, let uid = appState.currentUserId else { return }
                     Task { await refreshMentionBadge(uid) }
+                    // Review prompt: recorded on every activation, shown only
+                    // when every gate in ReviewPrompter passes (signed in,
+                    // established user, long since last asked, never declined).
+                    ReviewPrompter.shared.recordLaunch()
+                    if appState.currentUserId != nil,
+                       ReviewPrompter.shared.shouldPrompt() {
+                        showReviewPrompt = true
+                    }
                 }
                 .onChange(of: appState.profile?.theme) { _, _ in
                     themeManager.adopt(from: appState.profile)
+                }
+                .sheet(isPresented: $showReviewPrompt) {
+                    ReviewPromptSheet()
+                        .presentationDetents([.medium])
                 }
         }
     }
