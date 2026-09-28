@@ -1,0 +1,21 @@
+{
+  "name": "disband-commercial",
+  "private": true,
+  "type": "module",
+  "description": "Frame-accurate renderer for the Disband 16:9 promotional commercial.",
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "playwright": "1.56.1",
+    "potrace": "^2.1.8",
+    "three": "0.170.0"
+  },
+  "scripts": {
+    "capture": "node tools/capture-ui.mjs",
+    "timeline": "node tools/timeline-json.mjs",
+    "audio": "npm run timeline && python3 tools/audio.py",
+    "render": "node tools/render.mjs --fps 60 --workers 3",
+    "preview": "node tools/render.mjs --fps 30 --workers 3 --preview && tools/encode.sh build/preview-frames 30 build/preview.mp4",
+    "encode": "tools/encode.sh build/frames 60",
+    "build": "npm run capture && npm run audio && npm run render && npm run encode"
+  }
+}

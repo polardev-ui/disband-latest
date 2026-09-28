@@ -1,0 +1,335 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Disband iOS 1.13 screens, rebuilt for the commercial's device shots.
+     Layout values come from ios/DisbandiOS/Views/Shell/* and
+     Views/Components/* (rail 72pt, 48pt squircle icons, 28pt panel corner,
+     glass dock with an accent pill) and were checked against device captures
+     taken at the larger Dynamic Type size the captures use. 1 CSS px = 1 pt;
+     the capture script renders at 3x → 1206×2622. -->
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin-ext.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+:root {
+  /* AMOLED palette (Theme/Palette.swift, id .midnight) */
+  --bg: #050506; --surface: #0a0a0b; --raised: #060607; --elevated: #1a1b1e;
+  --accent: #5865f2; --accent-soft: #4752c4;
+  --text: #f2f3f5; --text2: #b5bac1; --muted: #949ba4; --divider: #2e3035;
+  --online: #23a55a; --idle: #f0b232; --dnd: #f23f43; --verified: #38bdf8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 402px; height: 874px; overflow: hidden; background: var(--bg); }
+body {
+  font-family: "Inter", system-ui, sans-serif; color: var(--text);
+  font-feature-settings: "cv11", "ss01" 0; -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto; letter-spacing: -0.012em;
+}
+.screen { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+.emoji { display: inline-block; width: 1.18em; height: 1.18em; vertical-align: -0.24em; }
+
+/* Status bar */
+.status { position: absolute; left: 0; right: 0; top: 0; height: 54px; z-index: 20; }
+.status .time { position: absolute; left: 0; width: 148px; top: 17px; text-align: center; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+.status .island { position: absolute; left: 139px; top: 11px; width: 125px; height: 37px; border-radius: 19px; background: #000; }
+.status .right { position: absolute; right: 26px; top: 21px; display: flex; gap: 6px; align-items: center; }
+
+/* Rail + panel (SpacesView) */
+.rail { position: absolute; left: 0; top: 62px; width: 72px; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 12px; }
+.rail .item { position: relative; width: 48px; height: 48px; flex: none; }
+.rail .icon { width: 48px; height: 48px; border-radius: 24px; overflow: hidden; display: grid; place-items: center; font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0; }
+.rail .item.sel .icon { border-radius: 16px; }
+.rail .item.sel::before { content: ""; position: absolute; left: -14px; top: 5px; width: 4px; height: 38px; border-radius: 2px; background: #fff; }
+.rail .sep { width: 26px; height: 2px; border-radius: 1px; background: var(--divider); margin: 2px 0; flex: none; }
+.rail .badge { position: absolute; right: -3px; bottom: -3px; }
+.rail .util { width: 48px; height: 48px; border-radius: 24px; background: var(--surface); display: grid; place-items: center; flex: none; }
+.rail .emoji3 { display: flex; gap: 1px; background: #1a1b1e; }
+.rail .emoji3 img { width: 14px; height: 14px; }
+.panel { position: absolute; left: 72px; right: 0; top: 62px; bottom: 0; background: var(--surface); border-top-left-radius: 28px; overflow: hidden; }
+
+/* Inbox */
+.hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; }
+.hdr h1 { font-size: 21.8px; font-weight: 700; letter-spacing: -0.02em; }
+.circle-btn { width: 36px; height: 36px; border-radius: 18px; background: var(--elevated); display: grid; place-items: center; }
+.chips { display: flex; gap: 6px; padding: 0 16px 10px; }
+.chip { height: 32px; padding: 0 14px; border-radius: 16px; background: var(--elevated); color: var(--text2); font-size: 15.2px; font-weight: 600; display: flex; align-items: center; }
+.chip.on { background: var(--accent); color: #fff; }
+.rows { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 6px 8px; }
+.row .dot { width: 8px; height: 8px; border-radius: 4px; flex: none; }
+.row .dot.on { background: var(--accent); }
+.avatar { position: relative; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 600; }
+.avatar .inner { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; overflow: hidden; }
+.avatar .pres { position: absolute; border-radius: 50%; }
+.row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.row .l1, .row .l2 { display: flex; align-items: baseline; gap: 6px; }
+.row .name { flex: 1; min-width: 0; font-size: 15.3px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .time { font-size: 12.4px; color: var(--muted); white-space: nowrap; }
+.row .prev { flex: 1; min-width: 0; font-size: 15.3px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row.unread .name { color: var(--text); font-weight: 600; }
+.row.unread .time { color: var(--text); }
+.row.unread .prev { color: var(--accent); }
+.count { font-size: 12px; font-weight: 700; color: #fff; background: #da373c; border-radius: 9px; padding: 2px 6px; }
+
+/* Floating dock */
+.dock { position: absolute; left: 50%; bottom: 42px; transform: translateX(-50%); height: 58px; padding: 6px; border-radius: 29px; display: flex; gap: 4px; z-index: 10;
+  background: rgba(30,31,34,.82); box-shadow: 0 8px 36px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(20px); }
+.dock .it { height: 46px; padding: 0 14px; border-radius: 23px; display: flex; align-items: center; gap: 7px; color: #a3a8b0; }
+.dock .it.on { padding: 0 16px; color: #fff; background: linear-gradient(180deg, #6a76ff, #5865f2 60%, #4f5be6); }
+.dock .it span { font-size: 15.2px; font-weight: 600; }
+
+/* Server panel */
+.banner { position: relative; height: 118px; }
+.banner .fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,10,11,0), rgba(10,10,11,.95)); }
+.banner .title { position: absolute; left: 16px; right: 16px; bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.banner h2 { font-size: 20.2px; font-weight: 700; letter-spacing: -0.02em; flex: 1; white-space: nowrap; overflow: hidden; }
+.glass-btn { width: 34px; height: 34px; border-radius: 17px; background: rgba(120,120,128,.32); display: grid; place-items: center; }
+.pills { display: flex; gap: 8px; padding: 12px 16px; }
+.pill { height: 34px; padding: 0 14px; border-radius: 17px; background: var(--elevated); display: flex; align-items: center; gap: 7px; font-size: 15.2px; font-weight: 600; }
+.cat { display: flex; align-items: center; gap: 4px; padding: 18px 16px 6px; font-size: 12.4px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+.chans { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+.chan { height: 42px; padding: 0 10px; display: flex; align-items: center; gap: 10px; border-radius: 12px; color: var(--text2); }
+.chan.sel { background: var(--elevated); color: var(--text); }
+.chan .hash { width: 22px; text-align: center; font-size: 22px; font-weight: 600; color: var(--muted); }
+.chan .nm { font-size: 16.8px; font-weight: 500; flex: 1; }
+.chan .n { font-size: 12.5px; font-weight: 700; color: var(--text2); background: var(--elevated); height: 22px; padding: 0 8px; border-radius: 11px; display: flex; align-items: center; }
+.vmembers { padding: 0 12px 8px 50px; display: flex; flex-direction: column; gap: 4px; }
+.vm { display: flex; align-items: center; gap: 8px; font-size: 15.2px; color: var(--text2); height: 28px; }
+
+/* Chat */
+.nav { position: absolute; left: 0; right: 0; top: 54px; height: 64px; display: flex; align-items: center; justify-content: center; z-index: 5; }
+.nav .back { position: absolute; left: 16px; top: 8px; width: 44px; height: 44px; border-radius: 22px; background: #141416; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); display: grid; place-items: center; }
+.nav .ttl { font-size: 16.4px; font-weight: 600; letter-spacing: -0.01em; }
+.nav .sub { font-size: 12px; color: var(--muted); text-align: center; }
+.msgs { position: absolute; left: 0; right: 0; top: 146px; bottom: 100px; display: flex; flex-direction: column; gap: 14px; padding: 0 16px; }
+.msg { display: flex; gap: 12px; }
+.msg .body { flex: 1; min-width: 0; }
+.msg .who { display: flex; align-items: baseline; gap: 7px; }
+.msg .who b { font-size: 15.4px; font-weight: 700; letter-spacing: -0.015em; }
+.msg .who b.me { color: var(--accent); }
+.msg .who i { font-style: normal; font-size: 11.8px; color: var(--muted); }
+.msg .t { font-size: 15.2px; line-height: 1.3; color: #eceef1; margin-top: 2px; }
+.react { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; height: 30px; padding: 0 10px; border-radius: 15px; background: #1a1b1e; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); font-size: 13.5px; font-weight: 700; color: var(--text2); }
+.react.mine { background: rgba(88,101,242,.16); box-shadow: inset 0 0 0 1.5px var(--accent); color: #7b86ff; }
+.react img { width: 20px; height: 20px; }
+.typing { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); padding-left: 68px; }
+.typing .dots { display: flex; gap: 3px; }
+.typing .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--text2); }
+.composer { position: absolute; left: 11px; right: 11px; bottom: 43px; height: 50px; border-radius: 25px; background: #0e0e10; box-shadow: inset 0 0 0 1px rgba(255,255,255,.09); display: flex; align-items: center; padding: 0 5px; gap: 10px; }
+.composer .plus { width: 40px; height: 40px; border-radius: 20px; background: #1c1d20; display: grid; place-items: center; }
+.composer .ph { flex: 1; font-size: 15.4px; color: #6d7178; white-space: nowrap; overflow: hidden; }
+.composer .ph.typed { color: var(--text); }
+.composer .caret { display: inline-block; width: 2px; height: 20px; background: var(--accent); vertical-align: -4px; margin-left: 1px; }
+.composer .send { width: 40px; height: 40px; border-radius: 20px; background: var(--accent); display: grid; place-items: center; }
+.home-ind { position: absolute; left: 50%; bottom: 8px; width: 139px; height: 5px; border-radius: 3px; background: #fff; transform: translateX(-50%); z-index: 30; }
+
+/* You */
+.big-title { position: absolute; left: 20px; top: 68px; font-size: 32px; font-weight: 700; letter-spacing: -0.025em; }
+.you-scroll { position: absolute; left: 16px; right: 16px; top: 122px; }
+.pcard { border-radius: 24px; background: #0e0e10; overflow: hidden; }
+.pcard .bn { height: 124px; position: relative; background: radial-gradient(120% 140% at 85% 10%, #9aa4ff 0%, #5865f2 38%, #2b2f8f 70%, #121330 100%); }
+.pcard .bn::after { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 90% at 15% 110%, rgba(235,69,158,.55), rgba(235,69,158,0) 70%); }
+.pcard .bn .ed { position: absolute; right: 12px; top: 10px; width: 28px; height: 28px; border-radius: 14px; background: var(--accent); display: grid; place-items: center; z-index: 2; }
+.pcard .av { position: absolute; left: 14px; top: 78px; width: 90px; height: 90px; border-radius: 45px; padding: 4px; background: conic-gradient(from 200deg, #7b86ff, #eb459e, #f5a623, #7b86ff); }
+.pcard .av .in { width: 100%; height: 100%; border-radius: 50%; border: 4px solid #0e0e10; display: grid; place-items: center; font-size: 36px; font-weight: 700; }
+.pcard .av .cam { position: absolute; right: -2px; bottom: 2px; width: 28px; height: 28px; border-radius: 14px; background: var(--accent); display: grid; place-items: center; border: 2.5px solid #0e0e10; }
+.pcard .meta { padding: 56px 16px 16px; }
+.pcard .nm { font-size: 21.5px; font-weight: 700; letter-spacing: -0.02em; }
+.pcard .hd { font-size: 14.4px; color: var(--muted); margin-top: 2px; }
+.badges { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.badges img { width: 20px; height: 20px; }
+.statusbar { margin-top: 12px; height: 44px; border-radius: 22px; background: #1a1b1e; display: flex; align-items: center; padding: 0 14px; gap: 10px; font-size: 14.4px; color: var(--text2); }
+.statusbar .g { width: 10px; height: 10px; border-radius: 5px; background: var(--online); }
+.bio { margin-top: 12px; font-size: 13.6px; line-height: 1.35; color: var(--text2); }
+.aero { margin-top: 12px; border-radius: 20px; padding: 14px; display: flex; gap: 12px; align-items: center; background: linear-gradient(135deg, #3a3217, #1a1712); box-shadow: inset 0 0 0 1.5px #8b7a2e; }
+.aero .ic { width: 46px; height: 46px; border-radius: 12px; background: #f8e05b; display: grid; place-items: center; }
+.aero b { font-size: 16.4px; font-weight: 600; }
+.aero p { font-size: 13.6px; color: var(--text2); margin-top: 2px; }
+.caption { font-size: 11.8px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); margin: 18px 8px 8px; }
+.group { border-radius: 20px; background: #0e0e10; overflow: hidden; }
+.grow { display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 14px; position: relative; }
+.grow + .grow::before { content: ""; position: absolute; left: 60px; right: 0; top: 0; height: 1px; background: #1f2023; }
+.grow .ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; }
+.grow .lb { flex: 1; font-size: 15.3px; }
+.grow .vl { font-size: 14.4px; color: var(--muted); }
+
+/* Discover sheet */
+.sheet { position: absolute; left: 0; right: 0; top: 62px; bottom: 0; background: #0a0a0b; border-radius: 28px 28px 0 0; overflow: hidden; }
+.done { position: absolute; left: 16px; top: 16px; height: 44px; padding: 0 16px; border-radius: 22px; background: #1a1b1e; display: flex; align-items: center; font-size: 15.3px; color: #7b86ff; }
+.disc-h { position: absolute; left: 20px; top: 76px; }
+.disc-h h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.025em; }
+.disc-h p { font-size: 14.6px; color: var(--muted); margin-top: 4px; }
+.searchf { position: absolute; left: 20px; right: 20px; top: 166px; height: 42px; border-radius: 21px; background: #141416; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 15.3px; color: #6d7178; }
+.cards { position: absolute; left: 16px; right: 16px; top: 226px; display: flex; flex-direction: column; gap: 14px; }
+.card { border-radius: 24px; background: #111113; overflow: hidden; position: relative; }
+.card .cb { height: 96px; }
+.card .ci { position: absolute; left: 14px; top: 76px; width: 58px; height: 58px; border-radius: 16px; border: 4px solid #111113; display: grid; place-items: center; overflow: hidden; font-weight: 700; font-size: 20px; }
+.card .open { position: absolute; right: 14px; top: 104px; height: 36px; padding: 0 16px; border-radius: 18px; background: #1d1e21; display: flex; align-items: center; gap: 8px; font-size: 14.6px; font-weight: 600; }
+.card .cm { padding: 64px 16px 16px; }
+.card .cm b { font-size: 17.2px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.card .cm p { font-size: 13.8px; color: var(--text2); margin-top: 4px; }
+.card .cm .mem { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.card .cm .mem i { width: 8px; height: 8px; border-radius: 4px; background: var(--online); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import { icon } from "./icons.js";
+import { ME, PEOPLE, SPACES, INBOX, RANDOM_CHANNEL, NOVA_DM, SYNC_MESSAGE } from "./demo-data.js";
+
+const params = new URLSearchParams(location.search);
+const screen = params.get("screen") || "inbox";
+const E = (code, cls = "emoji") => `<img class="${cls}" src="../assets/emoji/${code}.svg">`;
+const EMOJI = { "👋": "1f44b", "😍": "1f60d", "🔥": "1f525" };
+const rich = (s) => s.replace(/👋|😍|🔥/g, (m) => E(EMOJI[m]));
+const LOGO = (px, color = "#fff") => `<svg width="${px}" height="${px * 1.124}" style="color:${color}"><use href="#mark"/></svg>`;
+
+const PRES = { online: "var(--online)", idle: "var(--idle)", offline: "#80848e", dnd: "var(--dnd)" };
+function avatar(p, size, { ring = "var(--surface)", status = true } = {}) {
+  const inner = p.logo
+    ? `<div class="inner" style="background:#000">${LOGO(size * 0.5)}</div>`
+    : `<div class="inner" style="background:${p.color};font-size:${size * 0.42}px">${p.initials}</div>`;
+  const d = Math.round(size * 0.23), r = 3;
+  const pres = status && p.status
+    ? `<span class="pres" style="width:${d + r * 2}px;height:${d + r * 2}px;right:${-r - 1}px;bottom:${-r - 1}px;background:${PRES[p.status]};box-shadow:0 0 0 ${r}px ${ring}"></span>`
+    : "";
+  return `<div class="avatar" style="width:${size}px;height:${size}px">${inner}${pres}</div>`;
+}
+const who = (k) => (k === "me" ? { ...ME } : PEOPLE[k]);
+
+function statusBar() {
+  return `<div class="status"><div class="time">9:41</div><div class="island"></div>
+    <div class="right">${icon("statusBars", { size: 16, color: "#fff" })}${icon("wifi", { size: 16, color: "#fff" })}${icon("battery", { size: 16, color: "#fff" })}</div></div>`;
+}
+
+function rail(selected) {
+  const items = SPACES.map((s) => {
+    let inner;
+    if (s.logo) inner = `<div class="icon" style="background:#000">${LOGO(26)}</div>`;
+    else if (s.emoji) inner = `<div class="icon emoji3">${s.emoji.map((c) => `<img src="../assets/emoji/${c}.svg">`).join("")}</div>`;
+    else if (s.emoji1) inner = `<div class="icon" style="background:${s.color}"><img src="../assets/emoji/${s.emoji1}.svg" style="width:24px;height:24px"></div>`;
+    else inner = `<div class="icon" style="background:${s.color}">${s.initials}</div>`;
+    const badge = s.verified ? `<div class="badge">${icon("seal", { size: 18, color: "var(--verified)", bg: "#fff" })}</div>` : "";
+    return `<div class="item ${selected === s.id ? "sel" : ""}">${inner}${badge}</div>`;
+  }).join("");
+  return `<div class="rail">
+    <div class="item ${selected === "inbox" ? "sel" : ""}"><div class="icon" style="background:linear-gradient(180deg,#6a76ff,#5865f2 60%,#4f5be6)">${icon("bubbles", { size: 27, color: "#fff" })}</div></div>
+    <div class="sep"></div>${items}
+    <div class="util">${icon("plus", { size: 22, color: "var(--online)" })}</div>
+    <div class="util">${icon("compass", { size: 23, color: "var(--accent)", bg: "#0a0a0b" })}</div>
+  </div>`;
+}
+
+function dock(active) {
+  const items = [["home", "bubbles", "Home"], ["friends", "person2", "Friends"], ["notes", "note", "Notes"], ["you", "personCircle", "You"]];
+  return `<div class="dock">${items.map(([id, ic, label]) =>
+    `<div class="it ${id === active ? "on" : ""}">${icon(ic, { size: 24, color: "currentColor", bg: "#1e1f22" })}${id === active ? `<span>${label}</span>` : ""}</div>`).join("")}</div>`;
+}
+
+function inbox() {
+  const rows = INBOX.map((r) => {
+    const p = r.group ? { name: r.name, initials: r.initials, color: r.color } : PEOPLE[r.who];
+    const prev = r.preview.startsWith("emoji:") ? E(r.preview.slice(6)) : r.preview;
+    return `<div class="row ${r.unread ? "unread" : ""}"><div class="dot ${r.unread ? "on" : ""}"></div>${avatar(p, 44)}
+      <div class="txt"><div class="l1"><div class="name">${p.name}</div>${r.time ? `<div class="time">${r.time}</div>` : ""}</div>
+      <div class="l2"><div class="prev">${prev}</div>${r.unread ? `<span class="count">${r.unread}</span>` : ""}</div></div></div>`;
+  }).join("");
+  return `${statusBar()}${rail("inbox")}<div class="panel">
+    <div class="hdr"><h1>Messages</h1><div class="circle-btn">${icon("compose", { size: 19, color: "var(--text)" })}</div></div>
+    <div class="chips"><div class="chip on">All</div><div class="chip">Unread</div><div class="chip">Groups</div></div>
+    <div class="rows">${rows}</div></div>${dock("home")}`;
+}
+
+function server() {
+  const chan = (n, sel) => `<div class="chan ${sel ? "sel" : ""}"><span class="hash">#</span><span class="nm">${n}</span></div>`;
+  const vm = (k, extra = "") => { const p = PEOPLE[k]; return `<div class="vm">${avatar(p, 24, { status: false })}<span>${p.name}</span>${extra}</div>`; };
+  return `${statusBar()}${rail("hq")}<div class="panel">
+    <div class="banner" style="background:linear-gradient(135deg,#ed4245,rgba(170,40,70,.6))"><div class="fade"></div>
+      <div class="title"><h2>Disband Demo HQ</h2><div class="glass-btn">${icon("ellipsis", { size: 18, color: "#fff" })}</div></div></div>
+    <div class="pills"><div class="pill">${icon("personPlus", { size: 20, color: "#fff", bg: "#1a1b1e" })}Invite</div><div class="pill">${icon("person2", { size: 21, color: "#fff", bg: "#1a1b1e" })}Members</div></div>
+    <div class="cat">Text Channels ${icon("chevronDown", { size: 13, color: "var(--muted)" })}</div>
+    <div class="chans">${chan("welcome")}${chan("general")}${chan("random")}${chan("support")}</div>
+    <div class="cat">Voice Channels ${icon("chevronDown", { size: 13, color: "var(--muted)" })}</div>
+    <div class="chans"><div class="chan"><span class="hash" style="display:grid;place-items:center">${icon("speakerWave", { size: 20, color: "var(--online)" })}</span><span class="nm">Lounge</span><span class="n">3</span></div></div>
+    <div class="vmembers">${vm("nova")}${vm("kai")}${vm("mila", `<span style="margin-left:auto">${icon("speaker", { size: 14, color: "var(--muted)" })}</span>`)}</div>
+  </div>${dock("home")}`;
+}
+
+function chat(list, title, { typed = null, typing = false, extra = null, subtitle = "" } = {}) {
+  const all = extra ? [...list, extra] : list;
+  const msgs = all.map((m) => {
+    const p = who(m.who);
+    const r = m.reaction ? `<div class="react ${m.reaction.mine ? "mine" : ""}">${E(m.reaction.emoji, "")}${m.reaction.count}</div>` : "";
+    return `<div class="msg" ${m === extra ? 'data-new="1"' : ""}>${avatar(p, 40, { status: false })}<div class="body">
+      <div class="who"><b class="${m.who === "me" ? "me" : ""}">${p.name}</b><i>${m.time}</i></div>
+      <div class="t">${rich(m.text)}</div>${r}</div></div>`;
+  }).join("");
+  const composer = typed === null
+    ? `<div class="ph">Message</div>`
+    : `<div class="ph typed">${rich(typed)}<span class="caret"></span></div><div class="send">${icon("arrowUp", { size: 20, color: "#fff" })}</div>`;
+  return `${statusBar()}<div class="nav"><div class="back">${icon("chevronLeft", { size: 22, color: "#fff" })}</div>
+      <div><div class="ttl">${title}</div>${subtitle ? `<div class="sub">${subtitle}</div>` : ""}</div></div>
+    <div class="msgs" data-list="1">${msgs}${typing ? `<div class="typing"><span class="dots"><i></i><i></i><i></i></span>Nova is typing…</div>` : ""}</div>
+    <div class="composer"><div class="plus">${icon("plus", { size: 20, color: "#fff" })}</div>${composer}</div>`;
+}
+
+function you() {
+  const row = (ic, tint, label, value = "", bgc = "#fff") => `<div class="grow"><div class="ic" style="background:${tint}">${icon(ic, { size: 19, color: "#fff", bg: tint })}</div>
+    <div class="lb">${label}</div>${value ? `<div class="vl">${value}</div>` : ""}${icon("chevronRight", { size: 15, color: "#6d7178" })}</div>`;
+  return `${statusBar()}<div class="big-title">You</div>
+    <div style="position:absolute;right:16px;top:70px" class="circle-btn">${icon("pencil", { size: 18, color: "#fff" })}</div>
+    <div class="you-scroll">
+      <div class="pcard"><div class="bn"><div class="ed">${icon("photo", { size: 15, color: "#fff" })}</div></div>
+        <div class="av"><div class="in" style="background:${ME.color}">${ME.initials}</div><div class="cam">${icon("camera", { size: 14, color: "#fff" })}</div></div>
+        <div class="meta"><div class="nm">${ME.name}</div><div class="hd">@${ME.handle}</div>
+          <div class="badges">${E("2728", "")}${E("2764", "")}${E("1f680", "")}${E("1f3a8", "")}</div>
+          <div class="statusbar"><span class="g"></span>Designing something new<span style="margin-left:auto">${icon("chevronRight", { size: 15, color: "#6d7178" })}</span></div>
+          <div class="bio">Product designer. Privacy first, always.</div></div></div>
+      <div class="aero"><div class="ic">${icon("sparkles", { size: 26, color: "#1a1712" })}</div><div><b>Disband Aero</b><p>Active · renews Jul 27, 2027</p></div></div>
+      <div class="caption">ACCOUNT</div>
+      <div class="group">${row("personCircle", "#5865f2", "Edit profile")}${row("bubble", "#23a55a", "Status", "Online")}${row("gift", "#eb459e", "Referrals", "Win $100")}</div>
+      <div class="caption">APP</div>
+      <div class="group">${row("palette", "#9b59b6", "Appearance", "AMOLED")}</div>
+    </div>${dock("you")}`;
+}
+
+function discover() {
+  const card = (banner, iconHtml, iconBg, name, verified, desc, members) => `<div class="card"><div class="cb" style="background:${banner}"></div>
+    ${banner === "#fff" ? wordmark : ""}<div class="ci" style="background:${iconBg}">${iconHtml}</div>
+    <div class="open">${icon("arrowRight", { size: 18, color: "#fff" })}Open</div>
+    <div class="cm"><b>${name}${verified ? icon("seal", { size: 20, color: "var(--verified)", bg: "#fff" }) : ""}</b><p>${desc}</p>
+      <div class="mem"><i></i>${members}</div></div></div>`;
+  const officialBanner = "#fff";
+  const wordmark = `<div style="position:absolute;left:0;right:0;top:0;height:96px;display:flex;align-items:center;justify-content:center;gap:12px;color:#0a0a0b">${LOGO(34, "#0a0a0b")}<span style="font-size:30px;font-weight:800;letter-spacing:.04em">DISBAND</span></div>`;
+  return `${statusBar()}<div style="position:absolute;inset:0;background:#000"></div>
+    <div class="sheet"><div class="done">Done</div>
+      <div class="disc-h"><h1>Discover</h1><p>Find a space for your people.</p></div>
+      <div class="searchf">${icon("search", { size: 20, color: "#8e9297" })}Search spaces</div>
+      <div class="cards">
+        ${card(officialBanner, LOGO(26), "#000", "Disband", true, "Official Disband Community Server", "4,700 members")}
+        ${card("linear-gradient(120deg,#9b59b6,#b0766e 60%,#9a6b1f)", "DL", "#f5a623", "Design Lab", false, "Critiques, color crushes and work in progress.", "1,395 members")}
+        ${card("linear-gradient(120deg,#1f6feb,#16a085)", E("1f4f7", ""), "#1f6feb", "Photo Walk", false, "Weekly prompts and film swaps.", "862 members")}
+      </div></div>`;
+}
+
+const SCREENS = {
+  inbox, server, you, discover,
+  random: () => chat(RANDOM_CHANNEL, "#random"),
+  dm: () => chat(NOVA_DM, "Nova Reyes", { subtitle: "Online" }),
+  "dm-typing": () => chat(NOVA_DM, "Nova Reyes", { subtitle: "Online", typed: SYNC_MESSAGE.text.slice(0, Number(params.get("n") ?? SYNC_MESSAGE.text.length)) }),
+  "dm-sent": () => chat(NOVA_DM, "Nova Reyes", { subtitle: "Online", extra: SYNC_MESSAGE }),
+};
+
+document.getElementById("root").innerHTML = `
+  <svg width="0" height="0" style="position:absolute"><defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol></defs></svg>
+  <div class="screen">${SCREENS[screen]()}</div>`;
+const mark = await fetch("../assets/logo/disband-mark.svg").then((r) => r.text());
+document.getElementById("markpath").setAttribute("d", mark.match(/ d="([^"]+)"/)[1]);
+await document.fonts.ready;
+await Promise.all([...document.images].map((i) => (i.complete ? 0 : new Promise((r) => (i.onload = i.onerror = r)))));
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>
