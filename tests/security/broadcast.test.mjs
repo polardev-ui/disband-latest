@@ -148,7 +148,8 @@ before(async () => {
       thread_id uuid not null,
       author_id uuid not null,
       content text not null default '',
-      mentions uuid[] not null default '{}'
+      mentions uuid[] not null default '{}',
+      created_at timestamptz not null default now()
     );
     create table public.group_chats (id uuid primary key);
     create table public.group_chat_members (group_id uuid, user_id uuid);
@@ -231,6 +232,7 @@ before(async () => {
   await db.exec(await readFile("supabase/migrations/0101_official_account_lockdown.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0105_broadcast_dm_thread.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0106_official_dm_readonly.sql", "utf8"));
+  await db.exec(await readFile("supabase/migrations/0107_official_bulk_rate_exempt.sql", "utf8"));
 
   await db.query(
     `insert into public.dm_threads (id, user_a, user_b)
@@ -433,6 +435,49 @@ test("a recipient cannot write into an official thread, but normal DMs still wor
     ),
   );
   assert.equal(allowed.ok, true, "an ordinary DM between members is untouched");
+});
+
+test("an everyone-send survives the DM rate trigger, while a human flood still trips it", async () => {
+  // 0022's trigger is not part of this file's fixture set, so bind the 0107
+  // function here. Dropped in a finally: with every row sharing now(), a
+  // leaked binding would poison the burst windows of later tests.
+  await db.exec(
+    `create trigger dm_messages_rate_limit before insert on public.dm_messages
+     for each row execute function public.enforce_dm_message_rate()`,
+  );
+  try {
+    // 5 humans x 1 row as the official account: the old code died on row 8.
+    const { rows } = await send({ title: "Bulk rate check" });
+    assert.equal(rows[0].sent_recipient_count, 5);
+    for (const u of [ALICE, BOB, CARA, STAFF, SQUATTER]) {
+      assert.ok(
+        (await officialDmContents(u)).some((m) => m.content.includes("Bulk rate check")),
+      );
+    }
+
+    // A human author flooding their own thread still hits the burst window.
+    await db.query(
+      `insert into public.dm_threads (id, user_a, user_b)
+       values ('22222222-2222-4222-8222-222222222222', $1, $2)`,
+      [ALICE, SQUATTER],
+    );
+    const flood = (i) =>
+      tryAsRole("authenticated", SQUATTER, () =>
+        db.query(
+          `insert into public.dm_messages (thread_id, author_id, content)
+           values ('22222222-2222-4222-8222-222222222222', $1, $2)`,
+          [SQUATTER, `flood ${i}`],
+        ),
+      );
+    for (let i = 0; i < 7; i++) {
+      assert.equal((await flood(i)).ok, true, `flood row ${i} passes`);
+    }
+    const eighth = await flood(7);
+    assert.equal(eighth.ok, false, "the 8th row in 5 seconds is refused");
+    assert.match(String(eighth.message ?? ""), /too quickly/);
+  } finally {
+    await db.exec(`drop trigger dm_messages_rate_limit on public.dm_messages`);
+  }
 });
 
 // ---------------------------------------------------------------------------
