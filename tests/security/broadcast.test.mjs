@@ -230,6 +230,7 @@ before(async () => {
   await db.exec(await readFile("supabase/migrations/0100_official_broadcast.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0101_official_account_lockdown.sql", "utf8"));
   await db.exec(await readFile("supabase/migrations/0105_broadcast_dm_thread.sql", "utf8"));
+  await db.exec(await readFile("supabase/migrations/0106_official_dm_readonly.sql", "utf8"));
 
   await db.query(
     `insert into public.dm_threads (id, user_a, user_b)
@@ -402,6 +403,36 @@ test("the official account is flagged DM-able through the bot gate", async () =>
     [OFFICIAL],
   );
   assert.equal(rows[0].bot_dm_enabled, true);
+});
+
+test("the readonly guard is restrictive, so it can only ever deny", async () => {
+  const { rows } = await db.query(
+    `select permissive from pg_policies where schemaname = 'public' and tablename = 'dm_messages' and policyname = 'official_dm_readonly'`,
+  );
+  assert.equal(rows.length, 1);
+  // A permissive twin of this policy would OR with the membership check and
+  // hand every authenticated user write access to every DM thread. Stated
+  // directly so a future edit cannot silently flip it.
+  assert.equal(rows[0].permissive, "RESTRICTIVE");
+});
+
+test("a recipient cannot write into an official thread, but normal DMs still work", async () => {
+  const [thread] = await officialThreads(CARA);
+  const refused = await tryAsRole("authenticated", CARA, () =>
+    db.query(
+      `insert into public.dm_messages (thread_id, author_id, content) values ($1, $2, 'let me in')`,
+      [thread, CARA],
+    ),
+  );
+  assert.equal(refused.ok, false, "the database must refuse the write, not just the UI");
+
+  const allowed = await tryAsRole("authenticated", ALICE, () =>
+    db.query(
+      `insert into public.dm_messages (thread_id, author_id, content) values ('11111111-1111-4111-8111-111111111111', $1, 'still fine here')`,
+      [ALICE],
+    ),
+  );
+  assert.equal(allowed.ok, true, "an ordinary DM between members is untouched");
 });
 
 // ---------------------------------------------------------------------------

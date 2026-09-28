@@ -1574,6 +1574,11 @@ export function DiscordApp() {
             reactions={app.messageReactions}
             typingScope={{ kind: "dm", id: app.activeDmThreadId! }}
             readCursorScope={{ kind: "dm", id: app.activeDmThreadId! }}
+            composerLockedReason={
+              app.officialProfile && dmFriend.id === app.officialProfile.id
+                ? "This is a certified Disband broadcast. Replies are closed — watch for new notices here."
+                : undefined
+            }
             headerTrailing={
               !dmCallActive ? (
                 <div className="flex items-center gap-1">

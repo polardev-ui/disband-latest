@@ -20,6 +20,7 @@ import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { summarizeReactions, type ReactionSummary } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
+import { IconVerified } from "@/components/icons";
 import { BotTag } from "@/components/ui/BotTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
@@ -336,6 +337,59 @@ export function ChatMessage({
           <p className="shrink-0 text-center text-[13px] italic leading-snug">{sysText}</p>
           <span className="h-px flex-1 bg-divider" />
         </div>
+      </article>
+    );
+  }
+
+  // Official broadcasts render as an embed card, not a chat bubble: a
+  // certified notice should look certified. Keyed on the reserved identity
+  // (username + bot flag, which no human account can hold), so this is
+  // display logic only — nothing here grants authority.
+  const isOfficialNotice = author?.username === "disband" && (author?.is_bot ?? false);
+  if (isOfficialNotice) {
+    const [rawTitle, ...rest] = message.content.split(/\n\n+/);
+    const embedTitle = (rawTitle ?? "").trim();
+    const embedBody = rest.join("\n\n").trim();
+    return (
+      <article
+        id={`msg-${message.id}`}
+        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""}`}
+        onContextMenu={onContextMenu}
+        onDoubleClick={onDoubleClick}
+      >
+        <MessageActionBar
+          message={message}
+          onReply={onReply}
+          onToggleReaction={onToggleReaction}
+          onOpenReactionPicker={onOpenReactionPicker}
+          onForward={onForward}
+          onMoreActions={onContextMenu}
+        />
+        <div className="overflow-hidden rounded-xl border border-brand/30 bg-bg-secondary shadow-[0_0_0_1px_rgba(0,0,0,0.2)]">
+          <div className="flex items-center gap-2 border-b border-divider bg-brand/10 px-4 py-2.5">
+            <Avatar profile={author} size="sm" />
+            <span className="text-[15px] font-semibold text-text-normal">Disband</span>
+            <IconVerified size={15} className="shrink-0 text-sky-400" />
+            <span className="rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand">
+              Official
+            </span>
+            <time className="ml-auto shrink-0 text-xs text-text-muted">
+              {formatMessageTime(message.created_at).split(" at ").pop()}
+            </time>
+          </div>
+          <div className="px-4 py-3">
+            {embedTitle && (
+              <p className="text-[16px] font-bold leading-snug text-text-normal">{embedTitle}</p>
+            )}
+            {embedBody && (
+              <div className={embedTitle ? "mt-1" : ""}>
+                <MessageBody content={embedBody} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+              </div>
+            )}
+          </div>
+        </div>
+        {attachment}
+        {reactionBlock}
       </article>
     );
   }
