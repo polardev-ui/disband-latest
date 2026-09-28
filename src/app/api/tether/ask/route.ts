@@ -3,7 +3,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 import { persistentRateLimitCheck } from "@/lib/auth-guard";
 import { getClientIp, hashIp } from "@/lib/request-ip";
-import { planFromSubscription, type Subscription } from "@/lib/subscription";
+import { planWithGifts, type Subscription } from "@/lib/subscription";
 import { isTrustedUploadUrl } from "@/lib/media/uploadMedia";
 import { DeepSeekError, DeepSeekUnavailableError } from "@/lib/deepseek";
 import {
@@ -104,13 +104,23 @@ export async function POST(request: NextRequest) {
   if (!service) return NextResponse.json({ error: "Service not available." }, { status: 500 });
 
   // Aero gate first: cheapest rejection, and it is the point of the feature.
+  // Subscriptions and gifted time both count — a dashboard grant carries the
+  // same entitlements as a paid plan, and the client computes the same
+  // effective plan, so the two gates cannot disagree.
   const { data: sub, error: subError } = await service
     .from("subscriptions")
     .select("id, plan, status, current_period_end, canceled_at")
     .eq("user_id", user.id)
     .maybeSingle();
   if (subError) return NextResponse.json({ error: "Could not check your subscription." }, { status: 500 });
-  const plan = planFromSubscription((sub ?? null) as Subscription | null);
+  let plan = planWithGifts((sub ?? null) as Subscription | null, null);
+  if (plan !== "aero") {
+    const { data: gifts } = await service
+      .from("gift_entitlements")
+      .select("plan,expires_at")
+      .eq("user_id", user.id);
+    plan = planWithGifts((sub ?? null) as Subscription | null, gifts);
+  }
   if (plan !== "aero") {
     return NextResponse.json({ error: "Tether is a Disband Aero feature." }, { status: 403 });
   }

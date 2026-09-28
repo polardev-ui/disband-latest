@@ -5,6 +5,8 @@ import { getSupabaseClient, refreshSessionOnce } from "@/lib/supabase/client";
 import {
   ENTITLEMENTS,
   planFromSubscription,
+  planWithGifts,
+  type GiftEntitlement,
   type SubscriptionPlan,
   type Subscription,
 } from "@/lib/subscription";
@@ -17,11 +19,13 @@ let redirectPolled = false;
 
 export function useSubscription(userId: string | undefined) {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [gifts, setGifts] = useState<GiftEntitlement[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async (): Promise<Subscription | null> => {
     if (!userId) {
       setSubscription(null);
+      setGifts([]);
       setLoading(false);
       return null;
     }
@@ -53,6 +57,20 @@ export function useSubscription(userId: string | undefined) {
     }
     const row = (data as Subscription | null) ?? null;
     setSubscription(row);
+
+    // Gifted Aero (dashboard grants) carries the same entitlements as a paid
+    // subscription. Loaded alongside so every consumer of `plan` — Tether
+    // gating, nudges, limits — treats gifted users as Aero without caring
+    // which source granted it.
+    try {
+      const { data: giftRows } = await supabase
+        .from("gift_entitlements")
+        .select("plan,expires_at")
+        .eq("user_id", userId);
+      setGifts((giftRows as GiftEntitlement[] | null) ?? []);
+    } catch {
+      setGifts([]);
+    }
     setLoading(false);
     return row;
   }, [userId]);
@@ -99,8 +117,23 @@ export function useSubscription(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-
     const supabase = getSupabaseClient();
+
+    const onSubRow = (payload: RealtimePostgresChangesPayload<Subscription>) => {
+      if (payload.eventType === "DELETE") {
+        setSubscription(null);
+      } else {
+        setSubscription(payload.new as Subscription);
+      }
+    };
+    // A dashboard grant landing mid-session must flip the plan without a
+    // reload — otherwise the user stares at "subscribe" nudges for Aero
+    // they already hold. Refetch rather than merge: deletes and edits stay
+    // correct for free.
+    const onGiftRow = () => {
+      void load();
+    };
+
     const channelName = `subscription-changes:${userId}:${++idCounter}`;
 
     const channel = supabase.channel(channelName);
@@ -113,13 +146,18 @@ export function useSubscription(userId: string | undefined) {
         table: "subscriptions",
         filter: `user_id=eq.${userId}`,
       },
-      (payload: RealtimePostgresChangesPayload<Subscription>) => {
-        if (payload.eventType === "DELETE") {
-          setSubscription(null);
-        } else {
-          setSubscription(payload.new as Subscription);
-        }
+      onSubRow,
+    );
+
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "gift_entitlements",
+        filter: `user_id=eq.${userId}`,
       },
+      onGiftRow,
     );
 
     channel.subscribe();
@@ -127,9 +165,9 @@ export function useSubscription(userId: string | undefined) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, load]);
 
-  const plan: SubscriptionPlan = planFromSubscription(subscription);
+  const plan: SubscriptionPlan = planWithGifts(subscription, gifts);
   const entitlements = ENTITLEMENTS[plan];
 
   const startCheckout = useCallback(async (planId: SubscriptionPlan): Promise<string | null> => {

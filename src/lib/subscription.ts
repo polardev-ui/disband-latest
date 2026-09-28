@@ -30,6 +30,38 @@ export function planFromSubscription(sub: Subscription | null): SubscriptionPlan
   return normalizePlan(sub.plan);
 }
 
+/**
+ * Gifted Aero (dashboard grants, giveaways). The subscriptions table knows
+ * nothing about these — iOS's get_entitlement RPC resolves both sources,
+ * and the web gate must too, or gifted users see the Aero badge while every
+ * Aero feature tells them to subscribe.
+ */
+export interface GiftEntitlement {
+  plan: string | null;
+  expires_at: string | null;
+}
+
+export function hasActiveGiftAero(
+  gifts: GiftEntitlement[] | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  return (gifts ?? []).some(
+    (g) =>
+      normalizePlan(g.plan) === "aero" &&
+      (!g.expires_at || new Date(g.expires_at).getTime() > now),
+  );
+}
+
+/** Effective plan: Stripe subscription first, gifted time second. */
+export function planWithGifts(
+  sub: Subscription | null,
+  gifts: GiftEntitlement[] | null | undefined,
+  now: number = Date.now(),
+): SubscriptionPlan {
+  if (planFromSubscription(sub) === "aero") return "aero";
+  return hasActiveGiftAero(gifts, now) ? "aero" : "free";
+}
+
 export interface PlanTier {
   id: SubscriptionPlan;
   name: string;
