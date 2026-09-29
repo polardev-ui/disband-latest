@@ -30,7 +30,7 @@ export default function TermsPage() {
             Disband provides spaces and channels, direct messages, group chats, and voice and video
             calling across desktop, mobile, and the web. The Service is provided as-is, may evolve
             over time, and some features may be made available only on certain platforms or to paid
-            subscribers (&quot;basic&quot; and &quot;super&quot; plans). Nothing in these Terms grants you
+            subscribers (&quot;Disband Aero&quot;). Nothing in these Terms grants you
             ownership of Disband, its software, branding, or infrastructure.
           </p>
 
@@ -108,12 +108,37 @@ export default function TermsPage() {
 
           <h2 className="text-lg font-semibold text-white">8. Billing and paid plans</h2>
           <p>
-            Paid plans are billed on a recurring basis and renew automatically until cancelled.
-            Promotion codes and payments are subject to the terms shown at check-in, and cancellation
-            takes effect at the end of your current billing period. We do not provide refunds except
-            where required by law or where we are unable to provide the paid service. If you are
-            permanently suspended, we may terminate your paid plan and deny refunds for the unused
-            portion, in our discretion and to the extent permitted by law.
+            Disband Aero is an auto-renewing subscription. It is billed on a recurring basis and
+            renews automatically at the end of each period until you cancel it. Payment is taken at
+            confirmation of purchase, and renewal is charged within 24 hours of the current period
+            ending. Cancelling takes effect at the end of the period you have already paid for —
+            you keep Aero until then. Promotion codes and payments are subject to the terms shown at
+            checkout. We do not provide refunds except where required by law or where we are unable
+            to provide the paid service. If you are permanently suspended, we may terminate your
+            paid plan and deny refunds for the unused portion, in our discretion and to the extent
+            permitted by law.
+          </p>
+          <p>
+            Server Catalysts are a one-time purchase applied to the space you choose. They do not
+            renew and are not transferable between spaces.
+          </p>
+
+          <h2 className="text-lg font-semibold text-white">
+            8a. Subscriptions bought through the App Store
+          </h2>
+          <p>
+            Where you buy Aero inside the iOS app, the purchase is made through your Apple Account
+            and Apple&apos;s terms apply to the transaction. Payment is charged to your Apple Account
+            at confirmation of purchase. The subscription renews automatically unless auto-renew is
+            turned off at least 24 hours before the end of the current period, and your account is
+            charged for renewal within 24 hours of that period ending.
+          </p>
+          <p>
+            Manage or cancel an App Store subscription in your Apple Account settings
+            (Settings &rarr; your name &rarr; Subscriptions) — we cannot cancel or refund it for you,
+            because we never hold the payment. Refunds for App Store purchases are handled by Apple
+            under its own policies. Any unused portion of a free trial, where one is offered, is
+            forfeited when you buy a subscription.
           </p>
 
           <h2 className="text-lg font-semibold text-white">9. Service availability</h2>
