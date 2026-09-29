@@ -59,12 +59,65 @@ enum class ChannelType {
     @SerialName("voice") Voice,
 }
 
-@Serializable
+/**
+ * What an attachment is.
+ *
+ * The server's vocabulary has grown past image/video/gif/file — the web
+ * writes `poll` and `audio` too — and kotlinx.serialization THROWS on an enum
+ * value it does not know. One audio attachment anywhere in a response failed
+ * the whole decode, and because the callers wrap their loads in `runCatching`
+ * it surfaced as an empty list rather than an error: a DM inbox with 160
+ * conversations in it showed nothing at all, silently, because someone had
+ * once sent a voice message.
+ *
+ * [Unknown] is the landing place for anything a future server adds, so an
+ * older build degrades to "some kind of attachment" instead of losing the
+ * conversation. iOS has had this guard since its own version of this bug;
+ * Android never got it.
+ */
+@Serializable(with = AttachmentTypeSerializer::class)
 enum class AttachmentType {
-    @SerialName("image") Image,
-    @SerialName("video") Video,
-    @SerialName("gif") Gif,
-    @SerialName("file") File,
+    Image, Video, Gif, File, Poll, Audio, Unknown;
+
+    val raw: String
+        get() = when (this) {
+            Image -> "image"
+            Video -> "video"
+            Gif -> "gif"
+            File -> "file"
+            Poll -> "poll"
+            Audio -> "audio"
+            Unknown -> "file"
+        }
+
+    companion object {
+        fun from(raw: String?): AttachmentType = when (raw?.lowercase()) {
+            "image" -> Image
+            "video" -> Video
+            "gif" -> Gif
+            "file" -> File
+            "poll" -> Poll
+            "audio" -> Audio
+            else -> Unknown
+        }
+    }
+}
+
+/** Decodes any string, so a new server value can never fail a whole response. */
+object AttachmentTypeSerializer : kotlinx.serialization.KSerializer<AttachmentType> {
+    override val descriptor: kotlinx.serialization.descriptors.SerialDescriptor =
+        kotlinx.serialization.descriptors.PrimitiveSerialDescriptor(
+            "AttachmentType",
+            kotlinx.serialization.descriptors.PrimitiveKind.STRING,
+        )
+
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): AttachmentType =
+        AttachmentType.from(decoder.decodeString())
+
+    override fun serialize(
+        encoder: kotlinx.serialization.encoding.Encoder,
+        value: AttachmentType,
+    ) = encoder.encodeString(value.raw)
 }
 
 // MARK: - Profile
