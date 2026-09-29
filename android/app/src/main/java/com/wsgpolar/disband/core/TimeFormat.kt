@@ -8,22 +8,41 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 object TimeFormat {
-    private val iso: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").withZone(ZoneId.systemDefault())
-    private val isoFallback: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX").withZone(ZoneId.systemDefault())
+    /**
+     * Postgres' own rendering, with a space instead of a `T`. Only reached
+     * for values that did not come through PostgREST.
+     */
+    private val spaced: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX")
+            .withZone(ZoneId.systemDefault())
 
+    /**
+     * Turn a server timestamp into an instant.
+     *
+     * This used to insist on exactly three fractional digits
+     * (`yyyy-MM-dd'T'HH:mm:ss.SSSXXX`), with a fallback that allowed none at
+     * all. Postgres emits however many it has — `…:14.69127+00:00` is five —
+     * so both patterns threw and every timestamp in the app silently became
+     * an empty string. Message rows had no time next to the name at all, and
+     * nothing failed loudly enough to notice.
+     *
+     * `ISO_OFFSET_DATE_TIME` accepts any number of fractional digits, which
+     * is what the format actually guarantees.
+     */
     fun parse(string: String?): Instant? {
-        return try {
-            if (string == null) null
-            else Instant.from(iso.parse(string))
-        } catch (_: Exception) {
-            try {
-                if (string == null) null else Instant.from(isoFallback.parse(string))
-            } catch (_: Exception) {
-                null
-            }
+        if (string.isNullOrBlank()) return null
+        // Ordered by how the server actually sends them.
+        for (attempt in listOf<(String) -> Instant>(
+            { Instant.from(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(it)) },
+            { Instant.parse(it) },
+            { Instant.from(spaced.parse(it)) },
+            // No offset at all: Postgres `timestamp without time zone`, which
+            // this schema stores in UTC.
+            { java.time.LocalDateTime.parse(it).toInstant(java.time.ZoneOffset.UTC) },
+        )) {
+            runCatching { return attempt(string) }
         }
+        return null
     }
 
     /**
