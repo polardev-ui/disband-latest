@@ -51,25 +51,34 @@ import kotlinx.coroutines.launch
 fun MainScreen(
     app: AppState,
     modifier: Modifier = Modifier,
-    // --- Wiring hooks for later agents (notification routing, server sheets) ---
     /** Deep link from a notification tap; applied once, then reported consumed. */
     pendingNav: PendingNav? = null,
     onPendingNavConsumed: () -> Unit = {},
-    /** Server header actions — wire to the server sheets. */
-    onInvite: (Server) -> Unit = {},
-    onMembers: (Server) -> Unit = {},
-    onOverflow: (Server) -> Unit = {},
-    /** Per-server unread badge counts in the rail. */
-    unreadForServer: (String) -> Int = { 0 },
-    /** Live voice occupants per channel (count capsule + avatars on rows). */
-    occupantsFor: (Channel) -> List<VoiceOccupant> = { emptyList() },
-    /** Rail add/explore buttons. */
-    onAddServer: () -> Unit = {},
-    onExplore: () -> Unit = {},
 ) {
+    /*
+     Invite, Members and the ⋯ menu used to be PARAMETERS of this composable,
+     each defaulting to `{}`, under a comment calling them "wiring hooks for
+     later agents". The one call site — AppRoot — passed none of them, so
+     every one of those buttons ran an empty lambda: nothing on screen, no
+     crash, no log, and nothing for the compiler to complain about.
+
+     They are owned here now. This screen already has `app`, which is
+     everything the sheets need, so there was never a reason for the caller to
+     supply them — and a required callback that defaults to `{}` is exactly
+     how a dead button survives a compile and a review.
+    */
+    var inviteFor by remember { mutableStateOf<Server?>(null) }
+    var membersFor by remember { mutableStateOf<Server?>(null) }
+    var overflowFor by remember { mutableStateOf<Server?>(null) }
     val shellChrome = remember { ShellChromeState() }
     val currentUserId = app.currentUserId
-    val servers = app.servers.value
+    // `app.servers.value` read the flow ONCE at composition and never
+    // subscribed, so Compose never learned when loadServers() finished. The
+    // rail stayed empty until something unrelated forced a recomposition —
+    // which is why spaces looked like they took forever to load, or simply
+    // never appeared after a cold start. They were loading fine; the screen
+    // was not listening.
+    val servers by app.servers.collectAsStateValue()
     val palette = LocalPalette.current
 
     var allChannels by remember { mutableStateOf<List<Channel>>(emptyList()) }
@@ -220,13 +229,14 @@ fun MainScreen(
                             onGroupSelected = { group ->
                                 shellChrome.selectedChannelId = group.id
                             },
-                            onInvite = onInvite,
-                            onMembers = onMembers,
-                            onOverflow = onOverflow,
-                            unreadForServer = unreadForServer,
-                            occupantsFor = occupantsFor,
-                            onAddServer = onAddServer,
-                            onExplore = onExplore,
+                            onInvite = { inviteFor = it },
+                            onMembers = { membersFor = it },
+                            onOverflow = { overflowFor = it },
+                            // Still unwired, but deliberately left as the
+                            // panel's own defaults rather than dead params
+                            // here: server unread counts and live voice
+                            // occupants have no source on Android yet.
+                            
                         )
                     }
                 }
@@ -290,5 +300,23 @@ fun MainScreen(
         }
 
         CallOverlay(app, shellChrome = shellChrome)
+    }
+
+    // The three sheets the space header opens.
+    inviteFor?.let { server ->
+        InviteSheet(server = server, onDismiss = { inviteFor = null })
+    }
+    membersFor?.let { server ->
+        MembersSheet(server = server, onDismiss = { membersFor = null })
+    }
+    overflowFor?.let { server ->
+        ServerOverflowSheet(
+            app = app,
+            server = server,
+            onDismiss = { overflowFor = null },
+            // Leaving a space you are looking at has to put you somewhere
+            // else, or the panel renders a server you are no longer in.
+            onLeft = { shellChrome.selectedServerId = null },
+        )
     }
 }
