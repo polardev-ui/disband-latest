@@ -61,6 +61,27 @@ object TimeFormat {
         val date = parse(string) ?: return ""
         val now = Instant.now()
         val seconds = ChronoUnit.SECONDS.between(date, now)
+        /*
+         A future date counts DOWN, not up.
+
+         `seconds` is negative for anything ahead of now, and the old first
+         branch was `if (seconds < 60) return "now"` — so every future
+         timestamp answered "now". A subscription renewing in three weeks read
+         as "renews now" on the plan card.
+
+         Message timestamps are always in the past, which is why this went
+         unnoticed until something forward-looking used it.
+        */
+        if (seconds < 0) {
+            val thatDay = LocalDate.ofInstant(date, ZoneId.systemDefault())
+            val today = LocalDate.ofInstant(now, ZoneId.systemDefault())
+            if (thatDay == today) return "today"
+            if (thatDay == today.plusDays(1)) return "tomorrow"
+            val year = LocalDate.ofInstant(now, ZoneId.systemDefault()).year
+            return thatDay.format(
+                DateTimeFormatter.ofPattern(if (thatDay.year == year) "MMM d" else "MMM d, yyyy")
+            )
+        }
         if (seconds < 60) return "now"
         if (seconds < 3600) return "${seconds / 60}m"
         val hour = ChronoUnit.HOURS.between(date, now)

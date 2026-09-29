@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.wsgpolar.disband.BuildConfig
 import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.Palette
 import com.wsgpolar.disband.core.TimeFormat
@@ -87,12 +88,17 @@ fun YouScreen(app: AppState) {
         ActivityResultContracts.RequestPermission(),
     ) { granted -> notifGranted = granted }
 
+    // Four of the six rows below were wired to `{}` or had no handler at all.
+    var showAccount by remember { mutableStateOf(false) }
+    var showAppearance by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
+
     Column(
         Modifier
             .fillMaxSize()
             .background(palette.background)
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 96.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 132.dp),
     ) {
         ScreenHeader(title = "You")
         HorizontalDivider(color = palette.divider)
@@ -174,8 +180,12 @@ fun YouScreen(app: AppState) {
         // Settings groups — icon tiles match iOS tints
         SettingsGroupCard(
             rows = listOf(
-                SettingsRow(Icons.Filled.AccountCircle, "Account", tint = palette.accent, palette = palette) {},
-                SettingsRow(Icons.Filled.Brush, "Appearance", tint = Color(0xFF9B59B6), palette = palette) {},
+                SettingsRow(Icons.Filled.AccountCircle, "Account", tint = palette.accent, palette = palette) {
+                    showAccount = true
+                },
+                SettingsRow(Icons.Filled.Brush, "Appearance", tint = Color(0xFF9B59B6), palette = palette) {
+                    showAppearance = true
+                },
             ),
             palette = palette,
         )
@@ -185,9 +195,30 @@ fun YouScreen(app: AppState) {
                 SettingsRow(Icons.Filled.Notifications, "Notifications",
                     tint = Color(0xFFF0B232), palette = palette,
                     trailing = if (!notifGranted) "Enable" else null,
-                    onClick = if (!notifGranted) ({ requestNotifs.launch(Manifest.permission.POST_NOTIFICATIONS) }) else null),
-                SettingsRow(Icons.Filled.Info, "About", tint = Color(0xFF4E5058), palette = palette),
-                SettingsRow(Icons.Filled.Language, "disband.dev", tint = Color(0xFF1ABC9C), palette = palette),
+                    onClick = {
+                        if (!notifGranted) {
+                            requestNotifs.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            // Already granted: the only thing left to offer is
+                            // the system's own per-channel controls. A row that
+                            // goes dead once permission is granted reads as
+                            // broken.
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            )
+                        }
+                    }),
+                SettingsRow(Icons.Filled.Info, "About", tint = Color(0xFF4E5058), palette = palette,
+                    trailing = BuildConfig.VERSION_NAME) { showAbout = true },
+                SettingsRow(Icons.Filled.Language, "disband.dev", tint = Color(0xFF1ABC9C), palette = palette) {
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://www.disband.dev"),
+                        )
+                    )
+                },
             ),
             palette = palette,
         )
@@ -201,6 +232,12 @@ fun YouScreen(app: AppState) {
             palette = palette,
         )
         Spacer(Modifier.height(16.dp))
+    }
+
+    if (showAccount) AccountSheet(app) { showAccount = false }
+    if (showAppearance) AppearanceSheet(app) { showAppearance = false }
+    if (showAbout) {
+        AboutSheet(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE) { showAbout = false }
     }
 }
 
