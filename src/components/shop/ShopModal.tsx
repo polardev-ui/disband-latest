@@ -7,12 +7,14 @@ import { IconClose } from "@/components/icons";
 import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
 import {
   SHOP_CATEGORIES,
+  effectivePriceCents,
   formatPrice,
   itemsIn,
   isShopItemAvailable,
   type ShopCategory,
   type ShopItem,
 } from "@/lib/shop";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface Inventory {
   owned: string[];
@@ -38,6 +40,10 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Live sale prices keyed by item id. The catalogue carries list prices;
+  // sales live in the database (public readable) so a price change never
+  // needs a client deploy. Missing entry = no sale.
+  const [sales, setSales] = useState<Map<string, number>>(new Map());
 
   const refresh = useCallback(async () => {
     try {
@@ -57,12 +63,35 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
     setBuying(null);
     setClientSecret(null);
     setTab(initialCategory);
+    void (async () => {
+      try {
+        const { data } = await getSupabaseClient()
+          .from("shop_items")
+          .select("id,sale_price_cents");
+        const next = new Map<string, number>();
+        for (const row of (data ?? []) as { id: string; sale_price_cents: number | null }[]) {
+          if (row && typeof row.sale_price_cents === "number") next.set(row.id, row.sale_price_cents);
+        }
+        setSales(next);
+      } catch {
+        // No sale data: everything renders at list price.
+      }
+    })();
   }, [open, refresh, initialCategory]);
 
   useOverlayDismiss(onClose, open && !clientSecret);
 
   const owned = useMemo(() => new Set(inventory.owned), [inventory.owned]);
-  const items = useMemo(() => itemsIn(tab).filter((item) => isShopItemAvailable(item) || owned.has(item.id)), [tab, owned]);
+  const items = useMemo(
+    () =>
+      itemsIn(tab)
+        .filter((item) => isShopItemAvailable(item) || owned.has(item.id))
+        .map((item) => {
+          const sale = sales.get(item.id);
+          return sale === undefined ? item : { ...item, salePriceCents: sale };
+        }),
+    [tab, owned, sales],
+  );
 
   if (!open) return null;
 
@@ -168,7 +197,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
         {clientSecret && buying ? (
           <div className="overflow-y-auto px-5 py-4">
             <p className="text-sm font-semibold text-text-normal">
-              {buying.name} · {formatPrice(buying.priceCents)}
+              {buying.name} · {formatPrice(effectivePriceCents(buying.priceCents, buying.salePriceCents))}
             </p>
             <p className="mt-0.5 text-[13px] text-text-muted">{buying.description}</p>
             <div className="mt-3">
@@ -263,9 +292,24 @@ function ShopCard({
 
       <div className="mt-3 flex items-baseline gap-2">
         <h3 className="text-sm font-semibold text-text-normal">{item.name}</h3>
-        <span className="ml-auto text-sm font-bold text-text-normal">
-          {formatPrice(item.priceCents)}
-        </span>
+        {(() => {
+          const sale = effectivePriceCents(item.priceCents, item.salePriceCents);
+          return sale < item.priceCents ? (
+            <span className="ml-auto flex items-center gap-1.5">
+              <span className="rounded bg-status-dnd/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-status-dnd">
+                Sale
+              </span>
+              <span className="text-[13px] text-text-muted line-through">
+                {formatPrice(item.priceCents)}
+              </span>
+              <span className="text-sm font-bold text-status-dnd">{formatPrice(sale)}</span>
+            </span>
+          ) : (
+            <span className="ml-auto text-sm font-bold text-text-normal">
+              {formatPrice(item.priceCents)}
+            </span>
+          );
+        })()}
       </div>
       <p className="mt-0.5 flex-1 text-[12px] leading-4 text-text-muted">{item.description}</p>
 
@@ -277,7 +321,7 @@ function ShopCard({
             onClick={onBuy}
             className="w-full rounded-md bg-brand px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "Opening…" : `Buy ${formatPrice(item.priceCents)}`}
+            {busy ? "Opening…" : `Buy ${formatPrice(effectivePriceCents(item.priceCents, item.salePriceCents))}`}
           </button>
         ) : equipped ? (
           <div className="w-full rounded-md bg-bg-accent px-3 py-2 text-center text-sm font-medium text-text-muted">
