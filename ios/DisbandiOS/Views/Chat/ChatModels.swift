@@ -12,6 +12,10 @@ struct DisplayMessage: Identifiable, Hashable {
     /// Original filename and byte size, for the file card and the upload row.
     var attachmentName: String? = nil
     var attachmentSize: Int? = nil
+    /// Every attachment, from the `attachments` column when there is one and
+    /// synthesised from the legacy fields when there is not — so the renderer
+    /// only ever deals with a list.
+    var attachments: [StoredAttachment] = []
     var replyToId: String?
     var createdAt: String
     var editedAt: String?
@@ -25,6 +29,7 @@ struct DisplayMessage: Identifiable, Hashable {
     init(id: String, authorId: String, author: Profile?, content: String,
          attachmentUrl: String?, attachmentType: AttachmentType?,
          attachmentName: String? = nil, attachmentSize: Int? = nil,
+         attachments: [StoredAttachment] = [],
          replyToId: String?,
          createdAt: String, editedAt: String?, pending: Bool = false,
          uploadProgress: Double? = nil,
@@ -37,6 +42,7 @@ struct DisplayMessage: Identifiable, Hashable {
         self.attachmentType = attachmentType
         self.attachmentName = attachmentName
         self.attachmentSize = attachmentSize
+        self.attachments = attachments
         self.replyToId = replyToId
         self.createdAt = createdAt
         self.editedAt = editedAt
@@ -49,6 +55,9 @@ struct DisplayMessage: Identifiable, Hashable {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
                   attachmentName: m.attachmentName, attachmentSize: m.attachmentSize,
+                  attachments: resolveAttachments(array: m.attachments, url: m.attachmentUrl,
+                                                  type: m.attachmentType, name: m.attachmentName,
+                                                  size: m.attachmentSize),
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt,
                   mentions: m.mentions)
     }
@@ -56,12 +65,18 @@ struct DisplayMessage: Identifiable, Hashable {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
                   attachmentName: m.attachmentName, attachmentSize: m.attachmentSize,
+                  attachments: resolveAttachments(array: m.attachments, url: m.attachmentUrl,
+                                                  type: m.attachmentType, name: m.attachmentName,
+                                                  size: m.attachmentSize),
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt)
     }
     init(_ m: GroupMessage) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
                   attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType,
                   attachmentName: m.attachmentName, attachmentSize: m.attachmentSize,
+                  attachments: resolveAttachments(array: m.attachments, url: m.attachmentUrl,
+                                                  type: m.attachmentType, name: m.attachmentName,
+                                                  size: m.attachmentSize),
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt)
     }
 }

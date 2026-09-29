@@ -17,6 +17,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // depends on the storefront, and the cached answer is available
             // immediately even on a cold start.
             CallKitAvailability.start()
+            // Build the CXProvider now rather than inside the PushKit
+            // callback. It is only milliseconds, but those milliseconds are
+            // spent on the one code path that has a hard deadline, and a cold
+            // start woken by a call is exactly when nothing else is warm.
+            _ = CallKitProvider.shared
             VoipPushService.shared.start()
             // Before any await that could miss one: `Transaction.updates`
             // delivers renewals, refunds, and purchases made on another
@@ -49,6 +54,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let source = notification.request.content.userInfo["source"] as? String
         if ActiveChat.shared.isShowing(source) { return [] }
         return [.banner, .sound, .badge]
+    }
+
+    /// The notification was tapped. Without this the app simply came forward
+    /// wherever it had been left — almost always the home screen, showing
+    /// every conversation except the one that was being pointed at.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
+        // Only an actual open. Dismissing a notification is not a request to
+        // go anywhere.
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else { return }
+        let source = response.notification.request.content.userInfo["source"] as? String
+        NotificationRouter.shared.handleTap(source: source)
     }
 }
 

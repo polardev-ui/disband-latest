@@ -35,6 +35,22 @@ struct AppShell: View {
         }
         .background(Brand.background.ignoresSafeArea())
         .environment(chrome)
+        // A tapped notification decides which destination is showing. The
+        // target itself is left in place for whoever can act on it — Home
+        // owns the navigation path a conversation is pushed onto, and it has
+        // to be the visible destination before it can push anything.
+        .onChange(of: NotificationRouter.shared.target) { _, target in
+            guard let target else { return }
+            switch target {
+            case .dm, .group, .channel:
+                visited.insert(.home)
+                chrome.destination = .home
+            case .friends:
+                visited.insert(.friends)
+                chrome.destination = .friends
+                _ = NotificationRouter.shared.take()
+            }
+        }
         // The minimised call sits above everything, like the system's own
         // in-call indicator, instead of competing with the dock or composer.
         .safeAreaInset(edge: .top, spacing: 0) {

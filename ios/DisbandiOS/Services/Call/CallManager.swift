@@ -79,6 +79,8 @@ final class CallManager {
 
     /// A VoIP push that reopened the app before the session was restored.
     private var pendingPush: VoipPushPayload?
+    /// A call answered from the system UI before a session was available.
+    private var pendingAnswer: IncomingCall?
 
     nonisolated(unsafe) private var didEnterBackgroundObserver: NSObjectProtocol?
     nonisolated(unsafe) private var willEnterForegroundObserver: NSObjectProtocol?
@@ -107,7 +109,19 @@ final class CallManager {
         let callKit = CallKitProvider.shared
         callKit.onAnswer = { [weak self] call in
             Task { @MainActor [weak self] in
-                await self?.acceptCall(call)
+                guard let self else { return }
+                // CallKit can be answered during a cold start woken by the
+                // push, before the Supabase session has come back from the
+                // keychain. `acceptCall` needs a user id and quietly gives up
+                // without one, which left the system call UI up and connected
+                // to nothing. Hold the answer and replay it the moment a
+                // session exists.
+                if self.app.currentUserId == nil {
+                    PushDiag.log("callkit.answer.held", "callId=\(call.callId)")
+                    self.pendingAnswer = call
+                    return
+                }
+                await self.acceptCall(call)
             }
         }
         callKit.onEnd = { [weak self] call in
@@ -147,7 +161,12 @@ final class CallManager {
     /// watchdog, and restart the in-app tone so a call that outlived the
     /// background period looks and sounds alive again.
     private func handleAppReturnedToForeground() async {
-        if let pendingPush {
+        if let pendingAnswer {
+            self.pendingAnswer = nil
+            self.pendingPush = nil
+            PushDiag.log("callkit.answer.replay", "callId=\(pendingAnswer.callId)")
+            await acceptCall(pendingAnswer)
+        } else if let pendingPush {
             await handleVoipPush(pendingPush)
         }
         switch phase {
@@ -185,7 +204,12 @@ final class CallManager {
         startListening(for: userId)
         // A VoIP push can bring the app back from a cold start before the
         // session is restored; now that it is, ring the waiting call.
-        if let pendingPush {
+        if let pendingAnswer {
+            self.pendingAnswer = nil
+            self.pendingPush = nil
+            PushDiag.log("callkit.answer.replay", "callId=\(pendingAnswer.callId)")
+            await acceptCall(pendingAnswer)
+        } else if let pendingPush {
             await handleVoipPush(pendingPush)
         }
     }
@@ -479,9 +503,23 @@ final class CallManager {
         guard p.from != uid else { return }
         switch p.type {
         case "ring" where p.callId != nil:
-            // The same call arrives twice by design: the realtime ring AND the
-            // VoIP push. If this one is already ringing, it's the duplicate.
-            if phase == .incoming, incoming?.callId == p.callId {
+            /*
+             The same call arrives more than once by design — the realtime
+             ring and the VoIP push both carry it, and the caller keeps
+             ringing until it hears back. Any of those repeats that is about
+             a call this device is ALREADY dealing with is a duplicate, not a
+             second caller.
+
+             Only the `.incoming` case was recognised. Once the call had been
+             answered the phase is `.active`, so a repeat ring for that very
+             call fell through to the busy branch below and sent the caller a
+             `reject` — telling them you declined the call you were sitting
+             in. It showed up as "declined" on the desktop moments after
+             picking up on the phone, and it was worst on a cold start, where
+             answering through CallKit takes long enough for a repeat to
+             arrive in between.
+             */
+            if p.callId == incoming?.callId || p.callId == activeCallId {
                 return
             }
             if phase != .idle {

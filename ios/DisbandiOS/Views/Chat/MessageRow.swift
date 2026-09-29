@@ -20,19 +20,11 @@ struct MessageRow: View {
     var onSpeak: () -> Void = {}
     var onDelete: () -> Void = {}
     var onToggleReaction: (String) -> Void = { _ in }
-    /// Hold-to-react tray lifecycle. The row reports its own frame (in the
-    /// `chatScroll` coordinate space) when the hold completes, then streams
-    /// the dragging finger's position, then the release point — `nil` when the
-    /// gesture was cancelled before the hold finished.
+    /// The hold completed: the row reports its own frame, in the `chatScroll`
+    /// coordinate space, so the tray can be anchored above it.
     var onHoldReactStarted: (CGRect) -> Void = { _ in }
-    var onHoldReactDrag: (CGPoint) -> Void = { _ in }
-    var onHoldReactEnded: (CGPoint?) -> Void = { _ in }
 
     @State private var dragOffset: CGFloat = 0
-    /// True between the moment a hold completes and the finger lifts, while a
-    /// reaction tray session is live. Suppresses swipe-to-reply so scrubbing
-    /// across the tray cannot drag the message aside.
-    @State private var trayActive = false
     /// The row's frame in `chatScroll` space, measured continuously so the
     /// hold-to-react tray has a live anchor when the gesture begins.
     @State private var selfFrame: CGRect = .zero
@@ -73,20 +65,31 @@ struct MessageRow: View {
                 // traffic until it was marked.
                 .background(pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
                 .offset(x: dragOffset)
-                // Exclusive, and at ORDINARY priority.
-                //
-                // `highPriorityGesture` was the cause of two separate bugs.
-                // It beats gestures declared on child views, so pressing and
-                // holding a reaction chip raised the react tray instead of
-                // opening "who reacted" — the chip's own long press never got
-                // a look in. And it outranks the enclosing ScrollView, so a
-                // hold that had already won could not then be given up to a
-                // scroll.
-                //
-                // Exclusive rather than simultaneous: a hold and a sideways
-                // swipe are different intentions and must never both run, or
-                // the message slides away under the tray.
-                .gesture(ExclusiveGesture(holdToReact, swipeToReply))
+                .gesture(swipeToReply)
+                /*
+                 Hold still on a message and the tray appears. That is the
+                 whole gesture.
+
+                 It used to be a long press sequenced into a drag, so the
+                 finger could slide straight onto an emoji. That is a nicer
+                 gesture when it works, but it owns the touch from the moment
+                 the press succeeds, and SwiftUI does not always deliver
+                 `onEnded` when the enclosing ScrollView takes the touch back
+                 — which left the tray up, and with it a `scrollDisabled` that
+                 never turned off. A chat you cannot scroll is a far worse
+                 failure than a tray you have to tap.
+
+                 `onLongPressGesture` has no such tail: it either fires once
+                 or it does not fire at all, and there is no state left behind
+                 either way. Picking an emoji is a separate tap on the tray.
+
+                 `maximumDistance` keeps it honest — move more than 10pt and
+                 the press fails, so a scroll or a reply swipe can never raise
+                 it.
+                 */
+                .onLongPressGesture(minimumDuration: 2.3, maximumDistance: 10) {
+                    onHoldReactStarted(selfFrame)
+                }
                 .background(
                     GeometryReader { geo in
                         Color.clear
@@ -226,67 +229,13 @@ struct MessageRow: View {
     private var swipeToReply: some Gesture {
         DragGesture(minimumDistance: 18)
             .onChanged { value in
-                guard !trayActive else { return }
                 if value.translation.width < 0 {
                     dragOffset = max(value.translation.width, -80)
                 }
             }
             .onEnded { value in
-                guard !trayActive else {
-                    withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
-                    return
-                }
                 if value.translation.width < -55 { onReply() }
                 withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
-            }
-    }
-
-    /**
-     Press and hold, keep holding, drag onto an emoji, let go.
-
-     One continuous touch from start to finish, which is the whole contract:
-     the tray exists only while the finger is down, and lifting anywhere that
-     is not an emoji simply closes it. It used to stay on screen after the
-     lift, waiting to be tapped, and that one decision produced every symptom
-     — a tray that would not go away, that re-aimed itself at whichever
-     message was pressed next, and that was still sitting there to catch a
-     later scroll.
-
-     The 10pt maximum distance is tight on purpose: a deliberate hold keeps
-     still, while a swipe or a flick moves past it within the first moments
-     and fails the press, so neither scrolling nor swipe-to-reply can raise
-     the tray.
-
-     The duration is a compromise and worth stating plainly. 1.5s was long
-     enough that people gave up on the gesture, but shortening it makes the
-     one case that cannot be told apart — finger down, pause, then scroll —
-     more frequent. That case is now harmless: the list is frozen while the
-     tray is up, releasing commits nothing unless an emoji is genuinely
-     highlighted, and the tray closes on release either way. So the worst
-     outcome is a brief flicker, and the gesture can afford to be responsive.
-     */
-    private var holdToReact: some Gesture {
-        LongPressGesture(minimumDuration: 0.45, maximumDistance: 10)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named("chatScroll")))
-            .onChanged { value in
-                switch value {
-                case .first(true):
-                    trayActive = true
-                    onHoldReactStarted(selfFrame)
-                case .second(true, let drag?):
-                    onHoldReactDrag(drag.location)
-                default:
-                    break
-                }
-            }
-            .onEnded { value in
-                // Whatever happened, this touch is over and so is the tray.
-                defer { trayActive = false }
-                guard case .second(true, let drag?) = value else {
-                    onHoldReactEnded(nil)
-                    return
-                }
-                onHoldReactEnded(drag.location)
             }
     }
 
@@ -301,6 +250,8 @@ struct MessageRow: View {
                 type: message.attachmentType,
                 progress: progress,
             )
+        } else if message.attachments.count > 1 {
+            multiAttachment
         } else if let urlString = message.attachmentUrl, let url = URL(string: urlString) {
             switch message.attachmentType {
             case .image, .gif:
@@ -341,6 +292,59 @@ struct MessageRow: View {
                 )
             }
         }
+    }
+
+    /**
+     A message carrying several attachments.
+
+     Images and GIFs are tiled together; anything else keeps its own card
+     underneath. A video needs its play control and a file needs its name and
+     size, and neither survives being cropped into a mosaic cell — so a mixed
+     set is a grid of the pictures with the rest listed below it, rather than
+     everything forced into one shape.
+     */
+    @ViewBuilder private var multiAttachment: some View {
+        let tiles = message.attachments.filter { $0.type == .image || $0.type == .gif }
+        let rest = message.attachments.filter { $0.type != .image && $0.type != .gif }
+
+        VStack(alignment: .leading, spacing: 6) {
+            if tiles.count > 1 {
+                AttachmentMosaic(attachments: tiles) { picked in
+                    if let url = URL(string: picked.url) {
+                        viewingMedia = ViewedMedia(url: url, kind: .image)
+                    }
+                }
+                .frame(maxWidth: 280)
+            } else if let only = tiles.first, let url = URL(string: only.url) {
+                Button { viewingMedia = ViewedMedia(url: url, kind: .image) } label: {
+                    RemoteImage(url: only.url, contentMode: .fit) {
+                        RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
+                            .frame(height: 160)
+                    }
+                    .frame(maxWidth: 260, maxHeight: 280)
+                    .clipShape(.rect(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+            }
+
+            ForEach(rest) { item in
+                if let url = URL(string: item.url) {
+                    if item.type == .video {
+                        Button { viewingMedia = ViewedMedia(url: url, kind: .video) } label: {
+                            VideoThumbnail(url: url, maxWidth: 280)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        AttachmentFileCard(
+                            url: url,
+                            name: item.name ?? url.lastPathComponent,
+                            size: item.size,
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 }
 
