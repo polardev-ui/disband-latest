@@ -24,6 +24,12 @@ export interface ShopItem {
   category: ShopCategory;
   /** Minimum $2, per product decision. */
   priceCents: number;
+  /**
+   * Live sale price from the database (`shop_items.sale_price_cents`), merged
+   * in by the storefront. Never set by hand: the server is the only writer,
+   * and checkout charges it only after revalidating it against the row.
+   */
+  salePriceCents?: number | null;
   /** The CSS class that renders it, when there is no artwork. */
   className: string;
   /**
@@ -182,4 +188,22 @@ export function effectClass(id: string | null | undefined): string {
 
 export function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/**
+ * What an item actually costs. A sale price only counts when it is positive
+ * and strictly below the regular price — anything else is treated as no
+ * sale, so a bad database value can never raise a price or zero one out.
+ * Checkout re-runs this same check server-side; the client copy is display.
+ */
+export function effectivePriceCents(priceCents: number, salePriceCents: number | null | undefined): number {
+  if (
+    typeof salePriceCents === "number" &&
+    Number.isSafeInteger(salePriceCents) &&
+    salePriceCents > 0 &&
+    salePriceCents < priceCents
+  ) {
+    return salePriceCents;
+  }
+  return priceCents;
 }

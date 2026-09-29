@@ -3,7 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { isShopItemAvailable, shopItem } from "@/lib/shop";
+import { effectivePriceCents, isShopItemAvailable, shopItem } from "@/lib/shop";
 
 /**
  * Buy one shop cosmetic.
@@ -37,13 +37,19 @@ export async function POST(req: Request) {
 
     const { data: item } = await supabase
       .from("shop_items")
-      .select("id, name, description, price_cents, active")
+      .select("id, name, description, price_cents, sale_price_cents, active")
       .eq("id", item_id)
       .maybeSingle();
 
     if (!item || item.active === false) {
       return NextResponse.json({ error: "That item is no longer available." }, { status: 404 });
     }
+
+    // Charge the live sale price when the row has a valid one. Revalidated
+    // here (not trusted from the client) so a crafted request cannot set its
+    // own price — effectivePriceCents rejects anything that is not positive
+    // and strictly below the regular price.
+    const chargeCents = effectivePriceCents(item.price_cents, item.sale_price_cents);
 
     // Cosmetics are permanent, so a second purchase would take money for
     // nothing. Checked here as well as in the webhook's upsert.
@@ -68,7 +74,7 @@ export async function POST(req: Request) {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: item.price_cents,
+            unit_amount: chargeCents,
             product_data: {
               name: `Disband Shop — ${item.name}`,
               description: item.description,
@@ -86,7 +92,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       clientSecret: session.client_secret,
-      unitAmount: item.price_cents,
+      unitAmount: chargeCents,
+      listAmount: item.price_cents,
       currency: "usd",
     });
   } catch (err) {
