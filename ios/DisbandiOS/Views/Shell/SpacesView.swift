@@ -16,6 +16,8 @@ struct SpacesView: View {
     @State private var showCreate = false
     @State private var showDiscover = false
 
+    private var router: NotificationRouter { NotificationRouter.shared }
+
     @AppStorage("disband.lastSpace") private var lastSpace = ""
 
     var body: some View {
@@ -53,6 +55,11 @@ struct SpacesView: View {
             }
         }
         .task { await loadServers() }
+        // A tapped notification lands here: this view owns the navigation
+        // path, so it is the only place that can actually open the thing the
+        // notification was about.
+        .onChange(of: router.target) { _, _ in openPendingNotification() }
+        .onAppear { openPendingNotification() }
         .onChange(of: selection) { _, next in
             if case .server(let id) = next { lastSpace = id } else { lastSpace = "" }
         }
@@ -90,6 +97,50 @@ struct SpacesView: View {
     private var voiceServerId: String? {
         if case .channel(_, _, let serverId, _, _) = voice.room { return serverId }
         return nil
+    }
+
+    /**
+     Open whatever a tapped notification pointed at.
+
+     The path is reset first. Tapping a notification while already reading a
+     different conversation would otherwise stack one chat on top of another,
+     and backing out would walk through screens the reader never chose to
+     visit.
+
+     A DM's title comes from the cached thread list when it is there and falls
+     back to a neutral one when it is not — a notification can arrive for a
+     conversation this device has never listed, and waiting on a name before
+     opening the chat would be a worse trade than a plain title for a moment.
+     */
+    private func openPendingNotification() {
+        guard let target = router.take() else { return }
+
+        path = NavigationPath()
+
+        switch target {
+        case .dm(let threadId):
+            selection = .inbox
+            let title = vm.threads.first { $0.id == threadId }?.friend?.name ?? "Direct Message"
+            let peer = vm.threads.first { $0.id == threadId }?.friend
+            path.append(SpacesRoute.chat(.dm(threadId: threadId, title: title),
+                                         callPeer: peer, canModerate: false))
+
+        case .group(let id, let name):
+            selection = .inbox
+            path.append(SpacesRoute.chat(.group(id: id, name: name),
+                                         callPeer: nil, canModerate: false))
+
+        case .channel(let serverId, let channelId, let name):
+            // Switching the rail to the server first means backing out of the
+            // channel leaves you in that space, which is where you were sent.
+            selection = .server(serverId)
+            path.append(SpacesRoute.chat(.channel(id: channelId, name: name),
+                                         callPeer: nil, canModerate: false))
+
+        case .friends:
+            // Not this view's to handle; the shell moves tabs for it.
+            break
+        }
     }
 
     private func loadServers() async {

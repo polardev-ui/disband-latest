@@ -310,6 +310,96 @@ final class ChatViewModel {
         }
     }
 
+    /**
+     Upload several images and send them as one message.
+
+     Sequential, like the web's `uploadAttachments`, and for the same reason:
+     ten concurrent uploads of phone-sized photos saturate an ordinary
+     connection, make every one of them slow, and turn the progress number
+     into noise. One placeholder row tracks the whole set — progress runs
+     across all of them, so the bar moves steadily instead of resetting ten
+     times.
+
+     A failure part-way keeps what already landed rather than discarding it:
+     the message goes out with the images that uploaded, and the rest are
+     reported. Throwing the lot away would mean a dropped connection on the
+     tenth photo costs the other nine.
+     */
+    func uploadAndSendAttachments(
+        items: [(data: Data, filename: String, mimeType: String, type: AttachmentType)],
+        caption: String = "",
+        replyToId: String? = nil,
+        authorId: String,
+    ) async {
+        guard !items.isEmpty else { return }
+        if items.count == 1 {
+            let only = items[0]
+            await uploadAndSendAttachment(
+                data: only.data, filename: only.filename, mimeType: only.mimeType,
+                type: only.type, caption: caption, replyToId: replyToId, authorId: authorId)
+            return
+        }
+
+        let placeholderId = "uploading-\(UUID().uuidString)"
+        let totalBytes = items.reduce(0) { $0 + $1.data.count }
+        messages.append(DisplayMessage(
+            id: placeholderId, authorId: authorId, author: currentUserProfile,
+            content: caption.trimmingCharacters(in: .whitespacesAndNewlines),
+            attachmentUrl: nil, attachmentType: items[0].type,
+            attachmentName: "\(items.count) images", attachmentSize: totalBytes,
+            replyToId: replyToId,
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            editedAt: nil, pending: true, uploadProgress: 0,
+        ))
+
+        var uploaded: [StoredAttachment] = []
+        var failure: Error?
+
+        for (index, item) in items.enumerated() {
+            do {
+                let result = try await MediaService.uploadImage(
+                    item.data, filename: item.filename, mimeType: item.mimeType,
+                    onProgress: { [weak self] fraction in
+                        Task { @MainActor in
+                            guard let self,
+                                  let i = self.messages.firstIndex(where: { $0.id == placeholderId })
+                            else { return }
+                            // Across the whole set, not this one file.
+                            self.messages[i].uploadProgress =
+                                (Double(index) + fraction) / Double(items.count)
+                        }
+                    },
+                )
+                uploaded.append(StoredAttachment(
+                    url: result.url, key: result.key, type: item.type,
+                    name: item.filename, size: item.data.count))
+            } catch {
+                failure = error
+                break
+            }
+        }
+
+        messages.removeAll { $0.id == placeholderId }
+
+        guard !uploaded.isEmpty else {
+            loadError = failure?.localizedDescription ?? "Couldn't upload those images."
+            return
+        }
+
+        do {
+            _ = try await DatabaseService.sendMessageWithAttachments(
+                source: source, authorId: authorId,
+                content: caption.trimmingCharacters(in: .whitespacesAndNewlines),
+                attachments: uploaded, replyToId: replyToId)
+            await load()
+            if failure != nil {
+                loadError = "Sent \(uploaded.count) of \(items.count) — the rest didn't upload."
+            }
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
     /// Sends a video picked from Photos: converted to MP4 so every client can
     /// play it, then streamed up from disk. The progress card covers both
     /// steps — conversion is the first 30%, the upload the rest.

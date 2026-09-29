@@ -37,7 +37,7 @@ struct ChatView: View {
     }
     @State private var showGifPicker = false
     @State private var showPhotoPicker = false
-    @State private var photoItem: PhotosPickerItem?
+    @State private var photoItems: [PhotosPickerItem] = []
     @State private var openProfile: Profile?
     /// Set while a tapped mention is being looked up, so the sheet can show
     /// something immediately rather than after a round trip.
@@ -53,7 +53,6 @@ struct ChatView: View {
 
     // Hold-to-react tray state, all in the `chatScroll` coordinate space.
     @State private var reactTrayAnchor: CGRect = .zero
-    @State private var reactHoverEmoji: String?
     @State private var showTrayMenu = false
     @State private var trayMenuTarget: DisplayMessage?
     /// The emoji flying from the tray to the message, while the morph plays.
@@ -192,11 +191,15 @@ struct ChatView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem,
+        // Up to ten, matching the database constraint and the web composer.
+        // A video still travels alone: it needs converting and streaming from
+        // disk, which does not belong in a batch of photos.
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems,
+                      maxSelectionCount: maxAttachments,
                       matching: .any(of: [.images, .videos]))
-        .onChange(of: photoItem) { _, item in
-            guard let item else { return }
-            Task { await uploadAndSend(item) }
+        .onChange(of: photoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await uploadAndSend(items) }
         }
     }
 
@@ -293,9 +296,7 @@ struct ChatView: View {
                                 onToggleReaction: { emoji in
                                     Task { await model.toggleReaction(messageId: message.id, emoji: emoji) }
                                 },
-                                onHoldReactStarted: { frame in holdReactStarted(frame, message: message) },
-                                onHoldReactDrag: { point in holdReactDrag(point) },
-                                onHoldReactEnded: { point in holdReactEnded(point) }
+                                onHoldReactStarted: { frame in holdReactStarted(frame, message: message) }
                             )
                             .id(message.id)
                         }
@@ -311,11 +312,6 @@ struct ChatView: View {
                     )
                 }
             }
-            // Frozen while the tray is up. The tray is anchored to where the
-            // row was when the hold completed, so a list that kept moving
-            // would slide the message out from under its own tray — and would
-            // drag the finger across cells it was never aimed at.
-            .scrollDisabled(reactingMessage != nil)
             .coordinateSpace(name: "chatScroll")
             .background(
                 GeometryReader { geo in
@@ -367,9 +363,6 @@ struct ChatView: View {
     private static let trayPadH: CGFloat = 6
     /// How far above the held row the tray floats, so emoji clear the finger.
     private static let trayRise: CGFloat = 50
-    /// How far a hovered cell lifts out of the tray. Its hit frame rides up
-    /// with it, or the selection area would stay below the raised emoji.
-    private static let trayHoverLift: CGFloat = -18
 
     private var trayKeys: [String] { quickReactions + [trayMoreKey] }
 
@@ -391,72 +384,67 @@ struct ChatView: View {
         )
     }
 
-    /// Hit area of every cell, in `chatScroll` space. Generous by 9pt so the
-    /// gaps between cells do not drop the hover as a finger crosses them.
-    private func trayHitFrames(for anchor: CGRect, hovered: String?) -> [String: CGRect] {
-        let centre = trayCentre(for: anchor)
-        let left = centre.x - trayWidth / 2 + Self.trayPadH
-        var out: [String: CGRect] = [:]
-        for (i, key) in trayKeys.enumerated() {
-            let x = left + CGFloat(i) * (Self.trayCellW + Self.trayGap)
-            var rect = CGRect(x: x, y: centre.y - Self.trayCellW / 2,
-                              width: Self.trayCellW, height: Self.trayCellW)
-                .insetBy(dx: -9, dy: -9)
-            if key == hovered { rect = rect.offsetBy(dx: 0, dy: Self.trayHoverLift) }
-            out[key] = rect
-        }
-        return out
-    }
+    /**
+     The reaction tray: a row of emoji pinned above the message that was held.
 
-    /// The reaction tray: pinned dead-centre above the spot the row was held,
-/// always in the same place no matter where the finger wanders afterwards.
-/// Only the hovered emoji responds, popping up out of the tray. It floats in
-/// the message list's `chatScroll` space — the same space the row's frame and
-/// the drag points are reported in — so hit-testing is exact.
+     Tappable, and sitting on a backdrop that covers the list. Both matter.
+     The tray is raised by a press that has already ended, so there is no
+     finger left holding it — it has to be able to take a tap of its own, and
+     there has to be somewhere to tap to get rid of it.
+
+     The backdrop also swallows drags. The tray is anchored to where the row
+     was when the hold completed, so a list scrolling underneath would slide
+     the message away from its own tray. Absorbing the pan here holds the list
+     still WITHOUT a `scrollDisabled` flag — which is what broke scrolling
+     outright, because the flag outlived a gesture that did not always report
+     its own end. A backdrop cannot get stuck: it exists exactly as long as
+     the tray does, and tapping it dismisses both.
+     */
     @ViewBuilder private var reactionTray: some View {
-        if reactingMessage != nil {
-            HStack(spacing: Self.trayGap) {
-                ForEach(quickReactions, id: \.self) { emoji in
-                    trayCell(emoji: emoji, hovered: reactHoverEmoji == emoji)
+        if let target = reactingMessage {
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissTray() }
+                    .gesture(DragGesture(minimumDistance: 0))
+
+                HStack(spacing: Self.trayGap) {
+                    ForEach(quickReactions, id: \.self) { emoji in
+                        trayCell(emoji: emoji) {
+                            flyReaction(emoji: emoji, to: target,
+                                        from: trayCentre(for: reactTrayAnchor))
+                            dismissTray()
+                        }
+                    }
+                    trayCell(emoji: "⋯") {
+                        trayMenuTarget = target
+                        showTrayMenu = true
+                        dismissTray()
+                    }
                 }
-                trayCell(emoji: "⋯", hovered: reactHoverEmoji == trayMoreKey)
+                .padding(.horizontal, Self.trayPadH)
+                .padding(.vertical, 10)
+                .background(Brand.elevated, in: .capsule)
+                .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+                .position(
+                    x: trayCentre(for: reactTrayAnchor).x,
+                    y: trayCentre(for: reactTrayAnchor).y
+                )
             }
-            .padding(.horizontal, Self.trayPadH)
-            .padding(.vertical, 10)
-            .background(Brand.elevated, in: .capsule)
-            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
-            // Positioned from the SAME numbers the hit frames are computed
-            // from, so what is drawn and what is hit-tested cannot disagree.
-            .position(
-                x: trayCentre(for: reactTrayAnchor).x,
-                y: trayCentre(for: reactTrayAnchor).y
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // The tray is purely a display. It only exists while a finger is
-            // down, and that finger already belongs to the row's drag
-            // gesture, so taking touches here could only steal them from the
-            // gesture that is driving it.
-            .allowsHitTesting(false)
-            .transition(.scale(scale: 0.7, anchor: .bottom).combined(with: .opacity))
+            .transition(.opacity)
         }
     }
 
-    /// One reaction (or the "⋯" cell) in the tray. Display only — the tray
-    /// exists solely under a finger that already belongs to the row's drag
-    /// gesture, so it never takes a touch of its own.
-    ///
-    /// The hovered cell "genies": scales up and lifts clear of the tray so it
-    /// reads above the finger with a soft shadow.
-    private func trayCell(emoji: String, hovered: Bool) -> some View {
-        Text(emoji)
-            .font(.system(size: 20))
-            .frame(width: Self.trayCellW, height: Self.trayCellW)
-            .background(hovered ? Brand.accent.opacity(0.3) : Color.clear, in: .circle)
-            .scaleEffect(hovered ? 1.6 : 1, anchor: .center)
-            .offset(y: hovered ? Self.trayHoverLift : 0)
-            .shadow(color: .black.opacity(hovered ? 0.35 : 0), radius: 8, y: 6)
-            .zIndex(hovered ? 10 : 0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.6), value: hovered)
+    /// One reaction, or the "⋯" cell. A plain button: the tray is tapped, not
+    /// dragged across, so there is no hover state to track.
+    private func trayCell(emoji: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(emoji)
+                .font(.system(size: 20))
+                .frame(width: Self.trayCellW, height: Self.trayCellW)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// The committed emoji flying from the tray to the message row while the
@@ -483,58 +471,13 @@ struct ChatView: View {
     /// The hold completed: anchor the tray above the row and show it.
     private func holdReactStarted(_ frame: CGRect, message: DisplayMessage) {
         reactTrayAnchor = frame
-        reactHoverEmoji = nil
         withAnimation(.easeOut(duration: 0.12)) { reactingMessage = message }
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-    }
-
-    /// The finger moved: highlight the cell under it, ticking haptics
-    /// whenever the hovered emoji changes. Cells report generously-sized
-    /// (and, when hovered, popped-up) frames, so a small grace inset suffices.
-    private func holdReactDrag(_ point: CGPoint) {
-        let hit = trayHitFrames(for: reactTrayAnchor, hovered: reactHoverEmoji)
-            .first { $0.value.contains(point) }?
-            .key
-        if hit != reactHoverEmoji {
-            reactHoverEmoji = hit
-            if hit != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-        }
-    }
-
-    /// The finger lifted: commit the hovered reaction (morph + toggle) or the
-    /// ⋯ menu; anything else leaves the tray up for a plain tap instead of
-    /// fading it away.
-    /// The finger lifted. Commit the emoji that was highlighted at that
-    /// moment — and nothing else.
-    ///
-    /// The release point used to be hit-tested afresh, which could commit an
-    /// emoji the reader had never seen light up: a finger sliding across the
-    /// tray on its way somewhere else lands on *a* cell, and that was taken
-    /// as a choice. Reading `reactHoverEmoji` instead means what commits is
-    /// exactly what was under the finger and visibly raised, and a release
-    /// anywhere else is simply not a choice.
-    ///
-    /// This is also the guard that makes an accidental tray harmless: a hold
-    /// that turned into a scroll drags the finger well clear of the tray, the
-    /// hover clears on the way out, and the lift commits nothing.
-    private func holdReactEnded(_ point: CGPoint?) {
-        defer { dismissTray() }
-        guard let target = reactingMessage, point != nil,
-              let hovered = reactHoverEmoji else { return }
-
-        if hovered == trayMoreKey {
-            trayMenuTarget = target
-            showTrayMenu = true
-            return
-        }
-        guard let frame = trayHitFrames(for: reactTrayAnchor, hovered: hovered)[hovered] else { return }
-        flyReaction(emoji: hovered, to: target, from: CGPoint(x: frame.midX, y: frame.midY))
     }
 
     private func dismissTray() {
         withAnimation(.easeOut(duration: 0.15)) {
             reactingMessage = nil
-            reactHoverEmoji = nil
         }
     }
 
@@ -622,32 +565,43 @@ struct ChatView: View {
                                           replyToId: reply, authorId: uid) }
     }
 
-    private func uploadAndSend(_ item: PhotosPickerItem) async {
+    private func uploadAndSend(_ items: [PhotosPickerItem]) async {
         guard let uid = app.currentUserId else { return }
         let reply = replyingTo?.id
-        defer { photoItem = nil }
+        defer { photoItems = [] }
         withAnimation { replyingTo = nil }
 
         // Videos travel as files, never as one big `Data`: see `PickedMovie`.
-        if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
-            guard let movie = try? await item.loadTransferable(type: PickedMovie.self) else {
+        // Each is its own message — a video and a photo grid are different
+        // things to look at, and the mosaic has no cell shape that keeps a
+        // play control.
+        let videos = items.filter { item in
+            item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+        }
+        for video in videos {
+            guard let movie = try? await video.loadTransferable(type: PickedMovie.self) else {
                 model.loadError = "Couldn't open that video."
-                return
+                continue
             }
             await model.uploadAndSendVideo(source: movie.url, replyToId: reply, authorId: uid)
-            return
         }
 
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        let photos = items.filter { !videos.contains($0) }
+        guard !photos.isEmpty else { return }
+
+        var payloads: [(data: Data, filename: String, mimeType: String, type: AttachmentType)] = []
+        for (index, photo) in photos.enumerated() {
+            guard let data = try? await photo.loadTransferable(type: Data.self) else { continue }
+            // Numbered so a set does not arrive as ten files all called
+            // "image.jpg", which is what the file card would show.
+            payloads.append((data, photos.count == 1 ? "image.jpg" : "image-\(index + 1).jpg",
+                             "image/jpeg", .image))
+        }
+        guard !payloads.isEmpty else { return }
+
         // The progress row lives in the conversation, so the composer stays
         // usable while it uploads.
-        await model.uploadAndSendAttachment(
-            data: data,
-            filename: "image.jpg",
-            mimeType: "image/jpeg",
-            type: .image,
-            replyToId: reply,
-            authorId: uid,
-        )
+        await model.uploadAndSendAttachments(
+            items: payloads, replyToId: reply, authorId: uid)
     }
 }

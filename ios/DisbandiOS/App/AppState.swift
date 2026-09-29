@@ -90,6 +90,9 @@ final class AppState {
         PushManager.shared.registerIfAuthorized()
         await PushManager.shared.flushToken()
         await VoipPushService.shared.flushToken()
+        // A tap that launched the app from cold arrives before any session
+        // exists, and the lookup that turns it into a destination needs one.
+        await NotificationRouter.shared.resolvePending()
     }
 
     private func mfaChallengeRequired() async -> Bool {

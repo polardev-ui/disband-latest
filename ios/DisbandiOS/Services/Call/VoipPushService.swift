@@ -159,20 +159,56 @@ didReceiveIncomingPushWith payload: PKPushPayload,
         handle(payload: payload)
     }
 
+    /**
+     Ring CallKit **here**, synchronously, before anything else.
+
+     This is not a style choice — it is the one hard rule PushKit has. Since
+     iOS 13, an app that receives a VoIP push must call
+     `reportNewIncomingCall` before it returns from the delegate method. Miss
+     the deadline and iOS kills the process; miss it repeatedly and the system
+     stops delivering VoIP pushes to the app altogether, permanently, which
+     looks from the outside exactly like "CallKit just doesn't work any more".
+
+     Disband was missing it two different ways. The payload was handed to
+     `CallManager.handleVoipPush` inside a `Task`, so the report always landed
+     on a later run-loop turn, after this method had already returned. And
+     that method opens with `guard app.currentUserId != nil`, stashing the
+     push when no session has been restored yet — so a cold start woken *by*
+     the push, the exact case PushKit exists for, reported nothing at all.
+
+     Everything the system ring needs is in the payload: who is calling, what
+     the call is, what to name it. No session, no network, no await. So the
+     report is made from the payload alone and the rest of the work — matching
+     the call to a profile, setting up WebRTC, reconciling with a realtime
+     ring that may have arrived first — happens afterwards, where being slow
+     is allowed.
+     */
     private func handle(payload: PKPushPayload) {
         let dict = payload.dictionaryPayload
         guard let callId = dict["callId"] as? String,
               let from = dict["from"] as? String else {
             PushDiag.log("voip.push.badpayload", "missing callId/from: \(dict)")
+            // Still a violation to report nothing, but there is no call to
+            // report: a payload without an id cannot be answered or ended.
             return
         }
-        PushDiag.log("voip.push.parsed", "callId=\(callId)")
-        onReceiveIncomingPush?(VoipPushPayload(
+        let parsed = VoipPushPayload(
             callId: callId,
             from: from,
             callerName: dict["callerName"] as? String ?? "Disband call",
             type: dict["type"] as? String ?? "voice"
-        ))
+        )
+        PushDiag.log("voip.push.parsed", "callId=\(callId)")
+
+        // The report, before any hand-off. `presentIncomingCall` is
+        // synchronous up to CallKit's own completion handler.
+        if !CallKitProvider.shared.isPresented(callId: callId) {
+            CallKitProvider.shared.presentIncomingCall(
+                IncomingCall(fromId: from, callerName: parsed.callerName, callId: callId)
+            )
+        }
+
+        onReceiveIncomingPush?(parsed)
     }
 
     /**

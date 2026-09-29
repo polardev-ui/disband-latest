@@ -187,6 +187,54 @@ enum DatabaseService {
         return row.id
     }
 
+    /**
+     Send one message carrying several attachments.
+
+     The array goes in `attachments` AND the first one is mirrored into the
+     legacy `attachment_*` columns. The mirror is not redundant: older clients
+     — and the ones that never learn about the array — read only those, so
+     without it a five-image message arrives as an empty bubble on anything
+     that has not been updated. The web writes the same pair for the same
+     reason (`legacyColumns` in `src/lib/message-attachments.ts`).
+     */
+    static func sendMessageWithAttachments(
+        source: ChatSource, authorId: String, content: String,
+        attachments: [StoredAttachment], replyToId: String? = nil
+    ) async throws -> String {
+        let first = attachments.first
+        let row: InsertedId
+        switch source {
+        case .channel(let id, _):
+            let payload = NewMessage(
+                channelId: id, authorId: authorId, content: content,
+                attachmentUrl: first?.url, attachmentType: first?.type.rawValue,
+                attachmentKey: first?.key, attachmentName: first?.name,
+                attachmentSize: first?.size, attachments: attachments,
+                replyToId: replyToId)
+            row = try await client.from("messages").insert(payload)
+                .select("id").single().execute().value
+        case .dm(let threadId, _):
+            let payload = NewDmMessage(
+                threadId: threadId, authorId: authorId, content: content,
+                attachmentUrl: first?.url, attachmentType: first?.type.rawValue,
+                attachmentKey: first?.key, attachmentName: first?.name,
+                attachmentSize: first?.size, attachments: attachments,
+                replyToId: replyToId)
+            row = try await client.from("dm_messages").insert(payload)
+                .select("id").single().execute().value
+        case .group(let id, _):
+            let payload = NewGroupMessage(
+                groupId: id, authorId: authorId, content: content,
+                attachmentUrl: first?.url, attachmentType: first?.type.rawValue,
+                attachmentKey: first?.key, attachmentName: first?.name,
+                attachmentSize: first?.size, attachments: attachments,
+                replyToId: replyToId)
+            row = try await client.from("group_messages").insert(payload)
+                .select("id").single().execute().value
+        }
+        return row.id
+    }
+
     static func message(byId id: String) async throws -> Message {
         try await client.from("messages").select(authorEmbed)
             .eq("id", value: id).single().execute().value
@@ -685,6 +733,13 @@ struct NewMessage: Encodable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentKey: String?
+    /// Original filename and byte size of the first attachment, so a client
+    /// that only reads the legacy columns still shows a proper file card.
+    var attachmentName: String? = nil
+    var attachmentSize: Int? = nil
+    /// Every attachment. Nil for a single-attachment send, so the column is
+    /// left alone and behaves exactly as it did before.
+    var attachments: [StoredAttachment]? = nil
     let replyToId: String?
     enum CodingKeys: String, CodingKey {
         case content
@@ -693,6 +748,9 @@ struct NewMessage: Encodable {
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
         case attachmentKey = "attachment_key"
+        case attachmentName = "attachment_name"
+        case attachmentSize = "attachment_size"
+        case attachments
         case replyToId = "reply_to_id"
     }
 }
@@ -704,6 +762,13 @@ struct NewDmMessage: Encodable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentKey: String?
+    /// Original filename and byte size of the first attachment, so a client
+    /// that only reads the legacy columns still shows a proper file card.
+    var attachmentName: String? = nil
+    var attachmentSize: Int? = nil
+    /// Every attachment. Nil for a single-attachment send, so the column is
+    /// left alone and behaves exactly as it did before.
+    var attachments: [StoredAttachment]? = nil
     let replyToId: String?
     enum CodingKeys: String, CodingKey {
         case content
@@ -712,6 +777,9 @@ struct NewDmMessage: Encodable {
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
         case attachmentKey = "attachment_key"
+        case attachmentName = "attachment_name"
+        case attachmentSize = "attachment_size"
+        case attachments
         case replyToId = "reply_to_id"
     }
 }
@@ -723,6 +791,13 @@ struct NewGroupMessage: Encodable {
     let attachmentUrl: String?
     let attachmentType: String?
     let attachmentKey: String?
+    /// Original filename and byte size of the first attachment, so a client
+    /// that only reads the legacy columns still shows a proper file card.
+    var attachmentName: String? = nil
+    var attachmentSize: Int? = nil
+    /// Every attachment. Nil for a single-attachment send, so the column is
+    /// left alone and behaves exactly as it did before.
+    var attachments: [StoredAttachment]? = nil
     let replyToId: String?
     enum CodingKeys: String, CodingKey {
         case content
@@ -731,6 +806,9 @@ struct NewGroupMessage: Encodable {
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
         case attachmentKey = "attachment_key"
+        case attachmentName = "attachment_name"
+        case attachmentSize = "attachment_size"
+        case attachments
         case replyToId = "reply_to_id"
     }
 }

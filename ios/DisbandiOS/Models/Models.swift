@@ -224,6 +224,9 @@ struct Message: Codable, Identifiable, Hashable {
     var attachmentType: AttachmentType?
     var attachmentName: String?
     var attachmentSize: Int?
+    /// Every attachment on the message. The legacy `attachment*` fields
+    /// above mirror the first one for clients that predate this column.
+    var attachments: [StoredAttachment]?
     var replyToId: String?
     var mentions: [String]?
     let createdAt: String
@@ -238,6 +241,7 @@ struct Message: Codable, Identifiable, Hashable {
         case attachmentType = "attachment_type"
         case attachmentName = "attachment_name"
         case attachmentSize = "attachment_size"
+        case attachments
         case replyToId = "reply_to_id"
         case createdAt = "created_at"
         case editedAt = "edited_at"
@@ -274,6 +278,9 @@ struct DmMessage: Codable, Identifiable, Hashable {
     var attachmentType: AttachmentType?
     var attachmentName: String?
     var attachmentSize: Int?
+    /// Every attachment on the message. The legacy `attachment*` fields
+    /// above mirror the first one for clients that predate this column.
+    var attachments: [StoredAttachment]?
     var replyToId: String?
     let createdAt: String
     var editedAt: String?
@@ -287,6 +294,7 @@ struct DmMessage: Codable, Identifiable, Hashable {
         case attachmentType = "attachment_type"
         case attachmentName = "attachment_name"
         case attachmentSize = "attachment_size"
+        case attachments
         case replyToId = "reply_to_id"
         case createdAt = "created_at"
         case editedAt = "edited_at"
@@ -320,6 +328,9 @@ struct GroupMessage: Codable, Identifiable, Hashable {
     var attachmentType: AttachmentType?
     var attachmentName: String?
     var attachmentSize: Int?
+    /// Every attachment on the message. The legacy `attachment*` fields
+    /// above mirror the first one for clients that predate this column.
+    var attachments: [StoredAttachment]?
     var replyToId: String?
     let createdAt: String
     var editedAt: String?
@@ -333,6 +344,7 @@ struct GroupMessage: Codable, Identifiable, Hashable {
         case attachmentType = "attachment_type"
         case attachmentName = "attachment_name"
         case attachmentSize = "attachment_size"
+        case attachments
         case replyToId = "reply_to_id"
         case createdAt = "created_at"
         case editedAt = "edited_at"

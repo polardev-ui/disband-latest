@@ -29,6 +29,17 @@ pnpm-debug.log*
 .env
 .env*.local
 
+# Service-account and signing keys. This repository is public: a Google
+# service account key committed here is a live credential for FCM and
+# anything else that project can reach, and an App Store .p8 signs receipt
+# lookups. `android/service-account.json` was sitting untracked and
+# unignored, one `git add -A` away from being published.
+android/service-account.json
+**/service-account*.json
+*.p8
+*.keystore
+*.jks
+
 # vercel
 .vercel
 
