@@ -173,7 +173,20 @@ fun MainScreen(
                 dmThreads = runCatching { Database.myDmThreads(currentUserId) }
                     .getOrDefault(dmThreads)
             }
-            shellChrome.selectedChannelId = threadId
+            /*
+             Switch tab as well as thread.
+
+             Setting `selectedChannelId` alone opened the conversation while
+             the Friends tab was still the visible destination — the chat
+             screen called hidesDock(), so the dock disappeared and the friend
+             list stayed on screen looking broken, with the DM rendered
+             underneath where nobody could see it. Tapping the message button
+             on a friend simply appeared to do nothing.
+
+             `navigateTo` moves to Home with no server selected, which is the
+             inbox, and points it at the thread.
+            */
+            shellChrome.navigateTo(Destination.Home, serverId = null, channelId = threadId)
         }
     }
 
