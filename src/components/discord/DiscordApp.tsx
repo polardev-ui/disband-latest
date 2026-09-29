@@ -1521,6 +1521,7 @@ export function DiscordApp() {
                     }}
                     onGroupContext={handleGroupContext}
                     onOpenSubscription={() => setSubscriptionOpen(true)}
+                    onOpenShop={() => setShopOpen(true)}
                   />
                 </div>
               ) : (
