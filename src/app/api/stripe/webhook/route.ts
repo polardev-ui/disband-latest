@@ -180,7 +180,7 @@ export async function POST(req: Request) {
         const subId = session.subscription as string;
         const customerId = session.customer as string;
 
-        if (userId && plan === "aero" && subId) {
+        if (userId && (plan === "aero" || plan === "lite") && subId) {
           const sub = await getStripe().subscriptions.retrieve(subId);
           const periods = extractSubscriptionPeriods(sub);
           await upsertSubscription(
@@ -206,7 +206,7 @@ export async function POST(req: Request) {
           const meta = getMetadata(sub);
           const userId = meta.user_id;
           const plan = meta.plan ? normalizePlan(meta.plan) : undefined;
-          if (userId && plan === "aero") {
+          if (userId && (plan === "aero" || plan === "lite")) {
             const periods = extractSubscriptionPeriods(sub);
             await upsertSubscription(
               userId,
@@ -232,7 +232,7 @@ export async function POST(req: Request) {
 
         if (updatedSub.status === "canceled" || updatedSub.status === "unpaid" || updatedSub.status === "incomplete_expired") {
           await cancelSubscription(updatedSub.id);
-        } else if (userId2 && plan2 === "aero") {
+        } else if (userId2 && (plan2 === "aero" || plan2 === "lite")) {
           const periods = extractSubscriptionPeriods(updatedSub);
           await upsertSubscription(
             userId2,

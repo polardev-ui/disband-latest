@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     const { plan, months } = (await req.json()) as { plan?: unknown; months?: unknown };
     if (!isGiftPlan(plan)) {
-      return NextResponse.json({ error: "Pick Basic or Super." }, { status: 400 });
+      return NextResponse.json({ error: "Pick Aero or Lite." }, { status: 400 });
     }
     if (!isGiftMonths(months)) {
       return NextResponse.json(

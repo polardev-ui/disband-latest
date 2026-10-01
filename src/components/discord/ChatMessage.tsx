@@ -26,6 +26,7 @@ import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
 import { GiftCard } from "@/components/gift/GiftCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
+import { GifLinkEmbed, LinkedMedia, classifyLinkUrl } from "./LinkMediaEmbed";
 import { MessageAttachment } from "./MessageAttachment";
 import { AttachmentUploadCard } from "./AttachmentUploadCard";
 import { MessageReactions } from "./MessageReactions";
@@ -164,9 +165,21 @@ function MessageBody({  content,
       {giftCodes.map((code) => (
         <GiftCard key={code} code={code} onLoad={onContentResize} />
       ))}
-      {previewUrls.map((url) => (
-        <LinkPreviewCard key={url} url={url} onLoad={onContentResize} />
-      ))}
+      {previewUrls.map((url) => {
+        const kind = classifyLinkUrl(url);
+        if (kind === "gif") {
+          return <GifLinkEmbed key={url} url={url} onLoad={onContentResize} />;
+        }
+        if (kind === "video" || kind === "image") {
+          return (
+            <div key={url}>
+              <LinkPreviewCard url={url} onLoad={onContentResize} />
+              <LinkedMedia url={url} kind={kind} onLoad={onContentResize} />
+            </div>
+          );
+        }
+        return <LinkPreviewCard key={url} url={url} onLoad={onContentResize} />;
+      })}
     </>
   );
 }

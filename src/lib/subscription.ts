@@ -1,11 +1,15 @@
 
-export type SubscriptionPlan = "free" | "aero";
+export type SubscriptionPlan = "free" | "lite" | "aero";
 
 export type LegacyPlanName = SubscriptionPlan | "basic" | "super";
 
 export function normalizePlan(plan: string | null | undefined): SubscriptionPlan {
-  return plan === "aero" || plan === "basic" || plan === "super" ? "aero" : "free";
+  if (plan === "aero" || plan === "basic" || plan === "super") return "aero";
+  if (plan === "lite") return "lite";
+  return "free";
 }
+
+export type BillingInterval = "month" | "year";
 
 export interface Subscription {
   id: string;
@@ -120,6 +124,26 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
     prioritySupport: false,
   },
 
+  lite: {
+    maxUploadBytes: 100 * 1024 * 1024,
+    maxMessageChars: 2500,
+    maxBioLength: 200,
+    videoQuality: "1080p",
+    animatedAvatar: false,
+    animatedBanner: false,
+    customEmojiSlots: 10,
+    serverBoostsPerMonth: 1,
+    rateLimits: { burst: 10, minute: 50 },
+    usernameChangesPerDay: 5,
+    displayNameChangesPerDay: 20,
+    avatarChangesPerDay: 20,
+    profileChangeCooldowns: true,
+    premiumThemeIds: [],
+    screenShare: true,
+    historyExport: false,
+    prioritySupport: false,
+  },
+
   aero: {
     maxUploadBytes: 500 * 1024 * 1024,
     maxMessageChars: 4000,
@@ -163,7 +187,7 @@ export const PLANS: PlanTier[] = [
     monthlyPrice: 899,
     badgeLabel: "Aero",
     badgeClass: "bg-[#fee75c]/20 text-[#fee75c]",
-    highlighted: true,
+    highlighted: false,
     features: [
       { label: "500 MB file uploads", included: true, detail: "10× more than Free" },
       { label: "2K video (1440p)", included: true, detail: "120 fps" },
@@ -179,6 +203,24 @@ export const PLANS: PlanTier[] = [
       { label: "Message history export", included: true },
       { label: "Priority support", included: true },
       { label: "Aero badge", included: true },
+    ],
+  },
+  {
+    id: "lite",
+    name: "Disband Lite",
+    monthlyPrice: 299,
+    badgeLabel: "Lite",
+    badgeClass: "bg-sky-400/20 text-sky-300",
+    highlighted: true,
+    features: [
+      { label: "100 MB file uploads", included: true, detail: "2× more than Free" },
+      { label: "Full HD video (1080p)", included: true },
+      { label: "10 custom emoji slots", included: true },
+      { label: "1 Catalyst every month", included: true, detail: "Boost a space you like" },
+      { label: "Faster rate limits", included: true, detail: "10 msg / 5s" },
+      { label: "More profile changes", included: true, detail: "5 name changes / day" },
+      { label: "Screen sharing", included: true },
+      { label: "Lite badge", included: true },
     ],
   },
 ];

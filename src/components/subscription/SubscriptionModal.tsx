@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { PLANS, isGranting, type SubscriptionPlan } from "@/lib/subscription";
+import { PLANS, isGranting, type BillingInterval, type SubscriptionPlan } from "@/lib/subscription";
 import { MONTHLY_GRANT, monthlyRemaining, monthStartIso } from "@/lib/catalysts";
 import { IconClose } from "@/components/icons";
 import { StripeEmbeddedCheckout } from "./StripeEmbeddedCheckout";
@@ -23,22 +23,35 @@ function CheckIcon() {
   );
 }
 
-function PlanCard({ currentPlan, onSubscribe }: {
-  currentPlan: string;
-  onSubscribe: () => void;
-}) {
+const YEARLY_PRICE: Record<string, number> = {
+  aero: 8999,
+  lite: 2900,
+};
 
-  const plan = PLANS.find((p) => p.id === "aero")!;
-  const isCurrentPlan = currentPlan === plan.id;
-  const priceDollars = (plan.monthlyPrice / 100).toFixed(2);
+function PlanCard({ tier, interval, currentPlan, onSubscribe }: {
+  tier: (typeof PLANS)[number];
+  interval: BillingInterval;
+  currentPlan: string;
+  onSubscribe: (tierId: string) => void;
+}) {
+  const isCurrentPlan = currentPlan === tier.id;
+  const priceDollars = interval === "year"
+    ? ((YEARLY_PRICE[tier.id] ?? tier.monthlyPrice * 12) / 100).toFixed(2)
+    : (tier.monthlyPrice / 100).toFixed(2);
+  const accent = tier.highlighted;
 
   return (
-    <div className="relative flex flex-col rounded-xl border border-yellow-400/40 bg-yellow-400/[0.04] p-6">
-      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-yellow-400/20" />
+    <div className={`relative flex flex-col rounded-xl border p-6 ${accent ? "border-yellow-400/40 bg-yellow-400/[0.04]" : "border-divider bg-bg-secondary/50"}`}>
+      {accent && <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-yellow-400/20" />}
+      {tier.highlighted && !isCurrentPlan && (
+        <span className="absolute -top-2.5 left-5 rounded-full bg-[#fee75c] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">
+          Best deal
+        </span>
+      )}
 
       <div className="mb-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold">{plan.name}</h3>
+          <h3 className="text-base font-bold">{tier.name}</h3>
           {isCurrentPlan && (
             <span className="rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-semibold text-status-online">
               Current
@@ -47,12 +60,12 @@ function PlanCard({ currentPlan, onSubscribe }: {
         </div>
         <div className="mt-3">
           <span className="text-3xl font-bold">${priceDollars}</span>
-          <span className="ml-1 text-sm text-text-muted">/ month</span>
+          <span className="ml-1 text-sm text-text-muted">/ {interval === "year" ? "year" : "month"}</span>
         </div>
       </div>
 
       <div className="mb-6 flex-1 space-y-2.5">
-        {plan.features.map((f) => (
+        {tier.features.map((f) => (
           <div key={f.label} className="flex items-start gap-2.5">
             <CheckIcon />
             <div className="min-w-0">
@@ -66,7 +79,7 @@ function PlanCard({ currentPlan, onSubscribe }: {
       <button
         type="button"
         disabled={isCurrentPlan}
-        onClick={onSubscribe}
+        onClick={() => onSubscribe(tier.id)}
         className={`w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
           isCurrentPlan
             ? "cursor-not-allowed bg-text-normal/5 text-text-muted"
@@ -244,6 +257,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   const { myCatalysts } = useApp();
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [interval, setInterval] = useState<BillingInterval>("month");
   const [activation, setActivation] = useState<"activating" | "active" | "stalled" | null>(null);
   const mobile = isMobileBrowser();
   const isAero = isGranting(subscription?.status) && plan === "aero";
@@ -257,15 +271,15 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
     setActivation(granted === "free" ? "stalled" : "active");
   }, [activate]);
 
-  const handleSubscribe = useCallback(async () => {
+  const handleSubscribe = useCallback(async (tierId: string) => {
     setCheckoutError(null);
-    const result = await startCheckout("aero");
+    const result = await startCheckout(tierId as "aero" | "lite", interval);
     if (result && (result.startsWith("cs_") || result.startsWith("seti_"))) {
       setCheckoutClientSecret(result);
     } else if (result) {
       setCheckoutError(result);
     }
-  }, [startCheckout]);
+  }, [startCheckout, interval]);
 
   const handleCheckoutSuccess = useCallback(() => {
     setCheckoutClientSecret(null);
@@ -367,7 +381,28 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </div>
             ) : (
               <>
-                <PlanCard currentPlan={plan} onSubscribe={handleSubscribe} />
+                <div className="mb-4 flex items-center justify-center gap-1 rounded-full bg-bg-secondary p-1">
+                  {(["month", "year"] as BillingInterval[]).map((i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setInterval(i)}
+                      className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                        interval === i ? "bg-brand text-white" : "text-text-muted hover:text-text-normal"
+                      }`}
+                    >
+                      {i === "month" ? "Monthly" : "Yearly"}
+                    </button>
+                  ))}
+                </div>
+                <p className="mb-4 text-center text-xs text-text-muted">
+                  Yearly billing saves {interval === "year" ? "up to 19%" : "up to 19% — switch to Yearly"} versus monthly.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {PLANS.filter((t) => t.id === "lite" || t.id === "aero").map((tier) => (
+                    <PlanCard key={tier.id} tier={tier} interval={interval} currentPlan={plan} onSubscribe={handleSubscribe} />
+                  ))}
+                </div>
                 {subscription?.stripe_customer_id && (
                   <div className="mt-4">
                     <button

@@ -6,6 +6,7 @@ import {
   ENTITLEMENTS,
   planFromSubscription,
   planWithGifts,
+  type BillingInterval,
   type GiftEntitlement,
   type SubscriptionPlan,
   type Subscription,
@@ -170,11 +171,11 @@ export function useSubscription(userId: string | undefined) {
   const plan: SubscriptionPlan = planWithGifts(subscription, gifts);
   const entitlements = ENTITLEMENTS[plan];
 
-  const startCheckout = useCallback(async (planId: SubscriptionPlan): Promise<string | null> => {
+  const startCheckout = useCallback(async (planId: SubscriptionPlan, interval: BillingInterval = "month"): Promise<string | null> => {
     const res = await apiFetch("/api/stripe/create-checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: planId }),
+      body: JSON.stringify({ plan: planId, interval }),
     });
     const json = (await res.json()) as { clientSecret?: string; error?: string };
     return json.clientSecret ?? json.error ?? null;

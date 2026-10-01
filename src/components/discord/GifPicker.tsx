@@ -1,25 +1,58 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
-import { IconClose } from "@/components/icons";
+import { IconClose, IconStar } from "@/components/icons";
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
   disabled?: boolean;
 }
 
-function GifThumb({ gif, onSelect }: {
+interface FavGif {
+  url: string;
+  title: string | null;
+}
+
+function FavStar({ active, onToggle, label }: {
+  active: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-[30%] bg-black/50 text-yellow-400 backdrop-blur-sm transition-transform hover:scale-110"
+    >
+      <IconStar size={15} className={active ? "fill-yellow-400" : ""} />
+    </button>
+  );
+}
+
+function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
   gif: GiphyImage;
+  isFav: boolean;
   onSelect: (url: string) => void;
+  onToggleFav: (url: string, title: string | null) => void;
 }) {
   const thumb = gifThumb(gif);
   const full = gifUrl(gif);
+  const [hover, setHover] = useState(false);
   if (!thumb || !full) return null;
 
   return (
-    <div className="overflow-hidden rounded hover:ring-2 hover:ring-brand">
+    <div
+      className="relative overflow-hidden rounded hover:ring-2 hover:ring-brand"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
       <button
         type="button"
         onClick={() => { onSelect(full); }}
@@ -46,6 +79,40 @@ function GifThumb({ gif, onSelect }: {
           />
         )}
       </button>
+      {(hover || isFav) && (
+        <FavStar
+          active={isFav}
+          onToggle={() => onToggleFav(full, gif.title ?? null)}
+          label={isFav ? "Remove from favorites" : "Save to favorites"}
+        />
+      )}
+    </div>
+  );
+}
+
+function FavThumb({ fav, onSelect, onRemove }: {
+  fav: FavGif;
+  onSelect: (url: string) => void;
+  onRemove: (url: string) => void;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
+      <button
+        type="button"
+        onClick={() => { onSelect(fav.url); }}
+        className="block w-full"
+        title={fav.title ?? "Favorite GIF"}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={fav.url}
+          alt={fav.title ?? "Favorite GIF"}
+          loading="lazy"
+          className="h-24 w-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      </button>
+      <FavStar active onToggle={() => onRemove(fav.url)} label="Remove from favorites" />
     </div>
   );
 }
@@ -57,6 +124,9 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   const [gifs, setGifs] = useState<GiphyImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"search" | "favorites">("search");
+  const [favorites, setFavorites] = useState<FavGif[]>([]);
+  const [favsLoading, setFavsLoading] = useState(false);
   const [panelPos, setPanelPos] = useState({ left: 0, bottom: 0, width: 320 });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -124,6 +194,45 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
     setOpen(false);
   }
 
+  const loadFavorites = useCallback(async () => {
+    setFavsLoading(true);
+    try {
+      const res = await fetch("/api/gifs/favorites");
+      const json = (await res.json()) as { favorites?: FavGif[] };
+      if (res.ok) setFavorites(json.favorites ?? []);
+    } catch {
+      // Leave the last known list rather than blanking the tab.
+    } finally {
+      setFavsLoading(false);
+    }
+  }, []);
+
+  const toggleFav = useCallback(async (url: string, title: string | null, active: boolean) => {
+    // Optimistic: flip the star now, reconcile after.
+    setFavorites((prev) => {
+      const has = prev.some((f) => f.url === url);
+      if (active && !has) return [{ url, title }, ...prev];
+      if (!active && has) return prev.filter((f) => f.url !== url);
+      return prev;
+    });
+    try {
+      const res = await fetch("/api/gifs/favorites", {
+        method: active ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, title }),
+      });
+      if (!res.ok) void loadFavorites();
+    } catch {
+      void loadFavorites();
+    }
+  }, [loadFavorites]);
+
+  const favUrls = useMemo(() => new Set(favorites.map((f) => f.url)), [favorites]);
+
+  useEffect(() => {
+    if (open) void loadFavorites();
+  }, [open, loadFavorites]);
+
   const panel =
     open && mounted
       ? createPortal(
@@ -137,17 +246,55 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             }}
           >
             <div className="flex shrink-0 items-center gap-2 border-b border-divider p-2">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search KLIPY"
-                className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
-              />
-              <button type="button" onClick={() => setOpen(false)} className="text-text-muted hover:text-text-normal">
+              {tab === "search" ? (
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search KLIPY"
+                  className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
+                />
+              ) : (
+                <p className="min-w-0 flex-1 px-1 text-sm font-semibold text-text-normal">
+                  Favorited
+                </p>
+              )}
+              <button
+                type="button"
+                aria-label={tab === "favorites" ? "Back to search" : "View favorited GIFs"}
+                title={tab === "favorites" ? "Back to search" : "Favorited"}
+                onClick={() => setTab((t) => (t === "favorites" ? "search" : "favorites"))}
+                className={`rounded p-1.5 transition-colors hover:bg-interactive-hover ${
+                  tab === "favorites" ? "text-yellow-400" : "text-text-muted hover:text-text-normal"
+                }`}
+              >
+                <IconStar size={17} className={tab === "favorites" ? "fill-yellow-400" : ""} />
+              </button>
+              <button type="button" onClick={() => setOpen(false)} className="rounded p-1 text-text-muted hover:text-text-normal">
                 <IconClose size={16} />
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+              {tab === "favorites" ? (
+                favsLoading && favorites.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-text-muted">Loading…</p>
+                ) : favorites.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-text-muted">
+                    Nothing starred yet — hover any GIF and tap the star.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1">
+                    {favorites.map((fav) => (
+                      <FavThumb
+                        key={fav.url}
+                        fav={fav}
+                        onSelect={handleSelect}
+                        onRemove={(url) => void toggleFav(url, null, false)}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : (
+              <>
               {loading && <p className="py-4 text-center text-sm text-text-muted">Loading…</p>}
               {error && <p className="py-4 text-center text-sm text-status-dnd">{error}</p>}
               {!loading && !error && gifs.length === 0 && query.trim() && (
@@ -155,14 +302,21 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               )}
               {!loading && !error && gifs.length > 0 && (
                 <div className="grid grid-cols-2 gap-1">
-                  {gifs.map((gif) => (
-                    <GifThumb
-                      key={gif.id}
-                      gif={gif}
-                      onSelect={handleSelect}
-                    />
-                  ))}
+                  {gifs.map((gif) => {
+                    const full = gifUrl(gif);
+                    return (
+                      <GifThumb
+                        key={gif.id}
+                        gif={gif}
+                        isFav={!!full && favUrls.has(full)}
+                        onSelect={handleSelect}
+                        onToggleFav={(url, title) => void toggleFav(url, title, !favUrls.has(url))}
+                      />
+                    );
+                  })}
                 </div>
+              )}
+              </>
               )}
             </div>
           </div>,

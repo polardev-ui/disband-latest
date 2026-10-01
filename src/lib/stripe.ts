@@ -18,6 +18,9 @@ export function getStripe(): Stripe {
 
 export const PRICE_IDS = {
   aero: process.env.STRIPE_AERO_PRICE_ID || process.env.STRIPE_SUPER_PRICE_ID!,
+  aeroYearly: process.env.STRIPE_AERO_YEARLY_PRICE_ID ?? "",
+  lite: process.env.STRIPE_LITE_PRICE_ID ?? "",
+  liteYearly: process.env.STRIPE_LITE_YEARLY_PRICE_ID ?? "",
   legacyBasic: process.env.STRIPE_BASIC_PRICE_ID ?? "",
 
   catalyst: process.env.STRIPE_CATALYST_PRICE_ID!,
@@ -25,11 +28,18 @@ export const PRICE_IDS = {
 
 export type PlanPriceId = keyof typeof PRICE_IDS;
 
-export function getPriceId(plan: SubscriptionPlan): string {
-  if (plan !== "aero") {
-    throw new Error(`No price for plan "${plan}" — only Aero is for sale.`);
+export type PaidPlan = "aero" | "lite";
+
+export function getPriceId(plan: PaidPlan, interval: "month" | "year" = "month"): string {
+  const key = interval === "year" ? `${plan}Yearly` : plan;
+  const id = PRICE_IDS[key as PlanPriceId];
+  if (!id || !id.startsWith("price_")) {
+    throw new Error(
+      `No ${interval}ly price for plan "${plan}" — check STRIPE_${plan.toUpperCase()}_PRICE_ID` +
+        (interval === "year" ? "_YEARLY." : "."),
+    );
   }
-  return PRICE_IDS.aero;
+  return id;
 }
 
 export function getCatalystPriceId(): string {
