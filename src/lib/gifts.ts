@@ -1,15 +1,17 @@
 
-export type GiftPlan = "aero";
+export type GiftPlan = "aero" | "lite";
 
 export const GIFT_MONTHS = [1, 3, 6, 12] as const;
 export type GiftMonths = (typeof GIFT_MONTHS)[number];
 
 export const GIFT_PRICING: Record<GiftPlan, Record<GiftMonths, number>> = {
   aero: { 1: 899, 3: 2549, 6: 4799, 12: 8999 },
+  lite: { 1: 299, 3: 849, 6: 1599, 12: 2900 },
 };
 
 export const GIFT_PLAN_NAME: Record<GiftPlan, string> = {
   aero: "Disband Aero",
+  lite: "Disband Lite",
 };
 
 export function giftPrice(plan: GiftPlan, months: GiftMonths): number {
@@ -33,7 +35,7 @@ export function savingsPercent(plan: GiftPlan, months: GiftMonths): number {
 }
 
 export function isGiftPlan(v: unknown): v is GiftPlan {
-  return v === "aero";
+  return v === "aero" || v === "lite";
 }
 
 export function isGiftMonths(v: unknown): v is GiftMonths {

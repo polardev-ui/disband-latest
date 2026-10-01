@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getStripe, getPriceId } from "@/lib/stripe";
+import { getStripe, getPriceId, type PaidPlan } from "@/lib/stripe";
 import { getRouteUser } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { normalizePlan } from "@/lib/subscription";
+import { normalizePlan, type BillingInterval } from "@/lib/subscription";
 
 export async function POST(req: Request) {
   try {
@@ -12,16 +12,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { plan: requested } = (await req.json()) as { plan: string };
+    const { plan: requested, interval: requestedInterval } = (await req.json()) as {
+      plan: string;
+      interval?: string;
+    };
     const plan = normalizePlan(requested);
-    if (plan !== "aero") {
+    if (plan !== "aero" && plan !== "lite") {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
+    const interval: BillingInterval = requestedInterval === "year" ? "year" : "month";
 
     const limit = rateLimit(`checkout:stripe/create-checkout:${user.id}`, 10, 60_000);
     if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
     const origin = checkoutOrigin(req);
-    const priceId = getPriceId(plan);
+    const priceId = getPriceId(plan as PaidPlan, interval);
 
     if (!priceId || !priceId.startsWith("price_")) {
       console.error(

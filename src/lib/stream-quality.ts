@@ -15,7 +15,7 @@ export interface StreamQuality {
 
 const CAPS: Record<SubscriptionPlan, { max: StreamQuality; default: StreamQuality }> = {
   free: { max: { resolution: 720, fps: 30 }, default: { resolution: 720, fps: 30 } },
-
+  lite: { max: { resolution: 1080, fps: 60 }, default: { resolution: 720, fps: 30 } },
   aero: { max: { resolution: 2160, fps: 120 }, default: { resolution: 1080, fps: 60 } },
 };
 

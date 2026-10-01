@@ -15,11 +15,13 @@ interface StripePeriodFields {
 function planForSubscription(sub: Stripe.Subscription): SubscriptionPlan | null {
   const metaPlan = (sub.metadata as Record<string, string> | undefined)?.plan;
   if (metaPlan === "aero" || metaPlan === "basic" || metaPlan === "super") return "aero";
+  if (metaPlan === "lite") return "lite";
 
   for (const item of sub.items?.data ?? []) {
     const priceId = item.price?.id;
     if (!priceId) continue;
-    if (priceId === PRICE_IDS.aero) return "aero";
+    if (priceId === PRICE_IDS.aero || priceId === PRICE_IDS.aeroYearly) return "aero";
+    if (priceId === PRICE_IDS.lite || priceId === PRICE_IDS.liteYearly) return "lite";
     if (PRICE_IDS.legacyBasic && priceId === PRICE_IDS.legacyBasic) return "aero";
   }
   return null;

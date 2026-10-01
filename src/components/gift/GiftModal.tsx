@@ -17,7 +17,7 @@ export function GiftModal({ onClose, onPurchased }: {
   onPurchased: (code: string) => void;
 }) {
 
-  const plan: GiftPlan = "aero";
+  const [plan, setPlan] = useState<GiftPlan>("aero");
   const [months, setMonths] = useState<GiftMonths>(1);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
@@ -105,6 +105,22 @@ export function GiftModal({ onClose, onPurchased }: {
                 </p>
               </div>
             </div>
+
+            <label htmlFor="gift-plan" className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-text-muted">
+              Plan
+            </label>
+            <select
+              id="gift-plan"
+              value={plan}
+              onChange={(e) => setPlan(e.target.value as GiftPlan)}
+              className="mb-4 w-full rounded-lg border border-divider bg-bg-tertiary px-3 py-2.5 text-[15px] text-text-normal outline-none focus:border-brand"
+            >
+              {(["aero", "lite"] as GiftPlan[]).map((p) => (
+                <option key={p} value={p}>
+                  {GIFT_PLAN_NAME[p]} — from {formatPrice(giftPrice(p, 1))}/mo
+                </option>
+              ))}
+            </select>
 
             <label htmlFor="gift-length" className="mb-2 block text-[11px] font-bold uppercase tracking-wide text-text-muted">
               Length
