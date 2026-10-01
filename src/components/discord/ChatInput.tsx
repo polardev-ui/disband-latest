@@ -7,6 +7,7 @@ import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconHash, IconPlus } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
+import { applyAtomicEveryone } from "@/lib/composer-tokens";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
@@ -279,8 +280,22 @@ export function ChatInput({
             },
           ]
         : [];
-    const memberItems: MentionItem[] = members
-      .filter((m) => m.username && (q === "" || m.username!.toLowerCase().startsWith(q) || displayName(m).toLowerCase().includes(q)))
+    // @everyone is a real token in server channels (the server fans it out
+    // to every member), so it gets an autocomplete row like a member. Never
+    // offered in DMs/groups, where the token notifies nobody.
+    const everyoneItems: MentionItem[] =
+      serverId && (q === "" || "everyone".startsWith(q) || "everyone".includes(q))
+        ? [
+            {
+              id: "everyone",
+              kind: "member" as const,
+              label: "everyone",
+              sublabel: "Notify everyone in this server",
+              insert: "@everyone",
+            },
+          ]
+        : [];
+    const memberItems: MentionItem[] = members      .filter((m) => m.username && (q === "" || m.username!.toLowerCase().startsWith(q) || displayName(m).toLowerCase().includes(q)))
       .map((m) => ({
         id: m.id,
         kind: "member" as const,
@@ -299,8 +314,8 @@ export function ChatInput({
         insert: `@${r.name.replace(/\s+/g, "-").toLowerCase()}`,
         color: r.color,
       }));
-    return [...tetherItems, ...memberItems, ...roleItems].slice(0, 8);
-  }, [mentionCtx, members, roles, tetherEnabled, tetherProfile]);
+    return [...tetherItems, ...everyoneItems, ...memberItems, ...roleItems].slice(0, 8);
+  }, [mentionCtx, members, roles, tetherEnabled, tetherProfile, serverId]);
 
   // Validate at pick time so an oversize file never looks stageable only to
   // fail at send (uploadMedia enforces the same limit as a backstop).
@@ -795,13 +810,20 @@ export function ChatInput({
             onChange={(e) => {
               const next = e.target.value;
               const selStart = e.target.selectionStart;
+              const placeCursor = (pos: number) => {
+                setCursor(pos);
+                requestAnimationFrame(() => {
+                  textareaRef.current?.setSelectionRange(pos, pos);
+                });
+              };
               const token = getCompletedEmojiToken(next, selStart);
               if (token) {
                 const emoji = lookupShortcode(token.code);
                 if (emoji) {
                   const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
-                  const pos = token.start + emoji.length;
-                  setText(replaced);
+                  const atomic = applyAtomicEveryone(text, replaced);
+                  const pos = atomic ? atomic.cursor : token.start + emoji.length;
+                  setText(atomic ? atomic.text : replaced);
                   setCursor(pos);
                   setMentionIdx(0);
                   setEmojiIdx(0);
@@ -812,8 +834,14 @@ export function ChatInput({
                   return;
                 }
               }
-              setText(next);
-              setCursor(selStart);
+              const atomic = applyAtomicEveryone(text, next);
+              if (atomic) {
+                setText(atomic.text);
+                placeCursor(atomic.cursor);
+              } else {
+                setText(next);
+                setCursor(selStart);
+              }
               setMentionIdx(0);
               setEmojiIdx(0);
               onTypingActivity?.();

@@ -69,6 +69,18 @@ const HEADING_STYLE: CSSProperties = { WebkitTextStroke: "0.35px currentColor" }
 
 /** Inline rules, applied in order — longest markers first so ** beats *. */
 const INLINE: { re: RegExp; render: (inner: ReactNode, marker: string, key: string) => ReactNode }[] = [
+  // @everyone renders as a blue chip while composing, mirroring the sent
+  // message. Paint-only (background + colour): no weight or size change, so
+  // the caret never drifts — see THE RULE above. Needs its own capture group:
+  // the framework slices the marker off via m[1].
+  {
+    re: /(@everyone)\b/i,
+    render: (inner, _m, k) => (
+      <span key={k} className="rounded bg-brand/25 px-0.5 text-[#dee0fc]">
+        {inner}
+      </span>
+    ),
+  },
   {
     re: /\|\|([\s\S]+?)\|\|/,
     render: (inner, m, k) => (
