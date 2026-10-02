@@ -263,7 +263,10 @@ export function CallPanel({
         <p className="mb-6 text-xs font-bold uppercase tracking-widest text-white/30">Calling</p>
         {/* Was h-44 (176px) for two 16:9 tiles side by side, which is the
             squashed strip in the screenshot. Sized to the viewport now. */}
-        <div className="flex h-[min(42vh,380px)] w-full max-w-4xl flex-col px-6 py-3">
+        <div
+          className="flex w-full max-w-4xl shrink-0 flex-col px-6 py-3"
+          style={{ height: "min(42vh, 380px)" }}
+        >
           <CallGrid>
             {selfProfile && (
               <ParticipantTile profile={selfProfile} label="You" size="md" />
