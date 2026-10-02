@@ -69,6 +69,8 @@ export function useGroupCallManager(
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
   const [incomingRing, setIncomingRing] = useState<{ groupId: string; groupName: string; fromId: string } | null>(null);
+  const incomingRingGroupRef = useRef<string | null>(null);
+  incomingRingGroupRef.current = incomingRing?.groupId ?? null;
   const [error, setError] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
 
@@ -405,10 +407,23 @@ export function useGroupCallManager(
     [userId, createPeer],
   );
 
+  /** Tell this account's other clients the group ring was dealt with here. */
+  const notifyOwnClients = useCallback((gid: string) => {
+    if (!userId) return;
+    // Our own listener channel: opening a second one on this topic would hand
+    // back the same channel and unsubscribe it afterwards (see useCallManager).
+    void listenRef.current?.send({
+      type: "broadcast",
+      event: "group-call",
+      payload: { type: "handled", from: userId, groupId: gid },
+    });
+  }, [userId]);
+
   const joinGroupCall = useCallback(
     async (gid: string, name: string) => {
       if (!userId || !profile) return;
       setError(null);
+      if (incomingRingGroupRef.current === gid) notifyOwnClients(gid);
       setIncomingRing(null);
       stopRingtone();
       setGroupId(gid);
@@ -438,7 +453,7 @@ export function useGroupCallManager(
         await cleanup();
       }
     },
-    [userId, profile, joinCallMedia, subscribeSignal, connectToExisting, cleanup],
+    [userId, profile, joinCallMedia, subscribeSignal, connectToExisting, cleanup, notifyOwnClients],
   );
 
   const startGroupCall = useCallback(
@@ -620,10 +635,12 @@ export function useGroupCallManager(
   }, [broadcast, userId]);
 
   const dismissRing = useCallback(() => {
+    const ringing = incomingRingGroupRef.current;
+    if (ringing) notifyOwnClients(ringing);
     stopRingtone();
     setIncomingRing(null);
     if (phaseRef.current === "ringing") setPhase("idle");
-  }, []);
+  }, [notifyOwnClients]);
 
   useEffect(() => {
     if (!userId) return;
@@ -632,6 +649,15 @@ export function useGroupCallManager(
     const ch = supabase.channel(`call-user:${userId}`, { config: { broadcast: { self: false } } });
     ch.on("broadcast", { event: "group-call" }, ({ payload }) => {
       const p = payload as { type?: string; from?: string; groupId?: string; groupName?: string };
+      // Joined or dismissed on another of this account's clients: stop ringing here.
+      if (p.type === "handled" && p.from === userId) {
+        if (p.groupId && incomingRingGroupRef.current === p.groupId) {
+          stopRingtone();
+          setIncomingRing(null);
+          if (phaseRef.current === "ringing") setPhase("idle");
+        }
+        return;
+      }
       if (p.from === userId || !p.groupId || !p.groupName) return;
       if (p.type === "ring" && phaseRef.current !== "active") {
         setIncomingRing({ groupId: p.groupId, groupName: p.groupName, fromId: p.from! });
