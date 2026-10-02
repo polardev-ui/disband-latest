@@ -8,7 +8,7 @@ const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--ena
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 page.on("console", (m) => console.log("console:", m.text()));
 page.on("pageerror", (e) => console.log("pageerror:", e.message));
-await page.goto(`${origin}/src/stage.html`);
+await page.goto(`${origin}/${process.env.STAGE ?? "src/stage.html"}`);
 await page.waitForSelector("body[data-ready]", { timeout: 120000 });
 fs.mkdirSync("build/stills", { recursive: true });
 for (const t of times) {
