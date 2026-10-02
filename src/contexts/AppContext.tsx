@@ -1824,8 +1824,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeChannelId || !configured || !userId) return;
     void loadMessages(activeChannelId);
     const supabase = getSupabaseClient();
-    const sub = supabase
-      .channel(`msg:${activeChannelId}`)
+    // Self-healing live feed. Each subscription gets its own topic: reusing
+    // the bare name while the previous instance was still leaving let that
+    // leave tear the new one down, so after a reload (e.g. returning to the
+    // tab) messages stopped arriving until you switched conversations. A
+    // dropped or timed-out channel now resubscribes and catches up.
+    let disposed = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let sub: RealtimeChannel;
+    const connect = () => {
+    sub = supabase
+      .channel(`msg:${activeChannelId}:${Math.random().toString(36).slice(2, 10)}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
@@ -1834,7 +1844,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (activeChannelRef.current !== activeChannelId) return;
           void (async () => {
-            let author: Profile | undefined = profile ?? undefined;
+            let author: Profile | undefined = profileRef.current ?? undefined;
             if (msg.author_id !== userId) {
               const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
               author = data as Profile | undefined;
@@ -1870,18 +1880,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
         },
       )
-      .subscribe();
-    return () => {
-      void sub.unsubscribe();
+      .subscribe((status) => {
+        if (disposed) return;
+        if (status === "SUBSCRIBED") {
+          // Rejoined after a drop: fetch whatever arrived while we were gone.
+          if (attempt > 0) void loadMessages(activeChannelId);
+          attempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void supabase.removeChannel(sub);
+          retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
+        }
+      });
     };
-  }, [activeChannelId, configured, userId, loadMessages, profile]);
+    connect();
+    return () => {
+      disposed = true;
+      clearTimeout(retry);
+      void supabase.removeChannel(sub);
+    };
+  }, [activeChannelId, configured, userId, loadMessages]);
 
   useEffect(() => {
     if (!activeDmThreadId || !configured || !userId) return;
     void loadDmMessages(activeDmThreadId);
     const supabase = getSupabaseClient();
-    const sub = supabase
-      .channel(`dm:${activeDmThreadId}`)
+    // Self-healing live feed. Each subscription gets its own topic: reusing
+    // the bare name while the previous instance was still leaving let that
+    // leave tear the new one down, so after a reload (e.g. returning to the
+    // tab) messages stopped arriving until you switched conversations. A
+    // dropped or timed-out channel now resubscribes and catches up.
+    let disposed = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let sub: RealtimeChannel;
+    const connect = () => {
+    sub = supabase
+      .channel(`dm:${activeDmThreadId}:${Math.random().toString(36).slice(2, 10)}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
@@ -1890,7 +1926,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (msg.thread_id !== activeDmRef.current) return;
           void (async () => {
-            let author: Profile | undefined = profile ?? undefined;
+            let author: Profile | undefined = profileRef.current ?? undefined;
             if (msg.author_id !== userId) {
               const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
               author = data as Profile | undefined;
@@ -1952,18 +1988,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
         },
       )
-      .subscribe();
-    return () => {
-      void sub.unsubscribe();
+      .subscribe((status) => {
+        if (disposed) return;
+        if (status === "SUBSCRIBED") {
+          // Rejoined after a drop: fetch whatever arrived while we were gone.
+          if (attempt > 0) void loadDmMessages(activeDmThreadId);
+          attempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void supabase.removeChannel(sub);
+          retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
+        }
+      });
     };
-  }, [activeDmThreadId, configured, userId, loadDmMessages, profile, bumpDmThreadActivity]);
+    connect();
+    return () => {
+      disposed = true;
+      clearTimeout(retry);
+      void supabase.removeChannel(sub);
+    };
+  }, [activeDmThreadId, configured, userId, loadDmMessages, bumpDmThreadActivity]);
 
   useEffect(() => {
     if (!activeGroupChatId || !configured || !userId) return;
     void loadGroupMessages(activeGroupChatId);
     const supabase = getSupabaseClient();
-    const sub = supabase
-      .channel(`group:${activeGroupChatId}`)
+    // Self-healing live feed. Each subscription gets its own topic: reusing
+    // the bare name while the previous instance was still leaving let that
+    // leave tear the new one down, so after a reload (e.g. returning to the
+    // tab) messages stopped arriving until you switched conversations. A
+    // dropped or timed-out channel now resubscribes and catches up.
+    let disposed = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let sub: RealtimeChannel;
+    const connect = () => {
+    sub = supabase
+      .channel(`group:${activeGroupChatId}:${Math.random().toString(36).slice(2, 10)}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
@@ -1978,7 +2040,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               );
               return;
             }
-            let author: Profile | undefined = profile ?? undefined;
+            let author: Profile | undefined = profileRef.current ?? undefined;
             if (msg.author_id !== userId) {
               const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
               author = data as Profile | undefined;
@@ -2012,9 +2074,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
         },
       )
-      .subscribe();
-    return () => { void sub.unsubscribe(); };
-  }, [activeGroupChatId, configured, userId, loadGroupMessages, profile]);
+      .subscribe((status) => {
+        if (disposed) return;
+        if (status === "SUBSCRIBED") {
+          // Rejoined after a drop: fetch whatever arrived while we were gone.
+          if (attempt > 0) void loadGroupMessages(activeGroupChatId);
+          attempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void supabase.removeChannel(sub);
+          retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
+        }
+      });
+    };
+    connect();
+    return () => {
+      disposed = true;
+      clearTimeout(retry);
+      void supabase.removeChannel(sub);
+    };
+  }, [activeGroupChatId, configured, userId, loadGroupMessages]);
 
   useEffect(() => {
     if (!userId || !configured || groupChats.length === 0) return;

@@ -170,6 +170,9 @@ export function CallPanel({
   onEnd, onOpenSettings,
 }: CallPanelProps) {
   const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
+  // While a share or camera is focused the panel takes most of the window,
+  // without overwriting the height you dragged it to.
+  const [focused, setFocused] = useState(false);
   const calling = phase === "outgoing";
   const [elapsed, setElapsed] = useState(0);
 
@@ -216,7 +219,7 @@ export function CallPanel({
   return (
     <div
       className="call-enter flex shrink-0 flex-col overflow-hidden bg-black"
-      style={{ height: callHeight }}
+      style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}
     >
      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
       <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/30">
@@ -227,9 +230,10 @@ export function CallPanel({
       </p>
 
       {}
-      <div className="flex min-h-0 w-full max-w-3xl flex-1 flex-col py-3">
+      <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-3xl"} flex-1 flex-col py-3`}>
         <CallStage
           deafened={deafened}
+          onFocusChange={setFocused}
           screens={[
             ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
             ...(remoteScreen && peer
