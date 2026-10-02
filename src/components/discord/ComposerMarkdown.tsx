@@ -68,13 +68,16 @@ const BOLD_STYLE: CSSProperties = { WebkitTextStroke: "0.4px currentColor" };
 const HEADING_STYLE: CSSProperties = { WebkitTextStroke: "0.35px currentColor" };
 
 /** Inline rules, applied in order — longest markers first so ** beats *. */
-const INLINE: { re: RegExp; render: (inner: ReactNode, marker: string, key: string) => ReactNode }[] = [
+const INLINE: { re: RegExp; leaf?: boolean; render: (inner: ReactNode, marker: string, key: string) => ReactNode }[] = [
   // @everyone renders as a blue chip while composing, mirroring the sent
   // message. Paint-only (background + colour): no weight or size change, so
   // the caret never drifts — see THE RULE above. Needs its own capture group:
-  // the framework slices the marker off via m[1].
+  // the framework slices the marker off via m[1]. `leaf` because the capture
+  // IS the whole match: recursing into it re-matches forever (stack
+  // overflow the moment @everyone is typed).
   {
     re: /(@everyone)\b/i,
+    leaf: true,
     render: (inner, _m, k) => (
       <span key={k} className="rounded bg-brand/25 px-0.5 text-[#dee0fc]">
         {inner}
@@ -162,7 +165,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       best = {
         index: m.index,
         length: m[0].length,
-        node: rule.render(renderInline(m[1], `${keyBase}-${n}i`), marker, `${keyBase}-${n}`),
+        node: rule.render(rule.leaf ? m[1] : renderInline(m[1], `${keyBase}-${n}i`), marker, `${keyBase}-${n}`),
       };
     }
 
