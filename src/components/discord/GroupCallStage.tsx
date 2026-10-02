@@ -1,91 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Avatar } from "@/components/ui/Avatar";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
-import { CallGrid } from "./CallTile";
-import { IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff } from "@/components/icons";
+import { CallStage } from "./CallStage";
+import {
+  IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff,
+  IconScreenShare, IconScreenShareOff,
+} from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
-import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
-
-function ParticipantTile({
-  profile,
-  stream,
-  label,
-  mirrored,
-  ring,
-  ringing,
-  forceScreen,
-}: {
-  profile?: Profile;
-  stream?: MediaStream | null;
-  label: string;
-  mirrored?: boolean;
-  ring?: boolean;
-  // Ringing is not speaking: the green ring is kept for layout stability,
-  // but the tile says what it means instead of looking like live audio.
-  ringing?: boolean;
-  forceScreen?: boolean;
-}) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const hasVideo = useLiveVideoStream(stream);
-  const ringClass = ring
-    ? "ring-2 ring-status-online shadow-[0_0_20px_rgba(59,165,93,0.3)]"
-    : "ring-1 ring-white/10";
-
-  useEffect(() => {
-    if (ref.current && stream && hasVideo) {
-      ref.current.srcObject = stream;
-      void ref.current.play().catch(() => {});
-    }
-  }, [stream, hasVideo]);
-
-  const isScreen = forceScreen
-    || !!stream?.getVideoTracks().some((t) => /screen|display|window|monitor/i.test(t.label));
-
-  return (
-    <div
-      className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-overlay-media ${ringClass}`}
-    >
-      {hasVideo && stream ? (
-        <video
-          ref={ref}
-          autoPlay
-          playsInline
-          muted={mirrored}
-          className={`h-full w-full ${isScreen ? "bg-black object-contain" : "object-cover"} ${
-            mirrored && !isScreen ? "scale-x-[-1]" : ""
-          }`}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          {profile ? (
-            <Avatar profile={profile} size="lg" className="h-24 w-24 text-3xl" />
-          ) : (
-            <span className="text-3xl font-bold text-white/40">{label.charAt(0).toUpperCase()}</span>
-          )}
-        </div>
-      )}
-
-      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
-        <span className="truncate">{label}</span>
-        {ringing && (
-          <span className="shrink-0 animate-pulse rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
-            Ringing
-          </span>
-        )}
-        {isScreen && (
-          <span className="shrink-0 rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
-            Live
-          </span>
-        )}
-      </span>
-    </div>
-  );
-}
 
 // Shared shape with CallUI's timer: h:mm:ss past the hour, mm:ss within it.
 function formatElapsed(ms: number): string {
@@ -109,6 +34,9 @@ interface GroupCallStageProps {
   remoteStreams: Map<string, MediaStream>;
 
   remoteScreens: Map<string, MediaStream>;
+  remoteScreenAudio?: Map<string, MediaStream>;
+  screenShareEnabled?: boolean;
+  onToggleScreenShare?: () => void;
   localScreen: MediaStream | null;
   cameraEnabled: boolean;
   micMuted: boolean;
@@ -124,7 +52,8 @@ interface GroupCallStageProps {
 
 export function GroupCallStage({
   groupName, members, presence, ringingIds, joined,
-  selfId, localStream, remoteStreams, remoteScreens, localScreen, cameraEnabled,
+  selfId, localStream, remoteStreams, remoteScreens, remoteScreenAudio, screenShareEnabled, onToggleScreenShare,
+  localScreen, cameraEnabled,
   micMuted, deafened, connectedAt, onJoin, onLeave, onToggleCamera, onToggleMic,
 }: GroupCallStageProps) {
   const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
@@ -153,7 +82,7 @@ export function GroupCallStage({
     stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
     mirrored: p.user_id === selfId,
     ringing: ringingIds.has(p.user_id),
-    isScreen: false,
+    muted: p.user_id === selfId ? micMuted : undefined,
     label: p.profile ?? members.find((m) => m.id === p.user_id)
       ? displayName((p.profile ?? members.find((m) => m.id === p.user_id))!)
       : "Member",
@@ -167,14 +96,14 @@ export function GroupCallStage({
       id: `screen:${p.user_id}`,
       profile,
       stream,
-      mirrored: false,
-      ringing: false,
-      isScreen: true,
-      label: profile ? `${displayName(profile)}'s screen` : "Screen",
+      audio: p.user_id === selfId ? null : remoteScreenAudio?.get(p.user_id) ?? null,
+      local: p.user_id === selfId,
+      label: p.user_id === selfId
+        ? "Your screen"
+        : profile ? `${displayName(profile)}'s screen` : "Screen",
     }];
   });
 
-  const displayMembers = [...shares, ...people];
 
   return (
     <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: callHeight }}>
@@ -191,27 +120,14 @@ export function GroupCallStage({
 
       {}
       <div className="flex min-h-0 w-full max-w-4xl flex-1 flex-col py-3">
-        {joined && displayMembers.length === 0 ? (
+        {joined && people.length + shares.length === 0 ? (
           <p className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white/50">
             You&apos;re the only one here.
             <br />
             Others can join from the group.
           </p>
         ) : (
-        <CallGrid>
-          {displayMembers.map((m) => (
-            <ParticipantTile
-              key={m.id}
-              profile={m.profile}
-              stream={m.stream}
-              mirrored={m.mirrored}
-              ring={m.ringing}
-              ringing={m.ringing}
-              forceScreen={m.isScreen}
-              label={m.label}
-            />
-          ))}
-        </CallGrid>
+        <CallStage members={people} screens={shares} deafened={deafened} />
         )}
       </div>
 
@@ -225,6 +141,21 @@ export function GroupCallStage({
         >
           {cameraEnabled ? <IconVideo size={20} /> : <IconVideoOff size={20} />}
         </button>
+
+        {joined && onToggleScreenShare && (
+          <button
+            type="button"
+            onClick={onToggleScreenShare}
+            title={screenShareEnabled ? "Stop sharing" : "Share screen"}
+            className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+              screenShareEnabled
+                ? "bg-status-online/25 text-status-online ring-2 ring-status-online/40"
+                : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20"
+            }`}
+          >
+            {screenShareEnabled ? <IconScreenShareOff size={20} /> : <IconScreenShare size={20} />}
+          </button>
+        )}
 
         {!joined ? (
           <>

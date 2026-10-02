@@ -18,8 +18,7 @@ import {
 import type { Profile } from "@/lib/supabase/types";
 import { useEffect, useRef, useState } from "react";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
-import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
-import { CallGrid } from "./CallTile";
+import { CallStage } from "./CallStage";
 
 interface CallControlsProps {
   micMuted: boolean;
@@ -77,82 +76,6 @@ export function CallControls({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function ParticipantTile({
-  profile,
-  stream,
-  label,
-  mirrored,
-  isScreen,
-  ring,
-  size = "md",
-}: {
-  profile?: Profile;
-  stream?: MediaStream | null;
-  label: string;
-  mirrored?: boolean;
-
-  isScreen?: boolean;
-  ring?: boolean;
-  size?: "md" | "lg";
-}) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const hasVideo = useLiveVideoStream(stream);
-  const textSize = size === "lg" ? "text-4xl" : "text-3xl";
-  const ringClass = ring
-    ? "ring-[3px] ring-status-online"
-    : "ring-[3px] ring-white/15";
-
-  useEffect(() => {
-    if (ref.current && stream && hasVideo) {
-      ref.current.srcObject = stream;
-      void ref.current.play().catch(() => {});
-    }
-  }, [stream, hasVideo]);
-
-  return (
-    // Fills the cell CallGrid computes. The wrapper used to be an auto-height
-    // flex column, so the tile's own `h-full` resolved against nothing and the
-    // box collapsed to roughly the avatar's height — which is why tiles came
-    // out as thin letterboxes with the profile pictures sliced off top and
-    // bottom.
-    <div className="h-full w-full">
-      <div
-        className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media ${ringClass} ${
-          ring ? "shadow-[0_0_24px_rgba(59,165,93,0.3)]" : ""
-        }`}
-      >
-        {hasVideo && stream ? (
-          <video
-            ref={ref}
-            autoPlay
-            playsInline
-            muted={mirrored || isScreen}
-            className={`h-full w-full ${isScreen ? "bg-black object-contain" : "object-cover"} ${
-              mirrored && !isScreen ? "scale-x-[-1]" : ""
-            }`}
-          />
-        ) : profile ? (
-          <span className="flex h-full w-full items-center justify-center">
-            <Avatar profile={profile} size="lg" className="h-20 w-20 text-2xl" />
-          </span>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <span className={`${textSize} font-bold text-white/40`}>{label.charAt(0).toUpperCase()}</span>
-          </div>
-        )}
-        <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
-          <span className="max-w-[160px] truncate">{label}</span>
-          {isScreen && (
-            <span className="shrink-0 rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
-              Live
-            </span>
-          )}
-        </span>
-      </div>
     </div>
   );
 }
@@ -225,6 +148,7 @@ interface CallPanelProps {
 
   localScreen?: MediaStream | null;
   remoteScreen?: MediaStream | null;
+  remoteScreenAudio?: MediaStream | null;
   remoteStream?: MediaStream | null;
   connectedAt?: number | null;
   micMuted: boolean;
@@ -240,7 +164,7 @@ interface CallPanelProps {
 }
 
 export function CallPanel({
-  title, subtitle, phase, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen,
+  title, subtitle, phase, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen, remoteScreenAudio,
   connectedAt, micMuted, deafened, cameraEnabled, screenShareEnabled,
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd, onOpenSettings,
@@ -267,14 +191,14 @@ export function CallPanel({
           className="flex w-full max-w-4xl shrink-0 flex-col px-6 py-3"
           style={{ height: "min(42vh, 380px)" }}
         >
-          <CallGrid>
-            {selfProfile && (
-              <ParticipantTile profile={selfProfile} label="You" size="md" />
-            )}
-            {peer && (
-              <ParticipantTile profile={peer} label={displayName(peer)} ring size="md" />
-            )}
-          </CallGrid>
+          <CallStage
+            deafened={deafened}
+            screens={[]}
+            members={[
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), ringing: true }] : []),
+            ]}
+          />
         </div>
         <p className="mb-6 text-lg font-semibold text-white">{title}</p>
         <p className="mb-8 text-sm text-white/40">{subtitle || "Ringing..."}</p>
@@ -304,32 +228,19 @@ export function CallPanel({
 
       {}
       <div className="flex min-h-0 w-full max-w-3xl flex-1 flex-col py-3">
-        <CallGrid>
-          {localScreen && (
-            <ParticipantTile
-              profile={selfProfile ?? undefined} stream={localScreen} isScreen
-              label="Your screen" size="md"
-            />
-          )}
-          {remoteScreen && peer && (
-            <ParticipantTile
-              profile={peer} stream={remoteScreen} isScreen
-              label={`${displayName(peer)}'s screen`} size="md"
-            />
-          )}
-          {selfProfile && (
-            <ParticipantTile
-              profile={selfProfile} stream={localStream} label="You"
-              mirrored size="md"
-            />
-          )}
-          {peer && (
-            <ParticipantTile
-              profile={peer} stream={remoteStream}
-              label={displayName(peer)} size="md"
-            />
-          )}
-        </CallGrid>
+        <CallStage
+          deafened={deafened}
+          screens={[
+            ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
+            ...(remoteScreen && peer
+              ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
+              : []),
+          ]}
+          members={[
+            ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
+            ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
+          ]}
+        />
       </div>
 
       <div className="shrink-0 pb-3 pt-1">

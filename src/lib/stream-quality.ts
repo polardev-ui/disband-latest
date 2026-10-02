@@ -84,6 +84,11 @@ export function buildScreenConstraints(plan: SubscriptionPlan): MediaStreamConst
       height: { ideal: q.resolution },
       frameRate: { ideal: q.fps },
     },
-    audio: false,
+    // Share the tab/system sound too. Processing is off: echo cancellation
+    // and noise suppression are tuned for voice and mangle music and games.
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    // Chromium extensions to the spec: offer "share system audio" in the
+    // picker, and keep the sharer hearing their own tab.
+    ...({ systemAudio: "include", suppressLocalAudioPlayback: false } as object),
   };
 }

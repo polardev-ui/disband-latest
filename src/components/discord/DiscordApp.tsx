@@ -1291,6 +1291,7 @@ export function DiscordApp() {
           remoteStream={call.remoteStream}
           localScreen={call.localScreen}
           remoteScreen={call.remoteScreen}
+          remoteScreenAudio={call.remoteScreenAudio}
           connectedAt={call.connectedAt}
           micMuted={app.micMuted}
           deafened={app.deafened}
@@ -1669,6 +1670,9 @@ export function DiscordApp() {
                 localStream={groupCall.localStream}
                 remoteStreams={groupCall.remoteStreams}
                 remoteScreens={groupCall.remoteScreens}
+                remoteScreenAudio={groupCall.remoteScreenAudio}
+                screenShareEnabled={groupCall.screenShareEnabled}
+                onToggleScreenShare={() => void groupCall.toggleScreenShare()}
                 localScreen={groupCall.localScreen}
                 cameraEnabled={groupCall.cameraEnabled}
                 micMuted={app.micMuted}
