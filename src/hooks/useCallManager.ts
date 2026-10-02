@@ -370,34 +370,43 @@ export function useCallManager(
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraRef.current;
-    setCameraEnabled(next);
-    cameraRef.current = next;
     const pc = pcRef.current;
     const stream = localRef.current;
-    if (!pc || !stream || phaseRef.current !== "active") return;
+    // Before the call is live there is nothing to send on yet: just record the
+    // intent, and setupRtc picks it up when the lanes open.
+    if (!pc || !stream || phaseRef.current !== "active") {
+      cameraRef.current = next;
+      setCameraEnabled(next);
+      return;
+    }
 
-    const peerId = activePeerIdRef.current;
     const existing = stream.getVideoTracks()[0];
-
-    if (next) {
-      let track = existing;
-      if (track) {
-        track.enabled = true;
-      } else {
-        const cam = await getDisbandUserMedia({
-          video: buildVideoConstraints(planRef.current),
-        });
-        track = cam.getVideoTracks()[0];
-        stream.addTrack(track);
+    try {
+      if (next) {
+        let track = existing;
+        if (track) {
+          track.enabled = true;
+        } else {
+          const cam = await getDisbandUserMedia({
+            video: buildVideoConstraints(planRef.current),
+          });
+          track = cam.getVideoTracks()[0];
+          stream.addTrack(track);
+        }
+        await setLaneTrack(pc, LANE_CAMERA, track);
+      } else if (existing) {
+        existing.stop();
+        stream.removeTrack(existing);
+        await setLaneTrack(pc, LANE_CAMERA, null);
       }
-      await setLaneTrack(pc, LANE_CAMERA, track);
-    } else if (existing) {
-      existing.stop();
-      stream.removeTrack(existing);
-      await setLaneTrack(pc, LANE_CAMERA, null);
+      // Only light the button once the camera is actually flowing.
+      cameraRef.current = next;
+      setCameraEnabled(next);
+    } catch (err) {
+      setError(err instanceof Error ? `Camera unavailable: ${err.message}` : "Camera unavailable");
     }
     setLocalStream(new MediaStream(stream.getTracks()));
-  }, [userId]);
+  }, []);
 
   const reapplyCameraConstraints = useCallback(async (nextPlan: string | undefined) => {
     const pc = pcRef.current;
@@ -456,23 +465,38 @@ export function useCallManager(
       return;
     }
 
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setError("Screen sharing isn't supported here. Try the web app in Chrome, Edge or Safari.");
+      return;
+    }
+
     try {
       const display = await navigator.mediaDevices.getDisplayMedia(
         buildScreenConstraints((planRef.current ?? "free") as SubscriptionPlan),
       );
       const track = display.getVideoTracks()[0];
-      track.addEventListener("ended", () => { void toggleScreenShare(); });
+      // The browser's own "Stop sharing" bar ends the track; go through the
+      // ref so this never calls a stale copy of the toggle.
+      track.addEventListener("ended", () => {
+        if (screenTrackRef.current === track) void toggleScreenShareRef.current();
+      });
       screenTrackRef.current = track;
       await setLaneTrack(pc, LANE_SCREEN, track);
       setLocalScreen(new MediaStream([track]));
       setScreenShareEnabled(true);
       screenShareRef.current = true;
       announceSharing(true);
-    } catch {
+    } catch (err) {
       setScreenShareEnabled(false);
       screenShareRef.current = false;
+      // Dismissing the picker is a choice, not an error.
+      if (err instanceof DOMException && err.name === "NotAllowedError") return;
+      setError(err instanceof Error ? `Couldn't share screen: ${err.message}` : "Couldn't share screen");
     }
-  }, []);
+  }, [announceSharing]);
+  const toggleScreenShareRef = useRef(toggleScreenShare);
+  toggleScreenShareRef.current = toggleScreenShare;
+
 
   const startCall = useCallback(async (peer: Profile) => {
     if (!userId || !profile) return;
