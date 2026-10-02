@@ -1,39 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
+import { useGifFavorites, type FavGif } from "@/hooks/useGifFavorites";
+import { FavStarButton } from "./GifFavStar";
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
   disabled?: boolean;
-}
-
-interface FavGif {
-  url: string;
-  title: string | null;
-}
-
-function FavStar({ active, onToggle, label }: {
-  active: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle();
-      }}
-      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-[30%] bg-black/50 text-yellow-400 backdrop-blur-sm transition-transform hover:scale-110"
-    >
-      <IconStar size={15} className={active ? "fill-yellow-400" : ""} />
-    </button>
-  );
 }
 
 function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
@@ -80,10 +56,9 @@ function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
         )}
       </button>
       {(hover || isFav) && (
-        <FavStar
+        <FavStarButton
           active={isFav}
           onToggle={() => onToggleFav(full, gif.title ?? null)}
-          label={isFav ? "Remove from favorites" : "Save to favorites"}
         />
       )}
     </div>
@@ -112,7 +87,7 @@ function FavThumb({ fav, onSelect, onRemove }: {
           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
         />
       </button>
-      <FavStar active onToggle={() => onRemove(fav.url)} label="Remove from favorites" />
+      <FavStarButton active onToggle={() => onRemove(fav.url)} />
     </div>
   );
 }
@@ -125,8 +100,6 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"search" | "favorites">("search");
-  const [favorites, setFavorites] = useState<FavGif[]>([]);
-  const [favsLoading, setFavsLoading] = useState(false);
   const [panelPos, setPanelPos] = useState({ left: 0, bottom: 0, width: 320 });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -194,44 +167,13 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
     setOpen(false);
   }
 
-  const loadFavorites = useCallback(async () => {
-    setFavsLoading(true);
-    try {
-      const res = await fetch("/api/gifs/favorites");
-      const json = (await res.json()) as { favorites?: FavGif[] };
-      if (res.ok) setFavorites(json.favorites ?? []);
-    } catch {
-      // Leave the last known list rather than blanking the tab.
-    } finally {
-      setFavsLoading(false);
-    }
-  }, []);
-
-  const toggleFav = useCallback(async (url: string, title: string | null, active: boolean) => {
-    // Optimistic: flip the star now, reconcile after.
-    setFavorites((prev) => {
-      const has = prev.some((f) => f.url === url);
-      if (active && !has) return [{ url, title }, ...prev];
-      if (!active && has) return prev.filter((f) => f.url !== url);
-      return prev;
-    });
-    try {
-      const res = await fetch("/api/gifs/favorites", {
-        method: active ? "POST" : "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, title }),
-      });
-      if (!res.ok) void loadFavorites();
-    } catch {
-      void loadFavorites();
-    }
-  }, [loadFavorites]);
-
-  const favUrls = useMemo(() => new Set(favorites.map((f) => f.url)), [favorites]);
+  // One shared favorites list (see useGifFavorites): starring here lights the
+  // star on every GIF already sitting in chat, and vice versa.
+  const { favorites, loaded: favsLoaded, isFav, toggle, refresh } = useGifFavorites();
 
   useEffect(() => {
-    if (open) void loadFavorites();
-  }, [open, loadFavorites]);
+    if (open) void refresh();
+  }, [open, refresh]);
 
   const panel =
     open && mounted
@@ -275,7 +217,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
               {tab === "favorites" ? (
-                favsLoading && favorites.length === 0 ? (
+                !favsLoaded && favorites.length === 0 ? (
                   <p className="py-4 text-center text-sm text-text-muted">Loading…</p>
                 ) : favorites.length === 0 ? (
                   <p className="py-4 text-center text-sm text-text-muted">
@@ -288,7 +230,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                         key={fav.url}
                         fav={fav}
                         onSelect={handleSelect}
-                        onRemove={(url) => void toggleFav(url, null, false)}
+                        onRemove={(url) => void toggle(url, null, false)}
                       />
                     ))}
                   </div>
@@ -308,9 +250,9 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                       <GifThumb
                         key={gif.id}
                         gif={gif}
-                        isFav={!!full && favUrls.has(full)}
+                        isFav={!!full && isFav(full)}
                         onSelect={handleSelect}
-                        onToggleFav={(url, title) => void toggleFav(url, title, !favUrls.has(url))}
+                        onToggleFav={(url, title) => void toggle(url, title, !isFav(url))}
                       />
                     );
                   })}

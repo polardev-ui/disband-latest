@@ -9,7 +9,11 @@ registerHooks({
     let target;
     if (specifier.startsWith('@/')) target = path.resolve('src', specifier.slice(2));
     else if (specifier.startsWith('.') && context.parentURL?.startsWith('file:')) target = path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier);
-    if (target) for (const suffix of ['', '.ts', '.tsx']) if (existsSync(target + suffix) && /\.tsx?$/.test(target + suffix)) return { url: pathToFileURL(target + suffix).href, shortCircuit: true };
+    if (target) {
+      for (const suffix of ['', '.ts', '.tsx']) if (existsSync(target + suffix) && /\.tsx?$/.test(target + suffix)) return { url: pathToFileURL(target + suffix).href, shortCircuit: true };
+      // Directory barrels: "@/components/icons" -> src/components/icons/index.tsx.
+      for (const suffix of ['/index.ts', '/index.tsx']) if (existsSync(target + suffix)) return { url: pathToFileURL(target + suffix).href, shortCircuit: true };
+    }
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
