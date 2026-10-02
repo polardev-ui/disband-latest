@@ -146,6 +146,7 @@ interface AppContextValue {
   refreshMfaStatus: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshAll: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   savedSessions: SavedSession[];
   switchAccount: (account: SavedSession) => Promise<string | null>;
   removeSavedAccount: (userId: string) => void;
@@ -1411,6 +1412,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setServerFolders((folders as ServerFolder[]) ?? []);
     setServerListState((states as ServerListState[]) ?? []);
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (!userId) return;
+    await loadProfile(userId);
+  }, [userId, loadProfile]);
 
   const refreshAll = useCallback(async () => {
     if (!userId) return;
@@ -4566,6 +4572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshMfaStatus,
     signOut,
     refreshAll,
+    refreshProfile,
     savedSessions,
     switchAccount,
     removeSavedAccount,
