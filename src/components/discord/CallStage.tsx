@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconMicOff, IconSpeaker, IconSpeakerOff } from "@/components/icons";
+import { IconMaximize, IconMicOff, IconSpeaker, IconSpeakerOff } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
 import { streamHasLiveVideo } from "@/lib/webrtc";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
@@ -191,7 +191,7 @@ function MemberCircle({ member }: { member: StageMember }) {
 }
 
 /** Video mode: a tile with their camera, or their circle centred in the tile. */
-function MemberTile({ member }: { member: StageMember }) {
+function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(member.stream);
   const speaking = useSpeaking(member.ringing ? null : member.stream);
@@ -205,7 +205,10 @@ function MemberTile({ member }: { member: StageMember }) {
 
   return (
     <div
+      onClick={hasVideo ? onFocus : undefined}
       className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media transition-shadow duration-150 ${
+        hasVideo && onFocus ? "cursor-pointer " : ""
+      }${
         speaking ? "ring-[3px] ring-status-online" : "ring-1 ring-white/10"
       }`}
     >
@@ -232,13 +235,32 @@ function MemberTile({ member }: { member: StageMember }) {
   );
 }
 
-function ScreenTile({ screen, deafened }: { screen: StageScreen; deafened: boolean }) {
+function ScreenTile({
+  screen, deafened, focused, compact, onFocus, watching, onWatch,
+}: {
+  /** Owned by the stage so it survives the tile moving between layouts. */
+  watching: boolean;
+  onWatch: (watching: boolean) => void;
+  screen: StageScreen;
+  deafened: boolean;
+  focused?: boolean;
+  /** Thumbnail in the strip under a focused tile: no controls, just the picture. */
+  compact?: boolean;
+  onFocus?: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  // Like Discord, a share starts as an invitation: you choose to watch.
-  const [watching, setWatching] = useState(!!screen.local);
   const [soundOff, setSoundOff] = useState(false);
   const hasAudio = !screen.local && !!screen.audio?.getAudioTracks().length;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await boxRef.current?.requestFullscreen();
+    } catch {
+      /* not allowed here (e.g. some webviews) — the in-call focus still works */
+    }
+  };
 
   useEffect(() => {
     const el = videoRef.current;
@@ -260,7 +282,14 @@ function ScreenTile({ screen, deafened }: { screen: StageScreen; deafened: boole
   }, [screen.audio, watching, soundOff, deafened]);
 
   return (
-    <div className="group relative h-full w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
+    <div
+      ref={boxRef}
+      className={`group relative h-full w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10 ${
+        watching && onFocus ? "cursor-pointer" : ""
+      }`}
+      onClick={watching ? onFocus : undefined}
+      title={watching && onFocus ? (focused ? "Click to shrink" : "Click to focus") : undefined}
+    >
       {watching ? (
         <video ref={videoRef} autoPlay playsInline muted className="h-full w-full bg-black object-contain" />
       ) : (
@@ -269,7 +298,12 @@ function ScreenTile({ screen, deafened }: { screen: StageScreen; deafened: boole
           <p className="text-sm text-white/70">{screen.label}</p>
           <button
             type="button"
-            onClick={() => setWatching(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onWatch(true);
+              // Choosing to watch means you want to see it: open it big.
+              if (!focused) onFocus?.();
+            }}
             className="rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-black transition-transform hover:scale-105"
           >
             Watch Stream
@@ -286,8 +320,11 @@ function ScreenTile({ screen, deafened }: { screen: StageScreen; deafened: boole
         </span>
       </span>
 
-      {watching && !screen.local && (
-        <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      {watching && !compact && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+        >
           {hasAudio && (
             <button
               type="button"
@@ -300,11 +337,24 @@ function ScreenTile({ screen, deafened }: { screen: StageScreen; deafened: boole
           )}
           <button
             type="button"
-            onClick={() => setWatching(false)}
-            className="rounded-md bg-black/70 px-2.5 text-xs font-semibold text-white hover:bg-black/90"
+            onClick={() => void toggleFullscreen()}
+            title="Full screen"
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-black/70 text-white hover:bg-black/90"
           >
-            Stop watching
+            <IconMaximize size={16} />
           </button>
+          {!screen.local && (
+            <button
+              type="button"
+              onClick={() => {
+                onWatch(false);
+                if (focused) onFocus?.();
+              }}
+              className="rounded-md bg-black/70 px-2.5 text-xs font-semibold text-white hover:bg-black/90"
+            >
+              Stop watching
+            </button>
+          )}
         </div>
       )}
       {hasAudio && watching && soundOff && (
@@ -322,12 +372,26 @@ export function CallStage({
   members,
   screens,
   deafened = false,
+  onFocusChange,
 }: {
   members: StageMember[];
   screens: StageScreen[];
   deafened?: boolean;
+  /** Lets the call panel grow to most of the window while a tile is focused. */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const anyVideo = useAnyLiveVideo(members.map((m) => m.stream));
+  const [focusId, setFocusId] = useState<string | null>(null);
+  // Like Discord, someone else's share starts as an invitation: you choose
+  // to watch. Your own is always shown.
+  const [watchingIds, setWatchingIds] = useState<Set<string>>(() => new Set());
+  const setWatch = (id: string, on: boolean) =>
+    setWatchingIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   // Jingle whenever a share starts — yours or anyone's. Shares already running
   // when the stage mounts (you joined late) don't count as starting.
@@ -346,9 +410,19 @@ export function CallStage({
     }
   }, [screenKey]);
 
-  const ordered = useMemo(() => screens, [screens]);
+  // A focused share or camera that goes away drops the focus with it.
+  const focusExists =
+    focusId !== null &&
+    (screens.some((s) => s.id === focusId) || members.some((m) => m.id === focusId));
+  const activeFocus = focusExists ? focusId : null;
+  useEffect(() => {
+    onFocusChange?.(activeFocus !== null);
+  }, [activeFocus, onFocusChange]);
+  useEffect(() => () => onFocusChange?.(false), [onFocusChange]);
 
-  if (!anyVideo && ordered.length === 0) {
+  const toggle = (id: string) => setFocusId((cur) => (cur === id ? null : id));
+
+  if (!anyVideo && screens.length === 0) {
     return (
       <div className="flex min-h-0 w-full flex-1 flex-wrap content-center items-center justify-center gap-x-6 gap-y-5 overflow-auto py-2">
         {members.map((m) => (
@@ -358,12 +432,52 @@ export function CallStage({
     );
   }
 
+  const screenTile = (s: StageScreen, compact = false) => (
+    <ScreenTile
+      key={s.id}
+      screen={s}
+      deafened={deafened}
+      focused={s.id === activeFocus}
+      compact={compact}
+      watching={!!s.local || watchingIds.has(s.id)}
+      onWatch={(on) => setWatch(s.id, on)}
+      onFocus={() => toggle(s.id)}
+    />
+  );
+  const memberTile = (m: StageMember) => (
+    <MemberTile key={m.id} member={m} onFocus={() => toggle(m.id)} />
+  );
+
+  if (activeFocus) {
+    // Discord's focus view: the chosen tile fills the stage, everyone else
+    // rides along in a strip underneath. Click it again to go back.
+    const focusedScreen = screens.find((s) => s.id === activeFocus);
+    const focusedMember = members.find((m) => m.id === activeFocus);
+    const rest = [
+      ...screens.filter((s) => s.id !== activeFocus).map((s) => screenTile(s, true)),
+      ...members.filter((m) => m.id !== activeFocus).map(memberTile),
+    ];
+    return (
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-2">
+        <div className="min-h-0 flex-1">
+          {focusedScreen ? screenTile(focusedScreen) : focusedMember ? memberTile(focusedMember) : null}
+        </div>
+        {rest.length > 0 && (
+          <div className="flex h-24 shrink-0 justify-center gap-2 overflow-x-auto">
+            {rest.map((tile, i) => (
+              <div key={i} className="aspect-video h-full shrink-0">
+                {tile}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <CallGrid>
-      {[
-        ...ordered.map((s) => <ScreenTile key={s.id} screen={s} deafened={deafened} />),
-        ...members.map((m) => <MemberTile key={m.id} member={m} />),
-      ]}
+      {[...screens.map((s) => screenTile(s)), ...members.map(memberTile)]}
     </CallGrid>
   );
 }

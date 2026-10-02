@@ -57,6 +57,9 @@ export function GroupCallStage({
   micMuted, deafened, connectedAt, onJoin, onLeave, onToggleCamera, onToggleMic,
 }: GroupCallStageProps) {
   const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
+  // While a share or camera is focused the panel takes most of the window,
+  // without overwriting the height you dragged it to.
+  const [focused, setFocused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const joinedAtRef = useRef<number>(0);
 
@@ -106,7 +109,7 @@ export function GroupCallStage({
 
 
   return (
-    <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: callHeight }}>
+    <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}>
      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
       {}
       <p className="text-xs font-bold uppercase tracking-widest text-white/30">
@@ -119,7 +122,7 @@ export function GroupCallStage({
       </p>
 
       {}
-      <div className="flex min-h-0 w-full max-w-4xl flex-1 flex-col py-3">
+      <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-4xl"} flex-1 flex-col py-3`}>
         {joined && people.length + shares.length === 0 ? (
           <p className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white/50">
             You&apos;re the only one here.
@@ -127,7 +130,7 @@ export function GroupCallStage({
             Others can join from the group.
           </p>
         ) : (
-        <CallStage members={people} screens={shares} deafened={deafened} />
+        <CallStage members={people} screens={shares} deafened={deafened} onFocusChange={setFocused} />
         )}
       </div>
 

@@ -55,6 +55,7 @@ import {
   FolderMinus,
   Timer,
   VolumeX,
+  Maximize2,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -70,6 +71,7 @@ export const IconPlus = icon(Plus);
 export const IconHash = icon(Hash);
 export const IconSpeaker = icon(Volume2);
 export const IconSpeakerOff = icon(VolumeX);
+export const IconMaximize = icon(Maximize2);
 export const IconSearch = icon(Search);
 export const IconChevron = icon(ChevronDown);
 export const IconMic = icon(Mic);
