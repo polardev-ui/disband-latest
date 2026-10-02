@@ -156,6 +156,25 @@ export function useCallManager(
     await broadcastOnChannel(getSupabaseClient(), `call-user:${targetId}`, "call", payload);
   }, []);
 
+  /**
+   * Tell this account's other clients (web, desktop, phone) that the ring was
+   * answered or declined here, so they stop ringing.
+   *
+   * Goes out on the listener channel we already hold. `sendToUser(userId, …)`
+   * used to do this, but `supabase.channel(topic)` hands back the existing
+   * channel for a topic we're already subscribed to — so the helper's
+   * cleanup unsubscribed our own call listener, and the message often never
+   * left. The other client kept ringing after the call was answered.
+   */
+  const notifyOwnClients = useCallback(async (callId: string) => {
+    if (!userId) return;
+    const payload: CallSignal = { type: "handled", from: userId, to: userId, callId };
+    const ch = listenRef.current;
+    if (ch) {
+      await ch.send({ type: "broadcast", event: "call", payload });
+    }
+  }, [userId]);
+
   const notifyPeerLeave = useCallback(async (peerId: string, callId: string | null) => {
     if (!userId) return;
     const payload: CallSignal = { type: "leave", from: userId, to: peerId, callId: callId ?? undefined };
@@ -573,12 +592,12 @@ export function useCallManager(
     try {
       await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
 
-      void sendToUser(userId, { type: "handled", from: userId, to: userId, callId: incoming.callId });
+      void notifyOwnClients(incoming.callId);
       await setupRtc(incoming.callId, incoming.fromId, false);
     } catch {
 
     }
-  }, [incoming, userId, sendToUser, setupRtc]);
+  }, [incoming, userId, sendToUser, setupRtc, notifyOwnClients]);
 
   const rejectCall = useCallback(async () => {
     if (!incoming || !userId || !profile) return;
@@ -591,10 +610,10 @@ export function useCallManager(
       rejecterName: displayName(profile),
     });
 
-    void sendToUser(userId, { type: "handled", from: userId, to: userId, callId: incoming.callId });
+    void notifyOwnClients(incoming.callId);
     setIncoming(null);
     setPhase("idle");
-  }, [incoming, userId, profile, sendToUser]);
+  }, [incoming, userId, profile, sendToUser, notifyOwnClients]);
 
   const endCall = useCallback(async () => {
     stopRingtone();
