@@ -108,6 +108,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const myBadges = useBadges(profile?.id);
   const [gifting, setGifting] = useState(false);
   const [giftLink, setGiftLink] = useState<string | null>(null);
+  const [giftCopied, setGiftCopied] = useState(false);
   const { upload, isUploading } = useMediaUpload();
   const [zoom, setZoom] = useZoom();
   const [motion, setMotion] = useState<MotionPreference>(() => getStoredMotion());
@@ -1139,6 +1140,43 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           {subPlan === "free" ? "Upgrade" : "Manage"}
                         </button>
                       </div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm font-bold text-text-normal">Gift a subscription</p>
+                        <p className="text-xs text-text-muted">
+                          Pay once for Aero or Lite. Send the link in a DM or a channel — first to claim it gets it.
+                        </p>
+                        {giftLink && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <code className="min-w-0 flex-1 truncate rounded bg-bg-tertiary px-2 py-1 text-xs text-text-normal">
+                              {giftLink}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void navigator.clipboard?.writeText(giftLink).then(
+                                  () => setGiftCopied(true),
+                                  () => setGiftCopied(false),
+                                );
+                                window.setTimeout(() => setGiftCopied(false), 2000);
+                              }}
+                              className="shrink-0 rounded border border-divider px-2 py-1 text-xs font-semibold text-text-normal hover:bg-interactive-hover"
+                            >
+                              {giftCopied ? "Copied" : "Copy"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setGiftCopied(false); setGifting(true); }}
+                        className="shrink-0 rounded bg-[#fee75c] px-3 py-1.5 text-sm font-bold text-black transition-opacity hover:opacity-90"
+                      >
+                        Gift
+                      </button>
                     </div>
                   </div>
                   <button
