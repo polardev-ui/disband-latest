@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Disband Android screens for the Android beta announcement. Layout, sizes
+     and colours are measured from device captures of the current Android
+     build (rail + raised panel, labelled dock pill, Material 3 chips), with
+     the Disband Dark palette. Content is the App Review demo personas only.
+     1 CSS px = 1 dp; captured at 2.625x → 1081×2402. -->
+<style>
+@font-face { font-family: "Roboto"; src: url("../assets/fonts/RobotoVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root {
+  --bg: #1e1f22; --surface: #2b2d31; --raised: #313338; --elevated: #35373c;
+  --accent: #5865f2; --text: #f2f3f5; --text2: #b5bac1; --muted: #949ba4; --divider: #3f4147;
+  --online: #23a55a; --idle: #f0b232; --dnd: #f23f43; --offline: #80848e; --chipSel: #4a4458;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 412px; height: 915px; overflow: hidden; background: var(--bg); }
+body { font-family: "Roboto", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; letter-spacing: 0.005em; }
+.screen { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+.ic { display: inline-block; flex: none; }
+.ic svg { width: 100%; height: 100%; display: block; fill: currentColor; }
+.emoji { width: 1.2em; height: 1.2em; vertical-align: -0.22em; }
+
+/* System bars */
+.status { position: absolute; left: 0; right: 0; top: 0; height: 49px; z-index: 30; display: flex; align-items: center; padding: 0 20px; font-size: 15px; font-weight: 500; color: #e3e3e3; }
+.status .right { margin-left: auto; display: flex; gap: 5px; align-items: center; }
+.status.bar { background: var(--bg); }
+.punch { position: absolute; left: 194px; top: 13px; width: 24px; height: 24px; border-radius: 12px; background: #000; z-index: 31; }
+.gesture { position: absolute; left: 152px; bottom: 6px; width: 108px; height: 4px; border-radius: 2px; background: #f2f2f2; z-index: 31; }
+
+/* Rail + panel */
+.rail { position: absolute; left: 0; top: 50px; width: 73px; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 12px; }
+.rail .item { position: relative; width: 48px; height: 48px; flex: none; }
+.rail .icon { width: 48px; height: 48px; border-radius: 24px; overflow: hidden; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; }
+.rail .item.sel .icon { border-radius: 16px; }
+.rail .item.sel::before { content: ""; position: absolute; left: -12px; top: 5px; width: 4px; height: 38px; border-radius: 2px; background: #fff; }
+.rail .sep { width: 24px; height: 2px; border-radius: 1px; background: var(--divider); flex: none; margin: 1px 0; }
+.rail .util { width: 48px; height: 48px; border-radius: 24px; background: var(--surface); display: grid; place-items: center; flex: none; }
+.rail .badge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 9px; background: var(--bg); display: grid; place-items: center; color: #38bdf8; }
+.panel { position: absolute; left: 73px; right: 0; top: 50px; bottom: 0; background: var(--surface); border-top-left-radius: 28px; overflow: hidden; }
+
+/* Inbox */
+.hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px 17px; }
+.hdr h1 { font-size: 23px; font-weight: 700; }
+.circle { width: 36px; height: 36px; border-radius: 18px; background: var(--elevated); display: grid; place-items: center; color: #fff; }
+.chips { display: flex; gap: 7px; padding: 0 16px 12px 16px; }
+.chip { height: 31px; padding: 0 15px; border-radius: 16px; background: var(--elevated); color: var(--text2); font-size: 16px; font-weight: 500; display: flex; align-items: center; }
+.chip.on { background: var(--accent); color: #fff; }
+.rows { padding: 0 8px 0 21px; }
+.row { display: flex; align-items: center; gap: 12px; height: 63.5px; }
+.avatar { position: relative; flex: none; border-radius: 50%; }
+.avatar .in { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; overflow: hidden; color: #fff; font-weight: 500; }
+.avatar .st { position: absolute; border-radius: 50%; }
+.row .txt { flex: 1; min-width: 0; }
+.row .l1 { display: flex; align-items: baseline; gap: 8px; }
+.row .nm { flex: 1; font-size: 18px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .tm { font-size: 14px; color: var(--muted); padding-right: 8px; }
+.row .pv { font-size: 17px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+.row.unread .nm { color: var(--text); font-weight: 600; }
+.row.unread .pv { color: #8e97ff; }
+
+/* Dock */
+.dock { position: absolute; left: 78px; width: 259px; bottom: 21px; height: 63px; border-radius: 32px; background: rgba(43,45,49,.92); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1), 0 8px 26px rgba(0,0,0,.45); display: flex; align-items: center; padding: 0 8px; gap: 4px; z-index: 20; }
+.dock.mid { left: 76px; }
+.dock .it { height: 45px; min-width: 46px; border-radius: 23px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text2); flex: 1; }
+.dock .it.on { flex: none; padding: 0 18px 0 16px; color: #fff; background: linear-gradient(180deg, #6470ff, #5865f2 55%, #4f5be6); }
+.dock .it span { font-size: 18px; font-weight: 500; }
+
+/* Server */
+.banner { position: relative; height: 116px; }
+.banner .fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(43,45,49,0) 30%, rgba(43,45,49,.96)); }
+.banner .title { position: absolute; left: 16px; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.banner h2 { font-size: 26px; font-weight: 700; flex: 1; }
+.pills { display: flex; gap: 8px; padding: 14px 16px 0; }
+.pill { flex: 1; height: 34px; border-radius: 17px; background: var(--elevated); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 500; }
+.cat { display: flex; align-items: center; gap: 4px; padding: 26px 16px 8px; font-size: 13.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.chan { height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 20px; color: var(--text2); font-size: 19px; }
+.chan .g { width: 22px; display: grid; place-items: center; color: var(--text2); }
+.chan .hash { font-size: 24px; font-weight: 500; line-height: 1; }
+.vp { display: flex; align-items: center; gap: 9px; padding: 3px 0 3px 56px; font-size: 16px; color: var(--text2); }
+
+/* Friends / Notes / You headers */
+.topbar { position: absolute; left: 0; right: 0; top: 0; background: var(--surface); padding: 52px 17px 12px; z-index: 5; }
+.topbar h1 { font-size: 28px; font-weight: 700; }
+.topbar p { font-size: 16px; color: var(--muted); margin-top: 6px; }
+.topbar .act { position: absolute; right: 22px; top: 72px; color: #fff; }
+.m3chips { display: flex; gap: 8px; }
+.m3 { height: 32px; padding: 0 16px; border-radius: 8px; display: flex; align-items: center; font-size: 15px; font-weight: 500; color: var(--text); box-shadow: inset 0 0 0 1px #5f6166; }
+.m3.on { background: var(--chipSel); box-shadow: none; }
+.search { margin: 16px 16px 0; height: 56px; border-radius: 4px; box-shadow: inset 0 0 0 1px #5f6166; display: flex; align-items: center; padding: 0 16px; font-size: 18px; color: var(--muted); }
+.label { font-size: 15px; font-weight: 500; color: var(--muted); }
+.active { display: flex; gap: 22px; padding: 18px 23px 18px; }
+.active .a { display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 14.5px; font-weight: 500; color: var(--text2); }
+.flist { background: var(--raised); }
+.frow { height: 80px; display: flex; align-items: center; gap: 18px; padding: 0 30px; position: relative; }
+.frow + .frow::before { content: ""; position: absolute; left: 65px; right: 0; top: 0; height: 1px; background: #3d3f45; }
+.frow b { display: block; font-size: 18px; font-weight: 700; }
+.frow span { display: block; font-size: 16px; color: var(--muted); margin-top: 3px; }
+.frow .msg { margin-left: auto; color: var(--muted); }
+.notes { padding: 0 16px; }
+.note { background: var(--surface); border-radius: 16px; padding: 14px 16px 18px; margin-bottom: 10px; }
+.note .meta { display: flex; align-items: center; gap: 6px; font-size: 14.5px; color: var(--muted); }
+.note .meta .more { margin-left: auto; }
+.note .body { margin-top: 12px; font-size: 18px; line-height: 1.45; color: #e3e5e8; }
+.day { font-size: 15px; font-weight: 500; color: var(--muted); padding: 22px 0 10px; }
+.ncomposer { position: absolute; left: 12px; right: 12px; bottom: 112px; display: flex; gap: 10px; align-items: center; z-index: 6; }
+.ncomposer .f { flex: 1; height: 56px; border-radius: 28px; background: var(--elevated); display: flex; align-items: center; padding: 0 18px; font-size: 18px; color: var(--muted); }
+.ncomposer .s { width: 44px; height: 44px; border-radius: 22px; background: var(--elevated); display: grid; place-items: center; color: var(--muted); }
+.you { position: absolute; left: 16px; right: 16px; top: 0; }
+.aero { margin-top: 16px; border-radius: 24px; padding: 16px; display: flex; gap: 14px; align-items: center; background: linear-gradient(135deg, #43391b, #2d2a20); box-shadow: inset 0 0 0 1.5px #6d5c18; }
+.aero .sq { width: 46px; height: 46px; border-radius: 12px; background: #f8e05b; display: grid; place-items: center; color: #1a1712; }
+.aero b { font-size: 19px; font-weight: 500; display: block; }
+.aero span { font-size: 15.5px; color: var(--text2); display: block; margin-top: 4px; }
+.pcard { margin-top: 16px; border-radius: 24px; background: var(--surface); overflow: hidden; position: relative; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+.pcard .bn { height: 88px; background: linear-gradient(135deg, #5d69f4, #4752c4); }
+.pcard .av { position: absolute; left: 16px; top: 48px; width: 86px; height: 86px; border-radius: 43px; border: 4px solid var(--surface); display: grid; place-items: center; font-size: 34px; font-weight: 500; }
+.pcard .meta { padding: 54px 16px 18px; }
+.pcard .meta b { display: block; font-size: 24px; font-weight: 700; }
+.pcard .meta .h { font-size: 15px; color: var(--muted); margin-top: 14px; }
+.pcard .meta .bio { font-size: 16px; color: var(--text2); margin-top: 10px; line-height: 1.5; }
+.group { margin-top: 12px; border-radius: 20px; background: var(--surface); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
+.grow { height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 14px; position: relative; font-size: 18px; font-weight: 500; }
+.grow + .grow::before { content: ""; position: absolute; left: 56px; right: 0; top: 0; height: 1px; background: #3a3c41; }
+.grow .sq { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; }
+.grow .v { margin-left: auto; font-size: 16px; color: var(--accent); font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import { ME, PEOPLE, SPACES, INBOX } from "./demo-data.js";
+
+const params = new URLSearchParams(location.search);
+const screen = params.get("screen") || "inbox";
+const ICONS = ["chat", "people", "notes", "person", "edit", "person_add", "add", "explore", "lock", "volume_up", "send", "push_pin", "more_horiz", "verified", "notifications", "info", "language", "logout", "brush", "account_circle", "auto_awesome", "expand_more"];
+const svgs = {};
+await Promise.all(ICONS.map(async (n) => { svgs[n] = await fetch(`../assets/material-icons/${n}.svg`).then((r) => r.text()); }));
+const I = (n, size = 24, color = "currentColor") => `<span class="ic" style="width:${size}px;height:${size}px;color:${color}">${svgs[n]}</span>`;
+const E = (code, cls = "emoji") => `<img class="${cls}" src="../assets/emoji/${code}.svg">`;
+const LOGO = (px, color = "#fff") => `<svg width="${px}" height="${px * 1.124}" style="color:${color}"><use href="#mark"/></svg>`;
+const PRES = { online: "var(--online)", idle: "var(--idle)", offline: "var(--offline)", dnd: "var(--dnd)" };
+
+function avatar(p, size, ring = "var(--surface)", status = true) {
+  const inner = p.logo ? `<div class="in" style="background:#000">${LOGO(size * 0.5)}</div>`
+    : `<div class="in" style="background:${p.color};font-size:${size * 0.42}px">${p.initials}</div>`;
+  const d = Math.round(size * 0.27);
+  const st = status && p.status ? `<span class="st" style="width:${d}px;height:${d}px;right:-2px;bottom:-2px;background:${PRES[p.status]};box-shadow:0 0 0 3px ${ring}"></span>` : "";
+  return `<div class="avatar" style="width:${size}px;height:${size}px">${inner}${st}</div>`;
+}
+
+const statusBar = (bar = false) => `<div class="status ${bar ? "bar" : ""}"><span>12:00</span><span class="right">
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="#e3e3e3"><path d="M12 21 0 7c3.3-2.6 7.5-4 12-4s8.7 1.4 12 4z"/></svg>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="#e3e3e3"><path d="M2 22h20V2z"/></svg>
+  <svg width="10" height="17" viewBox="0 0 10 18" fill="#e3e3e3"><rect x="3" y="0" width="4" height="2" rx="1"/><rect x="0" y="2" width="10" height="16" rx="2"/></svg></span></div>
+  <div class="punch"></div><div class="gesture"></div>`;
+
+function rail(sel) {
+  const items = SPACES.slice(0, 8).map((s) => {
+    let inner;
+    if (s.logo) inner = `<div class="icon" style="background:#000">${LOGO(25)}</div>`;
+    else if (s.emoji) inner = `<div class="icon" style="background:transparent;gap:3px;display:flex">${s.emoji.map((c) => `<img src="../assets/emoji/${c}.svg" width="14">`).join("")}</div>`;
+    else if (s.emoji1) inner = `<div class="icon" style="background:${s.color}"><img src="../assets/emoji/${s.emoji1}.svg" width="24"></div>`;
+    else inner = `<div class="icon" style="background:${s.color}">${s.initials}</div>`;
+    const badge = s.verified ? `<span class="badge">${I("verified", 15, "#38bdf8")}</span>` : "";
+    return `<div class="item ${sel === s.id ? "sel" : ""}">${inner}${badge}</div>`;
+  }).join("");
+  return `<div class="rail">
+    <div class="item ${sel === "inbox" ? "sel" : ""}"><div class="icon" style="background:linear-gradient(180deg,#6470ff,#5865f2 60%,#4f5be6)">${I("chat", 27, "#fff")}</div></div>
+    <div class="sep"></div>${items}
+    <div class="util">${I("add", 28, "var(--online)")}</div>
+    <div class="util">${I("explore", 26, "var(--accent)")}</div></div>`;
+}
+
+function dock(active) {
+  const items = [["home", "chat", "Home"], ["friends", "people", "Friends"], ["notes", "notes", "Notes"], ["you", "person", "You"]];
+  return `<div class="dock">${items.map(([id, ic, label]) =>
+    `<div class="it ${id === active ? "on" : ""}">${I(ic, 25)}${id === active ? `<span>${label}</span>` : ""}</div>`).join("")}</div>`;
+}
+
+function inbox() {
+  const rows = INBOX.map((r) => {
+    const p = r.group ? { name: r.name, initials: r.initials, color: r.color } : PEOPLE[r.who];
+    const prev = r.preview.startsWith("emoji:") ? E(r.preview.slice(6)) : r.preview;
+    return `<div class="row ${r.unread ? "unread" : ""}">${avatar(p, 44)}<div class="txt"><div class="l1"><div class="nm">${p.name}</div><div class="tm">${r.time}</div></div><div class="pv">${prev}</div></div></div>`;
+  }).join("");
+  return `${statusBar(true)}${rail("inbox")}<div class="panel">
+    <div class="hdr"><h1>Messages</h1><div class="circle">${I("edit", 20)}</div></div>
+    <div class="chips"><div class="chip on">All</div><div class="chip">Unread</div><div class="chip">Groups</div></div>
+    <div class="rows">${rows}</div></div>${dock("home")}`;
+}
+
+function server() {
+  const ch = (g, name) => `<div class="chan"><span class="g">${g}</span><span>${name}</span></div>`;
+  const lock = I("lock", 21), hash = `<span class="hash">#</span>`;
+  return `${statusBar(true)}${rail("hq")}<div class="panel">
+    <div class="banner" style="background:linear-gradient(135deg,#ed4245,#a8284a)"><div class="fade"></div>
+      <div class="title"><h2>Disband Demo HQ</h2><div class="circle" style="background:rgba(60,62,65,.9)">${I("more_horiz", 22)}</div></div></div>
+    <div class="pills"><div class="pill">${I("person_add", 22)}Invite</div><div class="pill">${I("people", 22)}Members</div></div>
+    <div class="cat">INFO ${I("expand_more", 18)}</div>
+    ${ch(lock, "welcome")}${ch(lock, "rules")}${ch(lock, "updates")}
+    <div class="cat">TEXT CHANNELS ${I("expand_more", 18)}</div>
+    ${ch(hash, "general")}${ch(hash, "random")}${ch(hash, "support")}
+    <div class="cat">VOICE CHANNELS ${I("expand_more", 18)}</div>
+    ${ch(I("volume_up", 22, "var(--online)"), "Lounge")}
+    ${["nova", "kai", "mila"].map((k) => `<div class="vp">${avatar(PEOPLE[k], 24, "", false)}${PEOPLE[k].name}</div>`).join("")}
+  </div>${dock("home")}`;
+}
+
+function friends() {
+  const on = [PEOPLE.nova, PEOPLE.mila, PEOPLE.iris];
+  const handle = { "Nova Reyes": "nova", "Mila Oduya": "mila", "Iris Bennet": "iris" };
+  return `${statusBar()}<div class="topbar" style="padding-bottom:14px"><h1>Friends</h1><p>3 online · 7 total</p><span class="act">${I("person_add", 30)}</span></div>
+    <div style="position:absolute;left:0;right:0;top:124px;height:1px;background:#3a3c41"></div>
+    <div style="position:absolute;left:0;right:0;top:125px">
+      <div class="m3chips" style="padding:18px 16px 0"><div class="m3 on">Online</div><div class="m3">All</div><div class="m3">Pending</div></div>
+      <div class="search">Search friends</div>
+      <div class="label" style="padding:26px 17px 0">Active now</div>
+      <div class="active">${on.map((p) => `<div class="a">${avatar(p, 58, "var(--bg)")}${p.name.split(" ")[0]}</div>`).join("")}</div>
+      <div class="flist">${on.map((p) => `<div class="frow">${avatar(p, 44, "var(--raised)")}<div><b>${p.name}</b><span>@${handle[p.name]}</span></div><span class="msg">${I("chat", 24)}</span></div>`).join("")}</div>
+    </div>${dock("friends")}`;
+}
+
+function notes() {
+  const note = (time, body, pinned = false) => `<div class="note"><div class="meta">${pinned ? I("push_pin", 17, "var(--idle)") : ""}<span>${time}</span><span class="more">${I("more_horiz", 22)}</span></div><div class="body">${body}</div></div>`;
+  return `${statusBar()}<div class="topbar"><h1>Notes</h1><p>Only you can see these</p></div>
+    <div style="position:absolute;left:0;right:0;top:122px">
+      <div class="m3chips" style="padding:2px 16px 0"><div class="m3 on">All</div><div class="m3">Pinned</div></div>
+      <div class="notes"><div class="day">Today</div>
+        ${note("9:41 AM", "Community call — Friday at 4pm. Bring the roadmap slides.", true)}
+        ${note("8:15 AM", "Design Lab showcase ideas: colour-crush week, a sketch swap, and 30-minute critique sessions on Sundays.")}
+        <div class="day">Sunday, Sep 27</div>
+        ${note("Sun 12:04 PM", "Book club picks for October: Piranesi, then The Left Hand of Darkness.")}
+      </div></div>
+    <div class="ncomposer"><div class="f">Write a note…</div><div class="s">${I("send", 22)}</div></div>${dock("notes")}`;
+}
+
+function you() {
+  const row = (ic, bg, label, v = "") => `<div class="grow"><span class="sq" style="background:${bg}">${I(ic, 19)}</span>${label}${v ? `<span class="v">${v}</span>` : ""}</div>`;
+  return `${statusBar()}<div class="topbar" style="padding:46px 16px 0;background:transparent"></div>
+    <div class="you" style="top:50px">
+      <div style="background:var(--surface);border-radius:0 0 4px 4px;padding:16px 12px 14px;margin:0 -2px;font-size:28px;font-weight:700">You</div>
+      <div class="aero"><div class="sq">${I("auto_awesome", 26)}</div><div><b>Disband Aero</b><span>Active · renews Oct 28</span></div></div>
+      <div class="pcard"><div class="bn"></div><div class="av" style="background:${ME.color}">${ME.initials}</div>
+        <div class="meta"><b>${ME.name}</b><div class="h">@${ME.handle}</div><div class="bio">Product designer. Coffee, film cameras, good fonts.</div></div></div>
+      <div class="group">${row("account_circle", "#5865f2", "Account")}${row("brush", "#9b59b6", "Appearance")}</div>
+      <div class="group">${row("notifications", "#f0b232", "Notifications")}${row("info", "#4e5058", "About", "1.4.0")}${row("language", "#1abc9c", "disband.dev")}</div>
+    </div>${dock("you")}`;
+}
+
+const SCREENS = { inbox, server, friends, notes, you };
+document.getElementById("root").innerHTML = `
+  <svg width="0" height="0" style="position:absolute"><defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol></defs></svg>
+  <div class="screen">${SCREENS[screen]()}</div>`;
+const mark = await fetch("../assets/logo/disband-mark.svg").then((r) => r.text());
+document.getElementById("markpath").setAttribute("d", mark.match(/ d="([^"]+)"/)[1]);
+await document.fonts.load("500 16px Roboto");
+await document.fonts.load("700 16px Roboto");
+await Promise.all([...document.images].map((i) => (i.complete ? 0 : new Promise((r) => (i.onload = i.onerror = r)))));
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>
