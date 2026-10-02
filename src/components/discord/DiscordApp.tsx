@@ -2021,6 +2021,11 @@ export function DiscordApp() {
         open={shopOpen}
         onClose={() => setShopOpen(false)}
         initialCategory={shopCategory}
+        // Equipping writes profiles.equipped_* server-side: reload the own
+        // profile so the bottom-left panel, profile popout, and every other
+        // context-profile avatar pick the new effect up immediately (chat
+        // already shows it — message authors are fetched fresh per row).
+        onChanged={() => void app.refreshProfile()}
         self={{
           name: app.profile ? displayName(app.profile) : "You",
           avatarUrl: app.profile?.avatar_url,
