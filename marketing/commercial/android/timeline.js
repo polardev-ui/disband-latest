@@ -49,4 +49,5 @@ export const T = {
   endSlogan: 33.8,
   endNote: 34.8,
   endUrl: 35.8,
+  endHold: 37.1,   // URL settled (last char 37.02); static to the end
 };

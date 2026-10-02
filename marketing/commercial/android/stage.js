@@ -145,7 +145,7 @@ function scene7(t) {
   animateChars(sloganChars, t, { inStart: T.endSlogan, stagger: 0.022, dur: 0.7 });
   animateChars(noteChars, t, { inStart: T.endNote, stagger: 0.016, dur: 0.65 });
   animateChars(urlChars, t, { inStart: T.endUrl, stagger: 0.02, dur: 0.7, dx: 0.3, rise: 0.08, scaleFrom: 0.92 });
-  $("endGroup").style.transform = `scale(${(1 + 0.016 * ease.inOutSine(prog(t, T.endLogo, DURATION))).toFixed(5)})`;
+  $("endGroup").style.transform = `scale(${(1 + 0.016 * ease.inOutSine(prog(t, T.endLogo, T.endHold))).toFixed(5)})`;
 }
 
 const engine = new Engine3D($("gl"));
