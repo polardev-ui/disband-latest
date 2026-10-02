@@ -124,6 +124,12 @@ jobs:
           NEXT_PUBLIC_GITHUB_REPO: polardev-ui/disband-latest
           NEXT_PUBLIC_MEDIA_API_URL: https://cdn.disband.dev/v1
           NEXT_PUBLIC_APP_URL: https://www.disband.dev
+          # Publishable key is public by design (it ships in the web bundle
+          # too). Without it the desktop build inlines an empty key and every
+          # payment surfaces "deployed without a Stripe publishable key".
+          # Server-side Stripe work uses STRIPE_SECRET_KEY on disband.dev,
+          # which the desktop app already calls for its API routes.
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_live_51Tn8c9Q1fRF2p1VXdjXVfK1bNXag0A43aDySr7E51o1rJOgCf8zbAwmytOyRYgpwhrwokVYeMPA3Ik0nYIdyr3m400LA4adLm5
         with:
           tagName: ${{ steps.build.outputs.mode == 'branch' && steps.tag.outputs.name || steps.build.outputs.release_tag }}
           releaseName: Disband ${{ steps.build.outputs.mode == 'branch' && steps.tag.outputs.name || steps.build.outputs.release_tag }}
