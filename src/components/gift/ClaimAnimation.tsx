@@ -35,8 +35,8 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
     [],
   );
 
-  const accent = "#fee75c";
-  const planName = "Disband Aero";
+  const accent = plan === "lite" ? "#7dd3fc" : "#fee75c";
+  const planName = PLANS.find((p) => p.id === plan)?.name ?? "Disband Aero";
   const perks = useMemo(
     () => (PLANS.find((p) => p.id === plan)?.features ?? []).filter((f) => f.included).slice(0, 6),
     [plan],

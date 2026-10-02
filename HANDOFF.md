@@ -221,9 +221,199 @@ radius (`.env.local`, Vercel/Cloudflare env, worker secret, edge functions) —
 * Duplicate migration number prefixes exist at `0055`, `0057`, `0058`
   (pre-existing).
 
+### (g) UI tasks — added by the user 2026-10-02, NOT STARTED
+
+* **Rename the sidebar row "Disband Aero" → "Upgrade".** It is the `NavRow`
+  with the crown icon in `src/components/discord/HomePanel.tsx`, sitting under
+  **Notes** and above **Disband Shop** (it currently calls
+  `onOpenSubscription?.()`). The row must open a sheet that lists **both**
+  plans — Disband Aero *and* Disband Lite. Lite is already a real plan
+  (`SubscriptionPlan = free | lite | aero`, `getPriceId(plan, interval)`,
+  `GIFT_PRICING.lite`, Stripe prices live: Lite monthly
+  `price_1ULoWSQ1fRF2p1VXkhHl7cfA`, Lite yearly `price_1ULoWTQ1fRF2p1VXRFYMRiS4`,
+  Aero yearly `price_1UHBBhQ1fRF2p1VXHuAqNhaS`) — so check whether
+  `src/components/subscription/SubscriptionModal.tsx` is still Aero-only
+  (it still says "Start using Disband Aero" / hard-codes the name in a few
+  places, e.g. `SubscriptionBadgeModal.tsx`, `ClaimAnimation.tsx`).
+  **Reminder: the three `STRIPE_*_PRICE_ID` env vars must exist in Vercel
+  before any of this ships.**
+* **Redesign the Catalysts UI — "looks sloppy".** Entry point is
+  `src/components/discord/CatalystModal.tsx`; catalyst surfaces also appear in
+  `ChannelList.tsx`, `RoleManager.tsx`, `ServerSettingsModal.tsx` and
+  `SubscriptionModal.tsx`. No design direction given beyond that — get one
+  before restyling if the first pass misses.
+
+### (h) Bug fixes — DM cause #2 fixed in `ffd8865c`, everything else still open
+
+* **DM/channel messages sometimes never appear** until you leave the
+  conversation and come back. Status:
+  1. `loadDmMessages`/`loadMessages`/`loadGroupMessages` **replace** the list
+     with a snapshot taken earlier (`setDmMessages(rows)` at AppContext:1227),
+     wiping any message that arrived over realtime while the fetch was in
+     flight (its INSERT event was already consumed, so it never comes back).
+     A failed load also blanks the list (`setDmMessages([])` at :1236)
+     instead of keeping what it had. **STILL OPEN** — planned fix:
+     `mergeFetchedRows()` in `src/lib/messages.ts` (keep rows newer than the
+     snapshot / older than the page), no wipe on load error.
+  2. The realtime `.subscribe()` had no status handling — FIXED in `ffd8865c`
+     ("Self-healing message subscriptions"): each topic rejoins on
+     `CHANNEL_ERROR`/`TIMED_OUT` with backoff and catches up on every
+     `SUBSCRIBED`.
+  3. An incoming message is **dropped outright** if its `profiles` lookup
+     fails (`if (!author) return withoutDupes`). **STILL OPEN** — author
+     fallback instead of dropping.
+* **TURN sometimes fails to carry calls** (Web/Desktop/iOS) — **STILL FULLY
+  OPEN** (verified `src/lib/ice-servers.ts` still has
+  `CACHE_MS = 45 * 60 * 1000`). Causes found:
+  1. `src/lib/ice-servers.ts` caches credentials for **45 min** while
+     `/api/turn` can serve credentials minted up to **1 h 50 min** earlier
+     (server cache with a 10 min refresh margin) → calls can start with
+     expired TURN credentials. Works on open networks, fails exactly when a
+     relay is needed.
+  2. On ICE `failed`, `restartIce()` retries with the **same** (possibly
+     expired) credentials — `setConfiguration()` is never called.
+  3. A 401 from `/api/turn` (long-idle tab, `autoRefreshToken: false`) falls
+     back to static/no TURN with no refresh-and-retry.
+  4. Signaling race: the caller sends the offer right after *its* subscribe;
+     if the callee has not joined `call:{callId}` yet (media permission
+     prompt on iOS) the offer is lost and nothing retransmits it.
+
 ---
 
 ## 4. What changed this session (all uncommitted)
+
+### Current batch — 2026-10-02 evening, uncommitted, NOT pushed
+
+**Gifting — audited end to end, four real bugs fixed:**
+* `claim_gift` hardcoded `plan = 'aero'` in three places: claiming a $2.99
+  Lite gift granted a full Aero entitlement. Now grants `g.plan`, and
+  stacking keeps the better plan (one row per user).
+* `get_entitlement` / `get_entitlements` returned only `aero`/`free` — Lite
+  subscriptions (iOS) and Lite gifts (badges, Tether, entitlement feed) were
+  invisible. Both now have a `lite` branch.
+* `planWithGifts` never returned `lite`, so a paying Lite subscriber had
+  Free entitlements on web. New `activeGiftPlan()` + better-of-sub-or-gift
+  merge; `subscription-gifts.test.mjs` extended (159/159 pass).
+* `ClaimAnimation` said "Disband Aero" and GiftCard stayed Aero-yellow for
+  every gift — both now derive name/accent from the plan.
+* DB blocked all of it: applied **`0118_lite_plan_everywhere.sql` LIVE**
+  (`subscriptions_plan_check` → free/lite/aero,
+  `gift_entitlements_plan_check` → lite/aero; all three functions replaced
+  and verified; `plan='lite'` insert smoke-tested in a rolled-back
+  transaction). Live immediately, no deploy needed for claims/badges/Tether.
+* Verified complete and unbroken: create → Stripe → webhook marks
+  `unclaimed` → `/gift/[code]` + inline `GiftCard` → `claim_gift` →
+  entitlement (`gift_ent_read` policy exists — the old open item is
+  resolved), 19 gifts on file, `expires_at` defaults to now + 365 days.
+
+**Disband Shop:**
+* `ShopModal.tsx` used bare `fetch` on all four call sites (inventory GET,
+  equip GET/POST, create-shop-checkout) → 401s, so inventory always rendered
+  empty and buy/equip were dead. All four now `apiFetch`.
+* `0116_flight_shop_collection.sql` + `0117_sketchbook_shop_collection.sql`
+  were written but never applied — applied LIVE, then 0111's 25%-off rule
+  backfilled the three new >$5 profile skins (sale 486/449/411). Prod
+  catalogue is now 55 items / 55 active / 16 on sale — matches
+  `src/lib/shop.ts` exactly.
+* Stripe live prices all exist (nothing to create): Aero monthly
+  `price_1TnARzQ1fRF2p1VXVA8i8IAu`, Aero yearly
+  `price_1UHBBhQ1fRF2p1VXHuAqNhaS`, Lite monthly
+  `price_1ULoWSQ1fRF2p1VXkhHl7cfA`, Lite yearly
+  `price_1ULoWTQ1fRF2p1VXRFYMRiS4`, Catalyst
+  `price_1UGRRfQ1fRF2p1VXcB14jPdA`.
+* **Still needed: 3 Vercel env vars (production target).** The Vercel MCP
+  session here is signed into a different account (403 on
+  `team_6Z406ikAQihi6DRttWaCOj7Q`), so a human must add them — without them
+  Lite and Aero-yearly checkout throw:
+  `STRIPE_AERO_YEARLY_PRICE_ID=price_1UHBBhQ1fRF2p1VXHuAqNhaS`,
+  `STRIPE_LITE_PRICE_ID=price_1ULoWSQ1fRF2p1VXkhHl7cfA`,
+  `STRIPE_LITE_YEARLY_PRICE_ID=price_1ULoWTQ1fRF2p1VXRFYMRiS4`.
+
+**Sign-in incident fix (`AppContext.tsx` `signIn`):** removed the
+pre-attempt `signOut({scope:"local"})` + `resetSupabaseClient()` +
+`setProfile(null)`. auth-js 2.108.2's signOut always admin-revokes, so a
+wrong password revoked the OUTGOING account's server session — killing its
+saved refresh token (switch-back demanded the password again) and signing
+you out on any typo. A failed attempt now has zero side effects; on success
+the `userId` effect reloads the profile.
+
+**GIF favorites** (`useGifFavorites.ts`): bearer `authHeaders()` on all
+three fetches — the fix for the live 401s on disband.dev. Needs commit +
+deploy to reach production.
+
+**Verification:** `pnpm typecheck` clean; 166/166 tests (7 new message-merge
+tests); `pnpm build` clean; localhost serving on :3000
+(`allocate` 401s without auth as designed, `/gift/:code` renders 200,
+`/app` 200).
+**Version conflict — DO NOT bump blindly:** this batch bumped
+package.json/tauri.conf.json/Cargo.toml to 2.32.4, but at ~19:04 something
+else in this working tree reset all three to **2.31.1** (below the
+committed 2.32.2). Concurrent-session fingerprints: untracked
+`src/app/android/`, modified `MobileWaitlistScreen.tsx`, `sitemap.ts`,
+`shop-gallery/page.tsx`, `AvatarDecoration.tsx`, `ProfileOverlay.tsx`
+— none touched by this batch. Set the version deliberately at commit
+time after confirming with the user which session owns it.
+
+### Second batch — same night, uncommitted, NOT pushed
+
+**`/gift/[code]` page crashed SSR (500, "useApp requires AppProvider").**
+`GiftCard` called `useApp()`, but the standalone gift page has no provider
+(confirmed broken on localhost; likely broken on prod too since the
+`useApp` requirement shipped in v2.28.14). New `useOptionalApp()` in
+`AppContext.tsx`; `GiftCard` uses it with a raw-session fallback for the
+user id. Page renders 200 again.
+
+**DM/channel liveness (§3h causes #1 and #3 — FIXED, cause #2 was already
+fixed in `ffd8865c`):**
+* New `mergeFetchedRows()` in `src/lib/messages.ts`: loaders merge the
+  fetched page into on-screen rows instead of replacing — realtime
+  arrivals newer than the snapshot, scrolled history older than the page,
+  and unsent `opt-` rows survive; rows inside the window but missing are
+  treated as deleted. All three loaders (`loadMessages`,
+  `loadDmMessages`, `loadGroupMessages`) merge; failed loads keep the old
+  list instead of blanking it. Safe because every switch path clears the
+  list before loading the new conversation.
+* New `fallbackAuthor()` in `src/lib/messages.ts`: the three realtime
+  INSERT handlers append the message even when the profile lookup fails
+  (renders "Unknown", heals on next reload) instead of dropping it. The
+  DM unread-badge/alert path uses the same fallback so background
+  messages still notify. Notification-only paths (roving unread channel,
+  mention push) still require a real author — they need a name to show.
+* `tests/security/message-merge.test.mjs`: 7 tests for the merge.
+
+**TURN/call reliability (§3h — all four causes FIXED):**
+* `/api/turn` served 2h Cloudflare credentials from cache for up to 1h50m
+  (`REFRESH_MARGIN_MS` 10min) → calls could start on dead TURN creds.
+  Margin is now 60min: served credentials always have >1h of life left.
+* `src/lib/ice-servers.ts`: cache 45min → 30min; new `refreshIceServers()`
+  force-refresh; a 401 (long-idle tab, `autoRefreshToken: false`) now does
+  one explicit `refreshSession()` + retry before falling back to static
+  servers.
+* `useCallManager.retryIce` and the group manager's `failed` path fetch
+  fresh servers + `setConfiguration()` before `restartIce()` instead of
+  restarting on the dead credentials.
+* Signaling race (offer lost when the callee joins late): the 1:1 caller
+  re-sends its local offer every 2.5s (max 4) until the answer lands;
+  group initiators do the same per peer. Timers cleared on answer, leave,
+  drop, and full cleanup.
+
+**"Upgrade" row + Catalysts (§3g — DONE):**
+* Sidebar "Disband Aero" → **"Upgrade"**; the sheet is retitled "Upgrade"
+  (it already listed Aero + Lite, monthly/yearly).
+* CatalystModal rebuilt: consistent `px-5` sections, "Perks at every
+  level" heading, a real "Monthly credits" section, fixed indentation.
+* **Found while redesigning: the free-monthly boost has been dead since
+  0112.** That migration revoked client INSERTs (counterfeit hole) and
+  left no grant path — "Boost this space" 403'd for every Aero user.
+  New `POST /api/catalysts/allocate` (service role): verifies the space,
+  computes the effective plan from subscriptions + active gifts, enforces
+  the monthly cap (Aero 4, Lite 1), 20/min rate limit. `allocateCatalyst`
+  now calls it instead of inserting directly.
+* `monthlyRemaining(plan, used)` is plan-aware (was Aero-only boolean);
+  Lite members can spend their 1 monthly credit; both modals updated.
+  No migration needed (no schema change); abuse-holes test untouched.
+
+### Older notes (previous sessions)
 
 **iOS — version 1.12.0 (49), archived** at
 `~/Library/Developer/Xcode/Archives/2026-09-20/DisbandiOS 1.12.0 (49).xcarchive`,

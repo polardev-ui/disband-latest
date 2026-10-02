@@ -263,7 +263,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   const isAero = isGranting(subscription?.status) && plan === "aero";
 
   const monthlyUsed = myCatalysts.filter((c) => c.created_at >= monthStartIso()).length;
-  const catalystBalance = monthlyRemaining(isAero, monthlyUsed);
+  const catalystBalance = monthlyRemaining(plan, monthlyUsed);
 
   const runActivation = useCallback(async () => {
     setActivation("activating");
@@ -299,13 +299,13 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Disband Aero subscription"
+        aria-label="Upgrade subscription"
         className="modal-pop mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
           <div>
-            <h2 className="text-lg font-bold">Disband Aero</h2>
+            <h2 className="text-lg font-bold">Upgrade</h2>
             {!checkoutClientSecret && !activation && isGranting(subscription?.status) && (
               <p className="mt-0.5 text-sm text-text-muted">
                 <span className="font-semibold text-text-normal capitalize">{plan}</span>

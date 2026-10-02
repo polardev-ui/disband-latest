@@ -4,6 +4,7 @@ import { getClientIp, hashIp, hashValue } from "@/lib/request-ip";
 import { checkVpnStrict } from "@/lib/vpn-check";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
+import { isLoginAllowlisted } from "@/lib/login-allowlist";
 
 // Agreed limits: 5/min + 20/hr per IP and per email.
 const MIN_MAX = 5;
@@ -23,34 +24,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ allowed: false, error: "Enter your email address." }, { status: 400 });
   }
 
+  // Apple's App Review account skips the friction layers below — see
+  // `login-allowlist.ts` for why. It still passes through the platform-ban
+  // check and is still logged.
+  const allowlisted = isLoginAllowlisted(email);
+
   // Layer 1: in-memory burst guard (per isolate).
-  const burst = rateLimit(`login-check:${ip}`, MIN_MAX, 60_000);
-  if (!burst.allowed) return tooManyRequests(burst.retryAfterSeconds);
+  if (!allowlisted) {
+    const burst = rateLimit(`login-check:${ip}`, MIN_MAX, 60_000);
+    if (!burst.allowed) return tooManyRequests(burst.retryAfterSeconds);
+  }
 
   const service = getServiceSupabase();
 
   // Layer 2: persistent limits (multi-instance safe on Cloudflare).
   const ipHash = ip !== "unknown" ? hashIp(ip) : "unknown";
   const emailHash = hashValue(email, "login-email");
-  const hit = await persistentRateLimitCheck(service,
-    ip === "unknown"
-      ? [
-          { key: `login:email:${emailHash}:min`, max: MIN_MAX, windowSeconds: 60 },
-          { key: `login:email:${emailHash}:hr`, max: HOUR_MAX, windowSeconds: 3600 },
-        ]
-      : [
-          { key: `login:ip:${ipHash}:min`, max: MIN_MAX, windowSeconds: 60 },
-          { key: `login:ip:${ipHash}:hr`, max: HOUR_MAX, windowSeconds: 3600 },
-          { key: `login:email:${emailHash}:min`, max: MIN_MAX, windowSeconds: 60 },
-          { key: `login:email:${emailHash}:hr`, max: HOUR_MAX, windowSeconds: 3600 },
-        ],
-  );
-  if (hit) {
-    await logGateEvent(service, "login_rate_limited", ipHash === "unknown" ? null : ipHash, emailHash);
-    return NextResponse.json(
-      { allowed: false, error: "Too many sign-in attempts. Try again later." },
-      { status: 429, headers: { "Retry-After": "60" } },
+  if (!allowlisted) {
+    const hit = await persistentRateLimitCheck(service,
+      ip === "unknown"
+        ? [
+            { key: `login:email:${emailHash}:min`, max: MIN_MAX, windowSeconds: 60 },
+            { key: `login:email:${emailHash}:hr`, max: HOUR_MAX, windowSeconds: 3600 },
+          ]
+        : [
+            { key: `login:ip:${ipHash}:min`, max: MIN_MAX, windowSeconds: 60 },
+            { key: `login:ip:${ipHash}:hr`, max: HOUR_MAX, windowSeconds: 3600 },
+            { key: `login:email:${emailHash}:min`, max: MIN_MAX, windowSeconds: 60 },
+            { key: `login:email:${emailHash}:hr`, max: HOUR_MAX, windowSeconds: 3600 },
+          ],
     );
+    if (hit) {
+      await logGateEvent(service, "login_rate_limited", ipHash === "unknown" ? null : ipHash, emailHash);
+      return NextResponse.json(
+        { allowed: false, error: "Too many sign-in attempts. Try again later." },
+        { status: 429, headers: { "Retry-After": "60" } },
+      );
+    }
   }
 
   // Platform ban on this email: block login early with a generic message.
@@ -70,7 +80,9 @@ export async function POST(request: Request) {
   }
 
   // VPN/proxy block — login only. Existing sessions are never re-checked,
-  // so already-signed-in users stay signed in.
+  // so already-signed-in users stay signed in. Allowlisted addresses skip it:
+  // Apple's review egress is a shared NAT that the detectors can read as a
+  // proxy, and a reviewer cannot fix their network.
   //
   // FAIL-OPEN, deliberately. `unavailable` means "we could not tell", which is
   // NOT a verdict and must never be one: the free IPQS tier is capped at ~35
@@ -79,7 +91,7 @@ export async function POST(request: Request) {
   // into a site-wide login outage for the whole community. So an inconclusive
   // check is logged and let through. Only a *confirmed* block (both detectors
   // agreeing the IP is a VPN/proxy) rejects.
-  if (process.env.BLOCK_VPN_LOGIN !== "false" && ip !== "unknown") {
+  if (!allowlisted && process.env.BLOCK_VPN_LOGIN !== "false" && ip !== "unknown") {
     const vpn = await checkVpnStrict(ip);
     if (vpn.blocked) {
       await logGateEvent(service, "login_vpn_blocked", ipHash === "unknown" ? null : ipHash, emailHash);

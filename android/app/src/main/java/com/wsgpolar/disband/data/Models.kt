@@ -129,6 +129,9 @@ data class Profile(
     @SerialName("display_name") var displayName: String? = null,
     @SerialName("avatar_url") var avatarUrl: String? = null,
     var bio: String? = null,
+    var pronouns: String? = null,
+    @SerialName("status_note") var statusNote: String? = null,
+    @SerialName("status_expires_at") var statusExpiresAt: String? = null,
     var status: UserStatus = UserStatus.Offline,
     @SerialName("preferred_status") var preferredStatus: UserStatus? = null,
     @SerialName("banner_url") var bannerUrl: String? = null,
@@ -147,6 +150,21 @@ data class Profile(
     val name: String get() = displayName ?: username ?: "Unknown"
     val handle: String get() = username ?: "user"
     val initials: String get() = name.trim().takeIf { it.isNotEmpty() }?.first()?.uppercase() ?: "?"
+    /** Custom status line, or null once expired — mirrors iOS activeStatusNote / web activeStatusNote. */
+    val activeStatusNote: String?
+        get() {
+            val note = statusNote?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            // Expired notes linger server-side so every reader must check the expiry.
+            val raw = statusExpiresAt ?: return note
+            val expired = runCatching {
+                java.time.OffsetDateTime.parse(raw).toInstant().isBefore(java.time.Instant.now())
+            }.getOrElse {
+                runCatching {
+                    java.time.Instant.parse(raw).isBefore(java.time.Instant.now())
+                }.getOrDefault(false)
+            }
+            return if (expired) null else note
+        }
 }
 
 // MARK: - Friendship
@@ -482,6 +500,9 @@ data class VoiceJoin(
 data class ProfilePatch(
     @SerialName("display_name") var displayName: String? = null,
     var bio: String? = null,
+    var pronouns: String? = null,
+    @SerialName("status_note") var statusNote: String? = null,
+    @SerialName("status_expires_at") var statusExpiresAt: String? = null,
     @SerialName("avatar_url") var avatarUrl: String? = null,
     @SerialName("banner_url") var bannerUrl: String? = null,
     @SerialName("accent_color") var accentColor: String? = null,

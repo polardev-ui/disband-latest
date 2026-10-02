@@ -1,0 +1,53 @@
+.flight-art { position:relative; display:block; width:100%; height:100%; pointer-events:none; --flight-accent:#f6dfad; --wing-cycle:4.8s; }
+.flight-sprite { display:block; width:100%; height:100%; background-image:var(--flight-atlas); background-size:200% 200%; background-repeat:no-repeat; }
+.flight-sprite-frame { background-position:0 0; }
+.flight-sprite-left { background-position:100% 0; }
+.flight-sprite-right { background-position:0 100%; }
+.flight-sprite-charm { background-position:100% 100%; }
+.flight-frame { position:absolute; inset:4%; width:92%; height:92%; z-index:2; }
+.flight-wing { position:absolute; width:49%; aspect-ratio:1; top:8%; z-index:1; }
+.flight-wing-left { left:-19%; transform-origin:91% 85%; animation:flight-left var(--wing-cycle) cubic-bezier(.45,0,.25,1) infinite; }
+.flight-wing-right { right:-19%; transform-origin:9% 85%; animation:flight-right var(--wing-cycle) cubic-bezier(.45,0,.25,1) infinite; animation-delay:-.08s; }
+.flight-pendant { position:absolute; width:25%; aspect-ratio:1; left:37.5%; top:79%; z-index:3; transform-origin:50% 6%; animation:flight-charm 3.6s ease-in-out infinite; }
+.flight-accents { position:absolute; inset:0; z-index:4; }
+.flight-accents i { position:absolute; display:block; width:3%; aspect-ratio:1; background:var(--flight-accent); clip-path:polygon(50% 0,60% 39%,100% 50%,60% 61%,50% 100%,40% 61%,0 50%,40% 39%); animation:flight-glint 3.8s ease-in-out infinite; animation-delay:calc(var(--i) * -.79s); }
+.flight-nightflight { --flight-accent:#d4b9ff; --wing-cycle:3.8s; }
+.flight-nightflight .flight-wing { animation-timing-function:cubic-bezier(.6,.05,.25,1); }
+.flight-roseling { --flight-accent:#ffc5d2; --wing-cycle:2.6s; }
+.flight-roseling .flight-wing-left { animation-name:flight-butterfly-left; }
+.flight-roseling .flight-wing-right { animation-name:flight-butterfly-right; }
+.flight-roseling .flight-accents i { border-radius:85% 15% 75% 25%; clip-path:none; animation-name:flight-petal; }
+.flight-profile { border:1px solid color-mix(in srgb,var(--flight-accent) 40%,transparent); border-radius:inherit; overflow:hidden; }
+.flight-profile .flight-wing { width:61%; top:auto; bottom:-3%; opacity:.92; }
+.flight-profile .flight-wing-left { left:-20%; }
+.flight-profile .flight-wing-right { right:-20%; }
+.flight-profile .flight-pendant { width:29%; left:-2%; top:-4%; opacity:.88; }
+.flight-profile .flight-pendant-second { left:auto; right:-2%; top:-1%; width:24%; animation-delay:-1.6s; }
+.flight-profile .flight-accents i { width:2%; }
+.flight-profile .flight-accents i:nth-child(3n) { opacity:.6; }
+[data-motion="reduced"] .flight-art * { animation:none!important; }
+.flight-art[data-running=false] *, .flight-art[data-running=false] { animation-play-state:paused!important; }
+@keyframes flight-left {
+  0%,100% { transform:perspective(450px) rotateY(0deg) rotate(-6deg); }
+  38% { transform:perspective(450px) rotateY(48deg) rotate(9deg); }
+  64% { transform:perspective(450px) rotateY(-9deg) rotate(-10deg); }
+}
+@keyframes flight-right {
+  0%,100% { transform:perspective(450px) rotateY(0deg) rotate(6deg); }
+  38% { transform:perspective(450px) rotateY(-48deg) rotate(-9deg); }
+  64% { transform:perspective(450px) rotateY(9deg) rotate(10deg); }
+}
+@keyframes flight-butterfly-left {
+  0%,65%,100% { transform:perspective(400px) rotateY(0deg) rotate(-4deg); }
+  18%,43% { transform:perspective(400px) rotateY(64deg) rotate(7deg); }
+  30%,55% { transform:perspective(400px) rotateY(-8deg) rotate(-8deg); }
+}
+@keyframes flight-butterfly-right {
+  0%,65%,100% { transform:perspective(400px) rotateY(0deg) rotate(4deg); }
+  18%,43% { transform:perspective(400px) rotateY(-64deg) rotate(-7deg); }
+  30%,55% { transform:perspective(400px) rotateY(8deg) rotate(8deg); }
+}
+@keyframes flight-charm { 0%,100% { transform:rotate(-9deg); } 50% { transform:rotate(9deg); } }
+@keyframes flight-glint { 0%,65%,100% { opacity:.12; transform:scale(.4) rotate(0deg); } 30% { opacity:.95; transform:scale(1.15) rotate(65deg); } }
+@keyframes flight-petal { 0%,100% { opacity:0; transform:translate(0,-7px) rotate(0); } 25% { opacity:.8; } 85% { opacity:.15; transform:translate(6px,15px) rotate(150deg); } }
+@media(prefers-reduced-motion:reduce) { .flight-art * { animation:none!important; } }

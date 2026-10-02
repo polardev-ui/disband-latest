@@ -1,0 +1,34 @@
+.sketch-art { display:block; width:100%; height:100%; pointer-events:none; color:#d4d1c9; }
+.sketch-art svg { display:block; width:100%; height:100%; overflow:visible; }
+.sketch-pencil-frame { animation:sketch-pencil 1.8s steps(1,end) infinite; opacity:0; }
+.sketch-pencil-frame-1 { animation-delay:-1.2s; }
+.sketch-pencil-frame-2 { animation-delay:-.6s; }
+.sketch-blue-note { color:#91b6ee; }
+.sketch-underline { stroke-dasharray:1; animation:sketch-underline 5s ease-in-out infinite; }
+.sketch-star { transform-origin:101px 19px; animation:sketch-star 5s ease-in-out infinite; }
+.sketch-margins { color:#cecbb6; }
+.sketch-tick { animation:sketch-tick 4s ease-in-out infinite; }
+.sketch-tick-1 { animation-delay:-3s; }
+.sketch-tick-2 { animation-delay:-2s; }
+.sketch-tick-3 { animation-delay:-1s; }
+.sketch-red-thread { color:#d77c80; }
+.sketch-thread-light { stroke:#ffd1cd; stroke-dasharray:7 93; animation:sketch-thread 9s linear infinite; opacity:.8; }
+.sketch-knot { transform-origin:96px 99px; animation:sketch-knot 6s ease-in-out infinite; }
+.sketch-art[data-running=false] * { animation-play-state:paused!important; }
+.cosmetic-profile-light .sketch-graphite { color:#595954; }
+.cosmetic-profile-light .sketch-margins { color:#767159; }
+.cosmetic-profile-light .sketch-blue-note { color:#456fac; }
+@keyframes sketch-pencil { 0%,33.32% { opacity:1; } 33.33%,100% { opacity:0; } }
+@keyframes sketch-underline { 0%,60%,100% { stroke-dashoffset:0; } 77% { stroke-dashoffset:1; } 79% { stroke-dashoffset:1; } }
+@keyframes sketch-star { 0%,65%,100% { transform:rotate(0); opacity:.75; } 78% { transform:rotate(-12deg); opacity:1; } }
+@keyframes sketch-tick { 0%,100% { opacity:.3; } 35% { opacity:1; } }
+@keyframes sketch-thread { to { stroke-dashoffset:-100; } }
+@keyframes sketch-knot { 0%,65%,100% { transform:rotate(0); } 80% { transform:rotate(5deg); } }
+[data-motion="reduced"] .sketch-art * { animation:none!important; }
+[data-motion="reduced"] .sketch-pencil-frame { opacity:0; }
+[data-motion="reduced"] .sketch-pencil-frame-0 { opacity:1; }
+@media(prefers-reduced-motion:reduce) {
+  .sketch-art * { animation:none!important; }
+  .sketch-pencil-frame { opacity:0; }
+  .sketch-pencil-frame-0 { opacity:1; }
+}

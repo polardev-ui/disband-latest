@@ -33,7 +33,7 @@ interface CallSignal {
   candidate?: RTCIceCandidateInit;
 }
 
-import { fetchIceServers, getIceServers, hasTurnConfigured } from "@/lib/ice-servers";
+import { fetchIceServers, getIceServers, hasTurnConfigured, refreshIceServers } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 export interface IncomingCallInfo {
@@ -88,6 +88,7 @@ export function useCallManager(
 
   const iceRetryRef = useRef(0);
   const disconnectTimerRef = useRef<number | null>(null);
+  const offerRetryRef = useRef<number | null>(null);
   const callerRef = useRef(false);
   const lastPeerRef = useRef<Profile | null>(null);
   const reconnectingRef = useRef(false);
@@ -137,6 +138,10 @@ export function useCallManager(
     if (disconnectTimerRef.current !== null) {
       window.clearTimeout(disconnectTimerRef.current);
       disconnectTimerRef.current = null;
+    }
+    if (offerRetryRef.current !== null) {
+      window.clearTimeout(offerRetryRef.current);
+      offerRetryRef.current = null;
     }
     iceRetryRef.current = 0;
     reconnectingRef.current = false;
@@ -282,11 +287,18 @@ export function useCallManager(
         iceRetryRef.current += 1;
         reconnectingRef.current = true;
         setCallNotice(`Connection lost. Reconnecting… (attempt ${iceRetryRef.current} of 2)`);
-        try {
-          pcRef.current.restartIce();
-        } catch {
-          giveUp("Lost the connection to the other person.");
-        }
+        // restartIce() alone reuses the same (possibly expired) TURN
+        // credentials that just failed. Mint fresh ones and push them into
+        // the live connection before restarting.
+        void (async () => {
+          try {
+            const servers = await refreshIceServers();
+            pcRef.current?.setConfiguration({ iceServers: servers });
+            pcRef.current?.restartIce();
+          } catch {
+            giveUp("Lost the connection to the other person.");
+          }
+        })();
       };
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
@@ -370,6 +382,11 @@ export function useCallManager(
             await pc.setRemoteDescription(p.sdp);
             await drainIce();
             setRemoteStream((prev) => streamWithoutEndedTracks(prev));
+            // The offer landed: no more retransmits.
+            if (offerRetryRef.current !== null) {
+              window.clearTimeout(offerRetryRef.current);
+              offerRetryRef.current = null;
+            }
           } else if (p.type === "screen") {
             setPeerSharing(!!p.sharing);
           } else if (p.type === "ice" && p.candidate) {
@@ -387,6 +404,29 @@ export function useCallManager(
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await ch.send({ type: "broadcast", event: "call", payload: { type: "offer", from: userId, to: peerId, sdp: offer } });
+        // Broadcast doesn't persist: if the callee hasn't joined call:{id}
+        // yet (media permission prompt on iOS), the first offer is lost and
+        // nothing ever retransmits it. Re-send the current local offer until
+        // the answer arrives or the call ends.
+        let attempts = 0;
+        const resend = () => {
+          offerRetryRef.current = null;
+          const live = pcRef.current;
+          if (!live || live.signalingState === "closed" || live.remoteDescription) return;
+          if (attempts >= 4 || signalRef.current !== ch) return;
+          attempts += 1;
+          void (async () => {
+            try {
+              await ch.send({ type: "broadcast", event: "call", payload: { type: "offer", from: userId, to: peerId, sdp: live.localDescription } });
+            } catch {
+              // Next tick retries while attempts remain.
+            }
+            if (!live.remoteDescription) {
+              offerRetryRef.current = window.setTimeout(resend, 2500);
+            }
+          })();
+        };
+        offerRetryRef.current = window.setTimeout(resend, 2500);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start call";

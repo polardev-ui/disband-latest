@@ -16,7 +16,8 @@ export default function ShopGalleryPage() {
   const [light, setLight] = useState(false);
   const [name, setName] = useState("polar");
   const [shopOpen, setShopOpen] = useState(false);
-  const collection = ART_COLLECTIONS[selected];
+  const collections = ART_COLLECTIONS.filter((set) => category === "ring" || set.profileId);
+  const collection = collections[selected] ?? collections[0];
   const item = shopItem(category === "ring" ? collection.ringId : collection.profileId)!;
   const self = { name };
 
@@ -33,7 +34,7 @@ export default function ShopGalleryPage() {
       </nav>
 
       <header className="studio-intro">
-        <p className="studio-eyebrow">THE ILLUSTRATED COLLECTION / 01</p>
+        <p className="studio-eyebrow">NEW IN THE SHOP / SKETCHBOOK & FLIGHT</p>
         <h1>A profile with personality<span>.</span></h1>
         <p>Little details. A whole different feeling. Find a frame and a world to go with it.</p>
       </header>
@@ -42,12 +43,12 @@ export default function ShopGalleryPage() {
         <section className="studio-catalogue" aria-label="Cosmetic collections">
           <div className="studio-catalogue-header">
             <div className="studio-tabs" role="group" aria-label="Cosmetic type">
-              <button type="button" aria-pressed={category === "ring"} onClick={() => setCategory("ring")}>Avatar decorations <span>03</span></button>
-              <button type="button" aria-pressed={category === "overlay"} onClick={() => setCategory("overlay")}>Profile skins <span>03</span></button>
+              <button type="button" aria-pressed={category === "ring"} onClick={() => { setCategory("ring"); setSelected(0); }}>Avatar decorations <span>{String(ART_COLLECTIONS.length).padStart(2, "0")}</span></button>
+              <button type="button" aria-pressed={category === "overlay"} onClick={() => { setCategory("overlay"); setSelected(0); }}>Profile skins <span>{String(ART_COLLECTIONS.filter((set) => set.profileId).length).padStart(2, "0")}</span></button>
             </div>
           </div>
           <div className={`studio-products ${category === "overlay" ? "studio-products-profiles" : ""}`}>
-            {ART_COLLECTIONS.map((set, index) => {
+            {collections.map((set, index) => {
               const product = shopItem(category === "ring" ? set.ringId : set.profileId)!;
               return <button className={`studio-product ${selected === index ? "is-selected" : ""}`} type="button" key={set.id}
                 onClick={() => setSelected(index)} aria-pressed={selected === index}
@@ -75,13 +76,13 @@ export default function ShopGalleryPage() {
             <div><h3>Small detail. Everywhere.</h3><p>Your decoration follows you into conversations.</p></div>
             <div className="studio-message"><CosmeticAvatar self={self} ringId={collection.ringId} size={36} playing={playing} /><div><p><strong>{name.trim() || "Your name"}</strong><span>Today at 9:41 PM</span></p><p>Okay, this one feels like me.</p></div></div>
           </div>
-          <p className="studio-footnote">Permanent cosmetics · Matching pieces sold separately · Respects reduced motion</p>
+          <p className="studio-footnote">Permanent cosmetics · Profile skins sold separately where available · Respects reduced motion</p>
         </section>
 
         <aside className="studio-fitting-room" aria-label="Live profile preview">
           <div className="studio-preview-heading"><span>Your profile, dressed up</span><div role="group" aria-label="Preview appearance"><button type="button" aria-label="Dark preview" aria-pressed={!light} onClick={() => setLight(false)}><Moon size={14} /></button><button type="button" aria-label="Light preview" aria-pressed={light} onClick={() => setLight(true)}><Sun size={14} /></button></div></div>
           <div className="studio-profile-stage"><CosmeticProfile ringId={collection.ringId} overlayId={collection.profileId} self={self} playing={playing} light={light} /></div>
-          <div className="studio-preview-bottom"><span>Matching set preview</span><span>{collection.name}</span></div>
+          <div className="studio-preview-bottom"><span>{collection.profileId ? "Matching set preview" : "Avatar decoration preview"}</span><span>{collection.name}</span></div>
           <label className="studio-name-input">Try your name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Your name" /></label>
         </aside>
       </div>

@@ -4,6 +4,8 @@ import { DECORATIONS } from "@/components/shop/effects/Decorations";
 import { LottieEffect } from "@/components/shop/effects/LottieEffect";
 import { lottieSrc, shopItem } from "@/lib/shop";
 import { AnimatedCosmetic } from "./AnimatedCosmetic";
+import { FlightCosmetic } from "./FlightCosmetic";
+import { SketchDecoration } from "./SketchDecoration";
 
 /**
  * Artwork mounted over an avatar, with a transparent opening for the photo.
@@ -26,7 +28,7 @@ export function AvatarDecoration({
   if (!item || !item.overAvatar) return null;
 
   const art = lottieSrc(itemId);
-  const renderedScale = scale ?? item.art?.scale ?? 1.38;
+  const renderedScale = scale ?? item.art?.scale ?? (item.sketch === "graphite" ? 1.3 : item.sketch ? 1.22 : item.flight ? 1.5 : 1.38);
   const percent = `${renderedScale * 100}%`;
   const offset = ((renderedScale - 1) / 2) * -100;
 
@@ -36,7 +38,7 @@ export function AvatarDecoration({
       style={{ width: percent, height: percent, left: `${offset}%`, top: `${offset + (item.art?.offsetY ?? 0) * 100}%`, zIndex: 2 }}
       aria-hidden
     >
-      {item.art ? <AnimatedCosmetic art={item.art} playing={playing} /> : art ? <LottieEffect src={art} /> : <DrawnDecoration itemId={itemId} />}
+      {item.sketch ? <SketchDecoration design={item.sketch} playing={playing} /> : item.flight ? <FlightCosmetic design={item.flight} playing={playing} /> : item.art ? <AnimatedCosmetic art={item.art} playing={playing} /> : art ? <LottieEffect src={art} /> : <DrawnDecoration itemId={itemId} />}
     </span>
   );
 }

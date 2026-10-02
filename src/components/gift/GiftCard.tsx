@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { useApp } from "@/contexts/AppContext";
+import { useOptionalApp } from "@/contexts/AppContext";
 import { GIFT_PLAN_NAME, monthsLabel, type GiftPlan } from "@/lib/gifts";
 import { invalidateEntitlement } from "@/lib/entitlement-store";
 import { invalidateBadges } from "@/lib/badge-store";
@@ -19,7 +19,20 @@ interface GiftRow {
 }
 
 export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }) {
-  const { user } = useApp();
+  // Inside chat the provider supplies the user; on the standalone /gift
+  // page there is no provider, so fall back to the raw session. Either
+  // way only the id is needed (ownership display + cache invalidation).
+  const app = useOptionalApp();
+  const [standaloneUserId, setStandaloneUserId] = useState<string | null>(null);
+  useEffect(() => {
+    if (app) return;
+    let alive = true;
+    void getSupabaseClient().auth.getSession().then(({ data }) => {
+      if (alive) setStandaloneUserId(data.session?.user.id ?? null);
+    });
+    return () => { alive = false; };
+  }, [app]);
+  const userId = app?.user?.id ?? standaloneUserId;
   const [gift, setGift] = useState<GiftRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
@@ -89,11 +102,11 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
     );
   }
 
-  const mine = gift.buyer_id === user?.id;
-  const claimedByMe = gift.claimed_by === user?.id;
+  const mine = gift.buyer_id === userId;
+  const claimedByMe = gift.claimed_by === userId;
   const gone = gift.status === "claimed" || gift.status === "expired";
 
-  const accent = "#fee75c";
+  const accent = gift.plan === "lite" ? "#7dd3fc" : "#fee75c";
 
   async function claim() {
     if (claiming) return;
@@ -113,12 +126,12 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
         if (fresh) setGift(fresh as GiftRow);
         return;
       }
-      if (user?.id) {
-        invalidateEntitlement(user.id);
-        invalidateBadges(user.id);
+      if (userId) {
+        invalidateEntitlement(userId);
+        invalidateBadges(userId);
       }
       if (gift) invalidateBadges(gift.buyer_id);
-      setGift({ ...gift!, status: "claimed", claimed_by: user?.id ?? null });
+      setGift({ ...gift!, status: "claimed", claimed_by: userId });
       setCelebrate(true);
     } finally {
       setClaiming(false);

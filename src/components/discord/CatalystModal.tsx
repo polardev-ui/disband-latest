@@ -11,6 +11,8 @@ import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbedded
 import {
   CATALYST_LEVELS,
   CATALYST_PRICE_CENTS,
+  LITE_MONTHLY_GRANT,
+  MONTHLY_GRANT,
   catalystLevel,
   formatCents,
   monthlyRemaining,
@@ -52,7 +54,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
     servers,
   } = useApp();
   const { plan } = useSubscription(user?.id);
-  const isAero = plan === "aero";
+  const grant = plan === "aero" ? MONTHLY_GRANT : plan === "lite" ? LITE_MONTHLY_GRANT : 0;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
     () => myCatalysts.filter((c) => c.created_at >= monthStart).length,
     [myCatalysts, monthStart],
   );
-  const balance = monthlyRemaining(isAero, monthlyUsed);
+  const balance = monthlyRemaining(plan, monthlyUsed);
 
   useEffect(() => {
     if (!open) {
@@ -204,7 +206,11 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
           )}
         </div>
 
-        <div className="space-y-2">
+        <div className="px-5 pt-4">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            Perks at every level
+          </p>
+          <div className="space-y-2">
             {CATALYST_LEVELS.filter((l) => l.level > 0).map((l) => {
               const unlocked = count >= l.min;
               return (
@@ -229,93 +235,92 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        <div className="mt-4 border-t border-divider px-5 py-4">
+          <p className="text-sm font-bold">
+            Monthly credits
+          </p>
+          <p className="mt-0.5 text-[13px] text-text-muted">
+            {grant > 0 ? (
+              <>Put a free monthly Catalyst on <span className="font-semibold text-text-normal">{server.name}</span> — {balance} of {grant} left</>
+            ) : (
+              <>Paid plans include free Catalysts every month — Aero gets {MONTHLY_GRANT}, Lite gets {LITE_MONTHLY_GRANT}.</>
+            )}
+          </p>
+          {error && <p className="mt-2 text-[13px] text-red-400">{error}</p>}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={busy || balance <= 0}
+              onClick={() => void doAllocate()}
+              title={grant === 0 ? "A paid plan includes monthly credits" : balance <= 0 ? "No credits left this month" : "Spend a monthly credit"}
+              className="flex-1 rounded-lg bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy ? "Working…" : "Boost this space"}
+            </button>
+            {myHere > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void doWithdraw()}
+                className="rounded-lg border border-divider px-3 py-2 text-sm text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+              >
+                Withdraw
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="border-t border-divider px-5 py-4">
-          <p className="text-sm text-text-muted">
-            Put free monthly Catalysts on <span className="font-semibold text-text-normal">{server.name}</span>
-          </p>
-            {isAero ? (
-              <p className="mt-0.5 text-[13px] text-text-muted">
-                {balance} of 4 monthly credits left
-              </p>
-            ) : (
-              <p className="mt-0.5 text-[13px] text-text-muted">
-                Disband Aero members get 4 free Catalysts every month.
-              </p>
-            )}
-            {error && <p className="mt-2 text-[13px] text-red-400">{error}</p>}
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                disabled={busy || !isAero || balance <= 0}
-                onClick={() => void doAllocate()}
-                title={!isAero ? "Aero members only" : balance <= 0 ? "No credits left this month" : "Spend a monthly credit"}
-                className="flex-1 rounded-lg bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy ? "Working…" : "Boost this space"}
-              </button>
-              {myHere > 0 && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void doWithdraw()}
-                  className="rounded-lg border border-divider px-3 py-2 text-sm text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
-                >
-                  Withdraw
-                </button>
-              )}
-            </div>
-          </div>
-
-        <div className="border-t border-divider px-5 py-4">
           <p className="text-sm font-bold">Buy Catalysts</p>
-            <p className="mt-0.5 text-[13px] text-text-muted">
-              One-time purchase, never expire · {formatCents(unitCents)} each
-            </p>
+          <p className="mt-0.5 text-[13px] text-text-muted">
+            One-time purchase, never expire · {formatCents(unitCents)} each
+          </p>
             {buySecret ? (
-              <div className="mt-3">
-                <StripeEmbeddedCheckout
-                  clientSecret={buySecret}
-                  onSuccess={handleBuySuccess}
-                  onCancel={() => setBuySecret(null)}
-                />
-              </div>
-            ) : (
-              <>
-                {buyError && <p className="mt-2 text-[13px] text-red-400">{buyError}</p>}
-                <div className="mt-3 flex items-center gap-2">
-                  <div className="flex items-center rounded-lg border border-divider">
-                    <button
-                      type="button"
-                      aria-label="Fewer"
-                      onClick={() => setQty((q) => Math.max(1, q - 1))}
-                      className="px-2.5 py-1.5 text-lg leading-none text-text-muted hover:text-text-normal"
-                    >
-                      −
-                    </button>
-                    <span className="w-8 text-center text-sm font-bold">{qty}</span>
-                    <button
-                      type="button"
-                      aria-label="More"
-                      onClick={() => setQty((q) => Math.min(99, q + 1))}
-                      className="px-2.5 py-1.5 text-lg leading-none text-text-muted hover:text-text-normal"
-                    >
-                      +
-                    </button>
-                  </div>
+            <div className="mt-3">
+              <StripeEmbeddedCheckout
+                clientSecret={buySecret}
+                onSuccess={handleBuySuccess}
+                onCancel={() => setBuySecret(null)}
+              />
+            </div>
+          ) : (
+            <>
+              {buyError && <p className="mt-2 text-[13px] text-red-400">{buyError}</p>}
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex items-center rounded-lg border border-divider">
                   <button
                     type="button"
-                    disabled={buying}
-                    onClick={() => void startBuy()}
-                    className="flex-1 rounded-lg bg-[#fee75c] py-2 text-sm font-bold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+                    aria-label="Fewer"
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    className="px-2.5 py-1.5 text-lg leading-none text-text-muted hover:text-text-normal"
                   >
-                    {buying ? "Starting…" : `Buy ${qty} · ${formatCents(unitCents * qty)}`}
+                    −
+                  </button>
+                  <span className="w-8 text-center text-sm font-bold">{qty}</span>
+                  <button
+                    type="button"
+                    aria-label="More"
+                    onClick={() => setQty((q) => Math.min(99, q + 1))}
+                    className="px-2.5 py-1.5 text-lg leading-none text-text-muted hover:text-text-normal"
+                  >
+                    +
                   </button>
                 </div>
-              </>
-            )}
-          </div>
+                <button
+                  type="button"
+                  disabled={buying}
+                  onClick={() => void startBuy()}
+                  className="flex-1 rounded-lg bg-[#fee75c] py-2 text-sm font-bold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {buying ? "Starting…" : `Buy ${qty} · ${formatCents(unitCents * qty)}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         </div>
       </div>
   );

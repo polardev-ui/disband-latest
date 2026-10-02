@@ -19,8 +19,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -35,6 +39,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -46,9 +51,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -152,6 +159,10 @@ fun ChatScaffold(
     callAction: (@Composable () -> Unit)? = null,
     onSend: (String) -> Unit,
     sendEnabled: Boolean = true,
+    sendPlaceholder: String = "Message",
+    sendHint: String? = null,
+    loadError: String? = null,
+    onRetryLoad: (() -> Unit)? = null,
     onBack: () -> Unit,
     shellChrome: ShellChromeState? = null,
     typingUsers: List<Profile> = emptyList(),
@@ -159,6 +170,10 @@ fun ChatScaffold(
     onReplyDismiss: (() -> Unit)? = null,
     /** Message id and emoji. Adds the reaction, or takes it back. */
     onToggleReaction: (String, String) -> Unit = { _, _ -> },
+    onOpenAttachment: (StoredAttachment) -> Unit = {},
+    onMessageLongPress: (ChatRow) -> Unit = {},
+    editingRow: ChatRow? = null,
+    onEditDismiss: (() -> Unit)? = null,
     /** Staged images, and the caption-and-send that flushes them. */
     attachments: AttachmentSender? = null,
     onSendAttachments: ((String) -> Unit)? = null,
@@ -168,9 +183,21 @@ fun ChatScaffold(
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
 
+    // Smart auto-scroll: only jump to the bottom when already near it.
+    // The old code scrolled on every size change, yanking readers out of
+    // history whenever a new message arrived.
+    var userScrolledUp by remember { mutableStateOf(false) }
     LaunchedEffect(rows.size) {
-        if (rows.isNotEmpty()) listState.scrollToItem(rows.lastIndex)
+        if (rows.isNotEmpty() && !userScrolledUp) listState.scrollToItem(rows.lastIndex)
     }
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = listState.layoutInfo.totalItemsCount
+            userScrolledUp = last < total - 3
+        }
+    }
+    val showJumpToBottom = userScrolledUp && rows.isNotEmpty()
 
     Column(
         Modifier
@@ -191,15 +218,36 @@ fun ChatScaffold(
         if (replyTo != null) {
             ReplyBanner(row = replyTo, onDismiss = onReplyDismiss ?: {})
         }
+        if (editingRow != null) {
+            EditBanner(row = editingRow, onDismiss = onEditDismiss ?: {})
+        }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             when {
                 loading && rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
                 }
+                loadError != null && rows.isEmpty() -> com.wsgpolar.disband.ui.components.ErrorState(
+                    message = loadError,
+                    onRetry = { onRetryLoad?.invoke() },
+                )
                 rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(emptyText, color = palette.textMuted, fontSize = 15.sp)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 32.dp),
+                    ) {
+                        Text(emptyText, color = palette.textMuted, fontSize = 15.sp)
+                        sendHint?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text(it, color = palette.textMuted.copy(alpha = 0.7f), fontSize = 13.sp)
+                        }
+                    }
                 }
-                else -> MessageList(listState, rows, ownUserId, onToggleReaction)
+                else -> MessageList(
+                    listState, rows, ownUserId,
+                    onToggleReaction = onToggleReaction,
+                    onOpenAttachment = onOpenAttachment,
+                    onLongPress = onMessageLongPress,
+                )
             }
             // Floating, not stacked: as a row it pushed the composer and the
             // last message down a line every time somebody started typing,
@@ -212,11 +260,45 @@ fun ChatScaffold(
             ) {
                 TypingBubble(users = typingUsers, palette = palette)
             }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showJumpToBottom,
+                enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp),
+            ) {
+                androidx.compose.material3.FloatingActionButton(
+                    onClick = {
+                        userScrolledUp = false
+                    },
+                    modifier = Modifier.size(44.dp),
+                    shape = CircleShape,
+                    containerColor = palette.elevated,
+                    contentColor = palette.textPrimary,
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Jump to latest messages",
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+        if (!sendEnabled && sendHint != null) {
+            Text(
+                sendHint,
+                color = palette.textMuted,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surfaceRaised)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
         }
         Composer(
             palette = palette,
             onSend = onSend,
             enabled = sendEnabled,
+            placeholder = sendPlaceholder,
             attachments = attachments,
             onSendAttachments = onSendAttachments,
             onTyping = onTyping,
@@ -239,18 +321,29 @@ private fun ChatTopBar(
             .fillMaxWidth()
             .background(palette.surface)
             .statusBarsPadding()
-            .height(56.dp)
-            .padding(horizontal = 4.dp),
+            .heightIn(min = 60.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
+        // Circular back chevron mirroring iOS — 48dp target, not the old
+        // square edge-to-edge arrow.
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(palette.elevated)
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Back", onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = null,
                 tint = palette.textPrimary,
+                modifier = Modifier.size(20.dp),
             )
         }
-        AvatarImage(url = avatarUrl, name = avatarName, size = 36.dp)
+        Spacer(Modifier.width(8.dp))
+        AvatarImage(url = avatarUrl, name = avatarName, size = 40.dp)
         Column(Modifier.padding(start = 10.dp).weight(1f)) {
             Text(title, color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -269,6 +362,8 @@ private fun MessageList(
     rows: List<ChatRow>,
     ownUserId: String?,
     onToggleReaction: (String, String) -> Unit = { _, _ -> },
+    onOpenAttachment: (StoredAttachment) -> Unit = {},
+    onLongPress: (ChatRow) -> Unit = {},
 ) {
     val palette = LocalPalette.current
     // Looked up once per list rather than per row: a reply preview needs the
@@ -295,6 +390,8 @@ private fun MessageList(
                 grouped = row.groupsWith(rows.getOrNull(index - 1)),
                 repliedTo = row.replyToId?.let { byId[it] },
                 onToggleReaction = { emoji -> onToggleReaction(row.id, emoji) },
+                onOpenAttachment = onOpenAttachment,
+                onLongPress = { onLongPress(row) },
             )
         }
         item { Spacer(Modifier.height(8.dp)) }
@@ -327,15 +424,124 @@ private fun ReplyBanner(row: ChatRow, onDismiss: () -> Unit) {
             Text("Replying to ${row.author?.name ?: "Unknown"}", color = palette.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(row.content, color = palette.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Dismiss reply", tint = palette.textMuted, modifier = Modifier.size(18.dp))
+        IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Filled.Close, contentDescription = "Dismiss reply", tint = palette.textMuted, modifier = Modifier.size(18.dp))
         }
     }
     HorizontalDivider(color = palette.divider)
 }
 
 @Composable
+private fun EditBanner(row: ChatRow, onDismiss: () -> Unit) {
+    val palette = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().background(palette.accent.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Editing message", color = palette.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(row.content, color = palette.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Filled.Close, contentDescription = "Cancel editing", tint = palette.textMuted, modifier = Modifier.size(18.dp))
+        }
+    }
+    HorizontalDivider(color = palette.divider)
+}
+
+/**
+ * Long-press actions for a message, mirroring iOS reaction tray + context
+ * menu: quick reactions, Reply, Copy, Edit (own), Delete (own).
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun MessageActionSheet(
+    row: ChatRow,
+    isOwn: Boolean,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    onReply: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onReact: (String) -> Unit,
+) {
+    val palette = LocalPalette.current
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = palette.surface,
+    ) {
+        Column(Modifier.padding(bottom = 28.dp).navigationBarsPadding()) {
+            // Quick reactions.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                listOf("❤️", "👍", "😂", "😮", "😢", "🙏").forEach { emoji ->
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(palette.elevated)
+                            .clickable(
+                                role = androidx.compose.ui.semantics.Role.Button,
+                                onClickLabel = "React $emoji",
+                                onClick = { onReact(emoji); onDismiss() },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(emoji, fontSize = 22.sp)
+                    }
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(color = palette.divider)
+            SheetAction("Reply", Icons.AutoMirrored.Filled.Reply, palette) { onReply(); onDismiss() }
+            SheetAction("Copy text", Icons.Filled.ContentCopy, palette) { onCopy(); onDismiss() }
+            if (isOwn && row.content.isNotBlank()) {
+                SheetAction("Edit", Icons.Filled.Edit, palette) { onEdit(); onDismiss() }
+            }
+            if (isOwn) {
+                SheetAction("Delete", Icons.Filled.Delete, palette, destructive = true) { onDelete() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetAction(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    palette: Palette,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (destructive) Brand.dnd else palette.textPrimary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Text(
+            label,
+            color = if (destructive) Brand.dnd else palette.textPrimary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
 private fun TypingBubble(users: List<Profile>, palette: Palette) {
+    val names = users.take(3).joinToString(", ") { it.name }
     Row(
         Modifier
             .padding(start = 16.dp, bottom = 6.dp)
@@ -389,6 +595,7 @@ private fun Composer(
     palette: Palette,
     onSend: (String) -> Unit,
     enabled: Boolean,
+    placeholder: String = "Message",
     attachments: AttachmentSender? = null,
     onSendAttachments: ((String) -> Unit)? = null,
     onTyping: () -> Unit = {},
@@ -434,18 +641,32 @@ private fun Composer(
         verticalAlignment = Alignment.Bottom,
     ) {
         if (picker != null) {
-            IconButton(
-                onClick = {
-                    picker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                    )
-                },
-                enabled = enabled,
-                modifier = Modifier.size(44.dp),
+            // Circular + button mirroring iOS composer.
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(palette.elevated)
+                    .clickable(
+                        enabled = enabled,
+                        role = androidx.compose.ui.semantics.Role.Button,
+                        onClickLabel = "Add attachment",
+                        onClick = {
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                            )
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.AddPhotoAlternate, contentDescription = "Attach", tint = palette.textMuted)
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = if (enabled) palette.textPrimary else palette.textMuted,
+                    modifier = Modifier.size(22.dp),
+                )
             }
-            Spacer(Modifier.width(2.dp))
+            Spacer(Modifier.width(8.dp))
         }
         OutlinedTextField(
             value = text,
@@ -457,31 +678,48 @@ private fun Composer(
                 if (it.isNotEmpty() && !(wasEmpty && it.isEmpty())) onTyping()
             },
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Message", color = palette.textMuted) },
+            placeholder = { Text(placeholder, color = palette.textMuted) },
             maxLines = 4,
-            shape = RoundedCornerShape(18.dp),
+            shape = CircleShape,
+            enabled = enabled,
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(8.dp))
         val hasStaged = attachments?.staged?.isNotEmpty() == true
-        IconButton(
-            onClick = {
-                val trimmed = text.trim()
-                when {
-                    hasStaged && onSendAttachments != null -> {
-                        onSendAttachments(trimmed)
-                        text = ""
-                    }
-                    trimmed.isNotEmpty() -> {
-                        onSend(trimmed)
-                        text = ""
-                    }
-                }
-            },
-            // An image on its own is a message; it does not need a caption.
-            enabled = enabled && (text.isNotBlank() || hasStaged),
-            modifier = Modifier.size(44.dp),
+        val canSend = enabled && (text.isNotBlank() || hasStaged)
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(
+                    if (canSend) palette.accent
+                    else palette.elevated
+                )
+                .clickable(
+                    enabled = canSend,
+                    role = androidx.compose.ui.semantics.Role.Button,
+                    onClickLabel = "Send",
+                    onClick = {
+                        val trimmed = text.trim()
+                        when {
+                            hasStaged && onSendAttachments != null -> {
+                                onSendAttachments(trimmed)
+                                text = ""
+                            }
+                            trimmed.isNotEmpty() -> {
+                                onSend(trimmed)
+                                text = ""
+                            }
+                        }
+                    },
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Send, contentDescription = "Send", tint = palette.accent)
+            Icon(
+                Icons.Filled.Send,
+                contentDescription = null,
+                tint = if (canSend) Color.White else palette.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
     }
@@ -501,29 +739,34 @@ private fun StagedStrip(attachments: AttachmentSender, palette: Palette) {
             Box {
                 AsyncImage(
                     model = uri,
-                    contentDescription = null,
+                    contentDescription = "Staged attachment",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(64.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(palette.elevated),
                 )
-                Box(
-                    Modifier
+                IconButton(
+                    onClick = { attachments.unstage(uri) },
+                    modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(2.dp)
-                        .size(18.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .clickable { attachments.unstage(uri) },
-                    contentAlignment = Alignment.Center,
+                        .size(32.dp),
                 ) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Remove",
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp),
-                    )
+                    Box(
+                        Modifier
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.Black.copy(alpha = 0.6f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Remove attachment",
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
                 }
             }
         }
