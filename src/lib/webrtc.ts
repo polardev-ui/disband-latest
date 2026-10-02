@@ -139,9 +139,68 @@ export function ensureLanes(pc: RTCPeerConnection): void {
   pc.addTransceiver("video", { direction: "sendrecv" });
 }
 
+/*
+ Lanes are resolved by negotiated MID, never by array position.
+
+ Both sides call ensureLanes() before negotiating, so the callee adds three
+ transceivers of its own *before* the caller's offer arrives. The offer does
+ not reuse them: applying it creates three more, so the callee holds six —
+ its own three with `mid: null`, never negotiated and never sent, followed by
+ the three the offer actually describes. Measured in Chromium:
+
+   i:0 audio mid:null   i:3 audio mid:"0"
+   i:1 video mid:null   i:4 video mid:"1"
+   i:2 video mid:null   i:5 video mid:"2"
+
+ Lane lookups used `getTransceivers()[lane]`, so on the receiving side of
+ every call:
+
+   - its mic, camera and screen were handed to i:0–2 — dead transceivers that
+     are not in the SDP — and the screen share never left the machine;
+   - the caller's screen arrived on i:5, which `laneOfTransceiver` did not
+     recognise as the screen lane, so it fell through to the camera handler
+     and either replaced the caller's video or vanished.
+
+ That is "screen sharing doesn't work" and much of "video is buggy".
+
+ The m-line order of the offer is the only thing both peers agree on, and each
+ negotiated transceiver carries the mid of its m-line. So a lane is the
+ transceiver whose mid sits at that position in the session description; the
+ index is only a fallback for the moment before any description exists, which
+ is the caller about to make its offer — where its own three transceivers are
+ the ones that will be negotiated, and the index is correct.
+*/
+
+/** The `a=mid:` values in m-line order, from whichever description exists. */
+function negotiatedMids(pc: RTCPeerConnection): string[] {
+  const sdp =
+    pc.currentLocalDescription?.sdp ??
+    pc.localDescription?.sdp ??
+    pc.currentRemoteDescription?.sdp ??
+    pc.remoteDescription?.sdp ??
+    "";
+  const mids: string[] = [];
+  for (const match of sdp.matchAll(/^a=mid:(\S+)\s*$/gm)) mids.push(match[1]);
+  return mids;
+}
+
+/** The transceiver that carries a lane, or null if it does not exist yet. */
+export function transceiverForLane(
+  pc: RTCPeerConnection,
+  lane: Lane,
+): RTCRtpTransceiver | null {
+  const transceivers = pc.getTransceivers();
+  const mids = negotiatedMids(pc);
+  if (mids.length > lane) {
+    const byMid = transceivers.find((t) => t.mid === mids[lane]);
+    if (byMid) return byMid;
+  }
+  return transceivers[lane] ?? null;
+}
+
 export function openLanesForSending(pc: RTCPeerConnection): void {
-  for (const lane of [LANE_AUDIO, LANE_CAMERA, LANE_SCREEN]) {
-    const t = pc.getTransceivers()[lane];
+  for (const lane of [LANE_AUDIO, LANE_CAMERA, LANE_SCREEN] as const) {
+    const t = transceiverForLane(pc, lane);
     if (t && t.direction !== "sendrecv") t.direction = "sendrecv";
   }
 }
@@ -150,6 +209,10 @@ export function laneOfTransceiver(
   pc: RTCPeerConnection,
   transceiver: RTCRtpTransceiver,
 ): Lane | null {
+  if (transceiver.mid !== null) {
+    const i = negotiatedMids(pc).indexOf(transceiver.mid);
+    if (i === LANE_AUDIO || i === LANE_CAMERA || i === LANE_SCREEN) return i as Lane;
+  }
   const i = pc.getTransceivers().indexOf(transceiver);
   return i === LANE_AUDIO || i === LANE_CAMERA || i === LANE_SCREEN ? (i as Lane) : null;
 }
@@ -159,7 +222,7 @@ export async function setLaneTrack(
   lane: Lane,
   track: MediaStreamTrack | null,
 ): Promise<void> {
-  const transceiver = pc.getTransceivers()[lane];
+  const transceiver = transceiverForLane(pc, lane);
   if (!transceiver) return;
   await transceiver.sender.replaceTrack(track);
 }

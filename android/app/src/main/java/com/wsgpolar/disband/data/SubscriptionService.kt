@@ -77,7 +77,7 @@ data class Entitlements(
             maxBioLength = 190,
             animatedAvatar = false,
             animatedBanner = false,
-            screenShare = false,
+            screenShare = true,
             historyExport = false,
             prioritySupport = false,
         )

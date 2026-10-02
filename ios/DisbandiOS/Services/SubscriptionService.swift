@@ -75,7 +75,7 @@ struct Entitlements: Sendable {
 
     static let free = Entitlements(
         maxUploadBytes: 50 * 1024 * 1024, maxMessageChars: 2000, maxBioLength: 190,
-        animatedAvatar: false, animatedBanner: false, screenShare: false,
+        animatedAvatar: false, animatedBanner: false, screenShare: true,
         historyExport: false, prioritySupport: false
     )
     static let aero = Entitlements(

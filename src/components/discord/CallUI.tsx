@@ -114,9 +114,14 @@ function ParticipantTile({
   }, [stream, hasVideo]);
 
   return (
-    <div className="flex flex-col items-center gap-2.5">
+    // Fills the cell CallGrid computes. The wrapper used to be an auto-height
+    // flex column, so the tile's own `h-full` resolved against nothing and the
+    // box collapsed to roughly the avatar's height — which is why tiles came
+    // out as thin letterboxes with the profile pictures sliced off top and
+    // bottom.
+    <div className="h-full w-full">
       <div
-        className={`relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-overlay-media ${ringClass} ${
+        className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media ${ringClass} ${
           ring ? "shadow-[0_0_24px_rgba(59,165,93,0.3)]" : ""
         }`}
       >
@@ -256,7 +261,9 @@ export function CallPanel({
     return (
       <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black py-10">
         <p className="mb-6 text-xs font-bold uppercase tracking-widest text-white/30">Calling</p>
-        <div className="flex h-44 w-full max-w-3xl flex-col py-3 sm:h-56">
+        {/* Was h-44 (176px) for two 16:9 tiles side by side, which is the
+            squashed strip in the screenshot. Sized to the viewport now. */}
+        <div className="flex h-[min(42vh,380px)] w-full max-w-4xl flex-col px-6 py-3">
           <CallGrid>
             {selfProfile && (
               <ParticipantTile profile={selfProfile} label="You" size="md" />
