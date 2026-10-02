@@ -38,6 +38,34 @@ export function extractPreviewUrls(text: string, max = 3): string[] {
   return urls;
 }
 
+/**
+ * Remove the given URLs from display text.
+ *
+ * A GIF link is rendered as the GIF itself (see `GifLinkEmbed`), so leaving
+ * the raw URL in the body would print the link twice — once as text and once
+ * as the image. Both spellings a message can take are handled: the bare URL,
+ * and a `[label](url)` node, where a meaningful label survives as plain text
+ * and a label that is just the URL again disappears with it.
+ */
+export function removeUrlsFromText(text: string, urls: string[]): string {
+  let out = text;
+  for (const url of urls) {
+    if (!url) continue;
+    const esc = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Markdown-style [label](url): keep a meaningful label, drop the node.
+    out = out.replace(new RegExp(`\\[([^\\n\\]]*)\\]\\(${esc}\\)`, "g"), (_m, label: string) =>
+      label.trim() && label.trim() !== url ? label.trim() : "",
+    );
+    // A URL sitting alone on its line takes the line — and its line break —
+    // with it, so "look\n<gif>\ntext" does not become "look\n\ntext".
+    out = out.replace(new RegExp(`(^|\\n)[ \\t]*${esc}[ \\t]*(?=\\n|$)`, "g"), "");
+    // Anything left was inline in a sentence: remove it in place.
+    out = out.replace(new RegExp(esc, "g"), "");
+  }
+  // Close the gaps the removals leave, without rejoining split lines.
+  return out.replace(/[ \t]{2,}/g, " ").replace(/\n[ \t]+\n/g, "\n\n").trim();
+}
+
 function previewEndpoints(): string[] {
   if (isTauri()) {
     return [

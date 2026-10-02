@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { giphyDisplayUrl, giphyMp4Url } from "@/lib/giphy";
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
 import { IconMusic } from "@/components/icons";
 import { DangerousDownloadModal } from "./DangerousDownloadModal";
+import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
 import { PollCard } from "./PollCard";
 import { VideoPlayer } from "./VideoPlayer";
@@ -38,6 +39,29 @@ function rememberDims(url: string, w: number, h: number) {
   if (w > 0 && h > 0) dimCache.set(url, { w, h });
 }
 
+/**
+ * Wraps an attached GIF so the favorite star can sit over it: appears on
+ * hover, stays when the GIF is saved. `inline-block` keeps the star pinned to
+ * the image's own edge rather than the far side of the message column.
+ */
+function GifFrame({ url, title, children }: {
+  url: string;
+  title: string | null;
+  children: ReactNode;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span
+      className="relative inline-block max-w-full align-top"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {children}
+      <GifFavStar url={url} title={title} show={hover} />
+    </span>
+  );
+}
+
 export function MessageAttachment({
   url,
   type,
@@ -59,6 +83,10 @@ export function MessageAttachment({
 
   const [mp4Error, setMp4Error] = useState(false);
   const mp4 = type === "gif" && !mp4Error ? giphyMp4Url(url) : null;
+  // Favorite stars belong on GIFs only — this list is a GIF favorites tab.
+  const gifStarred = type === "gif" || /\.gif(\?|$)/i.test(url);
+  const withGifStar = (node: ReactNode) =>
+    gifStarred ? <GifFrame url={url} title={fileName}>{node}</GifFrame> : node;
   const displaySrc = mp4 ? giphyDisplayUrl(mp4) : null;
   const fileName = name || url.split("/").pop()?.split("?")[0] || "download";
   const sizeLabel = formatFileSize(size);
@@ -171,25 +199,27 @@ export function MessageAttachment({
       ) : type === "gif" && mp4 ? (
         gifSrc ? (
           <>
-            <button type="button" onClick={() => setLightbox(true)} className="block text-left">
-              {!mediaLoaded && skeleton}
-              <video
-                src={gifSrc}
-                autoPlay
-                loop
-                muted
-                playsInline
-                webkit-playsinline=""
-                className={`${mediaClass} cursor-zoom-in ${mediaLoaded ? "" : "hidden"}`}
-                onLoadedData={(e) => {
-                  const v = e.currentTarget;
-                  rememberDims(url, v.videoWidth, v.videoHeight);
-                  setDims(dimCache.get(url) ?? null);
-                  handleMediaLoad();
-                }}
-                onError={() => setMp4Error(true)}
-              />
-            </button>
+            <GifFrame url={url} title={fileName}>
+              <button type="button" onClick={() => setLightbox(true)} className="block text-left">
+                {!mediaLoaded && skeleton}
+                <video
+                  src={gifSrc}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  webkit-playsinline=""
+                  className={`${mediaClass} cursor-zoom-in ${mediaLoaded ? "" : "hidden"}`}
+                  onLoadedData={(e) => {
+                    const v = e.currentTarget;
+                    rememberDims(url, v.videoWidth, v.videoHeight);
+                    setDims(dimCache.get(url) ?? null);
+                    handleMediaLoad();
+                  }}
+                  onError={() => setMp4Error(true)}
+                />
+              </button>
+            </GifFrame>
             <ImageLightbox
               open={lightbox}
               onClose={() => setLightbox(false)}
@@ -211,22 +241,24 @@ export function MessageAttachment({
       ) : (
         <>
           {!mediaLoaded && skeleton}
-          <button type="button" onClick={() => setLightbox(true)} className={`block text-left ${mediaLoaded ? "" : "hidden"}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imgSrc}
-              alt={type === "gif" ? "GIF" : fileName}
-              className={`${mediaClass} cursor-zoom-in`}
-              loading="eager"
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                rememberDims(url, img.naturalWidth, img.naturalHeight);
-                setDims(dimCache.get(url) ?? null);
-                handleMediaLoad();
-              }}
-              onError={() => setImgError(true)}
-            />
-          </button>
+          {withGifStar(
+            <button type="button" onClick={() => setLightbox(true)} className={`block text-left ${mediaLoaded ? "" : "hidden"}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imgSrc}
+                alt={type === "gif" ? "GIF" : fileName}
+                className={`${mediaClass} cursor-zoom-in`}
+                loading="eager"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  rememberDims(url, img.naturalWidth, img.naturalHeight);
+                  setDims(dimCache.get(url) ?? null);
+                  handleMediaLoad();
+                }}
+                onError={() => setImgError(true)}
+              />
+            </button>,
+          )}
           <ImageLightbox
             open={lightbox}
             onClose={() => setLightbox(false)}

@@ -1,57 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { IconStar } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
-import { useGifFavorites } from "@/hooks/useGifFavorites";
+import { GifFavStar } from "./GifFavStar";
+import { ImageLightbox } from "./ImageLightbox";
+import { LinkPreviewCard } from "./LinkPreviewCard";
+import { VideoPlayer } from "./VideoPlayer";
 
-const GIF_EXTS = new Set(["gif"]);
-const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "m4v"]);
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "avif", "bmp"]);
-const GIF_HOSTS = ["media.giphy.com", "media.tenor.com", "c.tenor.com", "i.imgur.com"];
-
-function pathExt(url: string): string | null {
-  try {
-    const clean = new URL(url).pathname.toLowerCase();
-    const m = clean.match(/\.([a-z0-9]{2,5})$/);
-    return m ? m[1] : null;
-  } catch {
-    return null;
-  }
-}
-
-/** gif, video, or image — or null for ordinary links. Client-side only. */
-export function classifyLinkUrl(url: string): "gif" | "video" | "image" | null {
-  let host = "";
-  try {
-    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-  const ext = pathExt(url);
-  if (ext && GIF_EXTS.has(ext)) return "gif";
-  if (ext && VIDEO_EXTS.has(ext)) return "video";
-  if (ext && IMAGE_EXTS.has(ext)) return "image";
-  if (GIF_HOSTS.includes(host)) return "gif";
-  return null;
-}
-
-function FavStar({ active, onToggle }: { active: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={active ? "Remove from favorites" : "Save to favorites"}
-      title={active ? "Remove from favorites" : "Save to favorites"}
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle();
-      }}
-      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-[30%] bg-black/50 text-yellow-400 backdrop-blur-sm transition-transform hover:scale-110"
-    >
-      <IconStar size={15} className={active ? "fill-yellow-400" : ""} />
-    </button>
-  );
-}
+// Re-exported so chat code keeps one import site; the logic lives in a pure
+// module (src/lib/link-kind.ts) so it can be tested without React.
+export { classifyLinkUrl } from "@/lib/link-kind";
 
 function hostnameOf(url: string): string {
   try {
@@ -61,14 +19,18 @@ function hostnameOf(url: string): string {
   }
 }
 
-/** A pasted GIF link becomes the GIF itself (favoritable), replacing the card. */
+/**
+ * A pasted GIF link becomes the GIF itself (favoritable), replacing the card.
+ * Clicking opens the same lightbox an uploaded GIF opens, and if the image
+ * never loads the ordinary link card takes its place rather than leaving the
+ * message with nothing where its link used to be.
+ */
 export function GifLinkEmbed({ url, onLoad }: { url: string; onLoad?: () => void }) {
-  const { isFav, toggle } = useGifFavorites();
   const [hover, setHover] = useState(false);
   const [failed, setFailed] = useState(false);
-  const fav = isFav(url);
+  const [lightbox, setLightbox] = useState(false);
   const src = safeImageUrl(url);
-  if (!src || failed) return null;
+  if (!src || failed) return <LinkPreviewCard url={url} onLoad={onLoad} />;
 
   return (
     <div
@@ -76,25 +38,39 @@ export function GifLinkEmbed({ url, onLoad }: { url: string; onLoad?: () => void
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <button
+        type="button"
+        onClick={() => setLightbox(true)}
+        className="block w-full cursor-zoom-in bg-bg-secondary text-left"
+        title="Open GIF"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="GIF"
+          loading="lazy"
+          className="max-h-64 w-full bg-bg-secondary object-contain"
+          onLoad={onLoad}
+          onError={() => setFailed(true)}
+        />
+      </button>
+      <GifFavStar url={url} title={hostnameOf(url)} show={hover} />
+      <ImageLightbox
+        open={lightbox}
+        onClose={() => setLightbox(false)}
         src={src}
         alt="GIF"
-        loading="lazy"
-        className="max-h-64 w-full bg-bg-secondary object-contain"
-        onLoad={onLoad}
-        onError={() => setFailed(true)}
+        fileName={hostnameOf(url)}
+        animated
       />
-      {(hover || fav) && (
-        <FavStar active={fav} onToggle={() => void toggle(url, hostnameOf(url), !fav)} />
-      )}
     </div>
   );
 }
 
 /**
  * A pasted video/image link keeps its link card, with the playable media
- * rendered below it — same as an uploaded attachment.
+ * rendered below it — same as an uploaded attachment: images click through
+ * to the lightbox, videos get the real player.
  */
 export function LinkedMedia({ url, kind, onLoad }: {
   url: string;
@@ -102,30 +78,43 @@ export function LinkedMedia({ url, kind, onLoad }: {
   onLoad?: () => void;
 }) {
   const [failed, setFailed] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const src = safeImageUrl(url);
   if (!src || failed) return null;
   if (kind === "video") {
     return (
-      <video
+      <VideoPlayer
         src={src}
-        controls
-        playsInline
-        preload="metadata"
-        className="mt-1 max-h-64 w-full max-w-md rounded-lg border border-divider bg-black"
-        onLoadedData={onLoad}
-        onError={() => setFailed(true)}
+        onLoad={onLoad}
+        className="mt-1 max-h-64 w-full max-w-md rounded-lg border border-divider"
       />
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      className="mt-1 max-h-64 w-full max-w-md rounded-lg border border-divider bg-bg-secondary object-contain"
-      onLoad={onLoad}
-      onError={() => setFailed(true)}
-    />
+    <div className="relative mt-1 max-w-md overflow-hidden rounded-lg border border-divider bg-bg-secondary">
+      <button
+        type="button"
+        onClick={() => setLightbox(true)}
+        className="block w-full cursor-zoom-in text-left"
+        title="Open image"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          className="max-h-64 w-full bg-bg-secondary object-contain"
+          onLoad={onLoad}
+          onError={() => setFailed(true)}
+        />
+      </button>
+      <ImageLightbox
+        open={lightbox}
+        onClose={() => setLightbox(false)}
+        src={src}
+        alt=""
+        fileName={hostnameOf(url)}
+      />
+    </div>
   );
 }

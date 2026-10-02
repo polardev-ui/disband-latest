@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { safeImageUrl } from "@/lib/safe-url";
+import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -107,16 +108,13 @@ export function AttachmentGrid({
     const src = safeImageUrl(a.url);
     if (!src) return null;
     return (
-      <button
+      <GridTile
         key={a.url + index}
-        type="button"
-        onClick={() => onOpen?.(a, index)}
-        className={`min-w-0 overflow-hidden bg-bg-accent transition-opacity hover:opacity-90 ${className}`}
-        aria-label={a.name ? `Open ${a.name}` : "Open image"}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={a.name ?? ""} loading="lazy" className="h-full w-full object-cover" />
-      </button>
+        attachment={a}
+        index={index}
+        className={className}
+        onOpen={onOpen}
+      />
     );
   };
 
@@ -153,28 +151,8 @@ export function AttachmentGrid({
             row.length === 0 ? null : (
               <div key={r} className="flex gap-1" style={{ height: ROW_HEIGHT[row.length] ?? ROW_HEIGHT[3] }}>
                 {row.map((a, i) => {
-                  const src = safeImageUrl(a.url);
-                  if (!src) return null;
                   const index = rows.slice(0, r).reduce((n, x) => n + x.length, 0) + i;
-                  return (
-                    <button
-                      key={a.url + i}
-                      type="button"
-                      onClick={() => onOpen?.(a, index)}
-                      className="min-w-0 flex-1 overflow-hidden bg-bg-accent transition-opacity hover:opacity-90"
-                      aria-label={a.name ? `Open ${a.name}` : "Open image"}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt={a.name ?? ""}
-                        loading="lazy"
-                        // Cover, so a row of mixed aspect ratios stays flush
-                        // instead of leaving gaps between tiles.
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  );
+                  return tile(a, index, "flex-1");
                 })}
               </div>
             ),
@@ -188,8 +166,51 @@ export function AttachmentGrid({
   );
 }
 
-function OtherFiles({ others }: { others: MessageAttachment[] }) {
+/**
+ * One cell of the mosaic. Kept as its own component so the hover state that
+ * reveals the favorite star is per-tile, and the star sits over the tile as
+ * a sibling of the button (never nested inside it).
+ */
+function GridTile({ attachment, index, className, onOpen }: {
+  attachment: MessageAttachment;
+  index: number;
+  className: string;
+  onOpen: (a: MessageAttachment, index: number) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const src = safeImageUrl(attachment.url);
+  if (!src) return null;
+  const gif = attachment.type === "gif" || /\.gif(\?|$)/i.test(attachment.url);
   return (
+    <span
+      className={`relative block min-w-0 overflow-hidden bg-bg-accent ${className}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <button
+        type="button"
+        onClick={() => onOpen(attachment, index)}
+        className="block h-full w-full transition-opacity hover:opacity-90"
+        aria-label={attachment.name ? `Open ${attachment.name}` : "Open image"}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={attachment.name ?? ""}
+          loading="lazy"
+          // Cover, so a row of mixed aspect ratios stays flush
+          // instead of leaving gaps between tiles.
+          className="h-full w-full object-cover"
+        />
+      </button>
+      {gif && (
+        <GifFavStar url={attachment.url} title={attachment.name} show={hover} />
+      )}
+    </span>
+  );
+}
+
+function OtherFiles({ others }: { others: MessageAttachment[] }) {  return (
     <>
       {others.map((a, i) => (
         <a

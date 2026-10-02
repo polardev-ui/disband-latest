@@ -14,7 +14,7 @@ import {
   isSingleCustomEmoji,
   splitCustomEmojiSegments,
 } from "@/lib/custom-emoji";
-import { extractPreviewUrls } from "@/lib/link-preview";
+import { extractPreviewUrls, removeUrlsFromText } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
@@ -133,10 +133,17 @@ function MessageBody({  content,
   const codes = extractInviteCodes(content);
   const giftCodes = extractGiftCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
-  const textOnly = content
-    .replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "")
-    .replace(/(?:https?:\/\/[^\s]+)?\/gift\/[a-zA-Z0-9]{10}\b/g, "")
-    .trim();
+  // A GIF link renders as the GIF itself (see GifLinkEmbed below), so its raw
+  // URL leaves the body — otherwise the message prints the same link twice,
+  // once as text and once as the image that replaced it. Only GIF links are
+  // stripped: image/video links keep their visible URL above the card.
+  const gifUrls = previewUrls.filter((u) => classifyLinkUrl(u) === "gif");
+  const textOnly = removeUrlsFromText(
+    content
+      .replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "")
+      .replace(/(?:https?:\/\/[^\s]+)?\/gift\/[a-zA-Z0-9]{10}\b/g, ""),
+    gifUrls,
+  );
   const emojiOnly = isEmojiOnlyMessage(textOnly);
   const singleCustom = isSingleCustomEmoji(textOnly, customEmoji);
   const emojiSizeClass = emojiOnly ? emojiOnlySizeClass(textOnly) : "";
