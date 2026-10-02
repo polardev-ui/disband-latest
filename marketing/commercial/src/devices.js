@@ -250,3 +250,50 @@ export function makeLaptop(texture, { finish = "silver", openAngle = 108 } = {})
   screen.castShadow = glare.castShadow = false;
   return { group, screen, glare, lid, size: { W, Dp, T, SW, SH } };
 }
+
+// A generic modern Android handset: flat 20:9 slab, tighter corners than the
+// iPhone model, power and volume keys on the right, and a vertical pill camera
+// module. The punch-hole camera is part of the screen capture, as on device.
+export function makeAndroidPhone(texture, { finish = "graphite", aspect = 2402 / 1082 } = {}) {
+  const SW = 6.86, SH = SW * aspect, SR = 0.78;
+  const W = SW + 0.34, H = SH + 0.36, D = 0.86, R = 0.98;
+  const group = new THREE.Group();
+  const frame = MATERIALS[finish]();
+  frame.roughness = 0.42; // satin rather than polished
+
+  group.add(new THREE.Mesh(slab(W, H, D, R, 0.2, 56), frame));
+  const front = new THREE.Mesh(panel(W - 0.1, H - 0.1, R - 0.05, 48), MATERIALS.blackGlass());
+  front.position.z = D / 2 + 0.002;
+  group.add(front);
+  const { screen, glare } = screenLayers(SW, SH, SR, texture);
+  screen.position.z = D / 2 + 0.012;
+  glare.position.z = D / 2 + 0.02;
+  glare.renderOrder = 2;
+  group.add(screen, glare);
+  const back = new THREE.Mesh(panel(W - 0.1, H - 0.1, R - 0.05, 48), MATERIALS.backGlass());
+  back.position.z = -D / 2 - 0.002;
+  back.rotation.y = Math.PI;
+  group.add(back);
+
+  const pill = new THREE.Mesh(new RoundedBoxGeometry(1.7, 3.6, 0.16, 6, 0.8), MATERIALS.backGlass());
+  pill.position.set(W / 2 - 1.55, H / 2 - 2.5, -D / 2 - 0.08);
+  group.add(pill);
+  for (const y of [0.85, -0.85]) {
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.18, 40), frame);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(pill.position.x, pill.position.y + y, -D / 2 - 0.2);
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.47, 40), MATERIALS.lens());
+    glass.rotation.y = Math.PI;
+    glass.position.set(ring.position.x, ring.position.y, -D / 2 - 0.292);
+    group.add(ring, glass);
+  }
+
+  const button = (len, y) => {
+    const b = new THREE.Mesh(new RoundedBoxGeometry(0.12, len, 0.3, 3, 0.05), frame);
+    b.position.set(W / 2 + 0.03, y, 0);
+    group.add(b);
+  };
+  button(1.25, 3.6);
+  button(2.4, 1.2);
+  return { group, screen, glare, size: { W, H, D, SW, SH } };
+}

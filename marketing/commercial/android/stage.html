@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — Android beta announcement</title>
+<!-- Renders any frame of the Android beta announcement: renderFrame(t).
+     1920×1080 at CSS pixel ratio 1; tools/render.mjs --page android/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #0b0b0c; --ink2: #1d1d1f; --gray: #6e6e73; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #fff; }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--ink); }
+#bg { position: absolute; inset: 0; background: #000; }
+#gl { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+.layer { position: absolute; inset: 0; display: none; }
+.center { position: absolute; left: 0; right: 0; top: 50%; text-align: center; transform: translateY(-50%); }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.statement { font-size: 96px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; }
+.statement.md { font-size: 82px; letter-spacing: -0.028em; }
+
+#logo1 { position: absolute; left: 50%; top: 50%; width: 258px; height: 290px; margin: -145px 0 0 -129px; }
+#logo1 svg, #logo7 svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+#beta { position: absolute; left: 0; right: 0; top: 400px; text-align: center; font-size: 112px; font-weight: 600; letter-spacing: -0.035em; line-height: 1; }
+#early { position: absolute; left: 0; right: 0; top: 566px; text-align: center; font-size: 48px; font-weight: 500; letter-spacing: -0.018em; color: var(--gray); }
+
+#ctaText { position: absolute; left: 990px; top: 0; width: 860px; }
+#ctaHead { position: absolute; left: 0; top: 330px; font-size: 86px; font-weight: 600; letter-spacing: -0.032em; line-height: 1; white-space: nowrap; }
+#ctaSub { position: absolute; left: 2px; top: 452px; font-size: 38px; font-weight: 500; letter-spacing: -0.015em; color: var(--gray); white-space: nowrap; }
+#ctaUrlRow { position: absolute; left: 0; top: 560px; display: flex; align-items: center; gap: 22px; }
+#ctaArrow { width: 58px; height: 34px; flex: none; }
+#ctaUrl { font-size: 52px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+
+#endGroup { position: absolute; inset: 0; transform-origin: 50% 45%; }
+#logo7 { position: absolute; left: 50%; top: 190px; width: 150px; height: 169px; margin-left: -75px; }
+#title { position: absolute; left: 0; right: 0; top: 410px; text-align: center; font-size: 64px; font-weight: 600; letter-spacing: 0.34em; text-indent: 0.34em; line-height: 1; }
+#slogan { position: absolute; left: 0; right: 0; top: 508px; text-align: center; font-size: 38px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink2); }
+#note { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 34px; font-weight: 500; letter-spacing: -0.012em; color: var(--gray); }
+#url { position: absolute; left: 0; right: 0; top: 702px; text-align: center; font-size: 54px; font-weight: 600; letter-spacing: -0.02em; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl" width="1920" height="1080"></canvas>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" id="markpath"/></symbol>
+    <filter id="blurY" x="-20%" y="-60%" width="140%" height="220%" color-interpolation-filters="sRGB"><feGaussianBlur id="blurYv" stdDeviation="0 0"/></filter>
+  </defs>
+</svg>
+<div class="layer" id="s1"><div id="logo1"><svg><use href="#mark"/></svg></div></div>
+<div class="layer" id="s2"><div class="center statement" id="coming"></div></div>
+<div class="layer" id="s4"><div class="center statement md" id="connect"></div></div>
+<div class="layer" id="s5"><div id="s5g"><div id="beta"></div><div id="early"></div></div></div>
+<div class="layer" id="s6"><div id="ctaText">
+  <div id="ctaHead"></div><div id="ctaSub"></div>
+  <div id="ctaUrlRow"><svg id="ctaArrow" viewBox="0 0 58 34"><path id="arrowPath" d="M2 17H52M38 3l14 14-14 14" fill="none" stroke="#0b0b0c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg><div id="ctaUrl"></div></div>
+</div></div>
+<div class="layer" id="s7"><div id="endGroup">
+  <div id="logo7"><svg><use href="#mark"/></svg></div>
+  <div id="title"></div><div id="slogan"></div><div id="note"></div><div id="url"></div>
+</div></div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

@@ -31,7 +31,7 @@ async function worker(id) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   page.setDefaultTimeout(180000);
   page.on("pageerror", (e) => console.error(`[w${id}] pageerror`, e.message));
-  await page.goto(`${origin}/src/stage.html${preview ? "?preview" : ""}`);
+  await page.goto(`${origin}/${process.env.STAGE ?? "src/stage.html"}${preview ? "?preview" : ""}`);
   await page.waitForSelector("body[data-ready]", { timeout: 300000 });
   // Interleave frames across workers so heavy 3D stretches are shared.
   for (let i = id; i < todo.length; i += workers) {
