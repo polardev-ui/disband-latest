@@ -156,7 +156,7 @@ export function HomePanel({
         />
         <NavRow
           icon={<IconCrown size={18} />}
-          label="Disband Aero"
+          label="Upgrade"
           accent
           onClick={() => onOpenSubscription?.()}
         />

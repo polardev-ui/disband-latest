@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbeddedCheckout";
 import { IconClose } from "@/components/icons";
@@ -47,7 +48,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/shop/equip");
+      const res = await apiFetch("/api/shop/equip");
       if (!res.ok) return;
       const data = (await res.json()) as Inventory;
       setInventory({ owned: data.owned ?? [], equipped: { ...EMPTY.equipped, ...data.equipped } });
@@ -99,7 +100,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
     setBusyId(item.id);
     setError(null);
     try {
-      const res = await fetch("/api/stripe/create-shop-checkout", {
+      const res = await apiFetch("/api/stripe/create-shop-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_id: item.id }),
@@ -122,7 +123,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
     setBusyId(item?.id ?? `clear-${category}`);
     setError(null);
     try {
-      const res = await fetch("/api/shop/equip", {
+      const res = await apiFetch("/api/shop/equip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_id: item?.id ?? null, category }),
@@ -160,7 +161,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
 
   const hasItem = async (id: string) => {
     try {
-      const res = await fetch("/api/shop/equip");
+      const res = await apiFetch("/api/shop/equip");
       const data = (await res.json()) as Inventory;
       return (data.owned ?? []).includes(id);
     } catch {

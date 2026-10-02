@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useReducer } from "react";
 import { gifFavKey } from "@/lib/gif-favorites";
+import { getSupabaseClient, isAccessTokenExpired, refreshSessionOnce } from "@/lib/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
 export interface FavGif {
   url: string;
@@ -14,6 +16,27 @@ const listeners = new Set<Listener>();
 let cache: FavGif[] | null = null;
 let inflight: Promise<FavGif[]> | null = null;
 
+/**
+ * The session lives in localStorage, not cookies, so `getRouteUser` has
+ * nothing to read unless we hand it the bearer token — without this the
+ * route answers 401 and every favorite silently no-ops. A stale access
+ * token gets one refresh first rather than failing the request that a
+ * long-idle tab is most likely to make.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  try {
+    const supabase = getSupabaseClient();
+    let session = (await supabase.auth.getSession()).data.session;
+    if (session && isAccessTokenExpired(session)) {
+      const refreshed = await refreshSessionOnce();
+      if ("session" in refreshed && refreshed.session) session = refreshed.session as Session;
+    }
+    return session ? { Authorization: `Bearer ${session.access_token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 function notify() {
   for (const l of listeners) l();
 }
@@ -24,12 +47,12 @@ async function fetchAll(force = false): Promise<FavGif[]> {
     // A failed read keeps whatever list we already have: a 429 or a blip
     // must not blank the Favorited tab (or every star in chat) out.
     const prev = cache;
-    inflight = fetch("/api/gifs/favorites")
-      .then(async (res) => {
-        if (!res.ok) return prev ?? [];
-        const json = (await res.json()) as { favorites?: FavGif[] };
-        return json.favorites ?? [];
-      })
+    inflight = (async () => {
+      const res = await fetch("/api/gifs/favorites", { headers: await authHeaders() });
+      if (!res.ok) return prev ?? [];
+      const json = (await res.json()) as { favorites?: FavGif[] };
+      return json.favorites ?? [];
+    })()
       .catch(() => prev ?? [])
       .finally(() => {
         inflight = null;
@@ -81,7 +104,7 @@ export function useGifFavorites() {
     try {
       const res = await fetch("/api/gifs/favorites", {
         method: active ? "POST" : "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ url: active ? url : (stored?.url ?? url), title }),
       });
       if (!res.ok && prev) {

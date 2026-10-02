@@ -36,3 +36,23 @@ test('non-aero gifts and legacy names behave', () => {
   assert.equal(planWithGifts(null, null), 'free');
   assert.equal(planWithGifts(null, []), 'free');
 });
+
+test('lite subscribers and lite gifts land on lite', () => {
+  const LITE_SUB = { plan: 'lite', status: 'active' };
+  const LITE_GIFT = [{ plan: 'lite', expires_at: '2026-12-28T03:49:03.214Z' }];
+  assert.equal(planWithGifts(LITE_SUB, null), 'lite');
+  assert.equal(planWithGifts(LITE_SUB, []), 'lite');
+  assert.equal(planWithGifts(null, LITE_GIFT), 'lite');
+  assert.equal(planWithGifts(FREE_SUB, LITE_GIFT), 'lite');
+  // Aero beats Lite from either source — a lite gift must never downgrade.
+  assert.equal(planWithGifts(LITE_SUB, GIFT), 'aero');
+  assert.equal(planWithGifts(ACTIVE_SUB, LITE_GIFT), 'aero');
+  assert.equal(hasActiveGiftAero(LITE_GIFT), false);
+  assert.equal(hasActiveGiftAero([...GIFT, ...LITE_GIFT]), true);
+});
+
+test('expired lite gifts grant nothing', () => {
+  const dead = [{ plan: 'lite', expires_at: '2020-01-01T00:00:00.000Z' }];
+  assert.equal(planWithGifts(null, dead), 'free');
+  assert.equal(planWithGifts({ plan: 'lite', status: 'active' }, dead), 'lite');
+});

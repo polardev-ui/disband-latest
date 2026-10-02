@@ -15,7 +15,7 @@ import {
   attachRemoteTrack, createOfferForPeer, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack,
   LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
-import { fetchIceServers } from "@/lib/ice-servers";
+import { fetchIceServers, refreshIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
@@ -79,6 +79,10 @@ export function useGroupCallManager(
   const localRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const iceRetryRef = useRef<Map<string, number>>(new Map());
+  // Retransmit timers for offers whose first send may have predated the
+  // remote joining the signal channel. Cleared on answer, leave, drop,
+  // and full cleanup.
+  const offerTimersRef = useRef<Map<string, number>>(new Map());
   const signalRef = useRef<RealtimeChannel | null>(null);
   const listenRef = useRef<RealtimeChannel | null>(null);
   const groupIdRef = useRef<string | null>(null);
@@ -139,6 +143,8 @@ export function useGroupCallManager(
   }, [presence, joined, userId]);
 
   const cleanupMedia = useCallback(async () => {
+    offerTimersRef.current.forEach((t) => window.clearTimeout(t));
+    offerTimersRef.current.clear();
     peersRef.current.forEach((pc) => pc.close());
     peersRef.current.clear();
     iceQueueRef.current.clear();
@@ -248,18 +254,31 @@ export function useGroupCallManager(
           const attempts = (iceRetryRef.current.get(remoteId) ?? 0) + 1;
           iceRetryRef.current.set(remoteId, attempts);
           if (attempts <= 2) {
-            try {
-              pc.restartIce();
-              return;
-            } catch {
-              // fall through to drop
-            }
+            // Fresh TURN credentials before restarting: restartIce() alone
+            // reuses the ones that just failed.
+            void (async () => {
+              try {
+                const peer = peersRef.current.get(remoteId);
+                if (!peer) return;
+                const servers = await refreshIceServers();
+                peer.setConfiguration({ iceServers: servers });
+                peer.restartIce();
+              } catch {
+                // Falls through to the drop path below on next state change.
+              }
+            })();
+            return;
           }
         }
         if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
           pc.close();
           peersRef.current.delete(remoteId);
           iceRetryRef.current.delete(remoteId);
+          const dropTimer = offerTimersRef.current.get(remoteId);
+          if (dropTimer !== undefined) {
+            window.clearTimeout(dropTimer);
+            offerTimersRef.current.delete(remoteId);
+          }
           setRemoteStreams((prev) => {
             const next = new Map(prev);
             next.delete(remoteId);
@@ -282,6 +301,28 @@ export function useGroupCallManager(
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         broadcast({ type: "offer", from: userId, to: remoteId, sdp: offer });
+        // The remote may not be on the signal channel yet (slow join,
+        // permission prompt): re-send until the answer lands.
+        let offerAttempts = 0;
+        const resendOffer = () => {
+          offerTimersRef.current.delete(remoteId);
+          const peer = peersRef.current.get(remoteId);
+          if (!peer || peer.signalingState === "closed" || peer.remoteDescription) return;
+          if (offerAttempts >= 4) return;
+          offerAttempts += 1;
+          const sdp = peer.localDescription;
+          if (sdp) {
+            try {
+              broadcast({ type: "offer", from: userId, to: remoteId, sdp });
+            } catch {
+              // Next tick retries while attempts remain.
+            }
+          }
+          if (!peer.remoteDescription) {
+            offerTimersRef.current.set(remoteId, window.setTimeout(resendOffer, 2500));
+          }
+        };
+        offerTimersRef.current.set(remoteId, window.setTimeout(resendOffer, 2500));
       }
     },
     [userId, broadcast],
@@ -309,6 +350,11 @@ export function useGroupCallManager(
         const pc = peersRef.current.get(payload.from);
         pc?.close();
         peersRef.current.delete(payload.from);
+        const timer = offerTimersRef.current.get(payload.from);
+        if (timer !== undefined) {
+          window.clearTimeout(timer);
+          offerTimersRef.current.delete(payload.from);
+        }
         setRemoteStreams((prev) => {
           const next = new Map(prev);
           next.delete(payload.from);
@@ -357,6 +403,11 @@ export function useGroupCallManager(
       } else if (payload.type === "answer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
         await flushIce(payload.from, pc);
+        const timer = offerTimersRef.current.get(payload.from);
+        if (timer !== undefined) {
+          window.clearTimeout(timer);
+          offerTimersRef.current.delete(payload.from);
+        }
       } else if (payload.type === "ice" && payload.candidate) {
         if (pc.remoteDescription) {
           await pc.addIceCandidate(payload.candidate);

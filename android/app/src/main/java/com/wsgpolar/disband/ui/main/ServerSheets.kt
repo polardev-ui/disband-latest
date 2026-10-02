@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Share
@@ -136,12 +137,37 @@ fun InviteSheet(server: Server, onDismiss: () -> Unit) {
 @Composable
 fun MembersSheet(server: Server, onDismiss: () -> Unit) {
     val palette = LocalPalette.current
+    val scope = rememberCoroutineScopeCompat()
+    val context = LocalContext.current
     var members by remember(server.id) { mutableStateOf<List<ServerMember>>(emptyList()) }
     var loading by remember(server.id) { mutableStateOf(true) }
+    var loadError by remember(server.id) { mutableStateOf<String?>(null) }
+    var query by remember(server.id) { mutableStateOf("") }
+    var kickTarget by remember { mutableStateOf<ServerMember?>(null) }
+    var kicking by remember { mutableStateOf(false) }
+    // Current user's role gates kick visibility — RLS enforces it anyway,
+    // but hiding the button for plain members avoids a guaranteed failure.
+    val selfId = remember { com.wsgpolar.disband.core.DisbandSupabase.auth.currentSessionOrNull()?.user?.id }
 
-    LaunchedEffect(server.id) {
-        members = runCatching { Database.members(server.id) }.getOrDefault(emptyList())
+    suspend fun load() {
+        loading = true
+        loadError = null
+        try {
+            members = Database.members(server.id)
+        } catch (e: Exception) {
+            loadError = e.message ?: e.toString()
+        }
         loading = false
+    }
+
+    LaunchedEffect(server.id) { load() }
+
+    val selfRole = members.firstOrNull { it.userId == selfId }?.role
+    val canModerate = selfRole == MemberRole.Owner || selfRole == MemberRole.Admin || selfRole == MemberRole.Moderator
+    val needle = query.trim().lowercase()
+    val visible = if (needle.isBlank()) members else members.filter {
+        (it.profile?.name ?: "").lowercase().contains(needle) ||
+            (it.profile?.username ?: "").lowercase().contains(needle)
     }
 
     ModalBottomSheet(
@@ -160,15 +186,32 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
                 color = palette.textMuted, fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            Spacer(Modifier.height(8.dp))
+            com.wsgpolar.disband.ui.components.CapsuleSearchField(
+                text = query,
+                onValueChange = { query = it },
+                prompt = "Search members",
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
 
-            if (loading) {
-                Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+            when {
+                loading -> Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
                 }
-            } else {
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
-                    items(members, key = { it.id }) { member ->
+                loadError != null -> com.wsgpolar.disband.ui.components.ErrorState(
+                    message = loadError ?: "Unknown error",
+                    onRetry = { scope.launch { load() } },
+                )
+                visible.isEmpty() -> Box(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (query.isBlank()) "No members yet." else "No one matches \"$query\".",
+                        color = palette.textMuted, fontSize = 14.sp,
+                    )
+                }
+                else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
+                    items(visible, key = { it.id }) { member ->
                         Row(
                             Modifier
                                 .fillMaxWidth()
@@ -206,12 +249,53 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
                                         .padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
                             }
+                            if (canModerate && member.userId != selfId && member.role != MemberRole.Owner) {
+                                androidx.compose.material3.IconButton(
+                                    onClick = { kickTarget = member },
+                                    modifier = Modifier.size(48.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "Remove ${member.profile?.name ?: "member"}",
+                                        tint = Brand.dnd,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    kickTarget?.let { target ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!kicking) kickTarget = null },
+            title = { Text("Remove ${target.profile?.name ?: "member"}?") },
+            text = { Text("They'll need a new invite to rejoin ${server.name}.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        kicking = true
+                        scope.launch {
+                            runCatching { Database.kickMember(server.id, target.userId) }
+                            kicking = false
+                            kickTarget = null
+                            load()
+                        }
+                    },
+                    enabled = !kicking,
+                ) { Text(if (kicking) "Removing…" else "Remove", color = Brand.dnd) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { kickTarget = null },
+                    enabled = !kicking,
+                ) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -227,12 +311,13 @@ fun ServerOverflowSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScopeCompat()
     var leaving by remember { mutableStateOf(false) }
+    var confirmLeave by remember { mutableStateOf(false) }
     val uid = app.currentUserId
     val isOwner = server.ownerId == uid
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = palette.surface,
     ) {
         Column(Modifier.padding(bottom = 28.dp).navigationBarsPadding()) {
@@ -260,19 +345,40 @@ fun ServerOverflowSheet(
                     palette,
                     tint = Brand.danger,
                 ) {
-                    if (!leaving) {
+                    if (!leaving) confirmLeave = true
+                }
+            }
+        }
+    }
+
+    if (confirmLeave && uid != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!leaving) confirmLeave = false },
+            title = { Text("Leave ${server.name}?") },
+            text = { Text("You'll need a new invite to rejoin.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
                         leaving = true
                         scope.launch {
                             runCatching { Database.leaveServer(server.id, uid) }
                             app.loadServers()
                             leaving = false
+                            confirmLeave = false
                             onDismiss()
                             onLeft()
                         }
-                    }
-                }
-            }
-        }
+                    },
+                    enabled = !leaving,
+                ) { Text(if (leaving) "Leaving…" else "Leave", color = Brand.dnd) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { confirmLeave = false },
+                    enabled = !leaving,
+                ) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -287,8 +393,13 @@ private fun OverflowRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .heightIn(min = 52.dp)
+            .clickable(
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))

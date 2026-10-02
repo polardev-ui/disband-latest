@@ -45,25 +45,46 @@ export interface GiftEntitlement {
   expires_at: string | null;
 }
 
+/**
+ * Best plan an active gift grants: Aero beats Lite beats free. A gift with
+ * no expiry (dashboard grants) counts as active forever.
+ */
+export function activeGiftPlan(
+  gifts: GiftEntitlement[] | null | undefined,
+  now: number = Date.now(),
+): SubscriptionPlan {
+  let best: SubscriptionPlan = "free";
+  for (const g of gifts ?? []) {
+    if (g.expires_at && new Date(g.expires_at).getTime() <= now) continue;
+    const plan = normalizePlan(g.plan);
+    if (plan === "aero") return "aero";
+    if (plan === "lite") best = "lite";
+  }
+  return best;
+}
+
 export function hasActiveGiftAero(
   gifts: GiftEntitlement[] | null | undefined,
   now: number = Date.now(),
 ): boolean {
-  return (gifts ?? []).some(
-    (g) =>
-      normalizePlan(g.plan) === "aero" &&
-      (!g.expires_at || new Date(g.expires_at).getTime() > now),
-  );
+  return activeGiftPlan(gifts, now) === "aero";
 }
 
-/** Effective plan: Stripe subscription first, gifted time second. */
+/**
+ * Effective plan: the better of the Stripe subscription and any active
+ * gifted time. This predates Lite and returned "free" for Lite subscribers
+ * and Lite gift recipients alike — both now land on "lite".
+ */
 export function planWithGifts(
   sub: Subscription | null,
   gifts: GiftEntitlement[] | null | undefined,
   now: number = Date.now(),
 ): SubscriptionPlan {
-  if (planFromSubscription(sub) === "aero") return "aero";
-  return hasActiveGiftAero(gifts, now) ? "aero" : "free";
+  const subPlan = planFromSubscription(sub);
+  const giftPlan = activeGiftPlan(gifts, now);
+  if (subPlan === "aero" || giftPlan === "aero") return "aero";
+  if (subPlan === "lite" || giftPlan === "lite") return "lite";
+  return "free";
 }
 
 export interface PlanTier {

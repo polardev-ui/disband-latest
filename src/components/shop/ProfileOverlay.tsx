@@ -4,6 +4,7 @@ import { PROFILE_SCENES } from "@/components/shop/effects/ProfileEffect";
 import { LottieEffect } from "@/components/shop/effects/LottieEffect";
 import { effectClass, lottieSrc, shopItem } from "@/lib/shop";
 import { AnimatedCosmetic } from "./AnimatedCosmetic";
+import { FlightCosmetic } from "./FlightCosmetic";
 
 /**
  * The equipped profile effect, over a profile card.
@@ -13,6 +14,9 @@ import { AnimatedCosmetic } from "./AnimatedCosmetic";
  */
 export function ProfileOverlay({ itemId, playing = true }: { itemId: string | null | undefined; playing?: boolean }) {
   if (!itemId) return null;
+
+  const flight = shopItem(itemId)?.flight;
+  if (flight) return <div className="fx-overlay fx-overlay-art" aria-hidden><FlightCosmetic design={flight} profile playing={playing} /></div>;
 
   const media = shopItem(itemId)?.art;
   if (media) return <div className="fx-overlay fx-overlay-art" aria-hidden><AnimatedCosmetic art={media} playing={playing} /></div>;

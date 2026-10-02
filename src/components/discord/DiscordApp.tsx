@@ -63,6 +63,8 @@ import {
 const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
 const ShopModal = dynamic(() => import("@/components/shop/ShopModal").then(m => m.ShopModal));
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
+import { shopItem, type ShopCategory } from "@/lib/shop";
 import type { Channel, ChannelCategory, Profile, Server, ServerFolder } from "@/lib/supabase/types";
 import { ServerFolderDialog } from "@/components/discord/ServerFolderDialog";
 import type { MessageContext } from "@/lib/messages";
@@ -81,6 +83,8 @@ export function DiscordApp() {
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
+  const [shopCategory, setShopCategory] = useState<ShopCategory>("ring");
+  const [shopPurchase, setShopPurchase] = useState<string | null>(null);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
@@ -104,7 +108,42 @@ export function DiscordApp() {
       setCheckoutSuccess(true);
       window.history.replaceState({}, "", window.location.pathname);
     }
+    // Shop purchase return (Stripe `return_url` lands on /app?shop=<id>).
+    // The webhook grants ownership and can lag the redirect by seconds, so
+    // wait for the owned row before opening the shop — otherwise the item
+    // still shows Buy instead of Owned.
+    const purchasedId = params.get("shop");
+    if (purchasedId) {
+      window.history.replaceState({}, "", window.location.pathname);
+      const item = shopItem(purchasedId);
+      if (item) {
+        let cancelled = false;
+        void (async () => {
+          for (let i = 0; i < 15 && !cancelled; i++) {
+            try {
+              const res = await apiFetch("/api/shop/equip");
+              const data = (await res.json()) as { owned?: string[] };
+              if (res.ok && (data.owned ?? []).includes(item.id)) break;
+            } catch {
+              // Keep polling; the webhook may not have landed yet.
+            }
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+          if (cancelled) return;
+          setShopCategory(item.category);
+          setShopPurchase(item.name);
+          setShopOpen(true);
+        })();
+        return () => { cancelled = true; };
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (!shopPurchase) return;
+    const timer = setTimeout(() => setShopPurchase(null), 8000);
+    return () => clearTimeout(timer);
+  }, [shopPurchase]);
 
   useEffect(() => {
     if (!checkoutSuccess) return;
@@ -1350,6 +1389,11 @@ export function DiscordApp() {
           Subscription activated successfully!
         </div>
       )}
+      {shopPurchase && (
+        <div className="fixed left-0 right-0 top-0 z-[100] bg-[#57f287] px-4 py-2 text-center text-sm font-medium text-black">
+          {shopPurchase} is yours — equip it from the Shop.
+        </div>
+      )}
 
       {call.phase === "incoming" && call.incoming && (
         <IncomingCallOverlay
@@ -1976,6 +2020,7 @@ export function DiscordApp() {
       <ShopModal
         open={shopOpen}
         onClose={() => setShopOpen(false)}
+        initialCategory={shopCategory}
         self={{
           name: app.profile ? displayName(app.profile) : "You",
           avatarUrl: app.profile?.avatar_url,

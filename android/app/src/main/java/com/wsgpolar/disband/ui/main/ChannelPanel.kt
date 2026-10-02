@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +96,8 @@ fun ChannelPanel(
     occupantsFor: (Channel) -> List<VoiceOccupant> = { emptyList() },
 ) {
     val palette = LocalPalette.current
-    var collapsed by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Survives rotation — losing every collapsed section on rotate read as broken.
+    var collapsed by rememberSaveable { mutableStateOf(emptySet<String>()) }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     // Channels in no category come first and un-headed, as on iOS.
@@ -114,12 +117,23 @@ fun ChannelPanel(
 
         if (channels.isEmpty()) {
             item(key = "empty") {
-                Text(
-                    "No channels yet.",
-                    color = palette.textMuted,
-                    fontSize = 14.sp,
-                    modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
-                )
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 60.dp, start = 32.dp, end = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "No channels yet.",
+                        color = palette.textPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Channels your spaces create will show up here.",
+                        color = palette.textMuted,
+                        fontSize = 13.sp,
+                    )
+                }
             }
         }
 
@@ -224,7 +238,7 @@ private fun ServerHeader(
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier
-                        .size(34.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(palette.surface.copy(alpha = 0.55f))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
@@ -261,10 +275,15 @@ private fun PillButton(
     val palette = LocalPalette.current
     Row(
         modifier
-            .height(34.dp)
+            .heightIn(min = 40.dp)
             .clip(CircleShape)
             .background(palette.elevated)
-            .clickable(onClick = onClick),
+            .clickable(
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -281,8 +300,14 @@ private fun CategoryHeader(title: String, collapsed: Boolean, onToggle: () -> Un
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+            .clip(RoundedCornerShape(Radii.press))
+            .clickable(
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = if (collapsed) "Expand $title" else "Collapse $title",
+                onClick = onToggle,
+            )
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)
+            .heightIn(min = 40.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -295,7 +320,7 @@ private fun CategoryHeader(title: String, collapsed: Boolean, onToggle: () -> Un
         )
         Icon(
             Icons.Filled.ExpandMore,
-            contentDescription = if (collapsed) "Expand $title" else "Collapse $title",
+            contentDescription = null,
             tint = palette.textMuted,
             modifier = Modifier.size(14.dp).rotate(rotation),
         )
@@ -322,11 +347,16 @@ private fun ChannelRow(
         channel.readOnly == true -> Icons.Filled.Lock
         else -> Icons.Filled.Tag
     }
+    val iconDescription = when {
+        channel.type == ChannelType.Voice -> "Voice channel"
+        channel.readOnly == true -> "Announcement channel"
+        else -> "Text channel"
+    }
 
     Row(
         modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(Radii.press))
             .background(
                 when {
@@ -337,16 +367,18 @@ private fun ChannelRow(
             )
             .clickable(
                 interactionSource = interaction,
-                indication = null,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = "Open #${channel.name}",
                 onClick = onSelected,
             )
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             icon,
-            contentDescription = null,
+            contentDescription = iconDescription,
             tint = if (isSelected) palette.accent else palette.textSecondary,
             modifier = Modifier.size(18.dp),
         )
@@ -414,6 +446,14 @@ private fun VoiceOccupants(occupants: List<VoiceOccupant>) {
                     )
                 }
             }
+        }
+        if (occupants.size > 3) {
+            Text(
+                "+${occupants.size - 3}",
+                color = palette.textMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

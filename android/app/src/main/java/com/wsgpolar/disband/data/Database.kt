@@ -219,12 +219,33 @@ object Database {
         client.from("messages").delete { filter { eq("id", id) } }
     }
 
+    suspend fun editChannelMessage(id: String, content: String) {
+        client.from("messages").update({
+            set("content", content)
+            set("edited_at", java.time.OffsetDateTime.now().toString())
+        }) { filter { eq("id", id) } }
+    }
+
     suspend fun deleteDmMessage(id: String) {
         client.from("dm_messages").delete { filter { eq("id", id) } }
     }
 
+    suspend fun editDmMessage(id: String, content: String) {
+        client.from("dm_messages").update({
+            set("content", content)
+            set("edited_at", java.time.OffsetDateTime.now().toString())
+        }) { filter { eq("id", id) } }
+    }
+
     suspend fun deleteGroupMessage(id: String) {
         client.from("group_messages").delete { filter { eq("id", id) } }
+    }
+
+    suspend fun editGroupMessage(id: String, content: String) {
+        client.from("group_messages").update({
+            set("content", content)
+            set("edited_at", java.time.OffsetDateTime.now().toString())
+        }) { filter { eq("id", id) } }
     }
 
     // MARK: - Direct messages
@@ -526,6 +547,9 @@ object Database {
         client.from("profiles").update({
             patch.displayName?.let { set("display_name", it) }
             patch.bio?.let { set("bio", it) }
+            patch.pronouns?.let { set("pronouns", it) }
+            patch.statusNote?.let { set("status_note", it) }
+            patch.statusExpiresAt?.let { set("status_expires_at", it) }
             patch.avatarUrl?.let { set("avatar_url", it) }
             patch.bannerUrl?.let { set("banner_url", it) }
             patch.accentColor?.let { set("accent_color", it) }
@@ -536,6 +560,44 @@ object Database {
         }) {
             filter { eq("id", userId) }
         }
+    }
+
+    suspend fun clearStatus(userId: String) {
+        client.from("profiles").update({
+            set("status_note", null as String?)
+            set("status_expires_at", null as String?)
+        }) {
+            filter { eq("id", userId) }
+        }
+    }
+
+    @Serializable
+    data class ReferralCodeRow(val code: String)
+
+    suspend fun referralCode(userId: String): String? {
+        return runCatching {
+            client.from("referral_codes")
+                .select(Columns.list("code")) {
+                    filter { eq("user_id", userId) }
+                    limit(1)
+                }
+                .decodeList<ReferralCodeRow>()
+                .firstOrNull()?.code
+        }.getOrNull()
+    }
+
+    suspend fun referralCount(userId: String): Int {
+        return runCatching {
+            client.from("referrals")
+                .select(Columns.list("id")) {
+                    filter {
+                        eq("referrer_id", userId)
+                        eq("status", "verified")
+                    }
+                }
+                .decodeList<InsertedId>()
+                .size
+        }.getOrDefault(0)
     }
 
     suspend fun updateTheme(theme: String, userId: String) {

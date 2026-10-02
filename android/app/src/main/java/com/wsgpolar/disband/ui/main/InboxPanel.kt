@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -119,7 +120,7 @@ fun InboxPanel(
     ) {
         item(key = "header") {
             Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -131,7 +132,7 @@ fun InboxPanel(
                 )
                 Box(
                     Modifier
-                        .size(36.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(palette.elevated)
                         .clickable(onClickLabel = "New message", onClick = onCompose),
@@ -139,7 +140,7 @@ fun InboxPanel(
                 ) {
                     Icon(
                         Icons.Filled.Edit,
-                        contentDescription = "New message",
+                        contentDescription = null,
                         tint = palette.textPrimary,
                         modifier = Modifier.size(17.dp),
                     )
@@ -149,18 +150,21 @@ fun InboxPanel(
 
         item(key = "filters") {
             Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 InboxFilter.entries.forEach { option ->
                     val selected = option == filter
                     Box(
                         Modifier
-                            .height(32.dp)
+                            .heightIn(min = 36.dp)
                             .clip(CircleShape)
                             .background(if (selected) palette.accent else palette.elevated)
-                            .clickable { onFilterChanged(option) }
-                            .padding(horizontal = 14.dp),
+                            .clickable(
+                                role = androidx.compose.ui.semantics.Role.Tab,
+                                onClick = { onFilterChanged(option) },
+                            )
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -177,7 +181,7 @@ fun InboxPanel(
         if (items.isEmpty()) {
             item(key = "empty") {
                 Column(
-                    Modifier.fillMaxWidth().padding(top = 70.dp),
+                    Modifier.fillMaxWidth().padding(top = 70.dp, start = 32.dp, end = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -189,6 +193,25 @@ fun InboxPanel(
                     )
                     if (filter != InboxFilter.Unread) {
                         Text("Start one from Friends.", color = palette.textMuted, fontSize = 14.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(palette.accent)
+                                .clickable(
+                                    role = androidx.compose.ui.semantics.Role.Button,
+                                    onClickLabel = "Find friends",
+                                    onClick = onCompose,
+                                )
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                        ) {
+                            Text(
+                                "Find friends",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
                     }
                 }
             }

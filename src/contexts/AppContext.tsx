@@ -38,7 +38,9 @@ import {
   type PresencePayload,
 } from "@/lib/presence";
 import {
+  fallbackAuthor,
   matchesOptimisticRow,
+  mergeFetchedRows,
   type MessageContext,
   type MessageReaction,
   type MessageSendOptions,
@@ -873,12 +875,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const allocateCatalyst = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
-    const { error } = await getSupabaseClient()
-      .from("server_catalysts")
-      .insert({ server_id: serverId, user_id: userId, source: "grant" });
-    if (error) return error.message;
-    await refreshCatalysts(servers.map((s) => s.id), userId);
-    return null;
+    // Grants are written by /api/catalysts/allocate (service role): since
+    // 0112 clients cannot INSERT into server_catalysts at all, and the old
+    // direct insert here 403'd for everyone. The route enforces the monthly
+    // grant (Aero 4, Lite 1) against the caller's effective plan.
+    try {
+      const res = await apiFetch("/api/catalysts/allocate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server_id: serverId }),
+      });
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) return json?.error ?? "Could not add catalyst.";
+      await refreshCatalysts(servers.map((s) => s.id), userId);
+      return null;
+    } catch {
+      return "Could not reach Disband.";
+    }
   }, [userId, servers, refreshCatalysts]);
 
   const withdrawCatalyst = useCallback(async (serverId: string) => {
@@ -1048,9 +1061,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadMessages = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
-    // A failed fetch must never leave the skeleton up forever: fail open
-    // to an empty list (the view then shows its empty state, and a retry
-    // happens on the next navigation or realtime event).
+    // A failed fetch keeps whatever is on screen: wiping on error (or
+    // replacing with a stale snapshot) is what blanked conversations until
+    // you left and came back. A retry happens on the next navigation or
+    // realtime event.
     try {
       const { data } = await supabase
         .from("messages")
@@ -1061,7 +1075,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (activeChannelRef.current !== channelId) return;
 
       const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
-      setMessages(rows);
+      setMessages((prev) => mergeFetchedRows(prev, rows));
       setChannelHasMore(hasMore);
       setMessagesLoading(false);
 
@@ -1071,8 +1085,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
     } catch {
       if (activeChannelRef.current !== channelId) return;
-      setMessages([]);
-      setChannelHasMore(false);
       setMessagesLoading(false);
     }
   }, []);
@@ -1224,7 +1236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (activeDmRef.current !== threadId) return;
       const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[] | null);
-      setDmMessages(rows);
+      setDmMessages((prev) => mergeFetchedRows(prev, rows));
       setDmHasMore(hasMore);
       setDmLoading(false);
       const ids = rows.map((m) => m.id);
@@ -1233,8 +1245,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", rxn));
     } catch {
       if (activeDmRef.current !== threadId) return;
-      setDmMessages([]);
-      setDmHasMore(false);
       setDmLoading(false);
     }
   }, []);
@@ -1320,7 +1330,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (activeGroupRef.current !== groupId) return;
       const { rows, hasMore } = paginateDescendingRows(data as (GroupMessage & { author?: Profile | null })[] | null);
-      setGroupMessages(rows);
+      setGroupMessages((prev) => mergeFetchedRows(prev, rows));
       setGroupHasMore(hasMore);
       setGroupLoading(false);
       const ids = rows.map((m) => m.id);
@@ -1329,8 +1339,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMessageReactions((prev) => replaceReactionsForContext(prev, "group", rxn));
     } catch {
       if (activeGroupRef.current !== groupId) return;
-      setGroupMessages([]);
-      setGroupHasMore(false);
       setGroupLoading(false);
     }
   }, []);
@@ -1854,8 +1862,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const withoutDupes = prev.filter(
                 (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
               );
-              if (!author) return withoutDupes;
-              return [...withoutDupes, { ...msg, author }];
+              // Never drop a live message: when the author lookup fails the
+              // row still renders (the name falls back to "Unknown") and the
+              // author fills in on the next reload.
+              return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
             });
           })();
         },
@@ -1936,11 +1946,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const withoutDupes = prev.filter(
                 (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
               );
-              if (!author) return withoutDupes;
-              return [...withoutDupes, { ...msg, author }];
+              // Never drop a live message: when the author lookup fails the
+              // row still renders (the name falls back to "Unknown") and the
+              // author fills in on the next reload.
+              return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
             });
             bumpDmThreadActivity(msg.thread_id, msg.created_at);
-            if (msg.author_id !== userId && author) {
+            if (msg.author_id !== userId) {
+              // Same fallback as the row above: a failed lookup must not
+              // swallow the unread badge or the notification either.
+              const effectiveAuthor = author ?? fallbackAuthor(msg.author_id);
 
               if (isAppInBackground()) {
                 // Tab hidden or app unfocused: this message was NOT seen.
@@ -1951,7 +1966,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   const next = new Map(prev);
                   const cur = next.get(msg.thread_id);
                   next.set(msg.thread_id, {
-                    friend: author,
+                    friend: effectiveAuthor,
                     count: (cur?.count ?? 0) + 1,
                     latestAt: msg.created_at,
                   });
@@ -1961,7 +1976,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 void markDmReadNow(msg.thread_id);
               }
               alertIncomingDm(
-                displayName(author),
+                displayName(effectiveAuthor),
                 msg.content.slice(0, 120) || undefined,
                 profileRef.current,
                 msg.thread_id,
@@ -2050,8 +2065,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const withoutDupes = prev.filter(
                 (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
               );
-              if (!author) return withoutDupes;
-              return [...withoutDupes, { ...msg, author }];
+              // Never drop a live message: when the author lookup fails the
+              // row still renders (the name falls back to "Unknown") and the
+              // author fills in on the next reload.
+              return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
             });
           })();
         },
@@ -2485,11 +2502,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // fail-closed when reachable, but a client that can't reach the
       // API at all can't sign in anyway.
     }
-    const supabase = getSupabaseClient();
-    await supabase.auth.signOut({ scope: "local" });
-    resetSupabaseClient();
-    setProfile(null);
-
+    // No signOut()/resetSupabaseClient() before the attempt. auth-js
+    // 2.108.2's signOut always issues an admin revoke — even for scope
+    // "local" — so tearing down first revoked the OUTGOING account's
+    // server session: its saved refresh token died, switching back to it
+    // demanded the password again, and because the teardown ran before
+    // the password was ever checked, one failed attempt also signed you
+    // out of the account you were already using. A wrong password now has
+    // zero side effects; on success signInWithPassword swaps the session
+    // and the userId effect reloads the profile for the new user.
     const { data, error } = await getSupabaseClient().auth.signInWithPassword({
       email: email.trim(),
       password,
@@ -4689,4 +4710,14 @@ export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useApp requires AppProvider");
   return ctx;
+}
+
+/**
+ * Nullable version for components that also render outside the provider —
+ * e.g. GiftCard, which mounts both inside chat (/app, provider present)
+ * and standalone at /gift/[code] (no provider). Returns null instead of
+ * throwing so those pages can SSR.
+ */
+export function useOptionalApp() {
+  return useContext(AppContext);
 }

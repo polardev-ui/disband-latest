@@ -1,6 +1,9 @@
 
 
+import type { SubscriptionPlan } from "@/lib/subscription";
+
 export const MONTHLY_GRANT = 4;
+export const LITE_MONTHLY_GRANT = 1;
 
 export const CATALYST_PRICE_CENTS = 299;
 
@@ -55,9 +58,9 @@ export function monthStartIso(now = Date.now()): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
 }
 
-export function monthlyRemaining(isAero: boolean, allocatedThisMonth: number): number {
-  if (!isAero) return 0;
-  return Math.max(0, MONTHLY_GRANT - allocatedThisMonth);
+export function monthlyRemaining(plan: SubscriptionPlan, allocatedThisMonth: number): number {
+  const grant = plan === "aero" ? MONTHLY_GRANT : plan === "lite" ? LITE_MONTHLY_GRANT : 0;
+  return Math.max(0, grant - allocatedThisMonth);
 }
 
 const VANITY_RE = /^[a-z0-9-]{3,24}$/;

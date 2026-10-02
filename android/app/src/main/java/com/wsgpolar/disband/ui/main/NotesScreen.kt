@@ -144,6 +144,9 @@ fun NotesScreen(app: AppState) {
                             NoteCard(
                                 note = note,
                                 onTogglePin = { scope.launch { app.notes.togglePin(note) } },
+                                onEdit = { content ->
+                                    scope.launch { app.notes.edit(note, content) }
+                                },
                                 onDelete = { scope.launch { app.notes.delete(note) } },
                                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 10.dp),
                             )
@@ -171,12 +174,15 @@ fun NotesScreen(app: AppState) {
 private fun NoteCard(
     note: Note,
     onTogglePin: () -> Unit,
+    onEdit: (String) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
     val clipboard = LocalClipboardManager.current
     var menuOpen by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var editText by remember(note.id, note.content) { mutableStateOf(note.content) }
 
     Column(
         modifier
@@ -197,17 +203,27 @@ private fun NoteCard(
             }
             Spacer(Modifier.weight(1f))
             Box {
-                Icon(
-                    Icons.Filled.MoreHoriz,
-                    contentDescription = "Note options",
-                    tint = palette.textMuted,
-                    modifier = Modifier.size(20.dp).clickable { menuOpen = true },
-                )
+                androidx.compose.material3.IconButton(
+                    onClick = { menuOpen = true },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.MoreHoriz,
+                        contentDescription = "Note options",
+                        tint = palette.textMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
                         text = { Text(if (note.pinned) "Unpin" else "Pin") },
                         leadingIcon = { Icon(Icons.Filled.PushPin, null) },
                         onClick = { menuOpen = false; onTogglePin() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        leadingIcon = { Icon(Icons.Filled.Edit, null) },
+                        onClick = { menuOpen = false; editText = note.content; editing = true },
                     )
                     if (note.content.isNotEmpty()) {
                         DropdownMenuItem(
@@ -240,7 +256,31 @@ private fun NoteCard(
             )
         }
 
-        if (note.content.isNotBlank()) {
+        if (editing) {
+            androidx.compose.material3.OutlinedTextField(
+                value = editText,
+                onValueChange = { editText = it },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { editing = false },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) { Text("Cancel") }
+                androidx.compose.material3.Button(
+                    onClick = { editing = false; onEdit(editText.trim()) },
+                    enabled = editText.trim().isNotEmpty() && editText.trim() != note.content,
+                    shape = RoundedCornerShape(50),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) { Text("Save") }
+            }
+        } else if (note.content.isNotBlank()) {
             Text(note.content, color = palette.textPrimary, fontSize = 15.sp)
         }
     }
@@ -272,19 +312,25 @@ private fun Composer(text: String, onTextChange: (String) -> Unit, onSend: () ->
                 unfocusedTextColor = palette.textPrimary,
             ),
             maxLines = 4,
+            shape = CircleShape,
         )
         Spacer(Modifier.width(8.dp))
         Box(
             Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(if (text.isBlank()) palette.elevated else palette.accent)
-                .clickable(enabled = text.isNotBlank(), onClick = onSend),
+                .clickable(
+                    enabled = text.isNotBlank(),
+                    role = androidx.compose.ui.semantics.Role.Button,
+                    onClickLabel = "Save note",
+                    onClick = onSend,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.Send,
-                contentDescription = "Save note",
+                contentDescription = null,
                 tint = if (text.isBlank()) palette.textMuted else Color.White,
                 modifier = Modifier.size(20.dp),
             )

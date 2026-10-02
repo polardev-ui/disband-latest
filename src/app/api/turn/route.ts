@@ -7,7 +7,11 @@ const TTL_SECONDS = 2 * 60 * 60;
 
 let cached: { expiresAt: number; iceServers: unknown } | null = null;
 
-const REFRESH_MARGIN_MS = 10 * 60 * 1000;
+// Only serve cached credentials while more than an hour of life remains.
+// The old 10-minute margin meant the endpoint handed out credentials up to
+// 1h50m old, and clients starting a call on those got a relay that died
+// on arrival. Minting is cheap; stale credentials are not.
+const REFRESH_MARGIN_MS = 60 * 60 * 1000;
 
 export async function GET(request: NextRequest) {
   const user = await getUserFromRequest(request);

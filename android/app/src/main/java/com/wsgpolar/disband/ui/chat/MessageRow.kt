@@ -3,9 +3,11 @@ package com.wsgpolar.disband.ui.chat
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,12 +16,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,11 +37,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.wsgpolar.disband.core.Palette
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.data.StoredAttachment
@@ -54,6 +66,7 @@ import com.wsgpolar.disband.ui.AvatarImage
  * "Photo", there were no reactions, no reply preview, and markdown came
  * through as raw asterisks.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageRow(
     modifier: Modifier = Modifier,
@@ -72,6 +85,10 @@ fun MessageRow(
             .fillMaxWidth()
             // A message aimed at you is tinted, the way a ping is on the web.
             .background(if (row.pingsYou) palette.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onLongPress,
+            )
             .padding(horizontal = 12.dp, vertical = if (grouped) 1.dp else 4.dp)
     ) {
         if (repliedTo != null) ReplyPreview(repliedTo, palette)
@@ -100,6 +117,7 @@ fun MessageRow(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
@@ -107,16 +125,19 @@ fun MessageRow(
                             color = palette.textMuted,
                             fontSize = 11.sp,
                         )
+                        if (row.editedAt != null) {
+                            Text(
+                                " (edited)",
+                                color = palette.textMuted,
+                                fontSize = 11.sp,
+                            )
+                        }
                     }
                     Spacer(Modifier.height(2.dp))
                 }
 
                 if (row.content.isNotBlank()) {
                     MarkdownBody(row.content, palette)
-                }
-
-                if (row.editedAt != null) {
-                    Text("(edited)", color = palette.textMuted, fontSize = 11.sp)
                 }
 
                 Attachments(attachments, palette, onOpenAttachment)
@@ -197,7 +218,8 @@ private fun Attachments(
 ) {
     if (attachments.isEmpty()) return
     val tiles = attachments.filter { it.type == "image" || it.type == "gif" }
-    val rest = attachments - tiles.toSet()
+    val videos = attachments.filter { it.type == "video" }
+    val rest = attachments - tiles.toSet() - videos.toSet()
 
     Spacer(Modifier.height(6.dp))
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -205,29 +227,101 @@ private fun Attachments(
             tiles.size > 1 -> AttachmentMosaic(tiles, palette, onOpen = onOpen)
             tiles.size == 1 -> SingleImage(tiles[0], palette, onOpen = onOpen)
         }
-        rest.forEach { FileCard(it, palette, onOpen) }
+        videos.forEach { VideoCard(it, palette, onOpen) }
+        rest.forEach {
+            when (it.type) {
+                "audio" -> AudioCard(it, palette, onOpen)
+                else -> FileCard(it, palette, onOpen)
+            }
+        }
     }
 }
 
-/** A video or file: a name and a size, which a cropped thumbnail cannot give. */
+/** Video with a play overlay, mirroring iOS attachment card. */
 @Composable
-private fun FileCard(
+private fun VideoCard(
+    attachment: StoredAttachment,
+    palette: Palette,
+    onOpen: (StoredAttachment) -> Unit,
+) {
+    Box(
+        Modifier
+            .widthIn(max = 280.dp)
+            .heightIn(max = 280.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(palette.elevated)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Play video ${attachment.name ?: ""}",
+                onClick = { onOpen(attachment) },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            model = attachment.url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .heightIn(max = 220.dp),
+        )
+        Box(
+            Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+    }
+}
+
+/** Voice message / audio file with icon, name and size. */
+@Composable
+private fun AudioCard(
     attachment: StoredAttachment,
     palette: Palette,
     onOpen: (StoredAttachment) -> Unit,
 ) {
     Row(
         Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(palette.elevated)
-            .clickable { onOpen(attachment) }
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Play audio ${attachment.name ?: ""}",
+                onClick = { onOpen(attachment) },
+            )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(palette.accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Audiotrack,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Text(
-                attachment.name ?: if (attachment.type == "video") "Video" else "File",
-                color = palette.accent,
+                attachment.name ?: "Voice message",
+                color = palette.textPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -237,6 +331,71 @@ private fun FileCard(
                 Text(it, color = palette.textMuted, fontSize = 11.sp)
             }
         }
+        Icon(
+            Icons.Filled.PlayArrow,
+            contentDescription = null,
+            tint = palette.textSecondary,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+/** A file: icon tile + name and size, which a cropped thumbnail cannot give. */
+@Composable
+private fun FileCard(
+    attachment: StoredAttachment,
+    palette: Palette,
+    onOpen: (StoredAttachment) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(palette.elevated)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Open ${attachment.name ?: "file"}",
+                onClick = { onOpen(attachment) },
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(palette.accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                (attachment.name?.substringAfterLast('.', "")?.take(3)
+                    ?: attachment.type.take(3)).uppercase(),
+                color = palette.accent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                attachment.name ?: "File",
+                color = palette.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            formatFileSize(attachment.size)?.let {
+                Text(it, color = palette.textMuted, fontSize = 11.sp)
+            }
+        }
+        Icon(
+            Icons.Filled.Description,
+            contentDescription = null,
+            tint = palette.textMuted,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -272,7 +431,10 @@ private fun ReactionChips(
     palette: Palette,
     onToggle: (String) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    ) {
         reactions.forEach { reaction ->
             val scale by animateFloatAsState(
                 targetValue = if (reaction.reacted) 1.06f else 1f,
@@ -290,11 +452,15 @@ private fun ReactionChips(
                         if (reaction.reacted) Modifier.border(1.dp, palette.accent, CircleShape)
                         else Modifier
                     )
-                    .clickable { onToggle(reaction.emoji) }
-                    .padding(horizontal = 9.dp, vertical = 4.dp),
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Toggle ${reaction.emoji} reaction",
+                        onClick = { onToggle(reaction.emoji) },
+                    )
+                    .padding(horizontal = 9.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(reaction.emoji, fontSize = 14.sp)
+                Text(reaction.emoji, fontSize = 16.sp)
                 Spacer(Modifier.width(5.dp))
                 Text(
                     "${reaction.count}",

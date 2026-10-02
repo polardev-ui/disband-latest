@@ -49,8 +49,11 @@ export function MobileWaitlistScreen() {
         </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-text-muted">
-          The web app works on a phone, but it is designed for a larger screen. Android is on the
-          way.
+          The web app works on a phone, but it is designed for a larger screen. On Android?{" "}
+          <a href="/android" className="font-semibold text-text-normal underline">
+            The beta is live on Google Play
+          </a>
+          .
         </p>
       </div>
     </div>

@@ -16,6 +16,9 @@ export interface CosmeticArt {
   offsetY?: number;
 }
 
+export type FlightDesign = "aurelian" | "nightflight" | "roseling";
+export type SketchDesign = "graphite" | "blue-note" | "margins" | "red-thread";
+
 export interface ShopItem {
   /** Stable slug. Stored on the profile when equipped; never renumber these. */
   id: string;
@@ -44,6 +47,9 @@ export interface ShopItem {
   overAvatar?: boolean;
   art?: CosmeticArt;
   collection?: string;
+  /** Illustrated atlas with separately hinged wings, jewelry, and accents. */
+  flight?: FlightDesign;
+  sketch?: SketchDesign;
 }
 
 /** Where shop artwork lives. Keep exports named after the item id. */
@@ -138,14 +144,40 @@ const PROFILE_EFFECTS: ShopItem[] = [
   { id: "fx-sakura-night", name: "Night bloom", description: "Petals and fireflies together, after dark.", priceCents: 800, className: "fx-overlay-sakura-night", category: "overlay" },
 ];
 
-export const ART_COLLECTIONS = [
+export const FLIGHT_COLLECTIONS = [
+  { id: "aurelian", name: "Aurelian", line: "A little room to spread your wings.", description: "Ivory feathers open in a slow wingbeat. An opal pendant swings beneath a gold frame.", ringId: "ring-aurelian", profileId: "fx-aurelian", color: "#ecd6a1", surface: "#302c26", ringPrice: 499, profilePrice: 649 },
+  { id: "nightflight", name: "Nightflight", line: "Made for your midnight hours.", description: "Violet bat wings fold and unfurl, with a swinging crescent and scattered starlight.", ringId: "ring-nightflight", profileId: "fx-nightflight", color: "#bea5eb", surface: "#262032", ringPrice: 449, profilePrice: 599 },
+  { id: "roseling", name: "Roseling", line: "Something soft. Something alive.", description: "Rose butterfly wings flutter in pairs. A little heart charm sways among drifting petals.", ringId: "ring-roseling", profileId: "fx-roseling", color: "#efb2bf", surface: "#35252b", ringPrice: 399, profilePrice: 549 },
+] as const;
+
+const ILLUSTRATED_COLLECTIONS = [
   { id: "tideglass", name: "Tideglass", line: "A little ocean. All yours.", description: "Pearlescent waves, sea-glass blues, and a shell tucked into the tide.", ringId: "ring-bubble", profileId: "fx-hydro", color: "#8adeec", surface: "#142d37" },
   { id: "moonmoth", name: "Moonmoth", line: "For the after-hours crowd.", description: "Violet wings, tiny moon charms, and a garden that wakes up after dark.", ringId: "ring-gold", profileId: "fx-sakura-night", color: "#c9b1f2", surface: "#2a213d" },
   { id: "emberwing", name: "Emberwing", line: "Leave a warm impression.", description: "Copper feathers and sunstone details, with a quiet flicker of fire.", ringId: "ring-flame", profileId: "fx-embers", color: "#f6b184", surface: "#3a2421" },
 ] as const;
 
+export const SKETCH_COLLECTIONS = [
+  { id: "graphite", name: "Graphite", line: "Just a little pencil work.", description: "Loose pencil circles with a quiet, hand-drawn flicker. Simple enough to wear every day.", ringId: "ring-graphite", profileId: null, color: "#dbd8d0", surface: "#292b2d", price: 200 },
+  { id: "blue-note", name: "Blue Note", line: "From the corner of your notebook.", description: "A fine blue-ink loop, a little star, and a short underline that draws itself back in.", ringId: "ring-blue-note", profileId: null, color: "#9fbff0", surface: "#222b36", price: 249 },
+  { id: "margins", name: "Margins", line: "A small mark of your own.", description: "Four imperfect chalk brackets. Tiny registration marks appear one at a time around your picture.", ringId: "ring-margins", profileId: null, color: "#d9d5be", surface: "#2e2d28", price: 249 },
+  { id: "red-thread", name: "Red Thread", line: "One line. A little connection.", description: "A thin red sketch loop with a hand-tied knot. A short highlight slowly follows the thread.", ringId: "ring-red-thread", profileId: null, color: "#eaa1a0", surface: "#342627", price: 299 },
+] as const;
+
+export const ART_COLLECTIONS = [...SKETCH_COLLECTIONS, ...FLIGHT_COLLECTIONS, ...ILLUSTRATED_COLLECTIONS];
+
+const SKETCH_ITEMS: ShopItem[] = SKETCH_COLLECTIONS.map((collection) => ({
+  id: collection.ringId, name: collection.name, description: collection.description,
+  category: "ring", priceCents: collection.price, className: "fx-ring-art",
+  overAvatar: true, sketch: collection.id, collection: collection.id,
+}));
+
+const FLIGHT_ITEMS: ShopItem[] = FLIGHT_COLLECTIONS.flatMap((collection) => [
+  { id: collection.ringId, name: collection.name, description: collection.description, category: "ring", priceCents: collection.ringPrice, className: "fx-ring-art", overAvatar: true, flight: collection.id, collection: collection.id },
+  { id: collection.profileId, name: `${collection.name} · Profile skin`, description: collection.description, category: "overlay", priceCents: collection.profilePrice, className: "fx-overlay-art", flight: collection.id, collection: collection.id },
+]);
+
 const ART_UPGRADES = new Map<string, Partial<ShopItem>>(
-  ART_COLLECTIONS.flatMap((collection) => {
+  ILLUSTRATED_COLLECTIONS.flatMap((collection) => {
     const art = (kind: "ring" | "profile"): CosmeticArt => ({
       still: `/shop/art/${collection.id}-${kind}.webp`,
       animated: `/shop/art/${collection.id}-${kind}.animated.webp`,
@@ -163,11 +195,11 @@ const ART_UPGRADES = new Map<string, Partial<ShopItem>>(
 
 // Stable IDs preserve previous purchases. Older effects remain wearable but
 // are no longer offered to new buyers until they receive finished artwork.
-export const SHOP_ITEMS: ShopItem[] = [...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
+export const SHOP_ITEMS: ShopItem[] = [...SKETCH_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
   .map((item) => ({ ...item, ...ART_UPGRADES.get(item.id) }));
 
 export function isShopItemAvailable(item: ShopItem): boolean {
-  return item.category === "name" || !!item.art;
+  return item.category === "name" || !!item.art || !!item.flight || !!item.sketch;
 }
 
 const BY_ID = new Map(SHOP_ITEMS.map((i) => [i.id, i]));
