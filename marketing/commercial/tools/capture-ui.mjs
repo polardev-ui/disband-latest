@@ -18,6 +18,7 @@ const jobs = [
   ...["chat", "dm", "dm-sent", "security", "friends"].map((s) => ({ name: `desktop-${s}`, page: `ui/desktop.html?screen=${s}`, w: 1440, h: 900, dpr: 2 })),
   ...["chat", "dm", "dm-sent"].map((s) => ({ name: `laptop-${s}`, page: `ui/desktop.html?screen=${s}&laptop=1`, w: 1470, h: 956, dpr: 2 })),
   { name: "sync-card", page: "ui/card.html", w: 380, h: 84, dpr: 3, transparent: true },
+  ...["inbox", "server", "friends", "notes", "you"].map((s) => ({ name: `android-${s}`, page: `ui/android.html?screen=${s}`, w: 412, h: 915, dpr: 2.625 })),
 ];
 
 const filter = process.argv[2];
