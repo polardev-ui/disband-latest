@@ -354,7 +354,22 @@ committed 2.32.2). Concurrent-session fingerprints: untracked
 — none touched by this batch. Set the version deliberately at commit
 time after confirming with the user which session owns it.
 
-### Second batch — same night, uncommitted, NOT pushed
+### Second batch — same night, COMMITTED + PUSHED as `e5398174` (v2.32.5)
+
+**Shop post-purchase return (closes the loop):** Stripe `return_url` lands
+on `/app?shop=<id>` — previously unread by anything. `DiscordApp` now
+strips the param, polls `/api/shop/equip` for the webhook-owned row
+(15 × 2s; the webhook can lag the redirect), then opens the Shop on the
+item's tab with a "{name} is yours — equip it" banner (8s auto-dismiss).
+In-modal purchases already polled (`finishPurchase`). Full chain verified
+against prod: checkout (DB price + dup-check) → webhook upsert →
+equip route (ownership check) → `profiles.equipped_*` (trigger + columns
+live, `user_shop_items` readable) → realtime profile reload renders
+everywhere; renderers resolve all 55 ids through the catalogue.
+**To live-test:** buy the cheapest item ($2 `ring-graphite`) with a real
+card, confirm the banner + Owned/Equip state, equip it, check the avatar
+in chat. Note: the 3 `STRIPE_*_PRICE_ID` Vercel env vars are still
+missing — subscription checkout (not shop) needs them.
 
 **`/gift/[code]` page crashed SSR (500, "useApp requires AppProvider").**
 `GiftCard` called `useApp()`, but the standalone gift page has no provider
