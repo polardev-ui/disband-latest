@@ -11,7 +11,7 @@ import { notifyUser, requestNotificationPermissionFromGesture } from "@/lib/noti
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import {
   bindRemoteTrack, bindLaneStream, streamWithoutEndedTracks,
-  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN,
+  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
 import { buildScreenConstraints } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
@@ -62,8 +62,10 @@ export function useCallManager(
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
   const [remoteScreen, setRemoteScreen] = useState<MediaStream | null>(null);
+  const [remoteScreenAudio, setRemoteScreenAudio] = useState<MediaStream | null>(null);
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
+  const screenAudioTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const [peerSharing, setPeerSharing] = useState(false);
   const screenTrackByLaneRef = useRef<MediaStreamTrack | null>(null);
@@ -128,6 +130,7 @@ export function useCallManager(
   const reset = useCallback(async () => {
     setPeerSharing(false);
     setRemoteScreen(null);
+    setRemoteScreenAudio(null);
     setLocalScreen(null);
     stopRingtone();
     await cleanupRtc();
@@ -194,6 +197,11 @@ export function useCallManager(
       }
 
       pc.ontrack = (ev) => {
+        if (laneOfTransceiver(pc, ev.transceiver) === LANE_SCREEN_AUDIO) {
+          // Kept apart from the mic so the listener can mute it on its own.
+          setRemoteScreenAudio(new MediaStream([ev.track]));
+          return;
+        }
         if (laneOfTransceiver(pc, ev.transceiver) === LANE_SCREEN) {
 
           screenTrackByLaneRef.current = ev.track;
@@ -331,6 +339,7 @@ export function useCallManager(
               await setLaneTrack(pc, LANE_AUDIO, pending.mic);
               await setLaneTrack(pc, LANE_CAMERA, pending.cam);
               await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+              await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
             }
 
             if (screenShareRef.current) announceSharing(true);
@@ -457,7 +466,10 @@ export function useCallManager(
     if (!next) {
       screenTrackRef.current?.stop();
       screenTrackRef.current = null;
+      screenAudioTrackRef.current?.stop();
+      screenAudioTrackRef.current = null;
       await setLaneTrack(pc, LANE_SCREEN, null);
+      await setLaneTrack(pc, LANE_SCREEN_AUDIO, null);
       setLocalScreen(null);
       setScreenShareEnabled(false);
       screenShareRef.current = false;
@@ -481,7 +493,9 @@ export function useCallManager(
         if (screenTrackRef.current === track) void toggleScreenShareRef.current();
       });
       screenTrackRef.current = track;
+      screenAudioTrackRef.current = display.getAudioTracks()[0] ?? null;
       await setLaneTrack(pc, LANE_SCREEN, track);
+      await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
       setLocalScreen(new MediaStream([track]));
       setScreenShareEnabled(true);
       screenShareRef.current = true;
@@ -705,6 +719,7 @@ export function useCallManager(
     remoteStream,
 
     remoteScreen: peerSharing ? remoteScreen : null,
+    remoteScreenAudio: peerSharing ? remoteScreenAudio : null,
     localScreen,
     cameraEnabled,
     screenShareEnabled,

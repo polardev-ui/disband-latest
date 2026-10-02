@@ -1114,3 +1114,33 @@ img.twemoji {
 @media (prefers-reduced-motion:reduce) {
  .animate-role-gradient { animation:none; }
 }
+
+/* Someone being rung: a white outline that grows off the avatar and fades,
+   twice per cycle, like Discord's outgoing ring. Two staggered elements so a
+   new ring starts before the last has gone. */
+@keyframes call-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.call-ripple {
+  animation: call-ripple 1.8s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
+.call-ripple-delayed {
+  animation: call-ripple 1.8s cubic-bezier(0.2, 0.6, 0.35, 1) 0.9s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-ripple,
+  .call-ripple-delayed {
+    animation: none;
+    opacity: 0.4;
+  }
+}

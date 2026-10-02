@@ -129,14 +129,29 @@ export function streamHasLiveVideo(stream: MediaStream | null | undefined): bool
 export const LANE_AUDIO = 0;
 export const LANE_CAMERA = 1;
 export const LANE_SCREEN = 2;
+/**
+ * The screen share's own sound (a video, a game). A separate lane, never mixed
+ * into the mic, so every listener can mute it without muting the person.
+ * Appended last: a peer that only knows three lanes negotiates the fourth as
+ * an unused m-line and ignores it.
+ */
+export const LANE_SCREEN_AUDIO = 3;
 
-export type Lane = typeof LANE_AUDIO | typeof LANE_CAMERA | typeof LANE_SCREEN;
+export type Lane =
+  | typeof LANE_AUDIO
+  | typeof LANE_CAMERA
+  | typeof LANE_SCREEN
+  | typeof LANE_SCREEN_AUDIO;
+
+const ALL_LANES = [LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO] as const;
+const isLane = (i: number): i is Lane => (ALL_LANES as readonly number[]).includes(i);
 
 export function ensureLanes(pc: RTCPeerConnection): void {
   if (pc.getTransceivers().length > 0) return;
   pc.addTransceiver("audio", { direction: "sendrecv" });
   pc.addTransceiver("video", { direction: "sendrecv" });
   pc.addTransceiver("video", { direction: "sendrecv" });
+  pc.addTransceiver("audio", { direction: "sendrecv" });
 }
 
 /*
@@ -199,7 +214,7 @@ export function transceiverForLane(
 }
 
 export function openLanesForSending(pc: RTCPeerConnection): void {
-  for (const lane of [LANE_AUDIO, LANE_CAMERA, LANE_SCREEN] as const) {
+  for (const lane of ALL_LANES) {
     const t = transceiverForLane(pc, lane);
     if (t && t.direction !== "sendrecv") t.direction = "sendrecv";
   }
@@ -211,10 +226,10 @@ export function laneOfTransceiver(
 ): Lane | null {
   if (transceiver.mid !== null) {
     const i = negotiatedMids(pc).indexOf(transceiver.mid);
-    if (i === LANE_AUDIO || i === LANE_CAMERA || i === LANE_SCREEN) return i as Lane;
+    if (isLane(i)) return i;
   }
   const i = pc.getTransceivers().indexOf(transceiver);
-  return i === LANE_AUDIO || i === LANE_CAMERA || i === LANE_SCREEN ? (i as Lane) : null;
+  return isLane(i) ? i : null;
 }
 
 export async function setLaneTrack(

@@ -55,6 +55,31 @@ export function stopRingtone() {
   ringNodes = [];
 }
 
+/**
+ * Three rising notes when a screen share starts, for the sharer and for
+ * everyone watching, so nobody has to notice a new tile on their own.
+ */
+export function playScreenShareJingle() {
+  if (!isSoundEnabled()) return;
+  const ac = getCtx();
+  if (ac.state === "suspended") void ac.resume();
+  const start = ac.currentTime + 0.02;
+  [523.25, 659.25, 987.77].forEach((freq, i) => {
+    const t = start + i * 0.09;
+    const osc = ac.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, t);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.09, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    osc.connect(g);
+    g.connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.4);
+  });
+}
+
 export function directCallId(a: string, b: string) {
   return [a, b].sort().join(":");
 }

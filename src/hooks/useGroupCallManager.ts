@@ -13,7 +13,7 @@ import { playCallConnected, playCallEnd, playCallJoin, playCallLeave } from "@/l
 import { displayName } from "@/lib/utils";
 import {
   attachRemoteTrack, createOfferForPeer, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack,
-  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN,
+  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
 import { fetchIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
@@ -57,8 +57,11 @@ export function useGroupCallManager(
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
 
   const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
+  // Screen-share sound per sharer, apart from their mic so it can be muted alone.
+  const [remoteScreenAudio, setRemoteScreenAudio] = useState<Map<string, MediaStream>>(new Map());
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
+  const screenAudioTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
 
@@ -141,6 +144,8 @@ export function useGroupCallManager(
     localRef.current = null;
     setLocalStream(null);
     setRemoteStreams(new Map());
+    setRemoteScreens(new Map());
+    setRemoteScreenAudio(new Map());
     if (signalRef.current) {
       await signalRef.current.unsubscribe();
       signalRef.current = null;
@@ -193,6 +198,7 @@ export function useGroupCallManager(
           await setLaneTrack(pc, LANE_AUDIO, mic);
           await setLaneTrack(pc, LANE_CAMERA, cam);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+          await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
         } else {
 
           pendingLocalRef.current.set(remoteId, { mic, cam });
@@ -203,6 +209,15 @@ export function useGroupCallManager(
         const track = ev.track;
         const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
+          if (lane === LANE_SCREEN_AUDIO) {
+            setRemoteScreenAudio((prev) => {
+              const next = new Map(prev);
+              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+              else next.delete(remoteId);
+              return next;
+            });
+            return;
+          }
           if (lane === LANE_SCREEN) {
             // Keep the entry only while the track is live, so a stopped share
             // removes the tile instead of leaving a dead video element.
@@ -249,6 +264,11 @@ export function useGroupCallManager(
             return next;
           });
           setRemoteScreens((prev) => {
+            const next = new Map(prev);
+            next.delete(remoteId);
+            return next;
+          });
+          setRemoteScreenAudio((prev) => {
             const next = new Map(prev);
             next.delete(remoteId);
             return next;
@@ -326,6 +346,7 @@ export function useGroupCallManager(
           await setLaneTrack(pc, LANE_AUDIO, pending.mic);
           await setLaneTrack(pc, LANE_CAMERA, pending.cam);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+          await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
         }
         await flushIce(payload.from, pc);
         const ans = await pc.createAnswer();
@@ -562,8 +583,11 @@ export function useGroupCallManager(
         track.stop();
         screenTrackRef.current = null;
       }
+      screenAudioTrackRef.current?.stop();
+      screenAudioTrackRef.current = null;
       for (const pc of peersRef.current.values()) {
         await setLaneTrack(pc, LANE_SCREEN, null);
+        await setLaneTrack(pc, LANE_SCREEN_AUDIO, null);
       }
       setLocalScreen(null);
       setScreenShareEnabled(false);
@@ -580,8 +604,10 @@ export function useGroupCallManager(
 
       track.addEventListener("ended", () => { void toggleScreenShare(); });
       screenTrackRef.current = track;
+      screenAudioTrackRef.current = display.getAudioTracks()[0] ?? null;
       for (const pc of peersRef.current.values()) {
         await setLaneTrack(pc, LANE_SCREEN, track);
+        await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
       }
       setLocalScreen(new MediaStream([track]));
       setScreenShareEnabled(true);
@@ -679,6 +705,7 @@ export function useGroupCallManager(
     // sharer had no peer connection yet — which is why a late joiner never
     // saw the screen.
     remoteScreens,
+    remoteScreenAudio,
     localScreen,
     cameraEnabled,
     screenShareEnabled,

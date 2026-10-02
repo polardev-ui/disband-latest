@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buildScreenConstraints } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import {
-  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN,
+  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
 import { playCallConnected, playCallJoin, playCallLeave } from "@/lib/call-sounds";
@@ -42,11 +42,14 @@ export function useVoiceChannel(
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
 
   const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
+  // Screen-share sound per sharer, apart from their mic so it can be muted alone.
+  const [remoteScreenAudio, setRemoteScreenAudio] = useState<Map<string, MediaStream>>(new Map());
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenEnabled, setScreenEnabled] = useState(false);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
+  const screenAudioTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
   const pendingLocalRef = useRef<Map<string, MediaStreamTrack | null>>(new Map());
@@ -125,6 +128,7 @@ export function useVoiceChannel(
           await setLaneTrack(pc, LANE_AUDIO, mic);
           await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+          await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
         } else {
 
           pendingLocalRef.current.set(remoteId, mic);
@@ -135,6 +139,15 @@ export function useVoiceChannel(
         const track = ev.track;
         const lane = laneOfTransceiver(pc, ev.transceiver);
         const sync = () => {
+          if (lane === LANE_SCREEN_AUDIO) {
+            setRemoteScreenAudio((prev) => {
+              const next = new Map(prev);
+              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+              else next.delete(remoteId);
+              return next;
+            });
+            return;
+          }
           if (lane === LANE_SCREEN) {
             // Drop the entry once the track ends so a stopped share removes
             // the tile instead of leaving a dead video element.
@@ -229,6 +242,7 @@ export function useVoiceChannel(
           await setLaneTrack(pc, LANE_AUDIO, mic);
           await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+          await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
         }
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -249,11 +263,14 @@ export function useVoiceChannel(
       } else if (payload.type === "leave") {
         pc.close();
         peersRef.current.delete(payload.from);
-        setRemoteStreams((prev) => {
+        const drop = (prev: Map<string, MediaStream>) => {
           const next = new Map(prev);
           next.delete(payload.from);
           return next;
-        });
+        };
+        setRemoteStreams(drop);
+        setRemoteScreens(drop);
+        setRemoteScreenAudio(drop);
       }
     },
     [createPeer, userId],
@@ -265,6 +282,8 @@ export function useVoiceChannel(
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     setRemoteStreams(new Map());
+    setRemoteScreens(new Map());
+    setRemoteScreenAudio(new Map());
     audioRefsRef.current.clear();
 
     if (signalRef.current) {
@@ -362,7 +381,12 @@ export function useVoiceChannel(
     if (!next) {
       screenTrackRef.current?.stop();
       screenTrackRef.current = null;
-      for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_SCREEN, null);
+      screenAudioTrackRef.current?.stop();
+      screenAudioTrackRef.current = null;
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_SCREEN, null);
+        await setLaneTrack(pc, LANE_SCREEN_AUDIO, null);
+      }
       setLocalScreen(null);
       setScreenEnabled(false);
       announceSharing(false);
@@ -375,7 +399,11 @@ export function useVoiceChannel(
       const track = display.getVideoTracks()[0];
       track.addEventListener("ended", () => { void toggleScreenShare(); });
       screenTrackRef.current = track;
-      for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_SCREEN, track);
+      screenAudioTrackRef.current = display.getAudioTracks()[0] ?? null;
+      for (const pc of peersRef.current.values()) {
+        await setLaneTrack(pc, LANE_SCREEN, track);
+        await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
+      }
       setLocalScreen(new MediaStream([track]));
       setScreenEnabled(true);
       announceSharing(true);
@@ -435,6 +463,7 @@ export function useVoiceChannel(
     // No sharingIds filter: entries only exist from real LANE_SCREEN ontrack
     // events, so the map is already accurate (see useGroupCallManager).
     remoteScreens,
+    remoteScreenAudio,
     localScreen,
     cameraEnabled,
     screenEnabled,
