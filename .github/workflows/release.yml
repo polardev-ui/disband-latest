@@ -24,6 +24,10 @@ on:
 
 permissions:
   contents: write
+  # Needed for the post-tag desktop dispatch: without actions:write the
+  # dispatch 403s and the chain silently ends at the tag (no installers,
+  # no latest.json, no auto-update).
+  actions: write
 
 concurrency:
   group: prepare-release
