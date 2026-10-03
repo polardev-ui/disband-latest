@@ -113,7 +113,20 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: "-"
+          # Real Developer ID signing + Apple notarization. With ad-hoc "-"
+          # every macOS download trips Gatekeeper ("move to trash" / "open
+          # anyway" in Privacy & Security). These secrets are set once in the
+          # repo settings (see the release docs); when present, tauri-action
+          # signs, notarizes, and the .app.tar.gz the updater installs is
+          # Gatekeeper-clean. Empty/missing values fall back to ad-hoc "-".
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # Falls back to ad-hoc "-" until the secrets below exist, so
+          # unsigned builds keep working in the meantime.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Signs the updater manifest. Without these the build still produces
           # installers, but no latest.json — and the app falls back to telling
           # people to download by hand. See docs/DESKTOP_UPDATES.md.
