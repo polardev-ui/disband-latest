@@ -46,6 +46,7 @@ jobs:
           node-version: 22
 
       - name: Commit, tag, and push
+        id: bump
         env:
           BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,6 +83,7 @@ jobs:
 
             if git push origin HEAD:refs/heads/main && git push origin "refs/tags/${TAG}"; then
               echo "Released ${TAG}"
+              echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
               exit 0
             fi
 
@@ -95,3 +97,18 @@ jobs:
             fi
             sleep 2
           done
+
+      # Tags pushed with GITHUB_TOKEN do not trigger other workflows, so a
+      # bare tag push would never build installers and latest.json would rot
+      # (which is exactly what happened: stable releases with no updater
+      # manifest, and the desktop app silently never updating). Dispatch the
+      # desktop build explicitly — API-dispatched runs are not suppressed.
+      - name: Trigger desktop build for the tag
+        if: steps.bump.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          gh workflow run "Release Desktop" --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG" -f ref="$TAG"
+          echo "Dispatched Release Desktop for ${TAG}"
