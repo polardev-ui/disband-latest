@@ -71,3 +71,15 @@ export function playCallEnd() {
   tone(ctx, 329.63, t + 0.09, 0.2, 0.08);
   setTimeout(() => void ctx.close(), 500);
 }
+
+/** Update chime: two rising tones, distinct from the call sounds. Played
+ * when an app update is offered so an auto-install never lands silent. */
+export function playUpdateReady() {
+  if (!isSoundEnabled()) return;
+  const ctx = newCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  tone(ctx, 880, t, 0.1, 0.07);
+  tone(ctx, 1174.66, t + 0.09, 0.22, 0.07);
+  setTimeout(() => void ctx.close(), 500);
+}

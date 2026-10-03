@@ -67,7 +67,13 @@ function macLabelFromArch(arch: MacArch | undefined): string {
 
 export function detectMacArchSync(): MacArch {
   if (typeof navigator === "undefined") return "unknown";
-  if (!/Mac/i.test(navigator.platform) && !/Macintosh/i.test(navigator.userAgent)) {
+  // navigator.platform is deprecated and already returns "" in some
+  // webviews (including Tauri's) — fall back to the user agent so those
+  // clients still resolve instead of degrading to "unknown" and leaving
+  // the download picker to guess.
+  const platform = navigator.platform ?? "";
+  const ua = navigator.userAgent ?? "";
+  if (!/Mac/i.test(platform) && !/Macintosh/i.test(ua)) {
     return "unknown";
   }
 

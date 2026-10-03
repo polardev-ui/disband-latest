@@ -29,8 +29,13 @@ import { isNewerVersion, parseSemverTag, semverToString } from "@/lib/version";
 const COUNTDOWN_SECONDS = 3;
 /** Re-check occasionally for a long-running window. */
 const RECHECK_MS = 6 * 60 * 60 * 1000;
-/** Skipping is per-version, so declining 2.31.0 does not hide 2.32.0. */
-const SKIP_KEY = "disband:update-skipped";
+/**
+ * "Not now"/"Later" snoozes the offer within the session — it is not a
+ * permanent per-version skip. A refresh (or the next recheck) offers the
+ * same version again, which is what "later" means; a skipped-forever flag
+ * is how updates silently never happened.
+ */
+const SNOOZE_MS = 6 * 60 * 60 * 1000;
 
 type Phase = "idle" | "offering" | "downloading" | "installing" | "failed" | "manual";
 
@@ -48,6 +53,8 @@ export function UpdateToast() {
   const [manualLabel, setManualLabel] = useState<string | null>(null);
   const update = useRef<PendingUpdate | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const snoozedUntil = useRef(0);
+  const announcedVersion = useRef<string | null>(null);
 
   const install = useCallback(async () => {
     const pending = update.current;
@@ -79,9 +86,19 @@ export function UpdateToast() {
     }
   }, []);
 
-  const startCountdown = useCallback(() => {
+  const startCountdown = useCallback((chimeVersion: string | null) => {
     setPhase("offering");
     setSeconds(COUNTDOWN_SECONDS);
+    if (announcedVersion.current !== chimeVersion) {
+      announcedVersion.current = chimeVersion;
+      void import("@/lib/call-sounds").then((m) => {
+        try {
+          m.playUpdateReady();
+        } catch {
+          // Silence must never block the update.
+        }
+      }).catch(() => undefined);
+    }
     if (timer.current) clearInterval(timer.current);
     timer.current = setInterval(() => {
       setSeconds((n) => {
@@ -107,9 +124,7 @@ export function UpdateToast() {
         (parsed ? semverToString(parsed) : null) ?? inferVersionFromAssets(release.assets);
       if (!latest || !isNewerVersion(latest, current)) return;
 
-      try {
-        if (window.localStorage.getItem(SKIP_KEY) === latest) return;
-      } catch { /* storage unavailable — offer it */ }
+      if (Date.now() < snoozedUntil.current) return;
 
       const platform = detectClientPlatform();
       const arch: MacArch = platform === "macos" ? await detectMacArchAsync() : "unknown";
@@ -118,6 +133,16 @@ export function UpdateToast() {
       setVersion(latest);
       setManualUrl(asset?.url ?? releasePageUrl(release.tag));
       setManualLabel(asset?.label ?? null);
+      if (announcedVersion.current !== latest) {
+        announcedVersion.current = latest;
+        void import("@/lib/call-sounds").then((m) => {
+          try {
+            m.playUpdateReady();
+          } catch {
+            // Silence must never block the update.
+          }
+        }).catch(() => undefined);
+      }
       setPhase("manual");
     } catch {
       // Offline, rate-limited, no releases. Nothing worth interrupting for.
@@ -126,19 +151,15 @@ export function UpdateToast() {
 
   const check = useCallback(async () => {
     if (!isTauri()) return;
+    if (Date.now() < snoozedUntil.current) return;
     try {
       const { check: checkForUpdate } = await import("@tauri-apps/plugin-updater");
       const found = await checkForUpdate();
       if (!found) return;
 
-      // Declining a version hides that version, not updates in general.
-      try {
-        if (window.localStorage.getItem(SKIP_KEY) === found.version) return;
-      } catch { /* storage unavailable — offer it */ }
-
       update.current = found as unknown as PendingUpdate;
       setVersion(found.version);
-      startCountdown();
+      startCountdown(found.version);
     } catch {
       // The plugin refused — almost always because no signing key is
       // configured yet, so it cannot verify a manifest and correctly declines
@@ -162,9 +183,9 @@ export function UpdateToast() {
 
   const postpone = () => {
     if (timer.current) clearInterval(timer.current);
-    try {
-      if (version) window.localStorage.setItem(SKIP_KEY, version);
-    } catch { /* it will simply be offered again next launch */ }
+    // Snooze, don't skip: the same version is offered again after the
+    // snooze lapses (or on next launch, which starts a fresh session).
+    snoozedUntil.current = Date.now() + SNOOZE_MS;
     setPhase("idle");
   };
 
