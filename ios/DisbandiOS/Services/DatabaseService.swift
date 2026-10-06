@@ -603,14 +603,14 @@ enum DatabaseService {
     /// directly: that function normalises the value, enforces the blocked-word
     /// and format policy, and checks availability. A raw UPDATE would skip all
     /// of that and surface the CHECK-constraint failure as an opaque error.
-    static func updateUsername(_ username: String) async throws {
+    static func updateUsername(_ username: String, displayName: String? = nil) async throws {
         struct Params: Encodable {
             let p_username: String
             let p_display_name: String?
         }
         try await client
             .rpc("complete_signup_profile",
-                 params: Params(p_username: username, p_display_name: nil))
+                 params: Params(p_username: username, p_display_name: displayName))
             .execute()
     }
 

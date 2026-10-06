@@ -5,9 +5,24 @@ struct AuthView: View {
 
     private enum Mode { case signIn, signUp }
     @State private var mode: Mode = .signIn
+    @State private var username = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var usernameProblem: String?
     @State private var busy = false
+
+    private var normalizedUsername: String {
+        username.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
+    }
+
+    private var signupValid: Bool {
+        mode == .signIn
+            || (!username.isEmpty && normalizedUsername.count >= 2
+                && !email.isEmpty && password.count >= 6
+                && password == confirmPassword && usernameProblem == nil)
+    }
 
     var body: some View {
         ScrollView {
@@ -15,10 +30,41 @@ struct AuthView: View {
                 header
 
                 VStack(spacing: 14) {
+                    if mode == .signUp {
+                        field(icon: "person.fill", placeholder: "Username", text: $username,
+                              keyboard: .default, secure: false)
+                    }
                     field(icon: "envelope.fill", placeholder: "Email", text: $email,
                           keyboard: .emailAddress, secure: false)
                     field(icon: "lock.fill", placeholder: "Password", text: $password,
                           keyboard: .default, secure: true)
+                    if mode == .signUp {
+                        field(icon: "lock.shield.fill", placeholder: "Confirm password", text: $confirmPassword,
+                              keyboard: .default, secure: true)
+                    }
+                }
+                .task(id: username) {
+                    // Live availability while choosing a name at sign-up.
+                    // Mirrors the ProfileTab editor: empty/short/invalid input
+                    // clears the message rather than spamming the RPC.
+                    guard mode == .signUp else { usernameProblem = nil; return }
+                    let candidate = normalizedUsername
+                    guard candidate.count >= 2 else { usernameProblem = nil; return }
+                    usernameProblem = await DatabaseService.usernameUnavailableReason(candidate)
+                }
+
+                if mode == .signUp, !confirmPassword.isEmpty, password != confirmPassword {
+                    Text("Passwords don't match yet.")
+                        .font(.footnote)
+                        .foregroundStyle(Brand.dnd)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if let problem = mode == .signUp ? usernameProblem : nil {
+                    Text(problem)
+                        .font(.footnote)
+                        .foregroundStyle(Brand.dnd)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if let notice = app.authNotice {
@@ -50,8 +96,8 @@ struct AuthView: View {
                     .background(Brand.accent, in: .rect(cornerRadius: 12))
                     .foregroundStyle(.white)
                 }
-                .disabled(busy || email.isEmpty || password.isEmpty)
-                .opacity(busy || email.isEmpty || password.isEmpty ? 0.6 : 1)
+                .disabled(busy || (mode == .signUp ? !signupValid : email.isEmpty || password.isEmpty))
+                .opacity(busy || (mode == .signUp ? !signupValid : email.isEmpty || password.isEmpty) ? 0.6 : 1)
 
                 if mode == .signIn {
                     Button("Forgot password?") {
@@ -67,6 +113,8 @@ struct AuthView: View {
                     withAnimation { mode = mode == .signIn ? .signUp : .signIn }
                     app.authError = nil
                     app.authNotice = nil
+                    usernameProblem = nil
+                    confirmPassword = ""
                 } label: {
                     HStack(spacing: 4) {
                         Text(mode == .signIn ? "New to Disband?" : "Already have an account?")
@@ -130,7 +178,12 @@ struct AuthView: View {
             if mode == .signIn {
                 await app.signIn(email: email, password: password)
             } else {
-                await app.signUp(email: email, password: password)
+                guard password == confirmPassword else {
+                    app.authError = "Passwords don't match. Re-enter them and try again."
+                    withAnimation { busy = false }
+                    return
+                }
+                await app.signUp(email: email, password: password, username: username)
             }
             withAnimation { busy = false }
         }

@@ -190,11 +190,26 @@ final class AppState {
         }
     }
 
-    func signUp(email: String, password: String) async {
+    func signUp(email: String, password: String, username: String) async {
         authError = nil
         authNotice = nil
+        // Mirror web: lowercase, strip to letters/numbers/underscores, min 2.
+        let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
+        let display = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count >= 2 else {
+            authError = "Username must be at least 2 characters (letters, numbers, and underscores)."
+            return
+        }
         do {
-            let response = try await client.auth.signUp(email: normalise(email), password: password)
+            let response = try await client.auth.signUp(
+                email: normalise(email),
+                password: password,
+                data: [
+                    "username": .string(normalized),
+                    "display_name": .string(display),
+                ]
+            )
 
             // With user-enumeration protection on, signing up with an address
             // that already exists is NOT an error: Supabase returns a stub user
@@ -207,7 +222,18 @@ final class AppState {
             }
 
             if response.session == nil {
+                // No session: email confirmation required. The handle_new_user
+                // trigger applies the metadata username when the profile row
+                // is created, so nothing more to do here.
                 authNotice = "Check \(email) for a confirmation link to finish setting up your account."
+            } else {
+                // Immediate session: apply the username now, like web does.
+                do {
+                    try await DatabaseService.updateUsername(normalized, displayName: display)
+                } catch {
+                    authError = friendlyAuthError(error)
+                    return
+                }
             }
         } catch {
             authError = friendlyAuthError(error)
