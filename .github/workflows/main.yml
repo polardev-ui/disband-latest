@@ -119,10 +119,11 @@ jobs:
           # repo settings (see the release docs); when present, tauri-action
           # signs, notarizes, and the .app.tar.gz the updater installs is
           # Gatekeeper-clean. Empty/missing values fall back to ad-hoc "-".
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # Falls back to ad-hoc "-" until the secrets below exist, so
-          # unsigned builds keep working in the meantime.
+          #
+          # NOTE: APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD are wired in
+          # only together with real secret values — passing them empty makes
+          # tauri-action attempt a keychain import of nothing and fail the
+          # macOS bundle step. Re-add both lines when the .p12 exists.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
