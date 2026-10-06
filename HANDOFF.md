@@ -540,3 +540,29 @@ select id, sha256, category, preserved_until
   **why**, especially where a non-obvious decision prevents a specific bug.
 * Bump the version on every change.
 * Don't commit unless asked.
+
+---
+
+## 8. Perf/security/privacy program (2026-10-06, user-directed, "don't stop")
+
+Full report: `docs/PERF-SEC-REPORT.md`. Design: `docs/E2EE-DESIGN.md`.
+All pushed to main; release chain (push → tag → desktop) verified working.
+
+- Perf: Twemoji fast-path, lazy prism (523→438 KB max chunk), stable row
+  identities, O(n) reaction grouping, 200-row scrollback cap, realtime
+  consolidation (profile dedupe, per-group → 2 channels, catalyst scoping).
+- SEC: next 16.3.8 (RCE + 2 HIGH), random 1:1 call IDs, sender gates on all
+  three call transports, Android Keystore sessions, dead encrypt proxies
+  removed, warn-log sanitization, dead greet IPC removed.
+- Tests: 181/181 (22 new: twemoji, history-cap, merge+500-row burst,
+  DM boundaries, voice presence, github-releases).
+- Desktop updater repaired: real minisign keypair (old pubkey matched
+  nothing), Prepare Release auto-dispatches desktop, snooze-not-skip,
+  Silicon-first picker, update chime. NOTE 2026-10-06: desktop run
+  37521461865 was building v2.32.24 with the APPLE_CERTIFICATE fix —
+  verify latest.json exists before claiming victory.
+- Known gap: empty APPLE_CERTIFICATE env breaks macOS codesign import —
+  cert lines stay OUT of main.yml until real .p12 secrets exist.
+- Honestly deferred: message E2EE implementation (blueprint only — a
+  drive-by would be toy crypto), sustained load soak (needs staging),
+  DB-backed rate limits on non-auth routes (low value targets).
