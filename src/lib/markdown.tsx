@@ -1,9 +1,42 @@
 "use client";
 
 import { isValidMentionToken } from "@/lib/utils";
-import { CodeBlock } from "@/components/discord/CodeBlock";
+import { Suspense, lazy } from "react";
 import type { Profile } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
+
+/**
+ * Prism (via CodeBlock) is ~100KB+ that only code-fence messages need, so it
+ * stays out of the message bundle until the first fence renders. The Suspense
+ * fallback shows the same code unhighlighted in an identical box, so there
+ * is no layout jump or empty flash when highlighting arrives a beat later.
+ */
+const CodeBlockLazy = lazy(() =>
+  import("@/components/discord/CodeBlock").then((m) => ({ default: m.CodeBlock })),
+);
+
+function FencedCode({ code, language, langLabel }: { code: string; language: string; langLabel: string }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="group/code relative my-1.5">
+          <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-2">
+            {langLabel && (
+              <span className="rounded bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                {langLabel}
+              </span>
+            )}
+          </div>
+          <pre className="overflow-x-auto rounded-md bg-bg-accent p-3 font-mono text-[13px] leading-relaxed">
+            <code>{code.replace(/\n$/, "")}</code>
+          </pre>
+        </div>
+      }
+    >
+      <CodeBlockLazy code={code} language={language} />
+    </Suspense>
+  );
+}
 
 type Token = string;
 
@@ -222,7 +255,7 @@ export function renderMarkdown(
 
       // Highlighted, with the language badge and a copy button. The fence's
       // language (```ts) is segments[i - 1].
-      out.push(<CodeBlock key={k++} code={seg} language={segments[i - 1] ?? ""} />);
+      out.push(<FencedCode key={k++} code={seg} language={segments[i - 1] ?? ""} langLabel={segments[i - 1] ?? ""} />);
     }
   }
 
