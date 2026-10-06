@@ -1208,9 +1208,21 @@ export function DiscordApp() {
     author: m.author ?? undefined,
   });
 
-  const channelMessages: ChatMessageData[] = app.messages.map(mapChatMessage);
-  const dmMessages: ChatMessageData[] = app.dmMessages.map(mapChatMessage);
-  const groupMessages: ChatMessageData[] = app.groupMessages.map(mapChatMessage);
+  const channelMessages = useMemo(
+    () => app.messages.map(mapChatMessage),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [app.messages],
+  );
+  const dmMessages = useMemo(
+    () => app.dmMessages.map(mapChatMessage),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [app.dmMessages],
+  );
+  const groupMessages = useMemo(
+    () => app.groupMessages.map(mapChatMessage),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [app.groupMessages],
+  );
 
   const noteMessages: ChatMessageData[] = app.profile
     ? app.notes.map((n) =>

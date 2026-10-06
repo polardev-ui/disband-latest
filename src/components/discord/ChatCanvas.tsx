@@ -54,6 +54,9 @@ export interface ChatCanvasHandle {
   openReactionPicker: (messageId: string, x: number, y: number) => void;
 }
 
+/** Shared empty list so reaction-less rows keep a stable reference. */
+const EMPTY_REACTIONS: MessageReaction[] = [];
+
 interface ChatCanvasProps {
   channelName: string;
   messages: ChatMessageData[];
@@ -196,6 +199,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }));
 
   const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
+
+  // Per-message reaction lookup. The old code ran `reactions.filter(...)`
+  // per row (O(rows × reactions)) on every render; one grouped pass is O(n).
+  const reactionsByMessageId = useMemo(() => {
+    const map = new Map<string, typeof reactions>();
+    for (const r of reactions) {
+      if (r.context_type !== messageContext) continue;
+      const list = map.get(r.message_id);
+      if (list) list.push(r);
+      else map.set(r.message_id, [r]);
+    }
+    return map;
+  }, [reactions, messageContext]);
 
   // Distance (px) from the bottom within which content growth (new messages,
   // image/preview loads) follows the user down. Beyond this the user is
@@ -498,9 +514,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
             const prev = enriched[i - 1];
             const grouped = shouldGroupMessages(prev, msg, currentUserId, currentUserName);
             const showHeader = !grouped;
-            const msgReactions = reactions.filter(
-              (r) => r.context_type === messageContext && r.message_id === msg.id,
-            );
+            const msgReactions = reactionsByMessageId.get(msg.id) ?? EMPTY_REACTIONS;
             return (
               <div key={msg.id}>
                 {newMessagesDividerId === msg.id && (
