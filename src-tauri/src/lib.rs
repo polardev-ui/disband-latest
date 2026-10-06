@@ -4,14 +4,6 @@
 // Expose functionality to the frontend with `#[tauri::command]` and invoke it
 // from TypeScript via `@tauri-apps/api`.
 
-/// Example command callable from the web layer:
-///   import { invoke } from "@tauri-apps/api/core";
-///   await invoke("greet", { name: "Disband" });
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {name}! Disband desktop bridge is live.")
-}
-
 /// macOS WebView `Notification` does not reliably deliver when the app is
 /// backgrounded; use native UserNotifications via mac-notification-sys instead.
 #[cfg(target_os = "macos")]
@@ -60,7 +52,7 @@ pub fn run() {
     }
 
     builder
-        .invoke_handler(tauri::generate_handler![greet, show_macos_notification])
+        .invoke_handler(tauri::generate_handler![show_macos_notification])
         .run(tauri::generate_context!())
         .expect("error while running the Disband desktop application");
 }
