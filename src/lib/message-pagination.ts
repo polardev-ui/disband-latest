@@ -10,6 +10,21 @@ export function trimToLatestWindow<T>(messages: T[]): { messages: T[]; trimmed: 
   return { messages: messages.slice(-MESSAGE_PAGE_SIZE), trimmed: true };
 }
 
+/**
+ * Cap for scrollback history. Realtime inserts trim to the latest window,
+ * but paging up (`loadMore*`) prepends indefinitely — an afternoon of
+ * scrolling back can accumulate thousands of full message rows (each with
+ * an author profile, reactions, embeds) in state. Past this cap the oldest
+ * rows are dropped; `hasMore` stays true so scrolling back up refetches
+ * them. 200 rows is far beyond any viewport while keeping refetch rare.
+ */
+export const MAX_HISTORY_ROWS = 200;
+
+export function capHistoryRows<T>(rows: T[]): { rows: T[]; trimmed: boolean } {
+  if (rows.length <= MAX_HISTORY_ROWS) return { rows, trimmed: false };
+  return { rows: rows.slice(rows.length - MAX_HISTORY_ROWS), trimmed: true };
+}
+
 export async function loadReactionsForMessages(
   supabase: SupabaseClient,
   context: MessageContext,

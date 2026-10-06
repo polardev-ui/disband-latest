@@ -47,6 +47,7 @@ import {
 } from "@/lib/messages";
 import {
   MESSAGE_PAGE_SIZE,
+  capHistoryRows,
   loadReactionsForMessages,
   mergeReactions,
   paginateDescendingRows,
@@ -1106,8 +1107,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setChannelHasMore(false);
       return;
     }
-    setMessages((prev) => [...older, ...prev]);
-    setChannelHasMore(hasMore);
+    setMessages((prev) => capHistoryRows([...older, ...prev]).rows);
+    // Keep a previous `true`: if history was ever trimmed, rows that still
+    // exist in the database were dropped locally, so more is fetchable even
+    // when this page hit the beginning.
+    setChannelHasMore((prevHas) => hasMore || prevHas);
     const rxn = await loadReactionsForMessages(
       supabase,
       "channel",
@@ -1268,8 +1272,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDmHasMore(false);
       return;
     }
-    setDmMessages((prev) => [...older, ...prev]);
-    setDmHasMore(hasMore);
+    setDmMessages((prev) => capHistoryRows([...older, ...prev]).rows);
+    setDmHasMore((prevHas) => hasMore || prevHas);
     const rxn = await loadReactionsForMessages(
       supabase,
       "dm",
@@ -1362,8 +1366,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setGroupHasMore(false);
       return;
     }
-    setGroupMessages((prev) => [...older, ...prev]);
-    setGroupHasMore(hasMore);
+    setGroupMessages((prev) => capHistoryRows([...older, ...prev]).rows);
+    setGroupHasMore((prevHas) => hasMore || prevHas);
     const rxn = await loadReactionsForMessages(
       supabase,
       "group",
@@ -1463,24 +1467,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if ((result.error as { status?: number })?.status !== 429) break;
             await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
           }
-          const error = retryError as { name?: string; status?: number } | null;
+          const error = retryError as { name?: string; status?: number; message?: string } | null;
           if (error) {
-            console.warn("Session token was expired and could not be refreshed.", error);
+            // Name + message only: full SDK error objects can carry tokens.
+            console.warn("Session token was expired and could not be refreshed.", error.name, error.message);
           }
           session = refreshed?.session ?? (error?.name === "AuthRetryableFetchError" ? session : null);
         } else {
           const { error: verifyError } = await supabase.auth.getUser();
           if (verifyError) {
             if (verifyError.name === "AuthRetryableFetchError") {
-              console.warn("Could not reach Supabase to verify the session; continuing with the cached session.", verifyError);
+              console.warn("Could not reach Supabase to verify the session; continuing with the cached session.", verifyError.name);
             } else {
               const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
               if (refreshError) {
 
                 if (refreshError.name === "AuthRetryableFetchError") {
-                  console.warn("Could not refresh the session due to a transient error; continuing with the cached session.", refreshError);
+                  console.warn("Could not refresh the session due to a transient error; continuing with the cached session.", refreshError.name);
                 } else {
-                  console.warn("Session is rejected by Supabase and could not be refreshed; signing out.", refreshError);
+                  console.warn("Session is rejected by Supabase and could not be refreshed; signing out.", refreshError.name, refreshError.message);
                   await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
                   session = null;
                 }
