@@ -1753,13 +1753,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
 
-    const profileSub = supabase
-      .channel(`profiles:${userId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` }, () => {
-        void loadProfile(userId);
-      })
-      .subscribe();
-
     const catalystSub = supabase
       .channel(`catalysts:${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "server_catalysts" }, () => {
@@ -1815,13 +1808,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => {
-      void profileSub.unsubscribe();
       void catalystSub.unsubscribe();
       void notifSub.unsubscribe();
       void friendSub.unsubscribe();
       void notesSub.unsubscribe();
     };
-  }, [userId, configured, loadFriendships, loadProfile, refreshCatalysts]);
+  }, [userId, configured, loadFriendships, refreshCatalysts]);
 
   const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
   useEffect(() => {
@@ -2127,17 +2119,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId || !configured || groupChats.length === 0) return;
     const supabase = getSupabaseClient();
-    const subs = groupChats.map((g) =>
-      supabase
-        .channel(`gcm:${g.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "group_chat_members", filter: `group_id=eq.${g.id}` },
-          () => void loadGroupChats(userId),
-        )
-        .subscribe(),
-    );
-    return () => { subs.forEach((s) => void s.unsubscribe()); };
+    // One channel with a binding per group, not one channel per group:
+    // N groups used to hold N sockets for the same table.
+    const ch = supabase.channel(`gcm:${userId}`);
+    for (const g of groupChats) {
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "group_chat_members", filter: `group_id=eq.${g.id}` },
+        () => void loadGroupChats(userId),
+      );
+    }
+    ch.subscribe();
+    return () => { void ch.unsubscribe(); };
   }, [userId, configured, groupChats.map((g) => g.id).join(","), loadGroupChats]);
 
   useEffect(() => {
@@ -2178,17 +2171,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setGroupCallCounts(counts);
     };
     void loadCounts();
-    const subs = groupChats.map((g) =>
-      supabase
-        .channel(`gcp-badge:${g.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "group_call_presence", filter: `group_id=eq.${g.id}` },
-          () => void loadCounts(),
-        )
-        .subscribe(),
-    );
-    return () => { subs.forEach((s) => void s.unsubscribe()); };
+    // Same consolidation as the member watcher above: one channel, a binding
+    // per group, instead of a socket per group.
+    const ch = supabase.channel(`gcp:${userId}`);
+    for (const g of groupChats) {
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "group_call_presence", filter: `group_id=eq.${g.id}` },
+        () => void loadCounts(),
+      );
+    }
+    ch.subscribe();
+    return () => { void ch.unsubscribe(); };
   }, [userId, configured, groupChats.map((g) => g.id).join(",")]);
 
   useEffect(() => {
@@ -2200,7 +2194,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
         (payload) => {
-          patchProfileInState(payload.new as Profile);
+          // Single writer for own-profile updates (a second subscription
+          // used to refetch the whole row here too — double work per event).
+          // Keep the 5-minute cache coherent as well so a later loadProfile
+          // never flashes the pre-update row.
+          const updated = payload.new as Profile;
+          patchProfileInState(updated);
+          setCache(`profile:${userId}`, updated);
         },
       )
       .subscribe();
