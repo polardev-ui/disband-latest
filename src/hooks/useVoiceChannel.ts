@@ -79,6 +79,14 @@ export function useVoiceChannel(
   }, [channelId, userId, joined, micMuted, deafened]);
 
   const prevPresenceRef = useRef<Set<string>>(new Set());
+  // Membership-proofed sender set for the signal handler: presence insert
+  // requires server membership (voice_insert_own), so anyone listed is a
+  // verified member of this server — unlike the raw `from` field, which any
+  // holder of the anon key can forge.
+  const participantIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    participantIdsRef.current = new Set(participants.map((p) => p.user_id));
+  }, [participants]);
   useEffect(() => {
     if (!joined) {
       prevPresenceRef.current = new Set();
@@ -205,6 +213,11 @@ export function useVoiceChannel(
     async (payload: SignalPayload) => {
       if (!userId || payload.from === userId) return;
       if (payload.to && payload.to !== userId) return;
+      // Drop signals from anyone outside voice presence without a negotiated
+      // peer: forged `leave`s would otherwise drop live tiles, and forged
+      // offers would harvest srflx (IP-revealing) candidates. Joiners
+      // bootstrap through the presence-driven initiator path below.
+      if (!participantIdsRef.current.has(payload.from) && !peersRef.current.has(payload.from)) return;
 
       // Screen-share state must update even without a peer connection (the
       // sharer may have started while nobody else was in the channel).
