@@ -80,6 +80,12 @@ export function playScreenShareJingle() {
   });
 }
 
+/**
+ * Legacy deterministic 1:1 call id (`min:max` of the two user ids).
+ * Retired: predictable channel names let anyone who knew both user ids join
+ * the signaling channel. Callers mint `crypto.randomUUID()` per call now.
+ * Kept exported for tests; do not use for new calls.
+ */
 export function directCallId(a: string, b: string) {
   return [a, b].sort().join(":");
 }
