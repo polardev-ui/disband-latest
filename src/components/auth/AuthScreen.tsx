@@ -50,6 +50,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -114,6 +115,8 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
         if (sanitized.length < 2) {
           setError("Username must be at least 2 characters (letters, numbers, and underscores).");
+        } else if (password !== confirmPassword) {
+          setError("Passwords don't match. Re-enter them and try again.");
         } else {
           const result = await signUp(email, password, username, appliedRef, turnstileToken);
           if (result.error) {
@@ -140,6 +143,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
     setMode(next);
     setError(null);
     setSuccess(null);
+    setConfirmPassword("");
     setTurnstileToken(null);
     setTurnstileFailed(false);
     setTurnstileKey((k) => k + 1);
@@ -394,6 +398,36 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                     aria-label="Referral code applied"
                     className={fieldClass + " cursor-default border-status-online/40 bg-status-online/[0.06] font-mono tracking-wide"}
                   />
+                </Field>
+              )}
+
+              {mode === "signup" && (
+                <Field label="Confirm password">
+                  <div className="relative">
+                    <input
+                      required
+                      type={showPassword ? "text" : "password"}
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                      placeholder="Repeat your password"
+                      aria-label="Confirm password"
+                      className={fieldClass + " pr-16"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Hide passwords" : "Show passwords"}
+                      aria-pressed={showPassword}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[13px] font-medium text-text-muted transition-colors hover:text-text-normal"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                  {confirmPassword && password !== confirmPassword && (
+                    <p className="mt-1 text-xs text-status-dnd">Passwords don&apos;t match yet.</p>
+                  )}
                 </Field>
               )}
 
