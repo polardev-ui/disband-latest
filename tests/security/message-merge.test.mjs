@@ -80,3 +80,20 @@ test('conflicts resolve in favour of the fetched row', () => {
   assert.equal(merged.length, 1);
   assert.equal(merged[0].content, 'fresh');
 });
+
+test('burst scale: 500 realtime arrivals survive a refresh with no loss or dupes', () => {
+  const base = Date.parse('2026-10-02T10:00:00Z');
+  const ts = (i) => new Date(base + i * 1000).toISOString();
+  // Snapshot taken at message 100; 400 more arrive while it is in flight.
+  const fetched = Array.from({ length: 101 }, (_, i) => row(`m${i}`, ts(i)));
+  const prev = Array.from({ length: 501 }, (_, i) => row(`m${i}`, ts(i)));
+  const merged = mergeFetchedRows(prev, fetched);
+  assert.equal(merged.length, 501);
+  const ids = merged.map((m) => m.id);
+  assert.equal(new Set(ids).size, 501);
+  assert.deepEqual(ids, [...ids].sort((a, b) => {
+    const na = Number(a.slice(1));
+    const nb = Number(b.slice(1));
+    return na - nb;
+  }));
+});
