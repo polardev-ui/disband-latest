@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { directCallId, startRingtone, stopRingtone } from "@/lib/ringtone";
+import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { playCallConnected, playCallEnd, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
@@ -337,6 +337,13 @@ export function useCallManager(
       ch.on("broadcast", { event: "call" }, ({ payload }) => {
         const p = payload as CallSignal;
         if (p.from === userId || (p.to && p.to !== userId)) return;
+        // The `from` field is sender-controlled: only the peer this call was
+        // set up with may drive it. Call IDs used to be deterministic
+        // (`min:max` of the two user ids), so anyone who knew both ids could
+        // join the channel and inject offers/answers/ICE (or harvest srflx
+        // candidates, i.e. IPs). IDs are random per call now, and anything
+        // not from the peer is dropped on the floor.
+        if (p.from !== peerId) return;
         const addIce = async (candidate: RTCIceCandidateInit) => {
           try {
             if (!pc.remoteDescription) {
@@ -576,7 +583,7 @@ export function useCallManager(
     setError(null);
     void requestNotificationPermissionFromGesture();
     await warmUpMediaDevices();
-    const callId = directCallId(userId, peer.id);
+    const callId = crypto.randomUUID();
     activeCallIdRef.current = callId;
     activePeerIdRef.current = peer.id;
     lastPeerRef.current = peer;

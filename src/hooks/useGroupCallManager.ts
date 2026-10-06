@@ -79,6 +79,10 @@ export function useGroupCallManager(
   const localRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const iceRetryRef = useRef<Map<string, number>>(new Map());
+  const presenceIdsRef = useRef<Set<string>>(new Set());
+  // Mirror of call presence for the signal handler: presence rows are
+  // membership-proofed by RLS (insert requires is_group_member), so anyone
+  // in this set is a verified group member.
   // Retransmit timers for offers whose first send may have predated the
   // remote joining the signal channel. Cleared on answer, leave, drop,
   // and full cleanup.
@@ -95,6 +99,9 @@ export function useGroupCallManager(
   useEffect(() => { groupIdRef.current = groupId; }, [groupId]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { joinedRef.current = joined; }, [joined]);
+  useEffect(() => {
+    presenceIdsRef.current = new Set(presence.map((p) => p.user_id));
+  }, [presence]);
   useEffect(() => { cameraRef.current = cameraEnabled; }, [cameraEnabled]);
   useEffect(() => { screenShareRef.current = screenShareEnabled; }, [screenShareEnabled]);
 
@@ -333,6 +340,13 @@ export function useGroupCallManager(
       if (!userId || payload.from === userId) return;
       if (payload.to && payload.to !== userId) return;
       if (!joinedRef.current) return;
+      // The `from` field is sender-controlled. Admit signals only from
+      // verified call participants (presence is membership-proofed by RLS)
+      // or peers we already negotiated with — everyone else, including
+      // forged `leave`s that would hang up someone else's tile, is dropped.
+      // Joiners bootstrap through the presence-driven initiator path, so a
+      // not-yet-visible newcomer still connects via our offer to them.
+      if (!presenceIdsRef.current.has(payload.from) && !peersRef.current.has(payload.from)) return;
 
       // Screen-share announcements must not depend on a live peer connection:
       // the sharer may have started (or stopped) while nobody else was in the
