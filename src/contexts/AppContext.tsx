@@ -1753,13 +1753,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !configured) return;
     const supabase = getSupabaseClient();
 
-    const catalystSub = supabase
-      .channel(`catalysts:${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "server_catalysts" }, () => {
-        void refreshCatalysts(serversRef.current.map((s) => s.id), userId);
-      })
-      .subscribe();
-
     const notifSub = supabase
       .channel(`notif:${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
@@ -1808,12 +1801,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => {
-      void catalystSub.unsubscribe();
       void notifSub.unsubscribe();
       void friendSub.unsubscribe();
       void notesSub.unsubscribe();
     };
-  }, [userId, configured, loadFriendships, refreshCatalysts]);
+  }, [userId, configured, loadFriendships]);
+
+  // Catalyst counts follow only this user's servers plus their own grants.
+  // This used to be one unfiltered server_catalysts subscription, and that
+  // table is world-readable — so every purchase or grant by anyone, anywhere
+  // fanned out to every connected client and refetched here.
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    const reload = () => void refreshCatalysts(serversRef.current.map((s) => s.id), userId);
+    const ch = supabase.channel(`catalysts:${userId}`);
+    for (const s of serversRef.current) {
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "server_catalysts", filter: `server_id=eq.${s.id}` },
+        reload,
+      );
+    }
+    ch.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "server_catalysts", filter: `user_id=eq.${userId}` },
+      reload,
+    );
+    ch.subscribe();
+    return () => { void ch.unsubscribe(); };
+  }, [userId, configured, servers.map((s) => s.id).join(","), refreshCatalysts]);
 
   const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
   useEffect(() => {
