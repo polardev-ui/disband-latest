@@ -125,9 +125,11 @@ jobs:
           # tauri-action attempt a keychain import of nothing and fail the
           # macOS bundle step. Re-add both lines when the .p12 exists.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # NOTE: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID are likewise left
+          # out until real: present-but-empty makes the CLI attempt
+          # notarization with an empty team ID ("Team ID must be at least 3
+          # characters") and fail both macOS targets. Re-add all three with
+          # the certificate lines above.
           # Signs the updater manifest. Without these the build still produces
           # installers, but no latest.json — and the app falls back to telling
           # people to download by hand. See docs/DESKTOP_UPDATES.md.
