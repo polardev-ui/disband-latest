@@ -56,6 +56,15 @@ import {
   Timer,
   VolumeX,
   Maximize2,
+  User,
+  Bot,
+  Gift,
+  Image,
+  Lock,
+  MessageCircle,
+  Bug,
+  Check,
+  ChevronRight,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -108,6 +117,15 @@ export const IconScreenShareOff = icon(ScreenShareOff);
 export const IconNotes = icon(SquarePen);
 export const IconCrown = icon(Crown);
 export const IconMenu = icon(Menu);
+export const IconUser = icon(User);
+export const IconBot = icon(Bot);
+export const IconGift = icon(Gift);
+export const IconImage = icon(Image);
+export const IconLock = icon(Lock);
+export const IconMessage = icon(MessageCircle);
+export const IconBug = icon(Bug);
+export const IconCheck = icon(Check);
+export const IconChevronRight = icon(ChevronRight);
 
 export const IconStaff = function IconStaff({ size = 20, className }: IconProps) {
   return (

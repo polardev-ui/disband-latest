@@ -255,8 +255,8 @@ function ServerButton({
           className="group relative flex h-12 w-12 cursor-grab items-center justify-center active:cursor-grabbing"
         >
           <span
-            className={`absolute -left-1 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-white transition-all duration-150 ease-in-out ${
-              active ? "h-10 w-1" : hasUnread ? "h-2 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
+            className={`absolute -left-1 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-150 ease-in-out ${
+              active ? "h-10 w-1 shadow-[0_0_8px_var(--color-brand)]" : hasUnread ? "h-2 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
             }`}
           />
           <div className="relative">
@@ -266,14 +266,14 @@ function ServerButton({
                 src={safeImageUrl(server.icon_url)!}
                 alt=""
                 draggable={false}
-                className={`h-12 w-12 object-cover transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-                  active ? "rounded-[30%]" : "rounded-[50%]"
+                className={`h-12 w-12 object-cover transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
+                  active ? "rounded-2xl ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full"
                 }`}
               />
             ) : (
               <span
-                className={`flex h-12 w-12 items-center justify-center bg-brand text-[15px] font-semibold text-white transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-                  active ? "rounded-[30%]" : "rounded-[50%]"
+                className={`flex h-12 w-12 items-center justify-center bg-brand text-[15px] font-semibold text-white transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
+                  active ? "rounded-2xl ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full"
                 }`}
               >
                 {serverInitials(server.name)}
@@ -423,13 +423,13 @@ export function ServerList({
           className="group relative flex h-12 w-12 items-center justify-center"
         >
           <span
-            className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-white transition-all duration-150 ease-in-out ${
-              homeActive ? "h-10 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
+            className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-150 ease-in-out ${
+              homeActive ? "h-10 w-1 shadow-[0_0_8px_var(--color-brand)]" : "w-0 group-hover:h-5 group-hover:w-1"
             }`}
           />
           <span
-            className={`flex h-12 w-12 items-center justify-center text-white transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-              homeActive ? "rounded-[30%] bg-brand" : "rounded-[50%] bg-brand/90"
+            className={`flex h-12 w-12 items-center justify-center text-white transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
+              homeActive ? "rounded-2xl bg-brand ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full bg-brand/90"
             }`}
           >
             <IconHome size={22} />
@@ -450,16 +450,16 @@ export function ServerList({
                   className="group relative flex h-12 w-12 animate-in fade-in slide-in-from-top-2 items-center justify-center duration-300"
                 >
                   <span
-                    className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-white transition-all duration-150 ease-in-out ${
-                      active ? "h-10 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
+                    className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-150 ease-in-out ${
+                      active ? "h-10 w-1 shadow-[0_0_8px_var(--color-brand)]" : "w-0 group-hover:h-5 group-hover:w-1"
                     }`}
                   />
                   <div className="relative">
                     <Avatar
                       profile={entry.friend}
                       size="md"
-                      className={`h-12 w-12 transition-all duration-150 ease-in-out group-hover:rounded-[30%] ${
-                        active ? "rounded-[30%] ring-2 ring-brand" : "rounded-[50%]"
+                      className={`h-12 w-12 transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
+                        active ? "rounded-2xl ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full"
                       }`}
                     />
                     <UnreadCountBadge count={entry.count} />

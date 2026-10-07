@@ -149,16 +149,15 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className="fixed z-40 w-72 max-h-[calc(100vh-100px)] overflow-y-auto rounded-lg bg-bg-secondary shadow-xl ring-1 ring-divider"
+        className="modal-pop fixed z-40 max-h-[calc(100vh-100px)] w-72 overflow-y-auto rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
         style={{ left: pos.left, bottom: pos.bottom }}
       >
-        {}
         <div
-          className="relative h-16"
+          className="relative h-20 overflow-hidden rounded-t-2xl"
           style={{
             background: profile?.accent_color
-              ? `linear-gradient(to bottom, ${profile.accent_color}, transparent)`
-              : "linear-gradient(to bottom, #5865f2, #3c45a0)",
+              ? `linear-gradient(135deg, ${profile.accent_color}, transparent 140%)`
+              : "linear-gradient(135deg, #5865f2, #3c45a0)",
           }}
         >
           {profile?.banner_url && (
@@ -171,7 +170,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           )}
         </div>
 
-        <div className="relative -mt-9 mb-1 flex justify-center px-4">
+        <div className="relative -mt-10 mb-1 flex justify-center px-4">
           <div className="relative">
             <Avatar profile={profile ?? { display_name: name }} size="lg" className="ring-[6px] ring-bg-secondary" />
             <span
@@ -182,40 +181,40 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
 
         <div className="flex items-center justify-between px-4 pb-2">
           <div>
-            <p className="text-sm font-semibold text-text-normal">{name}</p>
+            <p className="text-[15px] font-bold text-text-normal">{name}</p>
             <p className="text-xs text-text-muted">{statusText}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1.5">
             {onOpenProfile && (
               <button
                 onClick={() => {
                   onClose();
                   onOpenProfile();
                 }}
-                className="h-8 shrink-0 rounded px-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                className="h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
               >
                 View profile
               </button>
             )}
             <button
               onClick={onOpenSettings}
-              className="h-8 w-8 shrink-0 rounded p-1.5 text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
               aria-label="Settings"
             >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
             </button>
           </div>
         </div>
 
-        <div className="border-t border-divider px-4 py-2.5">
+        <div className="mx-3 mb-2 rounded-2xl border border-divider bg-bg-tertiary/50 px-3 py-2.5">
           <input
             value={customNote}
             onChange={(e) => setCustomNote(e.target.value)}
             placeholder="Set a custom status"
             maxLength={128}
-            className="w-full rounded-md border border-divider bg-bg-tertiary px-2.5 py-2 text-[13px] text-text-normal placeholder:text-text-muted/60 focus:border-brand focus:outline-none"
+            className="w-full rounded-xl border border-divider bg-bg-secondary px-2.5 py-2 text-[13px] text-text-normal placeholder:text-text-muted/60 focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand/20"
           />
           <div className="mt-1.5 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
             {STATUS_DURATION_PRESETS.map((preset) => (
@@ -227,7 +226,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                 className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
                   customDuration === preset.id
                     ? "bg-brand text-white"
-                    : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                    : "bg-bg-secondary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                 }`}
               >
                 {preset.label}
@@ -239,7 +238,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               type="button"
               disabled={savingCustom}
               onClick={() => void saveCustomStatus()}
-              className="flex-1 rounded-md bg-brand px-2 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="flex-1 rounded-xl bg-brand px-2 py-1.5 text-[13px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {savingCustom ? "Saving…" : "Set Status"}
             </button>
@@ -248,7 +247,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                 type="button"
                 disabled={savingCustom}
                 onClick={() => void clearCustomStatus()}
-                className="rounded-md border border-divider px-2.5 py-1.5 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+                className="rounded-xl border border-divider px-2.5 py-1.5 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
               >
                 Clear
               </button>
@@ -256,7 +255,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           </div>
         </div>
 
-        <div className="border-t border-divider px-2 py-1.5">
+        <div className="mx-3 mb-2 rounded-2xl border border-divider bg-bg-tertiary/50 px-2 py-1.5">
           <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
             Set Status
           </p>
@@ -266,8 +265,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               type="button"
               disabled={changing}
               onClick={() => void setStatus(opt.status)}
-              className={`flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover ${
-                currentStatus === opt.status ? "bg-interactive-selected" : ""
+              className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover ${
+                currentStatus === opt.status ? "bg-brand/15" : ""
               } ${changing ? "opacity-50" : ""}`}
             >
               <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_BG[opt.status]}`} />
@@ -281,7 +280,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           ))}
         </div>
 
-        <div className="border-t border-divider px-2 py-1.5">
+        <div className="mx-3 mb-3 rounded-2xl border border-divider bg-bg-tertiary/50 px-2 py-1.5">
           <div className="mb-1 flex items-center justify-between px-2">
             <span className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Accounts</span>
             <button
@@ -295,7 +294,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
 
           <div className="flex flex-col gap-0.5">
             {accounts.current && (
-              <div className="flex items-center gap-2.5 rounded bg-interactive-selected px-2 py-1.5">
+              <div className="flex items-center gap-2.5 rounded-xl bg-brand/15 px-2 py-1.5">
                 <span className="relative shrink-0">
                   <Avatar
                     size="sm"
@@ -307,7 +306,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                   />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-text-normal">{accountLabel(accounts.current)}</span>
+                  <span className="block truncate text-sm font-semibold text-text-normal">{accountLabel(accounts.current)}</span>
                   <span className="block truncate text-[11px] text-text-muted">{accounts.current.email}</span>
                 </span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
@@ -322,7 +321,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               return (
                 <div
                   key={acct.user_id}
-                  className="group flex items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-interactive-hover"
+                  className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-interactive-hover"
                 >
                   <button
                     type="button"
@@ -349,7 +348,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                       aria-label={`Remove ${display}`}
                       title="Remove this account"
                       onClick={() => removeSavedAccount(acct.user_id)}
-                      className="shrink-0 rounded p-1 text-status-dnd transition-colors hover:bg-status-dnd/15"
+                      className="shrink-0 rounded-full p-1 text-status-dnd transition-colors hover:bg-status-dnd/15"
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <circle cx="12" cy="12" r="9" /><path d="M8 12h8" />
@@ -363,14 +362,14 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
             <button
               type="button"
               onClick={() => { beginAddAccount(); onClose(); }}
-              className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover"
+              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover"
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-text-muted text-text-muted">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-dashed border-text-muted text-text-muted">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
               </span>
-              <span className="text-sm text-text-normal">Add an Account</span>
+              <span className="text-sm font-medium text-text-normal">Add an Account</span>
             </button>
           </div>
         </div>

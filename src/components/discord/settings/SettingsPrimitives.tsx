@@ -12,17 +12,17 @@ export function SettingsSection({
   action?: React.ReactNode;
 }) {
   return (
-    <section className="mb-8">
-      <div className="mb-3 flex items-start justify-between gap-4">
+    <section className="mb-6">
+      <div className="mb-2.5 flex items-start justify-between gap-4 px-1">
         <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold text-text-normal">{title}</h3>
+          <h3 className="text-[15px] font-bold text-text-normal">{title}</h3>
           {description && (
             <p className="mt-0.5 text-[13px] leading-relaxed text-text-muted">{description}</p>
           )}
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="overflow-hidden rounded-lg border border-divider bg-bg-secondary">
+      <div className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-[0_2px_12px_-6px_rgba(0,0,0,0.5)]">
         {children}
       </div>
     </section>
@@ -106,8 +106,8 @@ export function Toggle({
 }
 
 export const settingsInputClass =
-  "w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal " +
-  "outline-none transition-colors placeholder:text-text-muted focus:border-brand/60";
+  "w-full rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal " +
+  "outline-none transition-all placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20";
 
 export function Hint({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "super" | "online" }) {
   return (
