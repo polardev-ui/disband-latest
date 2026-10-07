@@ -124,7 +124,7 @@ function ProfileBanner({ profile }: { profile: Profile }) {  const [failed, setF
   const show = url && !failed;
   return (
     <div
-      className="h-24 w-full overflow-hidden rounded-t-xl"
+      className="h-28 w-full overflow-hidden rounded-t-3xl"
       style={{ background: getAccentBackground(profile) }}
     >
       {show && (
@@ -207,7 +207,7 @@ export function UserProfileModal({
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} aria-label="Close" />
-      <div role="dialog" aria-modal="true" aria-label={title} className="fx-overlay-host modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-xl shadow-2xl" style={panelStyle}>
+      <div role="dialog" aria-modal="true" aria-label={title} className="fx-overlay-host modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-sm overflow-y-auto rounded-3xl border border-white/10 shadow-2xl" style={panelStyle}>
         {/* Artwork sits above the banner and below the readable profile content. */}
         <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
         <ProfileBanner profile={profile} />
@@ -215,14 +215,14 @@ export function UserProfileModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 rounded-full bg-black/40 p-1.5 text-white transition-colors hover:bg-black/60"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-all hover:scale-105 hover:bg-black/60"
           aria-label="Close profile"
         >
-          <IconClose size={20} />
+          <IconClose size={16} />
         </button>
 
         <div className="relative z-10 px-5 pb-5">
-          <div className="relative -mt-11 mb-3 w-fit">
+          <div className="relative -mt-12 mb-3 w-fit">
             <Avatar profile={profile} size="lg" className="ring-4 ring-black/25" />
             <span
               className="absolute -bottom-0.5 -right-0.5 rounded-full p-0.5"
@@ -232,10 +232,10 @@ export function UserProfileModal({
             </span>
           </div>
 
-          <h2 className="text-xl font-bold leading-tight">
+          <h2 className="text-[22px] font-extrabold leading-tight tracking-tight">
             {title}
             {isSelf && (
-              <span className="ml-2 rounded bg-black/25 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide">
+              <span className="ml-2 rounded-full bg-black/25 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide">
                 You
               </span>
             )}
@@ -243,7 +243,7 @@ export function UserProfileModal({
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             {profile.username && (
-              <p className="text-sm" style={{ color: mutedColor }}>
+              <p className="rounded-full bg-black/20 px-2 py-0.5 text-[13px] font-medium" style={{ color: mutedColor }}>
                 @{profile.username}
               </p>
             )}
@@ -342,19 +342,19 @@ export function UserProfileModal({
                   onClose();
                   onOpenSettings();
                 }}
-                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg bg-black/25 px-3 py-2 text-sm font-semibold backdrop-blur-sm transition-colors hover:bg-black/35"
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-full bg-black/25 px-3 py-2.5 text-sm font-bold backdrop-blur-sm transition-all hover:bg-black/35 active:scale-[0.98]"
               >
                 <IconSettings size={16} /> Edit Profile
               </button>
             )
           ) : isBlocked ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-lg border border-black/25 px-3 py-2 text-sm text-text-muted">Blocked</span>
+              <span className="rounded-full border border-black/25 px-4 py-2 text-sm text-text-muted">Blocked</span>
               {onUnblock && (
                 <button
                   type="button"
                   onClick={onUnblock}
-                  className="rounded-lg bg-black/25 px-3 py-2 text-sm font-semibold backdrop-blur-sm transition-colors hover:bg-black/35"
+                  className="rounded-full bg-black/25 px-4 py-2 text-sm font-bold backdrop-blur-sm transition-all hover:bg-black/35 active:scale-[0.98]"
                 >
                   Unblock
                 </button>
@@ -363,15 +363,15 @@ export function UserProfileModal({
           ) : (
             <div className="mt-4 flex flex-wrap gap-2">
               {profile?.is_bot && (
-                <p className="w-full rounded-lg bg-black/20 px-3 py-2 text-xs text-text-muted">
-                  This is Disband's assistant — it can't be messaged, friended, called, or blocked.
+                <p className="w-full rounded-2xl bg-black/20 px-3 py-2 text-xs text-text-muted">
+                  This is Disband&apos;s assistant — it can&apos;t be messaged, friended, called, or blocked.
                 </p>
               )}
               {(isFriend || friend) && onMessage && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onMessage}
-                  className="flex items-center gap-1.5 rounded-lg bg-black/25 px-3 py-2 text-sm font-semibold backdrop-blur-sm transition-colors hover:bg-black/35"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98]"
                 >
                   <IconFriends size={16} /> Message
                 </button>
@@ -380,9 +380,9 @@ export function UserProfileModal({
                 <button
                   type="button"
                   onClick={onVoiceCall}
-                  className="flex items-center gap-1.5 rounded-lg bg-status-online px-3 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-status-online px-4 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
                 >
-                  <IconPhone size={16} /> Voice Call
+                  <IconPhone size={16} /> Call
                 </button>
               )}
               {!friend && pendingIncoming && onAcceptFriend && onDeclineFriend && (
@@ -390,14 +390,14 @@ export function UserProfileModal({
                   <button
                     type="button"
                     onClick={onAcceptFriend}
-                    className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90"
+                    className="flex-1 rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98]"
                   >
-                    Accept Friend Request
+                    Accept
                   </button>
                   <button
                     type="button"
                     onClick={onDeclineFriend}
-                    className="rounded-lg border border-black/30 px-3 py-2 text-sm font-semibold transition-colors hover:bg-black/10"
+                    className="rounded-full border border-black/30 px-4 py-2.5 text-sm font-semibold transition-all hover:bg-black/10 active:scale-[0.98]"
                   >
                     Decline
                   </button>
@@ -407,30 +407,30 @@ export function UserProfileModal({
                 <button
                   type="button"
                   onClick={onAddFriend}
-                  className="rounded-lg border border-black/30 px-3 py-2 text-sm font-semibold transition-colors hover:bg-black/10"
+                  className="flex-1 rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98]"
                 >
                   Add Friend
                 </button>
               )}
               {!friend && pendingOutgoing && (
-                <span className="rounded-lg border border-black/25 px-3 py-2 text-sm text-text-muted">
-                  Friend request sent
+                <span className="rounded-full border border-black/25 px-4 py-2.5 text-sm text-text-muted">
+                  Request sent
                 </span>
               )}
               {(isFriend || friend) && onRemoveFriend && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onRemoveFriend}
-                  className="rounded-lg border border-black/30 px-3 py-2 text-sm font-semibold transition-colors hover:bg-black/10"
+                  className="rounded-full border border-black/30 px-4 py-2.5 text-sm font-semibold transition-all hover:bg-black/10 active:scale-[0.98]"
                 >
-                  Remove Friend
+                  Remove
                 </button>
               )}
               {onBlock && !profile?.is_bot && (
                 <button
                   type="button"
                   onClick={onBlock}
-                  className="rounded-lg border border-status-dnd/40 px-3 py-2 text-sm font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
+                  className="rounded-full border border-status-dnd/40 px-4 py-2.5 text-sm font-semibold text-status-dnd transition-all hover:bg-status-dnd/10 active:scale-[0.98]"
                 >
                   Block
                 </button>

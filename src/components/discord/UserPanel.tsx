@@ -52,7 +52,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   return (
     <div
       ref={panelRef}
-      className="flex h-[52px] shrink-0 items-center gap-1 border-t border-divider bg-bg-tertiary px-2"
+      className="mx-2 mb-2 flex h-[56px] shrink-0 items-center gap-1 rounded-2xl border border-divider bg-bg-tertiary px-2 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.7)]"
       onContextMenu={onContextMenu}
     >
       {popupOpen && (
@@ -67,7 +67,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         type="button"
         onClick={handleAvatarClick}
         title="View your profile"
-        className="flex min-w-0 flex-1 items-center gap-2 rounded p-1 text-left transition-all duration-150 ease-in-out hover:bg-interactive-hover"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-xl p-1 text-left transition-all duration-150 ease-in-out hover:bg-interactive-hover"
       >
         <div className="relative shrink-0">
           <Avatar profile={profile ?? { display_name: name }} size="sm" />
@@ -102,7 +102,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
           type="button"
           aria-pressed={micMuted}
           onClick={() => setMicMuted(!micMuted)}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
             micMuted ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
           }`}
         >
@@ -119,7 +119,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
             setDeafened(next);
             if (next) setMicMuted(true);
           }}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
             deafened ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
           }`}
         >
@@ -132,7 +132,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-text-muted transition-all duration-150 ease-in-out hover:bg-interactive-hover hover:text-text-normal"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-all duration-150 ease-in-out hover:bg-interactive-hover hover:text-text-normal"
         >
           <IconSettings size={20} />
         </button>

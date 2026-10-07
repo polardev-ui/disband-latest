@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconHash, IconPlus } from "@/components/icons";
+import { IconClose, IconHash, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { applyAtomicEveryone } from "@/lib/composer-tokens";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
@@ -708,7 +708,7 @@ export function ChatInput({
       )}
 
       {(replyTo || editingMessageId) && (
-        <div className="mb-1 flex items-center gap-2 rounded-t-lg border border-b-0 border-divider bg-bg-secondary px-3 py-2 text-sm">
+        <div className="mb-1 flex items-center gap-2 rounded-t-2xl border border-b-0 border-divider/70 bg-bg-secondary px-3 py-2 text-sm">
           <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
             <p className="text-xs font-semibold text-brand">
               {editingMessageId ? "Editing message" : `Replying to ${replyTo?.author ? displayName(replyTo.author as Profile) : "message"}`}
@@ -739,7 +739,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-lg bg-bg-accent transition-all duration-150 ease-in-out ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-2xl border border-divider/70 bg-bg-accent shadow-[0_2px_12px_-6px_rgba(0,0,0,0.5)] transition-all duration-150 ease-in-out focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/20 ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -873,6 +873,16 @@ export function ChatInput({
               onClearReply?.();
             }}
           />
+          {(text.trim() || entries.length > 0) && (
+            <button
+              type="submit"
+              aria-label={editingMessageId ? "Save edit" : "Send message"}
+              title={editingMessageId ? "Save edit" : "Send message"}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)] transition-all duration-150 hover:bg-brand-hover active:scale-90"
+            >
+              <IconSend size={16} />
+            </button>
+          )}
         </div>
         {error && <p className="px-4 pb-2 text-xs text-status-dnd">{error}</p>}
         {tetherEnabled && !editingMessageId && subscriptionPlan !== "aero" && mentionsTether(text) && (

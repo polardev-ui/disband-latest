@@ -329,9 +329,9 @@ export function ChannelList({
             type="button"
             onClick={() => setAddChannelType(t)}
             title={t === "text" ? "Text channel" : "Voice channel"}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+            className={`flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-semibold transition-colors ${
               addChannelType === t
-                ? "bg-interactive-selected text-text-normal"
+                ? "bg-brand/15 text-text-normal"
                 : "text-text-muted hover:text-text-normal"
             }`}
           >
@@ -380,7 +380,7 @@ export function ChannelList({
         {unread && (
           <span
             aria-hidden
-            className="absolute -left-2 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-text-normal"
+            className="absolute -left-2 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-brand"
           />
         )}
         <button
@@ -399,9 +399,9 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`group/drag mb-0.5 flex w-full items-center gap-1.5 rounded px-1 py-[6px] text-[15px] transition-all duration-150 ease-in-out ${
+          className={`group/drag mb-1 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-[7px] text-[15px] transition-all duration-150 ease-in-out ${
             active
-              ? "bg-interactive-selected text-text-normal"
+              ? "bg-brand/15 font-semibold text-text-normal"
               : unread
                 ? "font-semibold text-text-normal hover:bg-interactive-hover"
                 : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"

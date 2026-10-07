@@ -21,7 +21,7 @@ import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell, IconDownload } from "@/components/icons";
+import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconChevronRight, IconLeave } from "@/components/icons";
 import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
@@ -74,16 +74,16 @@ interface SettingsModalProps {
 }
 
 const TABS = [
-  { id: "profile" as const, label: "Profile", group: "User Settings" },
-  { id: "account" as const, label: "Account & Security", group: "User Settings" },
-  { id: "subscriptions" as const, label: "Subscription", group: "User Settings" },
-  { id: "referrals" as const, label: "Referrals", group: "User Settings" },
-  { id: "bots" as const, label: "Bots", group: "User Settings" },
-  { id: "appearance" as const, label: "Appearance", group: "App Settings" },
-  { id: "themes" as const, label: "Themes", group: "App Settings" },
-  { id: "notifications" as const, label: "Notifications", group: "App Settings" },
-  { id: "voice" as const, label: "Voice & Video", group: "App Settings" },
-  { id: "textMedia" as const, label: "Text & Media", group: "App Settings" },
+  { id: "profile" as const, label: "Profile", group: "User Settings", icon: <IconUser size={17} /> },
+  { id: "account" as const, label: "Account & Security", group: "User Settings", icon: <IconLock size={17} /> },
+  { id: "subscriptions" as const, label: "Subscription", group: "User Settings", icon: <IconCrown size={17} /> },
+  { id: "referrals" as const, label: "Referrals", group: "User Settings", icon: <IconGift size={17} /> },
+  { id: "bots" as const, label: "Bots", group: "User Settings", icon: <IconBot size={17} /> },
+  { id: "appearance" as const, label: "Appearance", group: "App Settings", icon: <IconPalette size={17} /> },
+  { id: "themes" as const, label: "Themes", group: "App Settings", icon: <IconImage size={17} /> },
+  { id: "notifications" as const, label: "Notifications", group: "App Settings", icon: <IconBell size={17} /> },
+  { id: "voice" as const, label: "Voice & Video", group: "App Settings", icon: <IconMic size={17} /> },
+  { id: "textMedia" as const, label: "Text & Media", group: "App Settings", icon: <IconMessage size={17} /> },
 ];
 
 const NAV_GROUPS = ["User Settings", "App Settings"] as const;
@@ -365,13 +365,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
-        <div role="dialog" aria-modal="true" aria-label="Settings" className="modal-pop relative flex max-h-[88vh] w-full max-w-[920px] overflow-hidden rounded-xl bg-bg-primary shadow-2xl">
-          <nav className="hidden w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary p-3 sm:flex">
+        <div role="dialog" aria-modal="true" aria-label="Settings" className="modal-pop relative flex max-h-[88vh] w-full max-w-[920px] overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl">
+          <nav className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-bg-secondary p-3 sm:flex">
             {profile && (
-              <div className="mb-3 flex items-center gap-2.5 rounded-lg px-2 py-2">
+              <div className="mb-3 flex items-center gap-2.5 rounded-2xl border border-divider bg-bg-tertiary/60 px-3 py-2.5">
                 <Avatar profile={profile} size="sm" />
                 <div className="min-w-0">
-                  <p className="truncate text-[14px] font-semibold leading-tight">
+                  <p className="truncate text-[14px] font-bold leading-tight">
                     {profile.display_name || profile.username}
                   </p>
                   <p className="truncate text-[12px] text-text-muted">@{profile.username}</p>
@@ -381,7 +381,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
             {NAV_GROUPS.map((group) => (
               <div key={group} className="mb-3">
-                <h2 className="mb-1 px-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                <h2 className="mb-1 px-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   {group}
                 </h2>
                 {TABS.filter((t) => t.group === group).map((t) => (
@@ -389,13 +389,21 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     key={t.id}
                     type="button"
                     onClick={() => setTab(t.id)}
-                    className={`block w-full rounded px-2 py-1.5 text-left text-[15px] transition-colors duration-150 ${
+                    className={`mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[14px] transition-all duration-150 ${
                       tab === t.id
-                        ? "bg-interactive-selected text-text-normal"
-                        : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                        ? "bg-brand/15 font-semibold text-text-normal"
+                        : "font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                     }`}
                   >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 ${
+                        tab === t.id ? "bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)]" : "bg-brand/15 text-brand"
+                      }`}
+                    >
+                      {t.icon}
+                    </span>
                     {t.label}
+                    {tab === t.id && <IconChevronRight size={15} className="ml-auto shrink-0 text-brand" />}
                   </button>
                 ))}
               </div>
@@ -407,35 +415,46 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 onClose();
                 window.location.href = "/bug-report";
               }}
-              className="mt-auto rounded px-2 py-1.5 text-left text-[15px] text-text-muted transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal"
+              className="mb-0.5 mt-auto flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[14px] font-medium text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal"
             >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
+                <IconBug size={17} />
+              </span>
               Report a Bug
             </button>
             <button
               type="button"
               onClick={() => void signOut()}
-              className="rounded px-2 py-1.5 text-left text-[15px] text-status-dnd transition-colors duration-150 hover:bg-interactive-hover"
+              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[14px] font-medium text-status-dnd transition-all duration-150 hover:bg-status-dnd/10"
             >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-status-dnd/15 text-status-dnd">
+                <IconLeave size={17} />
+              </span>
               Log Out
             </button>
           </nav>
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="flex items-center justify-between border-b border-divider px-6 py-4">
+            <header className="flex items-center justify-between gap-3 border-b border-divider bg-bg-secondary/40 px-6 py-4">
               <div className="min-w-0">
                 <select
                   value={tab}
                   onChange={(e) => setTab(e.target.value as SettingsTab)}
-                  className="w-full rounded bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:ring-2 focus:ring-brand sm:hidden"
+                  className="w-full rounded-xl bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:ring-2 focus:ring-brand sm:hidden"
                 >
                   {TABS.map((t) => (
                     <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
                 </select>
-                <h1 className="hidden text-xl font-semibold sm:block">{activeTab?.label ?? "Settings"}</h1>
+                <h1 className="hidden text-[22px] font-extrabold tracking-tight sm:block">{activeTab?.label ?? "Settings"}</h1>
               </div>
-              <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">
-                <IconClose size={24} />
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close settings"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg-accent text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
+              >
+                <IconClose size={18} />
               </button>
             </header>
 

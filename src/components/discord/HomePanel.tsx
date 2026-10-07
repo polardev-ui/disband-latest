@@ -45,13 +45,17 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className={`mb-0.5 flex w-full items-center gap-3 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover ${
-        active ? "bg-interactive-selected" : ""
+      className={`mb-1 flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover ${
+        active ? "bg-brand/15" : ""
       }`}
     >
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-          accent ? "bg-super/15 text-super" : "bg-brand/20 text-brand"
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 ${
+          active
+            ? "bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)]"
+            : accent
+              ? "bg-super/15 text-super"
+              : "bg-brand/15 text-brand"
         }`}
       >
         {icon}
@@ -205,12 +209,12 @@ export function HomePanel({
                     e.preventDefault();
                     onGroupContext?.(g, e.clientX, e.clientY);
                   }}
-                  className={`mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover ${
-                    active ? "bg-interactive-selected" : ""
+                  className={`mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover ${
+                    active ? "bg-brand/15" : ""
                   }`}
                 >
-                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 text-brand">
-                    <IconGroup size={16} />
+                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
+                    <IconGroup size={17} />
                     {inCallCount > 0 && (
                       <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
                     )}
@@ -243,7 +247,7 @@ export function HomePanel({
                 type="button"
                 onClick={() => void openDmWithFriend(tetherProfile.id)}
                 title="Message Tether directly"
-                className="mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover"
+                className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover"
               >
                 <div className="relative">
                   <Avatar profile={tetherProfile} size="sm" />
@@ -262,8 +266,8 @@ export function HomePanel({
                   key={entry.key}
                   type="button"
                   onClick={() => void openDmEntry(entry)}
-                  className={`mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 hover:bg-interactive-hover ${
-                    active ? "bg-interactive-selected" : ""
+                  className={`mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover ${
+                    active ? "bg-brand/15" : ""
                   }`}
                 >
                   <div className="relative">

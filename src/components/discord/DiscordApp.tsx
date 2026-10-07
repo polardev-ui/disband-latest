@@ -1474,8 +1474,6 @@ export function DiscordApp() {
                 <DiscoverSidebar
                   tab={discoverTab}
                   onTabChange={setDiscoverTab}
-                  query={discoverQuery}
-                  onQueryChange={setDiscoverQuery}
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
                 />
@@ -1561,8 +1559,6 @@ export function DiscordApp() {
                   <DiscoverSidebar
                     tab={discoverTab}
                     onTabChange={setDiscoverTab}
-                    query={discoverQuery}
-                    onQueryChange={setDiscoverQuery}
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
                   />
@@ -1848,7 +1844,7 @@ export function DiscordApp() {
         </>
       )}
 
-      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} />}
+      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
 
       {app.viewMode === "space" && activeChannel && isVoice && (
         <VoicePanel
