@@ -102,12 +102,14 @@ github-releases). Typecheck clean, production build clean, Android
 5. **Load testing**: correctness-under-burst is tested; sustained
    multi-client soak (reconnect storms, 100+ presence) still wants a
    staging harness.
-6. **Desktop updater signing**: minisign keypair is real and
-   `TAURI_SIGNING_PRIVATE_KEY` is set, but macOS Apple notarization is
-   NOT wired (no Developer ID .p12 in repo secrets) — Gatekeeper will
-   still prompt on fresh installs. Also: never pass empty Apple env vars
-   to tauri-action (empty `APPLE_CERTIFICATE` breaks the keychain import;
-   empty `APPLE_TEAM_ID` triggers a failing notarization attempt).
+6. **Desktop updater signing**: RESOLVED 2026-10-07 — v2.32.27 publishes
+   latest.json with valid minisign signatures on all platforms; the chain
+   (push → tag → signed desktop build → manifest) is verified working.
+   macOS Apple notarization is still NOT wired (no Developer ID .p12 in
+   repo secrets) — Gatekeeper will still prompt on fresh installs. Also:
+   never pass empty Apple env vars to tauri-action (empty
+   `APPLE_CERTIFICATE` breaks the keychain import; empty `APPLE_TEAM_ID`
+   triggers a failing notarization attempt).
 
 ## 8. Deployment / rollback
 

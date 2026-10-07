@@ -558,10 +558,14 @@ All pushed to main; release chain (push → tag → desktop) verified working.
   DM boundaries, voice presence, github-releases).
 - Desktop updater repaired: real minisign keypair (old pubkey matched
   nothing), Prepare Release auto-dispatches desktop, snooze-not-skip,
-  Silicon-first picker, update chime. NOTE 2026-10-07: the v2.32.24 desktop
-  build failed only on empty-team-ID notarization (stale tree predating the
-  main.yml fix). v2.32.26 contains the fix; desktop run 37557942213
-  dispatched — verify latest.json exists before claiming victory.
+  Silicon-first picker, update chime. RESOLVED 2026-10-07: v2.32.27 ships
+  latest.json with valid signatures on all platforms — desktop apps now
+  self-update end-to-end. Root causes found along the way: (1) collision
+  between two same-named "Prepare Release" workflows racing/cancelling
+  (disabled release-bump.yml triggers, release.yml canonical); (2) missing
+  bundle.createUpdaterArtifacts (CLI default false = silent no-sign);
+  (3) empty APPLE_* env passthrough breaking codesign import + triggering
+  failing notarization (wired only when real secrets exist).
 - Known gap: empty APPLE_CERTIFICATE env breaks macOS codesign import —
   cert lines stay OUT of main.yml until real .p12 secrets exist.
 - Honestly deferred: message E2EE implementation (blueprint only — a
