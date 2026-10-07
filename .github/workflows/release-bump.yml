@@ -5,12 +5,19 @@ name: Prepare Release
 # Use "Run workflow" manually when you want a minor or major bump instead.
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "**.md"
-      - ".github/**"
+  # DISABLED 2026-10-07: this file duplicates .github/workflows/release.yml
+  # (same workflow name, same triggers, same concurrency group). The two raced
+  # on every push — double version bumps (v2.32.24→27 in minutes) and a coin
+  # flip over whether the desktop build dispatched at all. release.yml is the
+  # canonical one (retry loop, annotated tags, post-tag desktop dispatch).
+  # Manual dispatch still works; re-enable push below only if release.yml is
+  # removed.
+  # push:
+  #   branches:
+  #     - main
+  #   paths-ignore:
+  #     - "**.md"
+  #     - ".github/**"
   workflow_dispatch:
     inputs:
       bump:
