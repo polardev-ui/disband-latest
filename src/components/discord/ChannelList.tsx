@@ -380,7 +380,7 @@ export function ChannelList({
         {unread && (
           <span
             aria-hidden
-            className="absolute -left-2 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-brand"
+            className="absolute -left-[5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-text-normal"
           />
         )}
         <button
@@ -399,15 +399,17 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`group/drag mb-1 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-[7px] text-[15px] transition-all duration-150 ease-in-out ${
+          className={`group/drag mb-px flex h-8 w-full items-center gap-2 rounded-[10px] px-2.5 text-[14.5px] transition-colors duration-100 ${
             active
-              ? "bg-brand/15 font-semibold text-text-normal"
+              ? "bg-interactive-selected font-medium text-text-normal"
               : unread
-                ? "font-semibold text-text-normal hover:bg-interactive-hover"
+                ? "font-medium text-text-normal hover:bg-interactive-hover"
                 : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
-          {ch.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
+          <span className={active || unread ? "text-text-normal/80" : "text-text-muted"}>
+            {ch.type === "text" ? <IconHash size={17} /> : <IconSpeaker size={17} />}
+          </span>
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
           {}
           {mentions > 0 && (
@@ -466,7 +468,7 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-all duration-150 ${
+          className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors duration-150 ${
             overCatId === cat.id ? "text-brand" : "text-text-muted hover:text-text-normal"
           } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
@@ -532,7 +534,7 @@ export function ChannelList({
             </button>
           </div>
         ) : (
-        <div className="flex h-12 shrink-0 items-center border-b border-black/20 px-4 shadow-sm">
+        <div className="flex h-12 shrink-0 items-center border-b border-divider px-4">
           <button
             type="button"
             onClick={onOpenServerSettings}
@@ -631,7 +633,7 @@ export function ChannelList({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-all duration-150 ${
+                className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors duration-150 ${
                   overCatId === "uncategorized" ? "text-brand" : "text-text-muted hover:text-text-normal"
                 }`}
               >

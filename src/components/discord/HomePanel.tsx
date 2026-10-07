@@ -45,22 +45,18 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className={`mb-1 flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover ${
-        active ? "bg-brand/15" : ""
+      className={`mb-px flex h-10 w-full items-center gap-3 rounded-[10px] px-2.5 text-left transition-colors duration-100 ${
+        active ? "bg-interactive-selected" : "hover:bg-interactive-hover"
       }`}
     >
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 ${
-          active
-            ? "bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)]"
-            : accent
-              ? "bg-super/15 text-super"
-              : "bg-brand/15 text-brand"
+        className={`flex h-6 w-6 shrink-0 items-center justify-center transition-colors duration-150 ${
+          accent ? "text-super" : active ? "text-text-normal" : "text-text-muted"
         }`}
       >
         {icon}
       </span>
-      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-text-normal">{label}</span>
+      <span className={`min-w-0 flex-1 truncate text-[14.5px] ${active ? "font-medium text-text-normal" : "text-text-muted"}`}>{label}</span>
       {trailing}
     </button>
   );
@@ -129,7 +125,7 @@ export function HomePanel({
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden bg-bg-secondary">
-      <header className="flex h-12 items-center border-b border-black/20 px-4 shadow-sm">
+      <header className="flex h-12 items-center border-b border-divider px-4">
         <IconFriends className="mr-2 text-text-muted" />
         <span className="flex-1 font-semibold text-text-normal">Friends</span>
         <NotificationBell />
@@ -209,11 +205,11 @@ export function HomePanel({
                     e.preventDefault();
                     onGroupContext?.(g, e.clientX, e.clientY);
                   }}
-                  className={`mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover ${
-                    active ? "bg-brand/15" : ""
+                  className={`mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
+                    active ? "bg-interactive-selected" : ""
                   }`}
                 >
-                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
+                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-divider bg-bg-accent text-text-muted">
                     <IconGroup size={17} />
                     {inCallCount > 0 && (
                       <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
@@ -247,7 +243,7 @@ export function HomePanel({
                 type="button"
                 onClick={() => void openDmWithFriend(tetherProfile.id)}
                 title="Message Tether directly"
-                className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover"
+                className="mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover"
               >
                 <div className="relative">
                   <Avatar profile={tetherProfile} size="sm" />
@@ -266,8 +262,8 @@ export function HomePanel({
                   key={entry.key}
                   type="button"
                   onClick={() => void openDmEntry(entry)}
-                  className={`mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-interactive-hover ${
-                    active ? "bg-brand/15" : ""
+                  className={`mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
+                    active ? "bg-interactive-selected" : ""
                   }`}
                 >
                   <div className="relative">

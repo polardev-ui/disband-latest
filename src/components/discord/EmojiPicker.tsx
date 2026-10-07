@@ -6,6 +6,7 @@ import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { searchEmojis } from "@/lib/emoji-shortcodes";
 import { twemojiUrl } from "@/components/ui/Twemoji";
 import { safeImageUrl } from "@/lib/safe-url";
+import { IconSmile } from "@/components/icons";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -96,9 +97,11 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
         aria-label="Insert emoji"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal"
+        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal ${
+          open ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+        }`}
       >
-        <EmojiImg emoji="😀" />
+        <IconSmile size={20} />
       </button>
 
       {mounted && open
@@ -113,7 +116,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search emoji…"
-                className="mb-2 w-full rounded-xl border border-black/20 bg-bg-accent px-3 py-1.5 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                className="mb-2 w-full rounded-xl border border-divider bg-bg-accent px-3 py-1.5 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
               />
               {q && (
                 <div className="mb-2">

@@ -282,9 +282,13 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             return next;
           });
         }}
-        className="flex h-8 items-center rounded px-2 text-xs font-bold uppercase tracking-wide text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+        className={`flex h-8 items-center rounded-lg px-1.5 transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
+          open ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+        }`}
       >
-        GIF
+        <span className="rounded-[5px] border-[1.5px] border-current px-1 py-px text-[10px] font-bold leading-none tracking-wide">
+          GIF
+        </span>
       </button>
       {panel}
     </div>

@@ -4,6 +4,9 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { IconCheck, IconPlus, IconSettings } from "@/components/icons";
+import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
+import { safeImageUrl } from "@/lib/safe-url";
 import { displayName } from "@/lib/utils";
 import { statusLabel } from "@/lib/presence";
 import {
@@ -145,156 +148,158 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     };
   }, [anchorRef]);
 
+  const bannerUrl = safeImageUrl(profile?.banner_url);
+  const bannerBg =
+    profile && usesCustomAccent(profile)
+      ? getAccentBackground(profile)
+      : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
+  const sectionLabel = "px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/80";
+  const row = "flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2 text-left text-[13.5px] transition-colors hover:bg-interactive-hover";
+
   const content = (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className="modal-pop fixed z-40 max-h-[calc(100vh-100px)] w-72 overflow-y-auto rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
+        className="modal-pop fixed z-40 max-h-[calc(100vh-100px)] w-[320px] overflow-y-auto rounded-[20px] border border-divider bg-overlay-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
         style={{ left: pos.left, bottom: pos.bottom }}
       >
-        <div
-          className="relative h-20 overflow-hidden rounded-t-2xl"
-          style={{
-            background: profile?.accent_color
-              ? `linear-gradient(135deg, ${profile.accent_color}, transparent 140%)`
-              : "linear-gradient(135deg, #5865f2, #3c45a0)",
-          }}
-        >
-          {profile?.banner_url && (
+        <div className="h-[84px] overflow-hidden" style={{ background: bannerBg }}>
+          {bannerUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={profile.banner_url}
+              src={bannerUrl}
               alt=""
-              className="h-full w-full object-cover opacity-60"
+              className="h-full w-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           )}
         </div>
 
-        <div className="relative -mt-10 mb-1 flex justify-center px-4">
-          <div className="relative">
-            <Avatar profile={profile ?? { display_name: name }} size="lg" className="ring-[6px] ring-bg-secondary" />
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-[3px] border-bg-secondary ${STATUS_DOT_BG[currentStatus]}`}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-4 pb-2">
-          <div>
-            <p className="text-[15px] font-bold text-text-normal">{name}</p>
-            <p className="text-xs text-text-muted">{statusText}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {onOpenProfile && (
+        <div className="px-4">
+          <div className="flex items-end justify-between gap-2">
+            <div className="relative -mt-10 shrink-0 rounded-full bg-overlay-panel p-[4px]">
+              <Avatar profile={profile ?? { display_name: name }} size="lg" />
+              <span
+                className={`absolute bottom-1 right-1 h-[18px] w-[18px] rounded-full border-[3px] border-overlay-panel ${STATUS_DOT_BG[currentStatus]}`}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5 pb-1">
+              {onOpenProfile && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenProfile();
+                  }}
+                  className="inline-flex h-8 items-center rounded-[10px] border border-divider px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+                >
+                  View profile
+                </button>
+              )}
               <button
-                onClick={() => {
-                  onClose();
-                  onOpenProfile();
-                }}
-                className="h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-              >
-                View profile
-              </button>
-            )}
-            <button
-              onClick={onOpenSettings}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-              aria-label="Settings"
-            >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="mx-3 mb-2 rounded-2xl border border-divider bg-bg-tertiary/50 px-3 py-2.5">
-          <input
-            value={customNote}
-            onChange={(e) => setCustomNote(e.target.value)}
-            placeholder="Set a custom status"
-            maxLength={128}
-            className="w-full rounded-xl border border-divider bg-bg-secondary px-2.5 py-2 text-[13px] text-text-normal placeholder:text-text-muted/60 focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand/20"
-          />
-          <div className="mt-1.5 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
-            {STATUS_DURATION_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
                 type="button"
-                onClick={() => setCustomDuration(preset.id)}
-                aria-pressed={customDuration === preset.id}
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                  customDuration === preset.id
-                    ? "bg-brand text-white"
-                    : "bg-bg-secondary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-                }`}
+                onClick={onOpenSettings}
+                className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                aria-label="Settings"
+                title="Settings"
               >
-                {preset.label}
+                <IconSettings size={16} />
               </button>
-            ))}
+            </div>
           </div>
-          <div className="mt-2 flex gap-1.5">
-            <button
-              type="button"
-              disabled={savingCustom}
-              onClick={() => void saveCustomStatus()}
-              className="flex-1 rounded-xl bg-brand px-2 py-1.5 text-[13px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {savingCustom ? "Saving…" : "Set Status"}
-            </button>
-            {(liveNote || customNote.trim()) && (
+
+          <div className="mt-2 pb-3">
+            <p className="truncate text-[17px] font-semibold tracking-[-0.01em] text-text-normal">{name}</p>
+            <p className="truncate text-[13px] text-text-muted">
+              {profile?.username ? `@${profile.username} · ` : ""}
+              {statusText}
+            </p>
+          </div>
+        </div>
+
+        <div className="border-t border-divider px-3 py-3">
+          <p className={sectionLabel}>Custom status</p>
+          <div className="px-1">
+            <input
+              value={customNote}
+              onChange={(e) => setCustomNote(e.target.value)}
+              placeholder="What are you up to?"
+              maxLength={128}
+              className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]"
+            />
+            <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
+              {STATUS_DURATION_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setCustomDuration(preset.id)}
+                  aria-pressed={customDuration === preset.id}
+                  className={`rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium transition-colors ${
+                    customDuration === preset.id
+                      ? "border-brand/60 bg-brand/15 text-text-normal"
+                      : "border-divider text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2.5 flex gap-1.5">
               <button
                 type="button"
                 disabled={savingCustom}
-                onClick={() => void clearCustomStatus()}
-                className="rounded-xl border border-divider px-2.5 py-1.5 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+                onClick={() => void saveCustomStatus()}
+                className="h-8 flex-1 rounded-[10px] bg-text-normal text-[13px] font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                Clear
+                {savingCustom ? "Saving…" : "Set status"}
               </button>
-            )}
+              {(liveNote || customNote.trim()) && (
+                <button
+                  type="button"
+                  disabled={savingCustom}
+                  onClick={() => void clearCustomStatus()}
+                  className="h-8 rounded-[10px] border border-divider px-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="mx-3 mb-2 rounded-2xl border border-divider bg-bg-tertiary/50 px-2 py-1.5">
-          <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-            Set Status
-          </p>
+        <div className="border-t border-divider px-3 py-3">
+          <p className={sectionLabel}>Presence</p>
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.status}
               type="button"
               disabled={changing}
+              aria-pressed={currentStatus === opt.status}
               onClick={() => void setStatus(opt.status)}
-              className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover ${
-                currentStatus === opt.status ? "bg-brand/15" : ""
-              } ${changing ? "opacity-50" : ""}`}
+              className={`${row} ${currentStatus === opt.status ? "bg-interactive-selected" : ""} ${changing ? "opacity-50" : ""}`}
             >
               <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_BG[opt.status]}`} />
               <span className="flex-1 text-text-normal">{opt.label}</span>
-              {currentStatus === opt.status && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
+              {currentStatus === opt.status && <IconCheck size={15} className="text-text-normal" />}
             </button>
           ))}
         </div>
 
-        <div className="mx-3 mb-3 rounded-2xl border border-divider bg-bg-tertiary/50 px-2 py-1.5">
-          <div className="mb-1 flex items-center justify-between px-2">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Accounts</span>
+        <div className="border-t border-divider px-3 py-3">
+          <div className="flex items-center justify-between pr-1">
+            <p className={sectionLabel}>Accounts</p>
             <button
               type="button"
               onClick={() => setManaging((m) => !m)}
-              className="text-[10px] font-bold uppercase tracking-wide text-text-muted transition-colors hover:text-text-normal"
+              className="pb-1 text-[12px] font-medium text-text-muted transition-colors hover:text-text-normal"
             >
               {managing ? "Done" : "Manage"}
             </button>
           </div>
 
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-px">
             {accounts.current && (
-              <div className="flex items-center gap-2.5 rounded-xl bg-brand/15 px-2 py-1.5">
+              <div className="flex items-center gap-2.5 rounded-[10px] bg-interactive-selected px-2 py-1.5">
                 <span className="relative shrink-0">
                   <Avatar
                     size="sm"
@@ -302,16 +307,14 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                     className="h-7 w-7 text-xs"
                   />
                   <span
-                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-bg-secondary ${STATUS_DOT_BG[currentStatus]}`}
+                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-overlay-panel ${STATUS_DOT_BG[currentStatus]}`}
                   />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-text-normal">{accountLabel(accounts.current)}</span>
-                  <span className="block truncate text-[11px] text-text-muted">{accounts.current.email}</span>
+                  <span className="block truncate text-[13.5px] font-medium text-text-normal">{accountLabel(accounts.current)}</span>
+                  <span className="block truncate text-[11.5px] text-text-muted">{accounts.current.email}</span>
                 </span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <IconCheck size={15} className="shrink-0 text-text-normal" />
               </div>
             )}
 
@@ -321,7 +324,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               return (
                 <div
                   key={acct.user_id}
-                  className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-interactive-hover"
+                  className="group flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-interactive-hover"
                 >
                   <button
                     type="button"
@@ -335,8 +338,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                       className="h-7 w-7 text-xs"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-text-normal">{display}</span>
-                      <span className="block truncate text-[11px] text-text-muted">{acct.email}</span>
+                      <span className="block truncate text-[13.5px] text-text-normal">{display}</span>
+                      <span className="block truncate text-[11.5px] text-text-muted">{acct.email}</span>
                     </span>
                     {busy && (
                       <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />
@@ -362,14 +365,12 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
             <button
               type="button"
               onClick={() => { beginAddAccount(); onClose(); }}
-              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover"
+              className={row}
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-dashed border-text-muted text-text-muted">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-text-muted/60 text-text-muted">
+                <IconPlus size={14} />
               </span>
-              <span className="text-sm font-medium text-text-normal">Add an Account</span>
+              <span className="font-medium text-text-normal">Add an account</span>
             </button>
           </div>
         </div>

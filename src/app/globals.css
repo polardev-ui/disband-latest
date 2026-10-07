@@ -50,34 +50,48 @@
   font-display: swap;
 }
 
+/*
+ Disband Dark — the default theme, web and desktop only (iOS and Android draw
+ their own native palettes and are deliberately untouched).
+
+ This used to be Discord's grey ladder (#313338 / #2b2d31 / #1e1f22), which is
+ the single biggest reason the app read as a Discord clone. It is now a
+ near-black, very slightly cool neutral where depth comes from hairline
+ borders (--divider) rather than from stacking three greys.
+
+   tertiary  #0b0c0e  space rail, the deepest layer
+   secondary #101114  sidebars and cards
+   primary   #141519  the conversation canvas
+   accent    #1b1c21  fields, chips, the composer
+
+ The theme id stays "dark": it is stored on the profile and read by the mobile
+ apps, so a new id would arrive there as an unknown theme.
+*/
 :root,
 [data-theme="dark"] {
-  --bg-primary: #313338;
-  --bg-secondary: #2b2d31;
-  --bg-tertiary: #1e1f22;
-  --bg-accent: #1e1f22;
-  --interactive-hover: #35373c;
-  --interactive-selected: #393c41;
+  --bg-primary: #141519;
+  --bg-secondary: #101114;
+  --bg-tertiary: #0b0c0e;
+  --bg-accent: #1b1c21;
+  --interactive-hover: #1d1e23;
+  --interactive-selected: #25272d;
   --brand: #5865f2;
   --brand-hover: #4752c4;
-  --text-normal: #dbdee1;
-  --text-muted: #949ba4;
-  --text-link: #00a8fc;
+  --text-normal: #e6e7eb;
+  --text-muted: #8b909a;
+  --text-link: #6aa9ff;
   --status-online: #23a559;
   --status-idle: #f0b232;
   --status-dnd: #f23f43;
   --status-offline: #80848e;
-  --divider: #3f4147;
+  --divider: #222429;
   --font-discord: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial,
     sans-serif;
-  /* Overlay layer tokens (web UI revamp, patch 2). Dark defaults preserve the
-     old hardcoded surfaces (#111214 menus, #1e1f22 modals, #2b2d31 media);
-     light themes override below so overlays stop rendering near-black. */
-  --overlay-surface: #111214;
-  --overlay-panel: #1e1f22;
-  --overlay-media: #2b2d31;
-  --overlay-scrim: rgb(0 0 0 / 0.7);
-  --overlay-scrim-strong: rgb(0 0 0 / 0.85);
+  --overlay-surface: #111215;
+  --overlay-panel: #131418;
+  --overlay-media: #1a1b20;
+  --overlay-scrim: rgb(0 0 0 / 0.72);
+  --overlay-scrim-strong: rgb(0 0 0 / 0.86);
 }
 
 [data-theme="midnight"] {

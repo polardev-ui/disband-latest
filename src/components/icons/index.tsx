@@ -37,6 +37,8 @@ import {
   ExternalLink,
   Star,
   SmilePlus,
+  Smile,
+  Ellipsis,
   ScreenShare,
   ScreenShareOff,
   SquarePen,
@@ -112,6 +114,8 @@ export const IconZoomOut = icon(ZoomOut);
 export const IconExternalLink = icon(ExternalLink);
 export const IconStar = icon(Star);
 export const IconEmoji = icon(SmilePlus);
+export const IconSmile = icon(Smile);
+export const IconMore = icon(Ellipsis);
 export const IconScreenShare = icon(ScreenShare);
 export const IconScreenShareOff = icon(ScreenShareOff);
 export const IconNotes = icon(SquarePen);

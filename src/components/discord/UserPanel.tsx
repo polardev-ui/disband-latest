@@ -52,7 +52,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   return (
     <div
       ref={panelRef}
-      className="mx-2 mb-2 flex h-[56px] shrink-0 items-center gap-1 rounded-2xl border border-divider bg-bg-tertiary px-2 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.7)]"
+      className="mx-2 mb-2 flex h-[54px] shrink-0 items-center gap-0.5 rounded-[14px] border border-divider bg-bg-accent px-1.5"
       onContextMenu={onContextMenu}
     >
       {popupOpen && (
@@ -67,12 +67,12 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         type="button"
         onClick={handleAvatarClick}
         title="View your profile"
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-xl p-1 text-left transition-all duration-150 ease-in-out hover:bg-interactive-hover"
+        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] p-1 text-left transition-colors duration-100 hover:bg-interactive-hover"
       >
         <div className="relative shrink-0">
           <Avatar profile={profile ?? { display_name: name }} size="sm" />
           <span
-            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-tertiary ${STATUS_BG[status]}`}
+            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-accent ${STATUS_BG[status]}`}
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -83,7 +83,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
           {liveNote ? (
             <span
               title="Click to edit your status"
-              className="mt-0.5 flex max-w-full items-center gap-1 rounded-full bg-bg-primary/60 py-px pl-1.5 pr-2 ring-1 ring-divider"
+              className="mt-0.5 flex max-w-full items-center gap-1"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -102,11 +102,11 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
           type="button"
           aria-pressed={micMuted}
           onClick={() => setMicMuted(!micMuted)}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
-            micMuted ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors duration-100 ${
+            micMuted ? "bg-status-dnd/10 text-status-dnd hover:bg-status-dnd/15" : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           }`}
         >
-          {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
+          {micMuted ? <IconMicOff size={18} /> : <IconMic size={18} />}
         </button>
       </Tooltip>
 
@@ -119,22 +119,22 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
             setDeafened(next);
             if (next) setMicMuted(true);
           }}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-150 ease-in-out hover:bg-interactive-hover ${
-            deafened ? "text-status-dnd" : "text-text-muted hover:text-text-normal"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors duration-100 ${
+            deafened ? "bg-status-dnd/10 text-status-dnd hover:bg-status-dnd/15" : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           }`}
         >
-          {deafened ? <IconHeadphonesOff size={20} /> : <IconHeadphones size={20} />}
+          {deafened ? <IconHeadphonesOff size={18} /> : <IconHeadphones size={18} />}
         </button>
       </Tooltip>
 
 
-      <Tooltip label="User Settings" side="top">
+      <Tooltip label="Settings" side="top">
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-all duration-150 ease-in-out hover:bg-interactive-hover hover:text-text-normal"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-text-muted transition-colors duration-100 hover:bg-interactive-hover hover:text-text-normal"
         >
-          <IconSettings size={20} />
+          <IconSettings size={18} />
         </button>
       </Tooltip>
     </div>

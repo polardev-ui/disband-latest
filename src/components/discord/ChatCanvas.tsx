@@ -40,10 +40,11 @@ function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
       role="separator"
       aria-label="New messages"
     >
-      <div className="h-px flex-1 bg-status-dnd" />
-      <span className="ml-2 shrink-0 rounded bg-status-dnd px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-        New
+      <div className="h-px flex-1 bg-brand/60" />
+      <span className="mx-3 shrink-0 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand">
+        New messages
       </span>
+      <div className="h-px flex-1 bg-brand/60" />
     </div>
   );
 }
@@ -471,7 +472,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
   return (
     <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-black/20 px-4 shadow-sm">
+      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-divider px-4">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
           {channelIcon ?? <IconHash size={18} className="text-brand" />}
         </span>

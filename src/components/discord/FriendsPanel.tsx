@@ -171,9 +171,9 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4">
         <IconFriends size={22} className="shrink-0 text-text-muted" />
-        <h1 className="shrink-0 text-[15px] font-semibold text-text-normal">My Friends</h1>
+        <h1 className="shrink-0 text-[15px] font-semibold text-text-normal">Friends</h1>
 
         <span className="mx-1 h-6 w-px shrink-0 bg-divider" />
 
@@ -186,9 +186,9 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setTab(t);
                 setAddOpen(false);
               }}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold capitalize transition-all ${
+              className={`shrink-0 rounded-[10px] px-3 py-1.5 text-[13.5px] font-medium capitalize transition-colors ${
                 tab === t && !addOpen
-                  ? "bg-brand/15 text-text-normal"
+                  ? "bg-interactive-selected text-text-normal"
                   : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
               }`}
             >
@@ -211,19 +211,19 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               setAddError(null);
               setAddSuccess(null);
             }}
-            className={`ml-1 shrink-0 rounded-full px-4 py-1.5 text-sm font-bold transition-all ${
+            className={`ml-1 shrink-0 rounded-[10px] px-3.5 py-1.5 text-[13.5px] font-semibold transition-[background-color,opacity] ${
               addOpen
-                ? "bg-brand-hover text-white"
-                : "bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)] hover:bg-brand-hover"
+                ? "bg-interactive-selected text-text-normal"
+                : "bg-text-normal text-bg-primary hover:opacity-90"
             }`}
           >
-            Add Friend
+            Add friend
           </button>
         </nav>
       </header>
 
       {addOpen && (
-        <div className="shrink-0 border-b border-black/20 px-6 py-5">
+        <div className="shrink-0 border-b border-divider px-6 py-5">
           <h2 className="text-[15px] font-semibold text-text-normal">Add a friend</h2>
           <p className="mt-1 text-sm text-text-muted">
             You can add friends by their Disband username.
@@ -543,7 +543,7 @@ export function ActiveNowPanel() {
   }, [friends, dmListEntries, presenceMap]);
 
   return (
-    <aside className="hidden w-[22rem] shrink-0 flex-col overflow-hidden border-l border-black/20 bg-bg-primary xl:flex">
+    <aside className="hidden w-[22rem] shrink-0 flex-col overflow-hidden border-l border-divider bg-bg-primary xl:flex">
       <div className="flex h-12 shrink-0 items-center px-6">
         <h2 className="text-[17px] font-semibold text-text-normal">Active Now</h2>
       </div>
