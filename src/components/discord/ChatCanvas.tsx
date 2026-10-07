@@ -471,9 +471,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
   return (
     <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
-        {channelIcon ?? <IconHash size={24} className="text-text-muted" />}
-        <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{channelName}</h1>
+      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-black/20 px-4 shadow-sm">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
+          {channelIcon ?? <IconHash size={18} className="text-brand" />}
+        </span>
+        <h1 className="min-w-0 flex-1 truncate text-[15px] font-bold">{channelName}</h1>
         {headerExtra}
         {headerTrailing}
       </header>

@@ -55,7 +55,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
   const content = (
     <>
       <div className="fixed inset-0 z-40 bg-overlay-scrim overlay-fade" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Forward message" className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-sm rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+      <div role="dialog" aria-modal="true" aria-label="Forward message" className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-sm rounded-t-2xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
         <div className="border-b border-divider px-4 py-3">
           <h3 className="text-sm font-semibold text-text-normal">Forward message</h3>
           <input

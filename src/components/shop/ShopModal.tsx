@@ -176,7 +176,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
         role="dialog"
         aria-modal="true"
         aria-label="Disband Shop"
-        className="modal-pop relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-bg-primary shadow-2xl"
+        className="modal-pop relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl"
       >
         <header className="flex items-center gap-3 border-b border-divider px-5 py-4">
           <div className="min-w-0 flex-1">

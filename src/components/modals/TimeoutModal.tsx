@@ -103,7 +103,7 @@ export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalP
         role="dialog"
         aria-modal="true"
         aria-label={`Time out ${displayName(profile)}`}
-        className="modal-pop relative w-full max-w-md rounded-lg bg-bg-primary p-6 shadow-2xl"
+        className="modal-pop relative w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl"
       >
         <button
           type="button"

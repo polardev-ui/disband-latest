@@ -186,9 +186,9 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setTab(t);
                 setAddOpen(false);
               }}
-              className={`shrink-0 rounded px-2.5 py-1 text-sm capitalize transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold capitalize transition-all ${
                 tab === t && !addOpen
-                  ? "bg-interactive-selected text-text-normal"
+                  ? "bg-brand/15 text-text-normal"
                   : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
               }`}
             >
@@ -211,10 +211,10 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               setAddError(null);
               setAddSuccess(null);
             }}
-            className={`ml-1 shrink-0 rounded px-2.5 py-1 text-sm font-medium transition-colors ${
+            className={`ml-1 shrink-0 rounded-full px-4 py-1.5 text-sm font-bold transition-all ${
               addOpen
                 ? "bg-brand-hover text-white"
-                : "bg-brand text-white hover:bg-brand-hover"
+                : "bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)] hover:bg-brand-hover"
             }`}
           >
             Add Friend
@@ -238,12 +238,12 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setAddSuccess(null);
               }}
               placeholder="Enter a username"
-              className="min-w-0 flex-1 rounded-md border border-divider bg-bg-tertiary px-3.5 py-2.5 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-brand/60"
+              className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-2.5 text-sm text-text-normal outline-none transition-all placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
             />
             <button
               type="submit"
               disabled={!addValue.trim() || sending}
-              className="shrink-0 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 rounded-2xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? "Sending…" : "Send request"}
             </button>
@@ -264,7 +264,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={tab === "online" ? "Search online friends" : "Search friends"}
-              className="w-full rounded-md bg-bg-tertiary py-2.5 pl-9 pr-9 text-sm text-text-normal outline-none placeholder:text-text-muted"
+              className="w-full rounded-full border border-transparent bg-bg-tertiary py-2.5 pl-10 pr-10 text-sm text-text-normal outline-none transition-all placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
             />
             {query && (
               <button
@@ -325,7 +325,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                     <button
                       type="button"
                       onClick={() => void unblockUser(person.id)}
-                      className="shrink-0 rounded-md border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
+                      className="shrink-0 rounded-full border border-divider px-4 py-1.5 text-[13px] font-semibold text-text-normal transition-all hover:border-text-muted hover:bg-interactive-hover"
                     >
                       Unblock
                     </button>
@@ -358,7 +358,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                       e.preventDefault();
                       onFriendContext(friend, e.clientX, e.clientY);
                     }}
-                    className="group -mx-3 flex cursor-pointer items-center gap-3 rounded-lg border-b border-divider px-3 py-2.5 transition-colors hover:bg-interactive-hover"
+                    className="group -mx-3 flex cursor-pointer items-center gap-3 rounded-2xl border-b border-divider px-3 py-2.5 transition-all hover:border-transparent hover:bg-interactive-hover"
                   >
                     <StatusAvatar profile={friend} presence={presenceMap} />
                     <div className="min-w-0 flex-1">

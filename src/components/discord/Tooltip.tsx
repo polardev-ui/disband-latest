@@ -90,7 +90,7 @@ export function Tooltip({ label, children, side = "right", as: Trigger = "div" }
         && createPortal(
           <div
             role="tooltip"
-            className="tooltip-content pointer-events-none fixed max-w-xs rounded-md bg-overlay-surface px-3 py-1.5 text-sm font-semibold text-text-normal shadow-lg"
+            className="tooltip-content pointer-events-none fixed max-w-xs rounded-xl border border-divider bg-overlay-surface px-3 py-1.5 text-[13px] font-semibold text-text-normal shadow-xl"
             style={{ top: pos.top, left: pos.left, transform, zIndex: OVERLAY_Z.tooltip }}
           >
             {label}

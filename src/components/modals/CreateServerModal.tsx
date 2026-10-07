@@ -67,7 +67,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Create a server" className="modal-pop relative w-full max-w-md rounded-lg bg-bg-primary p-6 shadow-2xl">
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Create a server" className="modal-pop relative w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl">
         <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted hover:text-text-normal">
           <IconClose size={24} />
         </button>

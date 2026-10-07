@@ -61,7 +61,7 @@ export function ReleaseModal() {
         role="dialog"
         aria-modal="true"
         aria-label="Disband has officially released"
-        className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl"
+        className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
       >
         <button
           type="button"

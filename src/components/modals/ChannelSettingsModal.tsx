@@ -173,7 +173,7 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Channel settings" className="modal-pop relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-bg-primary shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label="Channel settings" className="modal-pop relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl">
         <header className="flex items-center gap-2 border-b border-divider px-5 py-4">
           {channel.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
           <div className="min-w-0 flex-1">
