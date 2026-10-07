@@ -34,7 +34,7 @@ export function GroupMemberList({
           e.preventDefault();
           onMemberContext?.(m, e.clientX, e.clientY);
         }}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-interactive-hover"
+        className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-interactive-hover"
       >
         <div className="relative">
           <Avatar profile={m} size="sm" />

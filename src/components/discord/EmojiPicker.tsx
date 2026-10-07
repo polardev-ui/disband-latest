@@ -105,7 +105,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
         && createPortal(
           <div
             id="emoji-picker-panel"
-            className="fixed z-[120] max-h-80 overflow-hidden rounded-lg border border-divider bg-bg-secondary shadow-2xl"
+            className="fixed z-[120] max-h-80 overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
             style={{ left: panelPos.left, bottom: panelPos.bottom, width: panelPos.width }}
           >
             <div className="max-h-80 overflow-y-auto p-2">
@@ -113,7 +113,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search emoji…"
-                className="mb-2 w-full rounded-md border border-black/20 bg-bg-accent px-2.5 py-1.5 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                className="mb-2 w-full rounded-xl border border-black/20 bg-bg-accent px-3 py-1.5 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
               />
               {q && (
                 <div className="mb-2">

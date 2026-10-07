@@ -261,7 +261,7 @@ function Row({
         e.preventDefault();
         onContext?.(m, e.clientX, e.clientY);
       }}
-      className="group flex w-full items-center gap-3 rounded px-2 py-1.5 transition-all duration-150 ease-in-out hover:bg-interactive-hover"
+      className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 transition-all duration-150 ease-in-out hover:bg-interactive-hover"
     >
       <div className="relative shrink-0">
         <Avatar profile={p} size="sm" />

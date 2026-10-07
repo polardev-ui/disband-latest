@@ -180,7 +180,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
       ? createPortal(
           <div
             id="gif-picker-panel"
-            className="fixed z-[100] flex max-h-[min(20rem,50vh)] flex-col overflow-hidden rounded-lg border border-divider bg-bg-secondary shadow-2xl"
+            className="fixed z-[100] flex max-h-[min(20rem,50vh)] flex-col overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
             style={{
               left: panelPos.left,
               bottom: panelPos.bottom,
@@ -193,7 +193,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search KLIPY"
-                  className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
+                  className="min-w-0 flex-1 rounded-full bg-bg-accent px-3.5 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
                 />
               ) : (
                 <p className="min-w-0 flex-1 px-1 text-sm font-semibold text-text-normal">
