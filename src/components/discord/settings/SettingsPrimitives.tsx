@@ -12,17 +12,19 @@ export function SettingsSection({
   action?: React.ReactNode;
 }) {
   return (
-    <section className="mb-6">
-      <div className="mb-2.5 flex items-start justify-between gap-4 px-1">
+    <section className="mb-8 last:mb-0">
+      <div className="mb-3 flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="text-[15px] font-bold text-text-normal">{title}</h3>
+          <h3 className="text-[14.5px] font-semibold text-text-normal">{title}</h3>
           {description && (
             <p className="mt-0.5 text-[13px] leading-relaxed text-text-muted">{description}</p>
           )}
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-[0_2px_12px_-6px_rgba(0,0,0,0.5)]">
+      {/* Depth from a hairline, not a shadow: a shadowed card inside a
+          shadowed dialog reads as clutter. */}
+      <div className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
         {children}
       </div>
     </section>
@@ -44,7 +46,7 @@ export function SettingRow({
 }) {
   const Label = htmlFor ? "label" : "div";
   return (
-    <div className="border-b border-divider px-4 py-3.5 last:border-b-0">
+    <div className="border-b border-divider px-5 py-4 last:border-b-0">
       <div
         className={
           stacked ? "block" : "flex items-center justify-between gap-4"
@@ -56,7 +58,7 @@ export function SettingRow({
         >
           <span className="block text-[14px] font-medium text-text-normal">{label}</span>
           {description && (
-            <span className="mt-0.5 block text-[12.5px] leading-relaxed text-text-muted">
+            <span className="mt-0.5 block text-[13px] leading-relaxed text-text-muted">
               {description}
             </span>
           )}
@@ -91,13 +93,13 @@ export function Toggle({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-status-online" : "bg-text-muted/40"
+      className={`relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-secondary disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked ? "bg-brand" : "bg-text-muted/30"
       }`}
     >
       <span
-        className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform ${
-          checked ? "translate-x-[22px]" : "translate-x-1"
+        className={`inline-block rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition-transform duration-150 ${
+          checked ? "translate-x-[18px]" : "translate-x-[2px]"
         }`}
         style={{ height: 18, width: 18 }}
       />
@@ -106,8 +108,9 @@ export function Toggle({
 }
 
 export const settingsInputClass =
-  "w-full rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal " +
-  "outline-none transition-all placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20";
+  "w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] text-text-normal " +
+  "outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 " +
+  "focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]";
 
 export function Hint({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "super" | "online" }) {
   return (

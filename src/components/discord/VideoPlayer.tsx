@@ -118,7 +118,7 @@ export function VideoPlayer({ src, className = "", onLoad }: VideoPlayerProps) {
       className={`group relative overflow-hidden bg-black ${
         fullscreen
           ? "fixed inset-0 z-[200] border-0"
-          : "rounded-lg border border-black/20"
+          : "rounded-lg border border-divider"
       } ${className}`}
       onMouseMove={revealControls}
       onMouseLeave={() => !fullscreen && playing && setShowControls(false)}

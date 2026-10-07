@@ -27,7 +27,7 @@ interface MessageAttachmentProps {
 }
 
 const mediaClass =
-  "block max-h-[min(20rem,35vh)] max-w-full w-auto rounded-lg border border-black/20 object-contain";
+  "block max-h-[min(20rem,35vh)] max-w-full w-auto rounded-lg border border-divider object-contain";
 
 // Natural dimensions remembered per URL: rows remount constantly
 // (reactions, presence, pagination), and a repeat view can reserve the
@@ -103,7 +103,7 @@ export function MessageAttachment({
   const skeleton = (
     <div
       aria-label="Loading attachment"
-      className={`flex w-full max-w-md items-center justify-center rounded-lg border border-black/20 bg-bg-accent ${
+      className={`flex w-full max-w-md items-center justify-center rounded-lg border border-divider bg-bg-accent ${
         dims ? "" : "aspect-[16/10]"
       } max-h-[min(20rem,35vh)] min-h-24`}
       style={dims ? { aspectRatio: `${dims.w} / ${dims.h}` } : undefined}

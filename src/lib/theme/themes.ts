@@ -16,8 +16,8 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: "dark",
     label: "Disband Dark",
-    description: "Classic Disband dark theme",
-    swatch: ["#1e1f22", "#2b2d31", "#313338", "#5865f2"],
+    description: "Near-black, hairline borders — the default",
+    swatch: ["#0b0c0e", "#101114", "#141519", "#5865f2"],
   },
   {
     id: "midnight",

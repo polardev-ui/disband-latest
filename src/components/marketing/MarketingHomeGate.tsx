@@ -31,7 +31,7 @@ export function MarketingHomeGate() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#1e1f22] text-[#949ba4]">
+      <div className="flex min-h-screen items-center justify-center bg-[#0b0c0e] text-[#8b909a]">
         Loading…
       </div>
     );

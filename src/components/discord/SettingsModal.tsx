@@ -21,7 +21,7 @@ import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconChevronRight, IconLeave } from "@/components/icons";
+import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch } from "@/components/icons";
 import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
@@ -74,19 +74,39 @@ interface SettingsModalProps {
 }
 
 const TABS = [
-  { id: "profile" as const, label: "Profile", group: "User Settings", icon: <IconUser size={17} /> },
-  { id: "account" as const, label: "Account & Security", group: "User Settings", icon: <IconLock size={17} /> },
-  { id: "subscriptions" as const, label: "Subscription", group: "User Settings", icon: <IconCrown size={17} /> },
-  { id: "referrals" as const, label: "Referrals", group: "User Settings", icon: <IconGift size={17} /> },
-  { id: "bots" as const, label: "Bots", group: "User Settings", icon: <IconBot size={17} /> },
-  { id: "appearance" as const, label: "Appearance", group: "App Settings", icon: <IconPalette size={17} /> },
-  { id: "themes" as const, label: "Themes", group: "App Settings", icon: <IconImage size={17} /> },
-  { id: "notifications" as const, label: "Notifications", group: "App Settings", icon: <IconBell size={17} /> },
-  { id: "voice" as const, label: "Voice & Video", group: "App Settings", icon: <IconMic size={17} /> },
-  { id: "textMedia" as const, label: "Text & Media", group: "App Settings", icon: <IconMessage size={17} /> },
+  { id: "profile" as const, label: "Profile", group: "Account", icon: <IconUser size={17} />,
+    description: "How you appear to everyone on Disband.",
+    keywords: "avatar banner name display username bio about pronouns status note accent colour badges" },
+  { id: "account" as const, label: "Account & Security", group: "Account", icon: <IconLock size={17} />,
+    description: "Email, password, two-factor and account controls.",
+    keywords: "email password 2fa mfa two-factor authenticator security delete export data" },
+  { id: "subscriptions" as const, label: "Subscription", group: "Account", icon: <IconCrown size={17} />,
+    description: "Your plan, billing and perks.",
+    keywords: "aero lite plan billing upgrade gift perks premium" },
+  { id: "referrals" as const, label: "Referrals", group: "Account", icon: <IconGift size={17} />,
+    description: "Invite people and track what you've earned.",
+    keywords: "invite referral link rewards friends" },
+  { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
+    description: "Create and manage bots that act on your behalf.",
+    keywords: "bot token api developer webhook" },
+  { id: "appearance" as const, label: "Appearance", group: "App", icon: <IconPalette size={17} />,
+    description: "Zoom, motion and theme mode.",
+    keywords: "zoom scale size motion animation reduced dark light mode" },
+  { id: "themes" as const, label: "Themes", group: "App", icon: <IconImage size={17} />,
+    description: "Colour themes and skins.",
+    keywords: "colour color palette skin theme dark midnight amoled" },
+  { id: "notifications" as const, label: "Notifications", group: "App", icon: <IconBell size={17} />,
+    description: "What reaches you, and how.",
+    keywords: "sound desktop push alerts mentions ping" },
+  { id: "voice" as const, label: "Voice & Video", group: "App", icon: <IconMic size={17} />,
+    description: "Microphone, speakers and camera.",
+    keywords: "mic microphone input output speaker headphones camera webcam test device" },
+  { id: "textMedia" as const, label: "Text & Media", group: "App", icon: <IconMessage size={17} />,
+    description: "Link previews, embeds and media in chat.",
+    keywords: "links previews embeds images gif media unfurl" },
 ];
 
-const NAV_GROUPS = ["User Settings", "App Settings"] as const;
+const NAV_GROUPS = ["Account", "App"] as const;
 
 function formatBytes(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
@@ -113,6 +133,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [zoom, setZoom] = useZoom();
   const [motion, setMotion] = useState<MotionPreference>(() => getStoredMotion());
   const [tab, setTab] = useState<SettingsTab>("profile");
+  const [navQuery, setNavQuery] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -360,105 +381,158 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   }
 
   const activeTab = TABS.find((t) => t.id === tab);
+  const navQ = navQuery.trim().toLowerCase();
+  const navMatches = navQ
+    ? TABS.filter((t) => `${t.label} ${t.keywords}`.toLowerCase().includes(navQ))
+    : TABS;
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
         <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
-        <div role="dialog" aria-modal="true" aria-label="Settings" className="modal-pop relative flex max-h-[88vh] w-full max-w-[920px] overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl">
-          <nav className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-bg-secondary p-3 sm:flex">
-            {profile && (
-              <div className="mb-3 flex items-center gap-2.5 rounded-2xl border border-divider bg-bg-tertiary/60 px-3 py-2.5">
-                <Avatar profile={profile} size="sm" />
-                <div className="min-w-0">
-                  <p className="truncate text-[14px] font-bold leading-tight">
-                    {profile.display_name || profile.username}
-                  </p>
-                  <p className="truncate text-[12px] text-text-muted">@{profile.username}</p>
-                </div>
-              </div>
-            )}
-
-            {NAV_GROUPS.map((group) => (
-              <div key={group} className="mb-3">
-                <h2 className="mb-1 px-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  {group}
-                </h2>
-                {TABS.filter((t) => t.group === group).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTab(t.id)}
-                    className={`mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[14px] transition-all duration-150 ${
-                      tab === t.id
-                        ? "bg-brand/15 font-semibold text-text-normal"
-                        : "font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 ${
-                        tab === t.id ? "bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)]" : "bg-brand/15 text-brand"
-                      }`}
-                    >
-                      {t.icon}
+        {/* A fixed-size window: the old one sized itself to each page, so the
+            whole dialog jumped every time you changed tabs. */}
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Settings"
+          className="modal-pop relative flex h-[min(820px,calc(100vh-3rem))] w-full max-w-[1080px] overflow-hidden rounded-[22px] border border-divider bg-overlay-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)]"
+        >
+          <nav aria-label="Settings sections" className="hidden w-[256px] shrink-0 flex-col border-r border-divider bg-bg-secondary sm:flex">
+            <div className="px-3 pb-2 pt-4">
+              {profile && (
+                <button
+                  type="button"
+                  onClick={() => setTab("profile")}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-interactive-hover"
+                >
+                  <Avatar profile={profile} size="md" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-semibold leading-tight text-text-normal">
+                      {profile.display_name || profile.username}
                     </span>
-                    {t.label}
-                    {tab === t.id && <IconChevronRight size={15} className="ml-auto shrink-0 text-brand" />}
-                  </button>
-                ))}
-              </div>
-            ))}
+                    <span className="block truncate text-[12.5px] text-text-muted">Edit profile</span>
+                  </span>
+                </button>
+              )}
+              <label className="relative mt-3 block">
+                <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  value={navQuery}
+                  onChange={(e) => setNavQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Enter jumps to the first match, so search-then-Enter works
+                    // without touching the mouse.
+                    if (e.key === "Enter" && navMatches[0]) {
+                      setTab(navMatches[0].id);
+                      setNavQuery("");
+                    }
+                  }}
+                  placeholder="Search settings"
+                  aria-label="Search settings"
+                  className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]"
+                />
+              </label>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                window.location.href = "/bug-report";
-              }}
-              className="mb-0.5 mt-auto flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[14px] font-medium text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal"
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+              {navQuery.trim() && navMatches.length === 0 && (
+                <p className="px-2 py-3 text-[13px] text-text-muted">No settings match “{navQuery.trim()}”.</p>
+              )}
+              {NAV_GROUPS.map((group) => {
+                const items = navMatches.filter((t) => t.group === group);
+                if (items.length === 0) return null;
+                return (
+                  <div key={group} className="mt-3 first:mt-1">
+                    <h2 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/80">
+                      {group}
+                    </h2>
+                    {items.map((t) => {
+                      const active = tab === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          aria-current={active ? "page" : undefined}
+                          onClick={() => {
+                            setTab(t.id);
+                            setNavQuery("");
+                          }}
+                          className={`relative mb-px flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] transition-colors duration-150 ${
+                            active
+                              ? "bg-interactive-selected font-medium text-text-normal"
+                              : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                          }`}
+                        >
+                          {active && <span aria-hidden className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-brand" />}
+                          <span className={active ? "text-text-normal" : "text-text-muted"}>{t.icon}</span>
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-divider p-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  window.location.href = "/bug-report";
+                }}
+                className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              >
                 <IconBug size={17} />
-              </span>
-              Report a Bug
-            </button>
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[14px] font-medium text-status-dnd transition-all duration-150 hover:bg-status-dnd/10"
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-status-dnd/15 text-status-dnd">
+                Report a bug
+              </button>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] text-status-dnd transition-colors hover:bg-status-dnd/10"
+              >
                 <IconLeave size={17} />
-              </span>
-              Log Out
-            </button>
+                Log out
+              </button>
+            </div>
           </nav>
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="flex items-center justify-between gap-3 border-b border-divider bg-bg-secondary/40 px-6 py-4">
+            <header className="flex items-start justify-between gap-4 px-8 pb-4 pt-6">
               <div className="min-w-0">
                 <select
                   value={tab}
                   onChange={(e) => setTab(e.target.value as SettingsTab)}
-                  className="w-full rounded-xl bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:ring-2 focus:ring-brand sm:hidden"
+                  aria-label="Settings section"
+                  className="w-full rounded-[10px] border border-divider bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:border-brand/50 sm:hidden"
                 >
                   {TABS.map((t) => (
                     <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
                 </select>
-                <h1 className="hidden text-[22px] font-extrabold tracking-tight sm:block">{activeTab?.label ?? "Settings"}</h1>
+                <h1 className="hidden text-[22px] font-semibold tracking-[-0.02em] text-text-normal sm:block">
+                  {activeTab?.label ?? "Settings"}
+                </h1>
+                {activeTab?.description && (
+                  <p className="mt-1 hidden text-[14px] text-text-muted sm:block">{activeTab.description}</p>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close settings"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg-accent text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
-              >
-                <IconClose size={18} />
-              </button>
+              <div className="flex shrink-0 flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close settings"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                >
+                  <IconClose size={17} />
+                </button>
+                <span aria-hidden className="hidden text-[10.5px] font-medium uppercase tracking-wide text-text-muted/70 sm:block">Esc</span>
+              </div>
             </header>
 
-            <div key={tab} className="view-enter flex-1 overflow-y-auto px-6 py-6">
+            <div key={tab} className="view-enter flex-1 overflow-y-auto px-8 pb-8 pt-2">
+              <div className="max-w-[720px]">
               {tab === "profile" && (
                 <div className="pb-20">
                   {profile && (
@@ -740,7 +814,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   {error && <p className="text-sm text-status-dnd">{error}</p>}
 
                   {(profileDirty || saving || saved) && (
-                    <div className="sticky bottom-0 -mx-6 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-bg-primary/95 px-6 py-3 backdrop-blur">
+                    <div className="sticky bottom-0 -mx-8 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-overlay-panel/95 px-8 py-3 backdrop-blur">
                       <button
                         type="button"
                         onClick={resetProfileEdits}
@@ -865,13 +939,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
               {tab === "appearance" && (
                 <div>
-                  <div className="mb-5">
-                    <p className="mb-3 text-sm font-semibold">Interface zoom</p>
-                    <div className="flex items-center gap-3">
+                  <SettingsSection title="Interface zoom" description="Scales the whole app. Ctrl/Cmd + and − work anywhere, and Ctrl/Cmd 0 resets.">
+                    <div className="flex items-center gap-3 px-5 py-4">
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-divider text-lg text-text-normal hover:bg-interactive-hover"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
                         aria-label="Zoom out"
                       >
                         −
@@ -889,100 +962,107 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-divider text-lg text-text-normal hover:bg-interactive-hover"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
                         aria-label="Zoom in"
                       >
                         +
                       </button>
-                      <span className="w-12 shrink-0 text-right text-sm tabular-nums text-text-muted">
+                      <span className="w-12 shrink-0 text-right text-[13.5px] tabular-nums text-text-muted">
                         {Math.round(zoom * 100)}%
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-text-muted">
-                      Tip: use Ctrl/Cmd + and Ctrl/Cmd − (or Ctrl/Cmd 0 to reset) anywhere in the app.
-                    </p>
-                  </div>
+                  </SettingsSection>
 
-                  <div className="mb-5">
-                    <p className="mb-1 text-sm font-semibold">Animations</p>
-                    <p className="mb-3 text-xs text-text-muted">
-                      Interface motion: message arrivals, view transitions, badges and ambient effects.
-                    </p>
-                    <div className="flex gap-1 rounded-lg bg-bg-accent p-1" role="group" aria-label="Animation preference">
-                      {(
-                        [
-                          { id: "system", label: "System", hint: "Follow your OS setting" },
-                          { id: "full", label: "Full", hint: "Always animate" },
-                          { id: "reduced", label: "Reduced", hint: "Calm interface" },
-                        ] as const
-                      ).map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          title={opt.hint}
-                          aria-pressed={motion === opt.id}
-                          onClick={() => {
-                            setMotion(opt.id);
-                            setStoredMotion(opt.id);
-                          }}
-                          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                            motion === opt.id
-                              ? "bg-bg-secondary text-text-normal shadow"
-                              : "text-text-muted hover:text-text-normal"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                  <SettingsSection title="Motion" description="Message arrivals, view transitions, badges and ambient effects.">
+                    <div className="px-5 py-4">
+                      <div className="flex gap-1 rounded-[12px] border border-divider bg-bg-accent p-1" role="group" aria-label="Animation preference">
+                        {(
+                          [
+                            { id: "system", label: "System", hint: "Follow your OS setting" },
+                            { id: "full", label: "Full", hint: "Always animate" },
+                            { id: "reduced", label: "Reduced", hint: "Calm interface" },
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            title={opt.hint}
+                            aria-pressed={motion === opt.id}
+                            onClick={() => {
+                              setMotion(opt.id);
+                              setStoredMotion(opt.id);
+                            }}
+                            className={`flex-1 rounded-[9px] px-3 py-1.5 text-[13.5px] font-medium transition-colors ${
+                              motion === opt.id
+                                ? "bg-interactive-selected text-text-normal shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
+                                : "text-text-muted hover:text-text-normal"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  </SettingsSection>
 
-                  <p className="mb-4 text-sm text-text-muted">Theme changes apply instantly and sync to your account.</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {themes.map((t) => {
-
-                      const isLocked = !!t.plan && subPlan === "free";
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          disabled={isLocked}
-                          onClick={() => {
-                            if (isLocked) return;
-                            setTheme(t.id);
-                            void savePreference({ theme: t.id });
-                          }}
-                          className={`overflow-hidden rounded-lg border-2 text-left transition-all duration-150 ${
-                            theme === t.id ? "border-brand" : "border-transparent hover:border-interactive-hover"
-                          } ${isLocked ? "cursor-not-allowed opacity-50" : ""}`}
-                        >
-                          <div className="flex h-16">
-                            {t.swatch.map((c, i) => (
-                              <div key={i} className="flex-1" style={{ backgroundColor: c }} />
-                            ))}
-                          </div>
-                          <div className="bg-bg-secondary px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold">{t.label}</p>
-                              {t.plan && <SubscriptionBadge plan={t.plan} />}
-                              {isLocked && (
-                                <span className="ml-auto text-xs text-text-muted">Locked</span>
-                              )}
+                  <section>
+                    <div className="mb-3">
+                      <h3 className="text-[14.5px] font-semibold text-text-normal">Theme</h3>
+                      <p className="mt-0.5 text-[13px] leading-relaxed text-text-muted">
+                        Applies instantly and syncs to your account.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {themes.map((t) => {
+                        const isLocked = !!t.plan && subPlan === "free";
+                        const selected = theme === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={isLocked}
+                            aria-pressed={selected}
+                            onClick={() => {
+                              if (isLocked) return;
+                              setTheme(t.id);
+                              void savePreference({ theme: t.id });
+                            }}
+                            className={`overflow-hidden rounded-2xl border text-left transition-[border-color,box-shadow] duration-150 ${
+                              selected
+                                ? "border-brand shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_18%,transparent)]"
+                                : "border-divider hover:border-text-muted/40"
+                            } ${isLocked ? "cursor-not-allowed opacity-50" : ""}`}
+                          >
+                            <div className="flex h-14">
+                              {t.swatch.map((c, i) => (
+                                <div key={i} className="flex-1" style={{ backgroundColor: c }} />
+                              ))}
                             </div>
-                            <p className="text-xs text-text-muted">{t.description}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            <div className="border-t border-divider bg-bg-secondary px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <p className="text-[14px] font-medium">{t.label}</p>
+                                {t.plan && <SubscriptionBadge plan={t.plan} />}
+                                {isLocked ? (
+                                  <span className="ml-auto text-[12px] text-text-muted">Locked</span>
+                                ) : selected ? (
+                                  <span className="ml-auto text-[12px] font-medium text-brand">Active</span>
+                                ) : null}
+                              </div>
+                              <p className="mt-0.5 text-[12.5px] text-text-muted">{t.description}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
                 </div>
               )}
 
               {tab === "themes" && <ThemesPanel />}
 
               {tab === "notifications" && (
-                <div className="space-y-4">
-                  <p className="text-sm text-text-muted">Control sounds and desktop alerts when you are away from Disband.</p>
+                <div>
+                  <SettingsSection title="Alerts" description="Sounds and desktop alerts for when you're away from Disband.">
                   <SettingRow
                     label="Message sounds"
                     description="Play a ping for @mentions and incoming DMs when the app is in the background."
@@ -1010,20 +1090,27 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
                   {notifPermission !== "granted" && notifPermission !== "unsupported" && (
-                    <button
-                      type="button"
-                      onClick={() => void enableDesktopNotifications()}
-                      className="flex items-center gap-2 rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                    <SettingRow
+                      label="Browser permission"
+                      description={
+                        notifPermission === "denied"
+                          ? "Blocked in your browser. Allow notifications in this site's settings, then come back."
+                          : "Your browser needs to allow Disband to show alerts."
+                      }
                     >
-                      <IconBell size={16} />
-                      Enable browser notifications
-                    </button>
+                      {notifPermission !== "denied" && (
+                        <button
+                          type="button"
+                          onClick={() => void enableDesktopNotifications()}
+                          className="inline-flex h-9 items-center gap-2 rounded-[10px] bg-brand px-3.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                        >
+                          <IconBell size={15} />
+                          Allow
+                        </button>
+                      )}
+                    </SettingRow>
                   )}
-                  {notifPermission === "denied" && (
-                    <p className="text-xs text-text-muted">
-                      Notifications are blocked in your browser. Allow them in site settings to receive desktop alerts.
-                    </p>
-                  )}
+                  </SettingsSection>
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
@@ -1267,8 +1354,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               {tab === "bots" && <BotsPanel />}
 
               {tab === "textMedia" && (
-                <div className="space-y-4">
-                  <p className="text-sm text-text-muted">Choose how links and media appear in chat.</p>
+                <div>
+                  <SettingsSection title="Links" description="How links appear in conversations.">
                   <SettingRow
                     label="Link previews"
                     description="Show rich embeds with title, description, and image for URLs in messages."
@@ -1282,9 +1369,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       label="Link previews"
                     />
                   </SettingRow>
+                  </SettingsSection>
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>

@@ -90,7 +90,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             data-context-menu
             role="menu"
             aria-labelledby={menuId}
-            className="modal-pop fixed min-w-[200px] rounded-2xl border border-divider bg-overlay-surface p-1.5 shadow-2xl"
+            className="modal-pop fixed min-w-[200px] rounded-[14px] border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
             style={{
               zIndex: OVERLAY_Z.contextMenu,
               left: Math.min(menu.x, window.innerWidth - 200),
@@ -111,10 +111,10 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                 if (!item.disabled) item.onClick();
                 closeMenu();
               }}
-              className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm transition-all duration-150 ease-in-out disabled:opacity-40 ${
+              className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left text-[13.5px] transition-colors duration-100 disabled:opacity-40 ${
                 item.danger
-                  ? "text-status-dnd hover:bg-status-dnd/15"
-                  : "text-text-normal hover:bg-brand/15"
+                  ? "text-status-dnd hover:bg-status-dnd/10"
+                  : "text-text-normal hover:bg-interactive-hover"
               }`}
             >
               {item.icon && <span className="w-4 shrink-0 opacity-80">{item.icon}</span>}

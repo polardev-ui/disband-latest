@@ -708,7 +708,7 @@ export function ChatInput({
       )}
 
       {(replyTo || editingMessageId) && (
-        <div className="mb-1 flex items-center gap-2 rounded-t-2xl border border-b-0 border-divider/70 bg-bg-secondary px-3 py-2 text-sm">
+        <div className="flex items-center gap-2 rounded-t-[14px] border border-b-0 border-divider bg-bg-secondary px-3 py-2 text-sm">
           <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
             <p className="text-xs font-semibold text-brand">
               {editingMessageId ? "Editing message" : `Replying to ${replyTo?.author ? displayName(replyTo.author as Profile) : "message"}`}
@@ -739,7 +739,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-2xl border border-divider/70 bg-bg-accent shadow-[0_2px_12px_-6px_rgba(0,0,0,0.5)] transition-all duration-150 ease-in-out focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/20 ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-[14px] border border-divider bg-bg-accent transition-[border-color,box-shadow] duration-150 focus-within:border-brand/50 focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)] ${dragOver ? "border-brand shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_22%,transparent)]" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -749,7 +749,7 @@ export function ChatInput({
           </div>
         )}
 
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex items-end gap-1 px-2 py-2">
           <div ref={plusMenuRef} className="relative shrink-0">
             <button
               type="button"
@@ -761,25 +761,27 @@ export function ChatInput({
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
               }}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all duration-150 hover:text-text-normal active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
+                plusMenuOpen ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+              }`}
             >
-              <IconPlus size={22} />
+              <IconPlus size={20} />
             </button>
             {allowPolls && plusMenuOpen && (
-              <div className="absolute bottom-full left-0 z-20 mb-1 w-48 overflow-hidden rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
+              <div className="absolute bottom-full left-0 z-20 mb-2 w-52 overflow-hidden rounded-xl border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]">
                 <button
                   type="button"
                   onClick={() => { setPlusMenuOpen(false); fileRef.current?.click(); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-interactive-hover"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-interactive-hover"
                 >
-                  Upload Files
+                  Upload files
                 </button>
                 <button
                   type="button"
                   disabled={!!editingMessageId}
                   title={editingMessageId ? "Finish editing before creating a poll" : undefined}
                   onClick={() => { setPlusMenuOpen(false); setPollOpen(true); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Create a poll
                 </button>
@@ -794,13 +796,19 @@ export function ChatInput({
             className="hidden"
             onChange={(e) => { if (e.target.files?.length) void handleFiles(e.target.files); e.target.value = ""; }}
           />
-          <div className="relative min-w-0 flex-1">
+          {/* Outer: at least as tall as the buttons, centring a single line
+              against them. Inner: exactly the textarea's box, which the styled
+              layer (absolute, inset-0) has to share or the caret drifts. The
+              textarea used to be inline-block, so its wrapper also reserved
+              descender space beneath it and the text sat ~3px high. */}
+          <div className="flex min-h-8 min-w-0 flex-1 items-center px-1">
+          <div className="relative w-full">
             {/* The styled layer. aria-hidden: the textarea is the real input,
                 and a screen reader must not read the text twice. */}
             <div
               ref={highlightRef}
               aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-0.5 text-[15px] leading-5 text-text-normal"
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[15px] leading-[22px] text-text-normal"
             >
               <ComposerMarkdown text={text} />
             </div>
@@ -852,7 +860,7 @@ export function ChatInput({
             onPaste={onPaste}
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             rows={1}
-            className="relative z-[1] min-h-0 w-full resize-none bg-transparent py-0.5 text-[15px] leading-5 text-transparent caret-text-normal placeholder:text-text-muted focus:outline-none"
+            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[15px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted/80 focus:outline-none"
             onScroll={(e) => {
               // Keep the styled layer pinned to the textarea once the text is
               // long enough to scroll, or the two drift apart.
@@ -861,6 +869,7 @@ export function ChatInput({
               }
             }}
           />
+          </div>
           </div>
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
@@ -878,7 +887,7 @@ export function ChatInput({
               type="submit"
               aria-label={editingMessageId ? "Save edit" : "Send message"}
               title={editingMessageId ? "Save edit" : "Send message"}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-[0_2px_10px_-2px_var(--color-brand)] transition-all duration-150 hover:bg-brand-hover active:scale-90"
+              className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors duration-150 hover:bg-brand-hover active:scale-95"
             >
               <IconSend size={16} />
             </button>

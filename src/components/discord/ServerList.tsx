@@ -254,9 +254,11 @@ function ServerButton({
           onDragEnd={onDragEnd}
           className="group relative flex h-12 w-12 cursor-grab items-center justify-center active:cursor-grabbing"
         >
+          {/* Unread marker. Active is shown by the ring on the icon itself. */}
           <span
-            className={`absolute -left-1 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-150 ease-in-out ${
-              active ? "h-10 w-1 shadow-[0_0_8px_var(--color-brand)]" : hasUnread ? "h-2 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
+            aria-hidden
+            className={`absolute -left-[9px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-text-normal transition-opacity duration-150 ${
+              !active && hasUnread ? "opacity-100" : "opacity-0"
             }`}
           />
           <div className="relative">
@@ -266,14 +268,14 @@ function ServerButton({
                 src={safeImageUrl(server.icon_url)!}
                 alt=""
                 draggable={false}
-                className={`h-12 w-12 object-cover transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
-                  active ? "rounded-2xl ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full"
+                className={`h-12 w-12 rounded-[14px] object-cover transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
+                  active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
                 }`}
               />
             ) : (
               <span
-                className={`flex h-12 w-12 items-center justify-center bg-brand text-[15px] font-semibold text-white transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
-                  active ? "rounded-2xl ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full"
+                className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-[15px] font-semibold text-white transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
+                  active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
                 }`}
               >
                 {serverInitials(server.name)}
@@ -411,7 +413,7 @@ export function ServerList({
       // `justify-content: center`) leaves a gap above the home button whenever
       // the rail is shorter than the window, and pushes the first servers out
       // of reach above the scroll origin once it is taller.
-      className="flex w-[72px] shrink-0 flex-col items-center overflow-y-auto bg-bg-tertiary py-3"
+      className="flex w-[72px] shrink-0 flex-col items-center overflow-y-auto border-r border-divider bg-bg-tertiary py-3"
     >
       <div className="flex w-full flex-col items-center gap-2">
       <Tooltip label="Direct Messages">
@@ -423,13 +425,8 @@ export function ServerList({
           className="group relative flex h-12 w-12 items-center justify-center"
         >
           <span
-            className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-150 ease-in-out ${
-              homeActive ? "h-10 w-1 shadow-[0_0_8px_var(--color-brand)]" : "w-0 group-hover:h-5 group-hover:w-1"
-            }`}
-          />
-          <span
-            className={`flex h-12 w-12 items-center justify-center text-white transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
-              homeActive ? "rounded-2xl bg-brand ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full bg-brand/90"
+            className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-white transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
+              homeActive ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
             }`}
           >
             <IconHome size={22} />
@@ -449,17 +446,12 @@ export function ServerList({
                   onClick={() => onSelectDmThread(entry.threadId)}
                   className="group relative flex h-12 w-12 animate-in fade-in slide-in-from-top-2 items-center justify-center duration-300"
                 >
-                  <span
-                    className={`absolute -left-3 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-brand transition-all duration-150 ease-in-out ${
-                      active ? "h-10 w-1 shadow-[0_0_8px_var(--color-brand)]" : "w-0 group-hover:h-5 group-hover:w-1"
-                    }`}
-                  />
                   <div className="relative">
                     <Avatar
                       profile={entry.friend}
                       size="md"
-                      className={`h-12 w-12 transition-all duration-150 ease-in-out group-hover:rounded-2xl ${
-                        active ? "rounded-2xl ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : "rounded-full"
+                      className={`h-12 w-12 rounded-full transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
+                        active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
                       }`}
                     />
                     <UnreadCountBadge count={entry.count} />
@@ -471,7 +463,7 @@ export function ServerList({
         </div>
       )}
 
-      <div className="h-0.5 w-8 rounded bg-divider transition-all duration-300" />
+      <div className="h-px w-8 bg-divider transition-all duration-300" />
 
       <div
         className="flex w-full flex-col items-center gap-2"
@@ -534,12 +526,15 @@ export function ServerList({
                   className="group relative flex h-12 w-12 cursor-grab items-center justify-center active:cursor-grabbing"
                 >
                   <span
-                    className={`absolute -left-1 top-1/2 h-2 -translate-y-1/2 rounded-r-full bg-white transition-all ${
-                      hasActive ? "h-10 w-1" : hasUnread ? "h-2 w-1" : "w-0 group-hover:h-5 group-hover:w-1"
+                    aria-hidden
+                    className={`absolute -left-[9px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-text-normal transition-opacity duration-150 ${
+                      !hasActive && hasUnread ? "opacity-100" : "opacity-0"
                     }`}
                   />
                   <span
-                    className="flex h-12 w-12 flex-col items-center justify-center rounded-[30%] text-white"
+                    className={`flex h-12 w-12 flex-col items-center justify-center rounded-[14px] text-white ${
+                      hasActive ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
+                    }`}
                     style={{ backgroundColor: `${folder.color}55` }}
                   >
                     <span className="text-[15px] font-bold leading-none" style={{ color: folder.color }}>
@@ -570,9 +565,9 @@ export function ServerList({
           type="button"
           aria-label="Create space"
           onClick={onCreateServer}
-          className="group flex h-12 w-12 items-center justify-center rounded-[50%] bg-bg-primary text-status-online transition-all duration-150 ease-in-out hover:rounded-[30%] hover:bg-status-online hover:text-white"
+          className="group flex h-12 w-12 items-center justify-center rounded-[14px] border border-dashed border-divider text-text-muted transition-colors duration-150 hover:border-text-muted/50 hover:bg-interactive-hover hover:text-text-normal"
         >
-          <IconPlus size={24} />
+          <IconPlus size={22} />
         </button>
       </Tooltip>
 
@@ -581,7 +576,7 @@ export function ServerList({
           type="button"
           aria-label="Discover spaces"
           onClick={onDiscover}
-          className="group flex h-12 w-12 items-center justify-center rounded-[50%] bg-bg-primary text-text-muted transition-all duration-150 ease-in-out hover:rounded-[30%] hover:bg-brand hover:text-white"
+          className="group flex h-12 w-12 items-center justify-center rounded-[14px] border border-divider text-text-muted transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal"
         >
           <IconCompass size={22} />
         </button>

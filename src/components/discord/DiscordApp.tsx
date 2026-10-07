@@ -1844,7 +1844,7 @@ export function DiscordApp() {
         </>
       )}
 
-      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
+      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} onTabChange={setDiscoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
 
       {app.viewMode === "space" && activeChannel && isVoice && (
         <VoicePanel

@@ -17,11 +17,19 @@ interface AvatarProps {
     /** Shop ring the owner is wearing; drawn around every avatar of theirs. */
     equipped_ring_effect?: string | null;
   };
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
-const SIZES = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-sm", lg: "h-20 w-20 text-2xl" };
+const SIZES = {
+  sm: "h-8 w-8 text-xs",
+  md: "h-10 w-10 text-sm",
+  lg: "h-20 w-20 text-2xl",
+  // Profile cards. A size of its own rather than `lg` plus an override class:
+  // two height utilities on one element resolve by stylesheet order, not by
+  // the order they're written in, so the override silently lost.
+  xl: "h-[92px] w-[92px] text-3xl",
+};
 
 export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   const name = displayName(profile);

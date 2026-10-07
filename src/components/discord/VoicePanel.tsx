@@ -101,7 +101,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
 
   return (
     <main className="call-enter flex min-w-0 flex-1 flex-col bg-gradient-to-b from-status-online/[0.06] to-bg-primary">
-      <header className="flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
+      <header className="flex h-12 items-center gap-2 border-b border-divider px-4">
         <IconSpeaker className={voice.joined ? "text-status-online" : "text-text-muted"} />
         <h1 className="font-semibold">{channelName}</h1>
         {voice.joined && (

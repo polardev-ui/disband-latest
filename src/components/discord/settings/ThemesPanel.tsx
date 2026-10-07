@@ -57,22 +57,17 @@ export function ThemesPanel() {
 
   return (
     <div className="space-y-8">
-      <section>
-        <div className="mb-1 flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-text-normal">Themes</h3>
-          <span className="rounded bg-super/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-super">
-            Aero
-          </span>
-        </div>
-        <p className="text-sm text-text-muted">
-          Skins change the shape of Disband, not just its colours — corners,
-          typefaces and the way every button is drawn. They apply on web and
-          desktop and follow your account between them.
-        </p>
-      </section>
+      <p className="text-[13.5px] leading-relaxed text-text-muted">
+        <span className="mr-1.5 inline-block rounded bg-super/15 px-1.5 py-0.5 align-[1px] text-[10px] font-bold uppercase tracking-wide text-super">
+          Aero
+        </span>
+        Skins change the shape of Disband, not just its colours — corners,
+        typefaces and the way every button is drawn. They apply on web and
+        desktop and follow your account between them.
+      </p>
 
       {locked && (
-        <p className="rounded-md border border-super/30 bg-super/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-super">
+        <p className="rounded-xl border border-super/30 bg-super/[0.08] px-4 py-3 text-[13px] leading-relaxed text-super">
           Themes are part of Disband <span className="font-bold">Aero</span>.
           {skin.lapsed
             ? " Your theme is still saved — resubscribe and it comes back exactly as you left it."
@@ -82,7 +77,7 @@ export function ThemesPanel() {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold">Skin</p>
+          <h3 className="text-[14.5px] font-semibold text-text-normal">Skin</h3>
           {skin.preset && !locked && (
             <button
               type="button"
@@ -99,7 +94,7 @@ export function ThemesPanel() {
           <SkinCard
             label="None"
             description="The standard Disband look."
-            swatch={["#1e1f22", "#2b2d31", "#313338", "#5865f2"]}
+            swatch={["#0b0c0e", "#101114", "#141519", "#5865f2"]}
             selected={!skin.preset}
             locked={locked}
             onSelect={() => void commit({ preset: null }, "Skin removed.")}
@@ -131,7 +126,7 @@ export function ThemesPanel() {
 
       <section>
         <div className="mb-2 flex items-baseline justify-between gap-3">
-          <p className="text-sm font-semibold">Custom CSS</p>
+          <h3 className="text-[14.5px] font-semibold text-text-normal">Custom CSS</h3>
           <a
             href="/docs/themes"
             target="_blank"
