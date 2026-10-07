@@ -80,8 +80,43 @@ export function isRecipientDoNotDisturb(
   return profile.status === "dnd" || profile.preferred_status === "dnd";
 }
 
+const NOTIFICATION_POP_URL = "/sounds/notificationpop.mp3";
+
+let popAudio: HTMLAudioElement | null = null;
+
+/**
+ * Shared notification pop. Returns true when the file started playing (so
+ * callers skip the synthesized fallback); false when anything is off —
+ * missing file, blocked autoplay, no audio backend — and the caller falls
+ * back to synth. The element is created lazily so server renders and
+ * non-DOM contexts never touch it.
+ */
+function playNotificationPop(): boolean {
+  try {
+    if (typeof window === "undefined" || typeof Audio === "undefined") return false;
+    if (!popAudio) {
+      popAudio = new Audio(NOTIFICATION_POP_URL);
+      popAudio.preload = "auto";
+      popAudio.volume = 0.9;
+      // If the file itself is broken/missing, drop the element so every
+      // later call falls through to the synthesized fallback instead of
+      // going silent forever.
+      popAudio.addEventListener("error", () => { popAudio = null; });
+    }
+    popAudio.currentTime = 0;
+    const attempt = popAudio.play();
+    if (attempt && typeof attempt.catch === "function") {
+      attempt.catch(() => undefined);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function playMentionPing() {
   if (!getUserSettings().soundEnabled) return;
+  if (playNotificationPop()) return;
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
@@ -103,6 +138,7 @@ export function playMentionPing() {
 
 export function playDmPing() {
   if (!getUserSettings().soundEnabled) return;
+  if (playNotificationPop()) return;
   try {
     const ctx = new AudioContext();
     const playTone = (freq: number, start: number, duration: number) => {
