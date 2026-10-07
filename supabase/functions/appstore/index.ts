@@ -127,10 +127,16 @@ async function appStoreJwt(): Promise<string> {
   return token;
 }
 
-function apiBase(): string {
-  return Deno.env.get("APPSTORE_ENVIRONMENT") === "Sandbox"
-    ? "https://api.storekit-sandbox.itunes.apple.com"
-    : "https://api.storekit.itunes.apple.com";
+function apiBases(): string[] {
+  // Apple's documented order: production first, sandbox on miss. Sandbox
+  // transaction ids do not exist on the production endpoint, so without the
+  // fallback every App Review (sandbox) purchase fails lookup — which is
+  // exactly the 2.1(b) rejection. A single APPSTORE_ENVIRONMENT switch
+  // would just move the breakage to the other environment.
+  return [
+    "https://api.storekit.itunes.apple.com",
+    "https://api.storekit-sandbox.itunes.apple.com",
+  ];
 }
 
 /** What Apple's signed transaction payload gives us, once decoded. */
@@ -159,17 +165,18 @@ interface AppleTransaction {
  */
 async function fetchTransaction(transactionId: string): Promise<AppleTransaction | null> {
   const jwt = await appStoreJwt();
-  const res = await fetch(
-    `${apiBase()}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
-    { headers: { authorization: `Bearer ${jwt}` } },
-  );
-  if (!res.ok) {
-    console.log("App Store transaction lookup failed", res.status, await res.text());
-    return null;
+  for (const base of apiBases()) {
+    const res = await fetch(
+      `${base}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
+      { headers: { authorization: `Bearer ${jwt}` } },
+    );
+    if (!res.ok) continue;
+    const body = await res.json() as { signedTransactionInfo?: string };
+    if (!body.signedTransactionInfo) continue;
+    return decodeJwsPayload<AppleTransaction>(body.signedTransactionInfo);
   }
-  const body = await res.json() as { signedTransactionInfo?: string };
-  if (!body.signedTransactionInfo) return null;
-  return decodeJwsPayload<AppleTransaction>(body.signedTransactionInfo);
+  console.log("App Store transaction lookup failed on both endpoints", transactionId);
+  return null;
 }
 
 interface SubscriptionStatus {
@@ -264,13 +271,11 @@ async function applyTransaction(
   userId: string,
   serverId: string | null,
 ): Promise<{ granted: string | null; error?: string }> {
+  // NOTE: no environment gate here. Sandbox receipts can only be minted by
+  // sandbox tester accounts, so granting from one cannot charge real money
+  // by construction — and rejecting them broke every App Review (2.1(b)).
+  // The environment is recorded on the ledger row for forensics.
   const expectedEnv = Deno.env.get("APPSTORE_ENVIRONMENT") ?? "Production";
-  if (tx.environment && tx.environment !== expectedEnv) {
-    // A Sandbox receipt must never buy anything real. Recorded, not granted,
-    // so a tester's transactions are still visible while being inert.
-    console.log("appstore: environment mismatch", tx.environment, "expected", expectedEnv);
-    return { granted: null, error: "environment" };
-  }
   if (tx.bundleId && tx.bundleId !== Deno.env.get("APPSTORE_BUNDLE_ID")) {
     return { granted: null, error: "bundle" };
   }
