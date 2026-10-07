@@ -16,7 +16,7 @@
 //   FCM_SERVICE_ACCOUNT (JSON: {project_id, client_email, private_key})
 //     — or the trio FCM_PROJECT_ID + FCM_CLIENT_EMAIL + FCM_PRIVATE_KEY.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.44.4";
 
 const enc = new TextEncoder();
 
@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({
       aps: {
         alert: { title: title ?? "Disband", body },
-        sound: "default",
+        sound: "notificationpop.caf",
         // Omitted, not zeroed, when unknown: `badge: 0` clears the icon, so a
         // failed count would wipe a legitimate number off the user's home
         // screen.

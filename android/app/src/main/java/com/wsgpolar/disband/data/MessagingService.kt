@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -104,7 +106,9 @@ class MessagingService : FirebaseMessagingService() {
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // Sound comes from the channel (custom pop); DEFAULT_SOUND would
+            // only matter pre-Oreo and would fight it there.
+            .setDefaults(NotificationCompat.DEFAULT_LIGHTS or NotificationCompat.DEFAULT_VIBRATE)
 
     private fun notify(id: Int, notification: android.app.Notification) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -115,14 +119,31 @@ class MessagingService : FirebaseMessagingService() {
     }
 
     private fun ensureChannels(manager: NotificationManager) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(CALL_CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH),
-            )
-            manager.createNotificationChannel(
-                NotificationChannel(MESSAGE_CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_HIGH),
-            )
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        // Channel sound is frozen at creation: to move existing installs onto
+        // the custom pop without orphaning channels, delete once (guarded by
+        // a prefs flag) and recreate with the sound attached.
+        val prefs = getSharedPreferences("disband_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("notif_sound_v1", false)) {
+            manager.deleteNotificationChannel(CALL_CHANNEL_ID)
+            manager.deleteNotificationChannel(MESSAGE_CHANNEL_ID)
+            prefs.edit().putBoolean("notif_sound_v1", true).apply()
         }
+        val audio = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val pop = Uri.parse("android.resource://${packageName}/${R.raw.notificationpop}")
+        manager.createNotificationChannel(
+            NotificationChannel(CALL_CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(pop, audio)
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(MESSAGE_CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(pop, audio)
+            },
+        )
     }
 
     private fun notificationsAllowed(): Boolean =

@@ -55,6 +55,45 @@ export function UpdateToast() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const snoozedUntil = useRef(0);
   const announcedVersion = useRef<string | null>(null);
+  // Defined first: install()'s failure path falls back to it.
+  const offerManualDownload = useCallback(async (): Promise<boolean> => {
+    try {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      const current = await getVersion();
+      const { release } = await fetchLatestReleaseFromGitHub();
+      if (!release?.tag) return false;
+
+      const parsed = parseSemverTag(release.tag);
+      const latest =
+        (parsed ? semverToString(parsed) : null) ?? inferVersionFromAssets(release.assets);
+      if (!latest || !isNewerVersion(latest, current)) return false;
+
+      if (Date.now() < snoozedUntil.current) return false;
+
+      const platform = detectClientPlatform();
+      const arch: MacArch = platform === "macos" ? await detectMacArchAsync() : "unknown";
+      const asset = pickAssetForPlatform(release.assets, platform, arch);
+
+      setVersion(latest);
+      setManualUrl(asset?.url ?? releasePageUrl(release.tag));
+      setManualLabel(asset?.label ?? null);
+      if (announcedVersion.current !== latest) {
+        announcedVersion.current = latest;
+        void import("@/lib/call-sounds").then((m) => {
+          try {
+            m.playUpdateReady();
+          } catch {
+            // Silence must never block the update.
+          }
+        }).catch(() => undefined);
+      }
+      setPhase("manual");
+      return true;
+    } catch {
+      // Offline, rate-limited, no releases. Nothing worth interrupting for.
+      return false;
+    }
+  }, []);
 
   const install = useCallback(async () => {
     const pending = update.current;
@@ -80,11 +119,15 @@ export function UpdateToast() {
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch {
-      // A failed update must never block the app: say so, and let the next
-      // launch try again.
-      setPhase("failed");
+      // A failed update must never block the app. Most often this is a
+      // signature the installed build cannot verify (e.g. an updater key
+      // rotation) — in that case no retry will ever succeed, so offer the
+      // one-click manual download instead of a dead end. Only if even that
+      // cannot be resolved do we show the failure state.
+      const manual = await offerManualDownload();
+      if (!manual) setPhase("failed");
     }
-  }, []);
+  }, [offerManualDownload]);
 
   const startCountdown = useCallback((chimeVersion: string | null) => {
     setPhase("offering");
@@ -111,43 +154,6 @@ export function UpdateToast() {
       });
     }, 1000);
   }, [install]);
-
-  const offerManualDownload = useCallback(async () => {
-    try {
-      const { getVersion } = await import("@tauri-apps/api/app");
-      const current = await getVersion();
-      const { release } = await fetchLatestReleaseFromGitHub();
-      if (!release?.tag) return;
-
-      const parsed = parseSemverTag(release.tag);
-      const latest =
-        (parsed ? semverToString(parsed) : null) ?? inferVersionFromAssets(release.assets);
-      if (!latest || !isNewerVersion(latest, current)) return;
-
-      if (Date.now() < snoozedUntil.current) return;
-
-      const platform = detectClientPlatform();
-      const arch: MacArch = platform === "macos" ? await detectMacArchAsync() : "unknown";
-      const asset = pickAssetForPlatform(release.assets, platform, arch);
-
-      setVersion(latest);
-      setManualUrl(asset?.url ?? releasePageUrl(release.tag));
-      setManualLabel(asset?.label ?? null);
-      if (announcedVersion.current !== latest) {
-        announcedVersion.current = latest;
-        void import("@/lib/call-sounds").then((m) => {
-          try {
-            m.playUpdateReady();
-          } catch {
-            // Silence must never block the update.
-          }
-        }).catch(() => undefined);
-      }
-      setPhase("manual");
-    } catch {
-      // Offline, rate-limited, no releases. Nothing worth interrupting for.
-    }
-  }, []);
 
   const check = useCallback(async () => {
     if (!isTauri()) return;
@@ -244,8 +250,8 @@ export function UpdateToast() {
             Disband {version} is available
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
-            Automatic updates aren&apos;t set up for this build yet, so this one
-            installs by hand.
+            This one installs by hand — grab it below and you&apos;ll be back
+            on automatic updates afterwards.
           </p>
           <div className="mt-3 flex gap-2">
             <a
