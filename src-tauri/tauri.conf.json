@@ -46,6 +46,14 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "category": "SocialNetworking",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "shortDescription": "One codebase, every platform.",
     "longDescription": "Disband — a cross-platform app for macOS, Windows, Linux and the Web, built from a single Next.js codebase.",
     "macOS": {
