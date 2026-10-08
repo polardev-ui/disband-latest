@@ -61,9 +61,9 @@ export function ProfilePreview({
     : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
 
   return (
-    <div className="max-w-[440px] overflow-hidden rounded-[20px] border border-divider bg-overlay-panel text-text-normal">
+    <div className="overflow-hidden rounded-2xl border border-divider bg-overlay-panel text-text-normal">
       <label className="group relative block cursor-pointer" title={onChangeBanner ? "Change banner" : undefined}>
-        <div className="h-[112px] w-full" style={{ background: bannerBg }}>
+        <div className="h-[136px] w-full" style={{ background: bannerBg }}>
           {banner && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={banner} alt="" className="h-full w-full object-cover" />
