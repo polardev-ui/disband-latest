@@ -587,7 +587,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           groupContext={messageContext === "channel" || messageContext === "group"}
         />
         {composerLockedReason ? (
-          <div className="mx-2 mb-2 flex min-h-[54px] items-center gap-2 rounded-[14px] border border-divider bg-bg-accent px-4 py-2">
+          <div className="mx-1 mb-2 flex min-h-[54px] items-center gap-2 rounded-[14px] border border-divider bg-bg-accent px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
             <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
           </div>

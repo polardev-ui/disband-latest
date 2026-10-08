@@ -597,7 +597,7 @@ export function ChatInput({
   }
 
   return (
-    <div className="relative shrink-0 px-2 pb-2">
+    <div className="relative shrink-0 px-1 pb-2">
       {windowDrag
         && createPortal(
           <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8 backdrop-blur-sm">
