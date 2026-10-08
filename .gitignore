@@ -97,6 +97,3 @@ android/keystore/
 
 # Local Pollinations artwork and development records
 /.mascot-local/
-
-# Local media for the dev-only /dev/ui test page
-public/dev-samples/
