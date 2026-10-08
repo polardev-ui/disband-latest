@@ -225,7 +225,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               onChange={(e) => setCustomNote(e.target.value)}
               placeholder="What are you up to?"
               maxLength={128}
-              className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]"
+              className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-brand"
             />
             <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
               {STATUS_DURATION_PRESETS.map((preset) => (

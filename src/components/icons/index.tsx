@@ -67,6 +67,7 @@ import {
   Bug,
   Check,
   ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -130,6 +131,7 @@ export const IconMessage = icon(MessageCircle);
 export const IconBug = icon(Bug);
 export const IconCheck = icon(Check);
 export const IconChevronRight = icon(ChevronRight);
+export const IconChevronLeft = icon(ChevronLeft);
 
 export const IconStaff = function IconStaff({ size = 20, className }: IconProps) {
   return (

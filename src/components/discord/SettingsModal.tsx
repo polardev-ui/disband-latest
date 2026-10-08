@@ -430,7 +430,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   }}
                   placeholder="Search settings"
                   aria-label="Search settings"
-                  className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]"
+                  className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand"
                 />
               </label>
             </div>
@@ -505,7 +505,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   value={tab}
                   onChange={(e) => setTab(e.target.value as SettingsTab)}
                   aria-label="Settings section"
-                  className="w-full rounded-[10px] border border-divider bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:border-brand/50 sm:hidden"
+                  className="w-full rounded-[10px] border border-divider bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:border-brand sm:hidden"
                 >
                   {TABS.map((t) => (
                     <option key={t.id} value={t.id}>{t.label}</option>
@@ -1029,7 +1029,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                             }}
                             className={`overflow-hidden rounded-2xl border text-left transition-[border-color,box-shadow] duration-150 ${
                               selected
-                                ? "border-brand shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_18%,transparent)]"
+                                ? "border-brand"
                                 : "border-divider hover:border-text-muted/40"
                             } ${isLocked ? "cursor-not-allowed opacity-50" : ""}`}
                           >

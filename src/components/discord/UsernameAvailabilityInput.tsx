@@ -94,7 +94,7 @@ export function UsernameAvailabilityInput({
           value={value}
           onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
           maxLength={maxLength}
-          className={`w-full rounded-[10px] border border-divider bg-bg-accent py-2.5 pl-10 pr-3.5 text-[14px] text-text-normal outline-none transition-[border-color,box-shadow] focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)] ${className}`}
+          className={`w-full rounded-[10px] border border-divider bg-bg-accent py-2.5 pl-10 pr-3.5 text-[14px] text-text-normal outline-none transition-[border-color,box-shadow] focus:border-brand ${className}`}
           autoComplete="username"
           spellCheck={false}
         />

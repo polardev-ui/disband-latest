@@ -110,7 +110,7 @@ export function Toggle({
 export const settingsInputClass =
   "w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] text-text-normal " +
   "outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 " +
-  "focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]";
+  "focus:border-brand";
 
 export function Hint({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "super" | "online" }) {
   return (

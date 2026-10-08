@@ -243,7 +243,7 @@ export function DiscoverView({
                 }}
                 placeholder="Search spaces by name, topic or owner"
                 aria-label="Search spaces"
-                className="h-12 w-full rounded-[14px] border border-divider bg-bg-accent pl-12 pr-11 text-[15px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand/50 focus:shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]"
+                className="h-12 w-full rounded-[14px] border border-divider bg-bg-accent pl-12 pr-11 text-[15px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand"
               />
               {query && (
                 <button

@@ -597,7 +597,7 @@ export function ChatInput({
   }
 
   return (
-    <div className="relative shrink-0 px-4 pb-6">
+    <div className="relative shrink-0 px-4 pb-2">
       {windowDrag
         && createPortal(
           <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8 backdrop-blur-sm">
@@ -739,7 +739,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-[14px] border border-divider bg-bg-accent transition-[border-color,box-shadow] duration-150 focus-within:border-brand/50 focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)] ${dragOver ? "border-brand shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_22%,transparent)]" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-[14px] border border-divider bg-bg-accent transition-[border-color,box-shadow] duration-150 focus-within:border-brand ${dragOver ? "border-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -749,7 +749,7 @@ export function ChatInput({
           </div>
         )}
 
-        <div className="flex items-end gap-1 px-2 py-2">
+        <div className="flex items-end gap-1 px-2 py-[10px]">
           <div ref={plusMenuRef} className="relative shrink-0">
             <button
               type="button"
