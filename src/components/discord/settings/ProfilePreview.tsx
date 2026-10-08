@@ -3,7 +3,8 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { IconUpload } from "@/components/icons";
-import { getAccentBackground, getUsernameStyle } from "@/lib/profileColor";
+import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
+import { DisplayName } from "@/components/ui/DisplayName";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
 
@@ -21,6 +22,17 @@ const STATUS_LABEL: Record<UserStatus, string> = {
   offline: "Invisible",
 };
 
+/**
+ * Live preview in Settings → Profile. Mirrors the real profile card
+ * (UserProfileModal) so what you see while editing is what others see:
+ * dark card, banner, overlapping avatar, name with badges below it, handle and
+ * pronouns, status bubble, About me.
+ *
+ * The old version sat name and badges on one non-wrapping row, so a profile
+ * with a lot of badges crushed the name to "pol…"; and it sized the avatar
+ * with an override class that a shop ring moved onto the ring's wrapper,
+ * leaving the ring off-centre around a larger picture.
+ */
 export function ProfilePreview({
   profile,
   displayName,
@@ -42,11 +54,16 @@ export function ProfilePreview({
 }) {
   const name = displayName.trim() || username.trim() || "Your name";
   const banner = safeImageUrl(profile.banner_url);
+  const pronouns = profile.pronouns?.trim();
+  const note = profile.status_note?.trim();
+  const bannerBg = usesCustomAccent(profile)
+    ? getAccentBackground(profile)
+    : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
 
   return (
-    <div className="overflow-hidden rounded-lg border border-divider bg-bg-tertiary">
+    <div className="max-w-[440px] overflow-hidden rounded-[20px] border border-divider bg-overlay-panel text-text-normal">
       <label className="group relative block cursor-pointer" title={onChangeBanner ? "Change banner" : undefined}>
-        <div className="h-24 w-full" style={{ background: getAccentBackground(profile) }}>
+        <div className="h-[112px] w-full" style={{ background: bannerBg }}>
           {banner && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={banner} alt="" className="h-full w-full object-cover" />
@@ -54,7 +71,7 @@ export function ProfilePreview({
         </div>
         {onChangeBanner && (
           <>
-            <span className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/50 text-[13px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/55 text-[13px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
               <IconUpload size={16} /> Change banner
             </span>
             <input
@@ -71,61 +88,70 @@ export function ProfilePreview({
         )}
       </label>
 
-      <div className="px-4 pb-4">
-        <div className="-mt-10 mb-3 flex items-end justify-between">
-          <div className="relative">
-            <label className="group relative block cursor-pointer" title={onChangeAvatar ? "Change avatar" : undefined}>
-              <span className="block rounded-full border-4 border-bg-tertiary">
-                <Avatar profile={profile} size="lg" className="h-16 w-16 text-xl" />
-              </span>
-              {onChangeAvatar && (
-                <>
-                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                    <IconUpload size={16} />
-                    <span className="text-[10px] font-semibold leading-none">Change</span>
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) onChangeAvatar(file);
-                      e.target.value = "";
-                    }}
-                  />
-                </>
-              )}
-            </label>
-            <span
-              className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-[3px] border-bg-tertiary ${STATUS_BG[status]}`}
-              title={STATUS_LABEL[status]}
-            />
+      <div className="px-5 pb-5">
+        <div className="relative -mt-[46px] w-fit rounded-full bg-overlay-panel p-[5px]">
+          <label className="group relative block cursor-pointer rounded-full" title={onChangeAvatar ? "Change avatar" : undefined}>
+            <Avatar profile={profile} size="lg" />
+            {onChangeAvatar && (
+              <>
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <IconUpload size={16} />
+                  <span className="text-[10px] font-semibold leading-none">Change</span>
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onChangeAvatar(file);
+                    e.target.value = "";
+                  }}
+                />
+              </>
+            )}
+          </label>
+          <span
+            className={`absolute bottom-1.5 right-1.5 h-[18px] w-[18px] rounded-full border-[3px] border-overlay-panel ${STATUS_BG[status]}`}
+            title={STATUS_LABEL[status]}
+          />
+        </div>
+
+        <h3 className="mt-2.5 break-words text-[21px] font-semibold leading-tight tracking-[-0.02em]">
+          <DisplayName profile={{ ...profile, display_name: name }} />
+        </h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13.5px] text-text-muted">
+          {username.trim() && <span>@{username.trim()}</span>}
+          {pronouns && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{pronouns}</span>
+            </>
+          )}
+          <span aria-hidden>·</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${STATUS_BG[status]}`} />
+            {STATUS_LABEL[status]}
+          </span>
+        </p>
+
+        {/* Badges get their own row: however many there are, they wrap here
+            instead of fighting the name for width. */}
+        <UserBadges userId={profile.id} variant="full" size={16} className="mt-2.5" />
+
+        {note && (
+          <div className="relative mt-3.5 w-fit max-w-full">
+            <span aria-hidden className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-divider bg-bg-accent" />
+            <p className="break-words rounded-2xl border border-divider bg-bg-accent px-3.5 py-2 text-[13.5px] leading-snug">{note}</p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <p
-            className="truncate text-[17px] font-semibold"
-            style={getUsernameStyle(profile)}
-          >
-            {name}
-          </p>
-          <UserBadges userId={profile.id} variant="full" />
-        </div>
-
-        {username.trim() && (
-          <p className="truncate text-[13px] text-text-muted">@{username.trim()}</p>
         )}
 
-        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-text-muted">
-          {bio.trim() || "Your bio will appear here."}
-        </p>
-
-        <p className="mt-3 flex items-center gap-1.5 text-[12px] text-text-muted">
-          <span className={`h-2 w-2 rounded-full ${STATUS_BG[status]}`} />
-          {STATUS_LABEL[status]}
-        </p>
+        <div className="mt-4 border-t border-divider pt-3.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">About me</p>
+          <p className={`mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed ${bio.trim() ? "" : "text-text-muted"}`}>
+            {bio.trim() || "Your bio will appear here."}
+          </p>
+        </div>
       </div>
     </div>
   );

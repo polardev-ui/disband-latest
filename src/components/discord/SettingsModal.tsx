@@ -547,6 +547,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           display_name: displayName,
                           username,
                           bio,
+                          pronouns,
+                          status_note: statusNote,
                           accent_color: useDefaultAccent ? null : accent1,
                           accent_color_2: useDefaultAccent ? null : accent2,
                         }}
