@@ -9,7 +9,7 @@ import { invalidateBadges } from "@/lib/badge-store";
 import { ClaimAnimation } from "./ClaimAnimation";
 import { SubscriptionMedallion, TIERS, tierForMonths } from "./SubscriptionMedallion";
 
-interface GiftRow {
+export interface GiftRow {
   code: string;
   plan: GiftPlan;
   months: number;
@@ -19,7 +19,16 @@ interface GiftRow {
   expires_at: string;
 }
 
-export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }) {
+export function GiftCard({
+  code,
+  onLoad,
+  preview,
+}: {
+  code: string;
+  onLoad?: () => void;
+  /** Dev test page only: render this gift without touching the database. */
+  preview?: { gift: GiftRow; buyerName: string; viewerId: string | null };
+}) {
   // Inside chat the provider supplies the user; on the standalone /gift
   // page there is no provider, so fall back to the raw session. Either
   // way only the id is needed (ownership display + cache invalidation).
@@ -33,7 +42,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
     });
     return () => { alive = false; };
   }, [app]);
-  const userId = app?.user?.id ?? standaloneUserId;
+  const userId = preview ? preview.viewerId : app?.user?.id ?? standaloneUserId;
   const [gift, setGift] = useState<GiftRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
@@ -53,6 +62,12 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   }
 
   useEffect(() => {
+    if (preview) {
+      setGift(preview.gift);
+      setBuyerName(preview.buyerName);
+      setLoading(false);
+      return;
+    }
     let alive = true;
     setLoading(true);
     void (async () => {
@@ -118,6 +133,11 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   async function claim() {
     if (claiming) return;
+    if (preview) {
+      setGift({ ...gift!, status: "claimed", claimed_by: userId });
+      setCelebrate(true);
+      return;
+    }
     setClaiming(true);
     setError(null);
     try {
