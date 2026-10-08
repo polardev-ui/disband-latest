@@ -609,6 +609,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           allowPolls={messageContext === "channel" || messageContext === "group"}
           focusSignal={composerFocus}
           tetherEnabled={messageContext !== "notes"}
+          allowGifts={messageContext !== "notes"}
         />
         )}
       </div>

@@ -7,6 +7,7 @@ import { GIFT_PLAN_NAME, monthsLabel, type GiftPlan } from "@/lib/gifts";
 import { invalidateEntitlement } from "@/lib/entitlement-store";
 import { invalidateBadges } from "@/lib/badge-store";
 import { ClaimAnimation } from "./ClaimAnimation";
+import { SubscriptionMedallion, TIERS, tierForMonths } from "./SubscriptionMedallion";
 
 interface GiftRow {
   code: string;
@@ -84,17 +85,24 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   // still-loading. Show a skeleton, then an honest invalid state.
   if (loading) {
     return (
-      <div aria-label="Loading gift" className="mt-1.5 max-w-[420px] animate-pulse overflow-hidden rounded-lg border-l-4 border-divider bg-bg-secondary p-4">
-        <div className="h-4 w-1/2 rounded bg-bg-accent" />
-        <div className="mt-2 h-5 w-3/4 rounded bg-bg-accent" />
-        <div className="mt-3 h-10 w-full rounded-lg bg-bg-accent" />
+      <div aria-label="Loading gift" className="mt-1.5 max-w-[420px] animate-pulse overflow-hidden rounded-[16px] border border-divider bg-bg-secondary">
+        <div className="flex items-center gap-3.5 p-4">
+          <div className="h-[46px] w-[46px] rounded-full bg-bg-accent" />
+          <div className="flex-1">
+            <div className="h-3 w-1/3 rounded bg-bg-accent" />
+            <div className="mt-2 h-4 w-1/2 rounded bg-bg-accent" />
+          </div>
+        </div>
+        <div className="border-t border-divider px-4 py-3">
+          <div className="h-9 w-full rounded-[10px] bg-bg-accent" />
+        </div>
       </div>
     );
   }
 
   if (!gift) {
     return (
-      <div className="mt-1.5 max-w-[420px] rounded-lg border border-divider bg-bg-secondary px-4 py-3">
+      <div className="mt-1.5 max-w-[420px] rounded-[16px] border border-divider bg-bg-secondary px-4 py-3">
         <p className="text-[13px] text-text-muted">
           This gift link is invalid or has expired.
         </p>
@@ -140,72 +148,60 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   return (
     <>
-      <div
-        className="mt-1.5 max-w-[420px] overflow-hidden rounded-lg border-l-4 bg-bg-secondary"
-        style={{ borderColor: gone && !claimedByMe ? "var(--color-divider)" : accent }}
-      >
-        <div className="flex items-center gap-3 px-4 pt-4">
-          <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-            style={{ background: `${accent}22`, color: accent }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="10" width="18" height="11" rx="1.8" />
-              <path d="M3 14.4h18M12 10v11" />
-              <path d="M12 10S10.6 5.4 8.2 5.4a2.3 2.3 0 0 0 0 4.6ZM12 10s1.4-4.6 3.8-4.6a2.3 2.3 0 0 1 0 4.6Z" />
-            </svg>
+      <div className="mt-1.5 max-w-[420px] overflow-hidden rounded-[16px] border border-divider bg-bg-secondary">
+        <div className={`flex items-center gap-3.5 p-4 ${gone && !claimedByMe ? "opacity-60" : ""}`}>
+          <span className="shrink-0">
+            <SubscriptionMedallion tier={tierForMonths(gift.months) ?? TIERS[0]} super size={46} />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-              {mine ? "Your gift" : `A gift from ${buyerName}`}
+            <p className="text-[12.5px] text-text-muted">
+              {mine ? "Your gift" : `Gift from ${buyerName}`}
             </p>
-            <p className="truncate text-[15px] font-semibold text-text-normal">
-              {GIFT_PLAN_NAME[gift.plan]}
+            <p className="truncate text-[15.5px] font-semibold leading-snug">
+              <span style={{ color: accent }}>{GIFT_PLAN_NAME[gift.plan]}</span>
+              <span className="font-normal text-text-muted"> · {monthsLabel(gift.months)}</span>
             </p>
-            <p className="text-[13px] text-text-muted">
-              {monthsLabel(gift.months)}
-              {!gone && " · first to claim it gets it"}
-            </p>
+            {!gone && gift.status !== "pending" && (
+              <p className="text-[12.5px] text-text-muted">First to claim it gets it</p>
+            )}
           </div>
         </div>
 
-        <div className="px-4 pb-4 pt-3">
+        <div className="border-t border-divider px-4 py-3">
           {claimedByMe ? (
-            <p className="flex items-center gap-2 text-[13px] font-medium" style={{ color: accent }}>
+            <p className="flex items-center gap-2 text-[13.5px] font-medium text-status-online">
               <Tick /> Claimed by you
             </p>
           ) : gift.status === "claimed" ? (
-            <p className="text-[13px] text-text-muted">Already claimed.</p>
+            <p className="text-[13.5px] text-text-muted">Already claimed</p>
           ) : gift.status === "expired" ? (
-            <p className="text-[13px] text-text-muted">This gift expired.</p>
+            <p className="text-[13.5px] text-text-muted">This gift expired</p>
           ) : gift.status === "pending" ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" aria-hidden />
-              <p className="flex-1 text-[13px] text-text-muted">Waiting for payment to clear…</p>
+              <p className="flex-1 text-[13.5px] text-text-muted">Waiting for payment to clear…</p>
               <button
                 type="button"
                 disabled={refreshing}
                 onClick={() => void refresh()}
-                className="shrink-0 text-[13px] font-medium text-text-normal hover:underline disabled:opacity-50"
+                className="shrink-0 rounded-md px-2 py-1 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
               >
                 {refreshing ? "Checking…" : "Refresh"}
               </button>
             </div>
           ) : mine ? (
-            <p className="text-[13px] text-text-muted">Waiting for someone to claim it.</p>
+            <p className="text-[13.5px] text-text-muted">Waiting for someone to claim it</p>
           ) : (
             <button
               type="button"
               disabled={claiming}
               onClick={() => void claim()}
-              className="w-full rounded-lg py-2.5 text-[15px] font-semibold text-[#111] transition-opacity hover:opacity-90 disabled:opacity-60"
-              style={{ background: accent }}
+              className="h-9 w-full rounded-[10px] bg-text-normal text-[14px] font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              {claiming ? "Claiming…" : "Claim"}
+              {claiming ? "Claiming…" : "Claim gift"}
             </button>
           )}
-          {error && <p className="mt-2 text-[12px] text-status-dnd">{error}</p>}
+          {error && <p className="mt-2 text-[12.5px] text-status-dnd">{error}</p>}
         </div>
       </div>
 

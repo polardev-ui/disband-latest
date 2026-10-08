@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconAttach, IconPoll, IconClose, IconHash, IconPlus, IconSend } from "@/components/icons";
+import { IconAttach, IconGift, IconPoll, IconClose, IconHash, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { applyAtomicEveryone } from "@/lib/composer-tokens";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
@@ -16,6 +16,8 @@ import { GifPicker } from "./GifPicker";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
 import { ComposerMarkdown } from "./ComposerMarkdown";
+import { GiftModal } from "@/components/gift/GiftModal";
+import { giftUrl } from "@/lib/gifts";
 import { useApp } from "@/contexts/AppContext";
 import { mentionsTether, TETHER_AERO_NUDGE } from "@/lib/tether-client";
 
@@ -41,6 +43,9 @@ interface ChatInputProps {
 
   /** Whether this surface can invoke Tether ('@tether'). Notes cannot. */
   tetherEnabled?: boolean;
+
+  /** Show the gift button. Off in Notes, where there's nobody to gift. */
+  allowGifts?: boolean;
 }
 
 interface MentionItem {
@@ -117,7 +122,8 @@ export function ChatInput({
   serverId,
   allowPolls = false,
   focusSignal,
-  tetherEnabled = false,
+  tetherEnabled,
+  allowGifts = false,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -128,6 +134,7 @@ export function ChatInput({
   const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [giftOpen, setGiftOpen] = useState(false);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [pollOpen, setPollOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -911,6 +918,20 @@ export function ChatInput({
           />
           </div>
           </div>
+          {allowGifts && (
+            <button
+              type="button"
+              aria-label="Send a gift"
+              title={editingMessageId ? "Finish editing before sending a gift" : "Send a gift"}
+              disabled={!!editingMessageId}
+              onClick={() => setGiftOpen(true)}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
+                giftOpen ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+              }`}
+            >
+              <IconGift size={20} />
+            </button>
+          )}
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
             disabled={!!editingMessageId}
@@ -940,6 +961,19 @@ export function ChatInput({
           </p>
         )}
       </form>
+
+      {giftOpen && (
+        <GiftModal
+          onClose={() => setGiftOpen(false)}
+          onPurchased={(code) => {
+            setGiftOpen(false);
+            // Paid: post the link here. It renders as a claimable gift card.
+            void onSend(giftUrl(code, window.location.origin)).then((err) => {
+              if (err) setError(err);
+            });
+          }}
+        />
+      )}
 
       <PollCreateModal
         open={pollOpen}
