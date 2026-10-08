@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconHash, IconPlus, IconSend } from "@/components/icons";
+import { IconAttach, IconPoll, IconClose, IconHash, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { applyAtomicEveryone } from "@/lib/composer-tokens";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
@@ -128,6 +128,7 @@ export function ChatInput({
   const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [pollOpen, setPollOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -755,6 +756,8 @@ export function ChatInput({
               type="button"
               aria-label="Upload file"
               aria-expanded={plusMenuOpen}
+              aria-haspopup={allowPolls ? "menu" : undefined}
+              ref={plusButtonRef}
               disabled={!!editingMessageId}
               title={editingMessageId ? "Finish editing before adding files" : "Upload file"}
               onClick={() => {
@@ -768,23 +771,60 @@ export function ChatInput({
               <IconPlus size={20} />
             </button>
             {allowPolls && plusMenuOpen && (
-              <div className="absolute bottom-full left-0 z-20 mb-2 w-52 overflow-hidden rounded-xl border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]">
-                <button
-                  type="button"
-                  onClick={() => { setPlusMenuOpen(false); fileRef.current?.click(); }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-interactive-hover"
-                >
-                  Upload files
-                </button>
-                <button
-                  type="button"
-                  disabled={!!editingMessageId}
-                  title={editingMessageId ? "Finish editing before creating a poll" : undefined}
-                  onClick={() => { setPlusMenuOpen(false); setPollOpen(true); }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Create a poll
-                </button>
+              <div
+                role="menu"
+                aria-label="Add to message"
+                onKeyDown={(e) => {
+                  // Arrow keys move between items; Escape closes and returns focus.
+                  const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+                  const i = items.indexOf(document.activeElement as HTMLButtonElement);
+                  if (e.key === "ArrowDown") items[(i + 1) % items.length]?.focus();
+                  else if (e.key === "ArrowUp") items[(i - 1 + items.length) % items.length]?.focus();
+                  else if (e.key === "Escape") {
+                    setPlusMenuOpen(false);
+                    plusButtonRef.current?.focus();
+                  } else return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className="modal-pop absolute bottom-full left-0 z-20 mb-2 w-[260px] rounded-[14px] border border-divider bg-overlay-surface p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+              >
+                {[
+                  {
+                    id: "upload",
+                    icon: <IconAttach size={18} />,
+                    label: "Upload files",
+                    hint: "Photos, videos or any file",
+                    disabled: false,
+                    onSelect: () => fileRef.current?.click(),
+                  },
+                  {
+                    id: "poll",
+                    icon: <IconPoll size={18} />,
+                    label: "Create a poll",
+                    hint: editingMessageId ? "Finish editing first" : "Ask the channel to vote",
+                    disabled: !!editingMessageId,
+                    onSelect: () => setPollOpen(true),
+                  },
+                ].map((item, i) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitem"
+                    autoFocus={i === 0}
+                    disabled={item.disabled}
+                    onClick={() => { setPlusMenuOpen(false); item.onSelect(); }}
+                    className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-interactive-hover focus-visible:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-divider bg-bg-accent text-text-normal">
+                      {item.icon}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-medium leading-tight text-text-normal">{item.label}</span>
+                      <span className="mt-0.5 block truncate text-[12.5px] leading-tight text-text-muted">{item.hint}</span>
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
           </div>

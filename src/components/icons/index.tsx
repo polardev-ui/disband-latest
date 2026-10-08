@@ -39,6 +39,8 @@ import {
   SmilePlus,
   Smile,
   Ellipsis,
+  Paperclip,
+  ChartNoAxesColumn,
   ScreenShare,
   ScreenShareOff,
   SquarePen,
@@ -117,6 +119,8 @@ export const IconStar = icon(Star);
 export const IconEmoji = icon(SmilePlus);
 export const IconSmile = icon(Smile);
 export const IconMore = icon(Ellipsis);
+export const IconAttach = icon(Paperclip);
+export const IconPoll = icon(ChartNoAxesColumn);
 export const IconScreenShare = icon(ScreenShare);
 export const IconScreenShareOff = icon(ScreenShareOff);
 export const IconNotes = icon(SquarePen);
