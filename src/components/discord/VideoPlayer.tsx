@@ -1,77 +1,109 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Maximize2, Minimize2, Pause, Play, RotateCcw, Volume1, Volume2, VolumeX } from "lucide-react";
+import { useContextMenu } from "@/components/ui/ContextMenu";
+import { saveMedia } from "@/lib/media-actions";
+import { safeWindowOpen } from "@/lib/safe-url";
+import {
+  PLAYBACK_RATES,
+  SeekBar,
+  bufferedFraction,
+  claimPlayback,
+  formatTime,
+  useMediaClock,
+} from "./media/MediaKit";
 
 interface VideoPlayerProps {
   src: string;
   className?: string;
   onLoad?: () => void;
+  fileName?: string;
 }
 
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+/*
+ Inline video.
 
-export function VideoPlayer({ src, className = "", onLoad }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const barRef = useRef<HTMLDivElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
+ Before playback it shows a single solid play button and the length; while
+ playing, a slim control bar appears on movement and gets out of the way when
+ you stop moving. No browser chrome, no glow — the same matte controls as the
+ audio player, so media looks like one family.
+
+ Keys when the player is focused: Space/K play-pause, ←/→ seek 5s (Shift for
+ 10s), ↑/↓ volume, M mute, F fullscreen. Double-click toggles fullscreen.
+*/
+export function VideoPlayer({ src, className = "", onLoad, fileName = "video" }: VideoPlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
+  const [started, setStarted] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { openMenu } = useContextMenu();
+  useMediaClock(video);
+
+  const current = video?.currentTime ?? 0;
+  const duration = video && Number.isFinite(video.duration) ? video.duration : 0;
+  const playing = !!video && !video.paused && !video.ended;
+  const ended = !!video?.ended;
+  const muted = !!video?.muted || video?.volume === 0;
+  const volume = video?.volume ?? 1;
+  const rate = video?.playbackRate ?? 1;
 
   const revealControls = useCallback(() => {
     setShowControls(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
-      if (videoRef.current && !videoRef.current.paused) setShowControls(false);
-    }, 2500);
-  }, []);
+      if (video && !video.paused) setShowControls(false);
+    }, 2200);
+  }, [video]);
 
   useEffect(() => () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }, []);
 
-  function togglePlay() {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) void v.play();
-    else v.pause();
-  }
+  const togglePlay = useCallback(() => {
+    if (!video) return;
+    if (video.paused || video.ended) {
+      claimPlayback(video);
+      setStarted(true);
+      void video.play();
+    } else {
+      video.pause();
+    }
+  }, [video]);
 
-  function toggleMute() {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setMuted(v.muted);
-  }
-
-  function seek(clientX: number) {
-    const v = videoRef.current;
-    const bar = barRef.current;
-    if (!v || !bar || !duration) return;
-    const rect = bar.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    v.currentTime = ratio * duration;
-  }
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [fullscreen, setFullscreen] = useState(false);
+  const seek = (s: number) => {
+    if (video) video.currentTime = Math.min(duration, Math.max(0, s));
+  };
+  const setVolume = (v: number) => {
+    if (!video) return;
+    video.volume = Math.min(1, Math.max(0, v));
+    video.muted = video.volume === 0;
+  };
+  const toggleMute = () => {
+    if (!video) return;
+    if (video.muted || video.volume === 0) {
+      video.muted = false;
+      if (video.volume === 0) video.volume = 0.6;
+    } else {
+      video.muted = true;
+    }
+  };
+  const cycleRate = () => {
+    if (!video) return;
+    const i = PLAYBACK_RATES.indexOf(rate as (typeof PLAYBACK_RATES)[number]);
+    video.playbackRate = PLAYBACK_RATES[(i + 1) % PLAYBACK_RATES.length];
+  };
 
   /**
-   * Real fullscreen, not a full-viewport div.
-   *
-   * This used to just set `position: fixed; inset: 0`, which fills the browser
-   * window but leaves the tab bar and the OS around it — so the button looked
-   * like it did nothing. The Fullscreen API takes over the display properly,
-   * and on the desktop build it fills the window the same way.
+   * Real fullscreen, not a full-viewport div: the Fullscreen API takes over
+   * the display properly, and on the desktop build fills the window. Safari
+   * and the WebKit desktop build only have the prefixed form; if the request
+   * is refused, fall back to an in-page expansion rather than doing nothing.
    */
-  function toggleFullscreen() {
+  const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const doc = document as Document & {
@@ -79,25 +111,21 @@ export function VideoPlayer({ src, className = "", onLoad }: VideoPlayerProps) {
       webkitExitFullscreen?: () => Promise<void>;
     };
     const target = el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
-
     const active = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
-    if (active) {
-      void (document.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
+    if (active || fullscreen) {
+      if (active) void (document.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
+      else setFullscreen(false);
       return;
     }
-    // Safari and older WebKit (which the desktop build uses) only have the
-    // prefixed form. A rejected promise means the gesture was not trusted;
-    // fall back to the in-page expansion rather than doing nothing.
     const request = target.requestFullscreen?.bind(target) ?? target.webkitRequestFullscreen?.bind(target);
     if (!request) {
       setFullscreen(true);
       return;
     }
     void request().catch(() => setFullscreen(true));
-  }
+  }, [fullscreen]);
 
-  // The browser owns the state — Escape and F11 change it without going
-  // through the button — so mirror it rather than tracking it ourselves.
+  // Escape and F11 change fullscreen without the button, so mirror the browser.
   useEffect(() => {
     const sync = () => {
       const doc = document as Document & { webkitFullscreenElement?: Element | null };
@@ -112,82 +140,143 @@ export function VideoPlayer({ src, className = "", onLoad }: VideoPlayerProps) {
     };
   }, []);
 
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!video || (e.target as HTMLElement).getAttribute("role") === "slider") return;
+    const k = e.key.toLowerCase();
+    if (k === " " || k === "k") togglePlay();
+    else if (k === "arrowright") seek(current + (e.shiftKey ? 10 : 5));
+    else if (k === "arrowleft") seek(current - (e.shiftKey ? 10 : 5));
+    else if (k === "arrowup") setVolume(volume + 0.1);
+    else if (k === "arrowdown") setVolume(volume - 0.1);
+    else if (k === "m") toggleMute();
+    else if (k === "f") toggleFullscreen();
+    else return;
+    e.preventDefault();
+    revealControls();
+  };
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openMenu(e.clientX, e.clientY, [
+      { id: "play", label: playing ? "Pause" : "Play", onClick: togglePlay },
+      { id: "save", label: "Save video", onClick: () => void saveMedia(src, fileName) },
+      { id: "copy-link", label: "Copy link", onClick: () => void navigator.clipboard.writeText(src) },
+      { id: "open", label: "Open original", onClick: () => safeWindowOpen(src) },
+    ]);
+  };
+
+  const controlsVisible = showControls || !playing;
+  const iconBtn =
+    "flex h-8 w-8 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/10 hover:text-white";
+  const VolumeIcon = muted ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+
   return (
     <div
       ref={containerRef}
-      className={`group relative overflow-hidden bg-black ${
-        fullscreen
-          ? "fixed inset-0 z-[200] border-0"
-          : "rounded-lg border border-divider"
-      } ${className}`}
+      tabIndex={0}
+      aria-label="Video player"
+      onKeyDown={onKeyDown}
+      onContextMenu={onContextMenu}
+      className={`group/video relative overflow-hidden bg-black outline-none focus-visible:ring-1 focus-visible:ring-brand ${
+        fullscreen ? "fixed inset-0 z-[200]" : "rounded-[14px] border border-divider"
+      } ${playing && !showControls ? "cursor-none" : ""} ${className}`}
       onMouseMove={revealControls}
       onMouseLeave={() => !fullscreen && playing && setShowControls(false)}
     >
       <video
-        ref={videoRef}
+        ref={setVideo}
         src={src}
-        className={`block w-full object-contain ${
-          fullscreen ? "h-full" : "max-h-[min(24rem,40vh)]"
-        }`}
+        preload="metadata"
         playsInline
+        className={`block w-full object-contain ${fullscreen ? "h-full" : "max-h-[min(24rem,40vh)] min-h-[160px]"}`}
         onClick={togglePlay}
-        onPlay={() => { setPlaying(true); revealControls(); }}
-        onPause={() => { setPlaying(false); setShowControls(true); }}
-        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => {
-          setDuration(e.currentTarget.duration);
-          onLoad?.();
-        }}
-        onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
+        onDoubleClick={toggleFullscreen}
+        onPlay={() => revealControls()}
+        onPause={() => setShowControls(true)}
+        onWaiting={() => setWaiting(true)}
+        onPlaying={() => setWaiting(false)}
+        onCanPlay={() => setWaiting(false)}
+        onLoadedMetadata={() => onLoad?.()}
       />
 
-      <div
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-8 transition-opacity duration-200 ${
-          showControls ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <div
-          ref={barRef}
-          role="slider"
-          aria-label="Seek"
-          aria-valuemin={0}
-          aria-valuemax={duration}
-          aria-valuenow={current}
-          className="mb-2 h-1 cursor-pointer rounded-full bg-white/25"
-          onClick={(e) => seek(e.clientX)}
+      {/* Centre state: big play before/while paused, replay at the end. */}
+      {!playing && !waiting && (
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label={ended ? "Replay" : "Play"}
+          className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-black transition-transform duration-150 hover:scale-105 active:scale-95"
         >
-          <div
-            className="h-full rounded-full bg-brand"
-            style={{ width: duration ? `${(current / duration) * 100}%` : "0%" }}
-          />
-        </div>
+          {ended ? <RotateCcw size={22} strokeWidth={2.4} /> : <Play size={22} fill="currentColor" strokeWidth={0} className="translate-x-[2px]" />}
+        </button>
+      )}
+      {waiting && playing && (
+        <span
+          aria-label="Loading"
+          className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-[3px] border-white/25 border-t-white"
+        />
+      )}
 
-        <div className="flex items-center gap-2 text-white">
-          <button type="button" onClick={togglePlay} className="rounded p-1 hover:bg-white/10" aria-label={playing ? "Pause" : "Play"}>
-            {playing ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-            )}
-          </button>
-          <span className="text-xs tabular-nums">{formatTime(current)} / {formatTime(duration)}</span>
-          <div className="flex-1" />
-          <button type="button" onClick={toggleMute} className="rounded p-1 hover:bg-white/10" aria-label={muted ? "Unmute" : "Mute"}>
-            {muted ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" /></svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" /></svg>
-            )}
-          </button>
-          <button type="button" onClick={toggleFullscreen} className="rounded p-1 hover:bg-white/10" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>
-            {fullscreen ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" /></svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" /></svg>
-            )}
-          </button>
+      {/* Before first play, just the length — the control bar comes later. */}
+      {!started && duration > 0 && (
+        <span className="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/75 px-1.5 py-0.5 text-[11.5px] font-medium tabular-nums text-white">
+          {formatTime(duration)}
+        </span>
+      )}
+
+      {started && (
+        <div
+          className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pb-2 pt-10 transition-opacity duration-200 ${
+            controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        >
+          <SeekBar current={current} duration={duration} buffered={bufferedFraction(video)} onSeek={seek} />
+          <div className="mt-1 flex items-center gap-1 text-white">
+            <button type="button" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} className={iconBtn}>
+              {playing ? <Pause size={17} fill="currentColor" strokeWidth={0} /> : <Play size={17} fill="currentColor" strokeWidth={0} />}
+            </button>
+
+            <div className="group/vol flex items-center">
+              <button type="button" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} className={iconBtn}>
+                <VolumeIcon size={17} />
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={muted ? 0 : volume}
+                onChange={(e) => setVolume(Number(e.target.value))}
+                aria-label="Volume"
+                className="h-1 w-0 cursor-pointer appearance-none rounded-full bg-white/30 accent-white opacity-0 transition-[width,opacity,margin] duration-150 group-hover/vol:mr-2 group-hover/vol:w-16 group-hover/vol:opacity-100 focus:mr-2 focus:w-16 focus:opacity-100"
+              />
+            </div>
+
+            <span className="ml-1 text-[12px] tabular-nums text-white/85">
+              {formatTime(current)} <span className="text-white/45">/ {formatTime(duration)}</span>
+            </span>
+
+            <div className="flex-1" />
+
+            <button
+              type="button"
+              onClick={cycleRate}
+              title="Playback speed"
+              className="h-8 min-w-[40px] rounded-lg px-1.5 text-[12px] font-medium tabular-nums text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              {rate}×
+            </button>
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className={iconBtn}
+            >
+              {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

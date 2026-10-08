@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
-import { safeDownload, safeImageUrl, safeWindowOpen } from "@/lib/safe-url";
+import { safeImageUrl, safeWindowOpen } from "@/lib/safe-url";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -16,6 +16,9 @@ import {
 } from "@/components/icons";
 import { formatMessageTime, displayName } from "@/lib/utils";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { useContextMenu } from "@/components/ui/ContextMenu";
+import { OVERLAY_Z } from "@/lib/overlay";
+import { copyImageToClipboard, saveMedia } from "@/lib/media-actions";
 import { getUsernameStyle } from "@/lib/profileColor";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -67,6 +70,14 @@ export function ImageLightbox({
   // Where on the image a click-zoom was aimed, as % of the image box.
   const [origin, setOrigin] = useState("50% 50%");
   const zoom = ZOOM_STEPS[zoomIndex];
+  const { openMenu } = useContextMenu();
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 1800);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useOverlayDismiss(onClose, open);
 
@@ -102,6 +113,34 @@ export function ImageLightbox({
     setZoomIndex(2);
   }, [zoomIndex]);
 
+  const run = (action: () => Promise<void>, done: string, failed: string) => {
+    void action().then(
+      () => setToast(done),
+      () => setToast(failed),
+    );
+  };
+
+  // The desktop webview has no native context menu, so the viewer brings its
+  // own — the same on web and desktop.
+  const onMediaContextMenu = (e: MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = safeImageUrl(src);
+    if (!url) return;
+    openMenu(e.clientX, e.clientY, [
+      ...(!animated
+        ? [{ id: "copy-image", label: "Copy image", onClick: () => run(() => copyImageToClipboard(url), "Image copied", "Couldn't copy the image") }]
+        : []),
+      { id: "save", label: animated ? "Save" : "Save image", onClick: () => run(() => saveMedia(url, fileName), "Saved", "Couldn't save it") },
+      {
+        id: "copy-link",
+        label: "Copy link",
+        onClick: () => run(() => navigator.clipboard.writeText(url), "Link copied", "Couldn't copy the link"),
+      },
+      { id: "open", label: "Open original", onClick: () => safeWindowOpen(url) },
+    ]);
+  };
+
   if (!open || typeof document === "undefined") return null;
 
   const nameStyle = authorColor ? { color: authorColor } : author ? getUsernameStyle(author) : undefined;
@@ -114,10 +153,10 @@ export function ImageLightbox({
   const mediaStyle = { transform: `scale(${zoom})`, transformOrigin: origin };
 
   return createPortal(
-    <div className="fixed inset-0 z-[150]" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.lightbox }} role="dialog" aria-modal="true" aria-label="Image viewer">
       <button
         type="button"
-        className="overlay-fade absolute inset-0 bg-black/[0.96]"
+        className="overlay-fade absolute inset-0 bg-black"
         onClick={onClose}
         aria-label="Close viewer"
       />
@@ -167,7 +206,7 @@ export function ImageLightbox({
             <IconZoomIn size={18} />
           </ToolbarButton>
           <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
-          <ToolbarButton label="Download" onClick={() => safeDownload(src, fileName)}>
+          <ToolbarButton label="Download" onClick={() => run(() => saveMedia(src, fileName), "Saved", "Couldn't save it")}>
             <IconDownload size={18} />
           </ToolbarButton>
           <ToolbarButton label="Open original" onClick={() => safeWindowOpen(src)}>
@@ -196,6 +235,7 @@ export function ImageLightbox({
             muted
             playsInline
             onClick={onImageClick}
+            onContextMenu={onMediaContextMenu}
             className={`pointer-events-auto ${mediaClass}`}
             style={mediaStyle}
           />
@@ -205,6 +245,7 @@ export function ImageLightbox({
             src={resolved}
             alt={alt}
             onClick={onImageClick}
+            onContextMenu={onMediaContextMenu}
             draggable={false}
             className={`pointer-events-auto ${mediaClass}`}
             style={mediaStyle}
@@ -228,6 +269,15 @@ export function ImageLightbox({
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-center justify-center px-6">
         <p className="truncate text-[12.5px] text-white/45">{fileName}</p>
       </footer>
+
+      {toast && (
+        <div
+          role="status"
+          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-[10px] border border-white/10 bg-[#141519] px-3.5 py-2 text-[13px] text-white"
+        >
+          {toast}
+        </div>
+      )}
     </div>,
     document.body,
   );
