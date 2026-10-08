@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinForms>true</UseWinForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DisbandSetup</AssemblyName>
+    <RootNamespace>DisbandSetup</RootNamespace>
+    <Version>1.0.0</Version>
+    <!-- Single-file, self-contained: runs on any 64-bit Windows with no
+         .NET or WebView2 prerequisites of its own. -->
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <!-- No designer involved (hand-built UI); the serialization analyzer is noise. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <EmbeddedResource Include="res\logo.png" />
+  </ItemGroup>
+
+</Project>
