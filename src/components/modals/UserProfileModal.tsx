@@ -484,7 +484,7 @@ export function UserProfileModal({
                       maxLength={USER_NOTE_MAX}
                       placeholder="Click to add a note"
                       aria-label={`Private note about ${title}`}
-                      className="block w-full resize-none rounded-xl border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand/50 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-brand)_14%,transparent)] disabled:opacity-60"
+                      className="block w-full resize-none rounded-xl border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
                     />
                   </Section>
                 )}

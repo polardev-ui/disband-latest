@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { safeDownload, safeImageUrl, safeWindowOpen } from "@/lib/safe-url";
 import {
+  IconChevronLeft,
+  IconChevronRight,
   IconClose,
   IconDownload,
   IconExternalLink,
@@ -19,6 +21,16 @@ import type { Profile } from "@/lib/supabase/types";
 
 const ZOOM_STEPS = [1, 1.5, 2, 3, 4];
 
+/*
+ The media viewer: a flat black stage with the picture floating on it.
+
+ It used to be a framed card on a blurred backdrop, with the author header
+ inside the card — the picture competed with its own frame, and the blur made
+ the whole thing feel like a modal rather than a viewer. Now the chrome lives
+ at the edges (who and when on the left, tools on the right, filename below)
+ and the middle of the screen belongs to the image.
+*/
+
 interface ImageLightboxProps {
   open: boolean;
   onClose: () => void;
@@ -30,6 +42,10 @@ interface ImageLightboxProps {
   authorColor?: string | null;
   isOwn?: boolean;
   createdAt?: string;
+  /** Part of a set (a multi-image message): shows "2 / 5" and prev/next controls. */
+  position?: { index: number; total: number };
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 export function ImageLightbox({
@@ -43,141 +59,175 @@ export function ImageLightbox({
   authorColor,
   isOwn,
   createdAt,
+  position,
+  onPrev,
+  onNext,
 }: ImageLightboxProps) {
   const [zoomIndex, setZoomIndex] = useState(0);
+  // Where on the image a click-zoom was aimed, as % of the image box.
+  const [origin, setOrigin] = useState("50% 50%");
   const zoom = ZOOM_STEPS[zoomIndex];
 
-  // Scroll lock + topmost-only Escape come from the shared hook (replacing
-  // the local body-overflow effect); zoom keys stay local.
   useOverlayDismiss(onClose, open);
 
+  // A new picture always starts un-zoomed.
   useEffect(() => {
-    if (!open) {
-      setZoomIndex(0);
-      return;
-    }
-  }, [open]);
+    setZoomIndex(0);
+    setOrigin("50% 50%");
+  }, [open, src]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "+" || e.key === "=") setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1));
       if (e.key === "-") setZoomIndex((i) => Math.max(i - 1, 0));
+      if (e.key === "0") setZoomIndex(0);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const zoomIn = useCallback(() => {
-    setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1));
-  }, []);
+  const zoomIn = useCallback(() => setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1)), []);
+  const zoomOut = useCallback(() => setZoomIndex((i) => Math.max(i - 1, 0)), []);
 
-  const zoomOut = useCallback(() => {
-    setZoomIndex((i) => Math.max(i - 1, 0));
-  }, []);
+  // Click the picture to zoom into that spot; click again to come back out.
+  const onImageClick = useCallback((e: MouseEvent<HTMLElement>) => {
+    e.stopPropagation();
+    if (zoomIndex > 0) {
+      setZoomIndex(0);
+      return;
+    }
+    const r = e.currentTarget.getBoundingClientRect();
+    setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
+    setZoomIndex(2);
+  }, [zoomIndex]);
 
   if (!open || typeof document === "undefined") return null;
 
-  const nameStyle = authorColor
-    ? { color: authorColor }
-    : author
-      ? getUsernameStyle(author)
-      : undefined;
+  const nameStyle = authorColor ? { color: authorColor } : author ? getUsernameStyle(author) : undefined;
+  const resolved = safeImageUrl(src);
+  const hasPrev = !!onPrev && !!position && position.index > 0;
+  const hasNext = !!onNext && !!position && position.index < position.total - 1;
+  const mediaClass = `max-h-[calc(100vh-152px)] max-w-[calc(100vw-160px)] select-none rounded-[6px] object-contain transition-transform duration-200 ease-out ${
+    zoomIndex > 0 ? "cursor-zoom-out" : "cursor-zoom-in"
+  }`;
+  const mediaStyle = { transform: `scale(${zoom})`, transformOrigin: origin };
 
   return createPortal(
-    <div className="fixed inset-0 z-[150]" role="dialog" aria-modal="true" aria-label="Image preview">
+    <div className="fixed inset-0 z-[150]" role="dialog" aria-modal="true" aria-label="Image viewer">
       <button
         type="button"
-        className="absolute inset-0 bg-overlay-scrim-strong overlay-fade backdrop-blur-md"
+        className="overlay-fade absolute inset-0 bg-black/[0.96]"
         onClick={onClose}
-        aria-label="Close preview"
+        aria-label="Close viewer"
       />
 
-      <div className="pointer-events-none absolute inset-0 flex flex-col">
-        <div className="pointer-events-auto flex shrink-0 justify-end gap-1 p-4">
-          <ToolbarButton
-            label="Zoom out"
-            onClick={zoomOut}
-            disabled={zoomIndex === 0}
-          >
-            <IconZoomOut size={22} />
-          </ToolbarButton>
-          <ToolbarButton
-            label="Zoom in"
-            onClick={zoomIn}
-            disabled={zoomIndex === ZOOM_STEPS.length - 1}
-          >
-            <IconZoomIn size={22} />
-          </ToolbarButton>
-          <ToolbarButton label="Download" onClick={() => safeDownload(src, fileName)}>
-            <IconDownload size={22} />
-          </ToolbarButton>
-          <ToolbarButton label="Open in browser" onClick={() => safeWindowOpen(src)}>
-            <IconExternalLink size={22} />
-          </ToolbarButton>
-          <ToolbarButton label="Close" onClick={onClose}>
-            <IconClose size={22} />
-          </ToolbarButton>
-        </div>
-
-        <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-8 pt-2">
-          <div
-            className="modal-pop pointer-events-auto flex max-h-full max-w-[min(56rem,92vw)] flex-col overflow-hidden rounded-lg bg-overlay-media shadow-2xl ring-1 ring-divider"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {author && (
-              <header className="flex shrink-0 items-center gap-3 border-b border-black/25 px-4 py-3">
-                <Avatar profile={author} size="sm" />
-                <div className="min-w-0 flex flex-wrap items-baseline gap-2">
-                  <span className="text-[15px] font-medium" style={nameStyle}>
-                    {displayName(author)}
-                  </span>
+      {/* Top bar: who posted it on the left, tools on the right. */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center justify-between gap-4 px-5">
+        <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+          {author && (
+            <>
+              <Avatar profile={author} size="sm" />
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[14px] font-medium leading-tight">
+                  <span className="truncate" style={nameStyle}>{displayName(author)}</span>
                   {isOwn && (
-                    <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>
+                    <span className="rounded border border-white/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-white/60">
+                      You
+                    </span>
                   )}
                   <PlatformBadge userId={author?.id} />
-                  {createdAt && (
-                    <time className="text-xs text-text-muted">{formatMessageTime(createdAt)}</time>
-                  )}
-                </div>
-              </header>
-            )}
-
-            <div className="min-h-0 overflow-auto p-4">
-              <div className="flex justify-center">
-                {(() => {
-                  const resolved = safeImageUrl(src);
-                  if (!resolved) {
-                    return (
-                      <p className="py-10 text-sm text-text-muted">Couldn't load this image.</p>
-                    );
-                  }
-                  return animated ? (
-                    <video
-                      src={resolved}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
-                      style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={resolved}
-                      alt={alt}
-                      className="max-h-[min(70vh,720px)] max-w-full rounded object-contain transition-transform duration-200 ease-out"
-                      style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
-                      draggable={false}
-                    />
-                  );
-                })()}
+                </p>
+                {createdAt && (
+                  <time className="block text-[12px] leading-tight text-white/50">{formatMessageTime(createdAt)}</time>
+                )}
               </div>
-            </div>
-          </div>
+            </>
+          )}
+          {position && position.total > 1 && (
+            <span className="ml-1 rounded-md border border-white/12 px-2 py-0.5 text-[12px] tabular-nums text-white/60">
+              {position.index + 1} / {position.total}
+            </span>
+          )}
         </div>
+
+        <div className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-[12px] border border-white/10 bg-[#141519] p-1">
+          <ToolbarButton label="Zoom out (−)" onClick={zoomOut} disabled={zoomIndex === 0}>
+            <IconZoomOut size={18} />
+          </ToolbarButton>
+          <button
+            type="button"
+            onClick={() => setZoomIndex(0)}
+            title="Reset zoom (0)"
+            className="h-8 w-12 rounded-[8px] text-[12px] tabular-nums text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <ToolbarButton label="Zoom in (+)" onClick={zoomIn} disabled={zoomIndex === ZOOM_STEPS.length - 1}>
+            <IconZoomIn size={18} />
+          </ToolbarButton>
+          <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
+          <ToolbarButton label="Download" onClick={() => safeDownload(src, fileName)}>
+            <IconDownload size={18} />
+          </ToolbarButton>
+          <ToolbarButton label="Open original" onClick={() => safeWindowOpen(src)}>
+            <IconExternalLink size={18} />
+          </ToolbarButton>
+          <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
+          <ToolbarButton label="Close (Esc)" onClick={onClose}>
+            <IconClose size={18} />
+          </ToolbarButton>
+        </div>
+      </header>
+
+      {/* Stage. Clicks on the empty area fall through to the backdrop and close. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-12 top-16 flex items-center justify-center overflow-hidden">
+        {!resolved ? (
+          <p className="text-[14px] text-white/60">Couldn&apos;t load this image.</p>
+        ) : (
+          // The entrance animation lives on this wrapper: it ends holding a
+          // transform of its own, which on the media itself overrode the zoom.
+          <div key={resolved} className="modal-pop pointer-events-none flex items-center justify-center">
+          {animated ? (
+          <video
+            src={resolved}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onClick={onImageClick}
+            className={`pointer-events-auto ${mediaClass}`}
+            style={mediaStyle}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={resolved}
+            alt={alt}
+            onClick={onImageClick}
+            draggable={false}
+            className={`pointer-events-auto ${mediaClass}`}
+            style={mediaStyle}
+          />
+          )}
+          </div>
+        )}
       </div>
+
+      {hasPrev && (
+        <SideButton side="left" label="Previous image (←)" onClick={onPrev!}>
+          <IconChevronLeft size={22} />
+        </SideButton>
+      )}
+      {hasNext && (
+        <SideButton side="right" label="Next image (→)" onClick={onNext!}>
+          <IconChevronRight size={22} />
+        </SideButton>
+      )}
+
+      <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-center justify-center px-6">
+        <p className="truncate text-[12.5px] text-white/45">{fileName}</p>
+      </footer>
     </div>,
     document.body,
   );
@@ -201,7 +251,33 @@ function ToolbarButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-10 w-10 items-center justify-center rounded-full text-text-normal transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-8 w-8 items-center justify-center rounded-[8px] text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SideButton({
+  side,
+  label,
+  onClick,
+  children,
+}: {
+  side: "left" | "right";
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[#141519] text-white/80 transition-colors hover:bg-[#1d1e23] hover:text-white ${
+        side === "left" ? "left-5" : "right-5"
+      }`}
     >
       {children}
     </button>

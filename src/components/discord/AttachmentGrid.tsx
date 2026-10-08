@@ -101,6 +101,9 @@ export function AttachmentGrid({
       authorColor={authorColor}
       isOwn={isOwn}
       createdAt={createdAt}
+      position={{ index: openAt!, total: images.length }}
+      onPrev={() => setOpenAt((i) => (i === null ? i : Math.max(0, i - 1)))}
+      onNext={() => setOpenAt((i) => (i === null ? i : Math.min(images.length - 1, i + 1)))}
     />
   ) : null;
 

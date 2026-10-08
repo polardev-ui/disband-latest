@@ -144,7 +144,7 @@ function DropIndicator({ edge }: { edge: "before" | "after" }) {
   return (
     <span
       aria-hidden
-      className={`pointer-events-none absolute left-1/2 z-10 h-[3px] w-12 -translate-x-1/2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.75)] ${
+      className={`pointer-events-none absolute left-1/2 z-10 h-[3px] w-12 -translate-x-1/2 rounded-full bg-white ${
         edge === "before" ? "-top-[5px]" : "-bottom-[5px]"
       }`}
     />
@@ -268,14 +268,14 @@ function ServerButton({
                 src={safeImageUrl(server.icon_url)!}
                 alt=""
                 draggable={false}
-                className={`h-12 w-12 rounded-[14px] object-cover transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
-                  active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
+                className={`h-12 w-12 rounded-[14px] object-cover ${
+                  active ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
                 }`}
               />
             ) : (
               <span
-                className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-[15px] font-semibold text-white transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
-                  active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
+                className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-[15px] font-semibold text-white ${
+                  active ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
                 }`}
               >
                 {serverInitials(server.name)}
@@ -425,8 +425,8 @@ export function ServerList({
           className="group relative flex h-12 w-12 items-center justify-center"
         >
           <span
-            className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-white transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
-              homeActive ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
+            className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-white ${
+              homeActive ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
             }`}
           >
             <IconHome size={22} />
@@ -450,8 +450,8 @@ export function ServerList({
                     <Avatar
                       profile={entry.friend}
                       size="md"
-                      className={`h-12 w-12 rounded-full transition-[filter,box-shadow] duration-150 group-hover:brightness-110 ${
-                        active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
+                      className={`h-12 w-12 rounded-full ${
+                        active ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
                       }`}
                     />
                     <UnreadCountBadge count={entry.count} />
@@ -533,7 +533,7 @@ export function ServerList({
                   />
                   <span
                     className={`flex h-12 w-12 flex-col items-center justify-center rounded-[14px] text-white ${
-                      hasActive ? "ring-2 ring-brand ring-offset-2 ring-offset-bg-tertiary" : ""
+                      hasActive ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
                     }`}
                     style={{ backgroundColor: `${folder.color}55` }}
                   >
@@ -583,7 +583,7 @@ export function ServerList({
       </Tooltip>
       <div
         aria-hidden
-        className={`h-[3px] w-12 rounded-full bg-white transition-opacity ${dropTarget?.kind === "top-end" ? "opacity-100 shadow-[0_0_8px_rgba(255,255,255,0.75)]" : "opacity-0"}`}
+        className={`h-[3px] w-12 rounded-full bg-white transition-opacity ${dropTarget?.kind === "top-end" ? "opacity-100" : "opacity-0"}`}
       />
       </div>
     </nav>
