@@ -3,11 +3,11 @@
 import { useState, type ReactNode } from "react";
 import { giphyDisplayUrl, giphyMp4Url } from "@/lib/giphy";
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
-import { IconMusic } from "@/components/icons";
 import { DangerousDownloadModal } from "./DangerousDownloadModal";
 import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
 import { PollCard } from "./PollCard";
+import { AudioPlayer } from "./media/AudioPlayer";
 import { VideoPlayer } from "./VideoPlayer";
 import { safeDownload, safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
@@ -150,24 +150,13 @@ export function MessageAttachment({
 
   if (type === "audio") {
     return (
-      <div className="mt-1 flex w-full max-w-md flex-col gap-1 rounded-lg border border-divider bg-bg-secondary p-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-accent text-brand">
-            <IconMusic size={18} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-text-normal">{fileName}</p>
-            {sizeLabel && <p className="text-xs text-text-muted">{sizeLabel}</p>}
-          </div>
-        </div>
-        <audio
-          controls
-          preload="metadata"
-          src={safeImageUrl(url) ?? undefined}
-          onLoadedMetadata={onLoad}
-          className="w-full"
-        />
-      </div>
+      <AudioPlayer
+        src={safeImageUrl(url)}
+        fileName={fileName}
+        sizeLabel={sizeLabel}
+        sizeBytes={typeof size === "number" ? size : undefined}
+        onLoad={onLoad}
+      />
     );
   }
 
@@ -190,7 +179,7 @@ export function MessageAttachment({
           <>
             {!mediaLoaded && skeleton}
             <span className={mediaLoaded ? "" : "hidden"}>
-              <VideoPlayer src={imgSrc} onLoad={handleMediaLoad} />
+              <VideoPlayer src={imgSrc} onLoad={handleMediaLoad} fileName={fileName} />
             </span>
           </>
         ) : (
