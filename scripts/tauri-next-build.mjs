@@ -14,6 +14,9 @@ const moves = [
   ["src/app/gift", `${stashRoot}/app-gift`],
 
   ["src/app/referral", `${stashRoot}/app-referral`],
+
+  // Installer downloads stream from GitHub on the server; web only.
+  ["src/app/dl", `${stashRoot}/app-dl`],
 ];
 
 function moveAside(from, to) {
