@@ -93,50 +93,76 @@ export function DownloadSection() {
     <section id="download" className="border-t border-white/[0.06] px-6 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl">
         <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-[2rem]">
-          Download Disband
+          Official Platform Downloads
         </h2>
         <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
-          Native builds for macOS, Windows, and Linux, or Disband on your iPhone through the App
-          Store. Skip the install entirely and use Disband in your browser.
+          Download Disband from an official platform store, or get the native desktop
+          builds below. You can also use Disband directly in your browser.
         </p>
 
-        {}
-        <div className="mt-10 flex flex-wrap items-start gap-8 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
-          <div className="min-w-0 flex-1">
-            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
-              iOS
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Get Disband on iPhone</h3>
-            <p className="mt-1.5 max-w-lg text-[15px] leading-relaxed text-[#9aa0a8]">
-              Chat, voice calls, and communities on the go — the same account you use on desktop,
-              synced across every device.
-            </p>
+        <div className="mt-10 grid gap-6 sm:grid-cols-2">
+          {/* iOS download card */}
+          <div className="flex min-w-0 flex-col justify-between gap-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+                iOS
+              </p>
+              <h3 className="mt-2 text-lg font-semibold text-white">
+                Get Disband on iPhone
+              </h3>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">
+                Chat, voice calls, and communities on the go — synced across your devices.
+              </p>
+            </div>
+
             <a
               href={APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-2 rounded-md bg-brand px-5 py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover"
+              aria-label="Download Disband on the App Store"
+              className="inline-flex w-fit"
             >
-              <PlatformIcon platform="apple" />
-              Download on the App Store
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/appstore-badge.png"
+                alt="Download on the App Store"
+                width={150}
+                height={50}
+                className="h-[50px] w-[150px] object-contain"
+              />
             </a>
           </div>
-          <a
-            href={APP_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Download Disband on the App Store"
-            className="shrink-0"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/appstore-badge.png"
-              alt="Download on the App Store"
-              width={150}
-              height={50}
-              className="h-[50px] w-[150px]"
-            />
-          </a>
+
+          {/* Microsoft Store download card */}
+          <div className="flex min-w-0 flex-col justify-between gap-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+                Windows
+              </p>
+              <h3 className="mt-2 text-lg font-semibold text-white">
+                Get Disband on Windows
+              </h3>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">
+                Install Disband through the official Microsoft Store.
+              </p>
+            </div>
+
+            <a
+              href="https://get.microsoft.com/installer/download/xpffxflm628mns?referrer=appbadge"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Get Disband from the Microsoft Store"
+              className="inline-flex w-fit"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://get.microsoft.com/images/en-us%20dark.svg"
+                alt="Get it from Microsoft"
+                width={200}
+                className="h-[50px] w-[200px] object-contain"
+              />
+            </a>
+          </div>
         </div>
 
         {loading ? (
