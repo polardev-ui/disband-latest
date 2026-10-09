@@ -192,9 +192,9 @@ export function DownloadSection() {
               <img
                 src="/google-play-badge.png"
                 alt="Get it on Google Play"
-                width={150}
-                height={50}
-                className="h-[50px] w-[150px] object-contain"
+                width={200}
+                height={60}
+                className="h-[60px] w-[200px] object-contain object-left"
               />
             </a>
           </div>
