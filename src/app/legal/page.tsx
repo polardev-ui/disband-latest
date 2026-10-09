@@ -181,6 +181,8 @@ export default function LegalPage() {
             <p>
               Space owners and moderators set additional rules for their own communities; violating
               them may lead to removal from those communities under Section 8.
+              You must be at least 13 years old to use Disband. If you are under the acceptable age, restrictions will apply
+              depending on your region.
             </p>
           </Section>
 
