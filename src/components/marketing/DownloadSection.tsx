@@ -216,15 +216,14 @@ export function DownloadSection() {
             </div>
 
             <a
-              href={MICROSOFT_STORE_URL}
+              href="https://get.microsoft.com/installer/download/xpffxflm628mns?referrer=appbadge"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Get Disband from the Microsoft Store"
               className="inline-flex w-fit"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="https://get.microsoft.com/images/en-us%20dark.svg"
+                src="/microsoft-store-badge.svg"
                 alt="Get it from Microsoft"
                 width={200}
                 height={50}
