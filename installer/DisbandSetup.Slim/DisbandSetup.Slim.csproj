@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinForms>true</UseWinForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DisbandSetup</AssemblyName>
+    <RootNamespace>DisbandSetup</RootNamespace>
+    <Version>1.0.0</Version>
+    <!-- Framework-dependent: the ~200KB stub expects the .NET Desktop
+         Runtime on the machine and installs it on first run (see
+         EnsureDotNetAsync in Program.cs) instead of carrying it. -->
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- Run on .NET 10 *or any later major*: the stub must never need a
+         rebuild just because a new runtime shipped. -->
+    <RollForward>Major</RollForward>
+    <DebugType>none</DebugType>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+    <DefineConstants>$(DefineConstants);SLIM</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Same UI and flow as the fat stub; only the packaging differs. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <Compile Include="../DisbandSetup/Program.cs" />
+    <EmbeddedResource Include="../DisbandSetup/res/logo.png" LogicalName="DisbandSetup.res.logo.png" />
+  </ItemGroup>
+
+</Project>

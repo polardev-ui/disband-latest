@@ -19,6 +19,9 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Windows.Forms;
+#if SLIM
+using Microsoft.Win32;
+#endif
 
 namespace DisbandSetup;
 
@@ -243,6 +246,11 @@ internal sealed class SetupForm : Form
         string tempDir = Path.Combine(Path.GetTempPath(), "DisbandSetup");
         try
         {
+#if SLIM
+            // Slim build only: make sure the shared .NET Desktop Runtime is
+            // present before anything else needs it.
+            await EnsureDotNetAsync(tempDir);
+#endif
             // 1. Latest release metadata.
             Say("Checking for the latest version…");
             using var metaResp = await _http.GetAsync(ReleasesApi);
@@ -350,4 +358,94 @@ internal sealed class SetupForm : Form
         }
         return null;
     }
+
+#if SLIM
+    // Slim build only. The stub itself needs the shared .NET Desktop Runtime;
+    // if it is missing (fresh Windows, no dev tools), fetch and install it
+    // once, silently. This is the one elevation prompt in the whole flow —
+    // everything after it stays per-user.
+    private async Task EnsureDotNetAsync(string tempDir)
+    {
+        if (DotNetDesktopPresent()) return;
+        bool arm = RuntimeInformation.OSArchitecture == Architecture.Arm64;
+        string url = arm
+            ? "https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-arm64.exe"
+            : "https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe";
+        Directory.CreateDirectory(tempDir);
+        string installerPath = Path.Combine(tempDir, "dotnet-runtime.exe");
+
+        Say("Installing .NET runtime (one time only)…");
+        _bar.Value = -1;
+        using (var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+        {
+            resp.EnsureSuccessStatusCode();
+            long? total = resp.Content.Headers.ContentLength;
+            await using var net = await resp.Content.ReadAsStreamAsync();
+            await using var file = File.Create(installerPath);
+            var buffer = new byte[81920];
+            long done = 0;
+            int read;
+            while ((read = await net.ReadAsync(buffer)) > 0)
+            {
+                await file.WriteAsync(buffer.AsMemory(0, read));
+                done += read;
+                if (total is > 0)
+                    _bar.Value = (double)done / total.Value;
+            }
+        }
+
+        Say("Almost there — approving the runtime install…");
+        int exit;
+        using (var p = new Process())
+        {
+            // runas = the single UAC prompt. Without it the runtime installer
+            // fails on standard accounts.
+            p.StartInfo = new ProcessStartInfo
+            {
+                FileName = installerPath,
+                Arguments = "/install /quiet /norestart",
+                UseShellExecute = true,
+                Verb = "runas",
+            };
+            try
+            {
+                p.Start();
+            }
+            catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                throw new InvalidOperationException(
+                    "The .NET runtime needs administrator approval once. Re-run setup and accept the prompt.");
+            }
+            await p.WaitForExitAsync();
+            exit = p.ExitCode;
+        }
+        try { File.Delete(installerPath); } catch { /* best effort */ }
+        // 0 = done, 3010/1641 = done-pending-reboot (runtime is usable now).
+        if (exit != 0 && exit != 3010 && exit != 1641)
+            throw new InvalidOperationException($"The .NET runtime installer exited with code {exit}.");
+        if (!DotNetDesktopPresent())
+            throw new InvalidOperationException("The .NET runtime still isn't detected after install.");
+        _bar.Value = 1;
+    }
+
+    private static bool DotNetDesktopPresent()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App");
+            if (key == null) return false;
+            foreach (string name in key.GetValueNames())
+            {
+                if (Version.TryParse(name.Split(' ')[0], out var v) && v.Major >= 10)
+                    return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+#endif
 }
