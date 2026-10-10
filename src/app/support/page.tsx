@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AppProvider, useApp } from "@/contexts/AppContext";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
 import { Logo } from "@/components/ui/Logo";
+import { Avatar } from "@/components/ui/Avatar";
 import { apiFetch } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -35,9 +36,64 @@ function useAuthedFetch() {
   }, []);
 }
 
-/** Logged-out: prove the inbox with a one-time code. This is a support-only
- *  sign-in — it never touches the Disband password, and the code only ever
- *  goes to the email address typed below. */
+function ThemeSwitcher() {
+  const { theme, themes, setTheme } = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Change theme"
+        title="Change theme"
+        className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 3a9 9 0 0 0 0 18c1.5 0 2-1 1.3-2.2-.8-1.3 0-2.8 1.7-2.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z" />
+          <circle cx="7.5" cy="10.5" r="1" fill="currentColor" />
+          <circle cx="12" cy="7.5" r="1" fill="currentColor" />
+          <circle cx="16" cy="10.5" r="1" fill="currentColor" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <button type="button" aria-label="Close" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-50 mt-2 max-h-72 w-52 overflow-y-auto rounded-2xl border border-divider bg-bg-secondary p-1.5 shadow-2xl">
+            {themes.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  setTheme(t.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-interactive-hover ${
+                  theme === t.id ? "font-semibold" : ""
+                }`}
+              >
+                <span className="flex shrink-0 overflow-hidden rounded-full" aria-hidden>
+                  {t.swatch.slice(0, 3).map((c, i) => (
+                    <span key={i} className="h-4 w-2.5 first:rounded-l-full last:rounded-r-full" style={{ background: c }} />
+                  ))}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-text-normal">{t.label}</span>
+                {theme === t.id && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Logged-out: prove the inbox with a one-time code. Support-only sign-in —
+ *  never touches the Disband password; the code only goes to the typed inbox. */
 function VerifyEmail({ onVerified }: { onVerified: () => void }) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -90,53 +146,53 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
   }
 
   return (
-    <div className="w-full max-w-[420px] rounded-2xl border border-divider bg-bg-secondary p-6 shadow-2xl">
-      <h2 className="text-[19px] font-bold text-text-normal">Verify it&apos;s you</h2>
-      <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
+    <div className="w-full rounded-[28px] border border-divider bg-bg-secondary p-6 text-left shadow-[0_24px_70px_-30px_rgba(0,0,0,0.5)] sm:p-8">
+      <h2 className="text-[20px] font-extrabold tracking-tight text-text-normal">Verify it&apos;s you</h2>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-text-muted">
         Support needs your Disband account email — not your password. We send
         a one-time code to that inbox; entering it proves the account is
         yours, and Tether will only ever discuss that account.
       </p>
       {!sent ? (
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             autoComplete="email"
-            className="min-w-0 flex-1 rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[15px] outline-none placeholder:text-text-muted focus:border-brand/60"
+            className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-3 text-[15px] outline-none placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => void send()}
-            className="shrink-0 rounded-xl bg-brand px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+            className="shrink-0 rounded-2xl bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
           >
             {busy ? "Sending…" : "Send code"}
           </button>
         </div>
       ) : (
         <div className="mt-4">
-          <p className="text-[13px] text-text-muted">
+          <p className="text-[14px] text-text-muted">
             Code sent to <span className="font-semibold text-text-normal">{email.trim()}</span>
           </p>
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
               placeholder="6-digit code"
               inputMode="numeric"
               autoComplete="one-time-code"
-              className="min-w-0 flex-1 rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[15px] tracking-[0.2em] outline-none placeholder:text-text-muted focus:border-brand/60"
+              className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.2em] outline-none placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
             />
             <button
               type="button"
               disabled={busy}
               onClick={() => void verify()}
-              className="shrink-0 rounded-xl bg-brand px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+              className="shrink-0 rounded-2xl bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
             >
-              {busy ? "Checking…" : "Verify"}
+              {busy ? "Checking…" : "Verify & continue"}
             </button>
           </div>
           <button
@@ -150,8 +206,8 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
       )}
       {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
       <p className="mt-4 text-center text-[13px] text-text-muted">
-        Already have the app?{" "}
-        <Link href="/login?next=/support" className="font-medium text-text-normal hover:underline">
+        Have the app?{" "}
+        <Link href="/login?next=/support" className="font-semibold text-brand hover:underline">
           Sign in
         </Link>
       </p>
@@ -159,7 +215,7 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
   );
 }
 
-function Thread({ ticketId, onBack }: { ticketId: string; onBack: () => void }) {
+function Thread({ ticketId, subject }: { ticketId: string; subject: string }) {
   const authedFetch = useAuthedFetch();
   const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -204,8 +260,6 @@ function Thread({ ticketId, onBack }: { ticketId: string; onBack: () => void }) 
         if (tries <= 0) return;
         setTimeout(() => void poll(tries - 1), 2500);
       };
-      // The reply is written by the POST; poll a few times in case the
-      // model was still finishing when the response returned.
       await poll(5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not send.");
@@ -217,19 +271,16 @@ function Thread({ ticketId, onBack }: { ticketId: string; onBack: () => void }) 
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-3 self-start text-[13px] font-medium text-text-muted hover:text-text-normal hover:underline"
-      >
-        ← All requests
-      </button>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-2">
+    <div className="flex w-full flex-col rounded-[28px] border border-divider bg-bg-secondary shadow-[0_24px_70px_-30px_rgba(0,0,0,0.5)]">
+      <div className="border-b border-divider px-5 py-4 sm:px-6">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Request</p>
+        <p className="truncate text-[16px] font-bold text-text-normal">{subject}</p>
+      </div>
+      <div className="max-h-[380px] min-h-[220px] space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <p
-              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
+              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
                 m.role === "user" ? "bg-brand text-white" : "bg-bg-tertiary text-text-normal"
               }`}
             >
@@ -239,30 +290,30 @@ function Thread({ ticketId, onBack }: { ticketId: string; onBack: () => void }) 
         ))}
         {answering && (
           <div className="flex justify-start">
-            <p className="rounded-2xl bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-muted">
+            <p className="rounded-2xl bg-bg-tertiary px-4 py-2.5 text-[14px] text-text-muted">
               Tether is looking into it…
             </p>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
-      {error && <p className="mt-2 text-[13px] text-status-dnd">{error}</p>}
-      <div className="mt-2 flex gap-2">
+      {error && <p className="px-5 text-[13px] text-status-dnd">{error}</p>}
+      <div className="flex gap-2 border-t border-divider p-3 sm:p-4">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") void send();
           }}
-          placeholder="Describe what's happening…"
+          placeholder="Reply to Tether…"
           maxLength={4000}
-          className="min-w-0 flex-1 rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[14px] outline-none placeholder:text-text-muted focus:border-brand/60"
+          className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-2.5 text-[14px] outline-none placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
         />
         <button
           type="button"
           disabled={sending || !draft.trim()}
           onClick={() => void send()}
-          className="shrink-0 rounded-xl bg-brand px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+          className="shrink-0 rounded-2xl bg-brand px-5 py-2.5 text-[14px] font-bold text-white transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
         >
           {sending ? "…" : "Send"}
         </button>
@@ -271,14 +322,63 @@ function Thread({ ticketId, onBack }: { ticketId: string; onBack: () => void }) 
   );
 }
 
+function HeroChat({
+  onStart,
+  starting,
+}: {
+  onStart: (text: string) => void;
+  starting: boolean;
+}) {
+  const [text, setText] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  function submit() {
+    const clean = text.trim();
+    if (!clean || starting) return;
+    onStart(clean);
+  }
+
+  return (
+    <div className="w-full rounded-[28px] border border-divider bg-bg-secondary p-2 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]">
+      <textarea
+        ref={inputRef}
+        value={text}
+        onChange={(e) => setText(e.target.value.slice(0, 4000))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="Describe what's wrong — Tether reads your account and helps on the spot…"
+        rows={3}
+        className="w-full resize-none bg-transparent px-4 pb-1 pt-3 text-[16px] leading-relaxed outline-none placeholder:text-text-muted"
+      />
+      <div className="flex items-center justify-between px-2 pb-1">
+        <p className="px-2 text-[12px] text-text-muted">
+          Signed-in help · never touches anyone else&apos;s account
+        </p>
+        <button
+          type="button"
+          disabled={starting || !text.trim()}
+          onClick={submit}
+          className="rounded-full bg-brand px-6 py-2.5 text-[15px] font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
+        >
+          {starting ? "Starting…" : "Ask Tether →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SupportHome() {
-  const { ready, session, user } = useApp();
+  const { ready, session, user, profile } = useApp();
   const authedFetch = useAuthedFetch();
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [subject, setSubject] = useState("");
-  const [firstMessage, setFirstMessage] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [active, setActive] = useState<Ticket | null>(null);
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [pendingText, setPendingText] = useState("");
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noAccount, setNoAccount] = useState(false);
 
@@ -294,8 +394,6 @@ function SupportHome() {
   useEffect(() => {
     if (!ready || !session) return;
     void load();
-    // Stub sessions (verified email, never created a Disband profile) get
-    // general help; account tools report "no account" on their own.
     void getSupabaseClient()
       .from("profiles")
       .select("id")
@@ -304,130 +402,207 @@ function SupportHome() {
       .then(({ data }) => setNoAccount(!data));
   }, [ready, session, user?.id, load]);
 
-  async function create() {
-    if (!subject.trim() || !firstMessage.trim() || creating) return;
-    setCreating(true);
+  // White by default: only visitors who never chose a theme get light.
+  // (ThemeProvider inits dark; stored choices are respected untouched.)
+  const { setTheme } = useTheme();
+  const defaultedRef = useRef(false);
+  useEffect(() => {
+    if (defaultedRef.current) return;
+    defaultedRef.current = true;
+    try {
+      if (!window.localStorage.getItem("disband:theme")) setTheme("light");
+    } catch {
+      setTheme("light");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function startFromText(text: string) {
+    if (!session) {
+      // Hold the message across verification, then send it automatically.
+      setPendingText(text);
+      setNeedsVerify(true);
+      return;
+    }
+    setStarting(true);
     setError(null);
     try {
+      const subject = text.length > 80 ? `${text.slice(0, 77)}…` : text;
       const json = await authedFetch("/api/support/tickets", {
         method: "POST",
-        body: JSON.stringify({ subject: subject.trim(), message: firstMessage.trim() }),
+        body: JSON.stringify({ subject, message: text }),
       });
       const ticket = json.ticket as Ticket;
-      setSubject("");
-      setFirstMessage("");
-      setActiveId(ticket.id);
+      setActive(ticket);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not open the ticket.");
+      setError(e instanceof Error ? e.message : "Could not start the chat.");
     } finally {
-      setCreating(false);
+      setStarting(false);
     }
+  }
+
+  // After verification, the held message sends itself.
+  useEffect(() => {
+    if (session && pendingText && !starting && !active) {
+      const text = pendingText;
+      setPendingText("");
+      setNeedsVerify(false);
+      void startFromText(text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, pendingText]);
+
+  function pickTopic(subject: string) {
+    if (!session) {
+      setPendingText(subject);
+      setNeedsVerify(true);
+      return;
+    }
+    void startFromText(subject);
   }
 
   async function signOut() {
     await getSupabaseClient().auth.signOut();
     setTickets([]);
-    setActiveId(null);
+    setActive(null);
+    setNeedsVerify(false);
   }
 
-  if (!ready) {
-    return (
-      <div aria-label="Loading" className="animate-pulse rounded-2xl bg-bg-secondary p-6">
-        <div className="h-5 w-1/2 rounded bg-bg-accent" />
-        <div className="mt-3 h-10 w-full rounded-xl bg-bg-accent" />
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <VerifyEmail onVerified={() => undefined} />;
-  }
-
-  if (activeId) {
-    return (
-      <div className="flex min-h-[480px] w-full max-w-[560px] flex-col rounded-2xl border border-divider bg-bg-secondary p-4 shadow-2xl sm:p-5">
-        <Thread ticketId={activeId} onBack={() => { setActiveId(null); void load(); }} />
-      </div>
-    );
-  }
+  const displayName =
+    profile?.display_name || profile?.username || user?.email?.split("@")[0] || "You";
 
   return (
-    <div className="w-full max-w-[560px] rounded-2xl border border-divider bg-bg-secondary p-5 shadow-2xl sm:p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-[19px] font-bold text-text-normal">Support requests</h2>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="text-[13px] text-text-muted hover:text-text-normal hover:underline"
-        >
-          Sign out
-        </button>
-      </div>
-      {noAccount && (
-        <p className="mt-2 rounded-xl bg-bg-tertiary px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted">
-          This email isn&apos;t attached to a Disband account yet — Tether can
-          still answer general questions, and anything account-specific will
-          work once you create one.
+    <div className="min-h-screen bg-bg-primary text-text-normal">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-divider/70 bg-bg-primary/85 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-3 px-4 sm:px-6">
+          <Link href="/app" className="flex items-center gap-2.5">
+            <Logo adaptive size={30} className="h-[30px] w-[30px]" priority />
+            <span className="text-[17px] font-extrabold tracking-tight">
+              Disband <span className="font-medium text-text-muted">Support</span>
+            </span>
+          </Link>
+          <div className="ml-auto flex items-center gap-1.5">
+            <ThemeSwitcher />
+            {ready && session ? (
+              <div className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1">
+                <Avatar profile={profile ?? { display_name: displayName }} size="sm" />
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  title="Sign out"
+                  className="rounded-full px-2 py-1 text-[12px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login?next=/support"
+                className="rounded-full bg-bg-tertiary px-4 py-2 text-[13px] font-bold text-text-normal transition-colors hover:bg-interactive-hover"
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Hero + big chatbox */}
+      <section className="mx-auto w-full max-w-2xl px-4 pb-10 pt-12 text-center sm:pt-16">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          How can we help?
+        </h1>
+        <p className="mx-auto mt-3 max-w-md text-[16px] leading-relaxed text-text-muted">
+          Ask Tether anything about your account — login trouble, billing,
+          safety. It reads your account, never anyone else&apos;s.
         </p>
-      )}
-      {error && <p className="mt-2 text-[13px] text-status-dnd">{error}</p>}
-
-      <div className="mt-4 space-y-2">
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value.slice(0, 120))}
-          placeholder="Subject — e.g. Can't log in"
-          maxLength={120}
-          className="w-full rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[14px] outline-none placeholder:text-text-muted focus:border-brand/60"
-        />
-        <textarea
-          value={firstMessage}
-          onChange={(e) => setFirstMessage(e.target.value.slice(0, 4000))}
-          placeholder="What happened? Include what you tapped and what you saw."
-          rows={3}
-          maxLength={4000}
-          className="w-full resize-none rounded-xl border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[14px] outline-none placeholder:text-text-muted focus:border-brand/60"
-        />
-        <button
-          type="button"
-          disabled={creating || !subject.trim() || !firstMessage.trim()}
-          onClick={() => void create()}
-          className="w-full rounded-xl bg-brand py-2.5 text-[15px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
-        >
-          {creating ? "Opening…" : "Open request — talk to Tether"}
-        </button>
-      </div>
-
-      {tickets.length > 0 && (
-        <div className="mt-5">
-          <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Your requests
+        <div className="mt-7 text-left">
+          {!ready ? (
+            <div aria-label="Loading" className="animate-pulse rounded-[28px] border border-divider bg-bg-secondary p-6">
+              <div className="h-5 w-2/3 rounded bg-bg-accent" />
+              <div className="mt-3 h-12 w-full rounded-2xl bg-bg-accent" />
+            </div>
+          ) : needsVerify && !session ? (
+            <VerifyEmail onVerified={() => undefined} />
+          ) : (
+            <HeroChat onStart={(t) => void startFromText(t)} starting={starting} />
+          )}
+        </div>
+        {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
+        {noAccount && session && (
+          <p className="mx-auto mt-3 max-w-md rounded-2xl bg-bg-secondary px-4 py-2.5 text-[13px] leading-relaxed text-text-muted">
+            This email isn&apos;t attached to a Disband account yet — Tether
+            can still answer general questions here.
           </p>
-          <div className="space-y-1.5">
+        )}
+
+        {/* Active thread */}
+        {active && session && (
+          <div id="support-thread" className="mt-6 text-left">
+            <Thread ticketId={active.id} subject={active.subject} />
+            <button
+              type="button"
+              onClick={() => {
+                setActive(null);
+                void load();
+              }}
+              className="mt-3 text-[13px] font-medium text-text-muted hover:text-text-normal hover:underline"
+            >
+              ← Back to all requests
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* Topics */}
+      <section className="mx-auto w-full max-w-5xl px-4 pb-4 sm:px-6">
+        <h2 className="px-1 text-[15px] font-bold text-text-muted">Popular topics</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { subject: "I can't log in", hint: "Passwords, codes & locked accounts", icon: "🔑" },
+            { subject: "Billing question", hint: "Aero, Lite, renewals & refunds", icon: "💳" },
+            { subject: "Someone is harassing me", hint: "Blocks, reports & safety", icon: "🛡️" },
+            { subject: "Something is broken", hint: "Bugs, loading & calls", icon: "🐞" },
+          ].map((t) => (
+            <button
+              key={t.subject}
+              type="button"
+              onClick={() => pickTopic(t.subject)}
+              className="group rounded-[24px] border border-divider bg-bg-secondary p-5 text-left shadow-[0_10px_36px_-24px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-0.5 hover:border-brand/40"
+            >
+              <span className="text-[26px]" aria-hidden>{t.icon}</span>
+              <span className="mt-3 block text-[15px] font-bold text-text-normal">{t.subject}</span>
+              <span className="mt-1 block text-[13px] text-text-muted">{t.hint}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Past requests */}
+      {ready && session && tickets.length > 0 && !active && (
+        <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+          <h2 className="px-1 text-[15px] font-bold text-text-muted">Your requests</h2>
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
             {tickets.map((t) => (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setActiveId(t.id)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-interactive-hover"
+                onClick={() => setActive(t)}
+                className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold text-text-normal">
+                  <span className="block truncate text-[14px] font-bold text-text-normal">
                     {t.subject}
                   </span>
                   <span className="block text-[12px] text-text-muted">
-                    {new Date(t.updated_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {new Date(t.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </span>
                 </span>
                 <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    t.status === "open"
-                      ? "bg-brand/15 text-brand"
-                      : "bg-bg-tertiary text-text-muted"
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                    t.status === "open" ? "bg-brand/15 text-brand" : "bg-bg-tertiary text-text-muted"
                   }`}
                 >
                   {t.status}
@@ -435,8 +610,41 @@ function SupportHome() {
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
+
+      {/* FAQ */}
+      <section className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+        <h2 className="px-1 text-[15px] font-bold text-text-muted">Quick answers</h2>
+        <div className="mt-3 flex flex-col gap-2.5">
+          {[
+            ["I forgot my password. What now?", "Open a request above and ask Tether for a reset link — it emails one to your inbox on the spot."],
+            ["How do I get my subscription back?", "In the app: profile → Subscription → Restore purchases, with the same Apple ID."],
+            ["Can Tether look at someone else's account for me?", "No — ever. Tether only sees the account you're signed in (or verified) as."],
+            ["How do I delete my account?", "Ask Tether here and it will walk you through it, or email support from your account address."],
+          ].map(([q, a]) => (
+            <details
+              key={q}
+              className="group rounded-2xl border border-divider bg-bg-secondary px-5 py-4 open:shadow-[0_10px_36px_-24px_rgba(0,0,0,0.5)]"
+            >
+              <summary className="cursor-pointer list-none text-[15px] font-bold text-text-normal">
+                {q}
+              </summary>
+              <p className="mt-2 text-[14px] leading-relaxed text-text-muted">{a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <footer className="border-t border-divider/70 py-8">
+        <p className="text-center text-[13px] text-text-muted">
+          <Link href="/app" className="font-semibold text-text-normal hover:underline">
+            Open Disband
+          </Link>
+          <span className="mx-2">·</span>
+          Still stuck? Ask Tether above — a human reviews open requests daily.
+        </p>
+      </footer>
     </div>
   );
 }
@@ -445,25 +653,7 @@ export default function SupportPage() {
   return (
     <ThemeProvider>
       <AppProvider>
-        <div className="flex min-h-screen flex-col items-center bg-bg-tertiary px-4 py-10">
-          <div className="mb-6 flex flex-col items-center text-center">
-            <Logo adaptive size={40} className="h-10 w-10" priority />
-            <h1 className="mt-4 text-[24px] font-semibold tracking-[-0.02em] text-text-normal">
-              Disband Support
-            </h1>
-            <p className="mt-1 max-w-[380px] text-[14px] text-text-muted">
-              Account trouble? Talk it through with Tether — it can check
-              your account and email you reset links. It only ever sees
-              your own account, never anyone else&apos;s.
-            </p>
-          </div>
-          <SupportHome />
-          <p className="mt-6 text-center text-[13px] text-text-muted">
-            <Link href="/app" className="font-medium text-text-normal hover:underline">
-              Open Disband
-            </Link>
-          </p>
-        </div>
+        <SupportHome />
       </AppProvider>
     </ThemeProvider>
   );
