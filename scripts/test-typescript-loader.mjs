@@ -6,6 +6,11 @@ import ts from 'typescript';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    // `server-only` is a build-time marker Next strips; emulate that with an
+    // empty module so server libs stay importable in tests.
+    if (specifier === 'server-only') {
+      return { url: 'data:text/javascript,export default {}', shortCircuit: true };
+    }
     let target;
     if (specifier.startsWith('@/')) target = path.resolve('src', specifier.slice(2));
     else if (specifier.startsWith('.') && context.parentURL?.startsWith('file:')) target = path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier);
