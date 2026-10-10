@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ArrowUpRight, LockKeyhole } from "lucide-react";
+import { SupportConversation, type SupportMessage } from "@/components/support/SupportConversation";
+import styles from "@/components/support/support.module.css";
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
 import { Logo } from "@/components/ui/Logo";
@@ -15,13 +18,7 @@ interface Ticket {
   status: string;
   created_at: string;
   updated_at: string;
-}
-
-interface TicketMessage {
-  id: string;
-  role: string;
-  content: string;
-  created_at: string;
+  replyError?: string;
 }
 
 function useAuthedFetch() {
@@ -215,169 +212,70 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
   );
 }
 
-function Thread({ ticketId, subject, onBack }: { ticketId: string; subject: string; onBack: () => void }) {
+function Thread({ ticketId, subject, initialDraft = "", initialError, onBack }: { ticketId: string; subject: string; initialDraft?: string; initialError?: string; onBack: () => void }) {
   const authedFetch = useAuthedFetch();
-  const [messages, setMessages] = useState<TicketMessage[]>([]);
-  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [draft, setDraft] = useState(initialDraft);
   const [sending, setSending] = useState(false);
-  const [answering, setAnswering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(initialError ?? null);
+  const sendingRef = useRef(false);
+  const mounted = useRef(false);
 
   const load = useCallback(async () => {
     try {
       const json = await authedFetch(`/api/support/tickets/${ticketId}/messages`);
-      setMessages((json.messages as TicketMessage[]) ?? []);
+      if (!mounted.current) return;
+      setMessages((json.messages as SupportMessage[]) ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load messages.");
+      if (mounted.current) setError(e instanceof Error ? e.message : "Could not load messages.");
+    } finally {
+      if (mounted.current) setLoading(false);
     }
   }, [authedFetch, ticketId]);
 
   useEffect(() => {
-    setMessages([]);
+    mounted.current = true;
     void load();
+    return () => { mounted.current = false; };
   }, [load]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, answering]);
-
-  // Fullscreen takeover: lock the page behind it, restore on exit.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onBack();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onBack]);
 
   async function send() {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setError(null);
     setDraft("");
+    const pendingId = `pending-${Date.now()}`;
+    setMessages(current => [...current, { id: pendingId, role: "user", content: text, created_at: new Date().toISOString() }]);
     try {
-      await authedFetch(`/api/support/tickets/${ticketId}/messages`, {
+      // This endpoint waits for Tether's reply. Keep the thinking state active
+      // during the request rather than starting uncancelled polling afterward.
+      const json = await authedFetch(`/api/support/tickets/${ticketId}/messages`, {
         method: "POST",
         body: JSON.stringify({ message: text }),
       });
+      if (!mounted.current) return;
+      if (typeof json.reply === "string") {
+        const reply = json.reply;
+        setMessages(current => [...current, { id: `reply-${pendingId}`, role: "tether", content: reply, created_at: new Date().toISOString() }]);
+      }
       await load();
-      setAnswering(true);
-      const poll = async (tries: number): Promise<void> => {
-        await load();
-        if (tries <= 0) return;
-        setTimeout(() => void poll(tries - 1), 2500);
-      };
-      await poll(5);
     } catch (e) {
+      if (!mounted.current) return;
+      setMessages(current => current.filter(message => message.id !== pendingId));
       setError(e instanceof Error ? e.message : "Could not send.");
-      setDraft(text);
+      setDraft(current => current || text);
     } finally {
-      setSending(false);
-      setAnswering(false);
+      sendingRef.current = false;
+      if (mounted.current) setSending(false);
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg-primary">
-      <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-5 pt-4 sm:px-6">
-        <div className="flex items-center gap-2 pb-2">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to support"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
-            </svg>
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-              Support · Tether
-            </p>
-            <p className="truncate text-[16px] font-bold text-text-normal">{subject}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Close chat"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Tether resting on top of the wide input bar. */}
-        <div className="relative mt-[68px] shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/tether-resting.png"
-            alt="Tether"
-            aria-hidden
-            className="pointer-events-none absolute -top-[68px] left-3 z-10 h-[104px] w-[104px] select-none object-contain drop-shadow-[0_10px_16px_rgba(0,0,0,0.45)]"
-            draggable={false}
-          />
-          <div className="flex items-center gap-2 rounded-[28px] border border-divider bg-bg-secondary p-2 pl-4 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.55)]">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void send();
-              }}
-              placeholder="Ask Tether anything…"
-              maxLength={4000}
-              autoFocus
-              className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] outline-none placeholder:text-text-muted"
-            />
-            <button
-              type="button"
-              disabled={sending || !draft.trim()}
-              onClick={() => void send()}
-              className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brand px-5 text-[14px] font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
-            >
-              {sending ? "…" : "Send"}
-            </button>
-          </div>
-        </div>
-
-        {error && <p className="mt-2 text-[13px] text-status-dnd">{error}</p>}
-
-        <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pb-2 pt-1">
-          {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <p
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
-                  m.role === "user" ? "bg-brand text-white" : "bg-bg-tertiary text-text-normal"
-                }`}
-              >
-                {m.content}
-              </p>
-            </div>
-          ))}
-          {answering && (
-            <div className="flex justify-start">
-              <p className="rounded-2xl bg-bg-tertiary px-4 py-2.5 text-[14px] text-text-muted">
-                Tether is looking into it…
-              </p>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-      </div>
-    </div>
-  );
+  return <SupportConversation subject={subject} messages={messages} draft={draft}
+    sending={sending} loading={loading} error={error} onDraftChange={setDraft}
+    onSend={() => void send()} onRetry={() => { setError(null); void load(); }} onBack={onBack} />;
 }
 
 function HeroChat({
@@ -397,34 +295,35 @@ function HeroChat({
   }
 
   return (
-    <div className="w-full rounded-[28px] border border-divider bg-bg-secondary p-2 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]">
-      <textarea
-        ref={inputRef}
-        value={text}
-        onChange={(e) => setText(e.target.value.slice(0, 4000))}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submit();
-          }
-        }}
-        placeholder="Describe what's wrong — Tether reads your account and helps on the spot…"
-        rows={3}
-        className="w-full resize-none bg-transparent px-4 pb-1 pt-3 text-[16px] leading-relaxed outline-none placeholder:text-text-muted"
-      />
-      <div className="flex items-center justify-between px-2 pb-1">
-        <p className="px-2 text-[12px] text-text-muted">
-          Signed-in help · never touches anyone else&apos;s account
-        </p>
-        <button
-          type="button"
-          disabled={starting || !text.trim()}
-          onClick={submit}
-          className="rounded-full bg-brand px-6 py-2.5 text-[15px] font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
-        >
-          {starting ? "Starting…" : "Ask Tether →"}
-        </button>
-      </div>
+    <div className={styles.heroComposer}>
+      {/* The artwork belongs only to the support homepage, resting on its bar. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/tether-resting.png" alt="" aria-hidden="true" width={176} height={176}
+        className={styles.restingTether} draggable={false} />
+      <form className={styles.heroBar} onSubmit={e => { e.preventDefault(); submit(); }}>
+        <textarea
+          ref={inputRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          aria-label="Ask Tether about your account"
+          placeholder="Tell me what’s going on. We’ll figure it out together…"
+          maxLength={4000}
+          rows={2}
+          className={styles.heroInput}
+        />
+        <div className={styles.heroBarFooter}>
+          <p className="flex items-center gap-1.5"><LockKeyhole size={13} className="shrink-0" />Private help, just for your account</p>
+          <button type="submit" disabled={starting || !text.trim()} className={styles.heroSubmit}>
+            {starting ? "Starting…" : "Ask Tether"}<ArrowUpRight size={17} />
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -437,6 +336,10 @@ function SupportHome() {
   const [needsVerify, setNeedsVerify] = useState(false);
   const [pendingText, setPendingText] = useState("");
   const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
+  const showNewChatRef = useRef(false);
+  const [opening, setOpening] = useState<{ subject: string; message: SupportMessage } | null>(null);
+  const [openingDraft, setOpeningDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [noAccount, setNoAccount] = useState(false);
 
@@ -476,26 +379,36 @@ function SupportHome() {
   }, []);
 
   async function startFromText(text: string) {
+    if (startingRef.current) return;
     if (!session) {
       // Hold the message across verification, then send it automatically.
       setPendingText(text);
       setNeedsVerify(true);
       return;
     }
+    startingRef.current = true;
+    showNewChatRef.current = true;
     setStarting(true);
     setError(null);
+    setOpeningDraft("");
+    const subject = text.length > 80 ? `${text.slice(0, 77)}…` : text;
+    setOpening({ subject, message: { id: "opening-message", role: "user", content: text, created_at: new Date().toISOString() } });
     try {
-      const subject = text.length > 80 ? `${text.slice(0, 77)}…` : text;
       const json = await authedFetch("/api/support/tickets", {
         method: "POST",
         body: JSON.stringify({ subject, message: text }),
       });
       const ticket = json.ticket as Ticket;
-      setActive(ticket);
+      setOpening(null);
+      if (showNewChatRef.current) {
+        setActive({ ...ticket, replyError: typeof json.replyError === "string" ? json.replyError : undefined });
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start the chat.");
     } finally {
+      setOpening(null);
+      startingRef.current = false;
       setStarting(false);
     }
   }
@@ -568,7 +481,7 @@ function SupportHome() {
       </header>
 
       {/* Hero + big chatbox */}
-      <section className="mx-auto w-full max-w-2xl px-4 pb-10 pt-12 text-center sm:pt-16">
+      <section className={`${styles.heroSection} mx-auto w-full px-4 pb-10 pt-12 text-center sm:px-6 sm:pt-16`}>
         <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
           How can we help?
         </h1>
@@ -596,11 +509,21 @@ function SupportHome() {
           </p>
         )}
 
+        {/* Open immediately while the create request generates the first reply. */}
+        {opening && session && (
+          <SupportConversation subject={opening.subject} messages={[opening.message]}
+            draft={openingDraft} onDraftChange={setOpeningDraft} sending loading={false}
+            error={null} onSend={() => undefined} onRetry={() => undefined}
+            onBack={() => { showNewChatRef.current = false; setOpening(null); }} />
+        )}
         {/* Active thread takes over fullscreen. */}
         {active && session && (
           <Thread
+            key={active.id}
             ticketId={active.id}
             subject={active.subject}
+            initialDraft={openingDraft}
+            initialError={active.replyError}
             onBack={() => {
               setActive(null);
               void load();
@@ -642,7 +565,7 @@ function SupportHome() {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setActive(t)}
+                onClick={() => { setOpeningDraft(""); setActive(t); }}
                 className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
               >
                 <span className="min-w-0 flex-1">

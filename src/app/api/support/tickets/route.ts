@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { persistentRateLimitCheck } from "@/lib/auth-guard";
+import { chatWithSupportTether } from "@/lib/tether-support";
+import { DeepSeekError, DeepSeekUnavailableError } from "@/lib/deepseek";
+
+export const maxDuration = 90;
 
 /**
  * Support tickets. Authenticated session only — logged-out visitors verify
@@ -54,15 +58,44 @@ export async function POST(req: Request) {
   const { data: ticket, error } = await supabase
     .from("support_tickets")
     .insert({ user_id: user.id, email, subject: cleanSubject, status: "open" })
-    .select("id, subject, status, created_at")
+    .select("id, subject, status, created_at, updated_at")
     .single();
   if (error || !ticket) {
     return NextResponse.json({ error: "Could not open the ticket." }, { status: 500 });
   }
-  await supabase.from("support_messages").insert({
+  const { error: messageError } = await supabase.from("support_messages").insert({
     ticket_id: ticket.id,
     role: "user",
     content: cleanMessage,
   });
+  if (messageError) {
+    return NextResponse.json({ ticket, replyError: "Your request opened, but the first message could not be saved. Please send it again here." });
+  }
+
+  // A homepage topic or question is already the first turn. Answer it here,
+  // exactly once, rather than waiting for another message in the thread.
+  let reply: string;
+  try {
+    reply = await chatWithSupportTether({
+      service: supabase,
+      userId: user.id,
+      history: [{ role: "user", content: cleanMessage }],
+    });
+  } catch (err) {
+    reply = err instanceof DeepSeekUnavailableError
+      ? "Tether is warming up — ask again in a moment."
+      : err instanceof DeepSeekError
+        ? "Tether hit a snag on that one — try again in a moment."
+        : "Tether could not answer right now. Your request is saved — try again in a moment.";
+  }
+  const { error: replyError } = await supabase.from("support_messages").insert({
+    ticket_id: ticket.id,
+    role: "tether",
+    content: reply,
+  });
+  if (replyError) {
+    return NextResponse.json({ ticket, replyError: "Your message is saved, but Tether’s reply could not be saved. Please try again in this conversation." });
+  }
+  await supabase.from("support_tickets").update({ updated_at: new Date().toISOString() }).eq("id", ticket.id);
   return NextResponse.json({ ticket });
 }
