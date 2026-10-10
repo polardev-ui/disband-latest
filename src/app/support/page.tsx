@@ -215,7 +215,7 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
   );
 }
 
-function Thread({ ticketId, subject }: { ticketId: string; subject: string }) {
+function Thread({ ticketId, subject, onBack }: { ticketId: string; subject: string; onBack: () => void }) {
   const authedFetch = useAuthedFetch();
   const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -241,6 +241,23 @@ function Thread({ ticketId, subject }: { ticketId: string; subject: string }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, answering]);
+
+  // Fullscreen takeover: lock the page behind it, restore on exit.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onBack();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onBack]);
 
   async function send() {
     const text = draft.trim();
@@ -271,52 +288,93 @@ function Thread({ ticketId, subject }: { ticketId: string; subject: string }) {
   }
 
   return (
-    <div className="flex w-full flex-col rounded-[28px] border border-divider bg-bg-secondary shadow-[0_24px_70px_-30px_rgba(0,0,0,0.5)]">
-      <div className="border-b border-divider px-5 py-4 sm:px-6">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Request</p>
-        <p className="truncate text-[16px] font-bold text-text-normal">{subject}</p>
-      </div>
-      <div className="max-h-[380px] min-h-[220px] space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
-        {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <p
-              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
-                m.role === "user" ? "bg-brand text-white" : "bg-bg-tertiary text-text-normal"
-              }`}
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg-primary">
+      <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-5 pt-4 sm:px-6">
+        <div className="flex items-center gap-2 pb-2">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to support"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+              Support · Tether
+            </p>
+            <p className="truncate text-[16px] font-bold text-text-normal">{subject}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Close chat"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Tether resting on top of the wide input bar. */}
+        <div className="relative mt-[68px] shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/tether-resting.png"
+            alt="Tether"
+            aria-hidden
+            className="pointer-events-none absolute -top-[68px] left-3 z-10 h-[104px] w-[104px] select-none object-contain drop-shadow-[0_10px_16px_rgba(0,0,0,0.45)]"
+            draggable={false}
+          />
+          <div className="flex items-center gap-2 rounded-[28px] border border-divider bg-bg-secondary p-2 pl-4 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.55)]">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void send();
+              }}
+              placeholder="Ask Tether anything…"
+              maxLength={4000}
+              autoFocus
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] outline-none placeholder:text-text-muted"
+            />
+            <button
+              type="button"
+              disabled={sending || !draft.trim()}
+              onClick={() => void send()}
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brand px-5 text-[14px] font-bold text-white shadow-[0_4px_14px_-4px_var(--color-brand)] transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
             >
-              {m.content}
-            </p>
+              {sending ? "…" : "Send"}
+            </button>
           </div>
-        ))}
-        {answering && (
-          <div className="flex justify-start">
-            <p className="rounded-2xl bg-bg-tertiary px-4 py-2.5 text-[14px] text-text-muted">
-              Tether is looking into it…
-            </p>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-      {error && <p className="px-5 text-[13px] text-status-dnd">{error}</p>}
-      <div className="flex gap-2 border-t border-divider p-3 sm:p-4">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void send();
-          }}
-          placeholder="Reply to Tether…"
-          maxLength={4000}
-          className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-2.5 text-[14px] outline-none placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
-        />
-        <button
-          type="button"
-          disabled={sending || !draft.trim()}
-          onClick={() => void send()}
-          className="shrink-0 rounded-2xl bg-brand px-5 py-2.5 text-[14px] font-bold text-white transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
-        >
-          {sending ? "…" : "Send"}
-        </button>
+        </div>
+
+        {error && <p className="mt-2 text-[13px] text-status-dnd">{error}</p>}
+
+        <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pb-2 pt-1">
+          {messages.map((m) => (
+            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <p
+                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed ${
+                  m.role === "user" ? "bg-brand text-white" : "bg-bg-tertiary text-text-normal"
+                }`}
+              >
+                {m.content}
+              </p>
+            </div>
+          ))}
+          {answering && (
+            <div className="flex justify-start">
+              <p className="rounded-2xl bg-bg-tertiary px-4 py-2.5 text-[14px] text-text-muted">
+                Tether is looking into it…
+              </p>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
       </div>
     </div>
   );
@@ -538,21 +596,16 @@ function SupportHome() {
           </p>
         )}
 
-        {/* Active thread */}
+        {/* Active thread takes over fullscreen. */}
         {active && session && (
-          <div id="support-thread" className="mt-6 text-left">
-            <Thread ticketId={active.id} subject={active.subject} />
-            <button
-              type="button"
-              onClick={() => {
-                setActive(null);
-                void load();
-              }}
-              className="mt-3 text-[13px] font-medium text-text-muted hover:text-text-normal hover:underline"
-            >
-              ← Back to all requests
-            </button>
-          </div>
+          <Thread
+            ticketId={active.id}
+            subject={active.subject}
+            onBack={() => {
+              setActive(null);
+              void load();
+            }}
+          />
         )}
       </section>
 
