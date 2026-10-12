@@ -5,6 +5,7 @@ import { checkVpnStrict } from "@/lib/vpn-check";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
 import { isLoginAllowlisted } from "@/lib/login-allowlist";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 // Agreed limits: 5/min + 20/hr per IP and per email.
 const MIN_MAX = 5;
@@ -13,9 +14,9 @@ const HOUR_MAX = 20;
 export async function POST(request: Request) {
   const ip = getClientIp(request) || "unknown";
 
-  let body: { email?: string };
+  let body: { email?: string; turnstileToken?: string };
   try {
-    body = (await request.json()) as { email?: string };
+    body = (await request.json()) as { email?: string; turnstileToken?: string };
   } catch {
     return NextResponse.json({ allowed: false, error: "Invalid request." }, { status: 400 });
   }
@@ -82,14 +83,13 @@ export async function POST(request: Request) {
   // VPN/proxy block — login only. Existing sessions are never re-checked, so
   // already-signed-in users stay signed in. Allowlisted addresses skip it.
   //
-  // NARROW ON PURPOSE (see `vpn-check.ts`): the only thing that blocks is a
-  // categorically-confirmed TOR exit. "Is this a VPN/proxy?" reputations are
-  // advisory, because the whole anonymised-looking class is dominated by people
-  // who never chose a VPN — iCloud Private Relay (default-on for iCloud+ in
-  // Safari, and scored "high risk" by IPQS AND flagged `hosting` by ip-api, so
-  // even a two-provider consensus convicts it), carrier/CGNAT pools, shared
-  // campus/corporate NAT, and ordinary privacy VPNs. Blocking those locked real
-  // members out of their own accounts.
+  // NARROW ON PURPOSE (see `vpn-check.ts`): a hard block is reserved for a
+  // categorically-confirmed TOR exit. Everything that merely *looks* anonymised
+  // — iCloud Private Relay (default-on for iCloud+ in Safari, and scored "high
+  // risk" by IPQS AND flagged `hosting` by ip-api, so even a two-provider
+  // consensus convicts it), carrier/CGNAT pools, shared campus/corporate NAT,
+  // and ordinary privacy VPNs — gets a Cloudflare Turnstile step-up instead of
+  // a refusal. A human passes; bots don't.
   //
   // FAIL-OPEN, deliberately. `unavailable` means "we could not tell", which is
   // NOT a verdict and must never be one: the free IPQS tier caps fast, so a
@@ -107,6 +107,42 @@ export async function POST(request: Request) {
         },
         { status: 403 },
       );
+    }
+    if (vpn.flagged) {
+      // Only enforce when we can actually verify. With no secret configured the
+      // step-up cannot run, so we fail open rather than dead-ending the login.
+      if (!process.env.TURNSTILE_SECRET_KEY) {
+        await logGateEvent(service, "login_vpn_detection_unavailable", ipHash === "unknown" ? null : ipHash, emailHash);
+      } else if (!body.turnstileToken) {
+        await logGateEvent(service, "login_vpn_challenge_required", ipHash === "unknown" ? null : ipHash, emailHash);
+        return NextResponse.json(
+          {
+            allowed: false,
+            code: "TURNSTILE_REQUIRED",
+            challengeRequired: true,
+            error: "Please complete the verification to continue.",
+          },
+          { status: 403 },
+        );
+      } else {
+        const ok = await verifyTurnstileToken(
+          body.turnstileToken,
+          ip === "unknown" ? undefined : ip,
+        );
+        if (!ok) {
+          await logGateEvent(service, "login_vpn_challenge_failed", ipHash === "unknown" ? null : ipHash, emailHash);
+          return NextResponse.json(
+            {
+              allowed: false,
+              code: "TURNSTILE_INVALID",
+              challengeRequired: true,
+              error: "That verification didn't work. Please try the check again.",
+            },
+            { status: 403 },
+          );
+        }
+        await logGateEvent(service, "login_vpn_challenge_passed", ipHash === "unknown" ? null : ipHash, emailHash);
+      }
     }
     if (vpn.unavailable) {
       // Loud but harmless: this is how we notice if provider health degrades.

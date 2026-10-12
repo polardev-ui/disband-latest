@@ -5,8 +5,9 @@
  *
  * The ONLY egress this module hard-blocks is a confirmed TOR exit. Every other
  * thing a reputation feed can tell us — `vpn`, `proxy`, `hosting`, `active_vpn`,
- * even a high `fraud_score` — is advisory: it is logged for observability and
- * never used to refuse someone their account.
+ * even a high `fraud_score` — is advisory: it is returned as `flagged` for a
+ * Cloudflare Turnstile step-up, logged, and NEVER used to refuse someone their
+ * account outright.
  *
  * This is deliberately narrow, because the entire "looks anonymised" class is
  * dominated by ordinary people who are NOT on a VPN:
@@ -43,13 +44,19 @@
 
 export interface VpnCheckResult {
   blocked: boolean;
+  /**
+   * True when the egress *looks* anonymised (VPN/proxy/relay shape) but is not
+   * a categorical block. Callers step up to a Cloudflare Turnstile challenge
+   * rather than refusing. Never set together with `blocked`.
+   */
+  flagged: boolean;
   /** True when no provider could produce a verdict — the check was
    *  inconclusive rather than a clean pass. Callers decide the posture. */
   unavailable: boolean;
   reason?: string;
 }
 
-type VpnVerdict = { blocked: boolean; unavailable: boolean; reason?: string };
+type VpnVerdict = { blocked: boolean; flagged: boolean; unavailable: boolean; reason?: string };
 
 // Deterministic short-lived cache, so a burst of logins from one egress (or a
 // degraded provider) is not re-hit for every request.
@@ -75,33 +82,52 @@ interface ProviderAnswer {
   responded: boolean;
   /** The provider categorically identified a TOR exit. */
   tor: boolean;
+  /**
+   * The provider sees anonymiser shape — a VPN, proxy, relay or active
+   * anonymiser. Not enough to block (see the policy note), but enough to ask
+   * for a human-verification challenge.
+   */
+  anonymizer: boolean;
 }
 
 function parseIpqs(data: unknown): ProviderAnswer | undefined {
   if (typeof data !== "object" || data === null) return undefined;
-  const d = data as { success?: boolean; tor?: boolean; active_tor?: boolean };
+  const d = data as {
+    success?: boolean;
+    tor?: boolean;
+    active_tor?: boolean;
+    vpn?: boolean;
+    proxy?: boolean;
+    active_vpn?: boolean;
+  };
   if (d.success !== true) return undefined; // over quota / blocklisted caller: no vote
-  return { responded: true, tor: d.tor === true || d.active_tor === true };
+  const tor = d.tor === true || d.active_tor === true;
+  return { responded: true, tor, anonymizer: tor || d.vpn === true || d.proxy === true || d.active_vpn === true };
 }
 
 function parseIpApi(data: unknown): ProviderAnswer | undefined {
   if (typeof data !== "object" || data === null) return undefined;
-  const d = data as { status?: string };
+  const d = data as { status?: string; proxy?: boolean };
   if (d.status !== "success") return undefined;
-  return { responded: true, tor: false };
+  // Only the strong `proxy` field counts. `hosting` is deliberately ignored:
+  // it is true for carrier/CGNAT/campus pools and iCloud Private Relay, which
+  // are exactly the users we must not add friction for.
+  return { responded: true, tor: false, anonymizer: d.proxy === true };
 }
 
 /**
  * Strict check used by the signup/login gates.
  *
- * Blocks only a categorically-confirmed TOR exit (see the policy note at the
- * top of this file for why nothing else may block). `unavailable: true` without
- * `blocked` means the detectors could not answer at all — callers must fail
- * open on it, because "we could not tell" is not a verdict.
+ * Blocks only a categorically-confirmed TOR exit; everything else that merely
+ * *looks* anonymised is returned as `flagged` so the caller can step up to a
+ * Turnstile challenge (see the policy note at the top of this file).
+ * `unavailable: true` without `blocked` means the detectors could not answer at
+ * all — callers must fail open on it, because "we could not tell" is not a
+ * verdict.
  */
 export async function checkVpnStrict(ip: string): Promise<VpnCheckResult> {
   if (isBypassIp(ip)) {
-    return { blocked: false, unavailable: false };
+    return { blocked: false, flagged: false, unavailable: false };
   }
 
   const cached = vpnCache.get(ip);
@@ -132,19 +158,21 @@ export async function checkVpnStrict(ip: string): Promise<VpnCheckResult> {
   // distinctly and FAIL OPEN: gates must never strand the community because a
   // third-party detector is flaky or over quota.
   if (!ipqs?.responded && !ipApi?.responded) {
-    return { blocked: false, unavailable: true, reason: "VPN_DETECTION_UNAVAILABLE" };
+    return { blocked: false, flagged: false, unavailable: true, reason: "VPN_DETECTION_UNAVAILABLE" };
   }
 
   // The one categorical block. A confirmed TOR exit is not Private Relay, not a
   // carrier pool, and not something a member enables by accident.
   if (ipqs?.tor) {
-    const verdict: VpnVerdict = { blocked: true, unavailable: false, reason: "tor" };
+    const verdict: VpnVerdict = { blocked: true, flagged: false, unavailable: false, reason: "tor" };
     setCache(ip, verdict);
     return verdict;
   }
 
-  // Everything else — clean or merely flagged as vpn/proxy/hosting — is a pass.
-  const verdict: VpnVerdict = { blocked: false, unavailable: false };
+  // Anonymiser-shaped but not categorical: don't refuse the member — flag for a
+  // Turnstile step-up so a human can pass while bots are still filtered.
+  const flagged = !!(ipqs?.anonymizer || ipApi?.anonymizer);
+  const verdict: VpnVerdict = { blocked: false, flagged, unavailable: false };
   setCache(ip, verdict);
   return verdict;
 }
