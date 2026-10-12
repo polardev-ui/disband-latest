@@ -24,7 +24,7 @@ import { preloadImages } from "@/lib/preload-images";
 import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profileErrors";
 import { messageCharLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
-import { mapAuthError, type SignUpResult } from "@/lib/authErrors";
+import { mapAuthError, TURNSTILE_REQUIRED, type SignUpResult } from "@/lib/authErrors";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
@@ -139,7 +139,7 @@ interface AppContextValue {
   deafened: boolean;
   setMicMuted: (v: boolean) => void;
   setDeafened: (v: boolean) => void;
-  signIn: (email: string, password: string) => Promise<string | null>;
+  signIn: (email: string, password: string, turnstileToken?: string | null) => Promise<string | null>;
   signUp: (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null) => Promise<SignUpResult>;
   requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
@@ -2512,17 +2512,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    // Pre-gate: per-IP/email rate limit + VPN/proxy block (login only —
-    // saved sessions and active sessions are never re-checked).
+  const signIn = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {
+    // Pre-gate: per-IP/email rate limit + VPN/proxy check (login only —
+    // saved sessions and active sessions are never re-checked). Flagged egress
+    // answers TURNSTILE_REQUIRED and the caller re-runs us with a token.
     try {
       const gate = await apiFetch("/api/auth/login-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({
+          email: email.trim(),
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       });
       if (!gate.ok) {
-        const json = (await gate.json().catch(() => null)) as { error?: string } | null;
+        const json = (await gate.json().catch(() => null)) as { error?: string; code?: string } | null;
+        // Control-flow sentinel: the auth screen reveals the Turnstile widget
+        // and resubmits. Never shown to the user.
+        if (json?.code === "TURNSTILE_REQUIRED") return TURNSTILE_REQUIRED;
         return json?.error ?? "Sign-in is temporarily blocked. Try again later.";
       }
     } catch {

@@ -5,7 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { ScatteredIcons } from "@/components/auth/ScatteredIcons";
 import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
 import { ResendResetLink } from "@/components/auth/ResendResetLink";
-import { EMAIL_NOT_CONFIRMED } from "@/lib/authErrors";
+import { EMAIL_NOT_CONFIRMED, TURNSTILE_REQUIRED } from "@/lib/authErrors";
 import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { Logo } from "@/components/ui/Logo";
@@ -61,10 +61,10 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [turnstileFailed, setTurnstileFailed] = useState(false);
+  const [challengeRequired, setChallengeRequired] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [appliedRef, setAppliedRef] = useState<string | null>(null);
   const submittingRef = useRef(false);
-  const webOnly = !isTauri();
 
   useEffect(() => {
     if (overlay) return;
@@ -100,8 +100,16 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
     try {
       if (mode === "login") {
-        const err = await signIn(email, password);
-        if (err) setError(err);
+        const err = await signIn(email, password, turnstileToken);
+        if (err === TURNSTILE_REQUIRED) {
+          // The server wants a Cloudflare Turnstile step-up for this network.
+          // Reveal the widget (the finally below resets it so it remounts
+          // fresh) and let the member solve the check, then resubmits.
+          setChallengeRequired(true);
+          setError(null);
+        } else if (err) {
+          setError(err);
+        }
       } else if (mode === "reset") {
         const err = await requestPasswordReset(email);
         if (err) {
@@ -146,6 +154,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
     setConfirmPassword("");
     setTurnstileToken(null);
     setTurnstileFailed(false);
+    setChallengeRequired(false);
     setTurnstileKey((k) => k + 1);
   }
 
@@ -186,6 +195,12 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
   const submitLabel =
     mode === "login" ? "Sign in" : mode === "reset" ? "Send reset link" : "Create account";
+
+  // The Turnstile widget is offered on signup always; on login only once the
+  // server has asked for a step-up (flagged egress). Hidden entirely if the
+  // widget script is blocked and the member hasn't been challenged.
+  const showTurnstile =
+    !turnstileFailed && (mode === "signup" || (mode === "login" && challengeRequired));
 
   return (
     <div
@@ -431,17 +446,51 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 </Field>
               )}
 
-              {webOnly && !turnstileFailed && (
-                <Turnstile
-                  key={turnstileKey}
-                  siteKey={PUBLIC_ENV.turnstileSiteKey}
-                  onToken={setTurnstileToken}
-                  onExpire={() => setTurnstileToken(null)}
-                  onError={() => {
-                    setTurnstileToken(null);
-                    setTurnstileFailed(true);
-                  }}
-                />
+              {/* Rendered on web *and* desktop: a flagged network answers
+                  TURNSTILE_REQUIRED on sign-in (see login-check), and the
+                  Turnstile widget allow-lists `tauri.localhost`/`localhost`, so
+                  the step-up works inside the Tauri webview too. On signup the
+                  widget is always offered; on login it appears only once the
+                  server has asked for it. */}
+              {showTurnstile && (
+                <div className="space-y-2">
+                  {challengeRequired && (
+                    <p className="text-[13px] leading-relaxed text-text-muted">
+                      We need to confirm you&apos;re a person before signing you
+                      in from this network. Complete the check, then press{" "}
+                      {submitLabel}.
+                    </p>
+                  )}
+                  <Turnstile
+                    key={turnstileKey}
+                    siteKey={PUBLIC_ENV.turnstileSiteKey}
+                    onToken={setTurnstileToken}
+                    onExpire={() => setTurnstileToken(null)}
+                    onError={() => {
+                      setTurnstileToken(null);
+                      setTurnstileFailed(true);
+                    }}
+                  />
+                </div>
+              )}
+
+              {challengeRequired && turnstileFailed && (
+                <p
+                  className="rounded-md border border-divider bg-bg-accent px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted"
+                >
+                  The verification couldn&apos;t load.{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-brand hover:underline"
+                    onClick={() => {
+                      setTurnstileFailed(false);
+                      setTurnstileKey((k) => k + 1);
+                    }}
+                  >
+                    Retry
+                  </button>{" "}
+                  — or turn off content blockers for this page.
+                </p>
               )}
 
               {error && (
@@ -456,11 +505,11 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               {}
               {needsConfirmation && <ResendConfirmation defaultEmail={email} lockEmail />}
 
-              {/* The Turnstile token is not consumed by the auth calls yet
-                  (backend TODO): it used to gate the submit button, which
-                  permanently dead-ended the form for anyone whose blocker
-                  stops the widget script without firing onError. The widget
-                  still renders; the button no longer depends on it. */}
+              {/* The token gates nothing locally — the server decides, and it
+                  only asks on signup or on flagged egress. The button stays
+                  enabled even before the widget solves, because a blocker that
+                  silently eats the widget script must never dead-end the form;
+                  the server just answers TURNSTILE_REQUIRED again. */}
               <button
                 type="submit"
                 disabled={loading}

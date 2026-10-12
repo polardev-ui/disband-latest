@@ -41,6 +41,9 @@ export type AuthGateKind =
   | "login_vpn_blocked"
   | "login_banned"
   | "login_vpn_detection_unavailable"
+  | "login_vpn_challenge_required"
+  | "login_vpn_challenge_failed"
+  | "login_vpn_challenge_passed"
   | "signup_rate_limited"
   | "signup_vpn_blocked"
   | "signup_vpn_detection_unavailable";

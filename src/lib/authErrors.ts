@@ -3,6 +3,14 @@ export const EMAIL_NOT_CONFIRMED =
   "Please confirm your email address before signing in. If your link expired, "
   + "you can send yourself a new one below.";
 
+/**
+ * Sentinel returned by `signIn` when the server wants a Cloudflare Turnstile
+ * step-up before it will consider the credentials (flagged/​anonymised-looking
+ * egress). The auth screen reveals the widget and resubmits with the token —
+ * this string is control flow, never shown to the user.
+ */
+export const TURNSTILE_REQUIRED = "__turnstile_required__";
+
 export function mapAuthError(message: string | undefined | null): string {
   if (!message || message === "{}" || message === "{}") {
     return "Something went wrong. Please try again.";

@@ -68,8 +68,13 @@ function stubProviders({ ipqs, ipApi }) {
   };
 }
 
+let ipCounter = 0;
 function uniqueIp() {
-  return `203.0.113.${Math.floor(Math.random() * 250) + 1}`;
+  // Monotonic, not random: `checkVpnStrict` memoises verdicts in a
+  // process-wide Map for 10 minutes, so two tests sharing an IP would read each
+  // other's verdict. A counter guarantees a distinct address per call.
+  ipCounter += 1;
+  return `198.51.${(ipCounter % 250) + 1}.${((ipCounter * 7) % 250) + 1}`;
 }
 
 test.afterEach(() => {
@@ -103,12 +108,53 @@ test("THE BUG (Private Relay): both providers agree it is a VPN/proxy, but it is
   assert.equal(r.unavailable, false, "both providers answered, so this is a verdict, not an outage");
 });
 
-test("ip-api alone reporting proxy:true is advisory, not a block", async () => {
-  // With IPQS over quota, ip-api alone cannot convict: its proxy flag false-
-  // positives on shared/CGNAT/relay ranges too.
+test("ip-api alone reporting proxy:true does not block, but does step up", async () => {
+  // With IPQS over quota, ip-api alone cannot convict. Its `proxy` flag is a
+  // real anonymiser signal (unlike `hosting`), so it earns a challenge — but
+  // never a block, because it still false-positives on some relay ranges.
   stubProviders({ ipqs: null, ipApi: IPAPI_PROXY });
   const r = await checkVpnStrict(uniqueIp());
   assert.equal(r.blocked, false, "a single ip-api proxy verdict must not block");
+  assert.equal(r.flagged, true, "it is anonymiser-shaped, so it steps up to a challenge");
+});
+
+test("the Private Relay shape is flagged for a Turnstile step-up (not blocked)", async () => {
+  // The bug that locked clean users out must become a challenge instead: IPQS
+  // vpn/proxy on a network that is not a TOR exit asks for a human check.
+  stubProviders({ ipqs: IPQS_VPN, ipApi: null });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, false);
+  assert.equal(r.flagged, true, "anonymiser-shaped egress must step up to a challenge");
+});
+
+test("a lone ip-api hosting:true (carrier/CGNAT) is not even flagged", async () => {
+  // This is the false-positive class that must get ZERO friction: no block, no
+  // challenge — it is ordinary carrier/campus/corporate egress.
+  stubProviders({ ipqs: IPQS_QUOTA, ipApi: IPAPI_HOSTING });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, false);
+  assert.equal(r.flagged, false, "noisy hosting alone must never demand verification");
+});
+
+test("a confirmed TOR exit is blocked and never flagged", async () => {
+  stubProviders({ ipqs: IPQS_TOR, ipApi: IPAPI_CLEAN });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, true);
+  assert.equal(r.flagged, false, "flagged means challenge, not block — the two are exclusive");
+});
+
+test("a clean verdict is neither blocked nor flagged", async () => {
+  stubProviders({ ipqs: IPQS_CLEAN, ipApi: IPAPI_CLEAN });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, false);
+  assert.equal(r.flagged, false);
+});
+
+test("an inconclusive check is neither blocked nor flagged", async () => {
+  stubProviders({ ipqs: null, ipApi: null });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, false);
+  assert.equal(r.flagged, false, "we could not tell is not a reason to add friction");
 });
 
 test("IPQS alone reporting a VPN (ip-api unreachable) is advisory, not a block", async () => {
