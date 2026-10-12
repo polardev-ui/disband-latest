@@ -1,26 +1,44 @@
 /**
  * Fail-safe VPN/proxy detection for the auth gates.
  *
- * Design goals (in order):
- *   1. Block real VPN/proxy/TOR egress so abuse botnets can't farm accounts
- *      and bots can't hide behind proxies — the privacy/disaster posture.
- *   2. NEVER let a *flaky provider* become a *global auth outage*. Detection
- *      is a checkpoint, not the product; if the third-party API that answers
- *      "is this a VPN?" is down or rate-limited, that must not silently
- *      strand the legitimate community for hours.
+ * ── POLICY: what this module is allowed to block ────────────────────────────
  *
- * To that end, provider resolution is deliberately layered + fail-tolerant:
- *   - IPQualityScore (keyed, strict) is the primary.
- *   - ip-api.com is the fallback. IMPORTANT: its **free** JSON endpoint is
- *     http-only — https returns non-200 on the free tier. We try https first
- *     (paid setups), then http, so the fallback actually answers on free
- *     self-hosting installs.
- *   - All verdicts (including "can't tell today") are cached briefly so a
- *     degraded provider is not re-hammered on every keystroke, and the
- *     per-IP rate caps of the free tier (~45 req/min) don't trip a cascade.
+ * The ONLY egress this module hard-blocks is a confirmed TOR exit. Every other
+ * thing a reputation feed can tell us — `vpn`, `proxy`, `hosting`, `active_vpn`,
+ * even a high `fraud_score` — is advisory: it is logged for observability and
+ * never used to refuse someone their account.
  *
- * Bypass IPs (loopback, private ranges, "unknown") are trusted — matches
- * local dev and self-hosted LAN installs.
+ * This is deliberately narrow, because the entire "looks anonymised" class is
+ * dominated by ordinary people who are NOT on a VPN:
+ *
+ *   - iCloud Private Relay, which is ON BY DEFAULT for iCloud+ subscribers in
+ *     Safari. It is not a VPN the user chose; it appears transparently. And the
+ *     two providers *agree* it is risky: IPQS scores a Private Relay exit as
+ *     "high risk" (we have seen fraud_score ~84) and sets `vpn: true`, while
+ *     ip-api reports the same relay host `hosting: true`. A "two-provider
+ *     consensus" therefore still convicts a user who never touched a VPN.
+ *   - Carrier-Grade NAT / mobile carrier pools, where one public IP is shared
+ *     by dozens-to-hundreds of households and any one of them can sour it.
+ *   - University, corporate and public shared NAT.
+ *   - People who simply value privacy and run a commercial VPN.
+ *
+ * Industry guidance is unanimous on the response: do not blanket-block relay /
+ * VPN / shared egress; pair layered defences (rate limits, Turnstile, email
+ * verification) with step-up verification when *other* risk factors appear.
+ * Blocking this class "frustrates legitimate users and does nothing to stop
+ * determined fraudsters" (Fingerprint). TOR is the one categorical,
+ * non-repudiable signal that is almost never an accident, so it stays.
+ *
+ * ── Reliability ─────────────────────────────────────────────────────────────
+ *
+ * Detection is a checkpoint, not the product. Both providers are asked in
+ * parallel (a sequential walk used to spend up to 8s inside a login request).
+ * If neither can answer, the result is `unavailable` — which callers treat as
+ * "we could not tell", never as evidence of a VPN. A third-party quota limit
+ * must never become a community-wide auth outage.
+ *
+ * Bypass IPs (loopback, private ranges, "unknown") are trusted — matches local
+ * dev and self-hosted LAN installs.
  */
 
 export interface VpnCheckResult {
@@ -33,9 +51,8 @@ export interface VpnCheckResult {
 
 type VpnVerdict = { blocked: boolean; unavailable: boolean; reason?: string };
 
-// Deterministic short-lived cache. Never caches a "clean" result for long —
-// only long enough to smooth bursts — and caches *unavailability* too so a
-// down/flaky provider isn't re-hit by every concurrent auth request.
+// Deterministic short-lived cache, so a burst of logins from one egress (or a
+// degraded provider) is not re-hit for every request.
 const vpnCache = new Map<string, { verdict: VpnVerdict; expires: number }>();
 const VPN_CACHE_TTL_MS = 10 * 60_000; // 10 min — wins vs the 60s burst cap.
 
@@ -53,53 +70,34 @@ async function fetchAny(urls: string[], timeoutMs = 5000): Promise<{ ok: boolean
   return { ok: false };
 }
 
-function isCleanVerdict(data: unknown): boolean {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    (data as { status?: string }).status === "success"
-  );
+interface ProviderAnswer {
+  /** The provider returned a real verdict (not a quota/error payload). */
+  responded: boolean;
+  /** The provider categorically identified a TOR exit. */
+  tor: boolean;
 }
 
-function isIpqsVerdict(data: unknown): boolean {
-  const d = data as { success?: boolean; vpn?: boolean; proxy?: boolean; tor?: boolean };
-  return typeof data === "object" && data !== null && d.success === true;
+function parseIpqs(data: unknown): ProviderAnswer | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const d = data as { success?: boolean; tor?: boolean; active_tor?: boolean };
+  if (d.success !== true) return undefined; // over quota / blocklisted caller: no vote
+  return { responded: true, tor: d.tor === true || d.active_tor === true };
 }
 
-function blockedFromIpqs(data: unknown): boolean {
-  const d = data as { vpn?: boolean; proxy?: boolean; tor?: boolean; active_vpn?: boolean };
-  return !!(d.vpn || d.proxy || d.tor || d.active_vpn);
-}
-
-function blockedFromIpApi(data: unknown): boolean {
-  const d = data as { proxy?: boolean; hosting?: boolean };
-  return !!(d.proxy || d.hosting);
-}
-
-/**
- * The strong-signal subset of the ip-api verdict: `proxy` only.
- *
- * ip-api's `hosting` flag is notoriously noisy on clean egress — carrier NAT,
- * CGNAT, university and corporate pools, some mobile networks all answer
- * `hosting: true` while being ordinary households. It is a *hint*, not proof.
- * `proxy: true` is the field that actually means a forwarding/anonymising hop,
- * so when ip-api is the only provider that answered we trust this subset alone
- * and let the noisy `hosting` hint stand down.
- */
-function proxyOnlyFromIpApi(data: unknown): boolean {
-  const d = data as { proxy?: boolean };
-  return !!d.proxy;
+function parseIpApi(data: unknown): ProviderAnswer | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const d = data as { status?: string };
+  if (d.status !== "success") return undefined;
+  return { responded: true, tor: false };
 }
 
 /**
  * Strict check used by the signup/login gates.
  *
- * Returns a verdict object. `unavailable: true` WITHOUT `blocked` means the
- * detection providers were all unreachable/inconclusive. Callers that want a
- * hard wall (signup) can still reject with the "unavailable" messaging; the
- * point of this function is to never CONFLATE "can't reach the detector"
- * with "IP is a VPN" — those are different failures and must not stack into
- * a multi-hour community outage.
+ * Blocks only a categorically-confirmed TOR exit (see the policy note at the
+ * top of this file for why nothing else may block). `unavailable: true` without
+ * `blocked` means the detectors could not answer at all — callers must fail
+ * open on it, because "we could not tell" is not a verdict.
  */
 export async function checkVpnStrict(ip: string): Promise<VpnCheckResult> {
   if (isBypassIp(ip)) {
@@ -113,83 +111,53 @@ export async function checkVpnStrict(ip: string): Promise<VpnCheckResult> {
 
   const apiKey = process.env.IPQUALITYSCORE_API_KEY;
 
-  // Ask BOTH providers before weighing anything. Each is given a fair shot and
-  // we record what it actually answered — a provider that is quota-exhausted
-  // (free IPQS caps at ~35 lookups/day), unreachable, or misconfig'd simply
-  // contributes no vote. That unavailability must never masquerade as a block.
-  let ipqs: VpnVerdict | undefined;   // answered with a real verdict
-  if (apiKey) {
-    const r = await fetchAny([
-      `https://ipqualityscore.com/api/json/ip/${apiKey}/${encodeURIComponent(ip)}?strictness=1&allow_public_access_points=false&fast=true`,
-    ], 4000);
-    if (r.ok && isIpqsVerdict(r.data)) {
-      ipqs = { blocked: blockedFromIpqs(r.data), unavailable: false };
-    }
-    // Non-verdict (quota exhausted, caller blocklisted) or no answer: no vote.
-    // A flaky paid key must never be the only thing standing between a clean
-    // user and their account.
+  // Ask both providers at once. Whoever answers contributes; a provider that is
+  // over quota, unreachable, or misconfigured simply contributes nothing.
+  const [ipqsRaw, ipApiRaw] = await Promise.all([
+    apiKey
+      ? fetchAny([
+          `https://ipqualityscore.com/api/json/ip/${apiKey}/${encodeURIComponent(ip)}?strictness=1&allow_public_access_points=false&fast=true`,
+        ], 4000)
+      : Promise.resolve({ ok: false } as const),
+    fetchAny([
+      `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
+    ], 4000),
+  ]);
+
+  const ipqs = ipqsRaw.ok ? parseIpqs(ipqsRaw.data) : undefined;
+  const ipApi = ipApiRaw.ok ? parseIpApi(ipApiRaw.data) : undefined;
+
+  // Nobody could answer. That is NOT the same as "the IP is a VPN" — report it
+  // distinctly and FAIL OPEN: gates must never strand the community because a
+  // third-party detector is flaky or over quota.
+  if (!ipqs?.responded && !ipApi?.responded) {
+    return { blocked: false, unavailable: true, reason: "VPN_DETECTION_UNAVAILABLE" };
   }
 
-  const fallback = await fetchAny([
-    `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
-    `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
-  ], 4000);
-  let ipApi: VpnVerdict | undefined;   // answered with a real verdict
-  if (fallback.ok && isCleanVerdict(fallback.data)) {
-    ipApi = { blocked: blockedFromIpApi(fallback.data), unavailable: false };
-  }
-
-  // TWO-PROVIDER CONSENSUS: we only hard-block an IP when both detectors
-  // independently agree it is a VPN/proxy. A real VPN trips BOTH (IPQS vpn/
-  // proxy+tors + ip-api hosting), so bad egress still gets walled. But a lone
-  // muddy signal — IPQS past quota, or ip-api's `hosting` flag lighting up on
-  // legit shared/CGNAT/carrier pools — can never, on its own, strand clean
-  // users. That single-voice false positive is exactly the regression that
-  // kept locking out people who aren't on proxies at all, and it is the
-  // thing we are killing here for $0.
-  if (ipqs && ipApi) {
-    const blocked = ipqs.blocked && ipApi.blocked;
-    const verdict: VpnVerdict = { blocked, unavailable: false };
+  // The one categorical block. A confirmed TOR exit is not Private Relay, not a
+  // carrier pool, and not something a member enables by accident.
+  if (ipqs?.tor) {
+    const verdict: VpnVerdict = { blocked: true, unavailable: false, reason: "tor" };
     setCache(ip, verdict);
     return verdict;
   }
 
-  // IPQS answered but ip-api did not. IPQS is the authoritative strict
-  // detector, so a CLEAN verdict from it stands on its own — that is a
-  // definite pass, not an outage, and reporting it as `unavailable` would
-  // flag every healthy lookup as a detector failure. A BLOCKED verdict is
-  // different: one positive from a single provider is not a conviction, so
-  // it degrades to inconclusive and fails open rather than banning on the
-  // word of one detector.
-  if (ipqs && !ipApi) {
-    const verdict: VpnVerdict = ipqs.blocked
-      ? { blocked: false, unavailable: true, reason: "VPN_DETECTION_UNAVAILABLE" }
-      : { blocked: false, unavailable: false };
-    setCache(ip, verdict);
-    return verdict;
-  }
-
-  // Only the fallback answered (no key, or IPQS down). Its `hosting` flag is
-  // notoriously noisy on clean ranges, so alone it may never block — but a
-  // plain `proxy` verdict from it IS a strong, real signal we still trust.
-  if (!ipqs && ipApi) {
-    const blocked = proxyOnlyFromIpApi(fallback.data);
-    const verdict: VpnVerdict = { blocked, unavailable: false };
-    setCache(ip, verdict);
-    return verdict;
-  }
-
-  // Nobody could answer. That is NOT the same as "the IP is a VPN" — report
-  // it distinctly and FAIL OPEN: gates must never strand the community
-  // because a third-party detector is flaky.
-  return { blocked: false, unavailable: true, reason: "VPN_DETECTION_UNAVAILABLE" };
+  // Everything else — clean or merely flagged as vpn/proxy/hosting — is a pass.
+  const verdict: VpnVerdict = { blocked: false, unavailable: false };
+  setCache(ip, verdict);
+  return verdict;
 }
 
 /**
- * Coarse bool for non-gate consumers (e.g. moderation/access) that just want
- * "is this IP flagged as a VPN/proxy?" callable from a request path. Fails
- * open: if detection is unavailable we do NOT want a banned-user notice to
- * hinge on a third-party API being up.
+ * Coarse bool for non-gate consumers (e.g. the banned-user access notice) that
+ * just want "is this IP on anonymising infrastructure?".
+ *
+ * Broader than the gate on purpose (it only colours a message to an already
+ * banned user), but it still drops ip-api's notoriously noisy `hosting` field:
+ * carrier NAT, CGNAT, campus/corporate pools and iCloud Private Relay all set
+ * `hosting: true` while being perfectly ordinary. Fails open — a detector
+ * outage must never flip this flag.
  */
 export async function isVpnOrProxy(ip: string): Promise<boolean> {
   if (isBypassIp(ip)) return false;
@@ -199,17 +167,21 @@ export async function isVpnOrProxy(ip: string): Promise<boolean> {
     const r = await fetchAny([
       `https://ipqualityscore.com/api/json/ip/${apiKey}/${encodeURIComponent(ip)}?strictness=1&allow_public_access_points=false&fast=true`,
     ], 4000);
-    if (r.ok && isIpqsVerdict(r.data)) {
-      return blockedFromIpqs(r.data);
+    if (r.ok) {
+      const d = r.data as { success?: boolean; vpn?: boolean; proxy?: boolean; tor?: boolean; active_vpn?: boolean };
+      if (d?.success === true) {
+        return !!(d.vpn || d.proxy || d.tor || d.active_vpn);
+      }
     }
   }
 
   const fallback = await fetchAny([
-    `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
-    `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy,hosting`,
+    `https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy`,
+    `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,proxy`,
   ], 4000);
-  if (fallback.ok && isCleanVerdict(fallback.data)) {
-    return blockedFromIpApi(fallback.data);
+  if (fallback.ok) {
+    const d = fallback.data as { status?: string; proxy?: boolean };
+    if (d?.status === "success") return !!d.proxy;
   }
 
   return false; // fail open — detector down must not flip this flag
