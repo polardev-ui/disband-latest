@@ -157,11 +157,31 @@ final class SubscriptionService {
 
     private func apply(_ row: Subscription?) {
         subscription = row
-        guard let row, Self.grantingStatuses.contains(row.status) else {
+        guard let row, Self.grantingStatuses.contains(row.status), !Self.hasLapsed(row) else {
             plan = .free
             return
         }
         plan = SubscriptionPlan(normalizing: row.plan)
+    }
+
+    /// A row can still say "active" after its period has ended — a sandbox
+    /// subscription that expired, or a renewal the server never heard about.
+    /// App Review caught exactly that: an expired Aero test purchase kept
+    /// unlocking Aero, which reads as "turned on without payment". The period
+    /// end is the source of truth; an hour of grace covers a renewal webhook
+    /// that is a little behind.
+    private static let renewalGrace: TimeInterval = 60 * 60
+
+    private static func hasLapsed(_ row: Subscription) -> Bool {
+        guard let raw = row.currentPeriodEnd, let end = parseTimestamp(raw) else { return false }
+        return end.addingTimeInterval(renewalGrace) < Date()
+    }
+
+    private static func parseTimestamp(_ raw: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = withFraction.date(from: raw) { return d }
+        return ISO8601DateFormatter().date(from: raw)
     }
 
     /// Picks up upgrades the moment the webhook or /api/stripe/sync writes them,
