@@ -1,16 +1,23 @@
 /**
  * VPN gate regression tests — provider-verdict behaviour.
  *
- * Background (the bug this locks down): IPQualityScore's free tier is capped
- * at ~35 lookups/day. When the cap is hit IPQS answers non-verdict, the gate
- * falls through to ip-api.com, and ip-api's free tier reports `hosting: true`
- * for a large amount of perfectly ordinary egress (carrier NAT, CGNAT,
- * university/corporate pools, some mobile networks). The old code treated that
- * single muddy signal as proof of abuse and hard-blocked the account, so people
- * who were not on a VPN at all could not sign up or sign in.
+ * Background (the bugs this locks down): the gate has twice locked out people
+ * who were not on a VPN at all.
  *
- * The rule these tests enforce: a block requires TWO independent providers to
- * agree, and an inconclusive check is never a block.
+ *   1. IPQualityScore's free tier caps fast; when it is over quota the gate used
+ *      to fall through to ip-api.com, whose `hosting: true` is true for plenty of
+ *      perfectly ordinary egress (carrier NAT, CGNAT, campus/corporate pools,
+ *      some mobile networks). That single muddy signal hard-blocked the account.
+ *
+ *   2. Even a *two-provider consensus* does not save this class, because the two
+ *      providers agree on people who never chose a VPN: iCloud Private Relay is
+ *      default-on for iCloud+ in Safari, IPQS scores a relay exit as "high risk"
+ *      and sets `vpn: true`, and ip-api reports the same host `hosting: true`.
+ *
+ * The rule these tests enforce: the ONLY thing that hard-blocks is a
+ * categorically-confirmed TOR exit. Every other annotation — vpn, proxy,
+ * hosting, active_vpn, even an agreeing pair — is advisory and must not block.
+ * An inconclusive check is never a block either.
  *
  * `fetch` is stubbed so we can drive each provider's exact response, including
  * the over-quota and unreachable cases that only happen in production.
@@ -28,13 +35,18 @@ const { checkVpnStrict } = await import(moduleUrl);
 const realFetch = globalThis.fetch;
 
 /** Response shapes the real providers return. */
-const IPQS_CLEAN = { success: true, vpn: false, proxy: false, tor: false, active_vpn: false };
-const IPQS_VPN = { success: true, vpn: true, proxy: true, tor: false, active_vpn: true };
+const IPQS_CLEAN = { success: true, vpn: false, proxy: false, tor: false, active_vpn: false, fraud_score: 0 };
+// What a commercial VPN — OR an iCloud Private Relay exit — looks like. IPQS
+// itself rates Private Relay "high risk", so this payload is deliberately
+// indistinguishable from a real VPN: it must NOT block.
+const IPQS_VPN = { success: true, vpn: true, proxy: true, tor: false, active_vpn: true, fraud_score: 84 };
+const IPQS_TOR = { success: true, vpn: true, proxy: true, tor: true, active_vpn: true, fraud_score: 100 };
 // Over daily quota / blocked caller: HTTP 200 but not a verdict.
 const IPQS_QUOTA = { success: false, message: "Exceeded your daily API cap" };
 
 const IPAPI_CLEAN = { status: "success", proxy: false, hosting: false };
-// ip-api's noisy field: true on plenty of clean carrier/CGNAT/campus ranges.
+// ip-api's noisy field: true on plenty of clean carrier/CGNAT/campus ranges,
+// and on iCloud Private Relay.
 const IPAPI_HOSTING = { status: "success", proxy: false, hosting: true };
 const IPAPI_PROXY = { status: "success", proxy: true, hosting: true };
 
@@ -65,9 +77,8 @@ test.afterEach(() => {
 });
 
 test("THE BUG: ip-api alone reporting hosting:true no longer blocks a clean user", async () => {
-  // This is the exact production failure: IPQS is over its free-tier quota so
-  // it contributes nothing, and ip-api's noisy `hosting` flag is the only
-  // signal left. That must NOT be a block.
+  // IPQS is over its free-tier quota so it contributes nothing, and ip-api's
+  // noisy `hosting` flag is the only signal left. That must NOT be a block.
   stubProviders({ ipqs: IPQS_QUOTA, ipApi: IPAPI_HOSTING });
   const r = await checkVpnStrict(uniqueIp());
   assert.equal(
@@ -77,34 +88,34 @@ test("THE BUG: ip-api alone reporting hosting:true no longer blocks a clean user
   );
 });
 
-test("a real VPN detected by BOTH providers is still blocked", async () => {
+test("THE BUG (Private Relay): both providers agree it is a VPN/proxy, but it is not a TOR exit — do not block", async () => {
+  // This is the exact production failure behind the "it says I have a VPN and I
+  // don't" reports: a user on iCloud Private Relay (or a carrier pool, or a
+  // privacy VPN). IPQS says vpn+proxy, ip-api says proxy+hosting, and the old
+  // two-provider consensus convicted them. The gate must not.
   stubProviders({ ipqs: IPQS_VPN, ipApi: IPAPI_PROXY });
   const r = await checkVpnStrict(uniqueIp());
-  assert.equal(r.blocked, true, "genuine VPN/proxy egress must remain walled");
-  assert.equal(r.unavailable, false);
+  assert.equal(
+    r.blocked,
+    false,
+    "two providers agreeing on a non-TOR anonymiser must not wall a legitimate user",
+  );
+  assert.equal(r.unavailable, false, "both providers answered, so this is a verdict, not an outage");
 });
 
-test("two-provider consensus: one clean provider outvotes one blocked provider", async () => {
-  // IPQS says VPN, ip-api says clean. Consensus is not reached, so allow —
-  // a single provider's positive is not enough to convict.
-  stubProviders({ ipqs: IPQS_VPN, ipApi: IPAPI_CLEAN });
+test("ip-api alone reporting proxy:true is advisory, not a block", async () => {
+  // With IPQS over quota, ip-api alone cannot convict: its proxy flag false-
+  // positives on shared/CGNAT/relay ranges too.
+  stubProviders({ ipqs: null, ipApi: IPAPI_PROXY });
   const r = await checkVpnStrict(uniqueIp());
-  assert.equal(r.blocked, false, "one provider's positive must not convict alone");
+  assert.equal(r.blocked, false, "a single ip-api proxy verdict must not block");
 });
 
-test("two-provider consensus: both hosting AND vpn is a block", async () => {
-  stubProviders({ ipqs: IPQS_VPN, ipApi: IPAPI_HOSTING });
-  const r = await checkVpnStrict(uniqueIp());
-  assert.equal(r.blocked, true, "when both agree the IP is bad, block it");
-});
-
-test("IPQS alone (ip-api unreachable) is inconclusive, not a block", async () => {
-  // Only IPQS answered. One voice is not a conviction.
+test("IPQS alone reporting a VPN (ip-api unreachable) is advisory, not a block", async () => {
   stubProviders({ ipqs: IPQS_VPN, ipApi: null });
   const r = await checkVpnStrict(uniqueIp());
-  assert.equal(r.blocked, false, "a lone IPQS verdict must not block on its own");
-  assert.equal(r.unavailable, true, "a single voice is reported as inconclusive");
-  assert.equal(r.reason, "VPN_DETECTION_UNAVAILABLE");
+  assert.equal(r.blocked, false, "a lone IPQS VPN verdict must not block");
+  assert.equal(r.unavailable, false, "IPQS answered, so this is a clean-ish verdict, not an outage");
 });
 
 test("IPQS alone reporting clean is a definite pass", async () => {
@@ -114,12 +125,19 @@ test("IPQS alone reporting clean is a definite pass", async () => {
   assert.equal(r.unavailable, false, "a clean verdict from a real provider is a pass, not an outage");
 });
 
-test("ip-api alone reporting proxy:true still blocks (strong signal, trusted)", async () => {
-  // No IPQS key path: when only ip-api answers, `proxy` is a real anonymising
-  // hop and is still grounds to block on its own.
-  stubProviders({ ipqs: null, ipApi: IPAPI_PROXY });
+test("a confirmed TOR exit is still blocked — the one categorical signal", async () => {
+  stubProviders({ ipqs: IPQS_TOR, ipApi: IPAPI_CLEAN });
   const r = await checkVpnStrict(uniqueIp());
-  assert.equal(r.blocked, true, "a plain proxy verdict must still be enforced");
+  assert.equal(r.blocked, true, "TOR egress must remain walled");
+  assert.equal(r.unavailable, false);
+  assert.equal(r.reason, "tor");
+});
+
+test("a confirmed TOR exit blocks even when ip-api is unreachable", async () => {
+  stubProviders({ ipqs: IPQS_TOR, ipApi: null });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, true, "TOR is categorical and stands on IPQS alone");
+  assert.equal(r.unavailable, false);
 });
 
 test("both providers unreachable is unavailable, never a block", async () => {
@@ -127,6 +145,14 @@ test("both providers unreachable is unavailable, never a block", async () => {
   const r = await checkVpnStrict(uniqueIp());
   assert.equal(r.blocked, false, "a total detector outage must fail open");
   assert.equal(r.unavailable, true);
+});
+
+test("IPQS over quota with no ip-api answer is unavailable, never a block", async () => {
+  stubProviders({ ipqs: IPQS_QUOTA, ipApi: null });
+  const r = await checkVpnStrict(uniqueIp());
+  assert.equal(r.blocked, false);
+  assert.equal(r.unavailable, true);
+  assert.equal(r.reason, "VPN_DETECTION_UNAVAILABLE");
 });
 
 test("never returns blocked:true together with unavailable:true", async () => {
@@ -140,6 +166,8 @@ test("never returns blocked:true together with unavailable:true", async () => {
     { ipqs: IPQS_QUOTA, ipApi: null },
     { ipqs: IPQS_VPN, ipApi: IPAPI_PROXY },
     { ipqs: IPQS_CLEAN, ipApi: IPAPI_CLEAN },
+    { ipqs: IPQS_TOR, ipApi: null },
+    { ipqs: IPQS_TOR, ipApi: IPAPI_PROXY },
   ];
   for (const c of cases) {
     stubProviders(c);
@@ -151,5 +179,17 @@ test("never returns blocked:true together with unavailable:true", async () => {
         `inconclusive must never pair with blocked (${JSON.stringify(c)})`,
       );
     }
+  }
+});
+
+test("bypass IPs are trusted", async () => {
+  // No provider should even be consulted for loopback/private ranges.
+  globalThis.fetch = async () => {
+    throw new Error("fetch must not be called for a bypass IP");
+  };
+  for (const ip of ["127.0.0.1", "::1", "10.1.2.3", "192.168.0.9", "172.16.5.5", "unknown", ""]) {
+    const r = await checkVpnStrict(ip);
+    assert.equal(r.blocked, false);
+    assert.equal(r.unavailable, false);
   }
 });

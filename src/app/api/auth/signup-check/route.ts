@@ -154,24 +154,19 @@ export async function POST(request: Request) {
     }, { status: 400 });
   }
 
-  // VPN/proxy block is always on for signup — signup is the account-farming
-  // surface, so this gate matters most.
+  // VPN/proxy block — signup only blocks a categorically-confirmed TOR exit.
   //
-  // FAIL-OPEN on detection unavailability, deliberately. `unavailable` means
-  // "no provider could tell us", which is not evidence of a VPN. The free IPQS
-  // tier caps at ~35 lookups/day, so quota exhaustion is an expected daily
-  // condition, not an attack — rejecting on it would convert a third-party
-  // billing limit into a total signup outage. Local/private IPs bypass inside
-  // checkVpnStrict. Only a confirmed two-provider block rejects.
+  // FAIL-OPEN and NARROW on purpose (see `vpn-check.ts`). `unavailable` means
+  // "no provider could tell us", which is not evidence of a VPN; the free IPQS
+  // tier caps fast, so quota exhaustion is an expected daily condition, not an
+  // attack. And a *positive* vpn/proxy reputation is itself unreliable: iCloud
+  // Private Relay (default-on for iCloud+ in Safari) is flagged by both IPQS and
+  // ip-api even though the user never chose a VPN, so blocking on it locked
+  // ordinary people out of signup. Account farming is held back by the layered
+  // rate limits + Turnstile above instead.
   //
-  // It is also time-boxed. `checkVpnStrict` walks up to three provider URLs
-  // at 4s each, so a worst case of ~12s sat inside a request that the host
-  // kills around 10 — and a killed request answers with the platform's HTML
-  // error page, not this route's JSON. From the sign-up form that surfaced
-  // as "we couldn't verify account eligibility, check your connection", which
-  // blamed the user's network for a slow third-party IP lookup. Whatever has
-  // not answered in 3s contributes no vote, exactly like a provider that is
-  // over quota.
+  // It is also time-boxed. Whatever has not answered in 3s contributes no vote,
+  // exactly like a provider that is over quota.
   if (process.env.BLOCK_VPN_SIGNUP !== "false" && checkIp !== "unknown") {
     const vpn = await Promise.race([
       checkVpnStrict(checkIp),

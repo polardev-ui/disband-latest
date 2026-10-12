@@ -79,18 +79,22 @@ export async function POST(request: Request) {
     }
   }
 
-  // VPN/proxy block — login only. Existing sessions are never re-checked,
-  // so already-signed-in users stay signed in. Allowlisted addresses skip it:
-  // Apple's review egress is a shared NAT that the detectors can read as a
-  // proxy, and a reviewer cannot fix their network.
+  // VPN/proxy block — login only. Existing sessions are never re-checked, so
+  // already-signed-in users stay signed in. Allowlisted addresses skip it.
+  //
+  // NARROW ON PURPOSE (see `vpn-check.ts`): the only thing that blocks is a
+  // categorically-confirmed TOR exit. "Is this a VPN/proxy?" reputations are
+  // advisory, because the whole anonymised-looking class is dominated by people
+  // who never chose a VPN — iCloud Private Relay (default-on for iCloud+ in
+  // Safari, and scored "high risk" by IPQS AND flagged `hosting` by ip-api, so
+  // even a two-provider consensus convicts it), carrier/CGNAT pools, shared
+  // campus/corporate NAT, and ordinary privacy VPNs. Blocking those locked real
+  // members out of their own accounts.
   //
   // FAIL-OPEN, deliberately. `unavailable` means "we could not tell", which is
-  // NOT a verdict and must never be one: the free IPQS tier is capped at ~35
-  // lookups/day, so a quota-outage is an *expected* condition here, not an
-  // emergency. Failing closed on it would turn a third-party billing limit
-  // into a site-wide login outage for the whole community. So an inconclusive
-  // check is logged and let through. Only a *confirmed* block (both detectors
-  // agreeing the IP is a VPN/proxy) rejects.
+  // NOT a verdict and must never be one: the free IPQS tier caps fast, so a
+  // quota-outage is an *expected* condition here, not an emergency. An
+  // inconclusive check is logged and let through.
   if (!allowlisted && process.env.BLOCK_VPN_LOGIN !== "false" && ip !== "unknown") {
     const vpn = await checkVpnStrict(ip);
     if (vpn.blocked) {
