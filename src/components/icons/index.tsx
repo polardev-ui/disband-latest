@@ -22,6 +22,12 @@ import {
   Phone,
   PhoneOff,
   Bell,
+  AtSign,
+  Megaphone,
+  Reply,
+  UserPlus,
+  CheckCheck,
+  Inbox,
   Upload,
   Send,
   Shield,
@@ -103,6 +109,12 @@ export const IconLeave = icon(LogOut);
 export const IconPhone = icon(Phone);
 export const IconPhoneOff = icon(PhoneOff);
 export const IconBell = icon(Bell);
+export const IconAt = icon(AtSign);
+export const IconMegaphone = icon(Megaphone);
+export const IconReply = icon(Reply);
+export const IconUserPlus = icon(UserPlus);
+export const IconCheckAll = icon(CheckCheck);
+export const IconInbox = icon(Inbox);
 export const IconUpload = icon(Upload);
 export const IconShield = icon(Shield);
 export const IconLink = icon(Link);

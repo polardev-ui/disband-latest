@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { Window } from "@tauri-apps/api/window";
 import { isTauri } from "@/lib/platform";
+import { useApp } from "@/contexts/AppContext";
+import { NotificationBell } from "@/components/discord/NotificationBell";
 
 /**
  * The Tauri shell's native-feel layer.
@@ -127,6 +129,7 @@ async function installAppMenu(): Promise<void> {
 
 export function DesktopShell() {
   const [maximized, setMaximized] = useState(false);
+  const { session } = useApp();
 
   // Mark the document and let CSS reveal the title-bar strip. The attribute is
   // normally already set by the pre-paint script; this is a backstop.
@@ -307,45 +310,48 @@ export function DesktopShell() {
       <span data-tauri-drag-region className="desktop-titlebar-title">
         Disband
       </span>
-      <div className="desktop-titlebar-controls" onDoubleClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          aria-label="Minimize"
-          title="Minimize"
-          onClick={() => void withWindow((win) => win.minimize())}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-            <path d="M0 5h10" stroke="currentColor" strokeWidth="1.1" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          aria-label={maximized ? "Restore" : "Maximize"}
-          title={maximized ? "Restore" : "Maximize"}
-          onClick={() => void withWindow((win) => win.toggleMaximize())}
-        >
-          {maximized ? (
-            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.1">
-              <path d="M2.5 2.5V1.5h6v6h-1" />
-              <rect x="1.5" y="3.5" width="5" height="5" />
+      <div className="desktop-titlebar-actions" onDoubleClick={(e) => e.stopPropagation()}>
+        {session && <NotificationBell compact />}
+        <div className="desktop-titlebar-controls">
+          <button
+            type="button"
+            aria-label="Minimize"
+            title="Minimize"
+            onClick={() => void withWindow((win) => win.minimize())}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+              <path d="M0 5h10" stroke="currentColor" strokeWidth="1.1" />
             </svg>
-          ) : (
-            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.1">
-              <rect x="1.5" y="1.5" width="7" height="7" />
+          </button>
+          <button
+            type="button"
+            aria-label={maximized ? "Restore" : "Maximize"}
+            title={maximized ? "Restore" : "Maximize"}
+            onClick={() => void withWindow((win) => win.toggleMaximize())}
+          >
+            {maximized ? (
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.1">
+                <path d="M2.5 2.5V1.5h6v6h-1" />
+                <rect x="1.5" y="3.5" width="5" height="5" />
+              </svg>
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.1">
+                <rect x="1.5" y="1.5" width="7" height="7" />
+              </svg>
+            )}
+          </button>
+          <button
+            type="button"
+            data-close
+            aria-label="Close"
+            title="Close"
+            onClick={() => void withWindow((win) => win.close())}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+              <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" strokeWidth="1.1" />
             </svg>
-          )}
-        </button>
-        <button
-          type="button"
-          data-close
-          aria-label="Close"
-          title="Close"
-          onClick={() => void withWindow((win) => win.close())}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-            <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" strokeWidth="1.1" />
-          </svg>
-        </button>
+          </button>
+        </div>
       </div>
     </div>
   );

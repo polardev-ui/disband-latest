@@ -300,30 +300,33 @@ html[data-desktop] ::selection {
   color: var(--brand-foreground, #fff);
 }
 
-/* Height of the desktop title bar, shared by the bar itself and by the
-   full-height app screens so the app is never pushed past the window. It has
-   no effect on the web, where there is no title bar. */
+/* Height of the app bar, shared by the bar itself and by the full-height app
+   screens so the app is never pushed past the window (desktop) or past the
+   bottom of the viewport (wide web). */
 :root {
   --desktop-titlebar-height: 30px;
 }
 
-/* Screens that fill the viewport — the loading, auth, MFA and ban screens. On
-   the web that is the whole viewport; inside the desktop shell it is the
-   viewport minus the title bar. */
+/* Screens that fill the viewport — the loading, auth, MFA and ban screens.
+   They fill the viewport minus the app bar wherever the bar is shown. */
 .app-screen {
   min-height: 100vh;
+}
+@media (min-width: 769px) {
+  .app-screen {
+    min-height: calc(100vh - var(--desktop-titlebar-height));
+  }
 }
 html[data-desktop] .app-screen {
   min-height: calc(100vh - var(--desktop-titlebar-height));
 }
 
-/* The window title bar. Browsers and the mobile shell never see it. On macOS it
-   is the draggable strip the native traffic lights float over; on Windows and
-   Linux the window is undecorated and this bar carries its own controls. */
+/* The app bar. On the desktop it is the window's title bar: on macOS the
+   draggable strip the native traffic lights float over, on Windows and Linux
+   the undecorated window's own control strip. On the wide web it is a slim
+   global bar; the mobile web app draws its own compact bar instead. It is also
+   where the global notification bell lives, so it is reachable from anywhere. */
 .desktop-titlebar {
-  display: none;
-}
-html[data-desktop] .desktop-titlebar {
   display: flex;
   align-items: center;
   position: relative;
@@ -332,6 +335,11 @@ html[data-desktop] .desktop-titlebar {
   width: 100%;
   background-color: var(--bg-tertiary);
   border-bottom: 1px solid var(--divider);
+}
+@media (max-width: 768px) {
+  html:not([data-desktop]) .desktop-titlebar {
+    display: none;
+  }
 }
 html[data-desktop-os="macos"] .desktop-titlebar {
   border-bottom-color: transparent;
@@ -347,9 +355,22 @@ html[data-desktop-os="macos"] .desktop-titlebar {
   opacity: 0.55;
   pointer-events: none;
 }
+.desktop-titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  height: 100%;
+  padding-right: 6px;
+}
+/* The window controls run to the window edge, so drop the breathing room when
+   they are present. */
+html[data-desktop-os="windows"] .desktop-titlebar-actions,
+html[data-desktop-os="linux"] .desktop-titlebar-actions {
+  padding-right: 0;
+}
 .desktop-titlebar-controls {
   display: none;
-  margin-left: auto;
   height: 100%;
 }
 html[data-desktop-os="windows"] .desktop-titlebar-controls,
@@ -570,6 +591,40 @@ img.twemoji {
   transform-origin: bottom left;
 }
 
+/* The notification panel drops from — and retreats into — the top-right corner
+   it is anchored to. */
+@keyframes notif-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.notif-pop {
+  animation: notif-pop 0.18s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  transform-origin: top right;
+}
+
+@keyframes notif-pop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+.notif-pop-out {
+  animation: notif-pop-out 0.16s cubic-bezier(0.4, 0, 1, 1) forwards;
+  transform-origin: top right;
+}
+
 @keyframes call-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
@@ -613,6 +668,8 @@ img.twemoji {
   .overlay-fade,
   .overlay-fade-out,
   .pop-out,
+  .notif-pop,
+  .notif-pop-out,
   .tooltip-content,
   .call-enter,
   .avatar-pop,
@@ -647,6 +704,8 @@ img.twemoji {
 [data-motion="reduced"] .overlay-fade,
 [data-motion="reduced"] .overlay-fade-out,
 [data-motion="reduced"] .pop-out,
+[data-motion="reduced"] .notif-pop,
+[data-motion="reduced"] .notif-pop-out,
 [data-motion="reduced"] .tooltip-content,
 [data-motion="reduced"] .call-enter,
 [data-motion="reduced"] .avatar-pop,

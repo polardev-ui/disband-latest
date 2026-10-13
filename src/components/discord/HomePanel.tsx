@@ -5,7 +5,6 @@ import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
-import { NotificationBell } from "./NotificationBell";
 import { CallIndicator } from "./CallIndicator";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
@@ -128,7 +127,6 @@ export function HomePanel({
       <header className="flex h-12 items-center border-b border-divider px-4">
         <IconFriends className="mr-2 text-text-muted" />
         <span className="flex-1 font-semibold text-text-normal">Friends</span>
-        <NotificationBell />
       </header>
 
       <nav className="px-2 pt-2">
