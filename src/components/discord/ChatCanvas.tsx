@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  memo,
   forwardRef,
 } from "react";
 import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
@@ -57,6 +58,101 @@ export interface ChatCanvasHandle {
 
 /** Shared empty list so reaction-less rows keep a stable reference. */
 const EMPTY_REACTIONS: MessageReaction[] = [];
+
+interface MessageRowProps {
+  message: ChatMessageData;
+  grouped: boolean;
+  showDivider: boolean;
+  dividerAnimate: boolean;
+  highlight: boolean;
+  currentUserId?: string | null;
+  currentUserName?: string | null;
+  authorColor?: string | null;
+  reactions: MessageReaction[];
+  members: Profile[];
+  channels?: ChannelLite[];
+  customEmoji?: Record<string, string>;
+  canReact: boolean;
+  canForward: boolean;
+  onAuthorClick?: (profile: Profile) => void;
+  onAuthorContextMenu?: (profile: Profile, e: React.MouseEvent) => void;
+  onChannelClick?: (channelId: string) => void;
+  onToggleReaction: (messageId: string, emoji: string) => void;
+  onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
+  onForward: (message: ChatMessageData) => void;
+  onReply: (reply: ReplyPreview) => void;
+  onOpenReactionPicker: (messageId: string) => void;
+  onJumpToReply: (messageId: string) => void;
+  onContentResize: () => void;
+}
+
+/**
+ * One chat row, memoized and self-contained. The parent passes only stable
+ * callbacks and referentially stable data, so when the canvas re-renders for
+ * reasons that don't concern this row (context fan-out, other messages
+ * arriving, presence, notifications) the row is skipped entirely. The per-row
+ * closures that bind `message.id` are created here instead of in the parent's
+ * map, which is what lets the memo actually hold.
+ */
+const MessageRow = memo(function MessageRow({
+  message,
+  grouped,
+  showDivider,
+  dividerAnimate,
+  highlight,
+  currentUserId,
+  currentUserName,
+  authorColor,
+  reactions,
+  members,
+  channels,
+  customEmoji,
+  canReact,
+  canForward,
+  onAuthorClick,
+  onAuthorContextMenu,
+  onChannelClick,
+  onToggleReaction,
+  onMessageContext,
+  onForward,
+  onReply,
+  onOpenReactionPicker,
+  onJumpToReply,
+  onContentResize,
+}: MessageRowProps) {
+  return (
+    <div>
+      {showDivider && <NewMessagesDivider animate={dividerAnimate} />}
+      <ChatMessage
+        message={message}
+        showHeader={!grouped}
+        compact={grouped}
+        currentUserId={currentUserId}
+        currentUserName={currentUserName}
+        authorColor={authorColor}
+        reactions={reactions}
+        onAuthorClick={onAuthorClick}
+        onAuthorContextMenu={onAuthorContextMenu}
+        members={members}
+        channels={channels}
+        customEmoji={customEmoji}
+        onChannelClick={onChannelClick}
+        highlight={highlight}
+        onJumpToReply={onJumpToReply}
+        onToggleReaction={canReact ? (emoji) => onToggleReaction(message.id, emoji) : undefined}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onMessageContext(message, e.clientX, e.clientY);
+        }}
+        onReply={canReact ? onReply : undefined}
+        onOpenReactionPicker={canReact ? () => onOpenReactionPicker(message.id) : undefined}
+        onForward={canForward ? () => onForward(message) : undefined}
+        onDoubleClick={canReact ? () => onToggleReaction(message.id, "👍") : undefined}
+        onContentResize={onContentResize}
+      />
+    </div>
+  );
+});
 
 interface ChatCanvasProps {
   channelName: string;
@@ -173,6 +269,27 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  // Latest-parent-handler ref. DiscordApp passes several inline arrows
+  // (`onToggleReaction={(id, emoji) => ...}`), which get a new identity on every
+  // parent render and would defeat row memoization. Reading them through a ref
+  // lets us expose one stable callback for the lifetime of the canvas.
+  const handlersRef = useRef({
+    onToggleReaction,
+    onMessageContext,
+    onForward,
+    onAuthorClick,
+    onAuthorContextMenu,
+    onChannelClick,
+  });
+  handlersRef.current = {
+    onToggleReaction,
+    onMessageContext,
+    onForward,
+    onAuthorClick,
+    onAuthorContextMenu,
+    onChannelClick,
+  };
+
   const typingSelf = useMemo(
     () => (currentUserId && currentUserName ? { id: currentUserId, name: currentUserName } : null),
     [currentUserId, currentUserName],
@@ -201,6 +318,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
   const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
 
+  // Grouping decides whether a row shows its author header. It depends only on
+  // the enriched list and the viewer, but it used to run per row on every
+  // render — each call parsing two dates via toDateString(). Precompute the
+  // whole list once so unrelated re-renders (presence, notifications, typing)
+  // don't redo O(rows) date parsing.
+  const groupedFlags = useMemo(() => {
+    const flags = new Array<boolean>(enriched.length);
+    for (let i = 0; i < enriched.length; i += 1) {
+      flags[i] = shouldGroupMessages(enriched[i - 1], enriched[i], currentUserId, currentUserName);
+    }
+    return flags;
+  }, [enriched, currentUserId, currentUserName]);
+
   // Per-message reaction lookup. The old code ran `reactions.filter(...)`
   // per row (O(rows × reactions)) on every render; one grouped pass is O(n).
   const reactionsByMessageId = useMemo(() => {
@@ -214,6 +344,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     return map;
   }, [reactions, messageContext]);
 
+  const canReact = !!(onToggleReaction && reactionsEnabled);
+
   // Distance (px) from the bottom within which content growth (new messages,
   // image/preview loads) follows the user down. Beyond this the user is
   // considered to be reading and their position is held instead of yanked.
@@ -226,6 +358,64 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     stickToBottomRef.current = true;
     programmaticScrollRef.current = Date.now();
     el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  // Stable handler surface handed to every row. See handlersRef above.
+  const handleToggleReaction = useCallback((messageId: string, emoji: string) => {
+    handlersRef.current.onToggleReaction?.(messageId, emoji);
+  }, []);
+  const handleMessageContext = useCallback((message: ChatMessageData, x: number, y: number) => {
+    handlersRef.current.onMessageContext(message, x, y);
+  }, []);
+  const handleForward = useCallback((message: ChatMessageData) => {
+    handlersRef.current.onForward?.(message);
+  }, []);
+  const handleAuthorClick = useCallback((profile: Profile) => {
+    handlersRef.current.onAuthorClick?.(profile);
+  }, []);
+  const handleAuthorContextMenu = useCallback((profile: Profile, e: React.MouseEvent) => {
+    handlersRef.current.onAuthorContextMenu?.(profile, e);
+  }, []);
+  const handleChannelClick = useCallback((channelId: string) => {
+    handlersRef.current.onChannelClick?.(channelId);
+  }, []);
+  const handleReply = useCallback((reply: ReplyPreview) => {
+    setReplyTo(reply);
+  }, []);
+  const handleOpenReactionPicker = useCallback((messageId: string) => {
+    setPicker({ messageId, x: 0, y: 0 });
+  }, []);
+  const handleContentResize = useCallback(() => {
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  // Scoped to this canvas's own scroll container: the old global
+  // getElementById + scrollIntoView scrolled the whole page and missed when
+  // the chat scrolled inside a nested container. Falls back to centering in
+  // the viewport only if the row somehow isn't inside our scroller.
+  const jumpToMessage = useCallback((messageId: string) => {
+    const scroller = scrollRef.current;
+    const node = scroller?.querySelector(`#msg-${CSS.escape(messageId)}`)
+      ?? document.getElementById(`msg-${messageId}`);
+    if (!node || !(node instanceof HTMLElement)) return;
+    programmaticScrollRef.current = Date.now();
+    pinToBottomRef.current = false;
+    if (scroller && scroller.contains(node)) {
+      // offsetTop is relative to the offsetParent chain, not the scroller:
+      // walk up accumulating so intermediate positioned rows don't skew it.
+      let top = 0;
+      let el: HTMLElement | null = node;
+      while (el && el !== scroller) {
+        top += el.offsetTop;
+        el = el.offsetParent as HTMLElement | null;
+      }
+      top += node.clientHeight / 2 - scroller.clientHeight / 2;
+      scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    } else {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setHighlightId(messageId);
+    setTimeout(() => setHighlightId(null), 2000);
   }, []);
 
   const requestLoadMore = useCallback(async () => {
@@ -427,31 +617,6 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   // getElementById + scrollIntoView scrolled the whole page and missed when
   // the chat scrolled inside a nested container. Falls back to centering in
   // the viewport only if the row somehow isn't inside our scroller.
-  function jumpToMessage(messageId: string) {
-    const scroller = scrollRef.current;
-    const node = scroller?.querySelector(`#msg-${CSS.escape(messageId)}`)
-      ?? document.getElementById(`msg-${messageId}`);
-    if (!node || !(node instanceof HTMLElement)) return;
-    programmaticScrollRef.current = Date.now();
-    pinToBottomRef.current = false;
-    if (scroller && scroller.contains(node)) {
-      // offsetTop is relative to the offsetParent chain, not the scroller:
-      // walk up accumulating so intermediate positioned rows don't skew it.
-      let top = 0;
-      let el: HTMLElement | null = node;
-      while (el && el !== scroller) {
-        top += el.offsetTop;
-        el = el.offsetParent as HTMLElement | null;
-      }
-      top += node.clientHeight / 2 - scroller.clientHeight / 2;
-      scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    } else {
-      node.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-    setHighlightId(messageId);
-    setTimeout(() => setHighlightId(null), 2000);
-  }
-
   async function handleSend(content: string, options?: MessageSendOptions) {
     if (editing && onEdit) {
       const err = await onEdit(editing.id, content);
@@ -514,61 +679,38 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
               )}
 
               {enriched.map((msg, i) => {
-            const prev = enriched[i - 1];
-            const grouped = shouldGroupMessages(prev, msg, currentUserId, currentUserName);
-            const showHeader = !grouped;
-            const msgReactions = reactionsByMessageId.get(msg.id) ?? EMPTY_REACTIONS;
-            return (
-              <div key={msg.id}>
-                {newMessagesDividerId === msg.id && (
-                  <NewMessagesDivider animate={!(currentUserId && msg.author_id === currentUserId)} />
-                )}
-                <ChatMessage
-                  message={msg}
-                  showHeader={showHeader}
-                  compact={grouped}
-                  currentUserId={currentUserId}
-                  currentUserName={currentUserName}
-                  authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
-                  reactions={msgReactions}
-                  onAuthorClick={onAuthorClick}
-                  onAuthorContextMenu={onAuthorContextMenu}
-                  members={renderMembers}
-                  channels={channels}
-                  customEmoji={customEmoji}
-                  onChannelClick={onChannelClick}
-                  highlight={highlightId === msg.id}
-                  onJumpToReply={jumpToMessage}
-                  onToggleReaction={
-                    onToggleReaction && reactionsEnabled ? (emoji) => onToggleReaction(msg.id, emoji) : undefined
-                  }
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onMessageContext(msg, e.clientX, e.clientY);
-                  }}
-                  onReply={
-                    onToggleReaction && reactionsEnabled
-                      ? (reply: ReplyPreview) => {
-                          setReplyTo(reply);
-                        }
-                      : undefined
-                  }
-                  onOpenReactionPicker={
-                    onToggleReaction && reactionsEnabled
-                      ? () => setPicker({ messageId: msg.id, x: 0, y: 0 })
-                      : undefined
-                  }
-                  onForward={onForward ? () => onForward(msg) : undefined}
-                  onDoubleClick={
-                    onToggleReaction && reactionsEnabled
-                      ? () => onToggleReaction(msg.id, "👍")
-                      : undefined
-                  }
-                  onContentResize={() => scrollToBottom()}
-                />
-              </div>
-            );
-          })}
+                const grouped = groupedFlags[i];
+                const msgReactions = reactionsByMessageId.get(msg.id) ?? EMPTY_REACTIONS;
+                return (
+                  <MessageRow
+                    key={msg.id}
+                    message={msg}
+                    grouped={grouped}
+                    showDivider={newMessagesDividerId === msg.id}
+                    dividerAnimate={!(currentUserId && msg.author_id === currentUserId)}
+                    highlight={highlightId === msg.id}
+                    currentUserId={currentUserId}
+                    currentUserName={currentUserName}
+                    authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
+                    reactions={msgReactions}
+                    members={renderMembers}
+                    channels={channels}
+                    customEmoji={customEmoji}
+                    canReact={canReact}
+                    canForward={!!onForward}
+                    onAuthorClick={onAuthorClick ? handleAuthorClick : undefined}
+                    onAuthorContextMenu={onAuthorContextMenu ? handleAuthorContextMenu : undefined}
+                    onChannelClick={onChannelClick ? handleChannelClick : undefined}
+                    onToggleReaction={handleToggleReaction}
+                    onMessageContext={handleMessageContext}
+                    onForward={handleForward}
+                    onReply={handleReply}
+                    onOpenReactionPicker={handleOpenReactionPicker}
+                    onJumpToReply={jumpToMessage}
+                    onContentResize={handleContentResize}
+                  />
+                );
+              })}
             </>
           )}
         </div>

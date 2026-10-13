@@ -297,6 +297,17 @@ export function DiscordApp() {
     })();
   const activeGroup = app.groupChats.find((g) => g.id === app.activeGroupChatId);
 
+  // Stable member lists for ChatCanvas. Built inline in JSX these arrays got a
+  // fresh identity on every DiscordApp render, which re-ran the canvas's member
+  // memo and re-rendered every message row. Memoizing them lets row
+  // memoization actually hold while presence/notifications churn the context.
+  const channelMembers = useMemo(() => app.members.map((m) => m.profile), [app.members]);
+  const dmMembers = useMemo(
+    () => (dmFriend ? [dmFriend, ...(app.profile ? [app.profile] : [])] : []),
+    [dmFriend, app.profile],
+  );
+  const notesMembers = useMemo(() => (app.profile ? [app.profile] : []), [app.profile]);
+
   const mobileTitle = useMemo(() => {
     switch (app.viewMode) {
       case "home":
@@ -1631,7 +1642,7 @@ export function DiscordApp() {
             channelName={displayName(dmFriend)}
             messages={dmMessages}
             loading={app.dmLoading}
-            members={[dmFriend, ...(app.profile ? [app.profile] : [])]}
+            members={dmMembers}
             currentUserId={app.user?.id}
             currentUserName={app.profile ? displayName(app.profile) : undefined}
             messageContext="dm"
@@ -1827,7 +1838,7 @@ export function DiscordApp() {
           introText="Your private Notes — only you can see this"
           placeholder="Write a note, or drop in an image, video or file…"
           messages={noteMessages}
-          members={app.profile ? [app.profile] : []}
+          members={notesMembers}
           currentUserId={app.user?.id}
           messageContext="notes"
           headerTrailing={
@@ -1880,7 +1891,7 @@ export function DiscordApp() {
           }
           messages={channelMessages}
           loading={app.messagesLoading}
-          members={app.members.map((m) => m.profile)}
+          members={channelMembers}
           roles={app.serverRoles}
           customEmoji={app.customEmojiMap}
           channels={app.channels}
