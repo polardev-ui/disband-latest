@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
 import { readAttachments } from "@/lib/message-attachments";
 import {
@@ -233,7 +233,7 @@ function ReplyQuote({
 
 const COMPACT_INDENT = "pl-[72px]";
 
-export function ChatMessage({
+function ChatMessageImpl({
   message,
   showHeader,
   compact,
@@ -525,6 +525,14 @@ export function ChatMessage({
   );
 }
 
+/**
+ * Message rows are memoized: the chat canvas re-renders on every AppContext
+ * change (presence, notifications, unread, ...) and on every list update, and
+ * without this every mounted row re-ran its markdown/emoji/attachment work.
+ * The row only re-renders when its own props actually change.
+ */
+export const ChatMessage = memo(ChatMessageImpl);
+
 export function shouldGroupMessages(
   prev: ChatMessageData | undefined,
   msg: ChatMessageData,
@@ -557,6 +565,21 @@ function messagePingsUser(
   );
 }
 
+function replyPreviewEqual(a: ReplyPreview | null | undefined, b: ReplyPreview | null | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.id === b.id
+    && a.author_id === b.author_id
+    && a.content === b.content
+    && a.attachment_type === b.attachment_type
+    && !!a.deleted === !!b.deleted
+    && (a.author?.id ?? null) === (b.author?.id ?? null)
+    && (a.author?.username ?? null) === (b.author?.username ?? null)
+    && (a.author?.display_name ?? null) === (b.author?.display_name ?? null)
+  );
+}
+
 export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[] {
   const map = new Map(messages.map((m) => [m.id, m]));
   return messages.map((m) => {
@@ -578,17 +601,19 @@ export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[
         },
       };
     }
-    return {
-      ...m,
-      reply_to: {
-        id: target.id,
-        author_id: target.author_id,
-        content: target.content,
-        attachment_type: target.attachment_type,
-        author: target.author
-          ? { id: target.author.id, username: target.author.username, display_name: target.author.display_name }
-          : undefined,
-      },
+    const next: ReplyPreview = {
+      id: target.id,
+      author_id: target.author_id,
+      content: target.content,
+      attachment_type: target.attachment_type,
+      author: target.author
+        ? { id: target.author.id, username: target.author.username, display_name: target.author.display_name }
+        : undefined,
     };
+    // Preserve object identity when the resolved quote hasn't changed so the
+    // memoized row doesn't re-render when an unrelated message arrives: a new
+    // message then repaints only its own row instead of every reply in view.
+    if (replyPreviewEqual(m.reply_to, next)) return m;
+    return { ...m, reply_to: next };
   });
 }
