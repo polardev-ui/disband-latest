@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 import { createPortal } from "react-dom";
 import { IconPin, IconPinOff } from "@/components/icons";
@@ -22,13 +23,14 @@ export function PinnedMessagesPanel({
   onUnpin,
 }: PinnedMessagesPanelProps) {
   useOverlayDismiss(onClose, open);
+  const { mounted, exiting } = usePresence(open);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const content = (
     <>
-      <div className="fixed inset-0 z-40 bg-overlay-scrim overlay-fade" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Pinned messages" className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+      <div className={`fixed inset-0 z-40 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Pinned messages" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl`}>
         <div className="flex items-center justify-between border-b border-divider px-4 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-text-normal">
             <IconPin size={16} className="text-text-muted" />

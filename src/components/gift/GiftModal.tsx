@@ -12,9 +12,10 @@ import {
 } from "@/lib/gifts";
 import { SubscriptionMedallion, tierForMonths } from "./SubscriptionMedallion";
 
-export function GiftModal({ onClose, onPurchased }: {
+export function GiftModal({ onClose, onPurchased, exiting }: {
   onClose: () => void;
   onPurchased: (code: string) => void;
+  exiting?: boolean;
 }) {
 
   const [plan, setPlan] = useState<GiftPlan>("aero");
@@ -62,14 +63,14 @@ export function GiftModal({ onClose, onPurchased }: {
 
   const body = (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade p-4"
+      className={`fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}
       role="dialog"
       aria-modal="true"
       aria-label="Gift a subscription"
       onClick={onClose}
     >
       <div
-        className="modal-pop relative w-full max-w-[460px] rounded-[20px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[460px] rounded-[20px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

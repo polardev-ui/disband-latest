@@ -17,6 +17,7 @@ import {
   pushEscapeHandler,
 } from "@/lib/overlay";
 import { isTauri } from "@/lib/platform";
+import { usePresence } from "@/hooks/usePresence";
 
 export interface ContextMenuItem {
   id: string;
@@ -199,6 +200,13 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => setMounted(true), []);
 
+  // Keep the last-opened menu (and its items) around while it animates out,
+  // since `closeMenu` clears `menu` immediately.
+  const { mounted: menuMounted, exiting: menuExiting } = usePresence(!!menu, 180);
+  const lastMenuRef = useRef<ContextMenuState | null>(null);
+  if (menu) lastMenuRef.current = menu;
+  const shownMenu = menu ?? lastMenuRef.current;
+
   const closeMenu = useCallback(() => setMenu(null), []);
 
   const openMenu = useCallback((x: number, y: number, items: ContextMenuItem[]) => {
@@ -264,23 +272,24 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     <ContextMenuContext.Provider value={{ openMenu, closeMenu }}>
       {children}
       {mounted &&
-        menu &&
+        menuMounted &&
+        shownMenu &&
         createPortal(
           <div
             data-context-menu
             role="menu"
             aria-labelledby={menuId}
-            className="modal-pop fixed min-w-[200px] rounded-[14px] border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+            className={`modal-pop${menuExiting ? " pop-out" : ""} fixed min-w-[200px] rounded-[14px] border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]`}
             style={{
               zIndex: OVERLAY_Z.contextMenu,
-              left: Math.min(menu.x, window.innerWidth - 200),
-              top: Math.min(menu.y, window.innerHeight - menu.items.length * 36 - 16),
+              left: Math.min(shownMenu.x, window.innerWidth - 200),
+              top: Math.min(shownMenu.y, window.innerHeight - shownMenu.items.length * 36 - 16),
             }}
           >
             <span id={menuId} className="sr-only">
               Context menu
             </span>
-            {menu.items.map((item, i) =>
+            {shownMenu.items.map((item, i) =>
               item.separator ? (
                 <div key={item.id} role="separator" className="my-1 h-px bg-divider" />
               ) : (

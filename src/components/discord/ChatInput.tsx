@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
+import { usePresence } from "@/hooks/usePresence";
 import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
@@ -134,7 +135,9 @@ export function ChatInput({
   const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const { mounted: plusMounted, exiting: plusExiting } = usePresence(plusMenuOpen);
   const [giftOpen, setGiftOpen] = useState(false);
+  const { mounted: giftMounted, exiting: giftExiting } = usePresence(giftOpen);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [pollOpen, setPollOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -777,7 +780,7 @@ export function ChatInput({
             >
               <IconPlus size={20} />
             </button>
-            {allowPolls && plusMenuOpen && (
+            {allowPolls && plusMounted && (
               <div
                 role="menu"
                 aria-label="Add to message"
@@ -794,7 +797,7 @@ export function ChatInput({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className="modal-pop absolute bottom-full left-0 z-20 mb-2 w-[260px] rounded-[14px] border border-divider bg-overlay-surface p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+                className={`modal-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[260px] rounded-[14px] border border-divider bg-overlay-surface p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]`}
               >
                 {[
                   {
@@ -962,8 +965,9 @@ export function ChatInput({
         )}
       </form>
 
-      {giftOpen && (
+      {giftMounted && (
         <GiftModal
+          exiting={giftExiting}
           onClose={() => setGiftOpen(false)}
           onPurchased={(code) => {
             setGiftOpen(false);

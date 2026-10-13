@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/api";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
+import { apiFetch } from "@/lib/api";
 import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbeddedCheckout";
 import { IconClose } from "@/components/icons";
 import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
@@ -94,7 +95,8 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
     [tab, owned, sales],
   );
 
-  if (!open) return null;
+  const { mounted, exiting } = usePresence(open);
+  if (!mounted) return null;
 
   const startPurchase = async (item: ShopItem) => {
     setBusyId(item.id);
@@ -171,12 +173,12 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={clientSecret ? undefined : onClose} />
+      <div className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={clientSecret ? undefined : onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Disband Shop"
-        className="modal-pop relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl`}
       >
         <header className="flex items-center gap-3 border-b border-divider px-5 py-4">
           <div className="min-w-0 flex-1">

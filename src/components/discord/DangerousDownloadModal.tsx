@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 interface DangerousDownloadModalProps {
   open: boolean;
@@ -16,17 +17,18 @@ export function DangerousDownloadModal({
   onContinue,
 }: DangerousDownloadModalProps) {
   useOverlayDismiss(onClose, open);
+  const { mounted, exiting } = usePresence(open);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
+      <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="download-warning-title"
-        className="modal-pop relative w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl`}
       >
         <h2 id="download-warning-title" className="text-lg font-semibold text-text-normal">
           Potentially dangerous download

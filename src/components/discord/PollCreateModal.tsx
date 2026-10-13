@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -33,8 +34,9 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
   }, [open]);
 
   useOverlayDismiss(onClose, open);
+  const { mounted: pollMounted, exiting } = usePresence(open);
 
-  if (!open || !mounted) return null;
+  if (!pollMounted || !mounted) return null;
 
   const validOptions = options.map((o) => o.trim()).filter(Boolean);
   const canCreate = question.trim().length > 0 && validOptions.length >= 2 && !creating;
@@ -58,14 +60,14 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-overlay-scrim overlay-fade p-4"
+      className={`fixed inset-0 z-[130] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Create a poll"
-        className="modal-pop w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

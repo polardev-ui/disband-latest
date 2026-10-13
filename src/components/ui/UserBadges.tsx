@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePresence } from "@/hooks/usePresence";
 import { Tooltip } from "@/components/discord/Tooltip";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { useBadges, type AwardedBadge } from "@/lib/badge-store";
@@ -45,6 +46,9 @@ export function UserBadges({
 
   const tier: TierDef | null =
     !full || effectivePlan === "free" ? null : tierForMonths(months);
+
+  const tiersOpen = showTiers && !!tier && effectivePlan !== "free";
+  const { mounted: tiersMounted, exiting: tiersExiting } = usePresence(tiersOpen);
   if (badges.length === 0 && !tier) return null;
 
   return (
@@ -91,11 +95,12 @@ export function UserBadges({
         ))}
       </span>
 
-      {showTiers && tier && effectivePlan !== "free" && (
+      {tiersMounted && tier && effectivePlan !== "free" && (
         <SubscriptionBadgeModal
           plan={effectivePlan}
           tenureMonths={months}
           since={since}
+          exiting={tiersExiting}
           onClose={() => setShowTiers(false)}
         />
       )}

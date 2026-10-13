@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { usePresence } from "@/hooks/usePresence";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
@@ -141,7 +142,8 @@ export function ImageLightbox({
     ]);
   };
 
-  if (!open || typeof document === "undefined") return null;
+  const { mounted, exiting } = usePresence(open);
+  if (!mounted || typeof document === "undefined") return null;
 
   const nameStyle = authorColor ? { color: authorColor } : author ? getUsernameStyle(author) : undefined;
   const resolved = safeImageUrl(src);
@@ -156,7 +158,7 @@ export function ImageLightbox({
     <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.lightbox }} role="dialog" aria-modal="true" aria-label="Image viewer">
       <button
         type="button"
-        className="overlay-fade absolute inset-0 bg-black"
+        className={`overlay-fade${exiting ? " overlay-fade-out" : ""} absolute inset-0 bg-black`}
         onClick={onClose}
         aria-label="Close viewer"
       />
@@ -226,7 +228,7 @@ export function ImageLightbox({
         ) : (
           // The entrance animation lives on this wrapper: it ends holding a
           // transform of its own, which on the media itself overrode the zoom.
-          <div key={resolved} className="modal-pop pointer-events-none flex items-center justify-center">
+          <div key={resolved} className={`modal-pop${exiting ? " modal-pop-out" : ""} pointer-events-none flex items-center justify-center`}>
           {animated ? (
           <video
             src={resolved}

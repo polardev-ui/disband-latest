@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLANS, isGranting, type BillingInterval, type SubscriptionPlan } from "@/lib/subscription";
@@ -291,16 +292,17 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   }, []);
 
   useOverlayDismiss(onClose, open);
+  const { mounted, exiting } = usePresence(open);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
-    <div className="overlay-fade fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim" onClick={onClose}>
+    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim`} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Upgrade subscription"
-        className="modal-pop mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 import { useCallback, useEffect, useState } from "react";
 import type { ServerPermissionKey, ServerRole } from "@/lib/supabase/types";
@@ -112,8 +113,9 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
 
   // Topmost-only Escape + scroll lock via the shared overlay hook.
   useOverlayDismiss(onClose, open);
+  const { mounted, exiting } = usePresence(open);
 
-  if (!open || !activeServer) return null;
+  if (!mounted || !activeServer) return null;
   const isOwner = activeServer.owner_id === user?.id;
   const canManageChannels = isOwner || serverPermissions.manage_channels;
   const canManageRoles = isOwner || serverPermissions.manage_roles;
@@ -381,7 +383,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Space settings" className="overlay-fade fixed inset-0 z-[70] flex flex-col bg-bg-primary">
+    <div role="dialog" aria-modal="true" aria-label="Space settings" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-[70] flex flex-col bg-bg-primary`}>
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-divider px-6">
         <div className="flex items-center gap-3">
           {activeServer.icon_url ? (

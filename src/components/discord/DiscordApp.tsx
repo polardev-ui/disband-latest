@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePresence } from "@/hooks/usePresence";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 import { useApp } from "@/contexts/AppContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -88,6 +89,13 @@ export function DiscordApp() {
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
+  // Keep the dialog's data around while it animates out: closing clears
+  // `folderDialog`, which would otherwise unmount it mid-fade.
+  const folderDialogOpen = !!folderDialog;
+  const { mounted: folderDialogMounted, exiting: folderDialogExiting } = usePresence(folderDialogOpen);
+  const lastFolderDialogRef = useRef(folderDialog);
+  if (folderDialog) lastFolderDialogRef.current = folderDialog;
+  const shownFolderDialog = folderDialog ?? lastFolderDialogRef.current;
   const [pendingFolderServer, setPendingFolderServer] = useState<Server | null>(null);
   const [channelSettingsChannel, setChannelSettingsChannel] = useState<Channel | null>(null);
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
@@ -2053,19 +2061,20 @@ export function DiscordApp() {
 
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
       <ReleaseModal />
-      {folderDialog && (
+      {folderDialogMounted && shownFolderDialog && (
         <ServerFolderDialog
-          title={folderDialog.mode === "create" ? "Create Folder" : "Edit Folder"}
+          exiting={folderDialogExiting}
+          title={shownFolderDialog.mode === "create" ? "Create Folder" : "Edit Folder"}
           initialName={
-            folderDialog.mode === "edit"
-              ? (app.serverFolders.find((f) => f.id === folderDialog.folderId)?.name ?? "")
+            shownFolderDialog.mode === "edit"
+              ? (app.serverFolders.find((f) => f.id === shownFolderDialog.folderId)?.name ?? "")
               : pendingFolderServer
                 ? `${pendingFolderServer.name}`
                 : ""
           }
           initialColor={
-            folderDialog.mode === "edit"
-              ? (app.serverFolders.find((f) => f.id === folderDialog.folderId)?.color ?? "#5865f2")
+            shownFolderDialog.mode === "edit"
+              ? (app.serverFolders.find((f) => f.id === shownFolderDialog.folderId)?.color ?? "#5865f2")
               : "#5865f2"
           }
           onClose={() => {
@@ -2073,15 +2082,15 @@ export function DiscordApp() {
             setPendingFolderServer(null);
           }}
           onSave={async (name, color) => {
-            if (folderDialog.mode === "create") {
+            if (shownFolderDialog.mode === "create") {
               const id = await app.createFolder(name, color);
               if (typeof id === "string" && pendingFolderServer) {
                 const members = app.serverListState.filter((s) => s.folder_id === id);
                 await app.setServerSlot(pendingFolderServer.id, members.length, id);
               }
-            } else if (folderDialog.folderId) {
-              const err = await app.renameFolder(folderDialog.folderId, name);
-              if (!err) await app.setFolderColor(folderDialog.folderId, color);
+            } else if (shownFolderDialog.folderId) {
+              const err = await app.renameFolder(shownFolderDialog.folderId, name);
+              if (!err) await app.setFolderColor(shownFolderDialog.folderId, color);
               if (err) throw new Error(err);
             }
           }}
