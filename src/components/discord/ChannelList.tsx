@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { NotificationBell } from "./NotificationBell";
 import { CallIndicator } from "./CallIndicator";
 import { Tooltip } from "./Tooltip";
 import {
@@ -513,9 +512,6 @@ export function ChannelList({
                   <IconPlus size={16} />
                 </button>
               )}
-              <span className="[&_button]:text-white/80">
-                <NotificationBell />
-              </span>
             </div>
             <button
               type="button"
@@ -560,9 +556,6 @@ export function ChannelList({
               <IconPlus size={16} />
             </button>
           )}
-          <span className="ml-1">
-            <NotificationBell />
-          </span>
         </div>
         )
       )}

@@ -21,6 +21,7 @@ import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPane
 import { UserPanel } from "./UserPanel";
 import dynamic from "next/dynamic";
 import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
+import { NotificationBell } from "./NotificationBell";
 import { ChatCanvas, type ChatCanvasHandle } from "./ChatCanvas";
 import { VoicePanel } from "./VoicePanel";
 import { MemberList } from "./MemberList";
@@ -1388,6 +1389,7 @@ export function DiscordApp() {
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text-normal">
             {mobileTitle}
           </span>
+          <NotificationBell compact />
           <button
             type="button"
             aria-label="Settings"
