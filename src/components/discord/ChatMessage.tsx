@@ -153,6 +153,7 @@ function MessageBody({  content,
     <>
       {textOnly && (
         <div
+          data-selectable
           className={`break-words ${sending ? "text-text-muted" : "text-text-normal"} ${
             emojiOnly ? emojiSizeClass || normalClass : normalClass
           }`}

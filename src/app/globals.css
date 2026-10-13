@@ -252,6 +252,67 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* -------------------------------------------------------------- desktop shell
+   In the Tauri window this is a native app, not a page in a tab. Chrome text
+   is not selectable, images and links do not spawn drag ghosts, taps do not
+   flash, and the document does not rubber-band past its edges. Selection is
+   switched back on for the text people actually copy — message bodies, code
+   blocks, form fields. `data-desktop` is set before first paint (see the
+   theme-init script in layout.tsx), so there is no flash of the web rules. */
+html[data-desktop] {
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+html[data-desktop] body {
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-desktop] input,
+html[data-desktop] textarea,
+html[data-desktop] select,
+html[data-desktop] [contenteditable="true"],
+html[data-desktop] pre,
+html[data-desktop] code,
+html[data-desktop] .selectable,
+html[data-desktop] [data-selectable],
+html[data-desktop] [data-selectable] * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+html[data-desktop] img,
+html[data-desktop] a,
+html[data-desktop] svg {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+/* Controls stay inert even inside a selectable region, the way a native
+   toolbar never lets you marquee across its buttons. */
+html[data-desktop] button,
+html[data-desktop] [role="button"],
+html[data-desktop] [role="menuitem"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-desktop] ::selection {
+  background-color: var(--brand);
+  color: var(--brand-foreground, #fff);
+}
+
+/* The macOS overlay title bar: a slim, draggable strip reserved above the app
+   so the traffic lights never sit on top of the UI. Hidden everywhere else. */
+.desktop-titlebar {
+  display: none;
+}
+html[data-desktop-os="macos"] .desktop-titlebar {
+  display: block;
+  flex: 0 0 28px;
+  height: 28px;
+  width: 100%;
+  background-color: var(--bg-tertiary);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

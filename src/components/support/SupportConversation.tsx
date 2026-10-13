@@ -108,7 +108,7 @@ export function SupportConversation({ subject, messages, draft, sending, loading
               {!mine && <span className={styles.messageAvatar} aria-hidden="true"><TetherPortrait /></span>}
               <div className={styles.messageBody}>
                 <div className={styles.messageMeta}><strong>{mine ? "You" : m.role === "staff" ? "Disband support" : "Tether"}</strong><time dateTime={m.created_at}>{new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time></div>
-                <div className={styles.messageContent}>{mine ? m.content : renderMarkdown(m.content)}</div>
+                <div data-selectable className={styles.messageContent}>{mine ? m.content : renderMarkdown(m.content)}</div>
                 {!mine && <CopyReply content={m.content} />}
               </div>
             </article>;
