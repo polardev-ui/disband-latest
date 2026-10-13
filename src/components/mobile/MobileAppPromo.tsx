@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/Logo";
@@ -31,19 +32,20 @@ export function MobileAppPromo() {
   }
 
   useOverlayDismiss(dismiss, visible);
+  const { mounted, exiting } = usePresence(visible);
 
-  if (!visible) return null;
+  if (!mounted) return null;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Disband for iOS"
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-overlay-scrim overlay-fade p-4 sm:items-center"
+      className={`fixed inset-0 z-[100] flex items-end justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4 sm:items-center`}
       onClick={dismiss}
     >
       <div
-        className="modal-pop w-full max-w-sm rounded-2xl bg-bg-secondary p-6 text-center shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-sm rounded-2xl bg-bg-secondary p-6 text-center shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 flex justify-center">

@@ -1,8 +1,9 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconClose, IconHash, IconSpeaker, IconTrash } from "@/components/icons";
@@ -40,8 +41,12 @@ interface ChannelSettingsModalProps {
   onClose: () => void;
 }
 
-export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalProps) {
+export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelSettingsModalProps) {
   const app = useApp();
+  const { mounted, exiting } = usePresence(channelProp !== null);
+  const lastChannelRef = useRef<Channel | null>(null);
+  if (channelProp) lastChannelRef.current = channelProp;
+  const channel = channelProp ?? lastChannelRef.current;
   const [name, setName] = useState("");
   const [readOnly, setReadOnly] = useState(false);
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
@@ -80,7 +85,7 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
 
   useOverlayDismiss(onClose, channel !== null);
 
-  if (!channel) return null;
+  if (!mounted || !channel) return null;
 
   const rolePerms = (roleId: string) => {
     const perms = app.serverRoles.find((r) => r.id === roleId)?.permissions ?? {};
@@ -172,8 +177,8 @@ export function ChannelSettingsModal({ channel, onClose }: ChannelSettingsModalP
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Channel settings" className="modal-pop relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl">
+      <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Channel settings" className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl`}>
         <header className="flex items-center gap-2 border-b border-divider px-5 py-4">
           {channel.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
           <div className="min-w-0 flex-1">

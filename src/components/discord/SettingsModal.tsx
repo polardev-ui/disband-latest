@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -127,6 +128,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   const myBadges = useBadges(profile?.id);
   const [gifting, setGifting] = useState(false);
+  const { mounted: giftMounted, exiting: giftExiting } = usePresence(gifting);
   const [giftLink, setGiftLink] = useState<string | null>(null);
   const [giftCopied, setGiftCopied] = useState(false);
   const { upload, isUploading } = useMediaUpload();
@@ -255,7 +257,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [profile?.id]);
 
-  if (!open) return null;
+  const { mounted, exiting } = usePresence(open);
+  if (!mounted) return null;
 
   const previewAccent: ProfileAccentFields = useDefaultAccent
     ? { accent_color: null, accent_color_2: null }
@@ -389,14 +392,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-        <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} />
+        <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
         {/* A fixed-size window: the old one sized itself to each page, so the
             whole dialog jumped every time you changed tabs. */}
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Settings"
-          className="modal-pop relative flex h-[min(820px,calc(100vh-3rem))] w-full max-w-[1080px] overflow-hidden rounded-[22px] border border-divider bg-overlay-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)]"
+          className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex h-[min(820px,calc(100vh-3rem))] w-full max-w-[1080px] overflow-hidden rounded-[22px] border border-divider bg-overlay-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)]`}
         >
           <nav aria-label="Settings sections" className="hidden w-[256px] shrink-0 flex-col border-r border-divider bg-bg-secondary sm:flex">
             <div className="px-3 pb-2 pt-4">
@@ -1400,8 +1403,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         userId={profile?.id}
       />
 
-      {gifting && (
+      {giftMounted && (
         <GiftModal
+          exiting={giftExiting}
           onClose={() => setGifting(false)}
           onPurchased={(code) => {
             setGiftLink(giftUrl(code, window.location.origin));

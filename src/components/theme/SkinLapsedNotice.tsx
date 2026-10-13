@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePresence } from "@/hooks/usePresence";
 import { createPortal } from "react-dom";
 import { useSkin } from "@/components/theme/SkinProvider";
 
@@ -20,7 +21,9 @@ export function SkinLapsedNotice() {
     }
   }, [lapsed, plan, loading]);
 
-  if (loading || !lapsed || dismissed) return null;
+  const showNotice = !loading && !!lapsed && !dismissed;
+  const { mounted, exiting } = usePresence(showNotice);
+  if (!mounted) return null;
 
   const acknowledge = () => {
     setDismissed(true);
@@ -37,12 +40,12 @@ export function SkinLapsedNotice() {
         type="button"
         aria-label="Close"
         onClick={acknowledge}
-        className="absolute inset-0 bg-overlay-scrim overlay-fade"
+        className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`}
       />
       <div
         role="dialog"
         aria-labelledby="skin-lapsed-title"
-        className="relative w-full max-w-md overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
       >
         <div className="border-b border-divider px-6 py-5">
           <h2 id="skin-lapsed-title" className="text-lg font-bold text-text-normal">

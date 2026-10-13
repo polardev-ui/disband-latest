@@ -8,12 +8,13 @@ import {
 import type { SubscriptionPlan } from "@/lib/subscription";
 
 export function SubscriptionBadgeModal({
-  plan, tenureMonths, since, onClose,
+  plan, tenureMonths, since, onClose, exiting,
 }: {
   plan: Exclude<SubscriptionPlan, "free">;
   tenureMonths: number;
   since: string | null;
   onClose: () => void;
+  exiting?: boolean;
 }) {
   const current = tierForMonths(tenureMonths);
   const next = nextTier(tenureMonths);
@@ -32,14 +33,14 @@ export function SubscriptionBadgeModal({
 
   const body = (
     <div
-      className="overlay-fade fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-overlay-scrim p-4 backdrop-blur-sm"
+      className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-overlay-scrim p-4 backdrop-blur-sm`}
       role="dialog"
       aria-modal="true"
       aria-label={`${planName} subscription badge`}
       onClick={onClose}
     >
       <div
-        className="modal-pop relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-divider"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

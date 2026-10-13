@@ -22,9 +22,10 @@ interface ServerFolderDialogProps {
   initialColor?: string;
   onClose: () => void;
   onSave: (name: string, color: string) => void | Promise<void>;
+  exiting?: boolean;
 }
 
-export function ServerFolderDialog({ title, initialName = "", initialColor = FOLDER_COLORS[0], onClose, onSave }: ServerFolderDialogProps) {
+export function ServerFolderDialog({ title, initialName = "", initialColor = FOLDER_COLORS[0], onClose, onSave, exiting }: ServerFolderDialogProps) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor);
   const [saving, setSaving] = useState(false);
@@ -52,12 +53,12 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade p-4" onClick={onClose}>
+    <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="modal-pop w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-bold text-text-normal">{title}</h2>

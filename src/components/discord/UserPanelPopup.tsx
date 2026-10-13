@@ -42,9 +42,10 @@ interface UserPanelPopupProps {
   onClose: () => void;
   onOpenSettings: () => void;
   onOpenProfile?: () => void;
+  exiting?: boolean;
 }
 
-export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfile }: UserPanelPopupProps) {
+export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfile, exiting }: UserPanelPopupProps) {
   const {
     profile, user, updateProfile, presenceMap,
     savedSessions, switchAccount, removeSavedAccount, beginAddAccount,
@@ -160,7 +161,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className="modal-pop fixed z-40 max-h-[calc(100vh-100px)] w-[320px] overflow-y-auto rounded-[20px] border border-divider bg-overlay-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} fixed z-40 max-h-[calc(100vh-100px)] w-[320px] overflow-y-auto rounded-[20px] border border-divider bg-overlay-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]`}
         style={{ left: pos.left, bottom: pos.bottom }}
       >
         <div className="h-[84px] overflow-hidden" style={{ background: bannerBg }}>

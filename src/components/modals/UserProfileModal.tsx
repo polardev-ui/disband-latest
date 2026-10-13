@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
@@ -165,7 +166,7 @@ function EmptyTab({ children }: { children: ReactNode }) {
 }
 
 export function UserProfileModal({
-  profile,
+  profile: profileProp,
   open,
   onClose,
   onMessage,
@@ -190,6 +191,14 @@ export function UserProfileModal({
   memberIsOwner,
   onSetRoles,
 }: UserProfileModalProps) {
+  // Keep the last profile around while the card animates out: the parent
+  // clears its `profileTarget` the instant it closes, which would otherwise
+  // unmount the card mid-fade.
+  const { mounted, exiting } = usePresence(open);
+  const lastProfileRef = useRef<Profile | null>(null);
+  if (profileProp) lastProfileRef.current = profileProp;
+  const profile = profileProp ?? lastProfileRef.current;
+
   const { friends, presenceMap, servers, loadMutuals, user } = useApp();
   const [mutualServerIds, setMutualServerIds] = useState<string[]>([]);
   const [mutualFriendIds, setMutualFriendIds] = useState<string[]>([]);
@@ -214,7 +223,7 @@ export function UserProfileModal({
     };
   }, [open, profile?.id, loadMutuals]);
   useOverlayDismiss(onClose, open);
-  if (!open || !profile) return null;
+  if (!mounted || !profile) return null;
 
   const friend = isFriend || friends.some((f) => f.id === profile.id);
   const title = profile.display_name?.trim() || displayName(profile);
@@ -327,12 +336,12 @@ export function UserProfileModal({
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={onClose} aria-label="Close" />
+      <button type="button" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="fx-overlay-host modal-pop relative max-h-[calc(100vh-3rem)] w-full max-w-[440px] overflow-y-auto rounded-[22px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]"
+        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} relative max-h-[calc(100vh-3rem)] w-full max-w-[440px] overflow-y-auto rounded-[22px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]`}
         style={cardStyle}
       >
         {/* Artwork sits above the banner and below the readable profile content. */}

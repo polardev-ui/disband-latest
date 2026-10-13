@@ -1,8 +1,9 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconTimer } from "@/components/icons";
 import { displayName } from "@/lib/utils";
@@ -45,13 +46,18 @@ interface TimeoutModalProps {
   onSubmit: (seconds: number, reason: string) => Promise<string | null>;
 }
 
-export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalProps) {
+export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: TimeoutModalProps) {
   const [preset, setPreset] = useState<number | null>(600);
   const [amount, setAmount] = useState("30");
   const [unit, setUnit] = useState(UNITS[0]);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { mounted, exiting } = usePresence(open);
+  const lastProfileRef = useRef<Profile | null>(null);
+  if (profileProp) lastProfileRef.current = profileProp;
+  const profile = profileProp ?? lastProfileRef.current;
 
   // Reset to a sane default every time the dialog is opened for someone new,
   // so a previous target's custom duration is never applied by accident.
@@ -84,7 +90,7 @@ export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalP
   // can't dismiss mid-submit (the scrim click is disabled the same way).
   useOverlayDismiss(onClose, open && !busy);
 
-  if (!open || !profile) return null;
+  if (!mounted || !profile) return null;
 
   const submit = async () => {
     if (!valid || seconds === null || busy) return;
@@ -98,12 +104,12 @@ export function TimeoutModal({ open, profile, onClose, onSubmit }: TimeoutModalP
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-overlay-scrim overlay-fade" onClick={busy ? undefined : onClose} />
+      <div className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={busy ? undefined : onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Time out ${displayName(profile)}`}
-        className="modal-pop relative w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl`}
       >
         <button
           type="button"

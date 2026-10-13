@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { usePresence } from "@/hooks/usePresence";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { Tooltip } from "./Tooltip";
 import {
@@ -36,6 +37,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   const { plan } = useSubscription(profile?.id);
   const [popupOpen, setPopupOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const { mounted: popupMounted, exiting: popupExiting } = usePresence(popupOpen);
 
   const name = profile
     ? displayName(profile)
@@ -55,9 +57,10 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
       className="mx-2 mb-2 flex h-[54px] shrink-0 items-center gap-0.5 rounded-[14px] border border-divider bg-bg-accent px-1.5"
       onContextMenu={onContextMenu}
     >
-      {popupOpen && (
+      {popupMounted && (
         <UserPanelPopup
           anchorRef={panelRef}
+          exiting={popupExiting}
           onClose={() => setPopupOpen(false)}
           onOpenSettings={onOpenSettings}
           onOpenProfile={onOpenProfile}

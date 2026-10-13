@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 import { IconClose } from "@/components/icons";
 import { renderMarkdown } from "@/lib/markdown";
 
@@ -53,15 +54,16 @@ export function ReleaseModal() {
 
   useOverlayDismiss(dismiss, open);
 
-  if (!open) return null;
+  const { mounted, exiting } = usePresence(open);
+  if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm${exiting ? " overlay-fade-out" : ""}`}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Disband has officially released"
-        className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
+        className={`relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-2xl${exiting ? " modal-pop-out" : ""}`}
       >
         <button
           type="button"

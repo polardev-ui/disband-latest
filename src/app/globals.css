@@ -518,6 +518,58 @@ img.twemoji {
   animation: overlay-fade 0.2s ease-out forwards;
 }
 
+/* ---- Exit animations ----
+   Paired with the enter animations above and driven by usePresence: the
+   overlay stays mounted while `exiting` is true so the reverse plays instead
+   of the layer blinking out of existence. Slightly faster than the enter so
+   dismissal feels snappy. Kept at the same 0.18s across the board so a single
+   unmount timer can cover the whole layer. */
+@keyframes modal-pop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+.modal-pop-out {
+  animation: modal-pop-out 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.overlay-fade-out {
+  animation: overlay-fade-out 0.18s ease-in forwards;
+}
+
+/* Popovers/menus (context menu, profile pop) shrink slightly toward their
+   anchor as they leave. */
+@keyframes pop-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.pop-out {
+  animation: pop-out 0.16s cubic-bezier(0.4, 0, 1, 1) forwards;
+  transform-origin: bottom left;
+}
+
 @keyframes call-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
@@ -557,7 +609,10 @@ img.twemoji {
      instantly. marketing-fade-up starts at opacity 0, so it needs an
      explicit visible fallback or content would stay invisible. */
   .modal-pop,
+  .modal-pop-out,
   .overlay-fade,
+  .overlay-fade-out,
+  .pop-out,
   .tooltip-content,
   .call-enter,
   .avatar-pop,
@@ -588,7 +643,10 @@ img.twemoji {
    the OS reduced-motion block above for every motion class, so "Reduced"
    behaves identically regardless of the OS setting. */
 [data-motion="reduced"] .modal-pop,
+[data-motion="reduced"] .modal-pop-out,
 [data-motion="reduced"] .overlay-fade,
+[data-motion="reduced"] .overlay-fade-out,
+[data-motion="reduced"] .pop-out,
 [data-motion="reduced"] .tooltip-content,
 [data-motion="reduced"] .call-enter,
 [data-motion="reduced"] .avatar-pop,

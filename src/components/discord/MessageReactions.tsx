@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 import { OVERLAY_Z } from "@/lib/overlay";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -120,11 +121,12 @@ function ReactionHoverCard({
 }
 
 function ReactionListDialog({
-  reactions, initialEmoji, onClose,
+  reactions, initialEmoji, onClose, exiting,
 }: {
   reactions: ReactionSummary[];
   initialEmoji: string;
   onClose: () => void;
+  exiting?: boolean;
 }) {
   const [active, setActive] = useState(initialEmoji);
   const current = reactions.find((r) => r.emoji === active) ?? reactions[0];
@@ -141,13 +143,13 @@ function ReactionListDialog({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-overlay-scrim overlay-fade"
+        className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Reactions"
-        className="modal-pop relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
       >
         {}
         <div className="flex w-[104px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-divider p-2">
@@ -212,6 +214,10 @@ function ReactionListDialog({
 export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageReactionsProps) {
   const [hovered, setHovered] = useState<{ emoji: string; el: HTMLElement } | null>(null);
   const [listFor, setListFor] = useState<string | null>(null);
+  const { mounted: listMounted, exiting: listExiting } = usePresence(!!listFor);
+  const lastListForRef = useRef<string | null>(null);
+  if (listFor) lastListForRef.current = listFor;
+  const shownListFor = listFor ?? lastListForRef.current;
 
   const closeTimer = useRef<number | null>(null);
 
@@ -280,10 +286,11 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
         />
       )}
 
-      {listFor && (
+      {listMounted && shownListFor && (
         <ReactionListDialog
           reactions={reactions}
-          initialEmoji={listFor}
+          initialEmoji={shownListFor}
+          exiting={listExiting}
           onClose={() => setListFor(null)}
         />
       )}
@@ -306,8 +313,9 @@ export function ReactionPicker({
 
   // Stack-routed Escape + scroll lock + focus back (was: no Escape handling).
   useOverlayDismiss(onClose, open);
+  const { mounted, exiting } = usePresence(open);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const handleSelect = (emoji: string) => {
     onSelect(emoji);
@@ -318,7 +326,7 @@ export function ReactionPicker({
     <>
       <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
 
-      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className="overlay-fade fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
+      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl`}>
         <div className="border-b border-divider px-4 py-3">
           <input
             type="text"

@@ -1,8 +1,9 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
@@ -28,8 +29,12 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
   );
 
   useOverlayDismiss(onClose, open);
+  const { mounted, exiting } = usePresence(open);
+  const lastGroupIdRef = useRef<string | null>(null);
+  if (groupId) lastGroupIdRef.current = groupId;
+  const shownGroupId = groupId ?? lastGroupIdRef.current;
 
-  if (!open || !groupId) return null;
+  if (!mounted || !shownGroupId) return null;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -54,8 +59,8 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade p-4">
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Invite to group" className="modal-pop w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl">
+    <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}>
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Invite to group" className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl`}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">Invite friends</h2>
           <button type="button" onClick={onClose}><IconClose size={20} /></button>

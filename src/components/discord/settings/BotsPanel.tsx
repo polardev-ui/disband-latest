@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePresence } from "@/hooks/usePresence";
 import { useApp } from "@/contexts/AppContext";
 import { Hint, SettingRow, SettingsSection, settingsInputClass } from "./SettingsPrimitives";
 import { BotTag } from "@/components/ui/BotTag";
@@ -58,6 +59,10 @@ export function BotsPanel() {
   const [tokenCopied, setTokenCopied] = useState(false);
 
   const [invitingBot, setInvitingBot] = useState<ManagedBot | null>(null);
+  const { mounted: inviteMounted, exiting: inviteExiting } = usePresence(!!invitingBot);
+  const lastInvitingBotRef = useRef<ManagedBot | null>(null);
+  if (invitingBot) lastInvitingBotRef.current = invitingBot;
+  const shownInvitingBot = invitingBot ?? lastInvitingBotRef.current;
   const [inviteServerId, setInviteServerId] = useState("");
   const [inviteScopes, setInviteScopes] = useState<BotScope[]>([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -338,19 +343,19 @@ export function BotsPanel() {
         </p>
       )}
 
-      {invitingBot && (
+      {inviteMounted && shownInvitingBot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-overlay-scrim overlay-fade"
+            className={`absolute inset-0 bg-overlay-scrim overlay-fade${inviteExiting ? " overlay-fade-out" : ""}`}
             onClick={() => setInvitingBot(null)}
           />
-          <div className="modal-pop relative w-full max-w-md rounded-xl bg-bg-primary p-5 shadow-2xl">
+          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-xl bg-bg-primary p-5 shadow-2xl`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[16px] font-semibold text-text-normal">
-                  Invite {invitingBot.name}
+                  Invite {shownInvitingBot.name}
                 </h3>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
                   Generate a link and send it to the space's owner. They decide whether the bot
@@ -390,7 +395,7 @@ export function BotsPanel() {
                   Scopes the owner will be asked to grant
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {invitingBot.scopes.map((scope) => (
+                  {shownInvitingBot.scopes.map((scope) => (
                     <button
                       key={scope}
                       type="button"

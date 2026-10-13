@@ -1,8 +1,9 @@
 "use client";
 
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { usePresence } from "@/hooks/usePresence";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { apiFetch } from "@/lib/api";
@@ -43,7 +44,11 @@ function Check({ locked }: { locked?: boolean }) {
   );
 }
 
-export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
+export function CatalystModal({ server: serverProp, open, onClose }: CatalystModalProps) {
+  const { mounted, exiting } = usePresence(open);
+  const lastServerRef = useRef<Server | null>(null);
+  if (serverProp) lastServerRef.current = serverProp;
+  const server = serverProp ?? lastServerRef.current;
   const {
     user,
     catalystCounts,
@@ -157,12 +162,12 @@ export function CatalystModal({ server, open, onClose }: CatalystModalProps) {
 
   useOverlayDismiss(onClose, open);
 
-  if (!open || !server) return null;
+  if (!mounted || !server) return null;
 
   return (
-    <div className="overlay-fade fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim p-4" onClick={onClose}>
+    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim p-4`} onClick={onClose}>
       <div
-        className="modal-pop flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl"
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl`}
         role="dialog"
         aria-modal="true"
         aria-label="Server catalysts"
