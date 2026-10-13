@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { Window } from "@tauri-apps/api/window";
 import { isTauri } from "@/lib/platform";
 
 /**
@@ -46,6 +47,16 @@ function writeWindowState(state: WindowState): void {
     localStorage.setItem(WINDOW_STATE_KEY, JSON.stringify(state));
   } catch {
     // Private mode or a full quota. Remembering the window is not worth a throw.
+  }
+}
+
+/** Run an action against the current window; inert where there is no window. */
+async function withWindow(action: (win: Window) => Promise<void> | void): Promise<void> {
+  try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await action(getCurrentWindow());
+  } catch {
+    // A web build, or a shell without the window API: the bar stays inert.
   }
 }
 
@@ -115,6 +126,8 @@ async function installAppMenu(): Promise<void> {
 }
 
 export function DesktopShell() {
+  const [maximized, setMaximized] = useState(false);
+
   // Mark the document and let CSS reveal the title-bar strip. The attribute is
   // normally already set by the pre-paint script; this is a backstop.
   useEffect(() => {
@@ -178,6 +191,37 @@ export function DesktopShell() {
       }
     })();
 
+    return () => {
+      disposed = true;
+      for (const fn of unlisten) fn();
+    };
+  }, []);
+
+  // Keep the maximize/restore control in step with the real window state.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    const unlisten: Array<() => void> = [];
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        const sync = async () => {
+          try {
+            const isMax = await win.isMaximized();
+            if (!disposed) setMaximized(isMax);
+          } catch {
+            // Reading the window state is not permitted on an old shell.
+          }
+        };
+        await sync();
+        const u = await win.onResized(() => void sync());
+        if (disposed) u();
+        else unlisten.push(u);
+      } catch {
+        // No window API. The control still toggles, it just cannot show state.
+      }
+    })();
     return () => {
       disposed = true;
       for (const fn of unlisten) fn();
@@ -254,5 +298,55 @@ export function DesktopShell() {
     void installAppMenu();
   }, []);
 
-  return <div data-tauri-drag-region aria-hidden className="desktop-titlebar" />;
+  return (
+    <div
+      data-tauri-drag-region
+      className="desktop-titlebar"
+      onDoubleClick={() => void withWindow((win) => win.toggleMaximize())}
+    >
+      <span data-tauri-drag-region className="desktop-titlebar-title">
+        Disband
+      </span>
+      <div className="desktop-titlebar-controls" onDoubleClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          aria-label="Minimize"
+          title="Minimize"
+          onClick={() => void withWindow((win) => win.minimize())}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M0 5h10" stroke="currentColor" strokeWidth="1.1" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          aria-label={maximized ? "Restore" : "Maximize"}
+          title={maximized ? "Restore" : "Maximize"}
+          onClick={() => void withWindow((win) => win.toggleMaximize())}
+        >
+          {maximized ? (
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.1">
+              <path d="M2.5 2.5V1.5h6v6h-1" />
+              <rect x="1.5" y="3.5" width="5" height="5" />
+            </svg>
+          ) : (
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.1">
+              <rect x="1.5" y="1.5" width="7" height="7" />
+            </svg>
+          )}
+        </button>
+        <button
+          type="button"
+          data-close
+          aria-label="Close"
+          title="Close"
+          onClick={() => void withWindow((win) => win.close())}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" strokeWidth="1.1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
 }

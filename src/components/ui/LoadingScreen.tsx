@@ -15,7 +15,7 @@ export function LoadingScreen({ label = "Loading Disband" }: { label?: string })
     <div
       role="status"
       aria-live="polite"
-      className="flex h-screen w-screen flex-col items-center justify-center bg-bg-tertiary"
+      className="relative flex h-full w-full flex-col items-center justify-center bg-bg-tertiary"
     >
       {/* Sized down from 64: at that size it dominated the screen on a
           short load, which made a fast start feel slower than it was. */}

@@ -7,7 +7,7 @@ export function PlatformBanScreen() {
   const { platformBan, signOut } = useApp();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-tertiary p-6">
+    <div className="flex min-h-full items-center justify-center bg-bg-tertiary p-6">
       <div className="w-full max-w-md rounded-xl border border-status-danger/40 bg-bg-secondary p-8 text-center shadow-2xl">
         <div className="mb-4 flex justify-center">
           <Logo adaptive size={48} />

@@ -300,17 +300,80 @@ html[data-desktop] ::selection {
   color: var(--brand-foreground, #fff);
 }
 
-/* The macOS overlay title bar: a slim, draggable strip reserved above the app
-   so the traffic lights never sit on top of the UI. Hidden everywhere else. */
+/* Height of the desktop title bar, shared by the bar itself and by the
+   full-height app screens so the app is never pushed past the window. It has
+   no effect on the web, where there is no title bar. */
+:root {
+  --desktop-titlebar-height: 30px;
+}
+
+/* Screens that fill the viewport — the loading, auth, MFA and ban screens. On
+   the web that is the whole viewport; inside the desktop shell it is the
+   viewport minus the title bar. */
+.app-screen {
+  min-height: 100vh;
+}
+html[data-desktop] .app-screen {
+  min-height: calc(100vh - var(--desktop-titlebar-height));
+}
+
+/* The window title bar. Browsers and the mobile shell never see it. On macOS it
+   is the draggable strip the native traffic lights float over; on Windows and
+   Linux the window is undecorated and this bar carries its own controls. */
 .desktop-titlebar {
   display: none;
 }
-html[data-desktop-os="macos"] .desktop-titlebar {
-  display: block;
-  flex: 0 0 28px;
-  height: 28px;
+html[data-desktop] .desktop-titlebar {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex: 0 0 var(--desktop-titlebar-height);
+  height: var(--desktop-titlebar-height);
   width: 100%;
   background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--divider);
+}
+html[data-desktop-os="macos"] .desktop-titlebar {
+  border-bottom-color: transparent;
+}
+.desktop-titlebar-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.desktop-titlebar-controls {
+  display: none;
+  margin-left: auto;
+  height: 100%;
+}
+html[data-desktop-os="windows"] .desktop-titlebar-controls,
+html[data-desktop-os="linux"] .desktop-titlebar-controls {
+  display: flex;
+}
+.desktop-titlebar-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  color: var(--text-muted);
+  background-color: transparent;
+  border: 0;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.desktop-titlebar-controls button:hover {
+  background-color: var(--interactive-hover);
+  color: var(--text-normal);
+}
+.desktop-titlebar-controls button[data-close]:hover {
+  background-color: #e81123;
+  color: #ffffff;
 }
 
 ::-webkit-scrollbar {
