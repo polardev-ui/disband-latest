@@ -11,6 +11,7 @@ import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
 import { UpdateToast } from "@/components/desktop/UpdateToast";
+import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { MaintenanceNotice } from "@/components/maintenance/MaintenanceNotice";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -82,6 +83,7 @@ export function DisbandRoot() {
           <MobileAppPromo />
           {}
           <div className="flex h-screen flex-col">
+            <DesktopShell />
             <MaintenanceNotice />
             <div className="min-h-0 flex-1">
               <AppShell />

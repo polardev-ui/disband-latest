@@ -483,7 +483,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
       {callPanel && <div className="shrink-0">{callPanel}</div>}
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
+      <div ref={scrollRef} data-selectable className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
         <div ref={contentRef}>
           {loading && messages.length === 0 ? (
             <MessageSkeleton />

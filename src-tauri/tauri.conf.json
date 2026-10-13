@@ -22,7 +22,11 @@
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "devtools": true
+        "devtools": true,
+        "zoomHotkeysEnabled": false,
+        "backgroundColor": "#0b0c0e",
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

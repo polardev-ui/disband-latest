@@ -117,6 +117,24 @@ export default function RootLayout({
       document.documentElement.setAttribute('data-motion', motion);
     }
   } catch (e) {}
+  try {
+    // Desktop (Tauri) detection, set before first paint so the shell never
+    // flashes a selectable, browser-shaped page before the app styles land.
+    var proto = window.location.protocol;
+    var tauri = ('__TAURI_INTERNALS__' in window) || ('__TAURI__' in window)
+      || proto === 'tauri:' || proto === 'asset:' || window.location.hostname === 'tauri.localhost';
+    if (tauri) {
+      var el = document.documentElement;
+      var ua = navigator.userAgent || '';
+      var plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+      el.setAttribute('data-desktop', 'true');
+      el.setAttribute('data-desktop-os',
+        (/mac|darwin/i.test(plat) || /Mac OS X/i.test(ua)) ? 'macos'
+        : (/win/i.test(plat) || /Windows/i.test(ua)) ? 'windows'
+        : (/linux/i.test(plat) || /Linux/i.test(ua)) ? 'linux'
+        : 'other');
+    }
+  } catch (e) {}
 })();
           `}
         </Script>
