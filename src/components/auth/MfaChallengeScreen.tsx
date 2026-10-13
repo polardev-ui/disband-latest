@@ -74,7 +74,7 @@ export function MfaChallengeScreen() {
 
   if (loadingFactors) {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg-tertiary text-text-muted">
+      <div className="flex app-screen items-center justify-center bg-bg-tertiary text-text-muted">
         Loading your security methods…
       </div>
     );
@@ -82,7 +82,7 @@ export function MfaChallengeScreen() {
 
   if (loadError) {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
+      <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
         <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 text-center shadow-xl">
           <h1 className="text-xl font-bold text-text-normal">Something went wrong</h1>
           <p className="mt-2 text-sm text-text-muted">{loadError}</p>
@@ -106,7 +106,7 @@ export function MfaChallengeScreen() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
+    <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
       <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-xl">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex justify-center">

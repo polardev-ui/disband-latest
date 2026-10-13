@@ -77,7 +77,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
   if (!configured) {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg-tertiary p-6">
+      <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
         <div className="max-w-md rounded-lg border border-divider bg-bg-secondary p-8 text-center">
           <h1 className="text-xl font-semibold text-text-normal">Disband</h1>
           <p className="mt-3 text-sm leading-relaxed text-text-muted">
@@ -207,7 +207,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
       className={
         overlay
           ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade px-6 py-12 backdrop-blur-sm"
-          : "relative flex min-h-screen items-center justify-center overflow-hidden bg-bg-tertiary px-6 py-12"
+          : "relative flex app-screen items-center justify-center overflow-hidden bg-bg-tertiary px-6 py-12"
       }
       onClick={overlay ? onClose : undefined}
     >

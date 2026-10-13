@@ -1361,7 +1361,7 @@ export function DiscordApp() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-bg-primary">
+    <div className="h-full w-full overflow-hidden bg-bg-primary">
       <div
         className="h-full w-full origin-top-left"
         style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
