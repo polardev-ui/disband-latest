@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { applyParticipantAudioControls } from "@/lib/call-participant-settings";
 import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import type { Profile } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
@@ -58,6 +59,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     audioRefs.current.forEach((el) => { el.muted = deafened; });
   }, [deafened]);
+
+  useEffect(() => {
+    const sync = () => {
+      audioRefs.current.forEach((el, uid) => applyParticipantAudioControls(el, uid));
+    };
+    window.addEventListener("disband:participant-controls", sync);
+    return () => window.removeEventListener("disband:participant-controls", sync);
+  }, []);
 
   useEffect(() => {
     setVoiceJoinedChannelId(voice.joined ? connectedChannelId : null);
@@ -122,6 +131,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       {[...voice.remoteStreams.entries()].map(([uid, stream]) => (
         <audio
           key={uid}
+          data-call-user={uid}
           ref={(el) => {
             if (!el) return;
             // Only attach on change: re-setting srcObject every render
@@ -130,6 +140,12 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             el.srcObject = stream;
             el.muted = deafened;
             audioRefs.current.set(uid, el);
+            // Per-listener per-user volume lives in local storage; apply
+            // it immediately so a muted/quieter remote does not get reset
+            // when the audio element is recreated.
+            import("@/lib/call-participant-settings").then((mod) => {
+              mod.applyParticipantAudioControls(el, uid);
+            });
             void el.play().catch(() => {});
           }}
           autoPlay

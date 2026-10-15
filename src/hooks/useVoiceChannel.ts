@@ -7,6 +7,7 @@ import {
   ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
+import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
 import { playCallConnected, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
@@ -14,6 +15,7 @@ import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { fetchIceServers } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
+import { isNoiseCancellationEnabled, getNoiseCancellationStrength } from "@/lib/audio-settings";
 
 interface SignalPayload {
   type: "offer" | "answer" | "ice" | "leave" | "screen";
@@ -294,6 +296,7 @@ export function useVoiceChannel(
     peersRef.current.clear();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    setActiveVoiceMixer(null);
     setRemoteStreams(new Map());
     setRemoteScreens(new Map());
     setRemoteScreenAudio(new Map());
@@ -326,8 +329,15 @@ export function useVoiceChannel(
     if (!channelId || !userId) return;
     setError(null);
     try {
-      const stream = await getDisbandUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
+      const raw = await getDisbandUserMedia({ audio: true, video: false });
+      const rawMic = raw.getAudioTracks()[0] ?? null;
+      const mixer = new VoiceMixer(rawMic, {
+        micMuted,
+        noiseCancellation: isNoiseCancellationEnabled(),
+        noiseStrength: getNoiseCancellationStrength(),
+      });
+      localStreamRef.current = new MediaStream([mixer.audioTrack]);
+      setActiveVoiceMixer(mixer);
 
       const supabase = getSupabaseClient();
       await supabase.from("voice_presence").upsert({

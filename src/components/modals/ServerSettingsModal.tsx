@@ -13,7 +13,7 @@ import {
 } from "@/lib/catalysts";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
-import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus, IconChevron, IconGripVertical } from "@/components/icons";
+import { IconClose, IconCopy, IconTrash, IconSettings, IconLink, IconShield, IconPalette, IconAlert, IconEmoji, IconHash, IconVideo, IconEdit, IconPlus, IconChevron, IconGripVertical, IconSpeaker } from "@/components/icons";
 import { RoleManager } from "@/components/modals/RoleManager";
 import { AuditLogPanel } from "@/components/modals/AuditLogPanel";
 import { RolePicker } from "@/components/ui/RolePicker";
@@ -22,6 +22,8 @@ import { safeImageUrl } from "@/lib/safe-url";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
 import { Avatar } from "@/components/ui/Avatar";
 import { useSubscription } from "@/hooks/useSubscription";
+import { fetchServerSounds, uploadServerSound, deleteServerSound } from "@/lib/server-sounds";
+import type { ServerSound } from "@/lib/supabase/types";
 
 interface ServerSettingsModalProps {
   open: boolean;
@@ -29,7 +31,7 @@ interface ServerSettingsModalProps {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
 }
 
-type Section = "overview" | "invite" | "channels" | "members" | "roles" | "bans" | "audit" | "emoji" | "appearance" | "danger";
+type Section = "overview" | "invite" | "channels" | "members" | "roles" | "bans" | "audit" | "emoji" | "soundboard" | "appearance" | "danger";
 
 const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: boolean; permission?: ServerPermissionKey }[] = [
   { id: "overview", label: "Overview", icon: IconSettings },
@@ -40,6 +42,7 @@ const NAV: { id: Section; label: string; icon: typeof IconSettings; ownerOnly?: 
   { id: "bans", label: "Bans", icon: IconAlert, permission: "ban" },
   { id: "audit", label: "Audit Log", icon: IconHash, permission: "view_audit_log" },
   { id: "emoji", label: "Emoji", icon: IconEmoji, ownerOnly: true },
+  { id: "soundboard", label: "Soundboard", icon: IconSpeaker, ownerOnly: true, permission: "manage_emojis" },
   { id: "appearance", label: "Appearance", icon: IconPalette, ownerOnly: true },
   { id: "danger", label: "Danger Zone", icon: IconAlert, ownerOnly: true },
 ];
@@ -85,6 +88,11 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     { id: number; name: string; url: string; uploader_id: string | null }[]
   >([]);
   const [emojiName, setEmojiName] = useState("");
+  const [serverSounds, setServerSounds] = useState<ServerSound[]>([]);
+  const [soundName, setSoundName] = useState("");
+  const [soundEmoji, setSoundEmoji] = useState("");
+  const [soundFile, setSoundFile] = useState<File | null>(null);
+  const [soundUploading, setSoundUploading] = useState(false);
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
   const [emojiUploading, setEmojiUploading] = useState(false);
   const { plan, entitlements } = useSubscription(user?.id);
@@ -109,6 +117,10 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
         .order("name")
         .then(({ data }) => setCustomEmoji(data ?? []));
     });
+  }, [activeServer, open]);
+  useEffect(() => {
+    if (!open || !activeServer) return;
+    fetchServerSounds(activeServer.id).then(setServerSounds);
   }, [activeServer, open]);
 
   // Topmost-only Escape + scroll lock via the shared overlay hook.
@@ -232,6 +244,41 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
     const supabase = (await import("@/lib/supabase/client")).getSupabaseClient();
     await supabase.from("custom_emoji").delete().eq("id", id);
     setCustomEmoji((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  async function handleSoundUpload() {
+    if (!soundFile || !soundName.trim() || !soundEmoji.trim() || !activeServer || !isOwner) return;
+    if (serverSounds.length >= 15) {
+      setError("This server can have at most 15 soundboard sounds.");
+      return;
+    }
+    setSoundUploading(true);
+    setError(null);
+    try {
+      const uploaded = await uploadServerSound({
+        file: soundFile,
+        name: soundName.trim(),
+        emoji: soundEmoji.trim(),
+        serverId: activeServer.id,
+        userId: user?.id ?? "",
+        currentCount: serverSounds.length,
+      });
+      if (!uploaded) {
+        setError("Sound upload failed or this sound is not allowed.");
+        return;
+      }
+      setServerSounds((prev) => [uploaded, ...prev]);
+      setSoundName("");
+      setSoundEmoji("");
+      setSoundFile(null);
+    } finally {
+      setSoundUploading(false);
+    }
+  }
+
+  async function handleDeleteSound(sound: ServerSound) {
+    await deleteServerSound(sound);
+    setServerSounds((prev) => prev.filter((item) => item.id !== sound.id));
   }
 
   async function handleCreateChannel() {
@@ -858,6 +905,77 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                 )}
                 {plan === "free" && (
                   <p className="text-sm text-text-muted">Upgrade to a paid plan to add custom emoji.</p>
+                )}
+              </div>
+            )}
+
+            {section === "soundboard" && isOwner && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold">Soundboard</h2>
+                <p className="text-sm text-text-muted">
+                  Upload up to 15 sounds. Every sound needs an emoji, and all members can use the board in voice channels.
+                </p>
+                <ul className="space-y-2">
+                  {serverSounds.map((sound) => (
+                    <li key={sound.id} className="flex items-center justify-between gap-3 rounded-lg border border-divider bg-bg-secondary p-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{sound.emoji}</span>
+                        <div>
+                          <p className="font-medium text-text-normal">{sound.name}</p>
+                          <audio controls preload="metadata" src={sound.url} className="mt-1 h-6 max-w-56" />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteSound(sound)}
+                        className="rounded px-2 py-1 text-xs text-status-dnd hover:bg-interactive-hover"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                  {serverSounds.length === 0 && <li className="text-sm text-text-muted">No sounds uploaded yet.</li>}
+                </ul>
+                {serverSounds.length < 15 && (
+                  <div className="flex flex-wrap items-end gap-3 rounded-lg border border-divider bg-bg-secondary p-4">
+                    <label className="min-w-44 flex-1">
+                      <span className="text-xs font-bold uppercase text-text-muted">Name (required)</span>
+                      <input
+                        value={soundName}
+                        onChange={(e) => setSoundName(e.target.value.slice(0, 32))}
+                        placeholder="airhorn"
+                        required
+                        className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                      />
+                    </label>
+                    <label className="w-24">
+                      <span className="text-xs font-bold uppercase text-text-muted">Emoji (required)</span>
+                      <input
+                        value={soundEmoji}
+                        onChange={(e) => setSoundEmoji(e.target.value.slice(0, 8))}
+                        placeholder="📣"
+                        required
+                        className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-center text-xl outline-none focus:ring-2 focus:ring-brand"
+                      />
+                    </label>
+                    <label className="max-w-60">
+                      <span className="text-xs font-bold uppercase text-text-muted">Audio file</span>
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={(e) => setSoundFile(e.target.files?.[0] ?? null)}
+                        className="mt-1 block w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-brand file:px-2 file:py-1 file:text-xs file:text-white"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void handleSoundUpload()}
+                      disabled={soundUploading || !soundName.trim() || !soundEmoji.trim() || !soundFile}
+                      className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                    >
+                      {soundUploading ? "Uploading..." : "Upload sound"}
+                    </button>
+                  </div>
                 )}
               </div>
             )}

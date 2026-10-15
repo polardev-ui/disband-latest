@@ -6,6 +6,7 @@ import { IconMaximize, IconMicOff, IconSpeaker, IconSpeakerOff } from "@/compone
 import type { Profile } from "@/lib/supabase/types";
 import { streamHasLiveVideo } from "@/lib/webrtc";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
+import { getParticipantControls, setParticipantControl, applyParticipantAudioControls, type ParticipantControls } from "@/lib/call-participant-settings";
 import { playScreenShareJingle } from "@/lib/ringtone";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { CallGrid } from "./CallTile";
@@ -195,6 +196,8 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(member.stream);
   const speaking = useSpeaking(member.ringing ? null : member.stream);
+  const [controls, setControls] = useState<ParticipantControls>(() => getParticipantControls(member.id));
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (ref.current && member.stream && hasVideo) {
@@ -203,35 +206,108 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
     }
   }, [member.stream, hasVideo]);
 
+  useEffect(() => {
+    const sync = () => setControls(getParticipantControls(member.id));
+    window.addEventListener("disband:participant-controls", sync);
+    return () => window.removeEventListener("disband:participant-controls", sync);
+  }, [member.id]);
+
+  function update<K extends keyof ParticipantControls>(key: K, value: ParticipantControls[K]) {
+    setParticipantControl(member.id, key, value);
+    const next = { ...controls, [key]: value } as ParticipantControls;
+    setControls(next);
+    if (key === "volume" || key === "micMuted") {
+      document
+        .querySelectorAll(`audio[data-call-user="${CSS.escape(member.id)}"]`)
+        .forEach((el) => applyParticipantAudioControls(el as HTMLAudioElement, member.id));
+    }
+  }
+
+  const cameraHidden = controls.cameraDisabled && member.id !== "self";
+  const showVideo = hasVideo && !cameraHidden;
+
   return (
-    <div
-      onClick={hasVideo ? onFocus : undefined}
-      className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media transition-shadow duration-150 ${
-        hasVideo && onFocus ? "cursor-pointer " : ""
-      }${
-        speaking ? "ring-[3px] ring-status-online" : "ring-1 ring-white/10"
-      }`}
-    >
-      {hasVideo && member.stream ? (
-        <video
-          ref={ref}
-          autoPlay
-          playsInline
-          // Audio plays through the call's own <audio> elements.
-          muted
-          className={`h-full w-full object-cover ${member.mirrored ? "scale-x-[-1]" : ""}`}
-        />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center">
-          <MemberAvatar member={member} speaking={false} />
+    <>
+      <div
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setMenu({ x: event.clientX, y: event.clientY });
+        }}
+        onClick={showVideo ? onFocus : undefined}
+        className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media transition-shadow duration-150 ${
+          showVideo && onFocus ? "cursor-pointer " : ""
+        }${
+          speaking ? "ring-[3px] ring-status-online" : "ring-1 ring-white/10"
+        }`}
+      >
+        {showVideo && member.stream ? (
+          <video
+            ref={ref}
+            autoPlay
+            playsInline
+            // Audio plays through the call's own <audio> elements.
+            muted
+            className={`h-full w-full object-cover ${member.mirrored ? "scale-x-[-1]" : ""}`}
+          />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center">
+            <MemberAvatar member={member} speaking={false} />
+          </span>
+        )}
+        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+          {member.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
+          <span className="truncate">{member.label}</span>
+          {member.ringing && <span className="shrink-0 text-[11px] text-white/50">Ringing…</span>}
         </span>
+      </div>
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-[135]" onClick={() => setMenu(null)} />
+          <div
+            className="fixed z-[140] min-w-60 rounded-xl border border-divider bg-bg-secondary p-3 shadow-2xl"
+            style={{ left: Math.min(menu.x, window.innerWidth - 260), top: Math.min(menu.y, window.innerHeight - 240) }}
+          >
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">Participant</div>
+            <label className="block rounded-lg bg-bg-tertiary p-2">
+              <span className="mb-1 block text-xs font-medium text-text-normal">How loud their mic is</span>
+              <input
+                type="range"
+                min={0}
+                max={200}
+                value={controls.volume}
+                onChange={(event) => update("volume", Number(event.target.value))}
+                className="w-full"
+              />
+            </label>
+            <div className="mt-2 space-y-1">
+              {[
+                { key: "micMuted" as const, label: "Mute their microphone" },
+                { key: "soundboardMuted" as const, label: "Mute their soundboard" },
+                { key: "cameraDisabled" as const, label: "Disable their camera (for you)" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => update(item.key, !controls[item.key])}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-sm text-text-normal hover:bg-bg-tertiary"
+                >
+                  <span>{item.label}</span>
+                  <span className={controls[item.key] ? "font-semibold text-status-dnd" : "text-text-muted"}>
+                    {controls[item.key] ? "On" : "Off"}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 border-t border-divider pt-2">
+              <p className="text-[11px] text-text-muted">
+                These settings are saved locally and remain even after leaving the call or closing the app.
+              </p>
+            </div>
+          </div>
+        </>
       )}
-      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
-        {member.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
-        <span className="truncate">{member.label}</span>
-        {member.ringing && <span className="shrink-0 text-[11px] text-white/50">Ringing…</span>}
-      </span>
-    </div>
+    </>
   );
 }
 

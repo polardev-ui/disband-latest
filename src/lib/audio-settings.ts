@@ -56,8 +56,15 @@ export async function applyAudioOutputToElement(
 
 export function buildAudioConstraints(): boolean | MediaTrackConstraints {
   const deviceId = getPreferredAudioInputId();
-  if (!deviceId) return true;
-  return { deviceId: { ideal: deviceId } };
+  const cancellation = isNoiseCancellationEnabled();
+  const constraints: MediaTrackConstraints = {
+    ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
+    echoCancellation: cancellation,
+    noiseSuppression: cancellation,
+    autoGainControl: cancellation,
+  };
+  if (!deviceId && !cancellation) return true;
+  return constraints;
 }
 
 export function buildVideoConstraints(plan?: string): boolean | MediaTrackConstraints {
@@ -77,3 +84,30 @@ function videoTierConstraints(plan?: string): MediaTrackConstraints {
     ? { width: { ideal: 2560 }, height: { ideal: 1440 }, frameRate: { ideal: 120 } }
     : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
 }
+
+export const NOISE_CANCELLATION_KEY = "disband:noise-cancellation-enabled";
+export const NOISE_CANCELLATION_STRENGTH_KEY = "disband:noise-cancellation-strength";
+
+export function isNoiseCancellationEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  const value = localStorage.getItem(NOISE_CANCELLATION_KEY);
+  return value === null ? true : value === "true";
+}
+
+export function setNoiseCancellationEnabled(enabled: boolean) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(NOISE_CANCELLATION_KEY, String(enabled));
+}
+
+export function getNoiseCancellationStrength(): number {
+  if (typeof window === "undefined") return 50;
+  const value = Number(localStorage.getItem(NOISE_CANCELLATION_STRENGTH_KEY));
+  if (Number.isNaN(value)) return 50;
+  return Math.min(100, Math.max(0, value));
+}
+
+export function setNoiseCancellationStrength(strength: number) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(NOISE_CANCELLATION_STRENGTH_KEY, String(Math.min(100, Math.max(0, strength))));
+}
+

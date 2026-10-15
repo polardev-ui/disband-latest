@@ -1478,7 +1478,7 @@ export function DiscordApp() {
       )}
 
       {call.remoteStream && (
-        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+        <audio ref={remoteAudioRef} data-call-user={callBannerPeer?.id ?? undefined} autoPlay playsInline className="hidden" />
       )}
 
       {call.callNotice && (

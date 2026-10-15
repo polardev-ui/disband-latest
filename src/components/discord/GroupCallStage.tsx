@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
+import { Soundboard } from "./Soundboard";
 import { CallStage } from "./CallStage";
 import {
   IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff,
@@ -204,11 +205,15 @@ export function GroupCallStage({
           </>
         )}
       </div>
+      <div className="px-4 pb-3">
+        <Soundboard compact />
+      </div>
 
       {}
       {[...remoteStreams.entries()].map(([uid, stream]) => (
         <audio
           key={uid}
+          data-call-user={uid}
           ref={(el) => {
             // Guard identity: the old version re-set srcObject and re-played
             // on every render, which restarts audible playback (stutter /
@@ -217,6 +222,9 @@ export function GroupCallStage({
               el.srcObject = stream;
               el.muted = deafened;
               void applyAudioOutputToElement(el, getPreferredAudioOutputId());
+              import("@/lib/call-participant-settings").then((m) =>
+                m.applyParticipantAudioControls(el, uid),
+              );
               void el.play().catch(() => {});
             }
           }}
