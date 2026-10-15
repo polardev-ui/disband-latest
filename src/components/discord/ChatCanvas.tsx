@@ -54,6 +54,8 @@ export interface ChatCanvasHandle {
   setReplyTo: (reply: ReplyPreview | null) => void;
   setEditing: (edit: { id: string; content: string } | null) => void;
   openReactionPicker: (messageId: string, x: number, y: number) => void;
+  jumpToMessage: (messageId: string) => void;
+  highlightMessage: (messageId: string | null) => void;
 }
 
 /** Shared empty list so reaction-less rows keep a stable reference. */
@@ -196,6 +198,7 @@ interface ChatCanvasProps {
   maxUploadBytes?: number;
 
   loading?: boolean;
+  highlightMessageId?: string | null;
 }
 
 export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function ChatCanvas(
@@ -233,6 +236,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     hasMore,
     maxUploadBytes,
     loading = false,
+    highlightMessageId = null,
   },
   ref,
 ) {
@@ -262,6 +266,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [replyTo, setReplyTo] = useState<ReplyPreview | null>(null);
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  useEffect(() => {
+    if (highlightMessageId) {
+      setHighlightId(highlightMessageId);
+      const t = setTimeout(() => setHighlightId(null), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [highlightMessageId]);
   const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
   const [composerFocus, setComposerFocus] = useState(0);
@@ -314,6 +325,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     setReplyTo,
     setEditing,
     openReactionPicker: (messageId, x, y) => setPicker({ messageId, x, y }),
+    jumpToMessage,
+    highlightMessage: (messageId) => setHighlightId(messageId),
   }));
 
   const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
