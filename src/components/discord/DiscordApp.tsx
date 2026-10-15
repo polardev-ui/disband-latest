@@ -73,6 +73,8 @@ import type { MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 import { ForwardModal, type ForwardDestination } from "./ForwardModal";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
+import { HeaderToolbar } from "./HeaderToolbar";
+import SearchPanel from "./SearchPanel";
 import { DmProfileRail } from "./DmProfileRail";
 import { CatalystModal } from "./CatalystModal";
 
@@ -107,6 +109,36 @@ export function DiscordApp() {
   const [forwardMessage, setForwardMessage] = useState<ChatMessageData | null>(null);
 
   const [showDmProfile, setShowDmProfile] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [membersVisible, setMembersVisible] = useState(true);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('disband:membersVisible');
+      if (v != null) setMembersVisible(v === '1');
+    } catch {}
+  }, []);
+  const persistMembersVisible = useCallback((v: boolean) => {
+    setMembersVisible(v);
+    try { localStorage.setItem('disband:membersVisible', v ? '1' : '0'); } catch {}
+  }, []);
+  const handleSearchJump = useCallback((messageId: string, containerId: string, sourceKind: string) => {
+    void (async () => {
+      if (sourceKind === "channel") {
+        if (app.activeChannelId !== containerId) void app.selectChannel(containerId);
+        await app.loadChannelContextWindow(messageId);
+        setTimeout(() => channelChatRef.current?.jumpToMessage(messageId), 200);
+      } else if (sourceKind === "dm") {
+        if (app.activeDmThreadId !== containerId) await app.selectDmThread(containerId);
+        await app.loadDmContextWindow(messageId);
+        setTimeout(() => dmChatRef.current?.jumpToMessage(messageId), 200);
+      } else if (sourceKind === "group") {
+        if (app.activeGroupChatId !== containerId) await app.selectGroupChat(containerId);
+        await app.loadGroupContextWindow(messageId);
+        setTimeout(() => groupChatRef.current?.jumpToMessage(messageId), 200);
+      }
+    })();
+  }, [app]);
+
 
   const [catalystServerId, setCatalystServerId] = useState<string | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
@@ -1656,29 +1688,23 @@ export function DiscordApp() {
             }
             headerTrailing={
               !dmCallActive ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowDmProfile((v) => !v)}
-                    title={showDmProfile ? "Hide profile panel" : "Show profile panel"}
-                    aria-pressed={showDmProfile}
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-interactive-hover ${
-                      showDmProfile ? "text-brand" : "text-text-muted hover:text-text-normal"
-                    }`}
-                  >
-                    <IconFriends size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPinnedOpen(true);
-                      if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
-                    }}
-                    title="Pinned messages"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
-                  >
-                    <IconPin size={18} />
-                  </button>
+	                <div className="flex items-center gap-1">
+	                  <HeaderToolbar
+	                    scopeKind="dm"
+	                    serverId={null}
+	                    containerId={app.activeDmThreadId}
+	                    pinnedOpen={pinnedOpen}
+	                    searchOpen={searchOpen}
+	                    onOpenSearch={() => setSearchOpen(true)}
+	                    onCloseSearch={() => setSearchOpen(false)}
+	                    onTogglePins={() => {
+	                      setPinnedOpen(true);
+	                      if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
+	                    }}
+	                    showMembersToggle
+	                    membersVisible={showDmProfile}
+	                    onToggleMembers={() => setShowDmProfile((v) => !v)}
+	                  />
                   <HeaderCallButton
                     disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
                     onClick={() => void startVoiceCall(dmFriend)}
@@ -1697,7 +1723,18 @@ export function DiscordApp() {
             onLoadMore={app.loadMoreDmMessages}
           />
           </div>
-          {showDmProfile && (
+          {searchOpen && (
+            <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+              <SearchPanel
+                scopeKind="dm"
+                serverId={null}
+                containerId={app.activeDmThreadId}
+                onJump={handleSearchJump}
+                onClose={() => setSearchOpen(false)}
+              />
+            </div>
+          )}
+          {!searchOpen && showDmProfile && (
             <div className="hidden min-h-0 shrink-0 lg:flex">
               <DmProfileRail
                 friend={dmFriend}
@@ -1771,18 +1808,23 @@ export function DiscordApp() {
                 typingScope={{ kind: "group", id: app.activeGroupChatId! }}
                 readCursorScope={{ kind: "group", id: app.activeGroupChatId! }}
                 headerTrailing={
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPinnedOpen(true);
-                        if (app.activeGroupChatId) void app.loadPinnedMessages("group", app.activeGroupChatId);
-                      }}
-                      title="Pinned messages"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
-                    >
-                      <IconPin size={18} />
-                    </button>
+	                  <div className="flex items-center gap-1">
+	                    <HeaderToolbar
+	                      scopeKind="group"
+	                      serverId={null}
+	                      containerId={app.activeGroupChatId}
+	                      pinnedOpen={pinnedOpen}
+	                      searchOpen={searchOpen}
+	                      onOpenSearch={() => setSearchOpen(true)}
+	                      onCloseSearch={() => setSearchOpen(false)}
+	                      onTogglePins={() => {
+	                        setPinnedOpen(true);
+	                        if (app.activeGroupChatId) void app.loadPinnedMessages("group", app.activeGroupChatId);
+	                      }}
+	                      showMembersToggle
+                          membersVisible={membersVisible}
+                          onToggleMembers={() => persistMembersVisible(!membersVisible)}
+	                    />
                     <HeaderCallButton
                       disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
                       onClick={startGroupVoiceCall}
@@ -1800,16 +1842,28 @@ export function DiscordApp() {
               />
             )}
           </div>
-          <div className="hidden min-h-0 w-60 shrink-0 flex-col bg-bg-secondary lg:flex">
-            <GroupMemberList
-              members={activeGroup.members}
-              ownerId={activeGroup.owner_id}
-              inCallUserIds={groupCall.inCallUserIds}
-              currentUserId={app.user?.id}
-              onMemberClick={(p) => openProfile(p)}
-              onMemberContext={handleGroupMemberContext}
-            />
-          </div>
+          {searchOpen ? (
+            <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+              <SearchPanel
+                scopeKind="group"
+                serverId={null}
+                containerId={app.activeGroupChatId}
+                onJump={handleSearchJump}
+                onClose={() => setSearchOpen(false)}
+              />
+            </div>
+          ) : (membersVisible ? (
+            <div className="hidden min-h-0 w-60 shrink-0 flex-col bg-bg-secondary lg:flex">
+              <GroupMemberList
+                members={activeGroup.members}
+                ownerId={activeGroup.owner_id}
+                inCallUserIds={groupCall.inCallUserIds}
+                currentUserId={app.user?.id}
+                onMemberClick={(p) => openProfile(p)}
+                onMemberContext={handleGroupMemberContext}
+              />
+            </div>
+          ) : null)}
         </>
       )}
 
@@ -1911,6 +1965,24 @@ export function DiscordApp() {
           onForward={(m) => setForwardMessage(m)}
           onAuthorClick={handleAuthorClick}
           onAuthorContextMenu={handleAuthorContext}
+          headerTrailing={
+            <HeaderToolbar
+              scopeKind="server"
+              serverId={activeChannel.server_id}
+              containerId={null}
+              pinnedOpen={pinnedOpen}
+              searchOpen={searchOpen}
+              onOpenSearch={() => setSearchOpen(true)}
+              onCloseSearch={() => setSearchOpen(false)}
+              onTogglePins={() => {
+                setPinnedOpen(true);
+                if (app.activeChannelId) void app.loadPinnedMessages("channel", app.activeChannelId);
+              }}
+              showMembersToggle
+              membersVisible={membersVisible}
+              onToggleMembers={() => persistMembersVisible(!membersVisible)}
+            />
+          }
           hasMore={app.channelHasMore}
           onLoadMore={app.loadMoreChannelMessages}
         />
@@ -1924,7 +1996,19 @@ export function DiscordApp() {
         </div>
       )}
 
-      {app.viewMode === "space" && !isMobile && (
+      {app.viewMode === "space" && !isMobile && searchOpen && (
+        <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+          <SearchPanel
+            scopeKind="server"
+            serverId={app.activeServerId}
+            containerId={null}
+            onJump={handleSearchJump}
+            onClose={() => setSearchOpen(false)}
+          />
+        </div>
+      )}
+
+      {app.viewMode === "space" && !isMobile && !searchOpen && membersVisible && (
         <MemberList
           members={app.members}
           roles={app.serverRoles}
@@ -2138,11 +2222,29 @@ export function DiscordApp() {
       />
       <PinnedMessagesPanel
         open={pinnedOpen}
-        threadName={dmFriend ? displayName(dmFriend) : ""}
-        pins={app.activeDmThreadId ? app.pinnedBySource[`dm:${app.activeDmThreadId}`] ?? [] : []}
+        threadName={
+          app.viewMode === "group" && app.activeGroupChatId
+            ? (app.groupChats.find((g) => g.id === app.activeGroupChatId)?.name ?? "Group")
+            : app.viewMode === "space" && app.activeChannelId
+              ? (app.channels.find((c) => c.id === app.activeChannelId)?.name ?? "Channel")
+              : dmFriend
+                ? displayName(dmFriend)
+                : ""
+        }
+        pins={
+          app.viewMode === "group" && app.activeGroupChatId
+            ? app.pinnedBySource[`group:${app.activeGroupChatId}`] ?? []
+            : app.viewMode === "space" && app.activeChannelId
+              ? app.pinnedBySource[`channel:${app.activeChannelId}`] ?? []
+              : app.activeDmThreadId
+                ? app.pinnedBySource[`dm:${app.activeDmThreadId}`] ?? []
+                : []
+        }
         onClose={() => setPinnedOpen(false)}
         onUnpin={(messageId) => {
-          if (app.activeDmThreadId) void app.unpinMessage("dm", app.activeDmThreadId, messageId);
+          if (app.viewMode === "group" && app.activeGroupChatId) void app.unpinMessage("group", app.activeGroupChatId, messageId);
+          else if (app.viewMode === "space" && app.activeChannelId) void app.unpinMessage("channel", app.activeChannelId, messageId);
+          else if (app.activeDmThreadId) void app.unpinMessage("dm", app.activeDmThreadId, messageId);
         }}
       />
         </div>

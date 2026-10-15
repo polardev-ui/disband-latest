@@ -22,6 +22,7 @@ import {
   Phone,
   PhoneOff,
   Bell,
+  BellOff,
   AtSign,
   Megaphone,
   Reply,
@@ -109,6 +110,7 @@ export const IconLeave = icon(LogOut);
 export const IconPhone = icon(Phone);
 export const IconPhoneOff = icon(PhoneOff);
 export const IconBell = icon(Bell);
+export const IconBellOff = icon(BellOff);
 export const IconAt = icon(AtSign);
 export const IconMegaphone = icon(Megaphone);
 export const IconReply = icon(Reply);
