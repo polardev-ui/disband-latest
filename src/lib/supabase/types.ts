@@ -367,6 +367,13 @@ export interface ServerSound {
   created_at: string;
 }
 
+export interface FavoriteServerSound {
+  id: string;
+  user_id: string;
+  sound_id: string;
+  created_at: string;
+}
+
 export type ViewMode = "home" | "space" | "dm" | "group" | "notes" | "discover";
 
 export interface Database {
@@ -603,6 +610,12 @@ export interface Database {
         Row: ServerSound;
         Insert: { server_id: string; name: string; emoji: string; url: string; uploader_id?: string | null };
         Update: { name?: string; emoji?: string };
+        Relationships: [];
+      };
+      favorite_server_sounds: {
+        Row: FavoriteServerSound;
+        Insert: { user_id: string; sound_id: string };
+        Delete: { sound_id: string };
         Relationships: [];
       };
     };
