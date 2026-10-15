@@ -1,5 +1,6 @@
 "use client";
 
+import { Soundboard } from "./Soundboard";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import {
@@ -9,7 +10,6 @@ import {
   IconHeadphonesOff,
   IconPhoneOff,
   IconPhone,
-  IconSettings,
   IconVideo,
   IconVideoOff,
   IconScreenShare,
@@ -36,7 +36,7 @@ interface CallControlsProps {
 export function CallControls({
   micMuted, deafened, cameraEnabled, screenShareEnabled,
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
-  onEnd, onOpenSettings,
+  onEnd,
 }: CallControlsProps) {
   const items = [
     { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff },
@@ -46,7 +46,6 @@ export function CallControls({
     ...(onToggleCamera ? [{ onClick: onToggleCamera, title: cameraEnabled ? "Stop video" : "Start video", active: !!cameraEnabled, on: IconVideo, off: IconVideoOff }] : []),
     ...(onToggleScreenShare ? [{ onClick: onToggleScreenShare, title: screenShareEnabled ? "Stop sharing" : "Share screen", active: !!screenShareEnabled, on: IconScreenShare, off: IconScreenShareOff }] : []),
     { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, danger: true },
-    ...(onOpenSettings ? [{ onClick: onOpenSettings, title: "Settings", active: false, on: IconSettings, off: IconSettings }] : []),
   ];
 
   return (
@@ -76,6 +75,7 @@ export function CallControls({
           </button>
         );
       })}
+      <Soundboard compact />
     </div>
   );
 }
