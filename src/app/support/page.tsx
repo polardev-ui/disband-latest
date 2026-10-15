@@ -219,6 +219,7 @@ function Thread({ ticketId, subject, initialDraft = "", initialError, onBack }: 
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const [resolved, setResolved] = useState(false);
   const sendingRef = useRef(false);
   const mounted = useRef(false);
 
@@ -226,6 +227,8 @@ function Thread({ ticketId, subject, initialDraft = "", initialError, onBack }: 
     try {
       const json = await authedFetch(`/api/support/tickets/${ticketId}/messages`);
       if (!mounted.current) return;
+      const latestTicket = (json.ticket as { status?: string } | undefined) ?? null;
+      setResolved(latestTicket?.status === "closed");
       setMessages((json.messages as SupportMessage[]) ?? []);
     } catch (e) {
       if (mounted.current) setError(e instanceof Error ? e.message : "Could not load messages.");
@@ -242,7 +245,7 @@ function Thread({ ticketId, subject, initialDraft = "", initialError, onBack }: 
 
   async function send() {
     const text = draft.trim();
-    if (!text || sendingRef.current) return;
+    if (!text || sendingRef.current || resolved) return;
     sendingRef.current = true;
     setSending(true);
     setError(null);
@@ -275,7 +278,7 @@ function Thread({ ticketId, subject, initialDraft = "", initialError, onBack }: 
 
   return <SupportConversation subject={subject} messages={messages} draft={draft}
     sending={sending} loading={loading} error={error} onDraftChange={setDraft}
-    onSend={() => void send()} onRetry={() => { setError(null); void load(); }} onBack={onBack} />;
+    onSend={() => void send()} onRetry={() => { setError(null); void load(); }} onBack={onBack} readOnly={resolved} />;
 }
 
 function HeroChat({
@@ -556,37 +559,73 @@ function SupportHome() {
         </div>
       </section>
 
-      {/* Past requests */}
+      {/* Your requests */}
       {ready && session && tickets.length > 0 && !active && (
-        <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
-          <h2 className="px-1 text-[15px] font-bold text-text-muted">Your requests</h2>
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-            {tickets.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => { setOpeningDraft(""); setActive(t); }}
-                className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-bold text-text-normal">
-                    {t.subject}
-                  </span>
-                  <span className="block text-[12px] text-text-muted">
-                    {new Date(t.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                </span>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                    t.status === "open" ? "bg-brand/15 text-brand" : "bg-bg-tertiary text-text-muted"
-                  }`}
-                >
-                  {t.status}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+        <>
+          {tickets.some((t) => t.status !== "closed") && (
+            <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+              <h2 className="px-1 text-[15px] font-bold text-text-muted">Your requests</h2>
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {tickets.filter((t) => t.status !== "closed").map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => { setOpeningDraft(""); setActive(t); }}
+                    className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-bold text-text-normal">
+                        {t.subject}
+                      </span>
+                      <span className="block text-[12px] text-text-muted">
+                        {new Date(t.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        t.status === "open"
+                          ? "bg-brand/15 text-brand"
+                          : t.status === "human_reply"
+                            ? "bg-brand/15 text-brand"
+                            : "bg-amber-400/15 text-amber-300"
+                      }`}
+                    >
+                      {t.status === "human_reply" ? "human reply" : t.status}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {tickets.some((t) => t.status === "closed") && (
+            <section className="mx-auto w-full max-w-5xl px-4 pb-8 sm:px-6">
+              <h2 className="px-1 text-[15px] font-bold text-text-muted">Resolved</h2>
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {tickets.filter((t) => t.status === "closed").map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => { setOpeningDraft(""); setActive(t); }}
+                    className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary/60 px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-bold text-text-normal">
+                        {t.subject}
+                      </span>
+                      <span className="block text-[12px] text-text-muted">
+                        {new Date(t.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-status-online/15 px-2.5 py-1 text-[11px] font-bold text-status-online">
+                      resolved
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {/* FAQ */}
