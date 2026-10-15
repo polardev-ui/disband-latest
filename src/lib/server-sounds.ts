@@ -86,3 +86,35 @@ export async function deleteServerSound(sound: ServerSound) {
   const supabase = getSupabaseClient();
   await supabase.from("server_sounds").delete().eq("id", sound.id);
 }
+
+export async function fetchFavoriteSoundIds(userId: string): Promise<Set<string>> {
+  if (!userId) return new Set();
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("favorite_server_sounds")
+    .select("sound_id")
+    .eq("user_id", userId);
+  if (error || !data) return new Set();
+  return new Set(data.map((row) => row.sound_id));
+}
+
+export async function setFavoriteSound(
+  userId: string,
+  soundId: string,
+  favorite: boolean,
+): Promise<boolean> {
+  if (!userId || !soundId) return false;
+  const supabase = getSupabaseClient();
+  if (favorite) {
+    const { error } = await supabase
+      .from("favorite_server_sounds")
+      .upsert({ user_id: userId, sound_id: soundId }, { onConflict: "user_id,sound_id" });
+    return !error;
+  }
+  const { error } = await supabase
+    .from("favorite_server_sounds")
+    .delete()
+    .eq("user_id", userId)
+    .eq("sound_id", soundId);
+  return !error;
+}
