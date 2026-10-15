@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { isPasswordResetLink } from "@/lib/recover-session-from-url";
-import { MarketingHomePage } from "@/components/marketing/MarketingHomePage";
+import { MarketingHomeRedesign as MarketingHomePage } from "@/components/marketing/MarketingHomeRedesign";
 
 export function MarketingHomeGate() {
   const router = useRouter();
