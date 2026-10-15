@@ -1,33 +1,52 @@
 {
   "version": "5",
   "redirects": {
-    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.116.0"
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.116.0",
+    "https://esm.sh/iceberg-js@^0.8.1?target=denonext": "https://esm.sh/iceberg-js@0.8.1?target=denonext"
   },
   "remote": {
-    "https://esm.sh/@supabase/supabase-js@2.116.0": "a38014743786a06c7dbf095a99e9ef3b38c0ec16bff076fc7cd403991192b34e"
+    "https://esm.sh/@supabase/auth-js@2.116.0/denonext/auth-js.mjs": "c499313c350b5bc7c66f5a529a44bb98b16bcb4f5e42dcfbc0d71b3387c2f8db",
+    "https://esm.sh/@supabase/functions-js@2.116.0/denonext/functions-js.mjs": "b4563dfbefd52b36879757f8aee5adbeb8e57001672affcf09aea692842325c2",
+    "https://esm.sh/@supabase/phoenix@0.4.5/denonext/phoenix.mjs": "40bd2a70829cd847848baac58e635bacd83fd62188f6624b44e2c295341004eb",
+    "https://esm.sh/@supabase/postgrest-js@2.116.0/denonext/postgrest-js.mjs": "8bcbe926ba450fe3b584f659a84cd62b43298b8ab7113b4f68389cb8630e876f",
+    "https://esm.sh/@supabase/realtime-js@2.116.0/denonext/realtime-js.mjs": "c2aaa735183dcb94c62b43dfcb0c9e30ea1fd4c02ff16d77352a268ef5b3b897",
+    "https://esm.sh/@supabase/storage-js@2.116.0/denonext/storage-js.mjs": "9f9f67c3c6087ab28280eb378525665043658b157102d272026f294447bac8c0",
+    "https://esm.sh/@supabase/supabase-js@2.116.0": "a38014743786a06c7dbf095a99e9ef3b38c0ec16bff076fc7cd403991192b34e",
+    "https://esm.sh/@supabase/supabase-js@2.116.0/denonext/dist/tracingRegistry.mjs": "0e1396a312a355c347c21e408cdf70f0dbf24fa0f1cd0211898bbdb8b97d4b31",
+    "https://esm.sh/@supabase/supabase-js@2.116.0/denonext/supabase-js.mjs": "8ff7741567ff920877cbc944d0bfed51135fcc0597fdddbfd57033e3a2390ebe",
+    "https://esm.sh/iceberg-js@0.8.1/denonext/iceberg-js.mjs": "d839d81a2e3966500ca2cdd0c1cb458e9608bacfc91f7bb67a69b2e878dcdb4f",
+    "https://esm.sh/iceberg-js@0.8.1?target=denonext": "58c849d7fe2bf4eca4a84eb501e83c161a7d8c34ca1bec15a962b3bec3062633",
+    "https://esm.sh/tslib@2.8.1/denonext/tslib.mjs": "c38da5dd6da6281964435002ce204cd586634fe3bdfb24a0ee116f48cf3292e9"
   },
   "workspace": {
     "packageJson": {
       "dependencies": [
         "npm:@electric-sql/pglite@~0.5.8",
+        "npm:@lottiefiles/dotlottie-react@~0.19.16",
         "npm:@opennextjs/cloudflare@^1.20.6",
         "npm:@stripe/react-stripe-js@^6.6.0",
         "npm:@stripe/stripe-js@^9.8.0",
         "npm:@supabase/ssr@0.12",
         "npm:@supabase/supabase-js@^2.108.2",
         "npm:@tailwindcss/postcss@^4.3.1",
-        "npm:@tauri-apps/api@^2.11.1",
-        "npm:@tauri-apps/cli@^2.11.3",
-        "npm:@tauri-apps/plugin-notification@2.4",
+        "npm:@tauri-apps/api@2.12",
+        "npm:@tauri-apps/cli@2.12",
+        "npm:@tauri-apps/plugin-notification@2.5",
+        "npm:@tauri-apps/plugin-process@^2.4.0",
+        "npm:@tauri-apps/plugin-updater@^2.13.0",
         "npm:@twemoji/api@^17.0.3",
         "npm:@types/node@26",
         "npm:@types/react-dom@^19.2.3",
         "npm:@types/react@^19.2.17",
         "npm:emojibase-data@17",
+        "npm:gifenc@^1.0.3",
         "npm:lucide-react@^1.21.0",
-        "npm:next@^16.3.4",
+        "npm:mediabunny@^1.60.0",
+        "npm:next@^16.3.8",
+        "npm:prism-react-renderer@^2.4.1",
         "npm:react-dom@^19.2.7",
         "npm:react@^19.2.7",
+        "npm:server-only@^0.0.1",
         "npm:stripe@^22.3.0",
         "npm:tailwindcss@^4.3.1",
         "npm:tauri-plugin-macos-permissions-api@2.3.0",

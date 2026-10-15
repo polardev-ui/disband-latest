@@ -25,6 +25,12 @@ import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profi
 import { messageCharLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
 import { mapAuthError, TURNSTILE_REQUIRED, type SignUpResult } from "@/lib/authErrors";
+import {
+  normalizeAccountNumber,
+  type AnonAuthResult,
+  type AnonSessionPayload,
+  type AnonTier,
+} from "@/lib/anon-accounts";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
@@ -143,6 +149,8 @@ interface AppContextValue {
   signUp: (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null) => Promise<SignUpResult>;
   requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
+  requestAccountDeletion: () => Promise<{ ok?: boolean; error?: string; instant?: boolean; cancel_until?: string; purge_at?: string }>;
+  cancelAccountDeletion: () => Promise<{ ok?: boolean; error?: string }>;
   mfaRequired: boolean;
   refreshMfaStatus: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -151,6 +159,11 @@ interface AppContextValue {
   savedSessions: SavedSession[];
   switchAccount: (account: SavedSession) => Promise<string | null>;
   removeSavedAccount: (userId: string) => void;
+  registerAnonymousAccount: (tier: AnonTier, turnstileToken?: string | null) => Promise<AnonAuthResult>;
+  adoptAnonymousSession: (session: AnonSessionPayload) => Promise<string | null>;
+  loginAnonymousAccount: (accountNumber: string, turnstileToken?: string | null) => Promise<AnonAuthResult>;
+  exportAnonymousData: (accountNumber: string, turnstileToken?: string | null) => Promise<AnonAuthResult>;
+  purgeAnonymousAccount: (accountNumber: string, turnstileToken?: string | null) => Promise<AnonAuthResult>;
 
   addingAccount: boolean;
   beginAddAccount: () => void;
@@ -2622,6 +2635,182 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { error: null, needsEmailConfirmation: true };
   }, [rememberSession]);
 
+  // --- Anonymous (throwaway) accounts --------------------------------------
+  // The 16-digit number is the credential. Registration and login both return
+  // a server-minted session, which we install with setSession so the normal
+  // auth-state effect loads the profile/servers/etc. exactly like a password
+  // sign-in.
+  const registerAnonymousAccount = useCallback(
+    async (tier: AnonTier, turnstileToken?: string | null): Promise<AnonAuthResult> => {
+      try {
+        const res = await apiFetch("/api/auth/anon/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tier, ...(turnstileToken ? { turnstileToken } : {}) }),
+        });
+        const json = (await res.json().catch(() => null)) as AnonAuthResult | null;
+        if (!res.ok) {
+          if (json?.code === TURNSTILE_REQUIRED) return { code: TURNSTILE_REQUIRED, error: json.error };
+          return { error: json?.error ?? "Could not create the account. Try again." };
+        }
+        // Deliberately NOT signing in here: the caller has to show the account
+        // number once, and setting the session would swap the whole app shell
+        // in and unmount the reveal. The session rides along in the result and
+        // is installed by adoptAnonymousSession once the user confirms.
+        return json ?? { error: "Could not create the account. Try again." };
+      } catch {
+        return { error: "We couldn't reach Disband. Check your connection and try again." };
+      }
+    },
+    [],
+  );
+
+  const adoptAnonymousSession = useCallback(
+    async (payload: AnonSessionPayload): Promise<string | null> => {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.auth.setSession(payload);
+      if (error || !data.session) return "Sign-in failed. Try again.";
+      rememberSession(data.session);
+      await refreshMfaStatus();
+      return null;
+    },
+    [refreshMfaStatus, rememberSession],
+  );
+
+  const loginAnonymousAccount = useCallback(
+    async (accountNumber: string, turnstileToken?: string | null): Promise<AnonAuthResult> => {
+      try {
+        const res = await apiFetch("/api/auth/anon/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: normalizeAccountNumber(accountNumber),
+            ...(turnstileToken ? { turnstileToken } : {}),
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as AnonAuthResult | null;
+        if (!res.ok) {
+          if (json?.code === TURNSTILE_REQUIRED) return { code: TURNSTILE_REQUIRED, error: json.error };
+          return { error: json?.error ?? "Could not sign in. Try again." };
+        }
+        if (json?.status === "expired") return json;
+        if (json?.session) {
+          const { error } = await getSupabaseClient().auth.setSession(json.session);
+          if (error) return { error: "Sign-in failed. Try again." };
+          return { ok: true };
+        }
+        return { error: "Could not sign in. Try again." };
+      } catch {
+        return { error: "We couldn't reach Disband. Check your connection and try again." };
+      }
+    },
+    [],
+  );
+
+  const exportAnonymousData = useCallback(
+    async (accountNumber: string, turnstileToken?: string | null): Promise<AnonAuthResult> => {
+      try {
+        const res = await apiFetch("/api/auth/anon/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: normalizeAccountNumber(accountNumber),
+            ...(turnstileToken ? { turnstileToken } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const json = (await res.json().catch(() => null)) as AnonAuthResult | null;
+          if (json?.code === TURNSTILE_REQUIRED) return { code: TURNSTILE_REQUIRED, error: json.error };
+          return { error: json?.error ?? "Could not prepare your download. Try again." };
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `disband-anonymous-export-${normalizeAccountNumber(accountNumber).slice(-4)}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        return { ok: true };
+      } catch {
+        return { error: "We couldn't reach Disband. Check your connection and try again." };
+      }
+    },
+    [],
+  );
+
+  const purgeAnonymousAccount = useCallback(
+    async (accountNumber: string, turnstileToken?: string | null): Promise<AnonAuthResult> => {
+      try {
+        const res = await apiFetch("/api/auth/anon/purge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: normalizeAccountNumber(accountNumber),
+            ...(turnstileToken ? { turnstileToken } : {}),
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as AnonAuthResult | null;
+        if (!res.ok) {
+          if (json?.code === TURNSTILE_REQUIRED) return { code: TURNSTILE_REQUIRED, error: json.error };
+          return { error: json?.error ?? "Could not purge the account. Try again." };
+        }
+        return { ok: true, purged: true };
+      } catch {
+        return { error: "We couldn't reach Disband. Check your connection and try again." };
+      }
+    },
+    [],
+  );
+
+  const requestAccountDeletion = useCallback(async (): Promise<{ ok?: boolean; error?: string; instant?: boolean; cancel_until?: string; purge_at?: string }> => {
+    try {
+      const res = await apiFetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!res.ok) return { error: (json?.error as string) ?? "Could not start deletion. Try again." };
+      return { ok: true, instant: json?.instant as boolean, cancel_until: json?.cancel_until as string, purge_at: json?.purge_at as string };
+    } catch {
+      return { error: "We couldn't reach Disband. Check your connection and try again." };
+    }
+  }, []);
+
+  const cancelAccountDeletion = useCallback(async (): Promise<{ ok?: boolean; error?: string }> => {
+    try {
+      const res = await apiFetch("/api/account/cancel-deletion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!res.ok) return { error: (json?.error as string) ?? "Could not cancel deletion." };
+      return { ok: true };
+    } catch {
+      return { error: "We couldn't reach Disband. Check your connection and try again." };
+    }
+  }, []);
+
+  // Auto-cancel a pending deletion if the owner logs back in within the
+  // 24-hour window (see migration 0126).
+  const cancelDeletionInFlight = useRef(false);
+  useEffect(() => {
+    const profileAny = profile as {
+      deletion_requested_at?: string | null;
+      deletion_cancel_until?: string | null;
+    } | null;
+    if (!profileAny?.deletion_requested_at || !profileAny?.deletion_cancel_until) return;
+    if (cancelDeletionInFlight.current) return;
+    if (Date.parse(profileAny.deletion_cancel_until) <= Date.now()) return;
+    cancelDeletionInFlight.current = true;
+    void cancelAccountDeletion().finally(() => {
+      cancelDeletionInFlight.current = false;
+    });
+  }, [profile]);
+
   const requestPasswordReset = useCallback(async (email: string) => {
     const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: getAuthRedirectUrl("/reset-password"),
@@ -4605,6 +4794,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     savedSessions,
     switchAccount,
     removeSavedAccount,
+    registerAnonymousAccount,
+    adoptAnonymousSession,
+    loginAnonymousAccount,
+    exportAnonymousData,
+    purgeAnonymousAccount,
+    requestAccountDeletion,
+    cancelAccountDeletion,
     addingAccount,
     beginAddAccount,
     cancelAddAccount,

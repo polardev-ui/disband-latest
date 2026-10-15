@@ -2,10 +2,11 @@
 import fs from "node:fs";
 import { chromium } from "playwright";
 import { serve } from "./serve.mjs";
+const [vw, vh] = (process.env.VIEWPORT ?? "1920x1080").split("x").map(Number);
 const times = process.argv.slice(2).map(Number);
 const { server, origin } = await serve();
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+const page = await browser.newPage({ viewport: { width: vw, height: vh } });
 page.on("console", (m) => console.log("console:", m.text()));
 page.on("pageerror", (e) => console.log("pageerror:", e.message));
 await page.goto(`${origin}/${process.env.STAGE ?? "src/stage.html"}`);

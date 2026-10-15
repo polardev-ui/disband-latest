@@ -118,6 +118,10 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   async function claim() {
     if (claiming) return;
+    if (app?.profile?.account_type === "anonymous") {
+      setError("Anonymous accounts can't claim gifts.");
+      return;
+    }
     setClaiming(true);
     setError(null);
     try {

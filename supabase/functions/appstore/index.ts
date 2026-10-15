@@ -38,10 +38,13 @@
 //   APPSTORE_ISSUER_ID     Issuer id (Users and Access → Integrations → Keys)
 //   APPSTORE_PRIVATE_KEY   Contents of the .p8, BEGIN/END lines included
 //   APPSTORE_BUNDLE_ID     com.wsgpolar.disband
-//   APPSTORE_ENVIRONMENT   "Production" (default) or "Sandbox"
+//   APPSTORE_ENVIRONMENT   Ledger fallback only; Apple determines API routing
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createClient,
+  SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2";
 
 const enc = new TextEncoder();
 
@@ -100,7 +103,9 @@ async function appStoreJwt(): Promise<string> {
   const issuerId = Deno.env.get("APPSTORE_ISSUER_ID")!;
   const bundleId = Deno.env.get("APPSTORE_BUNDLE_ID")!;
 
-  const header = b64url(JSON.stringify({ alg: "ES256", kid: keyId, typ: "JWT" }));
+  const header = b64url(
+    JSON.stringify({ alg: "ES256", kid: keyId, typ: "JWT" }),
+  );
   const claims = b64url(JSON.stringify({
     iss: issuerId,
     iat: now,
@@ -127,16 +132,19 @@ async function appStoreJwt(): Promise<string> {
   return token;
 }
 
-function apiBases(): string[] {
+function apiBases(environment?: string): string[] {
   // Apple's documented order: production first, sandbox on miss. Sandbox
   // transaction ids do not exist on the production endpoint, so without the
   // fallback every App Review (sandbox) purchase fails lookup — which is
   // exactly the 2.1(b) rejection. A single APPSTORE_ENVIRONMENT switch
   // would just move the breakage to the other environment.
-  return [
-    "https://api.storekit.itunes.apple.com",
-    "https://api.storekit-sandbox.itunes.apple.com",
-  ];
+  const production = "https://api.storekit.itunes.apple.com";
+  const sandbox = "https://api.storekit-sandbox.itunes.apple.com";
+  // Once Apple has identified the environment, subscription status must be
+  // read from that same environment, regardless of the deployment setting.
+  if (environment === "Sandbox") return [sandbox];
+  if (environment === "Production") return [production];
+  return [production, sandbox];
 }
 
 /** What Apple's signed transaction payload gives us, once decoded. */
@@ -163,7 +171,9 @@ interface AppleTransaction {
  * payload without re-verifying the inner signature adds no trust we did not
  * already have.
  */
-async function fetchTransaction(transactionId: string): Promise<AppleTransaction | null> {
+async function fetchTransaction(
+  transactionId: string,
+): Promise<AppleTransaction | null> {
   const jwt = await appStoreJwt();
   for (const base of apiBases()) {
     const res = await fetch(
@@ -175,7 +185,10 @@ async function fetchTransaction(transactionId: string): Promise<AppleTransaction
     if (!body.signedTransactionInfo) continue;
     return decodeJwsPayload<AppleTransaction>(body.signedTransactionInfo);
   }
-  console.log("App Store transaction lookup failed on both endpoints", transactionId);
+  console.log(
+    "App Store transaction lookup failed on both endpoints",
+    transactionId,
+  );
   return null;
 }
 
@@ -194,40 +207,47 @@ interface SubscriptionStatus {
  */
 async function fetchSubscriptionStatus(
   originalTransactionId: string,
+  environment?: string,
 ): Promise<SubscriptionStatus | null> {
   const jwt = await appStoreJwt();
-  const res = await fetch(
-    `${apiBase()}/inApps/v1/subscriptions/${encodeURIComponent(originalTransactionId)}`,
-    { headers: { authorization: `Bearer ${jwt}` } },
-  );
-  if (!res.ok) {
-    console.log("App Store status lookup failed", res.status, await res.text());
-    return null;
-  }
-  const body = await res.json() as {
-    data?: Array<{
-      lastTransactions?: Array<{
-        status: number;
-        signedTransactionInfo?: string;
-        signedRenewalInfo?: string;
+  for (const base of apiBases(environment)) {
+    const res = await fetch(
+      `${base}/inApps/v1/subscriptions/${
+        encodeURIComponent(originalTransactionId)
+      }`,
+      { headers: { authorization: `Bearer ${jwt}` } },
+    );
+    if (!res.ok) {
+      console.log("App Store status lookup failed", base, res.status);
+      continue;
+    }
+    const body = await res.json() as {
+      data?: Array<{
+        lastTransactions?: Array<{
+          status: number;
+          signedTransactionInfo?: string;
+          signedRenewalInfo?: string;
+        }>;
       }>;
-    }>;
-  };
+    };
 
-  for (const group of body.data ?? []) {
-    for (const last of group.lastTransactions ?? []) {
-      const tx = last.signedTransactionInfo
-        ? decodeJwsPayload<AppleTransaction>(last.signedTransactionInfo)
-        : null;
-      if (tx?.originalTransactionId !== originalTransactionId) continue;
-      const renewal = last.signedRenewalInfo
-        ? decodeJwsPayload<{ autoRenewStatus?: number }>(last.signedRenewalInfo)
-        : null;
-      return {
-        status: last.status,
-        transaction: tx,
-        autoRenewing: renewal?.autoRenewStatus === 1,
-      };
+    for (const group of body.data ?? []) {
+      for (const last of group.lastTransactions ?? []) {
+        const tx = last.signedTransactionInfo
+          ? decodeJwsPayload<AppleTransaction>(last.signedTransactionInfo)
+          : null;
+        if (tx?.originalTransactionId !== originalTransactionId) continue;
+        const renewal = last.signedRenewalInfo
+          ? decodeJwsPayload<{ autoRenewStatus?: number }>(
+            last.signedRenewalInfo,
+          )
+          : null;
+        return {
+          status: last.status,
+          transaction: tx,
+          autoRenewing: renewal?.autoRenewStatus === 1,
+        };
+      }
     }
   }
   return null;
@@ -284,7 +304,8 @@ async function applyTransaction(
     .from("apple_products")
     .select("grants, quantity, active")
     .eq("product_id", tx.productId)
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
 
   if (!product?.active) {
     console.log("appstore: unknown or inactive product", tx.productId);
@@ -305,15 +326,19 @@ async function applyTransaction(
     environment: tx.environment ?? expectedEnv,
     raw: tx as unknown as Record<string, unknown>,
     updated_at: new Date().toISOString(),
-  }, { onConflict: "transaction_id" });
+  }, { onConflict: "transaction_id" }).throwOnError();
 
   if (product.grants === "aero") {
-    const status = await fetchSubscriptionStatus(tx.originalTransactionId);
+    const status = await fetchSubscriptionStatus(
+      tx.originalTransactionId,
+      tx.environment,
+    );
+    // A failed status lookup is retryable. Never acknowledge delivery (and
+    // let StoreKit finish the transaction) without confirming the grant.
+    if (!status) throw new Error("App Store subscription status unavailable");
     const planStatus = tx.revocationDate
       ? "canceled"
-      : status
-        ? statusToPlanStatus(status.status)
-        : "active";
+      : statusToPlanStatus(status.status);
     const current = status?.transaction ?? tx;
 
     await db.from("subscriptions").upsert({
@@ -326,14 +351,17 @@ async function applyTransaction(
       current_period_end: iso(current.expiresDate),
       canceled_at: planStatus === "canceled" ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
+    }, { onConflict: "user_id" }).throwOnError();
 
     return { granted: `aero:${planStatus}` };
   }
 
   // Catalysts are consumable, and a refund takes them back.
   if (tx.revocationDate) {
-    await db.from("server_catalysts").delete().eq("apple_transaction_id", tx.transactionId);
+    await db.from("server_catalysts").delete().eq(
+      "apple_transaction_id",
+      tx.transactionId,
+    ).throwOnError();
     return { granted: "catalyst:revoked" };
   }
 
@@ -343,7 +371,10 @@ async function applyTransaction(
     return { granted: null, error: "server_id_required" };
   }
 
-  const units = Math.max(1, Math.min(99, (tx.quantity ?? 1) * product.quantity));
+  const units = Math.max(
+    1,
+    Math.min(99, (tx.quantity ?? 1) * product.quantity),
+  );
   const rows = Array.from({ length: units }, (_, i) => ({
     server_id: serverId,
     user_id: userId,
@@ -354,7 +385,7 @@ async function applyTransaction(
   await db.from("server_catalysts").upsert(rows, {
     onConflict: "apple_transaction_id,session_seq",
     ignoreDuplicates: true,
-  });
+  }).throwOnError();
   return { granted: `catalyst:${units}` };
 }
 
@@ -369,16 +400,22 @@ function cors(req: Request): Record<string, string> {
   };
 }
 
-function json(body: unknown, status: number, headers: Record<string, string>): Response {
+function json(
+  body: unknown,
+  status: number,
+  headers: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
   });
 }
 
-Deno.serve(async (req) => {
+async function routeRequest(req: Request): Promise<Response> {
   const headers = cors(req);
-  if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers });
+  }
 
   const route = new URL(req.url).pathname.split("/").filter(Boolean).pop();
   const db = service();
@@ -391,7 +428,9 @@ Deno.serve(async (req) => {
     } catch {
       return json({ error: "Expected JSON." }, 400, headers);
     }
-    if (!body.signedPayload) return json({ error: "Missing signedPayload." }, 400, headers);
+    if (!body.signedPayload) {
+      return json({ error: "Missing signedPayload." }, 400, headers);
+    }
 
     // Untrusted: used only to learn WHICH transaction to go ask Apple about.
     const payload = decodeJwsPayload<{
@@ -407,7 +446,10 @@ Deno.serve(async (req) => {
     if (!hint?.transactionId) {
       // Apple also sends TEST notifications with no transaction. 200 so it
       // does not retry something there is nothing to do about.
-      console.log("appstore notification without a transaction", payload?.notificationType);
+      console.log(
+        "appstore notification without a transaction",
+        payload?.notificationType,
+      );
       return json({ ok: true }, 200, headers);
     }
 
@@ -427,11 +469,15 @@ Deno.serve(async (req) => {
       .select("user_id")
       .eq("original_transaction_id", tx.originalTransactionId)
       .limit(1)
-      .maybeSingle();
+      .maybeSingle()
+      .throwOnError();
 
     const userId = known?.user_id ?? tx.appAccountToken ?? null;
     if (!userId) {
-      console.log("appstore: unattributed transaction", tx.originalTransactionId);
+      console.log(
+        "appstore: unattributed transaction",
+        tx.originalTransactionId,
+      );
       return json({ ok: true, unattributed: true }, 200, headers);
     }
 
@@ -447,11 +493,16 @@ Deno.serve(async (req) => {
 
   // ---- App → us -----------------------------------------------------------
   if (route === "verify") {
-    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const token = (req.headers.get("authorization") ?? "").replace(
+      /^Bearer\s+/i,
+      "",
+    );
     if (!token) return json({ error: "Sign in first." }, 401, headers);
 
     const { data: { user }, error: authError } = await db.auth.getUser(token);
-    if (authError || !user) return json({ error: "Session expired." }, 401, headers);
+    if (authError || !user) {
+      return json({ error: "Session expired." }, 401, headers);
+    }
 
     let body: { transactionId?: string; serverId?: string };
     try {
@@ -459,10 +510,18 @@ Deno.serve(async (req) => {
     } catch {
       return json({ error: "Expected JSON." }, 400, headers);
     }
-    if (!body.transactionId) return json({ error: "transactionId is required." }, 400, headers);
+    if (!body.transactionId) {
+      return json({ error: "transactionId is required." }, 400, headers);
+    }
 
     const tx = await fetchTransaction(body.transactionId);
-    if (!tx) return json({ error: "The App Store did not recognise that purchase." }, 502, headers);
+    if (!tx) {
+      return json(
+        { error: "The App Store did not recognise that purchase." },
+        502,
+        headers,
+      );
+    }
 
     // A transaction already attributed to someone else is not transferable:
     // two Disband accounts sharing one Apple ID must not share one Aero.
@@ -471,22 +530,60 @@ Deno.serve(async (req) => {
       .select("user_id")
       .eq("original_transaction_id", tx.originalTransactionId)
       .limit(1)
-      .maybeSingle();
-    if (owner && owner.user_id !== user.id) {
-      return json({
-        error: "That purchase is already attached to a different Disband account.",
-      }, 409, headers);
+      .maybeSingle()
+      .throwOnError();
+    if (
+      (owner && owner.user_id !== user.id) ||
+      (tx.appAccountToken &&
+        tx.appAccountToken.toLowerCase() !== user.id.toLowerCase())
+    ) {
+      return json(
+        {
+          error:
+            "That purchase is already attached to a different Disband account.",
+        },
+        409,
+        headers,
+      );
     }
 
-    const result = await applyTransaction(db, tx, user.id, body.serverId ?? null);
+    const result = await applyTransaction(
+      db,
+      tx,
+      user.id,
+      body.serverId ?? null,
+    );
     if (result.error === "server_id_required") {
-      return json({ error: "Choose a space for these Catalysts." }, 400, headers);
+      return json(
+        { error: "Choose a space for these Catalysts." },
+        400,
+        headers,
+      );
     }
     if (result.error) {
-      return json({ error: "That purchase could not be applied." }, 400, headers);
+      return json(
+        { error: "That purchase could not be applied." },
+        400,
+        headers,
+      );
     }
     return json({ ok: true, granted: result.granted }, 200, headers);
   }
 
   return json({ error: "Not found." }, 404, headers);
-});
+}
+
+export async function handleRequest(req: Request): Promise<Response> {
+  try {
+    return await routeRequest(req);
+  } catch (error) {
+    console.error("appstore request failed", error);
+    return json(
+      { error: "We couldn't confirm that purchase yet. Please try again." },
+      503,
+      cors(req),
+    );
+  }
+}
+
+Deno.serve(handleRequest);

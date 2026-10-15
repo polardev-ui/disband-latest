@@ -18,6 +18,19 @@ export async function POST(request: NextRequest) {
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
 
+    // Anonymous throwaway accounts cannot create bots.
+    const { data: ownerProfile } = await service
+      .from("profiles")
+      .select("account_type")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (ownerProfile?.account_type === "anonymous") {
+      return NextResponse.json(
+        { error: "Anonymous accounts can't create bots." },
+        { status: 403 },
+      );
+    }
+
     // Revoked bots don't count toward the cap, so without this the
     // revoke/recreate loop mints unlimited auth users.
     const regGate = await checkBotRateLimit(service, "register", `owner:${user.id}`);

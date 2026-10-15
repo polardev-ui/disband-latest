@@ -1,0 +1,72 @@
+/* The review page: neutral, quiet, so the three directions carry the colour. */
+.sel {
+  --bg: #f4f4f2;
+  --card: #ffffff;
+  --line: #e2e1dd;
+  --text: #17171a;
+  --text-2: #55555c;
+  --text-3: #6f6f76;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+  padding: 48px 40px 72px;
+}
+.sel kbd { font: 500 12px/1 "Geist Variable", ui-sans-serif, system-ui; padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--card); color: var(--text-2); }
+.sel :focus-visible { outline: 2px solid var(--text); outline-offset: 3px; border-radius: 6px; }
+
+.sel-head { max-width: 1320px; margin: 0 auto; }
+.sel-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.sel-brand img { filter: brightness(0); }
+.sel-tag { margin-left: 4px; padding: 2px 8px; border-radius: 4px; background: #e9e8e4; color: var(--text-2); font-size: 12px; font-weight: 500; }
+.sel h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; margin-top: 28px; }
+.sel-lede { max-width: 760px; margin-top: 10px; color: var(--text-2); }
+
+.sel-grid { max-width: 1320px; margin: 36px auto 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.sel-card { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.sel-preview-link { display: block; border-bottom: 1px solid var(--line); }
+.sel-frame { position: relative; aspect-ratio: 1440 / 900; overflow: hidden; background: #e8e7e3; }
+.sel-frame iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; pointer-events: none; }
+.sel-preview-link:hover .sel-frame { filter: brightness(0.985); }
+.sel-meta { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 22px; flex: 1; }
+.sel-title { display: flex; gap: 12px; align-items: flex-start; }
+.sel-letter { flex: none; width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; background: var(--text); color: var(--card); font-weight: 600; font-size: 14px; }
+.sel-title h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.sel-line { color: var(--text-3); font-size: 14px; }
+.sel-phil { color: var(--text-2); font-size: 14px; }
+.sel-facts { display: grid; gap: 8px; margin: 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; }
+.sel-facts div { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.sel-facts dt { color: var(--text-3); }
+.sel-facts dd { margin: 0; }
+.sel-swatches { display: flex; gap: 4px; }
+.sel-swatches span { width: 22px; height: 22px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }
+.sel-actions { display: flex; align-items: center; gap: 14px; margin-top: auto; padding-top: 6px; }
+.sel-open { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 8px; background: var(--text); color: var(--card); font-weight: 550; font-size: 14px; text-decoration: none; transition: background 120ms ease; }
+.sel-open:hover { background: #33333a; }
+.sel-open svg { transition: transform 160ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.sel-open:hover svg { transform: translateX(2px); }
+.sel-key { color: var(--text-3); font-size: 13px; }
+
+.sel-compare { max-width: 1320px; margin: 56px auto 0; }
+.sel-compare h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.sel-table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.sel table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 760px; }
+.sel th, .sel td { text-align: left; vertical-align: top; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.sel tbody tr:last-child th, .sel tbody tr:last-child td { border-bottom: 0; }
+.sel thead th { font-weight: 600; font-size: 13px; color: var(--text); background: #fafaf8; }
+.sel tbody th { font-weight: 500; color: var(--text-3); width: 130px; }
+.sel td { color: var(--text-2); }
+.sel-foot { max-width: 760px; margin-top: 16px; color: var(--text-3); font-size: 13.5px; }
+
+@media (max-width: 1100px) {
+  .sel-grid { grid-template-columns: 1fr; max-width: 720px; }
+  .sel-head, .sel-compare { max-width: 720px; }
+}
+@media (max-width: 600px) {
+  .sel { padding: 28px 16px 48px; }
+  .sel h1 { font-size: 24px; }
+  .sel-meta { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sel-open svg { transition: none; }
+}

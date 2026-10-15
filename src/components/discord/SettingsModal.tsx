@@ -124,10 +124,18 @@ type SettingsTab = (typeof TABS)[number]["id"];
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
-  const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut } = useApp();
+  const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut, requestAccountDeletion, cancelAccountDeletion } = useApp();
+  const isAnonymous = profile?.account_type === "anonymous";
+  const isPendingDeletion = Boolean(profile?.deletion_requested_at);
+  const pendingCancelUntil = profile?.deletion_cancel_until ?? null;
+  const pendingPurgeAt = profile?.deletion_purge_at ?? null;
 
   const myBadges = useBadges(profile?.id);
   const [gifting, setGifting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const { mounted: giftMounted, exiting: giftExiting } = usePresence(gifting);
   const [giftLink, setGiftLink] = useState<string | null>(null);
   const [giftCopied, setGiftCopied] = useState(false);
@@ -914,6 +922,64 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </div>
 
                   <SettingsSection
+                    title="Delete account"
+                    description="Permanently remove your account and everything tied to it."
+                  >
+                    {isPendingDeletion ? (
+                      <div className="space-y-2">
+                        <p className="text-[13px] leading-relaxed text-text-muted">
+                          Your account is scheduled for deletion on{" "}
+                          <span className="font-medium text-text-normal">
+                            {pendingPurgeAt ? new Date(pendingPurgeAt).toLocaleString() : "—"}
+                          </span>
+                          . You can cancel until {pendingCancelUntil ? new Date(pendingCancelUntil).toLocaleString() : "—"}.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setDeletingAccount(true);
+                            setDeleteError(null);
+                            try {
+                              const res = await cancelAccountDeletion();
+                              if (res.error) setDeleteError(res.error);
+                              else setDeleteSuccess("Deletion cancelled. Welcome back.");
+                            } finally {
+                              setDeletingAccount(false);
+                            }
+                          }}
+                          disabled={deletingAccount}
+                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingAccount ? "Cancelling…" : "Cancel deletion"}
+                        </button>
+                        {deleteError && (
+                          <p className="text-[12.5px] text-status-dnd">{deleteError}</p>
+                        )}
+                        {deleteSuccess && (
+                          <p className="text-[12.5px] text-status-online">{deleteSuccess}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <SettingRow
+                        label="Delete this account"
+                        description={
+                          isAnonymous
+                            ? "Instant. Your profile and all data are removed immediately."
+                            : "Scheduled for 14 days out. For the first 24 hours you can log back in to cancel. After that your profile is anonymised and the account is purged."
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() => { setDeleteOpen(true); setDeleteError(null); }}
+                          className="rounded-md border border-status-dnd/40 px-3 py-1.5 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
+                        >
+                          Delete
+                        </button>
+                      </SettingRow>
+                    )}
+                  </SettingsSection>
+
+                  <SettingsSection
                     title="Sessions"
                     description="Manage where your account is signed in."
                   >
@@ -1413,6 +1479,51 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           }}
         />
       )}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim" onClick={() => setDeleteOpen(false)} />
+          <div className="modal-pop relative z-10 w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl">
+            <h2 className="text-[18px] font-semibold text-text-normal">Delete this account?</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-text-muted">
+              {isAnonymous
+                ? "Your profile and all data are removed immediately."
+                : "Your account is put into deletion. Your username, avatar, banner and bio are anonymised. You can cancel within 24 hours by signing back in. Otherwise the account is purged in 14 days."}
+            </p>
+            {deleteError && (
+              <p className="mt-2 text-[12.5px] text-status-dnd">{deleteError}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setDeleteOpen(false)} className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={async () => {
+                  setDeletingAccount(true);
+                  setDeleteError(null);
+                  try {
+                    const res = await requestAccountDeletion();
+                    if (res.error) { setDeleteError(res.error); return; }
+                    setDeleteOpen(false);
+                    if (res.instant) {
+                      await signOut();
+                    } else {
+                      setDeleteSuccess("Deletion scheduled. Log in within 24 hours to cancel.");
+                    }
+                  } finally {
+                    setDeletingAccount(false);
+                  }
+                }}
+                className="rounded-md bg-status-dnd px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingAccount ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

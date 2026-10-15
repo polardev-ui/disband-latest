@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — Not another boring app. (9:16)</title>
+<!-- Renders any frame of the "Not another boring app." spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=nextapp/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #0b0b0c; --ink2: #3a3a3e; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #fff; }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--ink); }
+#bg { position: absolute; inset: 0; background: #fff; }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+#wipe { position: absolute; inset: 0; display: none; }
+.layer { position: absolute; inset: 0; display: none; }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.line { display: block; }
+.big { position: absolute; left: 0; right: 0; text-align: center; font-weight: 800; letter-spacing: -0.045em; line-height: 0.98; }
+svg.mark { width: 100%; height: 100%; display: block; overflow: visible; }
+
+#line1 { top: 168px; font-size: 150px; }
+#meet { top: 168px; font-size: 150px; }
+/* Over the flying panels: white through a difference blend reads black on
+   the white studio and white over the dark screens. */
+#meet { color: #fff; }
+#meet .line { transform-origin: 50% 50%; mix-blend-mode: difference; }
+
+/* Scene 4: white words on black, in perspective. */
+#words { position: absolute; inset: 0; perspective: 1600px; }
+.word { position: absolute; left: 0; right: 0; top: 50%; text-align: center; font-weight: 800; letter-spacing: -0.045em; line-height: 1; color: #fff; transform-style: preserve-3d; }
+.word .w { transform-style: preserve-3d; }
+#wYour { font-size: 260px; margin-top: -130px; transform-origin: 50% 50%; }
+#wPeople { font-size: 196px; margin-top: -98px; }
+#wDisband { font-size: 172px; margin-top: -86px; transform-origin: 50% 50%; }
+#wDisband .w { overflow: hidden; padding: 0 0.04em; }
+
+/* White through a difference blend: white on black, black on white, and a
+   clean inversion where the white wipe passes through it. */
+#logo5 { position: absolute; left: 50%; top: 50%; width: 380px; height: 427px; margin: -214px 0 0 -190px; color: #fff; mix-blend-mode: difference; }
+.t { position: absolute; left: 0; right: 0; text-align: center; }
+#slogan { top: 1300px; font-size: 54px; font-weight: 600; letter-spacing: -0.022em; }
+#explore { top: 1392px; font-size: 72px; font-weight: 700; letter-spacing: -0.03em; }
+#url { top: 1500px; font-size: 124px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.1; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="wipe"></div>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<svg width="0" height="0" style="position:absolute">
+  <defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" fill-rule="evenodd" id="markpath"/></symbol></defs>
+</svg>
+<div class="layer" id="s1"><div class="big" id="line1"></div></div>
+<div class="layer" id="s2"><div class="big" id="meet"></div></div>
+<div class="layer" id="s4"><div id="words">
+  <div class="word" id="wYour"></div>
+  <div class="word" id="wPeople"></div>
+  <div class="word" id="wDisband"></div>
+</div></div>
+<div class="layer" id="s5">
+  <div id="logo5"><svg class="mark"><use href="#mark"/></svg></div>
+  <div class="t" id="slogan"></div><div class="t" id="explore"></div><div class="t" id="url"></div>
+</div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

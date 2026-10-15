@@ -48,6 +48,7 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
 
 export function BotsPanel() {
   const { servers, profile } = useApp();
+  const isAnonymous = profile?.account_type === "anonymous";
   const [bots, setBots] = useState<ManagedBot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,15 +192,25 @@ export function BotsPanel() {
             : "Bots are self-hosted: you run the client code, and Disband relays messages to and from it. Create one and grab its token."
         }
         action={
-          <button
-            type="button"
-            onClick={() => setCreatedToken(null)}
-            className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
-          >
-            New bot
-          </button>
+          isAnonymous ? undefined : (
+            <button
+              type="button"
+              onClick={() => setCreatedToken(null)}
+              className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
+            >
+              New bot
+            </button>
+          )
         }
       >
+        {isAnonymous && (
+          <div className="border-b border-divider px-4 py-4">
+            <p className="text-[13.5px] leading-relaxed text-text-muted">
+              Anonymous accounts can&apos;t create bots. Bots you were invited to can still be managed
+              here.
+            </p>
+          </div>
+        )}
         {createdToken && (
           <div className="border-b border-divider bg-bg-accent/60 px-4 py-4">
             <p className="text-[14px] font-medium text-text-normal">
@@ -232,7 +243,7 @@ export function BotsPanel() {
           </div>
         )}
 
-        {!createdToken && (
+        {!createdToken && !isAnonymous && (
           <div className="border-b border-divider px-4 py-4">
             <SettingRow label="Name" stacked htmlFor="bot-new-name">
               <div className="flex items-start gap-2">
@@ -286,7 +297,7 @@ export function BotsPanel() {
           <div className="px-4 py-6 text-center text-[13px] text-text-muted">Loading…</div>
         ) : bots.length === 0 ? (
           <div className="px-4 py-6 text-center text-[13px] text-text-muted">
-            No bots yet. Create your first one above.
+            {isAnonymous ? "No bots here." : "No bots yet. Create your first one above."}
           </div>
         ) : (
           <>
