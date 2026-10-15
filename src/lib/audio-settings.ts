@@ -61,7 +61,10 @@ export function buildAudioConstraints(): boolean | MediaTrackConstraints {
     ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
     echoCancellation: cancellation,
     noiseSuppression: cancellation,
-    autoGainControl: cancellation,
+    // Automatic gain control frequently pumps and adds perceived lag /
+    // stutter. Noise suppression is handled natively by the browser when
+    // enabled; Web Audio only fine-tunes the captured signal.
+    autoGainControl: false,
   };
   if (!deviceId && !cancellation) return true;
   return constraints;
