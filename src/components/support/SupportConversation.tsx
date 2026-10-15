@@ -25,6 +25,7 @@ interface SupportConversationProps {
   onSend: () => void;
   onRetry: () => void;
   onBack: () => void;
+  readOnly?: boolean;
 }
 
 function TetherPortrait({ thinking = false }: { thinking?: boolean }) {
@@ -45,7 +46,7 @@ function CopyReply({ content }: { content: string }) {
   }}>{status === "copied" ? <Check size={13} /> : <Copy size={13} />}<span aria-live="polite">{status === "copied" ? "Copied" : status === "failed" ? "Couldn’t copy" : "Copy reply"}</span></button>;
 }
 
-export function SupportConversation({ subject, messages, draft, sending, loading, error, onDraftChange, onSend, onRetry, onBack }: SupportConversationProps) {
+export function SupportConversation({ subject, messages, draft, sending, loading, error, onDraftChange, onSend, onRetry, onBack, readOnly = false }: SupportConversationProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -121,13 +122,21 @@ export function SupportConversation({ subject, messages, draft, sending, loading
     <footer className={styles.composerDock}>
       <div className={styles.composerColumn}>
         {error && <div role="alert" className={styles.chatError}><span>{error}</span><button type="button" onClick={onRetry}>Reload conversation</button></div>}
-        <form className={styles.chatComposer} onSubmit={e => { e.preventDefault(); submit(); }}>
-          <textarea ref={inputRef} value={draft} onChange={e => onDraftChange(e.target.value)} onKeyDown={e => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
-          }} aria-label="Message Tether" placeholder="Tell Tether a little more…" maxLength={4000} rows={1} />
-          <button type="submit" className={styles.sendButton} disabled={sending || loading || !draft.trim()} aria-label={sending ? "Waiting for Tether" : "Send message"}>{sending ? <LoaderCircle size={20} className={styles.spinner} /> : <ArrowUp size={21} />}</button>
-        </form>
-        <div className={styles.composerHint}><span><LockKeyhole size={11} />Only your signed-in account</span><span>Enter to send<span className={styles.desktopHint}> · Shift + Enter for a new line</span></span></div>
+        {readOnly ? (
+          <div className={styles.chatError} role="status">
+            <span>This request has been resolved by the support team. The chat is now read-only.</span>
+          </div>
+        ) : (
+          <>
+            <form className={styles.chatComposer} onSubmit={e => { e.preventDefault(); submit(); }}>
+              <textarea ref={inputRef} value={draft} onChange={e => onDraftChange(e.target.value)} onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
+              }} aria-label="Message Tether" placeholder="Tell Tether a little more…" maxLength={4000} rows={1} />
+              <button type="submit" className={styles.sendButton} disabled={sending || loading || !draft.trim()} aria-label={sending ? "Waiting for Tether" : "Send message"}>{sending ? <LoaderCircle size={20} className={styles.spinner} /> : <ArrowUp size={21} />}</button>
+            </form>
+            <div className={styles.composerHint}><span><LockKeyhole size={11} />Only your signed-in account</span><span>Enter to send<span className={styles.desktopHint}> · Shift + Enter for a new line</span></span></div>
+          </>
+        )}
       </div>
     </footer>
   </dialog>;

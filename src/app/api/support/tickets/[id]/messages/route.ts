@@ -10,6 +10,40 @@ import { DeepSeekError, DeepSeekUnavailableError } from "@/lib/deepseek";
 export const maxDuration = 90;
 export const dynamic = "force-dynamic";
 
+// Tether is now intentionally varied in wording, so detect a concrete
+// escalation question rather than an exact sentence. A human-review offer
+// only counts when the reply both mentions human review/escalation and
+// asks for the user's approval.
+// Deliberately conservative: a short approving reply to the escalation
+// offer routes the ticket to human review. Anything else goes to Tether
+// normally, keeping false positives rare.
+export function offersHumanReview(content: string): boolean {
+  const text = content.toLowerCase();
+  return (
+    /(human review|human reviewer|send (it|this) up|pass (it|this) (up|along)|escalate)/.test(text) &&
+    /(does that sound good|should i|want me to|sound good|go ahead)/.test(text)
+  );
+}
+export function isSupportEscalationApproval(content: string): boolean {
+  const value = content.trim().toLowerCase().replace(/[.!?]+$/, "");
+  if (!value) return false;
+  if (value.includes("not") || value.includes("no ") || value.startsWith("no")) return false;
+  const affirms = value === "yes" ||
+    value === "yeah" ||
+    value === "yep" ||
+    value === "sure" ||
+    value === "ok" ||
+    value === "okay" ||
+    value === "please" ||
+    value === "go ahead" ||
+    value === "do it" ||
+    value === "sounds good" ||
+    value === "that sounds good" ||
+    value === "escalate it" ||
+    value === "escalate";
+  return affirms || /^(yes|yeah|yep|sure|ok(?:ay)?|please),?\s+(please|go ahead|escalate|do it)$/i.test(content.trim());
+}
+
 async function ownTicket(supabase: NonNullable<ReturnType<typeof getServiceSupabase>>, ticketId: string, userId: string) {
   const { data } = await supabase
     .from("support_tickets")
@@ -73,6 +107,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
   if (insertError) return NextResponse.json({ error: "Could not send." }, { status: 500 });
 
+  await supabase
+    .from("support_tickets")
+    .update({
+      ...(ticket.status === "human_reply" ? { status: "open" } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
   // Conversation window for the model: last 20 messages, user + tether only.
   // No ticket ids, user ids, or emails are included — the tools already know
   // whose account this is from the server-side session.
@@ -82,7 +124,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq("ticket_id", id)
     .order("created_at", { ascending: false })
     .limit(20);
-  const history: DeepSeekChatMessage[] = ((rows ?? []) as { role: string; content: string }[])
+  const desc = (rows ?? []) as { role: string; content: string }[];
+
+  // If Tether just proposed a human handoff and the user accepted it, carry
+  // the request forward immediately rather than making another model turn.
+  const lastTetherMessage = desc.find((m) => m.role === "tether" || m.role === "assistant");
+  const acceptedEscalation =
+    ticket.status !== "closed" &&
+    !!lastTetherMessage?.content && offersHumanReview(lastTetherMessage.content) &&
+    isSupportEscalationApproval(content);
+
+  if (acceptedEscalation) {
+    const escalationReply =
+      "I’ve escalated this to our human support team. They’ll review your account context and reply within up to 48 hours. You don’t need to repeat anything — they’ll have the full conversation.";
+    await supabase
+      .from("support_tickets")
+      .update({ status: "pending", updated_at: new Date().toISOString() })
+      .eq("id", id);
+    await supabase.from("support_messages").insert({ ticket_id: id, role: "tether", content: escalationReply });
+    return NextResponse.json({ reply: escalationReply, escalated: true });
+  }
+
+  const history: DeepSeekChatMessage[] = desc
     .reverse()
     .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "tether")
     .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
