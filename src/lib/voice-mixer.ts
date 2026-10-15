@@ -50,10 +50,15 @@ export class VoiceMixer {
     const cancellation = options.noiseCancellation ?? true;
     const strength = Math.min(100, Math.max(0, options.noiseStrength ?? 50));
     if (cancellation) {
-      this.noiseHighpass.frequency.value = Math.round(200 + strength * 40);
-      this.noiseLowpass.frequency.value = Math.round(8000 - strength * 50);
+      // Keep the frequency shaping very gentle. Heavy high/low-pass cutoffs
+      // were hollowing out the voice and making it sound stuttery/laggy.
+      this.noiseHighpass.frequency.value = Math.round(50 + strength * 3);
+      this.noiseLowpass.frequency.value = Math.round(16000 - strength * 50);
+      this.noiseHighpass.Q.value = 0.7;
+      this.noiseLowpass.Q.value = 0.7;
     } else {
       this.noiseHighpass.frequency.value = 0;
+      this.noiseLowpass.frequency.value = 22000;
     }
 
     if (rawMicTrack) {
