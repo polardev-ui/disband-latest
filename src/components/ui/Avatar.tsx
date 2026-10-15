@@ -57,9 +57,29 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
     };
   }, [remote]);
 
+  /*
+   Sizing. A caller's own h-/w- classes replace the preset rather than sitting
+   next to it — two height utilities on one element resolve by stylesheet
+   order, not by the order they're written, so the override used to lose.
+
+   With a shop ring the avatar is wrapped, and the wrapper takes the size: the
+   picture fills it. Before, the wrapper got the caller's size (say h-6) while
+   the picture kept the preset (h-8), so a 32px image overflowed a 24px box and
+   drawn rings like Graphite were traced around the wrong, off-centre circle —
+   most visible in the typing indicator.
+  */
+  const presetClasses = SIZES[size].split(" ");
+  const sizeOverride = /(^|\s)(h|w|size)-/.test(className);
+  const textOverride = /(^|\s)text-(xs|sm|base|lg|xl|\d|\[)/.test(className);
+  const presetText = textOverride ? "" : presetClasses.filter((c) => c.startsWith("text-")).join(" ");
+  const presetBox = sizeOverride ? "" : presetClasses.filter((c) => !c.startsWith("text-")).join(" ");
+  const wrapped = !!ring || !!profile.equipped_ring_effect;
+
   const inner = (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${SIZES[size]} ${ring ? "" : className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${presetText} ${
+        wrapped ? "h-full w-full" : `${presetBox} ${className}`
+      }`}
       style={accentStyle}
     >
       {remote ? (
@@ -78,14 +98,14 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   if (!ring) {
     if (!profile.equipped_ring_effect) return inner;
     return (
-      <span className={`fx-ring relative ${className}`}>
+      <span className={`fx-ring relative shrink-0 ${presetBox} ${className}`}>
         {inner}
         {decoration}
       </span>
     );
   }
   return (
-    <span className={`fx-ring ${ring} ${className}`}>
+    <span className={`fx-ring shrink-0 ${ring} ${presetBox} ${className}`}>
       {inner}
       {decoration}
     </span>
