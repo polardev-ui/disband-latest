@@ -8,6 +8,7 @@ import {
   setFavoriteSound,
 } from "@/lib/server-sounds";
 import type { ServerSound } from "@/lib/supabase/types";
+import { IconMusic } from "@/components/icons";
 import { playVoiceSoundboardSound } from "@/lib/voice-mixer";
 
 interface SoundboardProps {
@@ -145,7 +146,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
         }`}
         title="Open soundboard"
       >
-        <span aria-hidden="true" className="text-lg leading-none">🔊</span>
+        <IconMusic size={16} />
         {sounds.length > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
             {sounds.length > 99 ? "99+" : sounds.length}
