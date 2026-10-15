@@ -88,9 +88,11 @@ supabase secrets set \
   APPSTORE_PRIVATE_KEY="$(cat AuthKey_XXXXXX.p8)"
 ```
 
-`APPSTORE_ENVIRONMENT` is a real switch, not a formality: a Sandbox
-transaction is recorded but never granted when it is set to `Production`, so
-a tester cannot hand themselves Aero on the live database.
+`APPSTORE_ENVIRONMENT` is only a ledger fallback for a transaction that omits
+its environment. Verification tries production first, then sandbox, and
+subscription status uses the environment Apple returned. Sandbox purchases
+must work against the live backend during App Review; they are recorded as
+`Sandbox` so they can be distinguished from paid production transactions.
 
 ### 4. Deploy
 
@@ -98,8 +100,21 @@ a tester cannot hand themselves Aero on the live database.
 supabase functions deploy appstore --no-verify-jwt
 ```
 
-`--no-verify-jwt` is required. Apple calls `/appstore/notifications` with no
-Supabase token; `/appstore/verify` checks the caller's token itself.
+`--no-verify-jwt` is required and is also recorded in `supabase/config.toml`.
+Apple calls `/appstore/notifications` with no Supabase token;
+`/appstore/verify` checks the caller's token itself.
+
+Apply migration `0123_apple_catalyst_purchase_units.sql` before deploying.
+It repairs the Apple Catalyst conflict index so PostgREST can deliver units
+idempotently. Database read or write failures now return a retryable 503;
+the server only acknowledges a purchase once its entitlement was written.
+
+The live migration history differs from this checkout. To apply only this
+repair without replaying unrelated migrations, use:
+
+```bash
+supabase db query --linked --file supabase/migrations/0123_apple_catalyst_purchase_units.sql
+```
 
 ### 5. Point Apple at the notifications URL
 
@@ -117,10 +132,37 @@ with no transaction in it.
 
 ### 6. Sandbox testing
 
-Create a sandbox tester in *Users and Access → Sandbox*, sign into it on the
-device under *Settings → Developer → Sandbox Apple Account*, and set
-`APPSTORE_ENVIRONMENT=Sandbox` on a **non-production** project — never on the
-live one, or sandbox purchases start granting real entitlements.
+Create a sandbox tester in *Users and Access → Sandbox* and sign into it on
+the device under *Settings → Developer → Sandbox Apple Account*. Test the
+same backend used by the review build, leaving its environment setting in
+place. Confirm a purchase and a restore both unlock Aero, and a Catalyst
+purchase increases the chosen space's units exactly once.
+
+Before deployment, run `pnpm test:appstore`. This type-checks the Edge Function
+(the web type-check excludes it), exercises the HTTP purchase and notification
+paths with simulated Apple responses, and tests Catalyst conflict handling in
+Postgres. These tests do not replace a real TestFlight/sandbox purchase.
+
+### October 10, 2026 review failure (1.13.0, build 57)
+
+The deployed function referenced the removed `apiBase()` inside subscription
+status lookup. Sandbox transactions reached the ledger, then verification
+crashed before the subscription grant, producing the review screenshot's 500.
+The fix routes status lookup to the environment confirmed by Apple. The
+deployed function also had `verify_jwt=true`, blocking Apple's notifications.
+
+Deployed October 10, 2026 as `appstore` version 3 with `verify_jwt=false`.
+The targeted Catalyst index repair was applied and the live index definition
+confirmed. Live smoke checks returned 401 for unauthenticated purchase
+verification and 200 for a test notification. Replaying the previously failed
+sandbox subscription through the deployed notification handler re-read the
+transaction and status from Apple and wrote an active Apple Aero subscription.
+Fresh device purchase and restore testing is still required.
+
+After deployment, retest purchase and Restore Purchases on the submitted
+build. This server fix requires no iOS binary changes. Confirm the Paid Apps
+Agreement and product metadata in App Store Connect separately, then request
+another review with the verified sandbox result.
 
 ## The buying screens
 

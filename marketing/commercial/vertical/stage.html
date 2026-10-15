@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — Your Space. Your Privacy. (9:16)</title>
+<!-- Renders any frame of the vertical social spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=vertical/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #0b0b0c; --gray: #6e6e73; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--ink); }
+#bg { position: absolute; inset: 0; background: #000; }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+.layer { position: absolute; inset: 0; display: none; }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.line { display: block; }
+.statement { position: absolute; left: 80px; right: 80px; text-align: center; font-weight: 600; letter-spacing: -0.032em; line-height: 1.06; }
+
+/* Atmosphere: haze and the light beam sit over the 3D canvas, screen-blended. */
+#haze { position: absolute; inset: -200px; mix-blend-mode: screen; pointer-events: none; }
+#haze i { position: absolute; border-radius: 50%; }
+#beamWrap { position: absolute; inset: 0; overflow: hidden; mix-blend-mode: screen; }
+#beam { position: absolute; top: -500px; left: 0; width: 520px; height: 2920px; margin-left: -260px; transform-origin: 50% 50%; }
+#beam .soft { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.05) 32%, rgba(255,255,255,.22) 50%, rgba(255,255,255,.05) 68%, rgba(255,255,255,0) 100%); filter: blur(30px); }
+#beam .core { position: absolute; top: 0; bottom: 0; left: 50%; width: 10px; margin-left: -5px; background: rgba(255,255,255,.85); filter: blur(5px); }
+
+#logoBox { position: absolute; left: 50%; top: 50%; width: 300px; height: 337px; margin: -168px 0 0 -150px; }
+#logoBox svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; color: #fff; }
+#logoGlow { position: absolute; left: 50%; top: 50%; width: 1100px; height: 1100px; margin: -550px 0 0 -550px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.16) 0%, rgba(255,255,255,.05) 30%, rgba(255,255,255,0) 62%); mix-blend-mode: screen; }
+
+#line1 { top: 236px; font-size: 104px; color: #fff; }
+#line2 { top: 268px; font-size: 112px; color: var(--ink); }
+#line3 { top: 1515px; font-size: 96px; color: var(--ink); }
+#flash { position: absolute; inset: 0; background: #fff; display: none; }
+
+#endGroup { position: absolute; inset: 0; transform-origin: 50% 46%; }
+#logo5 { position: absolute; left: 50%; top: 500px; width: 236px; height: 265px; margin-left: -118px; color: var(--ink); }
+#logo5 svg { width: 100%; height: 100%; display: block; overflow: visible; }
+#title { position: absolute; left: 0; right: 0; top: 850px; text-align: center; font-size: 78px; font-weight: 600; letter-spacing: 0.34em; text-indent: 0.34em; line-height: 1; }
+#disc { position: absolute; left: 0; right: 0; top: 1076px; text-align: center; font-size: 46px; font-weight: 500; letter-spacing: -0.015em; color: var(--gray); }
+#url { position: absolute; left: 0; right: 0; top: 1148px; text-align: center; font-size: 100px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" fill-rule="evenodd" id="markpath"/></symbol>
+    <filter id="blurZ" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB"><feGaussianBlur id="blurZv" stdDeviation="0"/></filter>
+  </defs>
+</svg>
+<div class="layer" id="atmo">
+  <div id="haze"><i id="h1"></i><i id="h2"></i><i id="h3"></i></div>
+</div>
+<div class="layer" id="s1">
+  <div id="logoGlow"></div>
+  <div id="logoBox"><svg id="logoBase"><use href="#mark"/></svg><svg id="logoLit"><use href="#mark"/></svg></div>
+</div>
+<div class="layer" id="beamLayer"><div id="beamWrap"><div id="beam"><div class="soft"></div><div class="core"></div></div></div></div>
+<div class="layer" id="s2"><div class="statement" id="line1"></div></div>
+<div class="layer" id="s3"><div class="statement" id="line2"></div></div>
+<div class="layer" id="s4"><div class="statement" id="line3"></div></div>
+<div id="flash"></div>
+<div class="layer" id="s5"><div id="endGroup">
+  <div id="logo5"><svg><use href="#mark"/></svg></div>
+  <div id="title"></div><div id="disc"></div><div id="url"></div>
+</div></div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

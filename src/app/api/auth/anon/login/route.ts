@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  if (!body.turnstileToken || !(await verifyTurnstileToken(body.turnstileToken))) {
+  if (process.env.TURNSTILE_SECRET_KEY && (!body.turnstileToken || !(await verifyTurnstileToken(body.turnstileToken)))) {
     return NextResponse.json(
       { error: "Please complete the verification challenge.", code: "TURNSTILE_REQUIRED" },
       { status: 403 },

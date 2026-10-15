@@ -20,6 +20,11 @@ export interface Profile {
   accent_color: string | null;
   accent_color_2: string | null;
   is_bot?: boolean;
+  /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */
+  account_type?: string | null;
+  deletion_requested_at?: string | null;
+  deletion_cancel_until?: string | null;
+  deletion_purge_at?: string | null;
   theme: ThemePreference;
   avatar_crop: { zoom: number; x: number; y: number } | null;
   /** Disband Shop cosmetics currently worn. Null when the slot is empty. */

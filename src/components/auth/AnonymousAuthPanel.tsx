@@ -139,17 +139,12 @@ export function AnonymousAuthPanel({
         if (err) setError(err);
         // On success the app shell takes over and this unmounts.
       } else if (isValidAccountNumber(createdNumber)) {
-        // Session minting failed at creation; sign in with the number instead.
-        const result = await loginAnonymousAccount(createdNumber, turnstileToken);
-        if (result.error) {
-          setError(result.error);
-          return;
-        }
-        if (result.status === "expired") {
-          openExpired(createdNumber, result);
-        }
+        // Rare fallback when session minting failed at creation — send them
+        // back to the login screen instead of requiring a verification token
+        // we never asked them for here.
+        setError("Your account was created, but sign-in needs your number. Copy it and use 'Log in to an Anonymous Account'.");
       } else {
-        setError("Copy your account number first.");
+        setError("Save your account number first.");
       }
     } finally {
       setLoading(false);
@@ -395,7 +390,7 @@ export function AnonymousAuthPanel({
               <button
                 type="button"
                 onClick={() => void handleCreate()}
-                disabled={loading}
+                disabled={loading || (!turnstileToken && !turnstileFailed)}
                 className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
@@ -463,7 +458,7 @@ export function AnonymousAuthPanel({
               <button
                 type="button"
                 onClick={() => void handleLogin()}
-                disabled={loading}
+                disabled={loading || (!turnstileToken && !turnstileFailed)}
                 className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
@@ -500,7 +495,7 @@ export function AnonymousAuthPanel({
                   <button
                     type="button"
                     onClick={() => void handleExport()}
-                    disabled={loading}
+                    disabled={loading || (!turnstileToken && !turnstileFailed)}
                     className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading ? (
@@ -546,7 +541,7 @@ export function AnonymousAuthPanel({
               <button
                 type="button"
                 onClick={() => void handlePurge()}
-                disabled={loading}
+                disabled={loading || (!turnstileToken && !turnstileFailed)}
                 className="flex w-full items-center justify-center rounded-md bg-status-dnd py-2.5 text-[15px] font-medium text-white transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (

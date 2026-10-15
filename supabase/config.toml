@@ -3,6 +3,11 @@
 
 project_id = "disband"
 
+# Apple notifications have no Supabase JWT. The verify route authenticates
+# purchases itself; notifications re-read every transaction from Apple.
+[functions.appstore]
+verify_jwt = false
+
 [auth]
 enabled = true
 site_url = "http://localhost:3000"

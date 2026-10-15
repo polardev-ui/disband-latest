@@ -11,8 +11,10 @@ import { PUBLIC_ENV } from "@/lib/public-env";
 import { Logo } from "@/components/ui/Logo";
 import { Turnstile } from "@/components/ui/Turnstile";
 import { Avatar } from "@/components/ui/Avatar";
+import { AnonymousAuthPanel, NewBadge } from "@/components/auth/AnonymousAuthPanel";
 
 type AuthMode = "login" | "signup" | "reset";
+type AnonView = "create" | "login";
 
 const fieldClass =
   "w-full rounded-md border border-divider bg-bg-accent px-3.5 py-2.5 text-[15px] text-text-normal " +
@@ -64,6 +66,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [challengeRequired, setChallengeRequired] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [appliedRef, setAppliedRef] = useState<string | null>(null);
+  const [anonView, setAnonView] = useState<AnonView | null>(null);
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -87,6 +90,16 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (anonView) {
+    return (
+      <AnonymousAuthPanel
+        initialView={anonView}
+        overlay={overlay}
+        onClose={() => setAnonView(null)}
+      />
     );
   }
 
@@ -521,6 +534,28 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                   submitLabel
                 )}
               </button>
+
+              {(mode === "login" || mode === "signup") && (
+                <div className="pt-1">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-divider" />
+                    <span className="text-[11px] uppercase tracking-wide text-text-muted">or</span>
+                    <span className="h-px flex-1 bg-divider" />
+                  </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setAnonView(mode === "login" ? "login" : "create")}
+                      className="w-full rounded-md border border-divider bg-bg-accent py-2.5 text-[14px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
+                    >
+                      {mode === "login"
+                        ? "Login to an Anonymous Account"
+                        : "Create an Anonymous Account"}
+                    </button>
+                    <NewBadge />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </form>

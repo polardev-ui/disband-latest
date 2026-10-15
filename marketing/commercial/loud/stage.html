@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — The internet is loud. (9:16)</title>
+<!-- Renders any frame of "The internet is loud." spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=loud/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #0b0b0c; --ink2: #3a3a3e; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--ink); }
+#bg { position: absolute; inset: 0; background: #000; }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+.layer { position: absolute; inset: 0; display: none; }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.line { display: block; }
+.statement { position: absolute; left: 80px; right: 80px; text-align: center; }
+
+#head { top: 790px; font-size: 124px; font-weight: 700; letter-spacing: -0.04em; line-height: 1.02; color: #fff; text-shadow: 0 0 60px rgba(0,0,0,.65); transform-origin: 50% 50%; }
+#line2 { top: 1540px; font-size: 64px; font-weight: 500; line-height: 1.3; color: #fff; }
+#meet { top: 190px; font-size: 104px; font-weight: 600; letter-spacing: -0.032em; color: #fff; transform-origin: 50% 50%; }
+
+#morph { position: absolute; inset: 0; background: var(--ink); }
+#logo { position: absolute; left: 50%; top: 900px; width: 420px; height: 472px; margin: -236px 0 0 -210px; color: var(--ink); }
+#logo svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.t { position: absolute; left: 0; right: 0; text-align: center; }
+#slogan { top: 1232px; font-size: 56px; font-weight: 500; letter-spacing: -0.018em; }
+#title { top: 885px; font-size: 76px; font-weight: 600; letter-spacing: 0.34em; text-indent: 0.34em; line-height: 1; }
+#find { top: 1010px; font-size: 52px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink2); }
+#url { top: 1150px; font-size: 112px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<svg width="0" height="0" style="position:absolute">
+  <defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" fill-rule="evenodd" id="markpath"/></symbol></defs>
+</svg>
+<div class="layer" id="s1"><div class="statement" id="head"></div></div>
+<div class="layer" id="s2"><div class="statement" id="line2"></div></div>
+<div class="layer" id="s3"><div class="statement" id="meet"></div></div>
+<div class="layer" id="s4">
+  <div id="morph"></div>
+  <div id="logo"><svg><use href="#mark"/></svg></div>
+  <div class="t" id="slogan"></div>
+  <div class="t" id="title"></div><div class="t" id="find"></div><div class="t" id="url"></div>
+</div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

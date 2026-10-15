@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — A New Way to Connect. (9:16)</title>
+<!-- Renders any frame of the "A New Way to Connect." spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=connect/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #0b0b0c; --gray: #6e6e73; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #fff; }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--ink); }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+.layer { position: absolute; inset: 0; display: none; }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.line { display: block; }
+.statement { position: absolute; left: 80px; right: 80px; text-align: center; font-weight: 600; letter-spacing: -0.032em; line-height: 1.06; }
+svg.mark { width: 100%; height: 100%; display: block; overflow: visible; }
+
+#logo1 { position: absolute; left: 50%; top: 50%; width: 420px; height: 472px; margin: -236px 0 0 -210px; }
+#ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 3px solid var(--ink); }
+#line1 { top: 940px; font-size: 96px; }
+#line2 { top: 178px; font-size: 104px; }
+#iris { position: absolute; inset: 0; display: none; }
+
+/* Scene 4: one word at a time, each with its own move, in perspective. */
+#words { position: absolute; inset: 0; perspective: 1500px; perspective-origin: 50% 50%; }
+.word { position: absolute; left: 0; right: 0; text-align: center; font-size: 176px; font-weight: 700; letter-spacing: -0.045em; line-height: 1; transform-style: preserve-3d; }
+.word .w { transform-style: preserve-3d; }
+#wSimple, #wSocial { top: 1390px; }
+#wDisband { top: 872px; }
+#wDisband .k { transform-origin: 50% 50%; }
+#logo4 { position: absolute; left: 50%; top: 50%; width: 300px; height: 337px; margin: -168px 0 0 -150px; }
+
+#s5 .t { position: absolute; left: 0; right: 0; text-align: center; }
+#slogan { top: 930px; font-size: 56px; font-weight: 600; letter-spacing: -0.025em; }
+#disc { top: 1160px; font-size: 44px; font-weight: 500; letter-spacing: -0.015em; color: var(--gray); }
+#url { top: 1220px; font-size: 108px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; }
+</style>
+</head>
+<body>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<svg width="0" height="0" style="position:absolute">
+  <defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" fill-rule="evenodd" id="markpath"/></symbol></defs>
+</svg>
+<div class="layer" id="s1">
+  <div id="ring"></div>
+  <div id="logo1"><svg class="mark"><use href="#mark"/></svg></div>
+  <div class="statement" id="line1"></div>
+</div>
+<div class="layer" id="s3"><div class="statement" id="line2"></div></div>
+<div class="layer" id="s4"><div id="words">
+  <div class="word" id="wSimple"></div>
+  <div class="word" id="wSocial"></div>
+  <div class="word" id="wDisband"></div>
+</div></div>
+<div class="layer" id="s5">
+  <div id="logo4"><svg class="mark"><use href="#mark"/></svg></div>
+  <div class="t" id="slogan"></div><div class="t" id="disc"></div><div class="t" id="url"></div>
+</div>
+<div id="iris"></div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

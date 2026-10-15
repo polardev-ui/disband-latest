@@ -1,4 +1,5 @@
 // Renders the commercial's frames to PNG with parallel headless browsers.
+// STAGE picks the page and VIEWPORT its size (default 1920x1080).
 //   node tools/render.mjs [--fps 60] [--from 0] [--to 40] [--workers 3] [--preview] [--out build/frames]
 // Existing frames are skipped, so an interrupted render resumes where it left off.
 import fs from "node:fs";
@@ -12,6 +13,7 @@ const from = Number(arg("from", 0));
 const to = Number(arg("to", 40));
 const workers = Number(arg("workers", 3));
 const preview = process.argv.includes("--preview");
+const [vw, vh] = (process.env.VIEWPORT ?? "1920x1080").split("x").map(Number);
 const out = arg("out", preview ? "build/preview-frames" : "build/frames");
 fs.mkdirSync(out, { recursive: true });
 
@@ -28,7 +30,7 @@ let done = 0;
 const t0 = Date.now();
 async function worker(id) {
   const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
   page.setDefaultTimeout(180000);
   page.on("pageerror", (e) => console.error(`[w${id}] pageerror`, e.message));
   await page.goto(`${origin}/${process.env.STAGE ?? "src/stage.html"}${preview ? "?preview" : ""}`);

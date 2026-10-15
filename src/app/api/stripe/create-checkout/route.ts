@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe, getPriceId, type PaidPlan } from "@/lib/stripe";
-import { getRouteUser } from "@/lib/supabase/server";
+import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { normalizePlan, type BillingInterval } from "@/lib/subscription";
@@ -10,6 +10,18 @@ export async function POST(req: Request) {
     const user = await getRouteUser(req);
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    // Anonymous throwaway accounts cannot buy Aero or Lite.
+    const service = getServiceSupabase();
+    const { data: buyer } = service
+      ? await service.from("profiles").select("account_type").eq("id", user.id).maybeSingle()
+      : { data: null };
+    if (buyer?.account_type === "anonymous") {
+      return NextResponse.json(
+        { error: "Anonymous accounts can't subscribe." },
+        { status: 403 },
+      );
     }
 
     const { plan: requested, interval: requestedInterval } = (await req.json()) as {

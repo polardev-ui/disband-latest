@@ -39,6 +39,7 @@
   ],
   "exclude": [
     "node_modules",
+    "prototype",
     "src-tauri",
     "supabase/functions",
     "ios/build",
