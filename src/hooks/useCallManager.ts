@@ -6,6 +6,8 @@ import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { playCallConnected, playCallEnd, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
+import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
+import { isNoiseCancellationEnabled, getNoiseCancellationStrength } from "@/lib/audio-settings";
 import { buildVideoConstraints } from "@/lib/audio-settings";
 import { notifyUser, requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
@@ -121,6 +123,7 @@ export function useCallManager(
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
     setLocalStream(null);
+    setActiveVoiceMixer(null);
     setRemoteStream(null);
     if (signalRef.current) {
       await signalRef.current.unsubscribe();
@@ -193,12 +196,21 @@ export function useCallManager(
     if (!userId) return;
     try {
       await warmUpMediaDevices();
-      const stream = await getDisbandUserMedia({
+      const raw = await getDisbandUserMedia({
         audio: true,
         video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
       });
+      const rawMic = raw.getAudioTracks()[0] ?? null;
+      const cameraTracks = raw.getVideoTracks();
+      const mixer = new VoiceMixer(rawMic, {
+        micMuted,
+        noiseCancellation: isNoiseCancellationEnabled(),
+        noiseStrength: getNoiseCancellationStrength(),
+      });
+      const stream = new MediaStream([mixer.audioTrack, ...cameraTracks]);
       localRef.current = stream;
       setLocalStream(stream);
+      setActiveVoiceMixer(mixer);
       applyMic(micMuted);
 
       const supabase = getSupabaseClient();

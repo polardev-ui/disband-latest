@@ -357,6 +357,16 @@ export interface CustomEmoji {
   created_at: string;
 }
 
+export interface ServerSound {
+  id: string;
+  server_id: string;
+  name: string;
+  emoji: string;
+  url: string;
+  uploader_id: string | null;
+  created_at: string;
+}
+
 export type ViewMode = "home" | "space" | "dm" | "group" | "notes" | "discover";
 
 export interface Database {
@@ -587,6 +597,12 @@ export interface Database {
         Row: CustomEmoji;
         Insert: { server_id: string; name: string; url: string; uploader_id: string | null };
         Update: Record<string, never>;
+        Relationships: [];
+      };
+      server_sounds: {
+        Row: ServerSound;
+        Insert: { server_id: string; name: string; emoji: string; url: string; uploader_id?: string | null };
+        Update: { name?: string; emoji?: string };
         Relationships: [];
       };
     };

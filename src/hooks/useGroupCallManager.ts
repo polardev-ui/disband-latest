@@ -6,6 +6,8 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
+import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
+import { isNoiseCancellationEnabled, getNoiseCancellationStrength } from "@/lib/audio-settings";
 import { buildVideoConstraints } from "@/lib/audio-settings";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
@@ -158,6 +160,7 @@ export function useGroupCallManager(
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
     setLocalStream(null);
+    setActiveVoiceMixer(null);
     setRemoteStreams(new Map());
     setRemoteScreens(new Map());
     setRemoteScreenAudio(new Map());
@@ -457,9 +460,17 @@ export function useGroupCallManager(
       audio: true,
       video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
     });
-    localRef.current = stream;
-    setLocalStream(stream);
-    stream.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
+    const rawMic = stream.getAudioTracks()[0] ?? null;
+    const cameraTracks = stream.getVideoTracks();
+    const mixer = new VoiceMixer(rawMic, {
+      micMuted,
+      noiseCancellation: isNoiseCancellationEnabled(),
+      noiseStrength: getNoiseCancellationStrength(),
+    });
+    const mixedStream = new MediaStream([mixer.audioTrack, ...cameraTracks]);
+    localRef.current = mixedStream;
+    setLocalStream(mixedStream);
+    setActiveVoiceMixer(mixer);
   }, [micMuted]);
 
   const connectToExisting = useCallback(

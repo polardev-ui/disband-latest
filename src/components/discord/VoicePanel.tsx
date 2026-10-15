@@ -5,6 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { CallTile, CallGrid } from "./CallTile";
 import { CallControls } from "./CallUI";
+import { Soundboard } from "./Soundboard";
 import { displayName } from "@/lib/utils";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { IconSpeaker } from "@/components/icons";
@@ -150,6 +151,8 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
             ))
           )}
         </CallGrid>
+
+        <Soundboard />
 
         {(voice.error || actionError) && (
           <p role="alert" className="max-w-md rounded-lg border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-center text-sm text-status-dnd">

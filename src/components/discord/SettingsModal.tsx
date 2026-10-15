@@ -16,6 +16,7 @@ import {
   Hint,
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
+import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
 import { useBadges } from "@/lib/badge-store";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
@@ -167,6 +168,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
   const [audioInput, setAudioInput] = useState("");
+  const [noiseCancellation, setNoiseCancellationState] = useState(isNoiseCancellationEnabled());
+  const [noiseCancellationStrength, setNoiseCancellationStrengthState] = useState(getNoiseCancellationStrength());
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
@@ -1243,8 +1246,46 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </SettingsSection>
 
                   <SettingsSection
+                    title="Noise cancellation"
+                    description="Reduce background noise before your microphone reaches everyone else."
+                  >
+                    <SettingRow
+                      label="Noise cancellation"
+                      description="Echo and noise suppression applied while capturing your voice."
+                    >
+                      <Toggle
+                        label="Noise cancellation"
+                        checked={noiseCancellation}
+                        onChange={() => {
+                          const next = !noiseCancellation;
+                          setNoiseCancellationState(next);
+                          setNoiseCancellationEnabled(next);
+                        }}
+                      />
+                    </SettingRow>
+                    <SettingRow
+                      label="Noise cancellation strength"
+                      description="Higher values remove more noise but can clip your voice."
+                      stacked
+                    >
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={noiseCancellationStrength}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setNoiseCancellationStrengthState(value);
+                          setNoiseCancellationStrength(value);
+                        }}
+                        className={settingsInputClass}
+                      />
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
                     title="Microphone test"
-                    description="Confirm your microphone hears you before joining a call."
+                    description="Relay your voice back to yourself to check noise cancellation."
                   >
                     <SettingRow
                       label="Live input level"

@@ -43,7 +43,11 @@ export function MicTest({ deviceId }: { deviceId: string }) {
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
+      const monitor = ctx.createGain();
+      monitor.gain.value = 0.45;
       source.connect(analyser);
+      source.connect(monitor);
+      monitor.connect(ctx.destination);
 
       const buffer = new Uint8Array(analyser.fftSize);
       const tick = () => {
@@ -94,7 +98,7 @@ export function MicTest({ deviceId }: { deviceId: string }) {
         </div>
       </div>
       {running && (
-        <p className="mt-1.5 text-[12px] text-text-muted">Say something — the bar should move.</p>
+        <p className="mt-1.5 text-[12px] text-text-muted">Say something — the bar should move, and you should hear yourself at low volume.</p>
       )}
       {error && <p className="mt-1.5 text-[12px] text-status-dnd">{error}</p>}
     </div>
