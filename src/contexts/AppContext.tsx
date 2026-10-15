@@ -301,6 +301,9 @@ interface AppContextValue {
   groupHasMore: boolean;
   notesHasMore: boolean;
   loadMoreChannelMessages: () => Promise<void>;
+  loadChannelContextWindow: (targetMessageId: string) => Promise<boolean>;
+  loadDmContextWindow: (targetMessageId: string) => Promise<boolean>;
+  loadGroupContextWindow: (targetMessageId: string) => Promise<boolean>;
   loadMoreDmMessages: () => Promise<void>;
   loadMoreGroupMessages: () => Promise<void>;
   loadMoreNotes: () => Promise<void>;
@@ -1139,6 +1142,171 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     );
   }, [activeChannelId, channelHasMore, messages]);
+
+  const loadChannelContextWindow = useCallback(async (targetMessageId: string) => {
+    if (!activeChannelId) return false;
+    const channelId = activeChannelId;
+    const supabase = getSupabaseClient();
+    try {
+      const { data: targetRow } = await supabase
+        .from("messages")
+        .select("*, author:profiles(*)")
+        .eq("id", targetMessageId)
+        .eq("channel_id", channelId)
+        .maybeSingle();
+      if (!targetRow || activeChannelRef.current !== channelId) return false;
+      const targetMsg = targetRow as Message & { author: Profile };
+      const ts = targetMsg.created_at;
+
+      const beforeRes = await supabase
+        .from("messages")
+        .select("*, author:profiles(*)")
+        .eq("channel_id", channelId)
+        .lt("created_at", ts)
+        .order("created_at", { ascending: false })
+        .limit(25);
+      const afterRes = await supabase
+        .from("messages")
+        .select("*, author:profiles(*)")
+        .eq("channel_id", channelId)
+        .gt("created_at", ts)
+        .order("created_at", { ascending: true })
+        .limit(25);
+
+      if (activeChannelRef.current !== channelId) return false;
+      const beforeRows = ((beforeRes.data ?? []) as (Message & { author: Profile })[]).slice().reverse();
+      const afterRows = (afterRes.data ?? []) as (Message & { author: Profile })[];
+      const rows = [...beforeRows, targetMsg, ...afterRows];
+      const seen = new Set<string>();
+      const unique = rows.filter((m) => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+
+      setMessages(unique);
+      setChannelHasMore(beforeRows.length === 25);
+      setMessagesLoading(false);
+      const ids = unique.map((m) => m.id);
+      const rxn = await loadReactionsForMessages(supabase, "channel", ids);
+      if (activeChannelRef.current !== channelId) return false;
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", rxn));
+      return true;
+    } catch {
+      if (activeChannelRef.current === channelId) setMessagesLoading(false);
+      return false;
+    }
+  }, [activeChannelId]);
+
+  const loadDmContextWindow = useCallback(async (targetMessageId: string) => {
+    if (!activeDmThreadId) return false;
+    const threadId = activeDmThreadId;
+    const supabase = getSupabaseClient();
+    try {
+      const { data: targetRow } = await supabase
+        .from("dm_messages")
+        .select("*, author:profiles(*)")
+        .eq("id", targetMessageId)
+        .eq("thread_id", threadId)
+        .maybeSingle();
+      if (!targetRow || activeDmRef.current !== threadId) return false;
+      const targetMsg = targetRow as DmMessage & { author: Profile };
+      const ts = targetMsg.created_at;
+
+      const beforeRes = await supabase
+        .from("dm_messages")
+        .select("*, author:profiles(*)")
+        .eq("thread_id", threadId)
+        .lt("created_at", ts)
+        .order("created_at", { ascending: false })
+        .limit(25);
+      const afterRes = await supabase
+        .from("dm_messages")
+        .select("*, author:profiles(*)")
+        .eq("thread_id", threadId)
+        .gt("created_at", ts)
+        .order("created_at", { ascending: true })
+        .limit(25);
+
+      if (activeDmRef.current !== threadId) return false;
+      const beforeRows = ((beforeRes.data ?? []) as (DmMessage & { author: Profile })[]).slice().reverse();
+      const afterRows = (afterRes.data ?? []) as (DmMessage & { author: Profile })[];
+      const rows = [...beforeRows, targetMsg, ...afterRows];
+      const seen = new Set<string>();
+      const unique = rows.filter((m) => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+
+      setDmMessages(unique);
+      setDmHasMore(beforeRows.length === 25);
+      setDmLoading(false);
+      const ids = unique.map((m) => m.id);
+      const rxn = await loadReactionsForMessages(supabase, "dm", ids);
+      if (activeDmRef.current !== threadId) return false;
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", rxn));
+      return true;
+    } catch {
+      if (activeDmRef.current === threadId) setDmLoading(false);
+      return false;
+    }
+  }, [activeDmThreadId]);
+
+  const loadGroupContextWindow = useCallback(async (targetMessageId: string) => {
+    if (!activeGroupChatId) return false;
+    const groupId = activeGroupChatId;
+    const supabase = getSupabaseClient();
+    try {
+      const { data: targetRow } = await supabase
+        .from("group_messages")
+        .select("*, author:profiles(*)")
+        .eq("id", targetMessageId)
+        .eq("group_id", groupId)
+        .maybeSingle();
+      if (!targetRow || activeGroupRef.current !== groupId) return false;
+      const targetMsg = targetRow as GroupMessage & { author?: Profile | null };
+      const ts = targetMsg.created_at;
+
+      const beforeRes = await supabase
+        .from("group_messages")
+        .select("*, author:profiles(*)")
+        .eq("group_id", groupId)
+        .lt("created_at", ts)
+        .order("created_at", { ascending: false })
+        .limit(25);
+      const afterRes = await supabase
+        .from("group_messages")
+        .select("*, author:profiles(*)")
+        .eq("group_id", groupId)
+        .gt("created_at", ts)
+        .order("created_at", { ascending: true })
+        .limit(25);
+
+      if (activeGroupRef.current !== groupId) return false;
+      const beforeRows = ((beforeRes.data ?? []) as (GroupMessage & { author?: Profile | null })[]).slice().reverse();
+      const afterRows = (afterRes.data ?? []) as (GroupMessage & { author?: Profile | null })[];
+      const rows = [...beforeRows, targetMsg, ...afterRows];
+      const seen = new Set<string>();
+      const unique = rows.filter((m) => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+
+      setGroupMessages(unique);
+      setGroupHasMore(beforeRows.length === 25);
+      setGroupLoading(false);
+      const ids = unique.map((m) => m.id);
+      const rxn = await loadReactionsForMessages(supabase, "group", ids);
+      if (activeGroupRef.current !== groupId) return false;
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "group", rxn));
+      return true;
+    } catch {
+      if (activeGroupRef.current === groupId) setGroupLoading(false);
+      return false;
+    }
+  }, [activeGroupChatId]);
 
   const loadFriendships = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
@@ -4921,6 +5089,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     groupHasMore,
     notesHasMore,
     loadMoreChannelMessages,
+    loadChannelContextWindow,
+    loadDmContextWindow,
+    loadGroupContextWindow,
     loadMoreDmMessages,
     loadMoreGroupMessages,
     loadMoreNotes,
