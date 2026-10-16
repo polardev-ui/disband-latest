@@ -38,9 +38,8 @@ export interface TetherInfo {
  */
 export async function fetchTetherInfo(): Promise<TetherInfo | null> {
   try {
-    const res = await fetch("/api/tether/info", {
+    const res = await apiFetch("/api/tether/info", {
       headers: { accept: "application/json" },
-      credentials: "same-origin",
     });
     if (!res.ok) return null;
     const data = (await res.json()) as Partial<TetherInfo>;
