@@ -4,6 +4,7 @@ import android.content.Context
 import com.wsgpolar.disband.core.DisbandSupabase
 import com.wsgpolar.disband.core.ThemeManager
 import com.wsgpolar.disband.data.Database
+import com.wsgpolar.disband.data.ClosedDmStore
 import com.wsgpolar.disband.data.DmUnreadStore
 import com.wsgpolar.disband.data.NotesService
 import com.wsgpolar.disband.data.PresenceService
@@ -43,6 +44,7 @@ class AppState(
     val themeManager: ThemeManager,
     val presence: PresenceService,
     val dmUnread: DmUnreadStore,
+    val closedDms: ClosedDmStore,
     val notes: NotesService,
     val turnService: com.wsgpolar.disband.data.TurnService,
     val calls: com.wsgpolar.disband.call.CallManager,

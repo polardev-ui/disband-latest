@@ -2,6 +2,7 @@ package com.wsgpolar.disband.ui.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +68,7 @@ fun MessagesScreen(app: AppState) {
 
     LaunchedEffect(uid) {
         if (uid == null) return@LaunchedEffect
+        app.closedDms.activate(uid)
         loading = true
         threads = runCatching { Database.myDmThreads(uid) }.getOrDefault(emptyList())
         groups = runCatching { Database.myGroups(uid) }.getOrDefault(emptyList())
@@ -131,7 +136,19 @@ private fun MessagesList(
 ) {
     val palette = LocalPalette.current
     val unread = app.dmUnread
+    val closedDms = app.closedDms
     val scope = rememberCoroutineScope()
+
+    // A closed row stays hidden only while there's nothing new: an unread
+    // message is proof they spoke, so the row comes back (and stays back).
+    val closed by closedDms.closed.collectAsState()
+    val visibleThreads = threads.filter { !closed.contains(it.friend?.id) || unread.count(it.id) > 0 }
+    LaunchedEffect(threads, closed) {
+        threads.forEach { t ->
+            val fid = t.friend?.id
+            if (fid != null && closed.contains(fid) && unread.count(t.id) > 0) closedDms.unhide(fid)
+        }
+    }
 
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Profile>>(emptyList()) }
@@ -197,19 +214,20 @@ private fun MessagesList(
                     }
                 }
             }
-            if (threads.isEmpty()) {
+            if (visibleThreads.isEmpty()) {
                 item {
                     Text("No conversations yet", color = palette.textMuted, fontSize = 14.sp,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 }
             } else {
-                items(threads, key = { it.id }) { thread ->
+                items(visibleThreads, key = { it.id }) { thread ->
                     val friend = thread.friend
                     ThreadRow(
                         thread = thread,
                         unreadCount = unread.count(thread.id),
                         palette = palette,
                         onOpen = { onOpenThread(thread) },
+                        onClose = { thread.friend?.id?.let(closedDms::close) },
                         call = friend?.let { peer -> @Composable { CallActionButton(app, peer) } },
                     )
                 }
@@ -265,42 +283,59 @@ private fun ThreadRow(
     unreadCount: Int,
     palette: com.wsgpolar.disband.core.Palette,
     onOpen: () -> Unit,
+    onClose: () -> Unit,
     call: (@Composable () -> Unit)?,
 ) {
     val friend = thread.friend
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AvatarImage(url = friend?.avatarUrl, name = friend?.name ?: "?", size = 44.dp)
-        Column(Modifier.padding(start = 12.dp).weight(1f)) {
-            Text(friend?.name ?: "Unknown", color = palette.textPrimary, fontSize = 15.sp,
-                fontWeight = if (unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal)
-            Row {
-                Text(
-                    thread.lastMessagePreview ?: "Tap to message",
-                    color = if (unreadCount > 0) palette.textSecondary else palette.textMuted,
-                    fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Text(TimeFormat.compact(thread.lastMessageAt), color = palette.textMuted,
-                    fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier.fillMaxWidth()
+                .combinedClickable(onClick = onOpen, onLongClick = { menuOpen = true })
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AvatarImage(url = friend?.avatarUrl, name = friend?.name ?: "?", size = 44.dp)
+            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                Text(friend?.name ?: "Unknown", color = palette.textPrimary, fontSize = 15.sp,
+                    fontWeight = if (unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal)
+                Row {
+                    Text(
+                        thread.lastMessagePreview ?: "Tap to message",
+                        color = if (unreadCount > 0) palette.textSecondary else palette.textMuted,
+                        fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Text(TimeFormat.compact(thread.lastMessageAt), color = palette.textMuted,
+                        fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                }
             }
-        }
-        if (unreadCount > 0) {
-            Box(
-                Modifier
-                    .padding(start = 8.dp)
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(palette.accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("$unreadCount", color = androidx.compose.ui.graphics.Color.White,
-                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            if (unreadCount > 0) {
+                Box(
+                    Modifier
+                        .padding(start = 8.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(palette.accent),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("$unreadCount", color = androidx.compose.ui.graphics.Color.White,
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
+            call?.invoke()
         }
-        call?.invoke()
+        // Hold a row to close it — the touch twin of the web's hover X. The
+        // conversation comes back with their next message or by opening it.
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text("Close DM") },
+                onClick = {
+                    menuOpen = false
+                    onClose()
+                },
+            )
+        }
     }
     HorizontalDivider(color = palette.divider, modifier = Modifier.padding(start = 72.dp))
 }

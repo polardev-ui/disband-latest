@@ -13,6 +13,7 @@ class AppContainer(private val context: Application) {
 
     val presence = com.wsgpolar.disband.data.PresenceService(appScope)
     val dmUnread = com.wsgpolar.disband.data.DmUnreadStore(context)
+    val closedDms = com.wsgpolar.disband.data.ClosedDmStore(context)
     val themeManager = com.wsgpolar.disband.core.ThemeManager(context)
     val turnService = com.wsgpolar.disband.data.TurnService()
     val notes = com.wsgpolar.disband.data.NotesService(appScope)
@@ -24,6 +25,7 @@ class AppContainer(private val context: Application) {
         themeManager = themeManager,
         presence = presence,
         dmUnread = dmUnread,
+        closedDms = closedDms,
         notes = notes,
         turnService = turnService,
         calls = calls,
