@@ -21,8 +21,10 @@ import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import { requestEmailChange } from "@/lib/email-change";
 import {
+  clearLastfmPending,
   clearSpotifyTokens,
   lastfmConfigured,
+  readLastfmPending,
   readLastfmUsername,
   readSpotifyTokens,
   spotifyConnectUrl,
@@ -222,27 +224,55 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
   const [lastfmUser, setLastfmUser] = useState("");
   const [lastfmSaved, setLastfmSaved] = useState(false);
+  const [lastfmNote, setLastfmNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setSpotifyConnected(Boolean(readSpotifyTokens()));
-    setLastfmUser(user?.id ? readLastfmUsername(user.id) ?? "" : "");
     setLastfmSaved(false);
+    setLastfmNote(null);
+    // A one-click connect may have finished while the modal was closed; the
+    // pending username is adopted here, otherwise the saved one is loaded.
+    const pending = readLastfmPending();
+    if (user?.id) {
+      const saved = readLastfmUsername(user.id);
+      if (pending && pending !== saved) {
+        writeLastfmUsername(user.id, pending);
+        clearLastfmPending();
+        setLastfmUser(pending);
+        setLastfmSaved(true);
+      } else {
+        if (pending) clearLastfmPending();
+        setLastfmUser(saved ?? "");
+      }
+    } else {
+      setLastfmUser("");
+    }
   }, [open, user?.id]);
 
-  // The OAuth callback page pings us when the popup finishes connecting.
+  // The OAuth callback pages ping us when a popup finishes connecting.
   useEffect(() => {
     if (!open) return;
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      if ((event.data as { type?: string } | null)?.type === "disband:spotify-connected") {
+      const data = event.data as { type?: string; username?: string } | null;
+      if (data?.type === "disband:spotify-connected") {
         setSpotifyConnected(true);
         setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
+      } else if (data?.type === "disband:lastfm-connected") {
+        const name = typeof data.username === "string" ? data.username : "";
+        if (name && user?.id) {
+          writeLastfmUsername(user.id, name);
+          clearLastfmPending();
+          setLastfmUser(name);
+          setLastfmSaved(true);
+          setLastfmNote(`Connected as ${name} — what you play on SoundCloud now shows on your profile.`);
+        }
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [open]);
+  }, [open, user?.id]);
 
   function handleSpotifyConnect() {
     if (!spotifyClientId()) {
@@ -269,6 +299,30 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     const name = lastfmUser.trim();
     writeLastfmUsername(user.id, name || null);
     setLastfmSaved(true);
+  }
+
+  async function handleLastfmConnect() {
+    if (!lastfmConfigured()) {
+      setLastfmNote("Last.fm isn't configured on this build yet — add NEXT_PUBLIC_LASTFM_API_KEY first.");
+      return;
+    }
+    setLastfmNote(null);
+    try {
+      const res = await fetch("/api/music/lastfm/token", { method: "POST" });
+      const data = (await res.json().catch(() => null)) as { authUrl?: string; error?: string } | null;
+      if (!res.ok || !data?.authUrl) {
+        setLastfmNote(
+          res.status === 503
+            ? "One-click connect isn't set up on the server yet — paste your username below instead."
+            : data?.error ?? "Couldn't start the Last.fm connection.",
+        );
+        return;
+      }
+      const popup = window.open(data.authUrl, "disband-lastfm-connect", "width=520,height=760,popup=yes");
+      if (!popup) setLastfmNote("Allow pop-ups for this site, then try again.");
+    } catch {
+      setLastfmNote("Couldn't start the Last.fm connection. Try again in a moment.");
+    }
   }
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
@@ -1703,10 +1757,19 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                   <SettingsSection
                     title="SoundCloud"
-                    description="SoundCloud doesn't let apps read playback directly. Link SoundCloud to Last.fm in your SoundCloud settings, then put your Last.fm username here — what you play appears on your profile within a minute."
+                    description="SoundCloud doesn't let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud → Settings → Connections), then connect Last.fm here — what you play appears on your profile within a minute, even from another device."
                   >
-                    <SettingRow label="Last.fm username" stacked>
+                    <SettingRow label="Last.fm" stacked>
                       <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleLastfmConnect()}
+                          disabled={!lastfmConfigured()}
+                          className="rounded-md bg-brand px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40"
+                        >
+                          Connect Last.fm
+                        </button>
+                        <span className="text-[12.5px] text-text-muted">or type a username</span>
                         <input
                           value={lastfmUser}
                           onChange={(e) => {
@@ -1731,6 +1794,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                             Not configured on this build yet.
                           </span>
                         )}
+                        {lastfmNote && <p className="text-[12.5px] text-text-muted">{lastfmNote}</p>}
                       </div>
                     </SettingRow>
                   </SettingsSection>

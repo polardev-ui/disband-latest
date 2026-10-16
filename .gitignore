@@ -99,3 +99,4 @@ android/keystore/
 
 # Local Pollinations artwork and development records
 /.mascot-local/
+.env*

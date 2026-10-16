@@ -25,16 +25,21 @@ user actually quits.
 ## Spotify (direct OAuth)
 
 1. Create an app at https://developer.spotify.com/dashboard.
-2. Add the redirect URI **exactly**: `https://disband.dev/connect/spotify/callback`
-   (plus `http://localhost:3000/connect/spotify/callback` for local dev).
+2. Add the redirect URI **exactly**: `https://www.disband.dev/connect/spotify/callback`.
+   Spotify rejects non-HTTPS redirect URIs (localhost included), so the app pins
+   `NEXT_PUBLIC_SITE_URL=https://www.disband.dev` and every build — dev and
+   desktop too — advertises the production callback.
    Scopes used are read-only: `user-read-currently-playing`,
    `user-read-playback-state`.
-3. Set environment variables (Vercel + local `.env.local`):
-   - `NEXT_PUBLIC_SPOTIFY_CLIENT_ID`
-   - `SPOTIFY_CLIENT_SECRET` (server-side only — used by
-     `src/app/api/music/spotify/token/route.ts`)
-   - Optional: `NEXT_PUBLIC_SITE_URL` to pin the redirect base when running
-     the web app on a non-production origin.
+3. Environment variables — the web app deploys on **Vercel** (project
+   `disband-latest`), so variables live there and in `.env.local`:
+   - Build-time (baked into the bundle): `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` —
+     set it in Vercel *before* deploying, `.env.local` for local dev.
+   - Server-only: `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET`
+     (`npx vercel env add SPOTIFY_CLIENT_SECRET production`) — used by
+     `src/app/api/music/spotify/token/route.ts`.
+   - `NEXT_PUBLIC_SITE_URL=https://www.disband.dev` pins the redirect base on
+     every origin (dev, production, desktop).
 4. Users: **Settings → Connections → Connect Spotify**. Tokens are held in
    `localStorage` (`disband:spotify-tokens`); Disconnect clears them and the
    profile card, and the poller stops on the next tick.
@@ -53,11 +58,25 @@ The working transport is Last.fm: SoundCloud can scrobble to Last.fm
 
 and Last.fm's public API reports the currently-playing track.
 
-1. Get a free API key: https://www.last.fm/api/account/create
-2. Set `NEXT_PUBLIC_LASTFM_API_KEY` (the key is public by design — it is
-   shipped in client bundles of every Last.fm app).
-3. Users: **Settings → Connections → SoundCloud** → enter their Last.fm
-   username → Save.
+1. Get a free API key: https://www.last.fm/api/account/create — and set the
+   API account's callback URL to `https://www.disband.dev/connect/lastfm/callback`.
+   Last.fm allows exactly one callback per account, so local dev falls back to
+   typing the username.
+2. Environment:
+   - `NEXT_PUBLIC_LASTFM_API_KEY` — public by design, ships in every Last.fm
+     app's client bundle.
+   - `LASTFM_API_SECRET` — server-only; add it on Vercel
+     (`npx vercel env add LASTFM_API_SECRET production`). This powers the
+     one-click connect.
+3. Users: **Settings → Connections → SoundCloud → Connect Last.fm** — one
+   click, approve on last.fm, done. Behind it: the client asks
+   `POST /api/music/lastfm/token` for an approval URL, the popup returns an
+   approved token to `/connect/lastfm/callback`, and
+   `POST /api/music/lastfm/session` trades the token for the username. Only
+   the username is kept (`disband:lastfm-user:<uid>` in localStorage) — the
+   read path never needs the session key. Typing the username manually still
+   works as a fallback. Request signatures use the app's own MD5
+   (`src/lib/md5.ts`) because Web Crypto has none.
 
 The track appears within a minute of starting playback. Titles arrive raw
 ("Artist - Title (feat. …)") and go through the same cleanup the browser
