@@ -8,6 +8,7 @@ import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconMessage, IconMore, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { RoleIcon } from "@/components/ui/RoleIcon";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { UnderlineTabs } from "@/components/ui/Tabs";
@@ -467,7 +468,7 @@ export function UserProfileModal({
                                 : { backgroundColor: `${role.color}1c` }
                             }
                           >
-                            {role.icon && <span className="text-[11px]">{role.icon}</span>}
+                            {role.icon && <RoleIcon icon={role.icon} name={role.name} size={14} />}
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
                             {role.name}
                           </span>

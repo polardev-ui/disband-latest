@@ -48,13 +48,13 @@ interface AuthScreenProps {
 }
 
 export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
-  const { signIn, signUp, requestPasswordReset, configured, savedSessions, switchAccount, removeSavedAccount } = useApp();
+  const { signIn, signUp, requestPasswordReset, configured, savedSessions, switchAccount, removeSavedAccount, addAccountPrefill } = useApp();
   const [mode, setMode] = useState<AuthMode>("login");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => (overlay ? addAccountPrefill?.email ?? "" : ""));
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => (overlay ? addAccountPrefill?.notice ?? null : null));
 
   const needsConfirmation = error === EMAIL_NOT_CONFIRMED;
   const [success, setSuccess] = useState<string | null>(null);

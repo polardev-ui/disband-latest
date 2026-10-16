@@ -136,14 +136,16 @@ export async function refreshOwnBadges(userId: string) {
   invalidateBadges(userId);
 }
 
-export async function setBadgeVisible(userId: string, badgeKey: string, visible: boolean) {
-  const supabase = getSupabaseClient();
-  try {
-    await supabase.rpc("set_badge_visible", { p_key: badgeKey, p_visible: visible });
-  } catch {
-    // Security definer function should exist; fall back silently.
-  }
+/**
+ * Show or hide one of your own badges. The RPC only touches rows owned by the
+ * caller, so a badge you do not have can never be switched on. Returns an
+ * error message, or null on success.
+ */
+export async function setBadgeVisible(userId: string, badgeKey: string, visible: boolean): Promise<string | null> {
+  const { error } = await getSupabaseClient().rpc("set_badge_visible", { p_key: badgeKey, p_visible: visible });
+  if (error) return "Couldn't update that badge. Try again.";
   invalidateBadges(userId);
+  return null;
 }
 
 export async function loadAllBadgesForUser(userId: string) {

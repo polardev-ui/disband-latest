@@ -12,8 +12,9 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetSupabaseClient } from "@/lib/supabase/client";
+import { exchangeRefreshToken, getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetRefreshState, resetSupabaseClient } from "@/lib/supabase/client";
 import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
+import { memberIconRole } from "@/lib/role-icons";
 import { getSavedRefreshToken, saveSwitchRefreshToken, clearSavedRefreshToken } from "@/lib/switch-refresh-tokens";
 import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground } from "@/lib/notifications";
@@ -103,6 +104,11 @@ import type {
   PinnedSourceType,
 } from "@/lib/supabase/types";
 
+export interface AddAccountPrefill {
+  email?: string | null;
+  notice?: string | null;
+}
+
 interface AppContextValue {
   ready: boolean;
 
@@ -166,8 +172,10 @@ interface AppContextValue {
   purgeAnonymousAccount: (accountNumber: string, turnstileToken?: string | null) => Promise<AnonAuthResult>;
 
   addingAccount: boolean;
-  beginAddAccount: () => void;
+  /** Open the add-account sheet; `prefill` names the account to sign back in to. */
+  beginAddAccount: (prefill?: AddAccountPrefill) => void;
   cancelAddAccount: () => void;
+  addAccountPrefill: AddAccountPrefill | null;
   updateProfile: (patch: Partial<Profile>) => Promise<string | null>;
   setViewHome: () => void;
   setViewDiscover: () => void;
@@ -221,6 +229,8 @@ interface AppContextValue {
   createRole: (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => Promise<string | null>;
   setMemberRoles: (userId: string, roleIds: string[]) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
+  /** The member's highest role that has an icon (Catalyst Level 2 role icons). */
+  getMemberIconRole: (member: ServerMember) => ServerRole | null;
   createChannel: (data: { name: string; type?: ChannelType; categoryId?: string | null }) => Promise<string | null>;
   renameChannel: (channelId: string, name: string) => Promise<string | null>;
   setChannelReadOnly: (channelId: string, readOnly: boolean) => Promise<string | null>;
@@ -455,8 +465,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const [addingAccount, setAddingAccount] = useState(false);
-  const beginAddAccount = useCallback(() => setAddingAccount(true), []);
-  const cancelAddAccount = useCallback(() => setAddingAccount(false), []);
+  const [addAccountPrefill, setAddAccountPrefill] = useState<AddAccountPrefill | null>(null);
+  const beginAddAccount = useCallback((prefill?: AddAccountPrefill) => {
+    setAddAccountPrefill(prefill ?? null);
+    setAddingAccount(true);
+  }, []);
+  const cancelAddAccount = useCallback(() => {
+    setAddingAccount(false);
+    setAddAccountPrefill(null);
+  }, []);
 
   useEffect(() => {
     if (session && profile) rememberSession(session, profile);
@@ -3012,63 +3029,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const switchAccount = useCallback(async (account: SavedSession) => {
-    // Make sure any rotating refresh-lock from another tab cannot hide here.
-    resetSupabaseClient();
     const supabase = getSupabaseClient();
-    const fallbackSession = sessionRef.current;
-    const savedTokens = getSavedSessionTokens(account.user_id);
-    // Prefer the account's persistent refresh token when available. Supabase
-    // access tokens expire; only a refresh token can establish a new session.
-    const persistedRefreshToken = getSavedRefreshToken(account.user_id);
-    const refreshToken = persistedRefreshToken ?? savedTokens?.refresh_token ?? null;
 
-    if (refreshToken) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-        if (!error && data.session) {
-          setSession(data.session);
-          rememberSession(data.session);
-          void refreshSessionOnce().then((r) => {
-            if ("session" in r && r.session) {
-              const refreshed = r.session as Session;
-              setSession(refreshed);
-              rememberSession(refreshed);
-            }
-          });
-          return null;
-        }
-        if (error?.name !== "AuthRetryableFetchError") break;
-        await new Promise((r) => setTimeout(r, 250 * Math.pow(2, attempt)));
+    // 1. Bank the account we are leaving. Read the live session from the
+    //    client rather than React state: storage is updated on every token
+    //    rotation, state is not, and saving a retired refresh token here is
+    //    what made switching back ask for a password.
+    const { data: live } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    const leaving = live.session ?? sessionRef.current;
+    if (leaving) rememberSession(leaving);
+    if (leaving?.user?.id === account.user_id) return null;
+
+    // 2. Mint a session for the target on a throwaway client, so a rejected
+    //    token can never disturb the account we are still signed in to.
+    const candidates = [
+      getSavedRefreshToken(account.user_id),
+      getSavedSessionTokens(account.user_id)?.refresh_token ?? null,
+    ].filter((t, i, all): t is string => !!t && all.indexOf(t) === i);
+
+    let expired = candidates.length === 0;
+    for (const token of candidates) {
+      const result = await exchangeRefreshToken(token);
+      if ("error" in result) {
+        expired = expired || result.expired;
+        continue;
       }
+      if (result.session.user?.id !== account.user_id) continue;
+      // The exchange already rotated the token: save the new one before
+      // anything else can fail, or this account is lost for good.
+      saveSwitchRefreshToken(account.user_id, result.session.refresh_token);
+
+      // 3. Only now hand the known-good session to the real client.
+      const { data, error } = await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
+      if (error || !data.session) {
+        // Put the account we were on back exactly as it was.
+        if (leaving) await supabase.auth.setSession({ access_token: leaving.access_token, refresh_token: leaving.refresh_token }).catch(() => undefined);
+        return "Couldn't switch accounts. Check your connection and try again.";
+      }
+      resetRefreshState();
+      setSession(data.session);
+      rememberSession(data.session);
+      return null;
     }
 
-    // Fallback to a direct token load. This can revive an account whose
-    // token pair survived in session storage but can no longer be refreshed.
-    if (savedTokens?.access_token && savedTokens?.refresh_token) {
-      const { data, error } = await supabase.auth.setSession(savedTokens).catch(() => ({ data: { session: null }, error: new Error("set session failed") })) ;
-      const fallbackSession = data?.session ?? null;
-      if (!error && fallbackSession?.user?.id === account.user_id) {
-        setSession(fallbackSession);
-        rememberSession(fallbackSession);
-        void refreshSessionOnce().then((r) => {
-          if ("session" in r && r.session && (r.session as Session)?.user?.id === account.user_id) {
-            const refreshed = r.session as Session;
-            setSession(refreshed);
-            rememberSession(refreshed);
-          }
-        });
-        return null;
-      }
+    if (expired) {
+      // The server rejected every token we hold, so it is gone for good:
+      // forget it and let the person sign in once more.
+      clearSavedRefreshToken(account.user_id);
       clearSavedSessionTokens(account.user_id);
+      return "This account was signed out. Sign in to it once more to keep it in the switcher.";
     }
-
-    // Keep the currently active session so a failed switch does not sign
-    // everyone out.
-    if (fallbackSession) {
-      try { await supabase.auth.setSession(fallbackSession); } catch { /* keep going */ }
-      setSession(fallbackSession);
-    }
-    return "Sign in again to continue as this account.";
+    return "Couldn't reach Disband to switch accounts. Try again in a moment.";
   }, [rememberSession]);
 
   const updateProfile = useCallback(async (patch: Partial<Profile>) => {
@@ -4044,6 +4058,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [serverRoles],
   );
 
+  const getMemberIconRole = useCallback(
+    (member: ServerMember) => memberIconRole(member, serverRoles),
+    [serverRoles],
+  );
+
   // Tether: when an Aero user's message mentions @tether, fire the ask after
   // the message is saved. Inside a DM with Tether itself every message is an
   // ask (force). Client-side gates are cosmetic cost savers only —
@@ -4988,6 +5007,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addingAccount,
     beginAddAccount,
     cancelAddAccount,
+    addAccountPrefill,
     updateProfile,
     setViewHome,
 
@@ -5043,6 +5063,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateRole,
     setMemberRoles,
     getMemberColor,
+    getMemberIconRole,
     createChannel,
     renameChannel,
     setChannelReadOnly,

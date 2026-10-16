@@ -12,14 +12,16 @@ struct CatalystLevel: Sendable {
 
     static let all: [CatalystLevel] = [
         .init(level: 0, min: 0, name: "No level", perks: []),
-        .init(level: 1, min: 1, name: "Level 1", perks: ["Custom vanity invite code"]),
+        .init(level: 1, min: 1, name: "Level 1", perks: ["+50 custom emoji slots for everyone"]),
         .init(level: 2, min: 3, name: "Level 2", perks: [
-            "Custom vanity invite code",
             "+50 custom emoji slots for everyone",
+            "Custom vanity invite code",
+            "Role icons",
         ]),
         .init(level: 3, min: 6, name: "Level 3", perks: [
-            "Custom vanity invite code",
             "+50 custom emoji slots for everyone",
+            "Custom vanity invite code",
+            "Role icons",
             "Animated gradient role styling",
         ]),
     ]

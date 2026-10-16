@@ -81,128 +81,132 @@ export function isRecipientDoNotDisturb(
 }
 
 const NOTIFICATION_POP_URL = "/sounds/notificationpop.mp3";
+const POP_VOLUME = 0.85;
 
-const notificationAudio = typeof window === "undefined"
-  ? null
-  : (() => {
-      const ctx = new AudioContext({ latencyHint: "interactive" });
-      window.addEventListener("pointerdown", () => {
-        if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
-      }, { once: true });
-      window.addEventListener("keydown", () => {
-        if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
-      }, { once: true });
-      return ctx;
-    })();
+/*
+ The notification pop is the one sound every notification makes, on every
+ platform. iOS and Android get it from the push itself (`notificationpop.caf`
+ / the channel sound); here it covers desktop and web.
 
-let notificationBuffer: AudioBuffer | null = null;
-let notificationBufferLoad: Promise<AudioBuffer | null> | null = null;
+ Why it used to play only some of the time:
+  - The AudioContext was created at import, before any user gesture, so it
+    started suspended and was only ever unlocked by the *first* click — a
+    context the browser suspended later (Safari does on hide) stayed silent.
+  - On macOS the desktop webview throttles audio while the window is in the
+    background, which is exactly when notifications arrive. The desktop app
+    now plays the pop natively there (`play_notification_sound`).
+*/
 
-async function loadNotificationBuffer(): Promise<AudioBuffer | null> {
-  if (notificationBuffer) return notificationBuffer;
-  if (!notificationAudio) return null;
-  if (!notificationBufferLoad) {
-    notificationBufferLoad = (async () => {
-      const response = await fetch(NOTIFICATION_POP_URL);
-      if (!response.ok) throw new Error("notification sound missing");
-      const data = await response.arrayBuffer();
-      notificationBuffer = await notificationAudio.decodeAudioData(data);
-      return notificationBuffer;
-    })().catch(() => null);
+let popContext: AudioContext | null = null;
+let popBuffer: AudioBuffer | null = null;
+let popBufferLoad: Promise<AudioBuffer | null> | null = null;
+let popElement: HTMLAudioElement | null = null;
+
+function audioContextFor(): AudioContext | null {
+  if (popContext) return popContext;
+  if (typeof window === "undefined") return null;
+  const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return null;
+  try {
+    popContext = new Ctor({ latencyHint: "interactive" });
+  } catch {
+    return null;
   }
-  return notificationBufferLoad;
+  return popContext;
 }
 
-async function playNotificationPop(): Promise<boolean> {
-  if (typeof window === "undefined" || !getUserSettings().soundEnabled) return false;
-  if (notificationAudio) {
-    try {
-      if (notificationAudio.state === "suspended") await notificationAudio.resume();
-      if (notificationAudio.state !== "running") {
-        const unlock = new Promise<void>((resolve, reject) => {
-          const finish = () => {
-            resolve();
-            cleanup();
-          };
-          const cleanup = () => {
-            window.removeEventListener("pointerdown", finish, true);
-            window.removeEventListener("keydown", finish, true);
-          };
-          window.addEventListener("pointerdown", finish, { capture: true, once: true });
-          window.addEventListener("keydown", finish, { capture: true, once: true });
-          setTimeout(() => reject(new Error("notification audio unlock timeout")), 1500);
-        });
-        try { await unlock; } catch { /* continue */ }
-      }
-      const buffer = await loadNotificationBuffer();
-      if (buffer && notificationAudio.state === "running") {
-        const source = notificationAudio.createBufferSource();
-        const gain = notificationAudio.createGain();
-        gain.gain.value = 0.85;
-        source.buffer = buffer;
-        source.connect(gain).connect(notificationAudio.destination);
-        source.start();
-        return true;
-      }
-    } catch {
-      // Fall through to HTML audio below.
-    }
-  }
+function loadPopBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
+  if (popBuffer) return Promise.resolve(popBuffer);
+  popBufferLoad ??= (async () => {
+    const response = await fetch(NOTIFICATION_POP_URL);
+    if (!response.ok) throw new Error("notification sound missing");
+    popBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
+    return popBuffer;
+  })().catch(() => {
+    popBufferLoad = null;
+    return null;
+  });
+  return popBufferLoad;
+}
 
+/** Wake (or create) the pop's audio graph. Safe to call on every gesture. */
+function primePop() {
+  const ctx = audioContextFor();
+  if (!ctx) return;
+  if (ctx.state !== "running") void ctx.resume().catch(() => undefined);
+  void loadPopBuffer(ctx);
+}
+
+// Every gesture re-arms the context, not just the first: browsers suspend it
+// again later (Safari on hide, Chrome after long idle), and a context that is
+// only unlocked once eventually goes quiet for good.
+if (typeof window !== "undefined") {
+  const arm = () => primePop();
+  window.addEventListener("pointerdown", arm, { capture: true, passive: true });
+  window.addEventListener("keydown", arm, { capture: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && popContext) arm();
+  });
+}
+
+async function playNativePop(): Promise<boolean> {
+  if (!isTauri() || !isMacOsDesktop()) return false;
   try {
-    const audio = new Audio(NOTIFICATION_POP_URL);
-    audio.volume = 0.85;
-    await audio.play();
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("play_notification_sound");
     return true;
   } catch {
     return false;
   }
 }
 
-export async function playMentionPing() {
-  if (!getUserSettings().soundEnabled) return;
-  if (await playNotificationPop()) return;
+async function playWebPop(): Promise<boolean> {
+  const ctx = audioContextFor();
+  if (ctx) {
+    try {
+      if (ctx.state !== "running") await ctx.resume();
+      const buffer = await loadPopBuffer(ctx);
+      if (buffer && ctx.state === "running") {
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        gain.gain.value = POP_VOLUME;
+        source.buffer = buffer;
+        source.connect(gain).connect(ctx.destination);
+        source.start();
+        return true;
+      }
+    } catch {
+      // Fall through to the media element.
+    }
+  }
   try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.35);
-    setTimeout(() => void ctx.close(), 500);
+    popElement ??= Object.assign(new Audio(NOTIFICATION_POP_URL), { preload: "auto", volume: POP_VOLUME });
+    popElement.currentTime = 0;
+    await popElement.play();
+    return true;
   } catch {
+    return false;
   }
 }
 
+/**
+ * The notification pop. Native on the macOS desktop app, Web Audio elsewhere.
+ * Returns false only when nothing could play (sound off, or the browser has
+ * not had a user gesture yet).
+ */
+export async function playNotificationPop(): Promise<boolean> {
+  if (typeof window === "undefined" || !getUserSettings().soundEnabled) return false;
+  if (await playNativePop()) return true;
+  return playWebPop();
+}
+
+/** Mentions and DMs share the one pop, so every notification sounds the same. */
+export async function playMentionPing() {
+  await playNotificationPop();
+}
+
 export async function playDmPing() {
-  if (!getUserSettings().soundEnabled) return;
-  if (await playNotificationPop()) return;
-  try {
-    const ctx = new AudioContext();
-    const playTone = (freq: number, start: number, duration: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, start);
-      gain.gain.setValueAtTime(0.12, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-      osc.start(start);
-      osc.stop(start + duration);
-    };
-    const t = ctx.currentTime;
-    playTone(880, t, 0.1);
-    playTone(1174.66, t + 0.08, 0.22);
-    setTimeout(() => void ctx.close(), 500);
-  } catch {
-  }
+  await playNotificationPop();
 }
 
 function notificationTag(target?: NotificationTarget, prefix = "disband"): string | undefined {
@@ -366,5 +370,7 @@ function showWebNotification(
 
 export function notifyUser(title: string, body?: string, target?: NotificationTarget) {
   if (target && !shouldDeliverOsNotification(target)) return;
+  // Calls have their own ringtone; everything else gets the pop.
+  if (target?.kind !== "call") void playNotificationPop();
   showSystemNotification(title, body, undefined, notificationTag(target));
 }

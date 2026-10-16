@@ -1,124 +1,131 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { catalystLevel } from "@/lib/catalysts";
+import { roleGradientTextStyle, roleIsGradientAnimated } from "@/lib/profileColor";
+import { cleanRoleIconEmoji, isEmojiRoleIcon, isImageRoleIcon } from "@/lib/role-icons";
 import type { ServerPermissionKey, ServerRole } from "@/lib/supabase/types";
-import { IconEdit, IconGripVertical, IconPlus, IconTrash } from "@/components/icons";
+import { RoleIcon } from "@/components/ui/RoleIcon";
+import { IconChevron, IconGripVertical, IconPlus, IconShield, IconTrash, IconUpload } from "@/components/icons";
+import {
+  ConfirmDialog,
+  EmptyState,
+  FieldLabel,
+  FilePickButton,
+  InlineError,
+  LevelLock,
+  Segmented,
+  SettingRow,
+  SettingsSection,
+  Toggle,
+  btn,
+  enterStyle,
+  iconBtn,
+  iconBtnDanger,
+} from "@/components/modals/server-settings/ui";
 
 export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; label: string; hint: string }[] }[] = [
   {
     title: "Moderation",
     perms: [
-      { key: "kick", label: "Kick Members", hint: "Remove members from the space" },
-      { key: "ban", label: "Ban Members", hint: "Ban members and manage the ban list" },
-      { key: "timeout_members", label: "Timeout Members", hint: "Temporarily mute members in chat" },
-      { key: "manage_messages", label: "Manage Messages", hint: "Delete anyone's messages" },
-      { key: "pin_messages", label: "Pin Messages", hint: "Pin messages to channels" },
-      { key: "mention_everyone", label: "Mention @everyone", hint: "Use @everyone and @here" },
+      { key: "kick", label: "Kick members", hint: "Remove people from the space. They can come back with an invite." },
+      { key: "ban", label: "Ban members", hint: "Remove people for good and manage the ban list." },
+      { key: "timeout_members", label: "Time out members", hint: "Stop someone posting for a while." },
+      { key: "manage_messages", label: "Manage messages", hint: "Delete anyone's messages." },
+      { key: "pin_messages", label: "Pin messages", hint: "Pin messages to a channel." },
+      { key: "mention_everyone", label: "Mention @everyone", hint: "Ping the whole space with @everyone and @here." },
     ],
   },
   {
     title: "Messages",
     perms: [
-      { key: "send_messages", label: "Send Messages", hint: "Post in text channels" },
-      { key: "add_reactions", label: "Add Reactions", hint: "React to messages" },
-      { key: "attach_files", label: "Attach Files", hint: "Upload files and images" },
+      { key: "send_messages", label: "Send messages", hint: "Post in text channels." },
+      { key: "add_reactions", label: "Add reactions", hint: "React to messages." },
+      { key: "attach_files", label: "Attach files", hint: "Upload images and files." },
     ],
   },
   {
     title: "Management",
     perms: [
-      { key: "manage_roles", label: "Manage Roles", hint: "Create roles and assign them" },
-      { key: "manage_channels", label: "Manage Channels", hint: "Create, edit and delete channels" },
-      { key: "manage_server", label: "Manage Space", hint: "Edit space settings and invites" },
-      { key: "create_invites", label: "Create Invites", hint: "Share invite links" },
-      { key: "manage_emojis", label: "Manage Emoji", hint: "Add and remove custom emoji" },
-      { key: "view_audit_log", label: "View Audit Log", hint: "See who did what" },
+      { key: "manage_roles", label: "Manage roles", hint: "Create roles below their own and assign them." },
+      { key: "manage_channels", label: "Manage channels", hint: "Create, edit and delete channels." },
+      { key: "manage_server", label: "Manage space", hint: "Edit the space's settings and invites." },
+      { key: "create_invites", label: "Create invites", hint: "Share invite links." },
+      { key: "manage_emojis", label: "Manage emoji", hint: "Add and remove custom emoji and sounds." },
+      { key: "view_audit_log", label: "View audit log", hint: "See who did what." },
     ],
   },
 ];
 
 export const ROLE_COLORS = ["#5865f2", "#57f287", "#fee75c", "#eb459e", "#ed4245", "#e67e22", "#9b59b6", "#1abc9c", "#95a5ba", "#ffffff"];
 
-function Toggle({ on, disabled, onFlip, label }: { on: boolean; disabled?: boolean; onFlip: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onFlip}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
-        on ? "bg-brand" : "bg-bg-accent"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`}
-      />
-    </button>
-  );
-}
+const DEFAULT_ROLE_PERMS: ServerPermissionKey[] = ["send_messages", "add_reactions", "attach_files"];
+const ICON_TYPES = "image/png,image/webp,image/gif,image/jpeg";
 
-export function RoleManager() {
-  const {
-    serverRoles,
-    members,
-    createRole,
-    updateRole,
-    deleteRole,
-    moveRole,
-    catalystCounts,
-    activeServer,
-  } = useApp();
+type Tab = "display" | "permissions";
+
+export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
+  const { serverRoles, members, createRole, updateRole, deleteRole, moveRole, catalystCounts, activeServer } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<Tab>("display");
   const [error, setError] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
-  const [editName, setEditName] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ServerRole | null>(null);
+  const knownIds = useRef<Set<string>>(new Set(serverRoles.map((r) => r.id)));
+  const awaitingNew = useRef(false);
 
+  const catalystCount = activeServer ? (catalystCounts[activeServer.id] ?? 0) : 0;
+  const level = catalystLevel(catalystCount).level;
   const sorted = [...serverRoles].sort((a, b) => b.position - a.position);
-  const lvl = catalystLevel(activeServer ? (catalystCounts[activeServer.id] ?? 0) : 0);
   const selected: ServerRole | undefined =
     sorted.find((r) => r.id === selectedId) ?? sorted.find((r) => !r.is_default) ?? sorted[0];
-  const perms = selected?.permissions ?? {};
-  const memberCount = (roleId: string, isDefault: boolean) =>
-    isDefault
-      ? members.length
-      : members.filter((m) => m.role_ids?.includes(roleId) ?? m.role_id === roleId).length;
+
+  // Select a role the moment it appears after "Create role".
+  useEffect(() => {
+    const fresh = serverRoles.find((r) => !knownIds.current.has(r.id));
+    if (fresh && awaitingNew.current) {
+      awaitingNew.current = false;
+      setSelectedId(fresh.id);
+      setTab("display");
+    }
+    knownIds.current = new Set(serverRoles.map((r) => r.id));
+  }, [serverRoles]);
+
+  const memberCount = (role: ServerRole) =>
+    role.is_default ? members.length : members.filter((m) => (m.role_ids?.length ? m.role_ids.includes(role.id) : m.role_id === role.id)).length;
 
   const run = async (fn: () => Promise<string | null>) => {
-    setLoading(true);
     setError(null);
     const err = await fn();
     if (err) setError(err);
-    setLoading(false);
+    return err;
   };
 
-  const saveName = (role: ServerRole) => {
-    const next = (editName ?? "").trim();
-    setEditName(null);
-    if (!next || next === role.name) return;
-    void run(() => updateRole(role.id, { name: next }));
-  };
+  async function create() {
+    setCreating(true);
+    awaitingNew.current = true;
+    const err = await run(() => createRole({ name: "new role", color: "#99aab5" }));
+    if (err) awaitingNew.current = false;
+    setCreating(false);
+  }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-text-normal">Roles</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Select a role to edit it. Drag rows to reorder — higher roles win when permissions conflict.
-        </p>
-      </div>
-      {error && <p className="rounded-md bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">{error}</p>}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[200px_1fr]">
-        <div className="space-y-3">
-          <ul className="space-y-1.5">
-            {sorted.map((r) => {
-              const isSel = selected?.id === r.id;
+    <div className="pb-10">
+      <InlineError>{error}</InlineError>
+      <div className={`grid grid-cols-1 gap-5 md:grid-cols-[236px_minmax(0,1fr)] ${error ? "mt-3" : ""}`}>
+        {/* Role list */}
+        <div className="min-w-0">
+          <button type="button" onClick={() => void create()} disabled={creating} className={`${btn.secondary} mb-3 w-full`}>
+            <IconPlus size={15} /> {creating ? "Creating…" : "Create role"}
+          </button>
+          <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary p-1.5">
+            {sorted.map((r, i) => {
+              const active = selected?.id === r.id;
+              const dropTarget = overId === r.id && dragId && dragId !== r.id;
               return (
                 <li
                   key={r.id}
@@ -134,7 +141,7 @@ export function RoleManager() {
                     setOverId(null);
                   }}
                   onDragOver={(e) => {
-                    if (r.is_default) return;
+                    if (r.is_default || !dragId) return;
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "move";
                     setOverId(r.id);
@@ -145,274 +152,453 @@ export function RoleManager() {
                     setDragId(null);
                     setOverId(null);
                   }}
-                  className={`rounded-lg border transition-all ${
-                    isSel ? "border-brand bg-brand/10" : "border-divider bg-bg-secondary hover:border-text-muted"
-                  } ${overId === r.id && dragId && dragId !== r.id ? "ring-2 ring-brand" : ""} ${
-                    dragId === r.id ? "opacity-40" : ""
-                  }`}
+                  className={`view-enter relative ${dragId === r.id ? "opacity-40" : ""}`}
+                  style={enterStyle(i)}
                 >
+                  {dropTarget && <span aria-hidden className="absolute inset-x-2 -top-px h-0.5 rounded-full bg-brand" />}
                   <button
                     type="button"
                     onClick={() => setSelectedId(r.id)}
-                    className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+                    aria-current={active ? "true" : undefined}
+                    className={`group flex h-9 w-full items-center gap-2 rounded-[10px] px-2 text-left transition-colors duration-150 ${
+                      active ? "bg-interactive-selected" : "hover:bg-interactive-hover"
+                    }`}
                   >
-                    {!r.is_default && (
-                      <span className="cursor-grab text-text-muted active:cursor-grabbing" title="Drag to reorder">
-                        <IconGripVertical size={14} />
-                      </span>
-                    )}
-                    {r.icon && <span className="shrink-0 text-[12px] text-text-normal">{r.icon}</span>}
-                    <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-normal">
-                      {r.name}
-                      {r.is_default && <span className="ml-1.5 text-[11px] text-text-muted">Default</span>}
+                    <span
+                      className={`w-3.5 shrink-0 text-text-muted ${r.is_default ? "invisible" : "cursor-grab opacity-0 group-hover:opacity-100 active:cursor-grabbing"}`}
+                      title="Drag to reorder"
+                    >
+                      <IconGripVertical size={14} />
                     </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-text-muted">
-                      {memberCount(r.id, r.is_default)}
+                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
+                    <span className={`min-w-0 flex-1 truncate text-[13.5px] ${active ? "font-medium text-text-normal" : "text-text-normal/90"}`}>
+                      {r.is_default ? "@everyone" : r.name}
                     </span>
+                    {r.icon && <RoleIcon icon={r.icon} name={r.name} size={14} />}
+                    <span className="shrink-0 text-[11.5px] tabular-nums text-text-muted">{memberCount(r)}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
-          <div className="flex gap-1.5">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newName.trim()) void run(() => createRole({ name: newName.trim(), color: "#99aab5" }).then(() => {
-                  setNewName("");
-                  return null;
-                }));
-              }}
-              placeholder="New role"
-              maxLength={32}
-              className="min-w-0 flex-1 rounded-md border border-divider bg-bg-secondary px-2.5 py-1.5 text-sm text-text-normal outline-none placeholder:text-text-muted focus:border-brand"
-            />
-            <button
-              type="button"
-              disabled={loading || !newName.trim()}
-              onClick={() =>
-                void run(() => createRole({ name: newName.trim(), color: "#99aab5" }).then(() => {
-                  setNewName("");
-                  return null;
-                }))
-              }
-              aria-label="Create role"
-              className="shrink-0 rounded-md bg-brand px-2.5 py-1.5 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-            >
-              <IconPlus size={16} />
-            </button>
-          </div>
+          <p className="mt-2.5 px-1 text-[12px] leading-relaxed text-text-muted">
+            Drag to reorder. Higher roles win when permissions disagree, and set a member&apos;s name colour.
+          </p>
         </div>
 
-        <div className="min-w-0 rounded-lg border border-divider bg-bg-secondary p-4">
+        {/* Editor */}
+        <div className="min-w-0">
           {!selected ? (
-            <p className="text-sm text-text-muted">No roles yet — create one.</p>
+            <div className="rounded-2xl border border-divider bg-bg-secondary">
+              <EmptyState icon={<IconShield size={20} />} title="No roles yet" body="Create one to start grouping members." />
+            </div>
           ) : (
-            <div className="space-y-5" key={selected.id}>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="h-6 w-6 shrink-0 rounded-full" style={{ backgroundColor: selected.color }} />
-                {editName !== null ? (
-                  <input
-                    autoFocus
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onBlur={() => saveName(selected)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveName(selected);
-                      if (e.key === "Escape") setEditName(null);
-                    }}
-                    maxLength={32}
-                    className="min-w-0 flex-1 rounded-md border border-brand bg-bg-tertiary px-2 py-1 text-[15px] font-bold text-text-normal outline-none"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditName(selected.name)}
-                    title="Rename role"
-                    className="group flex min-w-0 items-center gap-1.5 text-[15px] font-bold text-text-normal"
-                  >
-                    <span className="truncate">{selected.name}</span>
-                    <IconEdit size={14} className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
-                  </button>
-                )}
-                <span className="text-xs tabular-nums text-text-muted">
-                  {memberCount(selected.id, selected.is_default)} members
-                </span>
-                {!selected.is_default && (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => {
-                      if (confirm(`Delete role "${selected.name}"? Members keep everything else.`)) {
-                        void run(() => deleteRole(selected.id)).then(() => setSelectedId(null));
-                      }
-                    }}
-                    className="ml-auto rounded p-1.5 text-text-muted transition-colors hover:bg-status-dnd/15 hover:text-status-dnd disabled:opacity-40"
-                    aria-label={`Delete ${selected.name}`}
-                  >
-                    <IconTrash size={15} />
-                  </button>
-                )}
+            <div key={selected.id} className="view-enter">
+              <RoleHeader
+                role={selected}
+                count={memberCount(selected)}
+                canMoveUp={!selected.is_default && selected.position < serverRoles.length - 1}
+                canMoveDown={!selected.is_default && selected.position > 1}
+                onMove={(dir) => void run(() => moveRole(selected.id, selected.position + dir))}
+                onDelete={() => setDeleting(selected)}
+              />
+              <div className="mb-5">
+                <Segmented
+                  label="Role editor"
+                  value={tab}
+                  onChange={setTab}
+                  options={[
+                    { value: "display", label: "Display" },
+                    { value: "permissions", label: "Permissions" },
+                  ]}
+                />
               </div>
-
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">Color</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {ROLE_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      aria-label={`Use color ${c}`}
-                      disabled={loading}
-                      onClick={() => void run(() => updateRole(selected.id, { color: c }))}
-                      style={{ backgroundColor: c }}
-                      className={`h-6 w-6 rounded-full transition-transform hover:scale-110 disabled:opacity-40 ${
-                        selected.color.toLowerCase() === c ? "ring-2 ring-white ring-offset-2 ring-offset-bg-secondary" : ""
-                      }`}
-                    />
-                  ))}
-                  <input
-                    type="color"
-                    value={selected.color}
-                    disabled={loading}
-                    onChange={(e) => void run(() => updateRole(selected.id, { color: e.target.value }))}
-                    title="Custom color"
-                    className="h-6 w-8 cursor-pointer rounded disabled:opacity-40"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
-                  Role icon {lvl.level < 2 && <span className="font-normal normal-case">· Level 2 unlocks</span>}
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={selected.icon ?? ""}
-                    disabled={loading || lvl.level < 2}
-                    onChange={(e) => void run(() => updateRole(selected.id, { icon: e.target.value }))}
-                    placeholder="e.g. 🛡"
-                    className="w-20 rounded bg-bg-accent px-2 py-1.5 text-center text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-40"
-                  />
-                  {selected.icon && (
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => void run(() => updateRole(selected.id, { icon: null }))}
-                      className="text-xs text-text-muted hover:text-text-normal"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
-                  Gradient {lvl.level < 3 && <span className="font-normal normal-case">· Level 3 unlocks</span>}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="color"
-                    value={selected.gradient_to ?? selected.color}
-                    disabled={loading || lvl.level < 3}
-                    title={lvl.level >= 3 ? "Gradient end color" : "Boost to Level 3 for gradients"}
-                    onChange={(e) => void run(() => updateRole(selected.id, { gradient_to: e.target.value }))}
-                    className="h-7 w-10 cursor-pointer rounded disabled:cursor-not-allowed disabled:opacity-40"
-                  />
-                  {selected.gradient_to && (
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => void run(() => updateRole(selected.id, { gradient_to: null, gradient_animated: false }))}
-                      className="text-xs text-text-muted hover:text-text-normal disabled:opacity-40"
-                    >
-                      Clear
-                    </button>
-                  )}
-                  <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-text-muted">
-                    <input
-                      type="checkbox"
-                      checked={!!selected.gradient_animated}
-                      disabled={loading || !selected.gradient_to || lvl.level < 3}
-                      onChange={(e) => void run(() => updateRole(selected.id, { gradient_animated: e.target.checked }))}
-                      className="h-3.5 w-3.5 accent-brand disabled:opacity-40"
-                    />
-                    Animated
-                  </label>
-                </div>
-              </div>
-
-              {PERM_GROUPS.map((group) => (
-                <div key={group.title}>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">{group.title}</p>
-                  <div className="space-y-1">
-                    {group.perms.map((p) => {
-                      const locked = selected.is_default && p.key !== "send_messages" && p.key !== "add_reactions" && p.key !== "attach_files";
-                      return (
-                        <div
-                          key={p.key}
-                          className={`flex items-center gap-3 rounded-md px-2.5 py-2 ${locked ? "opacity-40" : "hover:bg-bg-tertiary"}`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium leading-tight text-text-normal">{p.label}</p>
-                            <p className="truncate text-xs text-text-muted">{p.hint}</p>
-                          </div>
-                          <Toggle
-                            on={!!selected.permissions?.[p.key]}
-                            disabled={loading || locked}
-                            onFlip={() =>
-                              void run(() =>
-                                updateRole(selected.id, {
-                                  permissions: { ...selected.permissions, [p.key]: !selected.permissions?.[p.key] },
-                                }),
-                              )
-                            }
-                            label={p.label}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              {selected.is_default && (
-                <p className="text-xs leading-relaxed text-text-muted">
-                  The default role holds no moderation powers. Its message permissions act as channel defaults for everyone.
-                </p>
+              {tab === "display" ? (
+                <DisplayTab role={selected} level={level} catalystCount={catalystCount} onBoost={onBoost} run={run} update={updateRole} />
+              ) : (
+                <PermissionsTab role={selected} run={run} update={updateRole} />
               )}
-
-              <div className="flex items-center gap-2">
-                {!selected.is_default && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={loading || selected.position >= serverRoles.length - 1}
-                      onClick={() => void run(() => moveRole(selected.id, selected.position + 1))}
-                      className="rounded-md border border-divider px-2.5 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
-                    >
-                      Move up
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loading || selected.position <= 1}
-                      onClick={() => void run(() => moveRole(selected.id, selected.position - 1))}
-                      className="rounded-md border border-divider px-2.5 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text-normal disabled:opacity-40"
-                    >
-                      Move down
-                    </button>
-                  </>
-                )}
-                <span className="ml-auto text-xs tabular-nums text-text-muted">Position {selected.position}</span>
-              </div>
             </div>
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleting}
+        title={deleting ? `Delete ${deleting.name}?` : ""}
+        body="Members with this role lose it, along with its colour and permissions. Nothing else about them changes."
+        confirmLabel="Delete role"
+        onCancel={() => setDeleting(null)}
+        onConfirm={async () => {
+          if (!deleting) return;
+          const err = await run(() => deleteRole(deleting.id));
+          if (!err) setSelectedId(null);
+          setDeleting(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function RoleHeader({
+  role,
+  count,
+  canMoveUp,
+  canMoveDown,
+  onMove,
+  onDelete,
+}: {
+  role: ServerRole;
+  count: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (dir: 1 | -1) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="mb-4 flex items-center gap-3">
+      <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 truncate text-[17px] font-semibold tracking-[-0.01em] text-text-normal">
+          <span className="truncate">{role.is_default ? "@everyone" : role.name}</span>
+          {role.icon && <RoleIcon icon={role.icon} name={role.name} size={17} />}
+        </p>
+        <p className="text-[12.5px] text-text-muted">
+          {count} {count === 1 ? "member" : "members"}
+          {role.is_default && " · everyone in the space has this role"}
+        </p>
+      </div>
+      {!role.is_default && (
+        <div className="flex items-center gap-0.5">
+          <button type="button" onClick={() => onMove(1)} disabled={!canMoveUp} className={iconBtn} aria-label="Move role up" title="Move up">
+            <IconChevron size={16} className="rotate-180" />
+          </button>
+          <button type="button" onClick={() => onMove(-1)} disabled={!canMoveDown} className={iconBtn} aria-label="Move role down" title="Move down">
+            <IconChevron size={16} />
+          </button>
+          <button type="button" onClick={onDelete} className={iconBtnDanger} aria-label={`Delete ${role.name}`} title="Delete role">
+            <IconTrash size={16} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Update = ReturnType<typeof useApp>["updateRole"];
+type Run = (fn: () => Promise<string | null>) => Promise<string | null>;
+
+/** Commit a value only after the user stops changing it (colour pickers fire continuously). */
+function useDebouncedCommit<T>(value: T, committed: T, commit: (v: T) => void, delay = 350) {
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  useEffect(() => {
+    if (value === committed) return;
+    const t = window.setTimeout(() => commitRef.current(value), delay);
+    return () => window.clearTimeout(t);
+  }, [value, committed, delay]);
+}
+
+function DisplayTab({
+  role,
+  level,
+  catalystCount,
+  onBoost,
+  run,
+  update,
+}: {
+  role: ServerRole;
+  level: number;
+  catalystCount: number;
+  onBoost?: () => void;
+  run: Run;
+  update: Update;
+}) {
+  const [name, setName] = useState(role.name);
+  const [color, setColor] = useState(role.color);
+  const [gradient, setGradient] = useState(role.gradient_to ?? role.color);
+
+  useEffect(() => setName(role.name), [role.name]);
+  useEffect(() => setColor(role.color), [role.color]);
+  useEffect(() => setGradient(role.gradient_to ?? role.color), [role.gradient_to, role.color]);
+
+  useDebouncedCommit(color, role.color, (v) => void run(() => update(role.id, { color: v })));
+  // With no gradient set, "committed" equals the draft, so nothing is written.
+  useDebouncedCommit(gradient, role.gradient_to ?? gradient, (v) => void run(() => update(role.id, { gradient_to: v })));
+
+  const saveName = () => {
+    const next = name.trim().slice(0, 32);
+    if (!next) {
+      setName(role.name);
+      return;
+    }
+    if (next !== role.name) void run(() => update(role.id, { name: next }));
+  };
+
+  const previewRole = { ...role, color, gradient_to: role.gradient_to ? gradient : null };
+  const gradStyle = roleGradientTextStyle(previewRole);
+
+  return (
+    <div>
+      {/* How it looks where it matters: on a message. */}
+      <SettingsSection title="Preview">
+        <div className="flex items-start gap-3 px-5 py-4">
+          <span className="h-10 w-10 shrink-0 rounded-full bg-bg-accent" />
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-[15px] font-medium leading-tight">
+              <span
+                className={gradStyle && roleIsGradientAnimated(previewRole) ? "animate-role-gradient" : ""}
+                style={gradStyle ?? { color }}
+              >
+                {role.is_default ? "Someone" : `A ${role.name}`}
+              </span>
+              {role.icon && <RoleIcon icon={role.icon} name={role.name} size={16} />}
+              <span className="text-[12px] font-normal text-text-muted">Today at 9:41 PM</span>
+            </p>
+            <p className="mt-1 text-[14px] text-text-normal/90">This is how my name looks in chat.</p>
+          </div>
+        </div>
+      </SettingsSection>
+
+      {!role.is_default && (
+        <SettingsSection title="Name">
+          <div className="px-5 py-4">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value.slice(0, 32))}
+              onBlur={saveName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setName(role.name);
+                }
+              }}
+              aria-label="Role name"
+              className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 text-[14px] text-text-normal outline-none focus:border-brand"
+            />
+          </div>
+        </SettingsSection>
+      )}
+
+      <SettingsSection title="Colour" description="The highest coloured role sets a member's name colour.">
+        <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+          {ROLE_COLORS.map((c) => {
+            const active = color.toLowerCase() === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-label={`Colour ${c}`}
+                aria-pressed={active}
+                onClick={() => setColor(c)}
+                style={{ backgroundColor: c }}
+                className={`h-8 w-8 rounded-full transition-transform duration-150 hover:scale-110 ${
+                  active ? "ring-2 ring-text-normal ring-offset-2 ring-offset-bg-secondary" : ""
+                }`}
+              />
+            );
+          })}
+          <label
+            className="relative flex h-8 items-center gap-2 rounded-full border border-divider pl-1 pr-3 text-[12.5px] text-text-muted transition-colors hover:bg-interactive-hover"
+            title="Custom colour"
+          >
+            <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: color }} />
+            <span className="font-mono">{color.toLowerCase()}</span>
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Custom colour" />
+          </label>
+        </div>
+      </SettingsSection>
+
+      <RoleIconCard role={role} unlocked={level >= 2} catalystCount={catalystCount} onBoost={onBoost} run={run} update={update} />
+
+      <SettingsSection title="Gradient" description="Fade the name into a second colour.">
+        {level < 3 ? (
+          <LevelLock level={3} count={catalystCount} perk="Gradient roles" onBoost={onBoost} />
+        ) : (
+          <>
+            <SettingRow label="Use a gradient" htmlFor={`grad-${role.id}`} description="From the role colour into a second one.">
+              <Toggle
+                id={`grad-${role.id}`}
+                label="Use a gradient"
+                checked={!!role.gradient_to}
+                onChange={(on) =>
+                  void run(() => update(role.id, on ? { gradient_to: gradient === color ? "#eb459e" : gradient } : { gradient_to: null, gradient_animated: false }))
+                }
+              />
+            </SettingRow>
+            {role.gradient_to && (
+              <>
+                <SettingRow label="Second colour">
+                  <label className="relative flex h-8 items-center gap-2 rounded-full border border-divider pl-1 pr-3 text-[12.5px] text-text-muted hover:bg-interactive-hover">
+                    <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: gradient }} />
+                    <span className="font-mono">{gradient.toLowerCase()}</span>
+                    <input type="color" value={gradient} onChange={(e) => setGradient(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Gradient end colour" />
+                  </label>
+                </SettingRow>
+                <SettingRow label="Animate it" htmlFor={`grad-anim-${role.id}`} description="A slow shimmer across the name.">
+                  <Toggle
+                    id={`grad-anim-${role.id}`}
+                    label="Animate the gradient"
+                    checked={!!role.gradient_animated}
+                    onChange={(on) => void run(() => update(role.id, { gradient_animated: on }))}
+                  />
+                </SettingRow>
+              </>
+            )}
+          </>
+        )}
+      </SettingsSection>
+    </div>
+  );
+}
+
+function RoleIconCard({
+  role,
+  unlocked,
+  catalystCount,
+  onBoost,
+  run,
+  update,
+}: {
+  role: ServerRole;
+  unlocked: boolean;
+  catalystCount: number;
+  onBoost?: () => void;
+  run: Run;
+  update: Update;
+}) {
+  const { upload } = useMediaUpload();
+  const [emoji, setEmoji] = useState(role.icon && !isImageRoleIcon(role.icon) ? role.icon : "");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setEmoji(role.icon && !isImageRoleIcon(role.icon) ? role.icon : ""), [role.icon]);
+
+  async function setIcon(value: string | null) {
+    setError(null);
+    const err = await run(() => update(role.id, { icon: value }));
+    if (err) setError(err);
+  }
+
+  function commitEmoji() {
+    const clean = cleanRoleIconEmoji(emoji);
+    if (!clean) return;
+    if (!isEmojiRoleIcon(clean)) {
+      setError("Use a single emoji, like 🛡️ or ⭐.");
+      return;
+    }
+    if (clean !== role.icon) void setIcon(clean);
+  }
+
+  async function pickImage(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("That file isn't an image.");
+      return;
+    }
+    if (file.size > 256 * 1024) {
+      setError("Role icons can be up to 256 KB. They show at 16 px, so small is fine.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const res = await upload(file);
+      if (!res) {
+        setError("The upload didn't go through. Try again.");
+        return;
+      }
+      await setIcon(res.url);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <SettingsSection title="Role icon" description="An emoji or a small picture shown after members' names in chat and the member list.">
+      {!unlocked ? (
+        <>
+          <LevelLock level={2} count={catalystCount} perk="Role icons" onBoost={onBoost} />
+          {role.icon && (
+            <div className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3">
+              <span className="flex items-center gap-2 text-[13px] text-text-muted">
+                Current icon <RoleIcon icon={role.icon} name={role.name} size={16} />
+              </span>
+              <button type="button" onClick={() => void setIcon(null)} className={btn.ghost}>
+                Remove
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center gap-4 px-5 py-4">
+          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] border border-divider bg-bg-accent ${uploading ? "animate-pulse" : ""}`}>
+            {role.icon ? <RoleIcon icon={role.icon} name={role.name} size={30} /> : <IconShield size={20} className="text-text-muted" />}
+          </div>
+          <div className="min-w-0 flex-1 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="w-[120px]">
+                <FieldLabel htmlFor={`role-emoji-${role.id}`}>Emoji</FieldLabel>
+                <input
+                  id={`role-emoji-${role.id}`}
+                  value={emoji}
+                  onChange={(e) => setEmoji(cleanRoleIconEmoji(e.target.value))}
+                  onBlur={commitEmoji}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitEmoji();
+                  }}
+                  placeholder="🛡️"
+                  className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-center text-[20px] outline-none placeholder:opacity-40 focus:border-brand"
+                />
+              </div>
+              <span className="mt-6 text-[12.5px] text-text-muted">or</span>
+              <div className="mt-6 flex items-center gap-2">
+                <FilePickButton accept={ICON_TYPES} disabled={uploading} onPick={(f) => void pickImage(f)}>
+                  <IconUpload size={15} /> {uploading ? "Uploading…" : "Upload image"}
+                </FilePickButton>
+                {role.icon && (
+                  <button type="button" onClick={() => void setIcon(null)} className={btn.ghost}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-[12px] text-text-muted">Images: square PNG, WebP or GIF, 64 × 64 or bigger, up to 256 KB.</p>
+          </div>
+          {error && <p className="w-full text-[13px] text-status-dnd">{error}</p>}
+        </div>
+      )}
+    </SettingsSection>
+  );
+}
+
+function PermissionsTab({ role, run, update }: { role: ServerRole; run: Run; update: Update }) {
+  return (
+    <div>
+      {role.is_default && (
+        <p className="mb-5 rounded-[12px] border border-divider bg-bg-secondary px-4 py-3 text-[13px] leading-relaxed text-text-muted">
+          @everyone can&apos;t hold moderation powers. Its message permissions are the default for every channel.
+        </p>
+      )}
+      {PERM_GROUPS.map((group) => (
+        <SettingsSection key={group.title} title={group.title}>
+          {group.perms.map((p) => {
+            const locked = role.is_default && !DEFAULT_ROLE_PERMS.includes(p.key);
+            const on = !!role.permissions?.[p.key];
+            return (
+              <SettingRow key={p.key} label={p.label} description={locked ? "Not available on @everyone." : p.hint} htmlFor={`perm-${role.id}-${p.key}`}>
+                <Toggle
+                  id={`perm-${role.id}-${p.key}`}
+                  label={p.label}
+                  checked={on}
+                  disabled={locked}
+                  onChange={(next) => void run(() => update(role.id, { permissions: { ...role.permissions, [p.key]: next } }))}
+                />
+              </SettingRow>
+            );
+          })}
+        </SettingsSection>
+      ))}
     </div>
   );
 }

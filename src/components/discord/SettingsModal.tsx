@@ -17,7 +17,7 @@ import {
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
 import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
-import { useBadges, loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
+import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
@@ -132,8 +132,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const pendingCancelUntil = profile?.deletion_cancel_until ?? null;
   const pendingPurgeAt = profile?.deletion_purge_at ?? null;
 
-  const myBadges = useBadges(profile?.id);
   const [myAllBadges, setMyAllBadges] = useState<Array<AwardedBadge & { visible: boolean }>>([]);
+  const [badgeError, setBadgeError] = useState<string | null>(null);
   useEffect(() => {
     if (!profile?.id) { setMyAllBadges([]); return; }
     let cancelled = false;
@@ -815,41 +815,51 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   {myAllBadges.length > 0 && (
                     <SettingsSection
                       title="Badges"
-                      description="Toggle any badge you have earned. Hidden badges stay on your record but do not show on your profile."
+                      description="Choose which of your badges show on your profile. Hidden badges stay on your account, so you can turn them back on any time."
                     >
-                      <SettingRow label="Your badges" stacked>
-                        <div className="grid gap-2">
-                          {myAllBadges.map((badge) => (
-                            <div
-                              key={badge.key}
-                              className="flex items-center gap-3 rounded-md border border-divider bg-interactive-hover/30 px-3 py-2"
-                            >
-                              <span
-                                className="inline-flex shrink-0 items-center justify-center rounded-md px-2 py-1 text-[12px] font-semibold"
-                                style={{ backgroundColor: `${badge.accent}2e`, color: badge.accent }}
-                                title={badge.description}
-                              >
-                                <BadgeGlyph badgeKey={badge.key} size={14} />
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[13px] font-semibold text-text-normal">{badge.name}</p>
-                                <p className="truncate text-[11px] text-text-muted">{badge.description}</p>
-                              </div>
-                              <Toggle
-                                label={`Show ${badge.name}`}
-                                checked={badge.visible}
-                                onChange={async () => {
-                                  const next = !badge.visible;
-                                  setMyAllBadges((prev) =>
-                                    prev.map((item) => (item.key === badge.key ? { ...item, visible: next } : item)),
-                                  );
-                                  await setBadgeVisible(profile?.id ?? "", badge.key, next);
-                                }}
-                              />
-                            </div>
-                          ))}
+                      {myAllBadges.map((badge) => (
+                        <div
+                          key={badge.key}
+                          className={`flex items-center gap-3.5 border-b border-divider px-5 py-3.5 transition-opacity duration-200 last:border-b-0 ${badge.visible ? "" : "opacity-60"}`}
+                        >
+                          <span
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+                            style={{ backgroundColor: `${badge.accent}24`, color: badge.accent }}
+                            aria-hidden
+                          >
+                            <BadgeGlyph badgeKey={badge.key} size={18} />
+                          </span>
+                          <label htmlFor={`badge-${badge.key}`} className="min-w-0 flex-1 cursor-pointer">
+                            <span className="block text-[14px] font-medium text-text-normal">{badge.name}</span>
+                            <span className="block truncate text-[12.5px] text-text-muted">
+                              {badge.visible ? badge.description : "Hidden from your profile"}
+                            </span>
+                          </label>
+                          <Toggle
+                            id={`badge-${badge.key}`}
+                            label={`Show ${badge.name} on your profile`}
+                            checked={badge.visible}
+                            onChange={async () => {
+                              if (!profile?.id) return;
+                              const next = !badge.visible;
+                              const flip = (visible: boolean) =>
+                                setMyAllBadges((prev) =>
+                                  prev.map((item) => (item.key === badge.key ? { ...item, visible } : item)),
+                                );
+                              flip(next);
+                              setBadgeError(null);
+                              const err = await setBadgeVisible(profile.id, badge.key, next);
+                              if (err) {
+                                flip(!next);
+                                setBadgeError(err);
+                              }
+                            }}
+                          />
                         </div>
-                      </SettingRow>
+                      ))}
+                      {badgeError && (
+                        <p role="alert" className="border-t border-divider px-5 py-3 text-[13px] text-status-dnd">{badgeError}</p>
+                      )}
                     </SettingsSection>
                   )}
 
