@@ -118,6 +118,9 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
 
     LaunchedEffect(thread.id) {
         dmUnread.markActive(thread.id)
+        // Opening the chat always brings its row back, even if it was closed
+        // from the list earlier.
+        app.closedDms.unhide(thread.friend?.id)
         ActiveChat.show(thread.id)
         runCatching { Database.markDmRead(thread.id) }
 
