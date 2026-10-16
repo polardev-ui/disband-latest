@@ -17,6 +17,7 @@ import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor, activeStatusNote, statusExpiryLabel } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { ListeningCard } from "@/components/ui/ListeningCard";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { USER_NOTE_MAX, useUserNote } from "@/hooks/useUserNote";
 import type { Profile, Server, ServerRole } from "@/lib/supabase/types";
@@ -200,14 +201,22 @@ export function UserProfileModal({
   if (profileProp) lastProfileRef.current = profileProp;
   const profile = profileProp ?? lastProfileRef.current;
 
-  const { friends, presenceMap, servers, loadMutuals, user } = useApp();
+  const { friends, presenceMap, servers, loadMutuals, user, openDmWithFriend, sendDmMessage } = useApp();
   const [mutualServerIds, setMutualServerIds] = useState<string[]>([]);
   const [mutualFriendIds, setMutualFriendIds] = useState<string[]>([]);
   const [tab, setTab] = useState<ProfileTab>("about");
+  // Inline status reply: hover the bubble → reply button → type here → Enter
+  // jumps to their DM with the reply sent.
+  const [statusReplyOpen, setStatusReplyOpen] = useState(false);
+  const [statusReplyText, setStatusReplyText] = useState("");
+  const [statusReplySending, setStatusReplySending] = useState(false);
   const note = useUserNote(open ? user?.id : null, open && !isSelf ? profile?.id : null);
 
   useEffect(() => {
     setTab("about");
+    setStatusReplyOpen(false);
+    setStatusReplyText("");
+    setStatusReplySending(false);
     if (!open || !profile || profile.id === undefined) {
       setMutualServerIds([]);
       setMutualFriendIds([]);
@@ -230,6 +239,28 @@ export function UserProfileModal({
   const title = profile.display_name?.trim() || displayName(profile);
   const live = presenceStatusFor(profile, presenceMap);
   const statusNote = activeStatusNote(profile);
+
+  // Replying to a status sends a DM quoting it, then jumps there so the
+  // reply lands in front of both people. Same open-then-send beat as
+  // forwarding: the thread id only settles after the open resolves.
+  async function submitStatusReply() {
+    if (!profile || isSelf || !statusNote) return;
+    const text = statusReplyText.trim();
+    if (!text || statusReplySending) return;
+    setStatusReplySending(true);
+    try {
+      await openDmWithFriend(profile.id);
+      const content = `> ${statusNote}\n${text}`;
+      setTimeout(() => {
+        void sendDmMessage(content);
+      }, 250);
+      setStatusReplyText("");
+      setStatusReplyOpen(false);
+      onClose();
+    } finally {
+      setStatusReplySending(false);
+    }
+  }
   const isBot = !!profile.is_bot;
 
   const mutualServers = mutualServerIds
@@ -399,15 +430,64 @@ export function UserProfileModal({
 
           {statusNote && (
             // A speech bubble whose notch points back up at the name.
-            <div className="relative mt-3.5 w-fit max-w-full">
+            <div className="group/status relative mt-3.5 w-fit max-w-full">
               <span
                 aria-hidden
                 className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-divider bg-bg-accent"
               />
               <div className="rounded-2xl border border-divider bg-bg-accent px-3.5 py-2">
+                {!isSelf && (
+                  <button
+                    type="button"
+                    onClick={() => setStatusReplyOpen((v) => !v)}
+                    aria-label="Reply to status"
+                    title="Reply to status"
+                    className="absolute -top-2 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-bg-secondary text-text-muted opacity-0 shadow transition-all hover:text-text-normal focus-visible:opacity-100 group-hover/status:opacity-100 [@media(hover:none)]:opacity-100"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 17 4 12 9 7" />
+                      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                    </svg>
+                  </button>
+                )}
                 <p className="break-words text-[14px] leading-snug">{statusNote}</p>
                 {profile.status_expires_at && (
                   <p className="mt-0.5 text-[11px] text-text-muted">{statusExpiryLabel(profile.status_expires_at)}</p>
+                )}
+                {!isSelf && statusReplyOpen && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={statusReplyText}
+                      onChange={(e) => setStatusReplyText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void submitStatusReply();
+                        }
+                        if (e.key === "Escape") {
+                          setStatusReplyOpen(false);
+                          setStatusReplyText("");
+                        }
+                      }}
+                      placeholder={`Reply to ${title}…`}
+                      maxLength={500}
+                      disabled={statusReplySending}
+                      className="min-w-0 flex-1 rounded-lg bg-bg-primary px-2.5 py-1.5 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void submitStatusReply()}
+                      disabled={!statusReplyText.trim() || statusReplySending}
+                      aria-label="Send status reply"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-40"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                      </svg>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -435,6 +515,12 @@ export function UserProfileModal({
                     <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[14px] leading-relaxed">
                       {profile.bio}
                     </p>
+                  </Section>
+                )}
+
+                {profile.listening && (
+                  <Section label="Listening">
+                    <ListeningCard listening={profile.listening} />
                   </Section>
                 )}
 

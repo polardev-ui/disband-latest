@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
-import { IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
+import { IconClose, IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
 import { CallIndicator } from "./CallIndicator";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
@@ -80,6 +81,7 @@ function DmRowBadge({ count }: { count: number }) {
 export function HomePanel({
   onOpenSettings,
   onOpenProfile,
+  onFriendClick,
   onGroupContext,
   onOpenSubscription,
   onOpenShop,
@@ -99,9 +101,11 @@ export function HomePanel({
     setViewNotes,
     presenceMap,
     getGroupUnreadCount,
+    closeDmThread,
     tetherProfile,
     subscriptionPlan,
   } = useApp();
+  const { openMenu } = useContextMenu();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   const onFriends = viewMode === "home";
@@ -120,6 +124,36 @@ export function HomePanel({
       return;
     }
     await openDmWithFriend(entry.friend.id);
+  }
+
+  // Long-press (mobile) or right-click a DM row: profile actions plus Close.
+  // Closing hides the row; messaging them again — or a new message from them
+  // — brings the row and its history back.
+  function openDmRowMenu(entry: (typeof dmListEntries)[number], x: number, y: number) {
+    openMenu(x, y, [
+      {
+        id: "message",
+        label: "Message",
+        icon: <IconFriends size={16} />,
+        onClick: () => void openDmEntry(entry),
+      },
+      ...(onFriendClick
+        ? [
+            {
+              id: "profile",
+              label: "View Profile",
+              icon: <IconFriends size={16} />,
+              onClick: () => onFriendClick(entry.friend.id),
+            },
+          ]
+        : []),
+      {
+        id: "close",
+        label: "Close DM",
+        icon: <IconClose size={16} />,
+        onClick: () => closeDmThread(entry.friend.id),
+      },
+    ]);
   }
 
   return (
@@ -260,7 +294,11 @@ export function HomePanel({
                   key={entry.key}
                   type="button"
                   onClick={() => void openDmEntry(entry)}
-                  className={`mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openDmRowMenu(entry, e.clientX, e.clientY);
+                  }}
+                  className={`group/dmrow mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
                     active ? "bg-interactive-selected" : ""
                   }`}
                 >
@@ -269,7 +307,27 @@ export function HomePanel({
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[presenceMap.get(entry.friend.id) ?? "offline"]}`} />
                     <DmRowBadge count={entry.unreadCount} />
                   </div>
-                  <span className="truncate text-sm">{displayName(entry.friend)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{displayName(entry.friend)}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Close conversation with ${displayName(entry.friend)}`}
+                    title="Close DM"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeDmThread(entry.friend.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeDmThread(entry.friend.id);
+                      }
+                    }}
+                    className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted opacity-0 transition-opacity hover:bg-interactive-hover hover:text-text-normal focus-visible:opacity-100 group-hover/dmrow:opacity-100 [@media(hover:none)]:flex [@media(hover:none)]:opacity-60"
+                  >
+                    <IconClose size={13} />
+                  </span>
                 </button>
               );
             })}

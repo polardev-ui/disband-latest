@@ -632,6 +632,62 @@ img.twemoji {
   transform-origin: top right;
 }
 
+/* Shimmering loading placeholders (member list, etc.): a soft light band
+   sweeps across a muted block on a loop. Honors reduced motion. */
+@keyframes skeleton-glimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-glimmer {
+  background: linear-gradient(
+    100deg,
+    var(--color-bg-accent) 30%,
+    var(--color-interactive-hover) 50%,
+    var(--color-bg-accent) 70%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-glimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-glimmer {
+    animation: none;
+  }
+}
+
+/* Now-listening marquee: hold at the start, slide left to reveal the rest,
+   hold at the end, slide back, hold 3s at the start, loop. Distance and
+   duration come from `--marquee-dist` / `animation-duration` set inline by
+   ListeningCard after measuring the overflow. */
+@keyframes listening-marquee {
+  0%, 12% {
+    transform: translateX(0);
+  }
+  42%, 54% {
+    transform: translateX(calc(-1 * var(--marquee-dist, 0px)));
+  }
+  88%, 100% {
+    transform: translateX(0);
+  }
+}
+
+.listening-marquee {
+  animation-name: listening-marquee;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listening-marquee {
+    animation: none;
+  }
+}
+
 @keyframes call-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
