@@ -264,6 +264,13 @@ html[data-desktop] {
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
 }
+/* Double-tap still zooms the page on touch browsers, which fights the
+   double-tap-to-react gesture on messages. `manipulation` disables the
+   double-tap zoom while keeping pinch zoom intact — global so mobile web
+   gets it too, not just the Tauri shell. */
+html {
+  touch-action: manipulation;
+}
 html[data-desktop] body {
   overscroll-behavior: none;
   -webkit-user-select: none;

@@ -279,7 +279,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             data-context-menu
             role="menu"
             aria-labelledby={menuId}
-            className={`modal-pop${menuExiting ? " pop-out" : ""} fixed min-w-[200px] rounded-[14px] border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]`}
+            className={`modal-pop${menuExiting ? " pop-out" : ""} fixed min-w-[200px] max-h-[70vh] overflow-y-auto overscroll-contain rounded-[14px] border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)] [@media(pointer:coarse)]:min-w-[240px]`}
             style={{
               zIndex: OVERLAY_Z.contextMenu,
               left: Math.min(shownMenu.x, window.innerWidth - 200),
@@ -303,7 +303,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                     if (!item.disabled) item.onClick?.();
                     closeMenu();
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left text-[13.5px] transition-colors duration-100 disabled:opacity-40 ${
+                  className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left text-[13.5px] transition-colors duration-100 disabled:opacity-40 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:py-2.5 [@media(pointer:coarse)]:text-[15px] ${
                     item.danger
                       ? "text-status-dnd hover:bg-status-dnd/10"
                       : "text-text-normal hover:bg-interactive-hover"

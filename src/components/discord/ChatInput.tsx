@@ -862,7 +862,7 @@ export function ChatInput({
             <div
               ref={highlightRef}
               aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[15px] leading-[22px] text-text-normal"
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[15px] leading-[22px] text-text-normal [@media(pointer:coarse)]:text-base"
             >
               <ComposerMarkdown text={text} />
             </div>
@@ -914,7 +914,8 @@ export function ChatInput({
             onPaste={onPaste}
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             rows={1}
-            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[15px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted/80 focus:outline-none"
+            enterKeyHint="send"
+            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[15px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted/80 focus:outline-none [@media(pointer:coarse)]:text-base"
             onScroll={(e) => {
               // Keep the styled layer pinned to the textarea once the text is
               // long enough to scroll, or the two drift apart.

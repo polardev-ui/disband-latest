@@ -128,8 +128,45 @@ const MessageRow = memo(function MessageRow({
   onJumpToReply,
   onContentResize,
 }: MessageRowProps) {
+  // Deterministic long-press for touch: iOS long-presses selectable text
+  // into a selection loupe instead of firing contextmenu, so rely on a
+  // timer rather than the native event. Links, media and buttons keep
+  // native behavior; anything else held still for 550ms opens the message
+  // menu at the touch point.
+  const touchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchOrigin = useRef<{ x: number; y: number } | null>(null);
+  const cancelTouchTimer = () => {
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+      touchTimer.current = null;
+    }
+    touchOrigin.current = null;
+  };
   return (
-    <div>
+    <div
+      onTouchStart={(e) => {
+        if (e.touches.length !== 1) return;
+        const target = e.target as HTMLElement | null;
+        if (target?.closest("a,img,video,button")) return;
+        const touch = e.touches[0];
+        touchOrigin.current = { x: touch.clientX, y: touch.clientY };
+        touchTimer.current = setTimeout(() => {
+          touchTimer.current = null;
+          touchOrigin.current = null;
+          onMessageContext(message, touch.clientX, touch.clientY);
+        }, 550);
+      }}
+      onTouchMove={(e) => {
+        const origin = touchOrigin.current;
+        if (!origin) return;
+        const touch = e.touches[0];
+        if (!touch || Math.hypot(touch.clientX - origin.x, touch.clientY - origin.y) > 12) {
+          cancelTouchTimer();
+        }
+      }}
+      onTouchEnd={cancelTouchTimer}
+      onTouchCancel={cancelTouchTimer}
+    >
       {showDivider && <NewMessagesDivider animate={dividerAnimate} />}
       <ChatMessage
         message={message}
@@ -546,6 +583,20 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     };
     vv.addEventListener("resize", onResize);
     return () => vv.removeEventListener("resize", onResize);
+  }, [scrollToBottom]);
+
+  // Fallback for engines where the visual-viewport resize fires late or not
+  // at all (notably iOS): when the composer takes focus while pinned to the
+  // bottom, the keyboard is opening — follow it down on the next frame.
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.tagName === "TEXTAREA" && stickToBottomRef.current) {
+        requestAnimationFrame(() => scrollToBottom("auto", true));
+      }
+    };
+    window.addEventListener("focusin", onFocusIn);
+    return () => window.removeEventListener("focusin", onFocusIn);
   }, [scrollToBottom]);
 
   useLayoutEffect(() => {

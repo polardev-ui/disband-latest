@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { giphyDisplayUrl, giphyMp4Url } from "@/lib/giphy";
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
 import { DangerousDownloadModal } from "./DangerousDownloadModal";
@@ -82,6 +82,28 @@ export function MessageAttachment({
   const [dims, setDims] = useState(() => dimCache.get(url) ?? null);
 
   const [mp4Error, setMp4Error] = useState(false);
+  // Viewport-aware GIF playback: an autoplaying <video> per GIF means every
+  // GIF in history decodes continuously — the classic mobile scroll-jank and
+  // battery drain. Pause offscreen GIFs, resume when scrolled into view.
+  const gifVideoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const video = gifVideoRef.current;
+    if (!video) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        if (entry.isIntersecting) {
+          void video.play().catch(() => undefined);
+        } else {
+          video.pause();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, [url]);
   const mp4 = type === "gif" && !mp4Error ? giphyMp4Url(url) : null;
   // Favorite stars belong on GIFs only — this list is a GIF favorites tab.
   const gifStarred = type === "gif" || /\.gif(\?|$)/i.test(url);
@@ -192,6 +214,7 @@ export function MessageAttachment({
               <button type="button" onClick={() => setLightbox(true)} className="block text-left">
                 {!mediaLoaded && skeleton}
                 <video
+                  ref={gifVideoRef}
                   src={gifSrc}
                   autoPlay
                   loop
@@ -237,7 +260,7 @@ export function MessageAttachment({
                 src={imgSrc}
                 alt={type === "gif" ? "GIF" : fileName}
                 className={`${mediaClass} cursor-zoom-in`}
-                loading="eager"
+                loading="lazy"
                 onLoad={(e) => {
                   const img = e.currentTarget;
                   rememberDims(url, img.naturalWidth, img.naturalHeight);
