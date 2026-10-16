@@ -54,7 +54,9 @@ android/service-account.json
 /src-tauri/target/
 /src-tauri/gen/
 /src/.web-only-stash/
-Cargo.lock
+# Cargo.lock is committed on purpose: every zip 4.x release is yanked, and
+# tauri-plugin-updater 2.x requires zip ^4, so CI can no longer resolve the
+# graph from scratch. A committed lock keeps the known-good versions.
 
 # editors / OS
 .vscode/
