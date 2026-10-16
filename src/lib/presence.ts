@@ -1,4 +1,5 @@
 import type { Profile, UserStatus } from "@/lib/supabase/types";
+import type { Listening } from "@/lib/music-presence";
 
 export const PRESENCE_CHANNEL = "presence:global";
 
@@ -7,9 +8,56 @@ export const AWAY_AFTER_MS = 5 * 60 * 1000;
 export interface PresencePayload {
   userId: string;
   status: UserStatus;
+  /** Live "now listening"; null/absent when nothing is playing. */
+  listening?: Listening | null;
 }
 
 export type PresenceMap = Map<string, UserStatus>;
+
+/**
+ * Live listening by user id. A present key means that user's client told us
+ * what it is (or isn't) playing right now — `null` is "present, not playing"
+ * and is deliberately distinct from an absent key ("no live info; trust the
+ * profile row").
+ */
+export type ListeningMap = Map<string, Listening | null>;
+
+/**
+ * What is this profile listening to? Prefer the live presence entry (it is
+ * what their client says *right now*); fall back to the value persisted on
+ * the profile row, but only while it is plausibly current — a song started
+ * more than six hours ago belongs to a session that ended (the row is only
+ * rewritten while Disband is running).
+ */
+export function listeningFor(
+  profile: Pick<Profile, "id" | "listening"> | null | undefined,
+  listening: ListeningMap | null,
+  now = Date.now(),
+): Listening | null {
+  if (!profile) return null;
+  const live = listening?.get(profile.id);
+  if (live !== undefined) return live;
+  const stale = profile.listening;
+  if (!stale) return null;
+  const started = Date.parse(stale.started_at);
+  if (Number.isFinite(started) && now - started > 6 * 60 * 60 * 1000) return null;
+  return stale;
+}
+
+/** Collect the live listening entries out of a presence-state snapshot. */
+export function flattenPresenceListening(
+  state: Record<string, Partial<PresencePayload>[] | undefined>,
+): ListeningMap {
+  const map = new Map<string, Listening | null>();
+  for (const key of Object.keys(state)) {
+    for (const entry of state[key] ?? []) {
+      if (entry && typeof entry.userId === "string") {
+        map.set(entry.userId, (entry.listening as Listening | null | undefined) ?? null);
+      }
+    }
+  }
+  return map;
+}
 
 export function presenceStatusFor(
   profile: Pick<Profile, "id" | "status"> | null | undefined,

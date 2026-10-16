@@ -44,12 +44,12 @@ export function ListeningCard({ listening }: { listening: Listening }) {
         />
       ) : (
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-lg">
-          {listening.source === "spotify" ? "🟢" : "🟠"}
+          {listening.source === "spotify" ? "🟢" : listening.source === "soundcloud" ? "🟠" : "🎵"}
         </span>
       )}
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">
-          Listening to {listening.source === "spotify" ? "Spotify" : "SoundCloud"}
+          Listening to {listening.source === "spotify" ? "Spotify" : listening.source === "soundcloud" ? "SoundCloud" : "Last.fm"}
         </p>
         <div ref={boxRef} className="overflow-hidden">
           <span

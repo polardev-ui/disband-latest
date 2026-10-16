@@ -178,6 +178,9 @@ struct ChatView: View {
             switch model.source {
             case .dm(let threadId, _):
                 unreadStore.markActive(threadId: threadId)
+                // Opening the chat always brings its row back, even if the
+                // user closed it from the list earlier.
+                directMessages.unhideThread(threadId)
                 // Persist the read cursor so the state syncs across devices and
                 // survives relaunch.
                 Task { try? await DatabaseService.markDmRead(threadId: threadId) }

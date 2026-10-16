@@ -22,6 +22,7 @@ final class DirectMessagesViewModel {
     private var groupTask: Task<Void, Never>?
     private var currentUserId: String?
     private var unreadStore: DmUnreadStore?
+    private var closedDms: ClosedDmStore?
     nonisolated(unsafe) private var foregroundObserver: NSObjectProtocol?
 
     init() {
@@ -55,8 +56,9 @@ final class DirectMessagesViewModel {
     /// Idempotent: the app starts this at sign-in to warm the tab, and the tab
     /// calls it again when it first appears. The second call must not open a
     /// second realtime subscription or re-block the list on a spinner.
-    func start(currentUserId: String?, unread: DmUnreadStore) async {
+    func start(currentUserId: String?, unread: DmUnreadStore, closed: ClosedDmStore?) async {
         self.unreadStore = unread
+        self.closedDms = closed
 
         if startedForUserId == currentUserId, hasLoadedOnce {
             // Already live for this user; just refresh quietly in place.
@@ -94,6 +96,13 @@ final class DirectMessagesViewModel {
         } catch {
             // Surface transient failures gracefully.
         }
+    }
+
+    /// Opening a conversation always brings its row back, even if it was
+    /// closed (web parity: selecting a closed DM unhides it).
+    func unhideThread(_ threadId: String) {
+        guard let thread = threads.first(where: { $0.id == threadId }) else { return }
+        closedDms?.unhide(thread.friend?.id)
     }
 
     func load(currentUserId: String?) async {
@@ -155,6 +164,8 @@ final class DirectMessagesViewModel {
         unreadStore?.increment(threadId: message.threadId,
                                senderId: message.authorId,
                                currentUserId: currentUserId)
+        // A new message from them brings a closed row back, with history.
+        closedDms?.unhide(message.authorId)
         guard let idx = threads.firstIndex(where: { $0.id == message.threadId }) else { return }
         threads[idx].lastMessageAt = message.createdAt
         threads[idx].lastMessagePreview = Self.previewText(for: message)

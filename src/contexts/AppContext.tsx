@@ -39,11 +39,21 @@ import { refreshOwnBadges } from "@/lib/badge-store";
 import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   AWAY_AFTER_MS,
+  flattenPresenceListening,
   flattenPresenceState,
   PRESENCE_CHANNEL,
+  type ListeningMap,
   type PresenceMap,
   type PresencePayload,
 } from "@/lib/presence";
+import {
+  fetchLastfmNowPlaying,
+  fetchSpotifyNowPlaying,
+  readLastfmUsername,
+  readSpotifyTokens,
+  writeSpotifyTokens,
+  type Listening,
+} from "@/lib/music-presence";
 import {
   fallbackAuthor,
   matchesOptimisticRow,
@@ -309,6 +319,8 @@ interface AppContextValue {
   getGroupUnreadCount: (groupId: string) => number;
   clearGroupUnread: (groupId: string) => void;
   presenceMap: PresenceMap;
+  /** Live "now listening" per user, from presence. See `listeningFor`. */
+  listeningMap: ListeningMap;
   channelHasMore: boolean;
   dmHasMore: boolean;
   groupHasMore: boolean;
@@ -469,6 +481,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [channelMentionMap, setChannelMentionMap] = useState<Map<string, number>>(new Map());
   const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
+  const [listeningMap, setListeningMap] = useState<ListeningMap>(new Map());
 
   const sessionRef = useRef<Session | null>(null);
   const activeDmRef = useRef<string | null>(null);
@@ -487,6 +500,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const maxMessageCharsRef = useRef(2000);
   const maxBioLengthRef = useRef(190);
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
+  // Mirrors the runner's latest Spotify poll so presence re-tracks (status
+  // changes, channel resubscribes) carry the current track without needing
+  // the poll loop to be re-run.
+  const listeningRef = useRef<Listening | null>(null);
   const lastActivityRef = useRef<number>(typeof window !== "undefined" ? Date.now() : 0);
   const autoAwayRef = useRef(false);
   const inCallRef = useRef(false);
@@ -872,13 +889,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       patchProfileInState({ ...current, status, updated_at: new Date().toISOString() });
     }
     await getSupabaseClient().from("profiles").update({ status }).eq("id", userId);
-    const payload: PresencePayload = { userId, status };
+    const payload: PresencePayload = { userId, status, listening: listeningRef.current };
     void presenceChannelRef.current?.track(payload).then();
   }, [userId, patchProfileInState]);
 
   const trackPresence = useCallback(async (status: UserStatus) => {
     if (!userId) return;
-    const payload: PresencePayload = { userId, status };
+    const payload: PresencePayload = { userId, status, listening: listeningRef.current };
     void presenceChannelRef.current?.track(payload).then();
   }, [userId]);
 
@@ -928,14 +945,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabaseClient();
     const channel = supabase.channel(PRESENCE_CHANNEL);
     channel.on("presence", { event: "sync" }, () => {
-      setPresenceMap(flattenPresenceState(channel.presenceState() as Record<string, PresencePayload[]>));
+      const state = channel.presenceState() as Record<string, PresencePayload[]>;
+      setPresenceMap(flattenPresenceState(state));
+      setListeningMap(flattenPresenceListening(state));
     });
     void channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         presenceChannelRef.current = channel;
         const preferred = profileRef.current?.preferred_status ?? "online";
         const live = profileRef.current?.status ?? "online";
-        await channel.track({ userId, status: live === "offline" && preferred !== "offline" ? preferred : live } satisfies PresencePayload);
+        await channel.track({ userId, status: live === "offline" && preferred !== "offline" ? preferred : live, listening: listeningRef.current } satisfies PresencePayload);
       }
     });
     return () => {
@@ -943,6 +962,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [userId, configured, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Music presence: while a Spotify connection exists, poll what's playing
+  // and mirror it onto presence (live, seen by everyone online) and the
+  // profile row (persisted, seen when we're offline). Only track *changes*
+  // are published; the row is written on each change, not each poll.
+  useEffect(() => {
+    if (!userId || !configured) return;
+    let alive = true;
+    let lastKey: string | null = null;
+    const supabase = getSupabaseClient();
+
+    const publish = (listening: Listening | null) => {
+      listeningRef.current = listening;
+      const status = profileRef.current?.status ?? "online";
+      void presenceChannelRef.current?.track({ userId, status, listening } satisfies PresencePayload).then();
+      setListeningMap((prev) => {
+        const next = new Map(prev);
+        next.set(userId, listening);
+        return next;
+      });
+      const current = profileRef.current;
+      if (current) patchProfileInState({ ...current, listening, updated_at: new Date().toISOString() });
+      void supabase.from("profiles").update({ listening }).eq("id", userId);
+    };
+
+    const tick = async () => {
+      const tokens = readSpotifyTokens();
+      const lastfmUser = readLastfmUsername(userId);
+      if (!tokens && !lastfmUser) {
+        // Nothing connected (or disconnected since): drop any live state.
+        if (lastKey !== "disconnected") {
+          lastKey = "disconnected";
+          if (listeningRef.current) publish(null);
+        }
+        return;
+      }
+      let next: Listening | null = null;
+      let failed = false;
+      if (tokens) {
+        try {
+          const res = await fetchSpotifyNowPlaying(tokens);
+          if (!alive) return;
+          if (res.tokens !== tokens) writeSpotifyTokens(res.tokens);
+          next = res.listening;
+        } catch {
+          failed = true;
+        }
+      }
+      if (!next && lastfmUser) {
+        try {
+          next = await fetchLastfmNowPlaying(lastfmUser);
+        } catch {
+          failed = true;
+        }
+      }
+      if (!alive) return;
+      // A provider error is not proof of silence: keep the last known state
+      // and let the next tick decide.
+      if (!next && failed) return;
+      const key = next ? `${next.source}|${next.track}|${next.artists}` : "idle";
+      if (key !== lastKey) {
+        lastKey = key;
+        publish(next);
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 20_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+      // Polling has stopped, so the persisted row is now stale — clear it
+      // so an approaching viewer isn't told about yesterday's song.
+      listeningRef.current = null;
+      void supabase.from("profiles").update({ listening: null }).eq("id", userId);
+    };
+  }, [userId, configured]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProfile = useCallback(async (uid: string) => {
     const cacheKey = `profile:${uid}`;
@@ -3181,7 +3277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     signingOutRef.current = true;
     if (userId) {
-      await getSupabaseClient().from("profiles").update({ status: "offline" }).eq("id", userId);
+      await getSupabaseClient().from("profiles").update({ status: "offline", listening: null }).eq("id", userId);
     }
     await getSupabaseClient().auth.signOut({ scope: "local" });
     resetSupabaseClient();
@@ -5315,6 +5411,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getGroupUnreadCount,
     clearGroupUnread,
     presenceMap,
+    listeningMap,
     channelHasMore,
     dmHasMore,
     groupHasMore,

@@ -45,7 +45,7 @@ export interface Profile {
    * older profile rows (and every mock in tests) keep compiling.
    */
   listening?: {
-    source: "spotify" | "soundcloud";
+    source: "spotify" | "soundcloud" | "lastfm";
     track: string;
     artists: string;
     artwork: string | null;
