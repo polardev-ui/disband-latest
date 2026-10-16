@@ -128,6 +128,7 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     use tauri::{
         menu::{MenuBuilder, MenuItemBuilder},
         tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+        Manager,
     };
     let show = MenuItemBuilder::with_id("show", "Show Disband").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit Disband").build(app)?;
