@@ -170,7 +170,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
   }
 
   async function saveVanity() {
-    if (!activeServer || !isOwner || catalystLvl.level < 1) return;
+    if (!activeServer || !isOwner || catalystLvl.level < 2) return;
     const clean = sanitizeVanity(vanity);
     const errMsg = clean ? vanityError(clean) : null;
     if (vanity.trim() && errMsg) {
@@ -852,7 +852,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                   {typeof entitlements.customEmojiSlots === "number"
                     ? ` Your plan: ${customEmoji.length}/${entitlements.customEmojiSlots} slots used.`
                     : " Your plan: unlimited slots."}
-                  {catalystLvl.level >= 2 && (
+                  {catalystLvl.level >= 1 && (
                     <> <span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS} from Level {catalystLvl.level}.</span></>
                   )}
                 </p>
@@ -873,7 +873,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel }: ServerSett
                 </div>
                 {(typeof entitlements.customEmojiSlots !== "number" ||
                   customEmoji.length <
-                    entitlements.customEmojiSlots + (catalystLvl.level >= 2 ? EMOJI_SLOTS_BONUS : 0)) && (
+                    entitlements.customEmojiSlots + (catalystLvl.level >= 1 ? EMOJI_SLOTS_BONUS : 0)) && (
                   <div className="flex flex-wrap items-end gap-3 rounded-lg border border-divider bg-bg-secondary p-4">
                     <label className="flex-1">
                       <span className="text-xs font-bold uppercase text-text-muted">Name</span>

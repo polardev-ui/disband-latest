@@ -82,41 +82,86 @@ export function isRecipientDoNotDisturb(
 
 const NOTIFICATION_POP_URL = "/sounds/notificationpop.mp3";
 
-let popAudio: HTMLAudioElement | null = null;
+const notificationAudio = typeof window === "undefined"
+  ? null
+  : (() => {
+      const ctx = new AudioContext({ latencyHint: "interactive" });
+      window.addEventListener("pointerdown", () => {
+        if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
+      }, { once: true });
+      window.addEventListener("keydown", () => {
+        if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
+      }, { once: true });
+      return ctx;
+    })();
 
-/**
- * Shared notification pop. Returns true when the file started playing (so
- * callers skip the synthesized fallback); false when anything is off —
- * missing file, blocked autoplay, no audio backend — and the caller falls
- * back to synth. The element is created lazily so server renders and
- * non-DOM contexts never touch it.
- */
-function playNotificationPop(): boolean {
+let notificationBuffer: AudioBuffer | null = null;
+let notificationBufferLoad: Promise<AudioBuffer | null> | null = null;
+
+async function loadNotificationBuffer(): Promise<AudioBuffer | null> {
+  if (notificationBuffer) return notificationBuffer;
+  if (!notificationAudio) return null;
+  if (!notificationBufferLoad) {
+    notificationBufferLoad = (async () => {
+      const response = await fetch(NOTIFICATION_POP_URL);
+      if (!response.ok) throw new Error("notification sound missing");
+      const data = await response.arrayBuffer();
+      notificationBuffer = await notificationAudio.decodeAudioData(data);
+      return notificationBuffer;
+    })().catch(() => null);
+  }
+  return notificationBufferLoad;
+}
+
+async function playNotificationPop(): Promise<boolean> {
+  if (typeof window === "undefined" || !getUserSettings().soundEnabled) return false;
+  if (notificationAudio) {
+    try {
+      if (notificationAudio.state === "suspended") await notificationAudio.resume();
+      if (notificationAudio.state !== "running") {
+        const unlock = new Promise<void>((resolve, reject) => {
+          const finish = () => {
+            resolve();
+            cleanup();
+          };
+          const cleanup = () => {
+            window.removeEventListener("pointerdown", finish, true);
+            window.removeEventListener("keydown", finish, true);
+          };
+          window.addEventListener("pointerdown", finish, { capture: true, once: true });
+          window.addEventListener("keydown", finish, { capture: true, once: true });
+          setTimeout(() => reject(new Error("notification audio unlock timeout")), 1500);
+        });
+        try { await unlock; } catch { /* continue */ }
+      }
+      const buffer = await loadNotificationBuffer();
+      if (buffer && notificationAudio.state === "running") {
+        const source = notificationAudio.createBufferSource();
+        const gain = notificationAudio.createGain();
+        gain.gain.value = 0.85;
+        source.buffer = buffer;
+        source.connect(gain).connect(notificationAudio.destination);
+        source.start();
+        return true;
+      }
+    } catch {
+      // Fall through to HTML audio below.
+    }
+  }
+
   try {
-    if (typeof window === "undefined" || typeof Audio === "undefined") return false;
-    if (!popAudio) {
-      popAudio = new Audio(NOTIFICATION_POP_URL);
-      popAudio.preload = "auto";
-      popAudio.volume = 0.9;
-      // If the file itself is broken/missing, drop the element so every
-      // later call falls through to the synthesized fallback instead of
-      // going silent forever.
-      popAudio.addEventListener("error", () => { popAudio = null; });
-    }
-    popAudio.currentTime = 0;
-    const attempt = popAudio.play();
-    if (attempt && typeof attempt.catch === "function") {
-      attempt.catch(() => undefined);
-    }
+    const audio = new Audio(NOTIFICATION_POP_URL);
+    audio.volume = 0.85;
+    await audio.play();
     return true;
   } catch {
     return false;
   }
 }
 
-export function playMentionPing() {
+export async function playMentionPing() {
   if (!getUserSettings().soundEnabled) return;
-  if (playNotificationPop()) return;
+  if (await playNotificationPop()) return;
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
@@ -132,13 +177,12 @@ export function playMentionPing() {
     osc.stop(ctx.currentTime + 0.35);
     setTimeout(() => void ctx.close(), 500);
   } catch {
-
   }
 }
 
-export function playDmPing() {
+export async function playDmPing() {
   if (!getUserSettings().soundEnabled) return;
-  if (playNotificationPop()) return;
+  if (await playNotificationPop()) return;
   try {
     const ctx = new AudioContext();
     const playTone = (freq: number, start: number, duration: number) => {
@@ -158,7 +202,6 @@ export function playDmPing() {
     playTone(1174.66, t + 0.08, 0.22);
     setTimeout(() => void ctx.close(), 500);
   } catch {
-
   }
 }
 
@@ -185,7 +228,7 @@ export function alertIncomingDm(
   if (isRecipientDoNotDisturb(recipient)) return;
   const target = { kind: "dm" as const, threadId };
   if (!shouldDeliverOsNotification(target)) return;
-  if (getUserSettings().soundEnabled) playDmPing();
+  if (getUserSettings().soundEnabled) void playDmPing();
   showSystemNotification(title, body, undefined, notificationTag(target));
 }
 
@@ -195,7 +238,7 @@ export function alertMention(
   target: NotificationTarget,
 ) {
   if (!shouldDeliverOsNotification(target)) return;
-  playMentionPing();
+  void playMentionPing();
   showSystemNotification(title, body, undefined, notificationTag(target, "mention"));
 }
 
@@ -310,7 +353,7 @@ function showWebNotification(
     body,
     icon,
     tag: tag ?? `disband:${title}:${body ?? ""}`,
-    silent: false,
+    silent: true,
   });
   if (onClick) {
     n.onclick = () => {

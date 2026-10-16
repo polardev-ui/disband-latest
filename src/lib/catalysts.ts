@@ -17,12 +17,12 @@ export interface CatalystLevel {
 
 export const CATALYST_LEVELS: CatalystLevel[] = [
   { level: 0, min: 0, name: "No level", perks: [] },
-  { level: 1, min: 1, name: "Level 1", perks: ["Custom vanity invite code"] },
+  { level: 1, min: 1, name: "Level 1", perks: ["+50 custom emoji slots for everyone"] },
   {
     level: 2,
     min: 3,
     name: "Level 2",
-    perks: ["Custom vanity invite code", "+50 custom emoji slots for everyone"],
+    perks: ["+50 custom emoji slots for everyone", "Custom vanity invite code", "Role icons"],
   },
   {
     level: 3,

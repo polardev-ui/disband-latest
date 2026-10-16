@@ -102,6 +102,7 @@ export interface ServerRole {
   server_id: string;
   name: string;
   color: string;
+  icon?: string | null;
   gradient_to?: string | null;
   gradient_animated?: boolean;
   permissions: ServerPermissions;
