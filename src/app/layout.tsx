@@ -89,6 +89,10 @@ export const viewport: Viewport = {
   themeColor: "#0b0c0e",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
+  // On iOS the keyboard otherwise overlays the webview instead of resizing
+  // it, which stranded the chat mid-history when the keyboard opened.
+  interactiveWidget: "resizes-content",
   colorScheme: "dark",
 };
 

@@ -382,7 +382,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""}`}
+        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -429,7 +429,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative ${COMPACT_INDENT} pr-4 py-0 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""}`}
+        className={`group relative ${COMPACT_INDENT} pr-4 py-0 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -470,7 +470,7 @@ function ChatMessageImpl({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""}`}
+      className={`group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
