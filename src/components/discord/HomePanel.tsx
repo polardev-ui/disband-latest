@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
@@ -107,6 +107,42 @@ export function HomePanel({
   } = useApp();
   const { openMenu } = useContextMenu();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  // One long-press at a time: holds the pending timer + origin for whichever
+  // DM row is being pressed (touch only — mouse gets the hover X and
+  // right-click menu).
+  const dmLongPress = useRef<{ timer: number | null; x: number; y: number; fired: boolean }>({
+    timer: null,
+    x: 0,
+    y: 0,
+    fired: false,
+  });
+
+  function dmRowPointerDown(entry: (typeof dmListEntries)[number], e: React.PointerEvent) {
+    if (e.pointerType === "mouse") return;
+    const lp = dmLongPress.current;
+    lp.fired = false;
+    lp.x = e.clientX;
+    lp.y = e.clientY;
+    lp.timer = window.setTimeout(() => {
+      lp.timer = null;
+      lp.fired = true;
+      openDmRowMenu(entry, lp.x, lp.y);
+    }, 550);
+  }
+
+  function dmRowPointerMove(e: React.PointerEvent) {
+    const lp = dmLongPress.current;
+    if (lp.timer == null) return;
+    if (Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 12) dmRowPointerEnd();
+  }
+
+  function dmRowPointerEnd() {
+    const lp = dmLongPress.current;
+    if (lp.timer != null) {
+      window.clearTimeout(lp.timer);
+      lp.timer = null;
+    }
+  }
 
   const onFriends = viewMode === "home";
 
@@ -293,12 +329,26 @@ export function HomePanel({
                 <button
                   key={entry.key}
                   type="button"
-                  onClick={() => void openDmEntry(entry)}
+                  onClick={(e) => {
+                    // A long-press already opened the menu; don't also open
+                    // the conversation when the finger lifts.
+                    if (dmLongPress.current.fired) {
+                      dmLongPress.current.fired = false;
+                      e.preventDefault();
+                      return;
+                    }
+                    void openDmEntry(entry);
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     openDmRowMenu(entry, e.clientX, e.clientY);
                   }}
-                  className={`group/dmrow mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
+                  onPointerDown={(e) => dmRowPointerDown(entry, e)}
+                  onPointerMove={dmRowPointerMove}
+                  onPointerUp={dmRowPointerEnd}
+                  onPointerCancel={dmRowPointerEnd}
+                  onPointerLeave={dmRowPointerEnd}
+                  className={`group/dmrow mb-px flex w-full select-none items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
                     active ? "bg-interactive-selected" : ""
                   }`}
                 >
@@ -324,7 +374,7 @@ export function HomePanel({
                         closeDmThread(entry.friend.id);
                       }
                     }}
-                    className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted opacity-0 transition-opacity hover:bg-interactive-hover hover:text-text-normal focus-visible:opacity-100 group-hover/dmrow:opacity-100 [@media(hover:none)]:flex [@media(hover:none)]:opacity-60"
+                    className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted opacity-0 transition-opacity hover:bg-interactive-hover hover:text-text-normal focus-visible:opacity-100 group-hover/dmrow:opacity-100 group-hover/dmrow:flex"
                   >
                     <IconClose size={13} />
                   </span>

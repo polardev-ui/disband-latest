@@ -6,6 +6,7 @@ struct DisbandiOSApp: App {
     @State private var appState: AppState
     @State private var call: CallManager
     @State private var dmUnread: DmUnreadStore
+    @State private var closedDms: ClosedDmStore
     @State private var subscriptions: SubscriptionService
     @State private var presence: PresenceService
     @State private var notes: NotesService
@@ -24,6 +25,7 @@ struct DisbandiOSApp: App {
         _appState = State(initialValue: appState)
         _call = State(initialValue: CallManager(app: appState))
         _dmUnread = State(initialValue: DmUnreadStore())
+        _closedDms = State(initialValue: ClosedDmStore())
         _subscriptions = State(initialValue: SubscriptionService())
         _presence = State(initialValue: presence)
         _notes = State(initialValue: NotesService())
@@ -38,6 +40,7 @@ struct DisbandiOSApp: App {
                 .environment(appState)
                 .environment(call)
                 .environment(dmUnread)
+                .environment(closedDms)
                 .environment(subscriptions)
                 .environment(presence)
                 .environment(notes)
@@ -64,9 +67,12 @@ struct DisbandiOSApp: App {
                 // lazily, so this work used to start on the tap that opened the
                 // tab — which is exactly when it is most visible.
                 .task(id: appState.currentUserId) {
+                    // Also runs on sign-out (nil) so the next account starts clean.
+                    closedDms.activate(currentUserId: appState.currentUserId)
                     guard appState.currentUserId != nil else { return }
                     await directMessages.start(currentUserId: appState.currentUserId,
-                                               unread: dmUnread)
+                                               unread: dmUnread,
+                                               closed: closedDms)
                 }
                 // Voice channels and group calls; also listens for group rings.
                 .task(id: appState.currentUserId) {

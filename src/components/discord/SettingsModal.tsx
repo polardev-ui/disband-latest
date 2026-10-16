@@ -20,12 +20,21 @@ import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancel
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import { requestEmailChange } from "@/lib/email-change";
+import {
+  clearSpotifyTokens,
+  lastfmConfigured,
+  readLastfmUsername,
+  readSpotifyTokens,
+  spotifyConnectUrl,
+  spotifyClientId,
+  writeLastfmUsername,
+} from "@/lib/music-presence";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch } from "@/components/icons";
+import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic } from "@/components/icons";
 import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
@@ -93,6 +102,9 @@ const TABS = [
   { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
     description: "Create and manage bots that act on your behalf.",
     keywords: "bot token api developer webhook" },
+  { id: "connections" as const, label: "Connections", group: "Account", icon: <IconMusic size={17} />,
+    description: "Spotify and SoundCloud — show what you're listening to.",
+    keywords: "spotify soundcloud lastfm music listening currently playing connect integrate account" },
   { id: "appearance" as const, label: "Appearance", group: "App", icon: <IconPalette size={17} />,
     description: "Zoom, motion and theme mode.",
     keywords: "zoom scale size motion animation reduced dark light mode" },
@@ -204,6 +216,60 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [newEmail, setNewEmail] = useState("");
   const [emailChangeBusy, setEmailChangeBusy] = useState(false);
   const [emailChangeSent, setEmailChangeSent] = useState(false);
+  // Connections tab: Spotify tokens live in localStorage (see music-presence
+  // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
+  const [lastfmUser, setLastfmUser] = useState("");
+  const [lastfmSaved, setLastfmSaved] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSpotifyConnected(Boolean(readSpotifyTokens()));
+    setLastfmUser(user?.id ? readLastfmUsername(user.id) ?? "" : "");
+    setLastfmSaved(false);
+  }, [open, user?.id]);
+
+  // The OAuth callback page pings us when the popup finishes connecting.
+  useEffect(() => {
+    if (!open) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { type?: string } | null)?.type === "disband:spotify-connected") {
+        setSpotifyConnected(true);
+        setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [open]);
+
+  function handleSpotifyConnect() {
+    if (!spotifyClientId()) {
+      setSpotifyNote("Spotify isn't configured on this build yet — add NEXT_PUBLIC_SPOTIFY_CLIENT_ID first.");
+      return;
+    }
+    setSpotifyNote(null);
+    const url = spotifyConnectUrl(user?.id ?? "disband");
+    if (!url) return;
+    const popup = window.open(url, "disband-spotify-connect", "width=520,height=760,popup=yes");
+    if (!popup) setSpotifyNote("Allow pop-ups for this site, then try again.");
+  }
+
+  async function handleSpotifyDisconnect() {
+    clearSpotifyTokens();
+    setSpotifyConnected(false);
+    setSpotifyNote("Disconnected — your profile no longer shows a track.");
+    // Best-effort immediate clear; the poller clears it on its next tick too.
+    void updateProfile({ listening: null });
+  }
+
+  function saveLastfm() {
+    if (!user?.id) return;
+    const name = lastfmUser.trim();
+    writeLastfmUsername(user.id, name || null);
+    setLastfmSaved(true);
+  }
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
   useEffect(() => {
@@ -1596,6 +1662,91 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               )}
 
               {tab === "bots" && <BotsPanel />}
+
+              {tab === "connections" && (
+                <div className="pb-20">
+                  <SettingsSection
+                    title="Spotify"
+                    description="Link your Spotify account and the track you're playing shows on your profile card, live."
+                  >
+                    <SettingRow
+                      label={spotifyConnected ? "Connected" : "Not connected"}
+                      description={
+                        spotifyConnected
+                          ? "Polled every 20 seconds while Disband is open — on desktop it keeps working from the tray."
+                          : "Read-only: we only see the currently-playing track. Nothing else is touched."
+                      }
+                      stacked
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        {spotifyConnected ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleSpotifyDisconnect()}
+                            className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                          >
+                            Disconnect
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleSpotifyConnect}
+                            className="rounded-md bg-brand px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                          >
+                            Connect Spotify
+                          </button>
+                        )}
+                        {spotifyNote && <p className="text-[12.5px] text-text-muted">{spotifyNote}</p>}
+                      </div>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title="SoundCloud"
+                    description="SoundCloud doesn't let apps read playback directly. Link SoundCloud to Last.fm in your SoundCloud settings, then put your Last.fm username here — what you play appears on your profile within a minute."
+                  >
+                    <SettingRow label="Last.fm username" stacked>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          value={lastfmUser}
+                          onChange={(e) => {
+                            setLastfmUser(e.target.value);
+                            setLastfmSaved(false);
+                          }}
+                          placeholder="your last.fm username"
+                          disabled={!lastfmConfigured()}
+                          className="w-56 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:border-brand disabled:opacity-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={saveLastfm}
+                          disabled={!lastfmConfigured()}
+                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-40"
+                        >
+                          Save
+                        </button>
+                        {lastfmSaved && <span className="text-[12.5px] text-status-online">Saved.</span>}
+                        {!lastfmConfigured() && (
+                          <span className="text-[12.5px] text-text-muted">
+                            Not configured on this build yet.
+                          </span>
+                        )}
+                      </div>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title="How it shows up"
+                    description="People see a small card on your profile — artwork, track and artist. The track name scrolls if it's too long for the card."
+                  >
+                    <SettingRow label="Visibility" description="Your listening card is visible to everyone who can view your profile." stacked>
+                      <p className="text-[13px] text-text-muted">
+                        Disconnect either account above to hide it instantly.
+                      </p>
+                    </SettingRow>
+                  </SettingsSection>
+                </div>
+              )}
 
               {tab === "textMedia" && (
                 <div>

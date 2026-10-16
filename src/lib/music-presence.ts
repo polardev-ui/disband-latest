@@ -16,6 +16,122 @@ import type { Profile } from "@/lib/supabase/types";
 export type ListeningSource = "spotify" | "soundcloud";
 export type Listening = NonNullable<NonNullable<Profile["listening"]>>;
 
+/* -------------------------------------------------- Connection state */
+
+const SPOTIFY_TOKENS_KEY = "disband:spotify-tokens";
+
+export function readSpotifyTokens(): SpotifyTokens | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SPOTIFY_TOKENS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SpotifyTokens>;
+    if (!parsed.access_token || !parsed.refresh_token || typeof parsed.expires_at !== "number") {
+      return null;
+    }
+    return parsed as SpotifyTokens;
+  } catch {
+    return null;
+  }
+}
+
+export function writeSpotifyTokens(tokens: SpotifyTokens): void {
+  try {
+    window.localStorage.setItem(SPOTIFY_TOKENS_KEY, JSON.stringify(tokens));
+  } catch {
+    // Private mode etc: the connection lasts this session only.
+  }
+}
+
+export function clearSpotifyTokens(): void {
+  try {
+    window.localStorage.removeItem(SPOTIFY_TOKENS_KEY);
+  } catch {
+    // Nothing to do.
+  }
+}
+
+/* ------------------------------------------- Last.fm (SoundCloud, etc.) */
+
+/**
+ * Last.fm is the transport for players whose "now playing" can't be read by
+ * apps — SoundCloud being the one that matters here. SoundCloud scrobbles to
+ * Last.fm when linked in its own settings (Settings → Connections), and
+ * Last.fm exposes the currently-scrobbling track over a plain public API.
+ * The SoundCloud title parser below still runs over the names Last.fm hands
+ * back, so messy "Artist - Title (feat. …)" uploads come out clean.
+ */
+
+const LASTFM_USER_KEY = "disband:lastfm-user:";
+
+export function lastfmConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_LASTFM_API_KEY);
+}
+
+export function readLastfmUsername(uid: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(LASTFM_USER_KEY + uid);
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastfmUsername(uid: string, username: string | null): void {
+  try {
+    if (username) window.localStorage.setItem(LASTFM_USER_KEY + uid, username);
+    else window.localStorage.removeItem(LASTFM_USER_KEY + uid);
+  } catch {
+    // Private mode etc: the connection lasts this session only.
+  }
+}
+
+interface LastfmTrack {
+  name?: string;
+  artist?: { "#text"?: string } | string;
+  url?: string;
+  image?: Array<{ "#text"?: string; size?: string }>;
+  "@attr"?: { nowplaying?: string };
+}
+
+/** Latest "now playing" scrobble for a public Last.fm user, or null. */
+export async function fetchLastfmNowPlaying(username: string): Promise<Listening | null> {
+  const apiKey = process.env.NEXT_PUBLIC_LASTFM_API_KEY;
+  if (!apiKey || !username) return null;
+  const url =
+    `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&format=json` +
+    `&limit=1&user=${encodeURIComponent(username)}&api_key=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Last.fm error: ${res.status}`);
+  const json = (await res.json()) as {
+    recenttracks?: { track?: LastfmTrack | LastfmTrack[] };
+    error?: number;
+  };
+  if (json.error) throw new Error(`Last.fm error ${json.error}`);
+  const raw = json.recenttracks?.track;
+  const track = Array.isArray(raw) ? raw[0] : raw;
+  if (!track || track["@attr"]?.nowplaying !== "true") return null;
+
+  const rawTitle = track.name ?? "";
+  const uploader = typeof track.artist === "object" ? track.artist?.["#text"] : track.artist;
+  // Reuse the SoundCloud cleanup on titles Last.fm passes through verbatim.
+  const parsed = parseSoundCloudTitle(rawTitle, uploader);
+  const images = track.image ?? [];
+  const artwork =
+    [...images].reverse().find((img) => img?.["#text"])?.["#text"] ?? null;
+
+  return {
+    source: "lastfm",
+    track: parsed.title || rawTitle,
+    artists: parsed.artist ?? uploader ?? "",
+    artwork,
+    track_url: track.url ?? null,
+    // Last.fm doesn't report a start instant; "first seen by us" is close
+    // enough and keeps the freshness check meaningful.
+    started_at: new Date().toISOString(),
+  };
+}
+
 /* ------------------------------------------------------------ Spotify */
 
 const SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize";

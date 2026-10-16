@@ -15,7 +15,7 @@ import { UnderlineTabs } from "@/components/ui/Tabs";
 import { getAccentBackground, roleIsGradientAnimated, sanitizeHex, usesCustomAccent } from "@/lib/profileColor";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
-import { presenceStatusFor, activeStatusNote, statusExpiryLabel } from "@/lib/presence";
+import { presenceStatusFor, activeStatusNote, statusExpiryLabel, listeningFor } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { ListeningCard } from "@/components/ui/ListeningCard";
 import { UserBadges } from "@/components/ui/UserBadges";
@@ -201,7 +201,7 @@ export function UserProfileModal({
   if (profileProp) lastProfileRef.current = profileProp;
   const profile = profileProp ?? lastProfileRef.current;
 
-  const { friends, presenceMap, servers, loadMutuals, user, openDmWithFriend, sendDmMessage } = useApp();
+  const { friends, presenceMap, listeningMap, servers, loadMutuals, user, openDmWithFriend, sendDmMessage } = useApp();
   const [mutualServerIds, setMutualServerIds] = useState<string[]>([]);
   const [mutualFriendIds, setMutualFriendIds] = useState<string[]>([]);
   const [tab, setTab] = useState<ProfileTab>("about");
@@ -239,6 +239,7 @@ export function UserProfileModal({
   const title = profile.display_name?.trim() || displayName(profile);
   const live = presenceStatusFor(profile, presenceMap);
   const statusNote = activeStatusNote(profile);
+  const listening = listeningFor(profile, listeningMap);
 
   // Replying to a status sends a DM quoting it, then jumps there so the
   // reply lands in front of both people. Same open-then-send beat as
@@ -518,9 +519,9 @@ export function UserProfileModal({
                   </Section>
                 )}
 
-                {profile.listening && (
+                {listening && (
                   <Section label="Listening">
-                    <ListeningCard listening={profile.listening} />
+                    <ListeningCard listening={listening} />
                   </Section>
                 )}
 

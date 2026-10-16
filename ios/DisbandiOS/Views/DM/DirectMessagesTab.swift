@@ -4,6 +4,7 @@ struct DirectMessagesTab: View {
     @Environment(AppState.self) private var app
     @Environment(DmUnreadStore.self) private var unreadStore
     @Environment(PresenceService.self) private var presence
+    @Environment(ClosedDmStore.self) private var closedDms
     // Shared with the app, which starts loading at sign-in rather than when
     // this tab is first opened.
     @Environment(DirectMessagesViewModel.self) private var vm
@@ -21,7 +22,7 @@ struct DirectMessagesTab: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
-                            Task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore) }
+                            Task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
                         } label: {
                             Image(systemName: "arrow.clockwise")
                         }
@@ -30,7 +31,7 @@ struct DirectMessagesTab: View {
                 .task {
                     // Usually a no-op by the time the tab is opened: `start`
                     // is idempotent and repaints from what is already loaded.
-                    await vm.start(currentUserId: app.currentUserId, unread: unreadStore)
+                    await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms)
                     await loadTetherEntry()
                 }
                 .navigationDestination(item: $tetherThreadId) { threadId in
@@ -63,13 +64,13 @@ struct DirectMessagesTab: View {
     private var content: some View {
         if vm.loading {
             StateView(kind: .loading)
-        } else if vm.threads.isEmpty && vm.groups.isEmpty {
+        } else if visibleThreads.isEmpty && vm.groups.isEmpty && !showTetherRow {
             StateView(kind: .empty,
                       title: "No conversations yet.\nStart one from the Friends tab.",
                       systemImage: "bubble.left.and.bubble.right")
         } else {
             List {
-                if !vm.threads.isEmpty || showTetherRow {
+                if !visibleThreads.isEmpty || showTetherRow {
                     Section("Direct Messages") {
                         if showTetherRow, let info = tetherInfo {
                             Button {
@@ -106,6 +107,18 @@ struct DirectMessagesTab: View {
                                     unread: unreadStore.count(for: thread.id)
                                 )
                             }
+                            // Hold a row to close it (web parity: hover X on
+                            // desktop, long-press menu on touch). A new message
+                            // or opening the chat again brings the row back.
+                            .contextMenu {
+                                if let friendId = thread.friend?.id {
+                                    Button(role: .destructive) {
+                                        closedDms.close(friendId)
+                                    } label: {
+                                        Label("Close DM", systemImage: "xmark")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -127,8 +140,10 @@ struct DirectMessagesTab: View {
     /// Threads with unread messages float to the top; everything else keeps
     /// the view model's most-recent-activity order. A stable secondary sort on
     /// recency stops rows from shuffling when two chats are both unread.
+    /// Closed rows are filtered out until a message or the chat itself opens.
     private var sortedThreads: [DmThread] {
-        vm.threads.enumerated()
+        vm.threads.filter { !closedDms.isClosed($0.friend?.id) }
+            .enumerated()
             .sorted { lhs, rhs in
                 let lUnread = unreadStore.count(for: lhs.element.id) > 0
                 let rUnread = unreadStore.count(for: rhs.element.id) > 0
@@ -137,6 +152,9 @@ struct DirectMessagesTab: View {
             }
             .map(\.element)
     }
+
+    /// What the DM section actually renders after closed rows are hidden.
+    private var visibleThreads: [DmThread] { sortedThreads }
 
     /// A DM friend's live presence status (offline when not actively connected,
     /// matching the web's presence semantics).
