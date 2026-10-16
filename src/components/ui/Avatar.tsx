@@ -40,8 +40,13 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   const ring = effectClass(profile.equipped_ring_effect);
 
   const [cachedSrc, setCachedSrc] = useState<string | null>(null);
+  // A dead URL (deleted object, offline host) used to leave the browser's
+  // broken-image glyph. Falling back to the initial keeps the avatar looking
+  // intentional; reset when the source changes so a new avatar can load.
+  const [imgFailed, setImgFailed] = useState(false);
   useEffect(() => {
     setCachedSrc(null);
+    setImgFailed(false);
     if (!remote) return;
     let live = true;
     void getCachedAvatarUrl(remote).then((hit) => {
@@ -82,9 +87,15 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
       }`}
       style={accentStyle}
     >
-      {remote ? (
+      {remote && !imgFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={cachedSrc ?? remote} alt="" className="h-full w-full" style={style} />
+        <img
+          src={cachedSrc ?? remote}
+          alt=""
+          className="h-full w-full"
+          style={style}
+          onError={() => setImgFailed(true)}
+        />
       ) : (
         name.charAt(0).toUpperCase()
       )}
