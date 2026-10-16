@@ -86,6 +86,48 @@ export function writeLastfmUsername(uid: string, username: string | null): void 
   }
 }
 
+/** One-click connect lands here so a closed settings modal still adopts the
+ *  account on its next open. Cleared the moment it's picked up. */
+const LASTFM_PENDING_KEY = "disband:lastfm-pending";
+
+export function readLastfmPending(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(LASTFM_PENDING_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastfmPending(username: string): void {
+  try {
+    window.localStorage.setItem(LASTFM_PENDING_KEY, username);
+  } catch {
+    // Private mode: the opener message still carries it across.
+  }
+}
+
+export function clearLastfmPending(): void {
+  try {
+    window.localStorage.removeItem(LASTFM_PENDING_KEY);
+  } catch {
+    // Nothing to do.
+  }
+}
+
+/** Finish the one-click connect: swap last.fm's approved token for the
+ *  username. The API secret stays server-side. */
+export async function fetchLastfmSession(token: string): Promise<string> {
+  const res = await fetch("/api/music/lastfm/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const data = (await res.json().catch(() => null)) as { username?: string } | null;
+  if (!res.ok || !data?.username) throw new Error("Last.fm session exchange failed");
+  return data.username;
+}
+
 interface LastfmTrack {
   name?: string;
   artist?: { "#text"?: string } | string;
