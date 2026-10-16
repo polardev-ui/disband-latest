@@ -17,7 +17,8 @@ import {
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
 import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
-import { useBadges } from "@/lib/badge-store";
+import { useBadges, loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
+import type { AwardedBadge } from "@/lib/badge-store";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
@@ -132,6 +133,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const pendingPurgeAt = profile?.deletion_purge_at ?? null;
 
   const myBadges = useBadges(profile?.id);
+  const [myAllBadges, setMyAllBadges] = useState<Array<AwardedBadge & { visible: boolean }>>([]);
+  useEffect(() => {
+    if (!profile?.id) { setMyAllBadges([]); return; }
+    let cancelled = false;
+    void loadAllBadgesForUser(profile.id).then((badges) => { if (!cancelled) setMyAllBadges(badges); });
+    return () => { cancelled = true; };
+  }, [profile?.id]);
   const [gifting, setGifting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -804,23 +812,41 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </SettingRow>
                   </SettingsSection>
 
-                  {myBadges.length > 0 && (
+                  {myAllBadges.length > 0 && (
                     <SettingsSection
                       title="Badges"
-                      description="Awarded by Disband — these can't be changed from here."
+                      description="Toggle any badge you have earned. Hidden badges stay on your record but do not show on your profile."
                     >
                       <SettingRow label="Your badges" stacked>
-                        <div className="flex flex-wrap gap-2">
-                          {myBadges.map((b) => (
-                            <span
-                              key={b.key}
-                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-semibold"
-                              style={{ backgroundColor: `${b.accent}2e`, color: b.accent }}
-                              title={b.description}
+                        <div className="grid gap-2">
+                          {myAllBadges.map((badge) => (
+                            <div
+                              key={badge.key}
+                              className="flex items-center gap-3 rounded-md border border-divider bg-interactive-hover/30 px-3 py-2"
                             >
-                              <BadgeGlyph badgeKey={b.key} size={14} />
-                              {b.name}
-                            </span>
+                              <span
+                                className="inline-flex shrink-0 items-center justify-center rounded-md px-2 py-1 text-[12px] font-semibold"
+                                style={{ backgroundColor: `${badge.accent}2e`, color: badge.accent }}
+                                title={badge.description}
+                              >
+                                <BadgeGlyph badgeKey={badge.key} size={14} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[13px] font-semibold text-text-normal">{badge.name}</p>
+                                <p className="truncate text-[11px] text-text-muted">{badge.description}</p>
+                              </div>
+                              <Toggle
+                                label={`Show ${badge.name}`}
+                                checked={badge.visible}
+                                onChange={async () => {
+                                  const next = !badge.visible;
+                                  setMyAllBadges((prev) =>
+                                    prev.map((item) => (item.key === badge.key ? { ...item, visible: next } : item)),
+                                  );
+                                  await setBadgeVisible(profile?.id ?? "", badge.key, next);
+                                }}
+                              />
+                            </div>
                           ))}
                         </div>
                       </SettingRow>

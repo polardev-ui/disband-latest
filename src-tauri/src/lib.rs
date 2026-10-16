@@ -16,7 +16,6 @@ fn show_macos_notification(title: String, body: Option<String>) -> Result<(), St
     if let Some(ref message) = body {
         notification.message(message);
     }
-    notification.sound("Ping");
 
     notification
         .send()

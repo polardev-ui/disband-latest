@@ -161,6 +161,7 @@ export function RoleManager() {
                         <IconGripVertical size={14} />
                       </span>
                     )}
+                    {r.icon && <span className="shrink-0 text-[12px] text-text-normal">{r.icon}</span>}
                     <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-normal">
                       {r.name}
@@ -280,6 +281,33 @@ export function RoleManager() {
                     title="Custom color"
                     className="h-6 w-8 cursor-pointer rounded disabled:opacity-40"
                   />
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
+                  Role icon {lvl.level < 2 && <span className="font-normal normal-case">· Level 2 unlocks</span>}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={selected.icon ?? ""}
+                    disabled={loading || lvl.level < 2}
+                    onChange={(e) => void run(() => updateRole(selected.id, { icon: e.target.value }))}
+                    placeholder="e.g. 🛡"
+                    className="w-20 rounded bg-bg-accent px-2 py-1.5 text-center text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-40"
+                  />
+                  {selected.icon && (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => void run(() => updateRole(selected.id, { icon: null }))}
+                      className="text-xs text-text-muted hover:text-text-normal"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
 

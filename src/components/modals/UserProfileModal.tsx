@@ -467,6 +467,7 @@ export function UserProfileModal({
                                 : { backgroundColor: `${role.color}1c` }
                             }
                           >
+                            {role.icon && <span className="text-[11px]">{role.icon}</span>}
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
                             {role.name}
                           </span>

@@ -316,7 +316,7 @@ interface AppContextValue {
   channelEffects: Record<string, ChannelEffects>;
   updateRole: (
     roleId: string,
-    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions" | "gradient_to" | "gradient_animated">>,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated">>,
   ) => Promise<string | null>;
   platformBanUser: (opts: { username?: string; userId?: string; password: string; reason?: string }) => Promise<string | null>;
   platformUnbanUser: (opts: { userId: string; password: string }) => Promise<string | null>;
@@ -3012,17 +3012,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const switchAccount = useCallback(async (account: SavedSession) => {
+    // Make sure any rotating refresh-lock from another tab cannot hide here.
     resetSupabaseClient();
     const supabase = getSupabaseClient();
-    // Fast path: full token pair from this tab's session storage.
-    const tokens = getSavedSessionTokens(account.user_id);
-    if (tokens) {
-      const { data, error } = await supabase.auth.setSession(tokens);
-      if (!error && data.session) {
-        setSession(data.session);
-        rememberSession(data.session);
+    const fallbackSession = sessionRef.current;
+    const savedTokens = getSavedSessionTokens(account.user_id);
+    // Prefer the account's persistent refresh token when available. Supabase
+    // access tokens expire; only a refresh token can establish a new session.
+    const persistedRefreshToken = getSavedRefreshToken(account.user_id);
+    const refreshToken = persistedRefreshToken ?? savedTokens?.refresh_token ?? null;
+
+    if (refreshToken) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+        if (!error && data.session) {
+          setSession(data.session);
+          rememberSession(data.session);
+          void refreshSessionOnce().then((r) => {
+            if ("session" in r && r.session) {
+              const refreshed = r.session as Session;
+              setSession(refreshed);
+              rememberSession(refreshed);
+            }
+          });
+          return null;
+        }
+        if (error?.name !== "AuthRetryableFetchError") break;
+        await new Promise((r) => setTimeout(r, 250 * Math.pow(2, attempt)));
+      }
+    }
+
+    // Fallback to a direct token load. This can revive an account whose
+    // token pair survived in session storage but can no longer be refreshed.
+    if (savedTokens?.access_token && savedTokens?.refresh_token) {
+      const { data, error } = await supabase.auth.setSession(savedTokens).catch(() => ({ data: { session: null }, error: new Error("set session failed") })) ;
+      const fallbackSession = data?.session ?? null;
+      if (!error && fallbackSession?.user?.id === account.user_id) {
+        setSession(fallbackSession);
+        rememberSession(fallbackSession);
         void refreshSessionOnce().then((r) => {
-          if ("session" in r && r.session) {
+          if ("session" in r && r.session && (r.session as Session)?.user?.id === account.user_id) {
             const refreshed = r.session as Session;
             setSession(refreshed);
             rememberSession(refreshed);
@@ -3032,27 +3061,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       clearSavedSessionTokens(account.user_id);
     }
-    // Restart path: only the refresh token survives a reopen. Mint a fresh
-    // pair from it so switching doesn't demand the password again.
-    const refreshToken = getSavedRefreshToken(account.user_id);
-    if (refreshToken) {
-      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-      if (!error && data.session) {
-        setSession(data.session);
-        rememberSession(data.session);
-        return null;
-      }
-    }
-    // Both paths failed. Do NOT drop the session we already had: a failed
-    // switch used to sign the user out of the account they were happily
-    // using, turning "that other account needs a password" into "you are now
-    // signed out of everything".
-    if (sessionRef.current) {
-      await supabase.auth.setSession({
-        access_token: sessionRef.current.access_token,
-        refresh_token: sessionRef.current.refresh_token,
-      }).catch(() => undefined);
-      setSession(sessionRef.current);
+
+    // Keep the currently active session so a failed switch does not sign
+    // everyone out.
+    if (fallbackSession) {
+      try { await supabase.auth.setSession(fallbackSession); } catch { /* keep going */ }
+      setSession(fallbackSession);
     }
     return "Sign in again to continue as this account.";
   }, [rememberSession]);
@@ -3801,12 +3815,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const createRole = useCallback(async (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => {
+  const createRole = useCallback(async (data: { name: string; color: string; icon?: string | null; permissions?: ServerRole["permissions"] }) => {
     if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().from("server_roles").insert({
       server_id: activeServerId,
       name: data.name.trim(),
       color: data.color,
+      icon: (data.icon ?? "").trim() || null,
       position: serverRoles.length,
       ...(data.permissions ? { permissions: data.permissions } : {}),
     });
@@ -3817,12 +3832,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateRole = useCallback(async (
     roleId: string,
-    patch: Partial<Pick<ServerRole, "name" | "color" | "permissions" | "gradient_to" | "gradient_animated">>,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated">>,
   ) => {
     if (!activeServerId) return "No space selected";
     const update: Record<string, unknown> = {};
     if (patch.name !== undefined) update.name = patch.name.trim();
     if (patch.color !== undefined) update.color = patch.color;
+    if (patch.icon !== undefined) update.icon = (patch.icon ?? "").trim() || null;
     if (patch.gradient_to !== undefined) update.gradient_to = patch.gradient_to;
     if (patch.gradient_animated !== undefined) update.gradient_animated = patch.gradient_animated;
     if (patch.permissions !== undefined) update.permissions = patch.permissions;

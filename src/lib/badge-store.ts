@@ -135,3 +135,29 @@ export async function refreshOwnBadges(userId: string) {
   await getSupabaseClient().rpc("refresh_user_badges", { p_user: userId });
   invalidateBadges(userId);
 }
+
+export async function setBadgeVisible(userId: string, badgeKey: string, visible: boolean) {
+  const supabase = getSupabaseClient();
+  try {
+    await supabase.rpc("set_badge_visible", { p_key: badgeKey, p_visible: visible });
+  } catch {
+    // Security definer function should exist; fall back silently.
+  }
+  invalidateBadges(userId);
+}
+
+export async function loadAllBadgesForUser(userId: string) {
+  const defs = await loadCatalogue();
+  const supabase = getSupabaseClient();
+  const { data } = await supabase
+    .from("user_badges")
+    .select("badge_key, awarded_at, metadata, visible")
+    .eq("user_id", userId);
+  return (data ?? [])
+    .map((row: { badge_key: string; awarded_at: string; metadata: Record<string, unknown>; visible: boolean }) => {
+      const def = defs.get(row.badge_key);
+      if (!def) return null;
+      return { ...def, awarded_at: row.awarded_at, metadata: row.metadata ?? {}, visible: row.visible ?? true };
+    })
+    .filter(Boolean) as Array<AwardedBadge & { visible: boolean }>;
+}
