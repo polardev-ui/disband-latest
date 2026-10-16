@@ -534,6 +534,20 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     return () => el.removeEventListener("scroll", onScroll);
   }, [requestLoadMore]);
 
+  // Mobile keyboards resize the visual viewport without scrolling the chat
+  // container, which used to strand the view mid-history when the keyboard
+  // opened. While the user is pinned to the bottom, follow the resize so
+  // the newest messages stay in view.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const onResize = () => {
+      if (stickToBottomRef.current) scrollToBottom("auto", true);
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [scrollToBottom]);
+
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -683,7 +697,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
       {callPanel && <div className="shrink-0">{callPanel}</div>}
 
-      <div ref={scrollRef} data-selectable className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
+      <div ref={scrollRef} data-selectable className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] py-4">
         <div ref={contentRef}>
           {loading && messages.length === 0 ? (
             <MessageSkeleton />

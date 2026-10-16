@@ -472,6 +472,10 @@ export function ChatInput({
         setError(err);
         return;
       }
+      // Exit edit mode AND clear the composer: without this the edited text
+      // stays in the box after Enter even though the edit already saved
+      // (the parent clears its editing state, but this local draft is ours).
+      setText("");
       onCancelEdit?.();
       return;
     }

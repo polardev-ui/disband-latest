@@ -339,6 +339,32 @@ function uploadErrorMessage(err: unknown): string {
   return "Upload failed. Check your connection and try again.";
 }
 
+const UNREAD_SNAPSHOT_PREFIX = "disband:unread:";
+
+interface UnreadSnapshot {
+  dm: {
+    threadId: string;
+    friendId: string;
+    displayName: string;
+    username: string;
+    avatarUrl: string | null;
+    count: number;
+    latestAt: string;
+  }[];
+  group: { id: string; count: number }[];
+  notifications: AppNotification[];
+}
+
+function readUnreadSnapshot(uid: string): UnreadSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(UNREAD_SNAPSHOT_PREFIX + uid);
+    if (!raw) return null;
+    return JSON.parse(raw) as UnreadSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [ready, setReady] = useState(false);
@@ -669,9 +695,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const seedUnread = useCallback(async (uid: string) => {
+  // Last-known attention state, persisted per user so a refresh paints DM /
+  // group badges and the notification list instantly — before the network
+  // round-trips finish. The server counts overwrite it moments later, and
+  // clearing a badge updates the snapshot too, so a read badge never comes
+  // back from the dead.
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") return;
+    try {
+      const snapshot: UnreadSnapshot = {
+        dm: [...dmUnreadMap.entries()].map(([threadId, entry]) => ({
+          threadId,
+          friendId: entry.friend.id,
+          displayName: entry.friend.display_name ?? entry.friend.username ?? "",
+          username: entry.friend.username ?? "",
+          avatarUrl: entry.friend.avatar_url ?? null,
+          count: entry.count,
+          latestAt: entry.latestAt,
+        })),
+        group: [...groupUnreadMap.entries()].map(([id, count]) => ({ id, count })),
+        notifications: notifications.slice(0, 30),
+      };
+      window.localStorage.setItem(UNREAD_SNAPSHOT_PREFIX + userId, JSON.stringify(snapshot));
+    } catch {
+      // Storage full or unavailable: the server re-seed covers it.
+    }
+  }, [userId, dmUnreadMap, groupUnreadMap, notifications]);
+
+  const seedUnread = useCallback(async (uid: string, threads?: (DmThread & { friend: Profile })[]) => {
     const supabase = getSupabaseClient();
-    const threadByFriend = new Map(dmThreads.map((t) => [t.friend.id, t]));
+    // Prefer the freshly loaded list when the caller has it: state (and the
+    // synced ref) only update on the next render, so reading them here right
+    // after a reload sees the pre-reload list and drops every badge.
+    const list = threads ?? dmThreadsRef.current;
+    const threadByFriend = new Map(list.map((t) => [t.friend.id, t]));
 
     const [{ data: dm }, { data: grp }] = await Promise.all([
       supabase.rpc("get_dm_unread"),
@@ -685,7 +742,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const existing = prev.get(row.thread_id);
         const friend =
           existing?.friend ??
-          dmThreads.find((x) => x.id === row.thread_id)?.friend ??
+          list.find((x) => x.id === row.thread_id)?.friend ??
           threadByFriend.get(row.thread_id)?.friend;
         if (!friend) continue;
         next.set(row.thread_id, {
@@ -704,7 +761,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
-  }, [dmThreads]);
+  }, []);
 
   const patchProfileInState = useCallback((updated: Profile) => {
     setProfile((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
@@ -1361,7 +1418,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ...t, friend: fp as Profile | null };
       }),
     );
-    setDmThreads(enriched.filter((t): t is DmThread & { friend: Profile } => !!t.friend));
+    const withFriends = enriched.filter((t): t is DmThread & { friend: Profile } => !!t.friend);
+    setDmThreads(withFriends);
+    // Returned (not just set) so callers like seedUnread can use the fresh
+    // list immediately instead of a stale closure over state.
+    return withFriends;
 
     const ids = threads.map((t) => t.id);
     if (ids.length) {
@@ -1622,7 +1683,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshAll = useCallback(async () => {
     if (!userId) return;
-    await Promise.all([
+    // Phase 1 — attention state first. Notifications, threads and unread
+    // badges resolve before any message history is fetched, so a refresh
+    // paints badges immediately instead of after seconds of channel loading.
+    const [, , , threads] = await Promise.all([
       loadProfile(userId),
       loadServers(userId),
       loadFriendships(userId),
@@ -1632,7 +1696,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadServerOrganization(),
     ]);
 
-    await seedUnread(userId);
+    await seedUnread(userId, threads);
+
+    // Phase 2 — the open conversation and server details stream in after.
     if (activeServerId) await loadServerDetails(activeServerId);
     if (activeChannelId) await loadMessages(activeChannelId);
     if (activeDmThreadId) await loadDmMessages(activeDmThreadId);
@@ -1744,10 +1810,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dmId ? loadDmMessages(dmId) : Promise.resolve(),
       channelId ? loadMessages(channelId) : Promise.resolve(),
       groupId ? loadGroupMessages(groupId) : Promise.resolve(),
-      loadDmThreads(uid),
       loadGroupChats(uid),
     ]);
-    await seedUnread(uid);
+    const threads = await loadDmThreads(uid);
+    await seedUnread(uid, threads);
   }, [loadDmMessages, loadMessages, loadGroupMessages, loadDmThreads, loadGroupChats, seedUnread]);
 
   useEffect(() => {
@@ -1909,6 +1975,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         await ensureProfile(userId, user?.email);
+        // Paint last-known badges/notifications instantly so a refresh never
+        // shows a clean slate while the network catches up. refreshAll
+        // overwrites all of this with server truth moments later.
+        const snapshot = typeof window !== "undefined" ? readUnreadSnapshot(userId) : null;
+        if (snapshot && !cancelled) {
+          if (snapshot.dm.length > 0) {
+            setDmUnreadMap(
+              new Map(
+                snapshot.dm.map((d) => [
+                  d.threadId,
+                  {
+                    friend: {
+                      id: d.friendId,
+                      display_name: d.displayName,
+                      username: d.username,
+                      avatar_url: d.avatarUrl,
+                    } as Profile,
+                    count: d.count,
+                    latestAt: d.latestAt,
+                  },
+                ]),
+              ),
+            );
+          }
+          if (snapshot.group.length > 0) {
+            setGroupUnreadMap(new Map(snapshot.group.map((g) => [g.id, g.count])));
+          }
+          if (snapshot.notifications.length > 0) {
+            setNotifications(snapshot.notifications);
+          }
+        }
         await refreshAll();
       } catch (err) {
 
@@ -4836,13 +4933,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await supabase.from("message_reactions").delete().eq("id", existing.id);
       return;
     }
+    // Optimistic add: the row appears instantly and is swapped for the saved
+    // row (or removed on failure) once the server responds.
+    const tempId = `opt-rxn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setMessageReactions((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        context_type: context,
+        message_id: messageId,
+        user_id: userId,
+        emoji,
+        created_at: new Date().toISOString(),
+      },
+    ]);
     const { data, error } = await supabase
       .from("message_reactions")
       .insert({ context_type: context, message_id: messageId, user_id: userId, emoji })
       .select("*")
       .single();
     if (!error && data) {
-      setMessageReactions((prev) => [...prev, data as MessageReaction]);
+      // Swap the optimistic row for the saved one so counts stay exact.
+      setMessageReactions((prev) => prev.map((r) => (r.id === tempId ? (data as MessageReaction) : r)));
+    } else {
+      // Nothing landed: pull the optimistic row back out.
+      setMessageReactions((prev) => prev.filter((r) => r.id !== tempId));
     }
   }, [userId, messageReactions]);
 

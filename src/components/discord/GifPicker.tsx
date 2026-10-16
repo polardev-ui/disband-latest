@@ -102,6 +102,8 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   const [tab, setTab] = useState<"search" | "favorites">("search");
   const [panelPos, setPanelPos] = useState({ left: 0, bottom: 0, width: 320 });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqRef = useRef(0);
+  const lastQueryRef = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -121,14 +123,19 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   }, []);
 
   const load = useCallback(async (q: string) => {
+    // Guard against out-of-order responses: a slow trending fetch must not
+    // overwrite newer search results (or vice versa).
+    const id = ++reqRef.current;
+    lastQueryRef.current = q;
     setLoading(true);
     setError(null);
     try {
-      setGifs(await searchGifs(q));
+      const res = await searchGifs(q);
+      if (reqRef.current === id) setGifs(res);
     } catch {
-      setError("Could not load GIFs");
+      if (reqRef.current === id) setError("Could not load GIFs");
     } finally {
-      setLoading(false);
+      if (reqRef.current === id) setLoading(false);
     }
   }, []);
 
@@ -143,8 +150,18 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
     };
   }, [open, updatePanelPos]);
 
+  // Trending loads the moment the picker opens — previously the first fetch
+  // waited out the 350ms debounce, so the panel always opened empty.
   useEffect(() => {
     if (!open) return;
+    lastQueryRef.current = null;
+    void load(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, load]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (lastQueryRef.current === query) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => void load(query), 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -237,7 +254,13 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                 )
               ) : (
               <>
-              {loading && <p className="py-4 text-center text-sm text-text-muted">Loading…</p>}
+              {loading && gifs.length === 0 && !error && (
+                <div className="grid grid-cols-2 gap-1" aria-hidden>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="h-24 animate-pulse rounded bg-bg-accent" />
+                  ))}
+                </div>
+              )}
               {error && <p className="py-4 text-center text-sm text-status-dnd">{error}</p>}
               {!loading && !error && gifs.length === 0 && query.trim() && (
                 <p className="py-4 text-center text-sm text-text-muted">No GIFs found</p>
