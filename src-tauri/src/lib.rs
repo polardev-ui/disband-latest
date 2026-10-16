@@ -29,6 +29,55 @@ fn show_macos_notification(_title: String, _body: Option<String>) -> Result<(), 
     Err("show_macos_notification is only available on macOS".into())
 }
 
+/// The notification pop, compiled into the binary so it never depends on a
+/// bundle resource path.
+#[cfg(target_os = "macos")]
+const NOTIFICATION_POP: &[u8] = include_bytes!("../../public/sounds/notificationpop.mp3");
+
+/// Play the notification pop natively.
+///
+/// The webview's audio is not dependable for this: WKWebView suspends its
+/// AudioContext while the window is in the background — exactly when a
+/// notification arrives — so the pop played only some of the time. A native
+/// player is not throttled. The notification itself stays silent and this is
+/// the one sound for it, so the two can never double up.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn play_notification_sound(app: tauri::AppHandle) -> Result<(), String> {
+    use std::sync::OnceLock;
+    use tauri::Manager;
+
+    static POP_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
+    let path = match POP_PATH.get() {
+        Some(path) => path.clone(),
+        None => {
+            let dir = app.path().app_cache_dir().map_err(|err| err.to_string())?;
+            std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+            let path = dir.join("notificationpop.mp3");
+            std::fs::write(&path, NOTIFICATION_POP).map_err(|err| err.to_string())?;
+            POP_PATH.get_or_init(|| path).clone()
+        }
+    };
+
+    let mut child = std::process::Command::new("/usr/bin/afplay")
+        .arg("-v")
+        .arg("0.85")
+        .arg(&path)
+        .spawn()
+        .map_err(|err| err.to_string())?;
+    // Reap the player off the main thread so it never lingers as a zombie.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn play_notification_sound() -> Result<(), String> {
+    Err("native notification sound is only available on macOS".into())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -51,7 +100,7 @@ pub fn run() {
     }
 
     builder
-        .invoke_handler(tauri::generate_handler![show_macos_notification])
+        .invoke_handler(tauri::generate_handler![show_macos_notification, play_notification_sound])
         .run(tauri::generate_context!())
         .expect("error while running the Disband desktop application");
 }

@@ -86,11 +86,16 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     setSwitchingId(acct.user_id);
     try {
       const err = await switchAccount(acct);
-      if (!err) onClose();
+      if (err) {
+        // A switch that needs the password again goes straight to a sign-in
+        // sheet for that account, instead of failing silently in the menu.
+        beginAddAccount({ email: acct.email, notice: err });
+      }
+      onClose();
     } finally {
       setSwitchingId(null);
     }
-  }, [switchAccount, switchingId, onClose]);
+  }, [switchAccount, switchingId, onClose, beginAddAccount]);
 
   const setStatus = useCallback(
     async (status: UserStatus) => {

@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { displayName } from "@/lib/utils";
-import type { Profile, ServerMember } from "@/lib/supabase/types";
+import { Avatar } from "@/components/ui/Avatar";
+import { IconLeave, IconLock, IconNotes, IconTimer, IconTrash } from "@/components/icons";
+import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 
 interface AuditRow {
   id: number;
@@ -15,15 +18,15 @@ interface AuditRow {
   created_at: string;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  "member.kick": "Kicked a member",
-  "member.ban": "Banned a member",
-  "member.unban": "Unbanned a member",
-  "member.timeout": "Timed out a member",
-  "member.untimeout": "Removed a timeout",
-  "channel.message.delete": "Deleted a message",
-  "dm.message.delete": "Deleted a DM",
-  "group.message.delete": "Deleted a group message",
+const ACTIONS: Record<string, { label: string; icon: ComponentType<{ size?: number }>; tone: "danger" | "muted" }> = {
+  "member.kick": { label: "kicked", icon: IconLeave, tone: "danger" },
+  "member.ban": { label: "banned", icon: IconLock, tone: "danger" },
+  "member.unban": { label: "lifted the ban on", icon: IconLock, tone: "muted" },
+  "member.timeout": { label: "timed out", icon: IconTimer, tone: "danger" },
+  "member.untimeout": { label: "removed the timeout on", icon: IconTimer, tone: "muted" },
+  "channel.message.delete": { label: "deleted a message", icon: IconTrash, tone: "muted" },
+  "dm.message.delete": { label: "deleted a DM", icon: IconTrash, tone: "muted" },
+  "group.message.delete": { label: "deleted a group message", icon: IconTrash, tone: "muted" },
 };
 
 function timeAgo(iso: string): string {
@@ -34,16 +37,23 @@ function timeAgo(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
-export function AuditLogPanel({ serverId, members }: { serverId: string; members: (ServerMember & { profile: Profile })[] }) {
+function formatDuration(seconds: number): string {
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} h`;
+  return `${Math.round(seconds / 86400)} d`;
+}
+
+/** The last 100 moderation actions in a space. */
+export function AuditLogPanel({ serverId }: { serverId: string }) {
+  const { members } = useApp();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const names = new Map<string, string>();
-  for (const m of members) {
-    if (m.profile) names.set(m.user_id, displayName(m.profile));
-  }
+  const byId = useMemo(() => new Map(members.map((m) => [m.user_id, m.profile])), [members]);
 
   useEffect(() => {
     let live = true;
@@ -55,10 +65,9 @@ export function AuditLogPanel({ serverId, members }: { serverId: string; members
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data }) => {
-        if (live) {
-          setRows((data as AuditRow[] | null) ?? []);
-          setLoading(false);
-        }
+        if (!live) return;
+        setRows((data as AuditRow[] | null) ?? []);
+        setLoading(false);
       });
     return () => {
       live = false;
@@ -66,43 +75,67 @@ export function AuditLogPanel({ serverId, members }: { serverId: string; members
   }, [serverId]);
 
   if (loading) {
-    return <p className="py-6 text-center text-sm text-text-muted">Loading audit log…</p>;
+    return (
+      <div className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-3 border-b border-divider px-4 py-3.5 last:border-b-0">
+            <div className="h-8 w-8 animate-pulse rounded-full bg-bg-accent" />
+            <div className="h-3 flex-1 animate-pulse rounded bg-bg-accent" style={{ maxWidth: 220 + i * 40 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-2xl border border-divider bg-bg-secondary">
+        <EmptyState icon={<IconNotes size={20} />} title="Nothing logged yet" body="Kicks, bans, timeouts and deleted messages will show up here." />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-text-normal">Audit Log</h2>
-        <p className="mt-1 text-sm text-text-muted">The last 100 moderation actions on this space.</p>
-      </div>
-      {rows.length === 0 ? (
-        <p className="rounded-lg border border-divider bg-bg-secondary px-4 py-6 text-center text-sm text-text-muted">
-          Nothing here yet. Kicks, bans, timeouts and deletions will show up.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {rows.map((row) => (
-            <li key={row.id} className="flex items-start gap-3 rounded-lg border border-divider bg-bg-secondary px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-text-normal">
-                  {ACTION_LABELS[row.action] ?? row.action}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-text-muted">
-                  {row.actor_id ? (names.get(row.actor_id) ?? "Someone") : "System"}
-                  {row.target_id && row.target_type === "user"
-                    ? ` → ${names.get(row.target_id) ?? "a user"}`
-                    : ""}
-                  {typeof row.details?.reason === "string" && row.details.reason
-                    ? ` · ${row.details.reason}`
-                    : ""}
-                  {typeof row.details?.seconds === "number" ? ` · ${row.details.seconds}s` : ""}
-                </p>
-              </div>
-              <span className="shrink-0 text-[11px] text-text-muted">{timeAgo(row.created_at)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      {rows.map((row, i) => {
+        const action = ACTIONS[row.action];
+        const Icon = action?.icon ?? IconNotes;
+        const actor = row.actor_id ? byId.get(row.actor_id) : null;
+        const target = row.target_id && row.target_type === "user" ? byId.get(row.target_id) : null;
+        const reason = typeof row.details?.reason === "string" && row.details.reason ? row.details.reason : null;
+        const seconds = typeof row.details?.seconds === "number" ? row.details.seconds : null;
+        return (
+          <li key={row.id} className="view-enter flex items-start gap-3 border-b border-divider px-4 py-3 last:border-b-0" style={enterStyle(i)}>
+            <div className="relative shrink-0">
+              {actor ? <Avatar profile={actor} size="sm" /> : <span className="block h-8 w-8 rounded-full bg-bg-accent" />}
+              <span
+                className={`absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-bg-secondary ${
+                  action?.tone === "danger" ? "bg-status-dnd text-white" : "bg-bg-accent text-text-muted"
+                }`}
+              >
+                <Icon size={10} />
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px] leading-snug text-text-muted">
+                <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? "Someone" : "Disband"}</span>{" "}
+                {action?.label ?? row.action}
+                {row.target_type === "user" && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-text-normal">{target ? displayName(target) : "a former member"}</span>
+                  </>
+                )}
+                {seconds !== null && <> for {formatDuration(seconds)}</>}
+              </p>
+              {reason && <p className="mt-0.5 truncate text-[12.5px] text-text-muted">“{reason}”</p>}
+            </div>
+            <time dateTime={row.created_at} title={new Date(row.created_at).toLocaleString()} className="shrink-0 text-[12px] text-text-muted">
+              {timeAgo(row.created_at)}
+            </time>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

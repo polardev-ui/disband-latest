@@ -6,6 +6,8 @@ import { BotTag } from "@/components/ui/BotTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
 import { roleGradientTextStyle, roleIsGradientAnimated } from "@/lib/profileColor";
+import { memberIconRole } from "@/lib/role-icons";
+import { RoleIcon } from "@/components/ui/RoleIcon";
 import { useApp } from "@/contexts/AppContext";
 import { IconCrown, IconShield } from "@/components/icons";
 import { Tooltip } from "./Tooltip";
@@ -252,6 +254,7 @@ function Row({
   const color = roleColor(m, roles);
   const gradRole = topRole(m, roles);
   const gradStyle = roleGradientTextStyle(gradRole);
+  const iconRole = memberIconRole(m, roles);
   return (
     <button
       type="button"
@@ -274,6 +277,7 @@ function Row({
         style={color ? { color } : undefined}
       >
         <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""}`} style={gradStyle ?? undefined}>{displayName(p)}</span>
+        {iconRole && <RoleIcon icon={iconRole.icon} name={iconRole.name} size={15} />}
         <BotTag profile={p} size="sm" />
         <PlatformBadge userId={p.id} />
         {m.role === "owner" && (

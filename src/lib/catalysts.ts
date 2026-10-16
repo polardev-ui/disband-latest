@@ -29,8 +29,9 @@ export const CATALYST_LEVELS: CatalystLevel[] = [
     min: 6,
     name: "Level 3",
     perks: [
-      "Custom vanity invite code",
       "+50 custom emoji slots for everyone",
+      "Custom vanity invite code",
+      "Role icons",
       "Animated gradient role styling",
     ],
   },

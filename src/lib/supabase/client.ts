@@ -1,7 +1,8 @@
 "use client";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { saveSwitchRefreshToken } from "@/lib/switch-refresh-tokens";
 
 let browserClient: SupabaseClient | null = null;
 
@@ -113,7 +114,7 @@ function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClie
       }
     }
   }
-  return createClient(url, anonKey, {
+  const client = createClient(url, anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: false,
@@ -121,6 +122,73 @@ function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClie
       storage: typeof window !== "undefined" ? window.localStorage : undefined,
     },
   });
+  /*
+   Keep each account's saved refresh token current, whoever caused the refresh.
+
+   Refresh tokens are single-use: every refresh retires the old one. The copy
+   used for account switching used to be updated only from React state, which
+   misses refreshes made outside it (the expired-JWT retry below, a refresh in
+   another tab). Switching back then presented a retired token — and Supabase
+   treats reuse of a retired token as theft and revokes that whole sign-in,
+   which is why the account had to be removed and added again. Listening here,
+   on the client itself, sees every rotation.
+  */
+  client.auth.onAuthStateChange((_event, session) => {
+    if (session?.user?.id && session.refresh_token) {
+      saveSwitchRefreshToken(session.user.id, session.refresh_token);
+    }
+  });
+  return client;
+}
+
+export type TokenExchange =
+  | { session: Session }
+  | { error: string; expired: boolean };
+
+/**
+ * Trade a saved refresh token for a fresh session WITHOUT touching the active
+ * one.
+ *
+ * Doing this on the main client was the other half of the switching bug: when
+ * the token was no longer valid, auth-js cleared the *current* session from
+ * storage as a side effect, and the app then restored it from a React copy that
+ * could itself be stale. A throwaway, memory-only client keeps a failed switch
+ * completely side-effect free; only a session that is known to be good is ever
+ * handed to the main client.
+ */
+export async function exchangeRefreshToken(refreshToken: string): Promise<TokenExchange> {
+  const url = PUBLIC_ENV.supabaseUrl;
+  const anonKey = PUBLIC_ENV.supabaseAnonKey;
+  if (!url || !anonKey) return { error: "Missing Supabase configuration.", expired: false };
+  const probe = createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: `disband-switch-probe-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    },
+  });
+  let lastError = "Could not reach Disband.";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await probe.auth.refreshSession({ refresh_token: refreshToken });
+    if (!error && data.session) return { session: data.session };
+    lastError = error?.message ?? lastError;
+    // Only network trouble is worth retrying; a rejected token stays rejected.
+    if (error?.name !== "AuthRetryableFetchError") return { error: lastError, expired: true };
+    await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
+  }
+  return { error: lastError, expired: false };
+}
+
+/** Forget in-flight refresh bookkeeping (after the active account changes). */
+export function resetRefreshState() {
+  refreshPromise = null;
+  lastRefreshTime = 0;
+  try {
+    window.localStorage.removeItem(REFRESH_COOLDOWN_KEY);
+  } catch {
+
+  }
 }
 
 const JWT_EXPIRED_PATTERN = /JWT expired|PGRST303|Invalid JWT/i;

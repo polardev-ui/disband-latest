@@ -70,6 +70,8 @@ interface MessageRowProps {
   currentUserId?: string | null;
   currentUserName?: string | null;
   authorColor?: string | null;
+  authorRoleIcon?: string | null;
+  authorRoleName?: string | null;
   reactions: MessageReaction[];
   members: Profile[];
   channels?: ChannelLite[];
@@ -105,6 +107,8 @@ const MessageRow = memo(function MessageRow({
   currentUserId,
   currentUserName,
   authorColor,
+  authorRoleIcon,
+  authorRoleName,
   reactions,
   members,
   channels,
@@ -132,6 +136,8 @@ const MessageRow = memo(function MessageRow({
         currentUserId={currentUserId}
         currentUserName={currentUserName}
         authorColor={authorColor}
+        authorRoleIcon={authorRoleIcon}
+        authorRoleName={authorRoleName}
         reactions={reactions}
         onAuthorClick={onAuthorClick}
         onAuthorContextMenu={onAuthorContextMenu}
@@ -168,6 +174,8 @@ interface ChatCanvasProps {
 
   reactionsEnabled?: boolean;
   getAuthorColor?: (authorId: string) => string | null | undefined;
+  /** The author's icon-bearing role, if any (role icons). */
+  getAuthorIconRole?: (authorId: string) => { icon?: string | null; name: string } | null | undefined;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
   callPanel?: React.ReactNode;
@@ -213,6 +221,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     reactions = [],
     reactionsEnabled = true,
     getAuthorColor,
+    getAuthorIconRole,
     headerExtra,
     headerTrailing,
     callPanel,
@@ -705,6 +714,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     currentUserId={currentUserId}
                     currentUserName={currentUserName}
                     authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
+                    authorRoleIcon={msg.author_id ? getAuthorIconRole?.(msg.author_id)?.icon ?? null : null}
+                    authorRoleName={msg.author_id ? getAuthorIconRole?.(msg.author_id)?.name ?? null : null}
                     reactions={msgReactions}
                     members={renderMembers}
                     channels={channels}

@@ -415,6 +415,14 @@ export function DiscordApp() {
     [app],
   );
 
+  const getAuthorIconRole = useCallback(
+    (authorId: string) => {
+      const member = app.members.find((m) => m.user_id === authorId);
+      return member ? app.getMemberIconRole(member) : null;
+    },
+    [app],
+  );
+
   const openProfile = useCallback((profile: Profile) => setProfileTarget(profile), []);
 
   const handleAuthorClick = useCallback(
@@ -1958,6 +1966,7 @@ export function DiscordApp() {
           typingScope={{ kind: "channel", id: activeChannel.id, serverId: activeChannel.server_id }}
           readCursorScope={{ kind: "channel", id: activeChannel.id }}
           getAuthorColor={getAuthorColor}
+          getAuthorIconRole={app.viewMode === "space" ? getAuthorIconRole : undefined}
           onSend={app.sendChannelMessage}
           onEdit={app.editChannelMessage}
           onToggleReaction={(id, emoji) => void app.toggleReaction("channel", id, emoji)}
@@ -2196,6 +2205,7 @@ export function DiscordApp() {
       <ServerSettingsModal
         open={serverSettingsOpen}
         onClose={() => setServerSettingsOpen(false)}
+        onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
         onEditChannel={(ch) => {
           setServerSettingsOpen(false);
           setChannelSettingsChannel(app.channels.find((c) => c.id === ch.id) ?? null);

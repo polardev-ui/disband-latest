@@ -18,6 +18,7 @@ import { extractPreviewUrls, removeUrlsFromText } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
+import { RoleIcon } from "@/components/ui/RoleIcon";
 import { summarizeReactions, type ReactionSummary } from "@/lib/messages";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconVerified } from "@/components/icons";
@@ -64,6 +65,9 @@ interface ChatMessageProps {
 
   currentUserName?: string | null;
   authorColor?: string | null;
+  /** The author's role icon (Catalyst Level 2), shown after their name. */
+  authorRoleIcon?: string | null;
+  authorRoleName?: string | null;
   reactions?: MessageReaction[];
   onAuthorClick?: (profile: Profile) => void;
   onAuthorContextMenu?: (profile: Profile, e: React.MouseEvent) => void;
@@ -240,6 +244,8 @@ function ChatMessageImpl({
   currentUserId,
   currentUserName,
   authorColor,
+  authorRoleIcon,
+  authorRoleName,
   reactions = [],
   onAuthorClick,
   onAuthorContextMenu,
@@ -502,6 +508,9 @@ function ChatMessageImpl({
               <span className="text-[15px] font-medium" style={nameStyle}>
                 {displayName(author ?? {})}
               </span>
+            )}
+            {authorRoleIcon && (
+              <RoleIcon icon={authorRoleIcon} name={authorRoleName ?? undefined} size={16} className="self-center" />
             )}
             {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
             <BotTag profile={author} size="sm" />
