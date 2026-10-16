@@ -44,7 +44,7 @@ export function MessageActionBar({
 
   return (
     <div
-      className="absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-divider bg-overlay-surface p-0.5 opacity-0 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100"
+      className="absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-divider bg-overlay-surface p-0.5 opacity-0 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:[&>:not(:last-child)]:hidden"
       onClick={(e) => e.stopPropagation()}
     >
       {QUICK_EMOJIS.map((emoji) => (
@@ -52,7 +52,7 @@ export function MessageActionBar({
           key={emoji}
           type="button"
           onClick={() => onToggleReaction?.(emoji)}
-          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-base leading-none transition-all duration-150 hover:bg-interactive-hover active:scale-90"
+          className="flex h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center rounded-[8px] text-base leading-none transition-all duration-150 hover:bg-interactive-hover active:scale-90"
           title={emoji}
         >
           {emoji}
@@ -64,7 +64,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={onOpenReactionPicker}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+        className="flex h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Add Reaction"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -78,7 +78,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={() => onReply?.(replyPreview!)}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+        className="flex h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Reply"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -91,7 +91,7 @@ export function MessageActionBar({
         <button
           type="button"
           onClick={onEdit}
-          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+          className="flex h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
           title="Edit"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -103,7 +103,7 @@ export function MessageActionBar({
         <button
           type="button"
           onClick={onForward}
-          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+          className="flex h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
           title="Forward"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -116,7 +116,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={onMoreActions}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+        className="flex h-7 w-7 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="More"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

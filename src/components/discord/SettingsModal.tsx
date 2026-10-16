@@ -3,7 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -168,6 +168,19 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
+  // Instant local previews for avatar/banner: the picked file shows in the
+  // preview card immediately, while the upload + profile write happen
+  // quietly in the background. Cleared once the real URL lands.
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const previewUrlsRef = useRef<{ avatar: string | null; banner: string | null }>({ avatar: null, banner: null });
+  useEffect(() => {
+    const leftovers = previewUrlsRef.current;
+    return () => {
+      if (leftovers.avatar) URL.revokeObjectURL(leftovers.avatar);
+      if (leftovers.banner) URL.revokeObjectURL(leftovers.banner);
+    };
+  }, []);
   const [showSubscription, setShowSubscription] = useState(false);
   const { subscription, plan: subPlan, entitlements, reload: reloadSubscription } = useSubscription(profile?.id);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -350,8 +363,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   function pickAvatar(file: File) {
     if (cropSource) URL.revokeObjectURL(cropSource);
+    const url = URL.createObjectURL(file);
     setCropSourceFile(file);
-    setCropSource(URL.createObjectURL(file));
+    setCropSource(url);
+    if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+    previewUrlsRef.current.avatar = url;
+    setAvatarPreview(url);
     setCropOpen(true);
   }
 
@@ -361,6 +378,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     if (res) {
       await updateProfile({ avatar_url: res.url, avatar_crop: crop });
     }
+    // Either the real URL is live on the profile now, or the upload failed
+    // — either way the local preview has served its purpose.
+    if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+    previewUrlsRef.current.avatar = null;
+    setAvatarPreview(null);
     setCropOpen(false);
     if (cropSource) URL.revokeObjectURL(cropSource);
     setCropSource(null);
@@ -368,8 +390,20 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   }
 
   async function handleBanner(file: File) {
-    const res = await upload(file);
-    if (res) await updateProfile({ banner_url: res.url });
+    const url = URL.createObjectURL(file);
+    if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+    previewUrlsRef.current.banner = url;
+    setBannerPreview(url);
+    try {
+      const res = await upload(file);
+      if (res) await updateProfile({ banner_url: res.url });
+    } finally {
+      if (previewUrlsRef.current.banner === url) {
+        URL.revokeObjectURL(url);
+        previewUrlsRef.current.banner = null;
+        setBannerPreview(null);
+      }
+    }
   }
 
   async function savePreference(
@@ -573,6 +607,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           status_note: statusNote,
                           accent_color: useDefaultAccent ? null : accent1,
                           accent_color_2: useDefaultAccent ? null : accent2,
+                          // Local previews win until the uploaded URL lands.
+                          avatar_url: avatarPreview ?? profile.avatar_url,
+                          banner_url: bannerPreview ?? profile.banner_url,
                         }}
                         displayName={displayName}
                         username={username}
