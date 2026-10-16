@@ -699,13 +699,13 @@ export function DiscordApp() {
         void app.openDmWithFriend(dest.id).then(() => {
           setTimeout(() => {
             void app.sendDmMessage(content);
-          }, 300);
+          }, 200);
         });
       } else if (dest.kind === "group") {
         void app.selectGroupChat(dest.id).then(() => {
           setTimeout(() => {
             void app.sendGroupMessage(content);
-          }, 300);
+          }, 200);
         });
       }
       setForwardMessage(null);

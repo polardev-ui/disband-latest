@@ -57,7 +57,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
   const content = (
     <>
       <div className={`fixed inset-0 z-40 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Forward message" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-sm rounded-t-2xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl`}>
+      <div role="dialog" aria-modal="true" aria-label="Forward message" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto w-[calc(100%-16px)] max-w-md rounded-t-2xl border border-divider bg-bg-secondary shadow-2xl transition-all duration-200 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl ${exiting ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
         <div className="border-b border-divider px-4 py-3">
           <h3 className="text-sm font-semibold text-text-normal">Forward message</h3>
           <input
@@ -66,11 +66,11 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search friends and groups..."
             autoFocus
-            className="mt-2 w-full rounded bg-bg-primary px-3 py-2 text-sm text-text-normal placeholder:text-text-muted outline-none"
+            className="mt-2 w-full rounded bg-bg-primary px-3 py-2 text-sm text-text-normal placeholder:text-text-muted outline-none ring-brand transition-shadow focus:ring-2"
           />
         </div>
 
-        <div className="max-h-72 overflow-y-auto p-2">
+        <div className="max-h-80 overflow-y-auto p-2">
           {destinations.length === 0 ? (
             <p className="py-8 text-center text-xs text-text-muted">
               {q ? "No matches found" : "No conversations available"}
@@ -81,7 +81,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
                 key={`${dest.kind}-${dest.id}`}
                 type="button"
                 onClick={() => handleSelect(dest)}
-                className="flex w-full items-center gap-3 rounded px-2 py-2 text-left transition-colors hover:bg-interactive-hover"
+                className="flex w-full items-center gap-3 rounded px-2 py-2 text-left transition-all duration-150 hover:bg-interactive-hover active:scale-[0.98]"
               >
                 {dest.kind === "group" ? (
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 text-xs font-bold text-brand">

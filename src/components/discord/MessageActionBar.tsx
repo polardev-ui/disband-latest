@@ -8,8 +8,10 @@ const QUICK_EMOJIS = ["\u{1f44d}", "\u{2764}\u{fe0f}", "\u{1f602}", "\u{1f62e}",
 
 interface MessageActionBarProps {
   message: ChatMessageData;
+  currentUserId?: string | null;
   onReply?: (reply: ReplyPreview) => void;
   onForward?: () => void;
+  onEdit?: () => void;
   onToggleReaction?: (emoji: string) => void;
   onOpenReactionPicker?: () => void;
   onMoreActions?: (e: React.MouseEvent) => void;
@@ -17,8 +19,10 @@ interface MessageActionBarProps {
 
 export function MessageActionBar({
   message,
+  currentUserId,
   onReply,
   onForward,
+  onEdit,
   onToggleReaction,
   onOpenReactionPicker,
   onMoreActions,
@@ -36,9 +40,11 @@ export function MessageActionBar({
     };
   }, [message]);
 
+  const isOwn = message.author_id === currentUserId;
+
   return (
     <div
-      className="absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-divider bg-overlay-surface p-0.5 opacity-0 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)] transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100"
+      className="absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-divider bg-overlay-surface p-0.5 opacity-0 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100"
       onClick={(e) => e.stopPropagation()}
     >
       {QUICK_EMOJIS.map((emoji) => (
@@ -46,7 +52,7 @@ export function MessageActionBar({
           key={emoji}
           type="button"
           onClick={() => onToggleReaction?.(emoji)}
-          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-base leading-none transition-all hover:bg-interactive-hover active:scale-90"
+          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-base leading-none transition-all duration-150 hover:bg-interactive-hover active:scale-90"
           title={emoji}
         >
           {emoji}
@@ -58,7 +64,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={onOpenReactionPicker}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Add Reaction"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -72,7 +78,7 @@ export function MessageActionBar({
       <button
         type="button"
         onClick={() => onReply?.(replyPreview!)}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="Reply"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -81,22 +87,36 @@ export function MessageActionBar({
         </svg>
       </button>
 
-      <button
-        type="button"
-        onClick={onForward}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
-        title="Forward"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13" />
-          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-        </svg>
-      </button>
+      {isOwn ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+          title="Edit"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onForward}
+          className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+          title="Forward"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        </button>
+      )}
 
       <button
         type="button"
         onClick={onMoreActions}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal active:scale-90"
+        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted transition-all duration-150 hover:bg-interactive-hover hover:text-text-normal active:scale-90"
         title="More"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
