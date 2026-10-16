@@ -19,7 +19,7 @@ tauri-build = { version = "2", features = [] }
 # package differ on major/minor, pnpm stays frozen to its lockfile, and there
 # is no Cargo.lock — so a bare "2" floats Rust to each new minor while JS
 # stands still. Patch updates still float on both sides.
-tauri = { version = "~2.12", features = ["devtools"] }
+tauri = { version = "~2.12", features = ["devtools", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "~2.5"
 # Desktop auto-update. Minor-frozen for the same reason as `tauri` above: the
