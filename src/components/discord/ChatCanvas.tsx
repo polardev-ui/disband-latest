@@ -85,6 +85,7 @@ interface MessageRowProps {
   onMessageContext: (message: ChatMessageData, x: number, y: number) => void;
   onForward: (message: ChatMessageData) => void;
   onReply: (reply: ReplyPreview) => void;
+  onEdit: (edit: { id: string; content: string } | null) => void;
   onOpenReactionPicker: (messageId: string) => void;
   onJumpToReply: (messageId: string) => void;
   onContentResize: () => void;
@@ -122,6 +123,7 @@ const MessageRow = memo(function MessageRow({
   onMessageContext,
   onForward,
   onReply,
+  onEdit,
   onOpenReactionPicker,
   onJumpToReply,
   onContentResize,
@@ -155,6 +157,14 @@ const MessageRow = memo(function MessageRow({
         onReply={canReact ? onReply : undefined}
         onOpenReactionPicker={canReact ? () => onOpenReactionPicker(message.id) : undefined}
         onForward={canForward ? () => onForward(message) : undefined}
+        onEdit={currentUserId === message.author_id ? () => {
+          onEdit({ id: message.id, content: message.content });
+          onReply({ id: message.id, author_id: message.author_id, content: message.content, attachment_type: message.attachment_type, author: message.author ? { id: message.author.id, username: message.author.username, display_name: message.author.display_name } : undefined } as any);
+          setTimeout(() => {
+            const composer = document.querySelector('textarea[placeholder*="Message"], textarea[placeholder*="Note"]') as HTMLTextAreaElement | null;
+            composer?.focus();
+          }, 10);
+        } : undefined}
         onDoubleClick={canReact ? () => onToggleReaction(message.id, "👍") : undefined}
         onContentResize={onContentResize}
       />
@@ -642,7 +652,10 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   async function handleSend(content: string, options?: MessageSendOptions) {
     if (editing && onEdit) {
       const err = await onEdit(editing.id, content);
-      if (!err) setEditing(null);
+      if (!err) {
+        setEditing(null);
+        setReplyTo(null);
+      }
       return err;
     }
     stickToBottomRef.current = true;
@@ -729,6 +742,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     onMessageContext={handleMessageContext}
                     onForward={handleForward}
                     onReply={handleReply}
+                    onEdit={setEditing}
                     onOpenReactionPicker={handleOpenReactionPicker}
                     onJumpToReply={jumpToMessage}
                     onContentResize={handleContentResize}

@@ -79,6 +79,7 @@ interface ChatMessageProps {
   onReply?: (reply: ReplyPreview) => void;
   onOpenReactionPicker?: () => void;
   onForward?: () => void;
+  onEdit?: () => void;
   highlight?: boolean;
   onContentResize?: () => void;
   channels?: ChannelLite[];
@@ -256,6 +257,7 @@ function ChatMessageImpl({
   onReply,
   onOpenReactionPicker,
   onForward,
+  onEdit,
   highlight,
   members = [],
   onContentResize,
@@ -391,7 +393,7 @@ function ChatMessageImpl({
           onToggleReaction={onToggleReaction}
           onOpenReactionPicker={onOpenReactionPicker}
           onForward={onForward}
-          onEdit={() => {}}
+          onEdit={onEdit}
           onMoreActions={onContextMenu}
         />
         <div className="overflow-hidden rounded-xl border border-brand/30 bg-bg-secondary shadow-[0_0_0_1px_rgba(0,0,0,0.2)]">
@@ -438,7 +440,7 @@ function ChatMessageImpl({
           onToggleReaction={onToggleReaction}
           onOpenReactionPicker={onOpenReactionPicker}
           onForward={onForward}
-          onEdit={() => {}}
+          onEdit={onEdit}
           onMoreActions={onContextMenu}
         />
         <time className="pointer-events-none absolute left-1 top-1/2 w-14 -translate-y-1/2 text-right text-[10px] text-text-muted opacity-0 group-hover:opacity-100">
@@ -495,7 +497,7 @@ function ChatMessageImpl({
           onToggleReaction={onToggleReaction}
           onOpenReactionPicker={onOpenReactionPicker}
           onForward={onForward}
-          onEdit={() => {}}
+          onEdit={onEdit}
           onMoreActions={onContextMenu}
         />
         {showHeader && (
