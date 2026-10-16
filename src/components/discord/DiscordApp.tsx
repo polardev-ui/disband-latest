@@ -2021,6 +2021,7 @@ export function DiscordApp() {
         <MemberList
           members={app.members}
           roles={app.serverRoles}
+          loading={app.membersLoading}
           onMemberClick={(m) => openProfile(m.profile)}
           onMemberContext={handleMemberContext}
         />

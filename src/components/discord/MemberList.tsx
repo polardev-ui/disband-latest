@@ -16,6 +16,7 @@ import type { Profile, ServerMember, ServerRole, UserStatus } from "@/lib/supaba
 interface MemberListProps {
   members: (ServerMember & { profile: Profile })[];
   roles: ServerRole[];
+  loading?: boolean;
   onMemberClick?: (member: ServerMember & { profile: Profile }) => void;
   onMemberContext?: (member: ServerMember & { profile: Profile }, x: number, y: number) => void;
 }
@@ -61,7 +62,7 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
-export function MemberList({ members, roles, onMemberClick, onMemberContext }: MemberListProps) {
+export function MemberList({ members, roles, loading, onMemberClick, onMemberContext }: MemberListProps) {
   const { presenceMap, serverTimeouts } = useApp();
 
   const timedOutIds = useMemo(() => {
@@ -172,6 +173,31 @@ export function MemberList({ members, roles, onMemberClick, onMemberContext }: M
   const visible = items.slice(first, last);
   const padTop = offsets[first] ?? 0;
   const padBottom = Math.max(0, total - (offsets[last] ?? total));
+
+  // While members load, show shimmering placeholder rows instead of "0"
+  // members followed by a pop-in list.
+  if (loading) {
+    return (
+      <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4" aria-label="Loading members">
+        <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          Members
+        </h2>
+        <div className="flex flex-col gap-1" aria-hidden>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2.5 rounded-[10px] px-2 py-1.5">
+              <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span
+                  className="skeleton-glimmer h-3 rounded"
+                  style={{ width: `${52 + ((i * 37) % 34)}%` }}
+                />
+              </span>
+            </div>
+          ))}
+        </div>
+      </aside>
+    );
+  }
 
   // An empty server (or one whose members failed to load) used to render a
   // blank rail with no explanation.

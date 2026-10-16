@@ -134,6 +134,7 @@ interface AppContextValue {
   messagesLoading: boolean;
   dmLoading: boolean;
   groupLoading: boolean;
+  membersLoading: boolean;
   friendships: Friendship[];
   friends: Profile[];
   pendingIncoming: Friendship[];
@@ -299,6 +300,8 @@ interface AppContextValue {
   serverUnreadIds: string[];
   getDmUnreadCount: (threadId: string) => number;
   clearDmUnread: (threadId: string) => void;
+  closeDmThread: (friendId: string) => void;
+  unhideDmFriend: (friendId: string) => void;
   channelUnreadMap: Map<string, number>;
   getChannelUnreadCount: (channelId: string) => number;
   getChannelMentionCount: (channelId: string) => number;
@@ -340,6 +343,18 @@ function uploadErrorMessage(err: unknown): string {
 }
 
 const UNREAD_SNAPSHOT_PREFIX = "disband:unread:";
+const CLOSED_DMS_PREFIX = "disband:closed-dms:";
+
+function readClosedDms(uid: string): string[] {
+  try {
+    const raw = window.localStorage.getItem(CLOSED_DMS_PREFIX + uid);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 interface UnreadSnapshot {
   dm: {
@@ -400,6 +415,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [dmLoading, setDmLoading] = useState(false);
   const [groupLoading, setGroupLoading] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+  // DM rows the user explicitly closed (by friend id). Persisted per user;
+  // a new incoming message or opening the DM again brings the row back.
+  const [closedDmFriendIds, setClosedDmFriendIds] = useState<string[]>([]);
   const [platformBan, setPlatformBan] = useState<{ banned: boolean; reason?: string; vpnBlocked?: boolean } | null>(null);
   const [restrictions, setRestrictions] = useState<string[]>([]);
   const [serverPermissions, setServerPermissions] = useState<Record<ServerPermissionKey, boolean>>({
@@ -633,6 +652,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }[] = [];
 
     for (const thread of sortedDmThreads) {
+      if (closedDmFriendIds.includes(thread.friend.id)) continue;
       entries.push({
         key: thread.id,
         friend: thread.friend,
@@ -644,6 +664,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     for (const friend of friends) {
       if (threadByFriend.has(friend.id)) continue;
+      if (closedDmFriendIds.includes(friend.id)) continue;
       entries.push({
         key: `friend-${friend.id}`,
         friend,
@@ -654,7 +675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     return entries.sort((a, b) => b.sortAt.localeCompare(a.sortAt));
-  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity]);
+  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds]);
 
   const serverUnreadIds = useMemo(() => [...serverIndicators], [serverIndicators]);
 
@@ -680,6 +701,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const persistClosedDms = useCallback((uid: string, ids: string[]) => {
+    try {
+      window.localStorage.setItem(CLOSED_DMS_PREFIX + uid, JSON.stringify(ids));
+    } catch {
+      // Storage unavailable: the in-memory set still applies this session.
+    }
+  }, []);
+
+  const closeDmThread = useCallback((friendId: string) => {
+    const uid = sessionRef.current?.user?.id ?? userId;
+    setClosedDmFriendIds((prev) => {
+      if (prev.includes(friendId)) return prev;
+      const next = [...prev, friendId];
+      if (uid) persistClosedDms(uid, next);
+      return next;
+    });
+  }, [userId, persistClosedDms]);
+
+  const unhideDmFriend = useCallback((friendId: string) => {
+    const uid = sessionRef.current?.user?.id ?? userId;
+    setClosedDmFriendIds((prev) => {
+      if (!prev.includes(friendId)) return prev;
+      const next = prev.filter((id) => id !== friendId);
+      if (uid) persistClosedDms(uid, next);
+      return next;
+    });
+  }, [userId, persistClosedDms]);
+
+  // Load the closed-DM set whenever the account changes.
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") {
+      if (!userId) setClosedDmFriendIds([]);
+      return;
+    }
+    setClosedDmFriendIds(readClosedDms(userId));
+  }, [userId]);
 
   const getGroupUnreadCount = useCallback(
     (groupId: string) => groupUnreadMap.get(groupId) ?? 0,
@@ -1039,6 +1097,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMembers(cached.members);
       setServerRoles(cached.roles);
     }
+    // No cache (or a fresh switch): the member list shows skeletons, not "0".
+    if (!cached) setMembersLoading(true);
     const supabase = getSupabaseClient();
     const [{ data: cats }, { data: chs }, { data: memRows }, { data: roles }, { data: roleRows }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
@@ -1095,6 +1155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     if (memberRows.length === 0) {
       setMembers([]);
+      setMembersLoading(false);
       return channelRows;
     }
     const enrichedMembers = memberRows.map((m) => ({
@@ -1148,6 +1209,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       members: memForCache,
       roles: (roles as ServerRole[]) ?? [],
     });
+    setMembersLoading(false);
     return channelRows;
   }, []);
 
@@ -2639,6 +2701,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           void (async () => {
             const { data: author } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
             if (!author) return;
+            // A new message from them brings a closed DM row back, with history.
+            setClosedDmFriendIds((prev) => {
+              if (!prev.includes(author.id)) return prev;
+              const next = prev.filter((id) => id !== author.id);
+              try {
+                window.localStorage.setItem(CLOSED_DMS_PREFIX + userId, JSON.stringify(next));
+              } catch {
+                // Non-fatal: the row is back for this session regardless.
+              }
+              return next;
+            });
             setDmUnreadMap((prev) => {
               const next = new Map(prev);
               const cur = next.get(msg.thread_id);
@@ -3307,6 +3380,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectDmThread = useCallback(async (threadId: string) => {
     markActivity();
     persistActiveServerChannel();
+    // Opening a DM always brings its row back, even if it was closed.
+    const thread = dmThreadsRef.current.find((t) => t.id === threadId);
+    if (thread) unhideDmFriend(thread.friend.id);
     setViewMode("dm");
     setActiveDmThreadId(threadId);
     activeDmRef.current = threadId;
@@ -3321,7 +3397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     void markDmReadNow(threadId);
     await loadDmMessages(threadId);
-  }, [loadDmMessages, clearDmUnread, markDmReadNow, persistActiveServerChannel, markActivity]);
+  }, [loadDmMessages, clearDmUnread, markDmReadNow, persistActiveServerChannel, markActivity, unhideDmFriend]);
 
   const selectGroupChat = useCallback(async (groupId: string) => {
     markActivity();
@@ -5083,6 +5159,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     messagesLoading,
     dmLoading,
     groupLoading,
+    membersLoading,
     friendships,
     friends,
     pendingIncoming,
@@ -5229,6 +5306,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     serverUnreadIds,
     getDmUnreadCount,
     clearDmUnread,
+    closeDmThread,
+    unhideDmFriend,
     channelUnreadMap,
     getChannelUnreadCount,
     getChannelMentionCount,

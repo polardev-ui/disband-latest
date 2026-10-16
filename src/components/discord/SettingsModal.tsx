@@ -19,6 +19,7 @@ import { MicTest } from "./settings/MicTest";
 import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
+import { requestEmailChange } from "@/lib/email-change";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
@@ -199,6 +200,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [copiedId, setCopiedId] = useState(false);
   const [signingOutAll, setSigningOutAll] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [emailChangeOpen, setEmailChangeOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailChangeBusy, setEmailChangeBusy] = useState(false);
+  const [emailChangeSent, setEmailChangeSent] = useState(false);
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
   useEffect(() => {
@@ -932,7 +937,61 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     description="Your email and user identifier on Disband."
                   >
                     <SettingRow label="Email" stacked>
-                      <p className="text-[14px] text-text-normal">{user?.email ?? "Not available"}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[14px] text-text-normal">{user?.email ?? "Not available"}</p>
+                        {user?.email && (
+                          <button
+                            type="button"
+                            onClick={() => setEmailChangeOpen((v) => !v)}
+                            className="rounded-md border border-divider px-2.5 py-1 text-[12px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                          >
+                            Change
+                          </button>
+                        )}
+                      </div>
+                      {user?.email && emailChangeOpen && (
+                        <form
+                          className="mt-2 flex flex-col gap-2"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            setSettingsError(null);
+                            setEmailChangeSent(false);
+                            void (async () => {
+                              setEmailChangeBusy(true);
+                              const err = await requestEmailChange(newEmail);
+                              setEmailChangeBusy(false);
+                              if (err) setSettingsError(err);
+                              else setEmailChangeSent(true);
+                            })();
+                          }}
+                        >
+                          <input
+                            type="email"
+                            required
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            placeholder="New email address"
+                            className="w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-brand"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="submit"
+                              disabled={emailChangeBusy || !newEmail.trim()}
+                              className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40"
+                            >
+                              {emailChangeBusy ? "Sending…" : "Send confirmation"}
+                            </button>
+                            <p className="text-[12px] text-text-muted">
+                              Both your current and new email must confirm.
+                            </p>
+                          </div>
+                          {emailChangeSent && (
+                            <p className="text-[13px] text-status-online">
+                              Confirmation sent — check your current inbox for the first link.
+                            </p>
+                          )}
+                        </form>
+                      )}
                     </SettingRow>
                     <SettingRow
                       label="User ID"

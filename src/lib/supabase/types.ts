@@ -39,6 +39,19 @@ export interface Profile {
   sound_enabled?: boolean;
   desktop_notifications_enabled?: boolean;
   link_previews_enabled?: boolean;
+  /**
+   * Live music presence ("listening to"), written by the connected Spotify /
+   * SoundCloud integration and cleared when playback stops. Optional so
+   * older profile rows (and every mock in tests) keep compiling.
+   */
+  listening?: {
+    source: "spotify" | "soundcloud";
+    track: string;
+    artists: string;
+    artwork: string | null;
+    track_url?: string | null;
+    started_at: string;
+  } | null;
   created_at: string;
   updated_at: string;
 }
