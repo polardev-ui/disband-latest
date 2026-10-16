@@ -386,6 +386,7 @@ function ChatMessageImpl({
       >
         <MessageActionBar
           message={message}
+          currentUserId={currentUserId}
           onReply={onReply}
           onToggleReaction={onToggleReaction}
           onOpenReactionPicker={onOpenReactionPicker}
@@ -431,6 +432,7 @@ function ChatMessageImpl({
       >
         <MessageActionBar
           message={message}
+          currentUserId={currentUserId}
           onReply={onReply}
           onToggleReaction={onToggleReaction}
           onOpenReactionPicker={onOpenReactionPicker}
@@ -486,6 +488,7 @@ function ChatMessageImpl({
       <div className="relative min-w-0 flex-1 pt-0.5">
         <MessageActionBar
           message={message}
+          currentUserId={currentUserId}
           onReply={onReply}
           onToggleReaction={onToggleReaction}
           onOpenReactionPicker={onOpenReactionPicker}
