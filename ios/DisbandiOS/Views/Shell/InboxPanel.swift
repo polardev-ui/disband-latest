@@ -5,6 +5,7 @@ struct InboxPanel: View {
     @Environment(AppState.self) private var app
     @Environment(DmUnreadStore.self) private var unreadStore
     @Environment(PresenceService.self) private var presence
+    @Environment(ClosedDmStore.self) private var closedDms
     @Environment(DirectMessagesViewModel.self) private var vm
     @Environment(VoiceSession.self) private var voice
     @Environment(ShellChrome.self) private var chrome
@@ -47,8 +48,8 @@ struct InboxPanel: View {
             .padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)
-        .refreshable { await vm.start(currentUserId: app.currentUserId, unread: unreadStore) }
-        .task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore) }
+        .refreshable { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
+        .task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
     }
 
     private var header: some View {
@@ -115,7 +116,7 @@ struct InboxPanel: View {
     private var items: [Item] {
         var result: [(Item, Date, Bool)] = []
         if filter != .groups {
-            for thread in vm.threads {
+            for thread in vm.threads where !closedDms.isClosed(thread.friend?.id) {
                 result.append((.dm(thread), DirectMessagesViewModel.recency(thread),
                                unreadStore.count(for: thread.id) > 0))
             }
@@ -149,6 +150,15 @@ struct InboxPanel: View {
                 .contentShape(RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(ChannelRowStyle())
+            .contextMenu {
+                if let friendId = thread.friend?.id {
+                    Button(role: .destructive) {
+                        closedDms.close(friendId)
+                    } label: {
+                        Label("Close DM", systemImage: "xmark")
+                    }
+                }
+            }
         case .group(let group):
             NavigationLink(value: SpacesRoute.chat(.group(id: group.id, name: group.name),
                                                    callPeer: nil, canModerate: false)) {
