@@ -39,7 +39,10 @@ struct SubscriptionTier: Identifiable, Hashable {
 
     /// The highest tier reached. Below a month there is no badge at all.
     static func forMonths(_ months: Int) -> SubscriptionTier? {
-        all.last { months >= $0.months }
+        // Tenure starts at zero on day one (App Store subscriptions never
+        // report a first-month stamp), but anyone on a paid plan has still
+        // earned the first medallion — show Bronze rather than nothing.
+        all.last { max(1, months) >= $0.months }
     }
 
     static func next(after months: Int) -> SubscriptionTier? {
