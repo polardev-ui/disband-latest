@@ -224,6 +224,26 @@ export async function POST(req: Request) {
         break;
       }
 
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        const refundMeta = charge.metadata ?? {};
+        // A refund invalidates a gift nobody has claimed yet. A claimed gift
+        // keeps its entitlement — clawing back months after the fact is a
+        // judgement call for a human, not something to guess at here.
+        if (refundMeta.kind === "gift" && refundMeta.gift_id) {
+          const supabase = getServiceSupabase();
+          if (supabase) {
+            const { error } = await supabase
+              .from("gifts")
+              .update({ status: "refunded" })
+              .eq("id", refundMeta.gift_id)
+              .in("status", ["pending", "unclaimed"]);
+            if (error) throw new Error(error.message);
+          }
+        }
+        break;
+      }
+
       case "customer.subscription.updated": {
         const updatedSub = event.data.object as Stripe.Subscription;
         const meta = getMetadata(updatedSub);

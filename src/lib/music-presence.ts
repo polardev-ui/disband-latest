@@ -13,6 +13,8 @@
 
 import type { Profile } from "@/lib/supabase/types";
 
+import { apiFetch } from "@/lib/api";
+
 export type ListeningSource = "spotify" | "soundcloud";
 export type Listening = NonNullable<NonNullable<Profile["listening"]>>;
 
@@ -214,7 +216,7 @@ export interface SpotifyTokens {
 /** Exchange an auth code for tokens. The client secret lives server-side:
  *  this hits our own API route, never Spotify directly. */
 export async function exchangeSpotifyCode(code: string): Promise<SpotifyTokens> {
-  const res = await fetch("/api/music/spotify/token", {
+  const res = await apiFetch("/api/music/spotify/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, redirect_uri: spotifyRedirectUri() }),
@@ -224,7 +226,7 @@ export async function exchangeSpotifyCode(code: string): Promise<SpotifyTokens> 
 }
 
 async function refreshSpotifyToken(refreshToken: string): Promise<SpotifyTokens> {
-  const res = await fetch("/api/music/spotify/token", {
+  const res = await apiFetch("/api/music/spotify/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refreshToken }),

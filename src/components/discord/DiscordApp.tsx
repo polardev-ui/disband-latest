@@ -89,6 +89,8 @@ export function DiscordApp() {
   const [shopOpen, setShopOpen] = useState(false);
   const [shopCategory, setShopCategory] = useState<ShopCategory>("ring");
   const [shopPurchase, setShopPurchase] = useState<string | null>(null);
+  const [giftReturn, setGiftReturn] = useState<string | null>(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | null>(null);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
@@ -178,6 +180,30 @@ export function DiscordApp() {
         return () => { cancelled = true; };
       }
     }
+
+    // Gift purchase return (Stripe `return_url` lands on /app?gift=<code>).
+    // The webhook flips the gift from pending to unclaimed and can lag the
+    // redirect, so wait for the row to go live before saying it's ready.
+    const boughtGiftCode = params.get("gift");
+    if (boughtGiftCode) {
+      window.history.replaceState({}, "", window.location.pathname);
+      let cancelled = false;
+      void (async () => {
+        for (let i = 0; i < 15 && !cancelled; i++) {
+          try {
+            const res = await apiFetch("/api/gifts/mine");
+            const data = (await res.json()) as { sent?: Array<{ code?: string; status?: string }> };
+            const row = (data.sent ?? []).find((g) => g.code === boughtGiftCode);
+            if (row && row.status !== "pending") break;
+          } catch {
+            // Keep polling; the webhook may not have landed yet.
+          }
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (!cancelled) setGiftReturn(boughtGiftCode);
+      })();
+      return () => { cancelled = true; };
+    }
   }, []);
 
   useEffect(() => {
@@ -185,6 +211,12 @@ export function DiscordApp() {
     const timer = setTimeout(() => setShopPurchase(null), 8000);
     return () => clearTimeout(timer);
   }, [shopPurchase]);
+
+  useEffect(() => {
+    if (!giftReturn) return;
+    const timer = setTimeout(() => setGiftReturn(null), 12000);
+    return () => clearTimeout(timer);
+  }, [giftReturn]);
 
   useEffect(() => {
     if (!checkoutSuccess) return;
@@ -1467,6 +1499,22 @@ export function DiscordApp() {
           {shopPurchase} is yours — equip it from the Shop.
         </div>
       )}
+      {giftReturn && (
+        <div className="fixed left-0 right-0 top-0 z-[100] flex items-center justify-center gap-3 bg-[#fee75c] px-4 py-2 text-center text-sm font-medium text-black">
+          <span>Your gift is ready — grab the link from Settings → Subscription.</span>
+          <button
+            type="button"
+            onClick={() => {
+              setGiftReturn(null);
+              setSettingsInitialTab("subscriptions");
+              setSettingsOpen(true);
+            }}
+            className="shrink-0 rounded bg-black px-2.5 py-1 text-xs font-bold text-[#fee75c]"
+          >
+            Open settings
+          </button>
+        </div>
+      )}
 
       {call.phase === "incoming" && call.incoming && (
         <IncomingCallOverlay
@@ -2129,7 +2177,11 @@ export function DiscordApp() {
         }
       />
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => { setSettingsOpen(false); setSettingsInitialTab(null); }}
+        initialTab={settingsInitialTab ?? undefined}
+      />
       <CatalystModal
         server={app.servers.find((s) => s.id === catalystServerId) ?? null}
         open={catalystServerId !== null}

@@ -137,6 +137,7 @@ jobs:
           NEXT_PUBLIC_MEDIA_API_URL: https://cdn.disband.dev/v1
           NEXT_PUBLIC_SITE_URL: https://www.disband.dev
           NEXT_PUBLIC_SPOTIFY_CLIENT_ID: 605d495fc260436f84045d68b2465905
+          NEXT_PUBLIC_LASTFM_API_KEY: 990d300c6ca4508d44eb33d9c0739536
           NEXT_PUBLIC_APP_URL: https://www.disband.dev
           # Publishable key is public by design (it ships in the web bundle
           # too). Without it the desktop build inlines an empty key and every

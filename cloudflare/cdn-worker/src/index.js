@@ -1078,7 +1078,11 @@ async function ingest(request, env) {
   const existing = await env.MEDIA.head(key);
   if (existing) return json({ ok: true, key, skipped: true }, 200, env);
 
-  const upstream = await fetch(source.toString(), { redirect: "error" });
+  // Workers only support "follow" or "manual" here ("error" throws 1101).
+  const upstream = await fetch(source.toString(), { redirect: "manual" });
+  if (upstream.status >= 300 && upstream.status < 400) {
+    return json({ error: `Upstream redirect ${upstream.status}`, key }, 502, env);
+  }
   if (!upstream.ok || !upstream.body) {
     return json({ error: `Upstream ${upstream.status}`, key }, 502, env);
   }

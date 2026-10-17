@@ -69,6 +69,11 @@ export async function POST(req: Request) {
           },
         },
       }],
+      // Stamped onto the payment intent so a later refund can find the gift
+      // again (the webhook matches charge.metadata, not just the session).
+      payment_intent_data: {
+        metadata: { kind: "gift", gift_id: gift.id, code: gift.code, buyer_id: user.id },
+      },
       return_url: `${origin}/app?gift=${gift.code}`,
       metadata: { kind: "gift", gift_id: gift.id, code: gift.code, buyer_id: user.id, plan, months: String(months) },
     });
