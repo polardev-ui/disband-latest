@@ -268,9 +268,17 @@ export async function fetchSpotifyNowPlaying(tokens: SpotifyTokens): Promise<{ l
   if (Date.now() >= current.expires_at - 30_000) {
     current = await refreshSpotifyToken(current.refresh_token);
   }
-  const res = await fetch(SPOTIFY_PLAYER_URL, {
+  let res = await fetch(SPOTIFY_PLAYER_URL, {
     headers: { Authorization: `Bearer ${current.access_token}` },
   });
+  // The clock isn't proof the token is good (sleep, skew, a token revoked
+  // elsewhere). On a 401, rebuild once and retry before giving up.
+  if (res.status === 401) {
+    current = await refreshSpotifyToken(current.refresh_token);
+    res = await fetch(SPOTIFY_PLAYER_URL, {
+      headers: { Authorization: `Bearer ${current.access_token}` },
+    });
+  }
   // 204 = nothing playing.
   if (res.status === 204) return { listening: null, tokens: current };
   if (!res.ok) throw new Error(`Spotify player error: ${res.status}`);

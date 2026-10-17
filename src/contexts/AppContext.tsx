@@ -984,7 +984,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       const current = profileRef.current;
       if (current) patchProfileInState({ ...current, listening, updated_at: new Date().toISOString() });
-      void supabase.from("profiles").update({ listening }).eq("id", userId);
+      // supabase-js query builders are lazy: the request only leaves when the
+      // builder is awaited or then()'d. A bare `void` call is a silent no-op.
+      supabase
+        .from("profiles")
+        .update({ listening })
+        .eq("id", userId)
+        .then(
+          () => {},
+          () => {},
+        );
     };
 
     const tick = async () => {
@@ -1036,7 +1045,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Polling has stopped, so the persisted row is now stale — clear it
       // so an approaching viewer isn't told about yesterday's song.
       listeningRef.current = null;
-      void supabase.from("profiles").update({ listening: null }).eq("id", userId);
+      // Same lazy-builder caveat as publish(): without then() this never sends.
+      supabase
+        .from("profiles")
+        .update({ listening: null })
+        .eq("id", userId)
+        .then(
+          () => {},
+          () => {},
+        );
     };
   }, [userId, configured]); // eslint-disable-line react-hooks/exhaustive-deps
 
