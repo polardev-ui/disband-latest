@@ -6,8 +6,9 @@ import { exchangeSpotifyCode } from "@/lib/music-presence";
 
 function CallbackInner() {
   const params = useSearchParams();
-  const [state, setState] = useState<"working" | "done" | "error">("working");
+  const [state, setState] = useState<"working" | "done" | "manual" | "error">("working");
   const [message, setMessage] = useState("Connecting Spotify…");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const code = params.get("code");
@@ -20,6 +21,13 @@ function CallbackInner() {
     if (!code) {
       setState("error");
       setMessage("No authorization code from Spotify.");
+      return;
+    }
+    // No opener means this landed in the system browser — the desktop app's
+    // flow. Don't burn the single-use code here; hand it back instead.
+    if (!window.opener) {
+      setState("manual");
+      setMessage("Copy this code into Disband to finish connecting.");
       return;
     }
     void (async () => {
@@ -45,14 +53,48 @@ function CallbackInner() {
     })();
   }, [params]);
 
+  const code = params.get("code") ?? "";
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg-primary px-6">
       <div className="w-full max-w-sm rounded-2xl border border-divider bg-bg-secondary p-8 text-center">
         <p className="text-lg font-semibold text-text-normal">
-          {state === "done" ? "Connected ✓" : state === "error" ? "Something went wrong" : "Connecting…"}
+          {state === "done"
+            ? "Connected ✓"
+            : state === "error"
+              ? "Something went wrong"
+              : state === "manual"
+                ? "Almost there"
+                : "Connecting…"}
         </p>
         <p className="mt-2 text-sm text-text-muted">{message}</p>
-        {state !== "working" && (
+        {state === "manual" && (
+          <div className="mt-4 space-y-3">
+            <code className="block break-all rounded-lg border border-divider bg-bg-tertiary px-3 py-2 text-left font-mono text-[12.5px] text-text-normal">
+              {code}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(code).then(
+                  () => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 2000);
+                  },
+                  () => setCopied(false),
+                );
+              }}
+              className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            >
+              {copied ? "Copied" : "Copy code"}
+            </button>
+            <p className="text-[12.5px] leading-relaxed text-text-muted">
+              In Disband: Settings → Connections → Connect Spotify → paste the code. It
+              expires in a few minutes.
+            </p>
+          </div>
+        )}
+        {state !== "working" && state !== "manual" && (
           <button
             type="button"
             onClick={() => window.close()}

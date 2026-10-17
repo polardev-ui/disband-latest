@@ -112,7 +112,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   const mine = gift.buyer_id === userId;
   const claimedByMe = gift.claimed_by === userId;
-  const gone = gift.status === "claimed" || gift.status === "expired";
+  const gone = gift.status === "claimed" || gift.status === "expired" || gift.status === "refunded";
 
   const accent = gift.plan === "lite" ? "#7dd3fc" : "#fee75c";
 
@@ -180,6 +180,8 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
             <p className="text-[13.5px] text-text-muted">Already claimed</p>
           ) : gift.status === "expired" ? (
             <p className="text-[13.5px] text-text-muted">This gift expired</p>
+          ) : gift.status === "refunded" ? (
+            <p className="text-[13.5px] text-text-muted">The buyer refunded this gift — it is no longer valid</p>
           ) : gift.status === "pending" ? (
             <div className="flex items-center gap-2.5">
               <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" aria-hidden />

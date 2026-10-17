@@ -41,7 +41,10 @@ export function UserBadges({
 
   const effectivePlan: SubscriptionPlan =
     plan && plan !== "free" ? plan : ent.plan;
-  const months = tenureMonths ?? ent.months;
+  // Tenure starts at zero on day one (and some platforms never report a
+  // first-month stamp at all), but anyone on a paid plan has earned at
+  // least the base medallion — show Bronze rather than nothing.
+  const months = Math.max(1, tenureMonths ?? ent.months);
   const since = subscribedSince ?? ent.since;
 
   const tier: TierDef | null =

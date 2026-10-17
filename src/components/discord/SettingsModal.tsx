@@ -23,6 +23,7 @@ import { requestEmailChange } from "@/lib/email-change";
 import {
   clearLastfmPending,
   clearSpotifyTokens,
+  exchangeSpotifyCode,
   lastfmConfigured,
   readLastfmPending,
   readLastfmUsername,
@@ -30,10 +31,13 @@ import {
   spotifyConnectUrl,
   spotifyClientId,
   writeLastfmUsername,
+  writeSpotifyTokens,
 } from "@/lib/music-presence";
+import { isTauri } from "@/lib/platform";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
-import { giftUrl } from "@/lib/gifts";
+import { GIFT_PLAN_NAME, giftUrl, monthsLabel, type GiftPlan } from "@/lib/gifts";
+import { apiFetch } from "@/lib/api";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic } from "@/components/icons";
@@ -86,6 +90,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+  initialTab?: SettingsTab;
 }
 
 const TABS = [
@@ -137,9 +142,55 @@ const STATUSES: { id: UserStatus; label: string }[] = [
   { id: "offline", label: "Offline" },
 ];
 
-type SettingsTab = (typeof TABS)[number]["id"];
+export type SettingsTab = (typeof TABS)[number]["id"];
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
+interface GiftRowSummary {
+  code: string;
+  plan: GiftPlan;
+  months: number;
+  status: string;
+  claimedAt: string | null;
+  expiresAt: string | null;
+}
+
+interface MyGifts {
+  sent: GiftRowSummary[];
+  received: GiftRowSummary[];
+}
+
+function normalizeGift(raw: Record<string, unknown>): GiftRowSummary {
+  return {
+    code: typeof raw.code === "string" ? raw.code : "",
+    plan: raw.plan === "lite" ? "lite" : "aero",
+    months: typeof raw.months === "number" ? raw.months : 1,
+    status: typeof raw.status === "string" ? raw.status : "pending",
+    claimedAt: typeof raw.claimed_at === "string" ? raw.claimed_at : null,
+    expiresAt: typeof raw.expires_at === "string" ? raw.expires_at : null,
+  };
+}
+
+function giftStatusLine(g: GiftRowSummary, received = false): string {
+  if (received || g.status === "claimed") {
+    const when = g.claimedAt ? ` on ${new Date(g.claimedAt).toLocaleDateString()}` : "";
+    return received ? `Claimed by you${when}` : `Claimed${when}`;
+  }
+  switch (g.status) {
+    case "unclaimed":
+      return g.expiresAt
+        ? `Unclaimed · expires ${new Date(g.expiresAt).toLocaleDateString()}`
+        : "Unclaimed";
+    case "pending":
+      return "Waiting for payment to clear";
+    case "refunded":
+      return "Refunded";
+    case "expired":
+      return "Expired";
+    default:
+      return g.status;
+  }
+}
+
+export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
   const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut, requestAccountDeletion, cancelAccountDeletion } = useApp();
   const isAnonymous = profile?.account_type === "anonymous";
@@ -163,10 +214,32 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { mounted: giftMounted, exiting: giftExiting } = usePresence(gifting);
   const [giftLink, setGiftLink] = useState<string | null>(null);
   const [giftCopied, setGiftCopied] = useState(false);
+  const [myGifts, setMyGifts] = useState<MyGifts | null>(null);
+  const [copiedGiftCode, setCopiedGiftCode] = useState<string | null>(null);
+  const loadMyGifts = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/gifts/mine");
+      if (!res.ok) return;
+      const data = (await res.json()) as { sent?: unknown[]; received?: unknown[] };
+      setMyGifts({
+        sent: (data.sent ?? []).map((r) => normalizeGift(r as Record<string, unknown>)),
+        received: (data.received ?? []).map((r) => normalizeGift(r as Record<string, unknown>)),
+      });
+    } catch {
+      // The card stays hidden; there is nothing for the user to fix here.
+    }
+  }, []);
   const { upload, isUploading } = useMediaUpload();
   const [zoom, setZoom] = useZoom();
   const [motion, setMotion] = useState<MotionPreference>(() => getStoredMotion());
   const [tab, setTab] = useState<SettingsTab>("profile");
+  useEffect(() => {
+    if (open && initialTab) setTab(initialTab);
+  }, [open, initialTab]);
+  useEffect(() => {
+    if (!open || tab !== "subscriptions" || !profile?.id) return;
+    void loadMyGifts();
+  }, [open, tab, profile?.id, loadMyGifts]);
   const [navQuery, setNavQuery] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -221,6 +294,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   // Connections tab: Spotify tokens live in localStorage (see music-presence
   // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
   const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyPasteOpen, setSpotifyPasteOpen] = useState(false);
+  const [spotifyPasteCode, setSpotifyPasteCode] = useState("");
+  const [spotifyPasteBusy, setSpotifyPasteBusy] = useState(false);
+  const [spotifyPasteError, setSpotifyPasteError] = useState<string | null>(null);
   const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
   const [lastfmUser, setLastfmUser] = useState("");
   const [lastfmSaved, setLastfmSaved] = useState(false);
@@ -280,10 +357,49 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       return;
     }
     setSpotifyNote(null);
+    setSpotifyPasteError(null);
+    setSpotifyPasteCode("");
     const url = spotifyConnectUrl(user?.id ?? "disband");
     if (!url) return;
+    if (isTauri()) {
+      // The desktop WebView refuses window.open, and even if it didn't, the
+      // callback page lives on www.disband.dev — a different storage origin —
+      // so the tokens could never reach the app. Open the real browser and
+      // finish with the code it hands back.
+      void (async () => {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          await invoke("plugin:opener|open_url", { url });
+          setSpotifyPasteOpen(true);
+        } catch {
+          setSpotifyNote("Couldn't open your browser for Spotify — try the web app instead.");
+        }
+      })();
+      return;
+    }
     const popup = window.open(url, "disband-spotify-connect", "width=520,height=760,popup=yes");
     if (!popup) setSpotifyNote("Allow pop-ups for this site, then try again.");
+  }
+
+  async function finishSpotifyPaste() {
+    const code = spotifyPasteCode.trim();
+    if (!code || spotifyPasteBusy) return;
+    setSpotifyPasteBusy(true);
+    setSpotifyPasteError(null);
+    try {
+      const tokens = await exchangeSpotifyCode(code);
+      writeSpotifyTokens(tokens);
+      setSpotifyConnected(true);
+      setSpotifyPasteOpen(false);
+      setSpotifyPasteCode("");
+      setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
+    } catch {
+      setSpotifyPasteError(
+        "That code didn't work — codes expire after a few minutes. Hit Connect Spotify to try again.",
+      );
+    } finally {
+      setSpotifyPasteBusy(false);
+    }
   }
 
   async function handleSpotifyDisconnect() {
@@ -306,9 +422,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setLastfmNote("Last.fm isn't configured on this build yet — add NEXT_PUBLIC_LASTFM_API_KEY first.");
       return;
     }
+    if (isTauri()) {
+      setLastfmNote("On desktop, type your Last.fm username below — the one-click connect needs a browser.");
+      return;
+    }
     setLastfmNote(null);
     try {
-      const res = await fetch("/api/music/lastfm/token", { method: "POST" });
+      const res = await apiFetch("/api/music/lastfm/token", { method: "POST" });
       const data = (await res.json().catch(() => null)) as { authUrl?: string; error?: string } | null;
       if (!res.ok || !data?.authUrl) {
         setLastfmNote(
@@ -1649,6 +1769,56 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </button>
                     </div>
                   </div>
+                  {myGifts && (myGifts.sent.length > 0 || myGifts.received.length > 0) && (
+                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                      <p className="text-sm font-bold text-text-normal">Your gifts</p>
+                      <p className="text-xs text-text-muted">
+                        Everything you&apos;ve bought or claimed. The link stays here until someone uses it.
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {myGifts.sent.map((g) => (
+                          <div key={g.code} className="flex items-center justify-between gap-3 rounded-md bg-bg-tertiary px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13px] font-semibold text-text-normal">
+                                {GIFT_PLAN_NAME[g.plan]} · {monthsLabel(g.months)}
+                              </p>
+                              <p className="truncate text-[12px] text-text-muted">{giftStatusLine(g)}</p>
+                            </div>
+                            {g.status === "unclaimed" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void navigator.clipboard
+                                    ?.writeText(giftUrl(g.code, window.location.origin))
+                                    .then(
+                                      () => setCopiedGiftCode(g.code),
+                                      () => setCopiedGiftCode(null),
+                                    );
+                                  window.setTimeout(
+                                    () => setCopiedGiftCode((c) => (c === g.code ? null : c)),
+                                    2000,
+                                  );
+                                }}
+                                className="shrink-0 rounded border border-divider px-2 py-1 text-xs font-semibold text-text-normal hover:bg-interactive-hover"
+                              >
+                                {copiedGiftCode === g.code ? "Copied" : "Copy link"}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {myGifts.received.map((g) => (
+                          <div key={`r-${g.code}`} className="flex items-center justify-between gap-3 rounded-md bg-bg-tertiary px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13px] font-semibold text-text-normal">
+                                {GIFT_PLAN_NAME[g.plan]} · {monthsLabel(g.months)}
+                              </p>
+                              <p className="truncate text-[12px] text-text-muted">{giftStatusLine(g, true)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => void reloadSubscription()}
@@ -1751,6 +1921,33 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           </button>
                         )}
                         {spotifyNote && <p className="text-[12.5px] text-text-muted">{spotifyNote}</p>}
+                        {spotifyPasteOpen && !spotifyConnected && (
+                          <div className="mt-2 w-full space-y-2">
+                            <p className="text-[12.5px] text-text-muted">
+                              Spotify opened in your browser. Approve access there, copy the code
+                              Spotify shows, and paste it here.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                value={spotifyPasteCode}
+                                onChange={(e) => setSpotifyPasteCode(e.target.value)}
+                                placeholder="paste the code"
+                                className="w-64 rounded-md border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-brand"
+                              />
+                              <button
+                                type="button"
+                                disabled={spotifyPasteBusy || !spotifyPasteCode.trim()}
+                                onClick={() => void finishSpotifyPaste()}
+                                className="rounded-md bg-brand px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                              >
+                                {spotifyPasteBusy ? "Connecting…" : "Connect"}
+                              </button>
+                            </div>
+                            {spotifyPasteError && (
+                              <p className="text-[12.5px] text-status-dnd">{spotifyPasteError}</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </SettingRow>
                   </SettingsSection>
@@ -1864,6 +2061,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           onPurchased={(code) => {
             setGiftLink(giftUrl(code, window.location.origin));
             setGifting(false);
+            void loadMyGifts();
           }}
         />
       )}
