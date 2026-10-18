@@ -4,10 +4,12 @@ import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { UserBadges } from "@/components/ui/UserBadges";
+import { ListeningCard } from "@/components/ui/ListeningCard";
 import { IconClose, IconFriends, IconPhone } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import {
   activeStatusNote,
+  listeningFor,
   presenceStatusFor,
   statusExpiryLabel,
 } from "@/lib/presence";
@@ -53,12 +55,13 @@ interface DmProfileRailProps {
 }
 
 export function DmProfileRail({ friend, onClose, onVoiceCall, onOpenFullProfile }: DmProfileRailProps) {
-  const { presenceMap } = useApp();
+  const { presenceMap, listeningMap } = useApp();
   const [bannerFailed, setBannerFailed] = useState(false);
   const panelStyle = getProfilePanelStyle(friend);
   const mutedColor = getProfilePanelMutedColor(friend);
   const live = presenceStatusFor(friend, presenceMap);
   const note = activeStatusNote(friend);
+  const listening = live === "offline" ? null : listeningFor(friend, listeningMap);
   const bannerUrl = safeImageUrl(friend.banner_url);
 
   return (
@@ -127,6 +130,12 @@ export function DmProfileRail({ friend, onClose, onVoiceCall, onOpenFullProfile 
                 {statusExpiryLabel(friend.status_expires_at)}
               </p>
             </div>
+          </div>
+        )}
+
+        {listening && (
+          <div className="mt-2.5">
+            <ListeningCard listening={listening} />
           </div>
         )}
 
