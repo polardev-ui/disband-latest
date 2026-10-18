@@ -1635,13 +1635,13 @@ export function DiscordApp() {
               directly in the column stacked them vertically, which collapsed
               the panel to its header.
 
-              The width is pinned to the rail (72px) plus a panel (w-60 = 240px)
+              The width is pinned to the rail (72px) plus a panel (280px)
               rather than left to auto. On auto the column takes its widest
               child's max-content, and the UserPanel's name and custom status
               have no natural limit — a long status widened the whole column and
               opened a gap beside the chat. A definite width is also what lets
               the `truncate` inside the UserPanel do anything at all. */}
-          <div className="relative flex h-full min-h-0 w-[312px] shrink-0 flex-col">
+          <div className="relative flex h-full min-h-0 w-[352px] shrink-0 flex-col">
             <div className="flex min-h-0 flex-1">
               <ServerList
                 servers={app.servers}

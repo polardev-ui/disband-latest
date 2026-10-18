@@ -69,7 +69,7 @@ const SORTS: { id: DiscoverTab; label: string; icon: React.ReactNode; hint: stri
 
 export function DiscoverSidebar({ tab, onTabChange }: DiscoverSidebarProps) {
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-divider bg-bg-secondary">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden border-r border-divider bg-bg-secondary">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4">
         <IconCompass size={18} className="text-text-muted" />
         <span className="flex-1 text-[15px] font-semibold text-text-normal">Discover</span>

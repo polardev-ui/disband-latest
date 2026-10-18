@@ -489,7 +489,7 @@ export function ChannelList({
   };
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary">
+    <aside className="flex w-[280px] shrink-0 flex-col bg-bg-secondary">
       {showServerHeader && (
         bannerUrl && safeImageUrl(bannerUrl) ? (
           <div className="relative h-24 shrink-0 overflow-hidden">
