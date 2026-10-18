@@ -194,6 +194,16 @@ export function MessageAttachment({
     </div>
   );
 
+  // While loading, the wrapper reserves the skeleton's footprint so the
+  // layout doesn't jump, and the spinner is an overlay rather than a
+  // stand-in sibling. The <img> stays in the render tree with a real box of
+  // its own (min-h/min-w below), which is what its lazy fetch needs to
+  // start: hiding the <img> until onLoad used to deadlock — no box meant
+  // the fetch never began, so onLoad never fired, so it stayed hidden.
+  const loadingBoxClass = `w-full max-w-md max-h-[min(20rem,35vh)] min-h-24 ${
+    dims ? "" : "aspect-[16/10]"
+  }`;
+
   return (
     <div className="mt-0.5 max-w-md overflow-hidden">
       {type === "video" ? (
@@ -252,25 +262,37 @@ export function MessageAttachment({
         brokenTile
       ) : (
         <>
-          {!mediaLoaded && skeleton}
-          {withGifStar(
-            <button type="button" onClick={() => setLightbox(true)} className={`block text-left ${mediaLoaded ? "" : "hidden"}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={imgSrc}
-                alt={type === "gif" ? "GIF" : fileName}
-                className={`${mediaClass} cursor-zoom-in`}
-                loading="lazy"
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  rememberDims(url, img.naturalWidth, img.naturalHeight);
-                  setDims(dimCache.get(url) ?? null);
-                  handleMediaLoad();
-                }}
-                onError={() => setImgError(true)}
-              />
-            </button>,
-          )}
+          <div
+            className={`relative ${mediaLoaded ? "" : loadingBoxClass}`}
+            style={!mediaLoaded && dims ? { aspectRatio: `${dims.w} / ${dims.h}` } : undefined}
+          >
+            {!mediaLoaded && (
+              <div
+                aria-label="Loading attachment"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border border-divider bg-bg-accent"
+              >
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted/30 border-t-text-muted" />
+              </div>
+            )}
+            {withGifStar(
+              <button type="button" onClick={() => setLightbox(true)} className="block text-left">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imgSrc}
+                  alt={type === "gif" ? "GIF" : fileName}
+                  className={`${mediaClass} cursor-zoom-in${mediaLoaded ? "" : " min-h-24 min-w-40"}`}
+                  loading="lazy"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    rememberDims(url, img.naturalWidth, img.naturalHeight);
+                    setDims(dimCache.get(url) ?? null);
+                    handleMediaLoad();
+                  }}
+                  onError={() => setImgError(true)}
+                />
+              </button>,
+            )}
+          </div>
           <ImageLightbox
             open={lightbox}
             onClose={() => setLightbox(false)}
