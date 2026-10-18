@@ -5,6 +5,8 @@ import { useApp } from "@/contexts/AppContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
+import { listeningFor } from "@/lib/presence";
+import { ListeningLine } from "@/components/ui/ListeningLine";
 import { IconClose, IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
 import { CallIndicator } from "./CallIndicator";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
@@ -100,6 +102,7 @@ export function HomePanel({
     setViewHome,
     setViewNotes,
     presenceMap,
+    listeningMap,
     getGroupUnreadCount,
     closeDmThread,
     tetherProfile,
@@ -193,7 +196,7 @@ export function HomePanel({
   }
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden bg-bg-secondary">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden bg-bg-secondary">
       <header className="flex h-12 items-center border-b border-divider px-4">
         <IconFriends className="mr-2 text-text-muted" />
         <span className="flex-1 font-semibold text-text-normal">Friends</span>
@@ -357,7 +360,16 @@ export function HomePanel({
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[presenceMap.get(entry.friend.id) ?? "offline"]}`} />
                     <DmRowBadge count={entry.unreadCount} />
                   </div>
-                  <span className="min-w-0 flex-1 truncate text-sm">{displayName(entry.friend)}</span>
+                  {(() => {
+                    const live = presenceMap.get(entry.friend.id) ?? "offline";
+                    const listening = live === "offline" ? null : listeningFor(entry.friend, listeningMap);
+                    return (
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-sm">{displayName(entry.friend)}</span>
+                        {listening && <ListeningLine listening={listening} />}
+                      </span>
+                    );
+                  })()}
                   <span
                     role="button"
                     tabIndex={0}
