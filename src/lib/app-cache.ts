@@ -55,8 +55,12 @@ export function getCached<T>(key: string): T | null {
   return null;
 }
 
-export function setCache<T>(key: string, data: T, ttl = CACHE_TTL): void {
+export function setCache<T>(key: string, data: T, ttl = CACHE_TTL, opts?: { persist?: boolean }): void {
   const entry: CacheEntry<T> = { data, expiresAt: Date.now() + ttl };
   store().set(key, entry);
+  // Big payloads (the full member list of a large server) stay in memory:
+  // persisting megabytes of JSON through base64 on every write janks the
+  // main thread and usually blows the localStorage quota anyway.
+  if (opts?.persist === false) return;
   persist(key, entry);
 }

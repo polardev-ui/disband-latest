@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconLeave, IconLock, IconNotes, IconTimer, IconTrash } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
+import type { Profile } from "@/lib/supabase/types";
 
 interface AuditRow {
   id: number;
@@ -54,6 +56,28 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const byId = useMemo(() => new Map(members.map((m) => [m.user_id, m.profile])), [members]);
+  const [extraProfiles, setExtraProfiles] = useState<Map<string, Profile>>(new Map());
+
+  // The member rail loads a single page, so an actor or target outside it
+  // would render as "Someone" / "a former member"; resolve those directly.
+  useEffect(() => {
+    const missing = new Set<string>();
+    for (const r of rows) {
+      if (r.actor_id && !byId.has(r.actor_id)) missing.add(r.actor_id);
+      if (r.target_id && r.target_type === "user" && !byId.has(r.target_id)) missing.add(r.target_id);
+    }
+    if (missing.size === 0) {
+      setExtraProfiles((prev) => (prev.size === 0 ? prev : new Map()));
+      return;
+    }
+    let live = true;
+    void fetchProfilesByIds(getSupabaseClient(), [...missing]).then((map) => {
+      if (live) setExtraProfiles(map);
+    });
+    return () => {
+      live = false;
+    };
+  }, [rows, byId]);
 
   useEffect(() => {
     let live = true;
@@ -100,8 +124,8 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
       {rows.map((row, i) => {
         const action = ACTIONS[row.action];
         const Icon = action?.icon ?? IconNotes;
-        const actor = row.actor_id ? byId.get(row.actor_id) : null;
-        const target = row.target_id && row.target_type === "user" ? byId.get(row.target_id) : null;
+        const actor = row.actor_id ? (byId.get(row.actor_id) ?? extraProfiles.get(row.actor_id) ?? null) : null;
+        const target = row.target_id && row.target_type === "user" ? (byId.get(row.target_id) ?? extraProfiles.get(row.target_id) ?? null) : null;
         const reason = typeof row.details?.reason === "string" && row.details.reason ? row.details.reason : null;
         const seconds = typeof row.details?.seconds === "number" ? row.details.seconds : null;
         return (
