@@ -17,10 +17,11 @@ import {
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
 import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
+import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
+import { MyAccountPanel } from "./settings/MyAccountPanel";
 import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
-import { requestEmailChange } from "@/lib/email-change";
 import {
   clearLastfmPending,
   clearSpotifyTokens,
@@ -42,8 +43,6 @@ import { apiFetch } from "@/lib/api";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic } from "@/components/icons";
-import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
-import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { OfficialBroadcastPanel } from "@/components/discord/OfficialBroadcastPanel";
@@ -95,24 +94,24 @@ interface SettingsModalProps {
 }
 
 const TABS = [
-  { id: "profile" as const, label: "Profile", group: "Account", icon: <IconUser size={17} />,
-    description: "How you appear to everyone on Disband.",
-    keywords: "avatar banner name display username bio about pronouns status note accent colour badges" },
-  { id: "account" as const, label: "Account & Security", group: "Account", icon: <IconLock size={17} />,
+  { id: "account" as const, label: "My Account", group: "Account", icon: <IconLock size={17} />,
     description: "Email, password, two-factor and account controls.",
     keywords: "email password 2fa mfa two-factor authenticator security delete export data" },
-  { id: "subscriptions" as const, label: "Subscription", group: "Account", icon: <IconCrown size={17} />,
-    description: "Your plan, billing and perks.",
-    keywords: "aero lite plan billing upgrade gift perks premium" },
-  { id: "referrals" as const, label: "Referrals", group: "Account", icon: <IconGift size={17} />,
-    description: "Invite people and track what you've earned.",
-    keywords: "invite referral link rewards friends" },
-  { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
-    description: "Create and manage bots that act on your behalf.",
-    keywords: "bot token api developer webhook" },
+  { id: "profile" as const, label: "Profiles", group: "Account", icon: <IconUser size={17} />,
+    description: "How you appear to everyone on Disband.",
+    keywords: "avatar banner name display username bio about pronouns status note accent colour badges" },
   { id: "connections" as const, label: "Connections", group: "Account", icon: <IconMusic size={17} />,
     description: "Spotify and SoundCloud — show what you're listening to.",
     keywords: "spotify soundcloud lastfm music listening currently playing connect integrate account" },
+  { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
+    description: "Create and manage bots that act on your behalf.",
+    keywords: "bot token api developer webhook" },
+  { id: "subscriptions" as const, label: "Subscription", group: "Billing", icon: <IconCrown size={17} />,
+    description: "Your plan, billing and perks.",
+    keywords: "aero lite plan billing upgrade gift perks premium" },
+  { id: "referrals" as const, label: "Referrals", group: "Billing", icon: <IconGift size={17} />,
+    description: "Invite people and track what you've earned.",
+    keywords: "invite referral link rewards friends" },
   { id: "appearance" as const, label: "Appearance", group: "App", icon: <IconPalette size={17} />,
     description: "Zoom, motion and theme mode.",
     keywords: "zoom scale size motion animation reduced dark light mode" },
@@ -130,7 +129,12 @@ const TABS = [
     keywords: "links previews embeds images gif media unfurl" },
 ];
 
-const NAV_GROUPS = ["Account", "App"] as const;
+const NAV_GROUPS = ["Account", "Billing", "App"] as const;
+const NAV_GROUP_LABEL: Record<(typeof NAV_GROUPS)[number], string> = {
+  Account: "User Settings",
+  Billing: "Billing Settings",
+  App: "App Settings",
+};
 
 function formatBytes(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
@@ -193,11 +197,8 @@ function giftStatusLine(g: GiftRowSummary, received = false): string {
 
 export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
-  const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut, requestAccountDeletion, cancelAccountDeletion } = useApp();
+  const { profile, user, updateProfile, signOut, requestAccountDeletion } = useApp();
   const isAnonymous = profile?.account_type === "anonymous";
-  const isPendingDeletion = Boolean(profile?.deletion_requested_at);
-  const pendingCancelUntil = profile?.deletion_cancel_until ?? null;
-  const pendingPurgeAt = profile?.deletion_purge_at ?? null;
 
   const [myAllBadges, setMyAllBadges] = useState<Array<AwardedBadge & { visible: boolean }>>([]);
   const [badgeError, setBadgeError] = useState<string | null>(null);
@@ -233,7 +234,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const { upload, isUploading } = useMediaUpload();
   const [zoom, setZoom] = useZoom();
   const [motion, setMotion] = useState<MotionPreference>(() => getStoredMotion());
-  const [tab, setTab] = useState<SettingsTab>("profile");
+  const [tab, setTab] = useState<SettingsTab>("account");
   useEffect(() => {
     if (open && initialTab) setTab(initialTab);
   }, [open, initialTab]);
@@ -283,15 +284,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [copiedId, setCopiedId] = useState(false);
-  const [signingOutAll, setSigningOutAll] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [emailChangeOpen, setEmailChangeOpen] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
-  const [emailChangeBusy, setEmailChangeBusy] = useState(false);
-  const [emailChangeSent, setEmailChangeSent] = useState(false);
   // Connections tab: Spotify tokens live in localStorage (see music-presence
   // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
   const [spotifyConnected, setSpotifyConnected] = useState(false);
@@ -516,25 +510,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
   }, [profile]);
 
-  const signOutEverywhere = useCallback(async () => {
-    setSigningOutAll(true);
-    setSettingsError(null);
-    const { error: err } = await getSupabaseClient().auth.signOut({ scope: "others" });
-    if (err) setSettingsError(err.message);
-    setSigningOutAll(false);
-  }, []);
-
-  const copyUserId = useCallback(async () => {
-    if (!profile?.id) return;
-    try {
-      await navigator.clipboard.writeText(profile.id);
-      setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 1500);
-    } catch {
-      setSettingsError("Could not copy to the clipboard.");
-    }
-  }, [profile?.id]);
-
   const { mounted, exiting } = usePresence(open);
   if (!mounted) return null;
 
@@ -734,7 +709,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               return (
                 <div key={group}>
                   {gi > 0 && <SettingsNavSeparator />}
-                  <SettingsNavHeader>{group === "Account" ? "User Settings" : "App Settings"}</SettingsNavHeader>
+                  <SettingsNavHeader>{NAV_GROUP_LABEL[group]}</SettingsNavHeader>
                   {items.map((t) => (
                     <SettingsNavItem
                       key={t.id}
@@ -1106,216 +1081,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               )}
 
               {tab === "account" && (
-                <div className="pb-20">
-                  <SettingsSection
-                    title="Account"
-                    description="Your email and user identifier on Disband."
-                  >
-                    <SettingRow label="Email" stacked>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[14px] text-text-normal">{user?.email ?? "Not available"}</p>
-                        {user?.email && (
-                          <button
-                            type="button"
-                            onClick={() => setEmailChangeOpen((v) => !v)}
-                            className="rounded-md border border-divider px-2.5 py-1 text-[12px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
-                          >
-                            Change
-                          </button>
-                        )}
-                      </div>
-                      {user?.email && emailChangeOpen && (
-                        <form
-                          className="mt-2 flex flex-col gap-2"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            setSettingsError(null);
-                            setEmailChangeSent(false);
-                            void (async () => {
-                              setEmailChangeBusy(true);
-                              const err = await requestEmailChange(newEmail);
-                              setEmailChangeBusy(false);
-                              if (err) setSettingsError(err);
-                              else setEmailChangeSent(true);
-                            })();
-                          }}
-                        >
-                          <input
-                            type="email"
-                            required
-                            value={newEmail}
-                            onChange={(e) => setNewEmail(e.target.value)}
-                            placeholder="New email address"
-                            className="w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
-                          />
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="submit"
-                              disabled={emailChangeBusy || !newEmail.trim()}
-                              className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40"
-                            >
-                              {emailChangeBusy ? "Sending…" : "Send confirmation"}
-                            </button>
-                            <p className="text-[12px] text-text-muted">
-                              Both your current and new email must confirm.
-                            </p>
-                          </div>
-                          {emailChangeSent && (
-                            <p className="text-[13px] text-status-online">
-                              Confirmation sent — check your current inbox for the first link.
-                            </p>
-                          )}
-                        </form>
-                      )}
-                    </SettingRow>
-                    <SettingRow
-                      label="User ID"
-                      description="Used for support requests. You can't change this."
-                      stacked
-                    >
-                      <div className="flex items-center gap-2">
-                        <code className="min-w-0 flex-1 truncate rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[12.5px] text-text-muted">
-                          {profile?.id}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => void copyUserId()}
-                          className="shrink-0 rounded-md border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
-                        >
-                          {copiedId ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    </SettingRow>
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title="Password & security"
-                    description="Keep your account protected."
-                  >
-                    <SettingRow
-                      label="Change password"
-                      description="Set a new password while you are logged in."
-                      stacked
-                    >
-                      <NewPasswordForm submitLabel="Update password" onSubmit={updatePassword} />
-                    </SettingRow>
-                    {user?.email && (
-                      <SettingRow
-                        label="Email reset link"
-                        description={`Prefer to reset from your inbox? We can send a link to ${user.email}.`}
-                        stacked
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSettingsError(null);
-                            setResetEmailSent(false);
-                            void (async () => {
-                              const err = await requestPasswordReset(user.email!);
-                              if (err) setSettingsError(err);
-                              else setResetEmailSent(true);
-                            })();
-                          }}
-                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover"
-                        >
-                          Send reset email
-                        </button>
-                        {resetEmailSent && (
-                          <p className="mt-2 text-[13px] text-status-online">Reset link sent. Check your inbox.</p>
-                        )}
-                      </SettingRow>
-                    )}
-                  </SettingsSection>
-
-                  <div className="mb-8">
-                    <MfaSettingsPanel />
-                  </div>
-
-                  <SettingsSection
-                    title="Delete account"
-                    description="Permanently remove your account and everything tied to it."
-                  >
-                    {isPendingDeletion ? (
-                      <div className="space-y-2">
-                        <p className="text-[13px] leading-relaxed text-text-muted">
-                          Your account is scheduled for deletion on{" "}
-                          <span className="font-medium text-text-normal">
-                            {pendingPurgeAt ? new Date(pendingPurgeAt).toLocaleString() : "—"}
-                          </span>
-                          . You can cancel until {pendingCancelUntil ? new Date(pendingCancelUntil).toLocaleString() : "—"}.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setDeletingAccount(true);
-                            setDeleteError(null);
-                            try {
-                              const res = await cancelAccountDeletion();
-                              if (res.error) setDeleteError(res.error);
-                              else setDeleteSuccess("Deletion cancelled. Welcome back.");
-                            } finally {
-                              setDeletingAccount(false);
-                            }
-                          }}
-                          disabled={deletingAccount}
-                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {deletingAccount ? "Cancelling…" : "Cancel deletion"}
-                        </button>
-                        {deleteError && (
-                          <p className="text-[12.5px] text-status-dnd">{deleteError}</p>
-                        )}
-                        {deleteSuccess && (
-                          <p className="text-[12.5px] text-status-online">{deleteSuccess}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <SettingRow
-                        label="Delete this account"
-                        description={
-                          isAnonymous
-                            ? "Instant. Your profile and all data are removed immediately."
-                            : "Scheduled for 14 days out. For the first 24 hours you can log back in to cancel. After that your profile is anonymised and the account is purged."
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => { setDeleteOpen(true); setDeleteError(null); }}
-                          className="rounded-md border border-status-dnd/40 px-3 py-1.5 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
-                        >
-                          Delete
-                        </button>
-                      </SettingRow>
-                    )}
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title="Sessions"
-                    description="Manage where your account is signed in."
-                  >
-                    <SettingRow
-                      label="Sign out everywhere"
-                      description="Ends every other session on this account. You'll stay signed in here."
-                    >
-                      <button
-                        type="button"
-                        onClick={() => void signOutEverywhere()}
-                        disabled={signingOutAll}
-                        className="rounded-md border border-status-dnd/40 px-3 py-1.5 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {signingOutAll ? "Signing out…" : "Sign out everywhere"}
-                      </button>
-                    </SettingRow>
-                  </SettingsSection>
-
+                <>
+                  <MyAccountPanel
+                    onEditProfile={() => setTab("profile")}
+                    onDeleteAccount={() => { setDeleteOpen(true); setDeleteError(null); }}
+                  />
+                  {deleteSuccess && <p className="-mt-14 mb-14 text-[14px] text-status-online">{deleteSuccess}</p>}
                   <PlatformModerationPanel />
-
                   <AccountRestrictionsPanel />
-
                   <OfficialBroadcastPanel />
-
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
-                </div>
+                </>
               )}
 
               {tab === "appearance" && (
@@ -1996,51 +1772,49 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           }}
         />
       )}
-      {deleteOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim" onClick={() => setDeleteOpen(false)} />
-          <div className="modal-pop relative z-10 w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl">
-            <h2 className="text-[18px] font-semibold text-text-normal">Delete this account?</h2>
-            <p className="mt-2 text-[13px] leading-relaxed text-text-muted">
-              {isAnonymous
-                ? "Your profile and all data are removed immediately."
-                : "Your account is put into deletion. Your username, avatar, banner and bio are anonymised. You can cancel within 24 hours by signing back in. Otherwise the account is purged in 14 days."}
-            </p>
-            {deleteError && (
-              <p className="mt-2 text-[12.5px] text-status-dnd">{deleteError}</p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setDeleteOpen(false)} className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover">
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingAccount}
-                onClick={async () => {
-                  setDeletingAccount(true);
-                  setDeleteError(null);
-                  try {
-                    const res = await requestAccountDeletion();
-                    if (res.error) { setDeleteError(res.error); return; }
-                    setDeleteOpen(false);
-                    if (res.instant) {
-                      await signOut();
-                    } else {
-                      setDeleteSuccess("Deletion scheduled. Log in within 24 hours to cancel.");
-                    }
-                  } finally {
-                    setDeletingAccount(false);
+      <ClassicModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Delete Account"
+        centered={false}
+        footer={
+          <>
+            <button type="button" onClick={() => setDeleteOpen(false)} className={`${classicBtn.link} ${classicBtn.md}`}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deletingAccount}
+              onClick={async () => {
+                setDeletingAccount(true);
+                setDeleteError(null);
+                try {
+                  const res = await requestAccountDeletion();
+                  if (res.error) { setDeleteError(res.error); return; }
+                  setDeleteOpen(false);
+                  if (res.instant) {
+                    await signOut();
+                  } else {
+                    setDeleteSuccess("Deletion scheduled. Log in within 24 hours to cancel.");
                   }
-                }}
-                className="rounded-md bg-status-dnd px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {deletingAccount ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
+                } finally {
+                  setDeletingAccount(false);
+                }
+              }}
+              className={`${classicBtn.danger} ${classicBtn.md}`}
+            >
+              {deletingAccount ? "Deleting…" : "Delete Account"}
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-[3px] bg-[#f0b232] p-2.5 text-[14px] leading-[18px] text-white">
+          {isAnonymous
+            ? "Your profile and all data are removed immediately. This can't be undone."
+            : "Your username, avatar, banner and bio are anonymised. You can cancel within 24 hours by logging back in; after 14 days the account is purged for good."}
         </div>
-      )}
-
+        {deleteError && <p className="mt-3 text-[14px] text-status-dnd">{deleteError}</p>}
+      </ClassicModal>
     </>
   );
 }
