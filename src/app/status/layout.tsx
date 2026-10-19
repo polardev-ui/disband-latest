@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Status",
-  description: "Real-time health checks across Disband services — API, app, auth, and CDN.",
+  description: "Live operational status, uptime history, incidents and scheduled maintenance for Disband.",
   alternates: { canonical: "/status" },
 };
 

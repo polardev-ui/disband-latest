@@ -20,6 +20,10 @@ const moves = [
 
   // Discord-compatible webhook endpoints are server route handlers; web only.
   ["src/app/webhook", `${stashRoot}/app-webhook`],
+
+  // The status page reads Supabase on the server and has a dynamic incident
+  // route; the desktop build links out to the web version instead.
+  ["src/app/status", `${stashRoot}/app-status`],
 ];
 
 function moveAside(from, to) {
