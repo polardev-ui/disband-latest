@@ -187,7 +187,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
               <p className="text-xs text-text-muted">
                 {tab === "server"
                   ? `${activeServerName} · ${serverSounds.length} sounds`
-                  : `Favorited sounds (${favoriteSounds.length})`}
+                  : `Favourited sounds (${favoriteSounds.length})`}
               </p>
             </div>
             <button
@@ -212,7 +212,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                     : "text-text-muted hover:bg-bg-secondary hover:text-text-normal"
                 }`}
               >
-                {value === "server" ? "Sounds" : "Favorites"}
+                {value === "server" ? "Sounds" : "Favourites"}
               </button>
             ))}
           </div>
@@ -261,8 +261,8 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                                 ? "bg-brand/20 text-brand"
                                 : "bg-black/20 text-white/70 opacity-0 group-hover:opacity-100"
                             }`}
-                            title={favorite ? "Remove favorite" : "Add favorite"}
-                            aria-label={favorite ? "Remove favorite" : "Add favorite"}
+                            title={favorite ? "Remove favourite" : "Add favourite"}
+                            aria-label={favorite ? "Remove favourite" : "Add favourite"}
                           >
                             {toggling === sound.id ? "…" : favorite ? "★" : "☆"}
                           </button>
@@ -277,7 +277,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                     </p>
                     {!userId && (
                       <p className="mt-1 text-xs text-text-muted">
-                        Log in to favorite sounds.
+                        Log in to favourite sounds.
                       </p>
                     )}
                   </div>
@@ -304,7 +304,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
               ) : (
                 <div className="py-8 text-center">
                   <p className="text-xs text-text-muted">
-                    No favorite sounds yet.
+                    No favourite sounds yet.
                   </p>
                   <p className="mt-1 text-xs text-text-muted">
                     Star sounds from the Sounds tab to reach them from every device.

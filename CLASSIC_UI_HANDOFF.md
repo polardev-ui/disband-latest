@@ -79,9 +79,9 @@ Patterns: popouts and menus use `bg-bg-floating`, `rounded-[4px]`, `shadow-[var(
 - Phone widths: chat views carry the menu button in their header (`headerLeading` on `ChatCanvas`), the drawer ends with the call card and user panel, the composer re-fits on width changes.
 - Whole-app classic sweep: 13.5/12.5px body text, xl/2xl corners, soft shadows, blurred sticky bars and pill controls replaced across settings, server settings, notices, support, bug report, referrals, auth-adjacent pages and staff tools. Intentional exceptions are the 16px space-folder squircle and functional scroll/legibility gradients over media.
 - Gifting: compact `GiftModal`, `GiftCard`, claim celebration and Stripe checkout; UK dates and "Cancelled"; settings plan/gift history cards standardised.
-- Role assignment: searchable admin-only `RolePicker`, removable role chips in `UserProfileModal`, cleaner `RoleManager`. The client gate is `manage_roles && manage_server`.
+- Role assignment: searchable admin-only `RolePicker`, removable role chips in `UserProfileModal`, cleaner `RoleManager`. The client and database both require `manage_roles && manage_server` (owners/admins bypass; migration `0141`, applied).
 - Webhooks and embeds: Discord-compatible execute/manage endpoints, per-webhook author and message grouping, embed renderer, Integrations settings, audit-log entries and the `manage_webhooks` permission (migration `0136`, applied).
-- Status: grouped monitors, 90-day bars, incidents/maintenance/announcements, detail pages and RSS, owner-only `/status/admin` (migration `0137`, applied; `status-probe` Edge Function and `pg_cron` job live).
+- Status: grouped monitors, 90-day bars, incidents/maintenance/announcements, detail pages and RSS, owner-only `/status/admin` (migration `0137`, applied; `status-probe` Edge Function and `pg_cron` job live). Public RPCs omit monitor URLs, headers, probe errors and incident author ids (migration `0140`).
 - Spotify: tokens moved from localStorage to server-side `spotify_connections`, so a connection follows the account across web and desktop (migration `0138`, applied). The browser only receives the current track.
 - Favourite GIFs: deterministic 52-bit `gif_id` generated from the canonical URL (migration `0139`, applied), used as the cross-platform identity and conflict key.
 
@@ -109,7 +109,6 @@ Patterns: popouts and menus use `bg-bg-floating`, `rounded-[4px]`, `shadow-[var(
 - Screenshots from the browser pane can show a stale frame while it is hidden; confirm state with `javascript_tool` before "fixing" a ghost.
 
 - The browser pane throttles hidden tabs; screenshots can be one step stale — re-take them, and prefer `javascript_tool` to check DOM state.
-- Role assignment is admin-only in the client (`manage_roles && manage_server`), but `set_member_roles` still checks only `manage_roles`. Tightening it is an owner decision because it changes the RPC contract.
 - `/status/admin` is gated by `show_owner_badge` (the platform owner), not a space role. Unauthenticated callers get `401`; other signed-in accounts get `403`.
 - `app.members` still loads the first 500 members (used for mentions and author colours); the member *list* uses `useMemberWindow`.
 - The member-list fix is wanted in production soon. It is on this branch; shipping it alone means porting `useMemberWindow.ts` + the `MemberList` changes onto `main` (that file was restyled here, so cherry-pick will conflict). Ask the owner before pushing anything.
