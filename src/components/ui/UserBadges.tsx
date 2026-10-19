@@ -60,7 +60,7 @@ export function UserBadges({
       <span
         className={
           full
-            ? `flex flex-wrap items-center gap-1.5 ${className}`
+            ? `flex flex-wrap items-center gap-0.5 ${className}`
             : `inline-flex shrink-0 items-center gap-1 ${className}`
         }
       >
@@ -82,7 +82,7 @@ export function UserBadges({
                 type="button"
                 onClick={() => setShowTiers(true)}
                 aria-label={`Aero subscriber, ${tier.label} tier`}
-                className="inline-flex shrink-0 items-center transition-transform hover:scale-110"
+                className="inline-flex shrink-0 items-center"
               >
                 <SubscriptionMedallion tier={tier} super size={size + 7} />
               </button>
@@ -112,6 +112,21 @@ export function UserBadges({
   );
 }
 
+/**
+ How many pips the full variant draws (badges plus the Aero medallion).
+ Profile cards use it to choose between the classic header box, which holds
+ one row, and a wrapping row inside the card for long collections.
+*/
+export function useBadgeCount(userId: string | null | undefined, plan?: SubscriptionPlan): number {
+  const badges = useBadges(userId, { fresh: true });
+  const ent = useEntitlement(userId);
+  const effective = plan && plan !== "free" ? plan : ent.plan;
+  return badges.length + (effective !== "free" ? 1 : 0);
+}
+
+/** The header box beside the avatar fits one row of 22px badges. */
+export const HEADER_BADGE_LIMIT = 8;
+
 function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
   const detail = badgeDetail(badge);
   return (
@@ -132,7 +147,7 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
     >
       {hasBadgeArt(badge.key) ? (
         // Classic badges stand on their own: no tinted disc behind the art.
-        <span className="inline-flex shrink-0 items-center justify-center transition-transform hover:scale-110">
+        <span className="inline-flex shrink-0 items-center justify-center">
           <BadgeArt badgeKey={badge.key} size={Math.max(size, 18)} />
         </span>
       ) : (

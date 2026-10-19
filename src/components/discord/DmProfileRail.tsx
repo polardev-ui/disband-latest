@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { UserBadges } from "@/components/ui/UserBadges";
+import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
 import { ListeningCard } from "@/components/ui/ListeningCard";
 import { BotTag } from "@/components/ui/BotTag";
 import { IconChevron } from "@/components/icons";
@@ -31,6 +31,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
   const [bannerFailed, setBannerFailed] = useState(false);
   const [mutuals, setMutuals] = useState<{ serverIds: string[]; friendIds: string[] } | null>(null);
   const [open, setOpen] = useState<"servers" | "friends" | null>(null);
+  const badgeCount = useBadgeCount(friend.id);
 
   useEffect(() => {
     let live = true;
@@ -80,10 +81,12 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
             <StatusDot status={live} size={16} ring="var(--bg-secondary-alt)" className="absolute -bottom-0.5 -right-0.5" />
           </span>
         </button>
-        <div className="flex min-h-[44px] justify-end px-4 pt-3">
-          <span className="flex max-w-[180px] flex-wrap justify-end gap-1 rounded-lg bg-bg-floating px-1 py-0.5 empty:hidden">
-            <UserBadges userId={friend.id} size={22} variant="full" />
-          </span>
+        <div className="flex min-h-[44px] justify-end pl-[116px] pr-4 pt-3">
+          {badgeCount > 0 && badgeCount <= HEADER_BADGE_LIMIT && (
+            <span className="rounded-lg bg-bg-floating p-1">
+              <UserBadges userId={friend.id} size={22} variant="full" className="justify-end" />
+            </span>
+          )}
         </div>
       </div>
 
@@ -96,6 +99,9 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
           {friend.username ?? ""}
           {friend.pronouns?.trim() && <span className="text-header-secondary"> • {friend.pronouns.trim()}</span>}
         </p>
+        {badgeCount > HEADER_BADGE_LIMIT && (
+          <UserBadges userId={friend.id} size={22} variant="full" className="mt-2" />
+        )}
         {note && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{note}</p>}
 
         <div className="my-3 h-px bg-[#2e2f34]" />
