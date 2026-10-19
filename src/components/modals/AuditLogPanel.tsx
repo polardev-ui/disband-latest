@@ -141,7 +141,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] leading-snug text-text-muted">
+              <p className="text-[14px] leading-snug text-text-muted">
                 <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? "Someone" : "Disband"}</span>{" "}
                 {action?.label ?? row.action}
                 {row.target_type === "user" && (

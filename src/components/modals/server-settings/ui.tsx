@@ -70,7 +70,7 @@ export function SearchField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={label}
-        className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-[#00a8fc]"
+        className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-[#00a8fc]"
       />
     </label>
   );
@@ -90,7 +90,7 @@ export function EmptyState({ icon, title, body, action }: { icon: ReactNode; tit
 export function InlineError({ children }: { children: ReactNode }) {
   if (!children) return null;
   return (
-    <p role="alert" className="view-enter rounded-[10px] border border-status-dnd/25 bg-status-dnd/8 px-3.5 py-2.5 text-[13px] text-status-dnd">
+    <p role="alert" className="view-enter rounded-[4px] border border-status-dnd/25 bg-status-dnd/8 px-3.5 py-2.5 text-[13px] text-status-dnd">
       {children}
     </p>
   );
@@ -139,7 +139,7 @@ export function LevelLock({
   const remaining = Math.max(0, needed - count);
   return (
     <div className="flex items-center gap-3.5 px-5 py-4">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-brand/12 text-brand">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-brand/12 text-brand">
         <IconLock size={16} />
       </span>
       <div className="min-w-0 flex-1">
@@ -255,7 +255,7 @@ export function DropZone({
         }}
       />
       <IconUpload size={18} className={over ? "text-brand" : "text-text-muted"} />
-      <p className="mt-2 text-[13.5px] font-medium text-text-normal">{title}</p>
+      <p className="mt-2 text-[14px] font-medium text-text-normal">{title}</p>
       {hint && <p className="mt-0.5 text-[12px] text-text-muted">{hint}</p>}
     </div>
   );

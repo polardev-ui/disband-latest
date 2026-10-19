@@ -58,7 +58,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-xs rounded-lg bg-bg-secondary p-5 shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-bold text-text-normal">{title}</h2>

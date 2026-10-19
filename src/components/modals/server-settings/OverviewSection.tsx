@@ -106,7 +106,7 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
 
       {isOwner && (dirty || saving || savedFlash) && (
         <div className="view-enter sticky bottom-0 -mx-8 mt-8 flex items-center justify-between gap-3 border-t border-divider bg-overlay-panel/95 px-8 py-3 backdrop-blur">
-          <p className="text-[13.5px] text-text-muted">{savedFlash ? "Saved." : "You have unsaved changes."}</p>
+          <p className="text-[14px] text-text-muted">{savedFlash ? "Saved." : "You have unsaved changes."}</p>
           <div className="flex gap-2">
             {dirty && (
               <button

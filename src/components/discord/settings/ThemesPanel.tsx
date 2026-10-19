@@ -57,7 +57,7 @@ export function ThemesPanel() {
 
   return (
     <div className="space-y-8">
-      <p className="text-[13.5px] leading-relaxed text-text-muted">
+      <p className="text-[14px] leading-relaxed text-text-muted">
         <span className="mr-1.5 inline-block rounded bg-super/15 px-1.5 py-0.5 align-[1px] text-[10px] font-bold uppercase tracking-wide text-super">
           Aero
         </span>
@@ -67,7 +67,7 @@ export function ThemesPanel() {
       </p>
 
       {locked && (
-        <p className="rounded-xl border border-super/30 bg-super/[0.08] px-4 py-3 text-[13px] leading-relaxed text-super">
+        <p className="rounded-lg border border-super/30 bg-super/[0.08] px-4 py-3 text-[13px] leading-relaxed text-super">
           Themes are part of Disband <span className="font-bold">Aero</span>.
           {skin.lapsed
             ? " Your theme is still saved — resubscribe and it comes back exactly as you left it."

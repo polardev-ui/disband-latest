@@ -61,7 +61,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
         <div
           role="listbox"
           aria-multiselectable
-          className={`absolute z-50 mt-1 max-h-64 w-52 overflow-y-auto rounded-lg border border-divider bg-bg-secondary p-1 shadow-xl ${
+          className={`absolute z-50 mt-1 max-h-64 w-52 overflow-y-auto rounded-lg bg-bg-secondary p-1 shadow-[var(--elevation-high)] ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

@@ -70,7 +70,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               aria-label="Category"
-              className="h-9 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[13.5px] text-text-normal outline-none focus:border-[#00a8fc]"
+              className="h-9 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
             >
               <option value="">No category</option>
               {categories.map((c) => (

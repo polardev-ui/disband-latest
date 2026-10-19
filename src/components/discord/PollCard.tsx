@@ -75,7 +75,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
 
   if (loading) {
     return (
-      <div className="mt-1 w-full max-w-md animate-pulse rounded-xl border border-divider bg-bg-secondary p-4">
+      <div className="mt-1 w-full max-w-md animate-pulse rounded-lg bg-bg-secondary p-4">
         <div className="h-4 w-2/3 rounded bg-bg-accent" />
         <div className="mt-3 h-9 rounded-lg bg-bg-accent" />
         <div className="mt-2 h-9 rounded-lg bg-bg-accent" />
@@ -85,7 +85,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
 
   if (!poll) {
     return (
-      <div className="mt-1 w-full max-w-md rounded-xl border border-divider bg-bg-secondary p-4 text-sm text-text-muted">
+      <div className="mt-1 w-full max-w-md rounded-lg bg-bg-secondary p-4 text-sm text-text-muted">
         {error ?? "Poll unavailable"}
       </div>
     );
@@ -96,7 +96,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
   const isAuthor = !!currentUserId && poll.authorId === currentUserId;
 
   return (
-    <div className="mt-1 w-full max-w-md overflow-hidden rounded-xl border border-divider bg-bg-secondary">
+    <div className="mt-1 w-full max-w-md overflow-hidden rounded-lg bg-bg-secondary">
       <div className="flex items-start gap-2 px-4 pb-3 pt-3.5">
         <p className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-text-normal">
           {poll.question}

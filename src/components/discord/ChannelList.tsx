@@ -331,7 +331,7 @@ export function ChannelList({
             type="button"
             onClick={() => setAddChannelType(t)}
             title={t === "text" ? "Text channel" : "Voice channel"}
-            className={`flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-semibold transition-colors ${
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
               addChannelType === t
                 ? "bg-brand/15 text-text-normal"
                 : "text-text-muted hover:text-text-normal"

@@ -135,7 +135,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
 
       {plan === "free" && limit === 0 ? (
         <SettingsSection title="Add emoji">
-          <p className="px-5 py-4 text-[13.5px] text-text-muted">Custom emoji come with a paid plan, or with Catalyst Level 1 for this space.</p>
+          <p className="px-5 py-4 text-[14px] text-text-muted">Custom emoji come with a paid plan, or with Catalyst Level 1 for this space.</p>
         </SettingsSection>
       ) : (
         !full && (

@@ -103,7 +103,7 @@ function ReactionHoverCard({
       <button
         type="button"
         onClick={onOpenList}
-        className="flex w-full items-center gap-2.5 rounded-lg bg-overlay-surface px-3 py-2 text-left shadow-xl ring-1 ring-divider transition-colors hover:bg-interactive-hover"
+        className="flex w-full items-center gap-2.5 rounded-lg bg-bg-floating px-3 py-2 text-left shadow-[var(--elevation-high)] ring-1 ring-divider transition-colors hover:bg-interactive-hover"
       >
         <EmojiImg emoji={summary.emoji} size="1.75em" />
         <span className="min-w-0">
@@ -149,7 +149,7 @@ function ReactionListDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Reactions"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
       >
         {}
         <div className="flex w-[104px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-divider p-2">
@@ -326,7 +326,7 @@ export function ReactionPicker({
     <>
       <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
 
-      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl`}>
+      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-[var(--elevation-high)] sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg`}>
         <div className="border-b border-divider px-4 py-3">
           <input
             type="text"

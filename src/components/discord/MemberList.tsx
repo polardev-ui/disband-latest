@@ -231,7 +231,7 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
         </h2>
         <div className="flex flex-col gap-1" aria-hidden>
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2.5 rounded-[10px] px-2 py-1.5">
+            <div key={i} className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5">
               <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
               <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <span
@@ -314,7 +314,7 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
         {hasMore && (
           <div className="flex flex-col gap-1 pt-1" aria-hidden>
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-2.5 rounded-[10px] px-2 py-1.5">
+              <div key={i} className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5">
                 <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
                 <span className="skeleton-glimmer h-3 rounded" style={{ width: `${58 + ((i * 23) % 30)}%` }} />
               </div>
