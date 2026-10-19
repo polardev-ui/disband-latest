@@ -58,94 +58,93 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
     }
   }
 
+  const label = "mb-2 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+  const field =
+    "h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]";
+
   return createPortal(
     <div
-      className={`fixed inset-0 z-[130] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}
+      className={`fixed inset-0 z-[130] flex items-center justify-center bg-black/85 p-4 overlay-fade${exiting ? " overlay-fade-out" : ""}`}
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Create a poll"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-[var(--elevation-high)]`}
+        aria-label="Create a Poll"
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} flex max-h-[calc(100dvh-32px)] w-full max-w-[480px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-text-normal">Create a poll</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded p-1 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          >
-            <IconClose size={18} />
+        <div className="flex items-center justify-between px-4 pb-2 pt-4">
+          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Create a Poll</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-interactive-normal hover:text-interactive-active">
+            <IconClose size={22} />
           </button>
         </div>
 
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-bold uppercase text-text-muted">Question</span>
-          <input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="What&apos;s your favorite color?"
-            maxLength={200}
-            autoFocus
-            className="w-full rounded-md border border-divider bg-bg-accent px-3 py-2 text-sm text-text-normal placeholder:text-text-muted focus:border-[#00a8fc] focus:outline-none focus:ring-2 focus:ring-brand/40"
-          />
-        </label>
+        <div className="channel-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-3">
+          <label className="block">
+            <span className={label}>Question</span>
+            <input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="What question do you want to ask?"
+              maxLength={200}
+              autoFocus
+              className={field}
+            />
+          </label>
 
-        <div className="mt-3 space-y-2">
-          {options.map((opt, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                value={opt}
-                onChange={(e) => updateOption(i, e.target.value)}
-                placeholder={`Option ${i + 1}`}
-                maxLength={100}
-                className="flex-1 rounded-md border border-divider bg-bg-accent px-3 py-2 text-sm text-text-normal placeholder:text-text-muted focus:border-[#00a8fc] focus:outline-none focus:ring-2 focus:ring-brand/40"
-              />
-              {options.length > 2 && (
-                <button
-                  type="button"
-                  onClick={() => setOptions((prev) => prev.filter((_, idx) => idx !== i))}
-                  aria-label="Remove option"
-                  className="shrink-0 rounded p-1.5 text-text-muted hover:bg-interactive-hover hover:text-status-dnd"
-                >
-                  <IconClose size={16} />
-                </button>
-              )}
-            </div>
-          ))}
+          <p className={`${label} mt-6`}>Answers</p>
+          <div className="space-y-2">
+            {options.map((opt, i) => (
+              <div key={i} className="group relative">
+                <input
+                  value={opt}
+                  onChange={(e) => updateOption(i, e.target.value)}
+                  placeholder="Type your answer"
+                  aria-label={`Answer ${i + 1}`}
+                  maxLength={100}
+                  className={`${field} pr-10`}
+                />
+                {options.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setOptions((prev) => prev.filter((_, idx) => idx !== i))}
+                    aria-label={`Remove answer ${i + 1}`}
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-interactive-normal opacity-0 transition-opacity hover:text-status-dnd focus:opacity-100 group-hover:opacity-100"
+                  >
+                    <IconClose size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {options.length < MAX_OPTIONS && (
+            <button
+              type="button"
+              onClick={() => setOptions((prev) => [...prev, ""])}
+              className="mt-2 flex h-10 w-full items-center gap-2 rounded-[3px] border border-dashed border-interactive-normal/40 px-2.5 text-[16px] text-header-secondary transition-colors hover:border-interactive-normal hover:text-header-primary"
+            >
+              <IconPlus size={16} />
+              Add another answer
+            </button>
+          )}
+
+          {error && <p className="mt-3 text-[14px] text-status-dnd">{error}</p>}
         </div>
 
-        {options.length < MAX_OPTIONS && (
-          <button
-            type="button"
-            onClick={() => setOptions((prev) => [...prev, ""])}
-            className="mt-2 flex items-center gap-1 rounded px-1 py-1 text-xs font-medium text-brand hover:underline"
-          >
-            <IconPlus size={14} />
-            Add option
-          </button>
-        )}
-
-        {error && <p className="mt-2 text-xs text-status-dnd">{error}</p>}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-3 py-2 text-sm font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          >
+        <div className="flex justify-end gap-2 bg-bg-secondary p-4">
+          <button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] font-medium text-white hover:underline">
             Cancel
           </button>
           <button
             type="button"
             disabled={!canCreate}
             onClick={() => void create()}
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className="h-[38px] min-w-[96px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {creating ? "Creating…" : "Create poll"}
+            {creating ? "Posting…" : "Post"}
           </button>
         </div>
       </div>

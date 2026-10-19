@@ -8,8 +8,6 @@ import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
-import { IconHash } from "@/components/icons";
-import type { Profile, Channel } from "@/lib/supabase/types";
 
 interface ForwardModalProps {
   open: boolean;
@@ -55,25 +53,32 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
   };
 
   const content = (
-    <>
-      <div className={`fixed inset-0 z-40 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Forward message" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto w-[calc(100%-16px)] max-w-md rounded-t-2xl border border-divider bg-bg-secondary shadow-[var(--elevation-high)] transition-all duration-200 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg ${exiting ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
-        <div className="border-b border-divider px-4 py-3">
-          <h3 className="text-sm font-semibold text-text-normal">Forward message</h3>
+    <div className={`fixed inset-0 z-[90] flex items-end justify-center p-2 sm:items-center sm:p-4 overlay-fade${exiting ? " overlay-fade-out" : ""}`}>
+      <button type="button" aria-label="Close" className="absolute inset-0 cursor-default bg-black/85" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Forward message"
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[min(640px,calc(100dvh-32px))] w-full max-w-[440px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+      >
+        <div className="px-4 pt-4">
+          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Forward To</h2>
+          <p className="mt-1 text-[14px] text-header-secondary">Select where you want to share this message.</p>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search friends and groups..."
+            placeholder="Search"
+            aria-label="Search friends and groups"
             autoFocus
-            className="mt-2 w-full rounded bg-bg-primary px-3 py-2 text-sm text-text-normal placeholder:text-text-muted outline-none ring-brand transition-shadow focus:ring-2"
+            className="mt-4 h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-2">
+        <div className="channel-scroll mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {destinations.length === 0 ? (
-            <p className="py-8 text-center text-xs text-text-muted">
-              {q ? "No matches found" : "No conversations available"}
+            <p className="py-8 text-center text-[14px] text-header-secondary">
+              {q ? "No results found." : "No conversations yet."}
             </p>
           ) : (
             destinations.map((dest) => (
@@ -81,10 +86,10 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
                 key={`${dest.kind}-${dest.id}`}
                 type="button"
                 onClick={() => handleSelect(dest)}
-                className="flex w-full items-center gap-3 rounded px-2 py-2 text-left transition-all duration-150 hover:bg-interactive-hover active:scale-[0.98]"
+                className="group flex h-[44px] w-full items-center gap-3 rounded-[4px] px-2 text-left hover:bg-interactive-hover"
               >
                 {dest.kind === "group" ? (
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/20 text-xs font-bold text-brand">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-[14px] font-semibold text-white">
                     {dest.label.charAt(0).toUpperCase()}
                   </span>
                 ) : (
@@ -93,18 +98,22 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
                     size="sm"
                   />
                 )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text-normal">{dest.label}</p>
-                  <p className="text-xs text-text-muted">
-                    {dest.kind === "dm" ? "Direct Message" : "Group Chat"}
-                  </p>
-                </div>
+                <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-header-primary">{dest.label}</span>
+                <span className="shrink-0 text-[12px] text-header-secondary">{dest.kind === "dm" ? "Direct Message" : "Group DM"}</span>
+                <span className="ml-2 hidden h-8 shrink-0 items-center rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white group-hover:flex">
+                  Send
+                </span>
               </button>
             ))
           )}
         </div>
+        <div className="flex justify-end bg-bg-secondary p-4">
+          <button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] font-medium text-white hover:underline">
+            Cancel
+          </button>
+        </div>
       </div>
-    </>
+    </div>
   );
 
   if (typeof document === "undefined") return null;
