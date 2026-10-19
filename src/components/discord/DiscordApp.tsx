@@ -1486,14 +1486,33 @@ export function DiscordApp() {
     return null;
   };
 
+  // On phones a chat view carries the menu button in its own header, as
+  // Discord did, instead of stacking a second bar above it.
+  const mobileChatHeader =
+    isMobile &&
+    ((app.viewMode === "dm" && !!dmFriend) ||
+      (app.viewMode === "group" && !!activeGroup) ||
+      app.viewMode === "notes" ||
+      (app.viewMode === "space" && !!activeChannel && !isVoice));
+  const mobileMenuButton = isMobile ? (
+    <button
+      type="button"
+      aria-label="Open navigation"
+      onClick={() => setMobileMenuOpen((v) => !v)}
+      className="-ml-2 mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal hover:text-interactive-active"
+    >
+      <IconMenu size={22} />
+    </button>
+  ) : undefined;
+
   return (
     <div className="app-base-layer h-full w-full overflow-hidden bg-bg-primary">
       <div
         className="h-full w-full origin-top-left"
         style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
       >
-        <div className={`relative flex h-full w-full overflow-hidden ${isMobile ? "pt-10" : ""}`}>
-      {isMobile && (
+        <div className={`relative flex h-full w-full overflow-hidden ${isMobile && !mobileChatHeader ? "pt-10" : ""}`}>
+      {isMobile && !mobileChatHeader && (
         <div className="absolute inset-x-0 top-0 z-[60] flex h-10 items-center gap-2 border-b border-divider bg-bg-tertiary px-2">
           <button
             type="button"
@@ -1613,6 +1632,8 @@ export function DiscordApp() {
                 onReorderFolders={handleReorderFolders}
               />
 
+              <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-bg-secondary">
+              <div className="flex min-h-0 flex-1">
               {app.viewMode === "discover" ? (
                 <DiscoverSidebar
                   tab={discoverTab}
@@ -1661,6 +1682,10 @@ export function DiscordApp() {
                   onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
                 />
               )}
+              </div>
+              <CallIndicator />
+              <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
+              </div>
             </div>
           </div>
         )
@@ -1764,6 +1789,7 @@ export function DiscordApp() {
           <ChatCanvas
             key={app.activeDmThreadId}
             ref={dmChatRef}
+            headerLeading={mobileMenuButton}
             channelName={displayName(dmFriend)}
             messages={dmMessages}
             loading={app.dmLoading}
@@ -1890,6 +1916,7 @@ export function DiscordApp() {
               <ChatCanvas
                 key={app.activeGroupChatId}
                 ref={groupChatRef}
+                headerLeading={mobileMenuButton}
                 channelName={activeGroup.name}
                 messages={groupMessages}
                 loading={app.groupLoading}
@@ -1980,6 +2007,7 @@ export function DiscordApp() {
         <ChatCanvas
           key="notes"
           ref={notesChatRef}
+          headerLeading={mobileMenuButton}
           channelName="Notes"
           channelIcon={<IconNotes size={22} className="text-text-muted" />}
           introText="Your private Notes — only you can see this"
@@ -2026,6 +2054,7 @@ export function DiscordApp() {
         <ChatCanvas
           key={app.activeChannelId}
           ref={channelChatRef}
+          headerLeading={mobileMenuButton}
           channelName={activeChannel.name}
           // Announcement channels (read-only + managers only) carry the
           // megaphone so the header matches the rail.
