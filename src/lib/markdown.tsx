@@ -1,6 +1,6 @@
 "use client";
 
-import { isValidMentionToken } from "@/lib/utils";
+import { displayName, isValidMentionToken } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import type { Profile } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
@@ -84,7 +84,10 @@ function renderInlineTokens(
         continue;
       }
       const user = members.find((x) => x.username?.toLowerCase() === uname.toLowerCase());
-      const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
+      // Shown by display name, like Discord; the username is what pinged,
+      // and it is on hover.
+      const label = user ? displayName(user) : uname.toLowerCase() === "everyone" ? "everyone" : uname;
+      const title = user?.username ? `@${user.username}` : undefined;
       const chipClass = "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (user && onMentionClick) {
@@ -93,6 +96,7 @@ function renderInlineTokens(
             key={key}
             type="button"
             className={`${chipClass} cursor-pointer`}
+            title={title}
             onClick={(e) => {
               e.stopPropagation();
               onMentionClick(user);
@@ -103,7 +107,7 @@ function renderInlineTokens(
         );
       } else {
         out.push(
-          <span key={key} className={chipClass}>
+          <span key={key} className={chipClass} title={title}>
             @{label}
           </span>,
         );
