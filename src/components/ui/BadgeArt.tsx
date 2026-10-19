@@ -27,38 +27,38 @@ const ART: Record<string, ReactNode> = {
       <circle cx="11.4" cy="13" r=".6" fill={W} opacity={0.8} />
     </>
   ),
-  // Disband staff — a blurple shield carrying the mark.
+  // Staff — crossed hammer and wrench, in blurple.
   staff: (
     <>
-      <path d="M12 2 20.5 5.2v6.6c0 4.9-3.5 8.4-8.5 10.2-5-1.8-8.5-5.3-8.5-10.2V5.2Z" fill="#5865f2" />
-      <Shade d="M12 2 20.5 5.2v6.6c0 4.9-3.5 8.4-8.5 10.2Z" />
-      <path d="M12 6.4 16.4 15H13.6L12 11.8 10.4 15H7.6Z" fill={W} />
+      <path d="M6.2 19.6 4.4 17.8l8.9-8.9 1.8 1.8Z" fill="#5865f2" />
+      <path d="M14.2 4.2a4 4 0 0 0-1 4.1l1.8 1.8a4 4 0 0 0 4.1-1L17 7l.4-1.6L19 5l2.1 2.1a4 4 0 0 0-1.1-4.2 4 4 0 0 0-5.8 1.3Z" fill="#5865f2" />
+      <path d="M17.8 19.6 19.6 17.8 11.1 9.3l-1.8 1.8Z" fill="#4752c4" />
+      <path d="M3.3 7.6 7.6 3.3l3.8 3.8-4.3 4.3Z" fill="#5865f2" />
+      <path d="M5.4 5.5 7.6 3.3l3.8 3.8-2.2 2.2Z" fill="#7983f5" />
     </>
   ),
-  // Moderator — a green shield with a tick.
+  // Moderator — a shield, half filled.
   moderator: (
     <>
-      <path d="M12 2.2 20 5.4v6.2c0 4.7-3.3 8-8 9.9-4.7-1.9-8-5.2-8-9.9V5.4Z" fill="#23a55a" />
-      <Shade d="M12 2.2 20 5.4v6.2c0 4.7-3.3 8-8 9.9Z" color="#0b3d1f" opacity={0.25} />
-      <path d="m8.2 12.2 2.6 2.6 5-5.2" fill="none" stroke={W} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 3.2 19.2 6v5.4c0 4.4-3 7.6-7.2 9.4-4.2-1.8-7.2-5-7.2-9.4V6Z" fill="none" stroke="#5865f2" strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M12 3.2V20.8c-4.2-1.8-7.2-5-7.2-9.4V6Z" fill="#5865f2" />
     </>
   ),
-  // Partner — a blue tile with linked loops.
+  // Partner — two blurple links.
   partner: (
     <>
-      <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="#4087ed" />
-      <Shade d="M12 2.5h4.5a5 5 0 0 1 5 5v9a5 5 0 0 1-5 5H12Z" />
-      <path d="M8.3 9.2a2.8 2.8 0 1 0 0 5.6c2 0 5.4-5.6 7.4-5.6a2.8 2.8 0 1 1 0 5.6c-2 0-5.4-5.6-7.4-5.6Z" fill="none" stroke={W} strokeWidth="2" strokeLinejoin="round" />
+      <path d="M10.4 13.6 7.9 16.1a2.7 2.7 0 0 1-3.8-3.8l3.4-3.4a2.7 2.7 0 0 1 3.8 0" fill="none" stroke="#5865f2" strokeWidth="2.8" strokeLinecap="round" />
+      <path d="M13.6 10.4l2.5-2.5a2.7 2.7 0 0 1 3.8 3.8l-3.4 3.4a2.7 2.7 0 0 1-3.8 0" fill="none" stroke="#5865f2" strokeWidth="2.8" strokeLinecap="round" />
+      <path d="M9.6 14.4l4.8-4.8" stroke="#7983f5" strokeWidth="2.8" strokeLinecap="round" />
     </>
   ),
-  // OG — a bronze medallion inside a laurel.
+  // OG — gold wings with a star, in the old events style.
   og: (
     <>
-      <circle cx="12" cy="12" r="6.6" fill="#d58a3a" />
-      <circle cx="12" cy="12" r="4.4" fill="#f4b968" />
-      <path d="M12 8.6 13 10.9l2.4.2-1.8 1.6.6 2.4L12 13.8l-2.2 1.3.6-2.4-1.8-1.6 2.4-.2Z" fill="#a65f1b" />
-      <path d="M4.6 7.4C2.9 10.6 3.4 15.2 7 18.4M19.4 7.4c1.7 3.2 1.2 7.8-2.4 11" fill="none" stroke="#57c785" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M3.6 11.2 5.4 12M3.9 14.6l1.9.3M20.4 11.2l-1.8.8M20.1 14.6l-1.9.3" stroke="#57c785" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M12 3.4 12.9 5.3 15 5.6 13.5 7 13.9 9.1 12 8.1 10.1 9.1 10.5 7 9 5.6 11.1 5.3Z" fill="#fbb848" />
+      <path d="M2.6 9.6 7.4 12.2 12 17.4 16.6 12.2 21.4 9.6 19.4 15.4 12 20.6 4.6 15.4Z" fill="#f8a531" />
+      <path d="M12 17.4 16.6 12.2 21.4 9.6 19.4 15.4 12 20.6Z" fill="#d98a14" />
+      <path d="M7.4 12.2 12 17.4 16.6 12.2 12 14.6Z" fill="#fcd27a" />
     </>
   ),
   // Early supporter — a pink heart with a sparkle.
@@ -115,35 +115,29 @@ const ART: Record<string, ReactNode> = {
       <path d="M2.8 12h18.4M12 2.6c2.6 2.7 3.8 5.9 3.8 9.4s-1.2 6.7-3.8 9.4c-2.6-2.7-3.8-5.9-3.8-9.4S9.4 5.3 12 2.6Z" fill="none" stroke={W} strokeWidth="1.5" />
     </>
   ),
-  // Bug bounty — a gold coin stamped with a bug.
+  // Bug bounty — the bug-hunter tag in orange, with a sparkle.
   bounty: (
     <>
-      <circle cx="12" cy="12" r="9.4" fill="#f0b232" />
-      <circle cx="12" cy="12" r="7.4" fill="none" stroke="#c27c0e" strokeWidth="1.2" />
-      <ellipse cx="12" cy="13" rx="2.8" ry="3.4" fill="#7a4a06" />
-      <circle cx="12" cy="8.8" r="1.6" fill="#7a4a06" />
-      <path d="M9.2 11.6H7.6M9.2 14.4H7.8M14.8 11.6h1.6M14.8 14.4h1.4" stroke="#7a4a06" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M4.4 20.6a1.3 1.3 0 0 1 0-1.8l7.9-7.9 1.8 1.8-7.9 7.9a1.3 1.3 0 0 1-1.8 0Z" fill="#ffc2a1" />
+      <path d="M11.3 6.2c2.6-2.6 6.4-3.1 8.4-1.1s1.5 5.8-1.1 8.4l-1.4 1.4-7.3-7.3Z" fill="#f47b67" />
+      <path d="M19.7 5.1c2 2 1.5 5.8-1.1 8.4l-1.4 1.4-3.6-3.6Z" fill="#d4563f" />
+      <path d="M5.6 3 6.2 4.6 7.8 5.2 6.2 5.8 5.6 7.4 5 5.8 3.4 5.2 5 4.6Z" fill="#fee75c" />
     </>
   ),
-  // Bug hunter — a green beetle.
+  // Bug hunter — the green two-tone tag.
   hunter: (
     <>
-      <path d="M8.2 5.4 6.6 3.4M15.8 5.4l1.6-2M6.8 11H3.4M6.8 15H3.6M17.2 11h3.4M17.2 15h3.2M7.4 18.6l-2.4 1.8M16.6 18.6l2.4 1.8" stroke="#1a7f45" strokeWidth="1.6" strokeLinecap="round" />
-      <ellipse cx="12" cy="13.6" rx="5.4" ry="7" fill="#23a55a" />
-      <path d="M12 6.6c3 0 5.4 3.1 5.4 7s-2.4 7-5.4 7Z" fill="#1a7f45" />
-      <circle cx="12" cy="6" r="2.8" fill="#1a7f45" />
-      <path d="M12 8.4v12" stroke="#0b3d1f" strokeWidth="1" />
+      <path d="M4.4 20.6a1.3 1.3 0 0 1 0-1.8l7.9-7.9 1.8 1.8-7.9 7.9a1.3 1.3 0 0 1-1.8 0Z" fill="#a6e3bd" />
+      <path d="M11.3 6.2c2.6-2.6 6.4-3.1 8.4-1.1s1.5 5.8-1.1 8.4l-1.4 1.4-7.3-7.3Z" fill="#5bd18f" />
+      <path d="M19.7 5.1c2 2 1.5 5.8-1.1 8.4l-1.4 1.4-3.6-3.6Z" fill="#2f9e5f" />
     </>
   ),
-  // Bug hunter, level 2 — the gold beetle.
+  // Bug hunter, level 2 — the gold two-tone tag.
   hunter2: (
     <>
-      <path d="M8.2 5.4 6.6 3.4M15.8 5.4l1.6-2M6.8 11H3.4M6.8 15H3.6M17.2 11h3.4M17.2 15h3.2M7.4 18.6l-2.4 1.8M16.6 18.6l2.4 1.8" stroke="#a96a05" strokeWidth="1.6" strokeLinecap="round" />
-      <ellipse cx="12" cy="13.6" rx="5.4" ry="7" fill="#f0b232" />
-      <path d="M12 6.6c3 0 5.4 3.1 5.4 7s-2.4 7-5.4 7Z" fill="#d6950f" />
-      <circle cx="12" cy="6" r="2.8" fill="#d6950f" />
-      <path d="M12 8.4v12" stroke="#7a4a06" strokeWidth="1" />
-      <circle cx="9.8" cy="12" r="1" fill={W} opacity={0.7} />
+      <path d="M4.4 20.6a1.3 1.3 0 0 1 0-1.8l7.9-7.9 1.8 1.8-7.9 7.9a1.3 1.3 0 0 1-1.8 0Z" fill="#ffe0a3" />
+      <path d="M11.3 6.2c2.6-2.6 6.4-3.1 8.4-1.1s1.5 5.8-1.1 8.4l-1.4 1.4-7.3-7.3Z" fill="#ffc861" />
+      <path d="M19.7 5.1c2 2 1.5 5.8-1.1 8.4l-1.4 1.4-3.6-3.6Z" fill="#e09a1d" />
     </>
   ),
   // Security researcher — a navy shield with a keyhole.
@@ -180,13 +174,12 @@ const ART: Record<string, ReactNode> = {
       <path d="m8 12.2 2.8 2.8 5.2-5.6" fill="none" stroke={W} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
-  // Catalyst booster — a faceted pink gem.
+  // Catalyst booster — Disband's own: a pink hexagon with rising chevrons.
   boost: (
     <>
-      <path d="M12 2 20.4 8.6 12 22 3.6 8.6Z" fill="#ff73fa" />
-      <path d="M3.6 8.6h16.8L12 22Z" fill="#d94fd6" />
-      <path d="M12 2 15.8 8.6H8.2Z" fill="#ffb3fd" />
-      <path d="M8.2 8.6 12 22l3.8-13.4Z" fill="#ff8cfb" opacity={0.6} />
+      <path d="M12 2 20.7 7v10L12 22l-8.7-5V7Z" fill="#ff73fa" />
+      <path d="M12 2 20.7 7v10L12 22Z" fill="#d94fd6" />
+      <path d="m8 12.4 4-3.8 4 3.8M8 16.4l4-3.8 4 3.8" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
   // Recruiter — an orange figure with a plus.

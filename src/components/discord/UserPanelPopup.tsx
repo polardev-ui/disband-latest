@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { StatusDot, StatusGlyph } from "@/components/ui/StatusDot";
 import { IconCheck, IconPlus, IconSettings } from "@/components/icons";
 import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
@@ -159,17 +160,17 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     profile && usesCustomAccent(profile)
       ? getAccentBackground(profile)
       : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
-  const sectionLabel = "px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/80";
-  const row = "flex h-9 w-full items-center gap-2.5 rounded-[3px] px-2 text-left text-[13.5px] transition-colors hover:bg-interactive-hover";
+  const sectionLabel = "px-2 pb-1.5 pt-1 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+  const row = "group/row flex min-h-8 w-full items-center gap-2.5 rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white [&_span]:group-hover/row:!text-white";
 
   const content = (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} fixed z-40 max-h-[calc(100vh-100px)] w-[320px] overflow-y-auto rounded-lg border border-divider bg-overlay-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]`}
+        className={`menu-pop${exiting ? " modal-pop-out" : ""} channel-scroll fixed z-40 max-h-[calc(100vh-100px)] w-[340px] overflow-y-auto rounded-lg bg-bg-secondary-alt pb-1 shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
         style={{ left: pos.left, bottom: pos.bottom }}
       >
-        <div className="h-[84px] overflow-hidden" style={{ background: bannerBg }}>
+        <div className="h-[60px] overflow-hidden" style={{ background: bannerBg }}>
           {bannerUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -183,11 +184,9 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
 
         <div className="px-4">
           <div className="flex items-end justify-between gap-2">
-            <div className="relative -mt-10 shrink-0 rounded-full bg-overlay-panel p-[4px]">
-              <Avatar profile={profile ?? { display_name: name }} size="lg" />
-              <span
-                className={`absolute bottom-1 right-1 h-[18px] w-[18px] rounded-full border-[3px] border-overlay-panel ${STATUS_DOT_BG[currentStatus]}`}
-              />
+            <div className="relative -mt-11 shrink-0 rounded-full bg-bg-secondary-alt p-1.5">
+              <Avatar profile={profile ?? { display_name: name }} size="xl" className="!h-20 !w-20 !text-2xl" />
+              <StatusDot status={currentStatus} size={16} ring="var(--bg-secondary-alt)" className="absolute bottom-1 right-1" />
             </div>
             <div className="flex shrink-0 items-center gap-1.5 pb-1">
               {onOpenProfile && (
@@ -197,7 +196,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                     onClose();
                     onOpenProfile();
                   }}
-                  className="inline-flex h-8 items-center rounded-[3px] border border-divider px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+                  className="inline-flex h-8 items-center rounded-[3px] bg-button-secondary px-3 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
                 >
                   View profile
                 </button>
@@ -205,7 +204,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               <button
                 type="button"
                 onClick={onOpenSettings}
-                className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                className="flex h-8 w-8 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover"
                 aria-label="Settings"
                 title="Settings"
               >
@@ -214,16 +213,16 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
             </div>
           </div>
 
-          <div className="mt-2 pb-3">
-            <p className="truncate text-[17px] font-semibold tracking-[-0.01em] text-text-normal">{name}</p>
-            <p className="truncate text-[13px] text-text-muted">
-              {profile?.username ? `@${profile.username} · ` : ""}
-              {statusText}
+          <div className="mt-3 rounded-t-lg bg-bg-floating px-3 pb-2 pt-3">
+            <p className="truncate text-[20px] font-semibold leading-6 text-header-primary">{name}</p>
+            <p className="truncate text-[14px] leading-[18px] text-header-primary">
+              {profile?.username ?? ""}
+              <span className="text-header-secondary"> • {statusText}</span>
             </p>
           </div>
         </div>
 
-        <div className="border-t border-divider px-3 py-3">
+        <div className="mx-4 bg-bg-floating px-2 py-2 [&+div]:border-t [&+div]:border-[#2e2f34]">
           <p className={sectionLabel}>Custom status</p>
           <div className="px-1">
             <input
@@ -240,10 +239,10 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                   type="button"
                   onClick={() => setCustomDuration(preset.id)}
                   aria-pressed={customDuration === preset.id}
-                  className={`rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium transition-colors ${
+                  className={`rounded-[3px] px-2 py-0.5 text-[12px] font-medium transition-colors ${
                     customDuration === preset.id
-                      ? "border-brand/60 bg-brand/15 text-text-normal"
-                      : "border-divider text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                      ? "bg-brand text-white"
+                      : "bg-bg-secondary text-interactive-normal hover:text-interactive-active"
                   }`}
                 >
                   {preset.label}
@@ -255,7 +254,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                 type="button"
                 disabled={savingCustom}
                 onClick={() => void saveCustomStatus()}
-                className="h-8 flex-1 rounded-[3px] bg-text-normal text-[13px] font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="h-8 flex-1 rounded-[3px] bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
                 {savingCustom ? "Saving…" : "Set status"}
               </button>
@@ -273,7 +272,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           </div>
         </div>
 
-        <div className="border-t border-divider px-3 py-3">
+        <div className="mx-4 bg-bg-floating px-2 py-2 [&+div]:border-t [&+div]:border-[#2e2f34]">
           <p className={sectionLabel}>Presence</p>
           {STATUS_OPTIONS.map((opt) => (
             <button
@@ -282,16 +281,16 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               disabled={changing}
               aria-pressed={currentStatus === opt.status}
               onClick={() => void setStatus(opt.status)}
-              className={`${row} ${currentStatus === opt.status ? "bg-interactive-selected" : ""} ${changing ? "opacity-50" : ""}`}
+              className={`${row} ${changing ? "opacity-50" : ""}`}
             >
-              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_BG[opt.status]}`} />
-              <span className="flex-1 text-text-normal">{opt.label}</span>
-              {currentStatus === opt.status && <IconCheck size={15} className="text-text-normal" />}
+              <StatusGlyph status={opt.status} size={12} className="shrink-0" />
+              <span className="flex-1">{opt.label}</span>
+              {currentStatus === opt.status && <IconCheck size={15} />}
             </button>
           ))}
         </div>
 
-        <div className="border-t border-divider px-3 py-3">
+        <div className="mx-4 bg-bg-floating px-2 py-2 [&+div]:border-t [&+div]:border-[#2e2f34]">
           <div className="flex items-center justify-between pr-1">
             <p className={sectionLabel}>Accounts</p>
             <button
@@ -305,16 +304,14 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
 
           <div className="flex flex-col gap-px">
             {accounts.current && (
-              <div className="flex items-center gap-2.5 rounded-[3px] bg-interactive-selected px-2 py-1.5">
+              <div className="flex items-center gap-2.5 rounded-[2px] bg-interactive-selected px-2 py-1.5">
                 <span className="relative shrink-0">
                   <Avatar
                     size="sm"
                     profile={{ display_name: accountLabel(accounts.current), avatar_url: accounts.current.avatar_url }}
                     className="h-7 w-7 text-xs"
                   />
-                  <span
-                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-overlay-panel ${STATUS_DOT_BG[currentStatus]}`}
-                  />
+                  <StatusDot status={currentStatus} size={8} ring="var(--interactive-selected)" className="absolute -bottom-1 -right-1" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-medium text-text-normal">{accountLabel(accounts.current)}</span>
@@ -330,7 +327,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               return (
                 <div
                   key={acct.user_id}
-                  className="group flex items-center gap-2.5 rounded-[3px] px-2 py-1.5 transition-colors hover:bg-interactive-hover"
+                  className="group flex items-center gap-2.5 rounded-[2px] px-2 py-1.5 transition-colors hover:bg-interactive-hover"
                 >
                   <button
                     type="button"
