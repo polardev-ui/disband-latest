@@ -360,6 +360,12 @@ function uploadErrorMessage(err: unknown): string {
 const UNREAD_SNAPSHOT_PREFIX = "disband:unread:";
 const CLOSED_DMS_PREFIX = "disband:closed-dms:";
 
+// Member pages are offset-based (`(page - 1) * size`), so every page of a walk
+// must use the same size. Kept well under PostgREST's 1,000-row cap because
+// each row embeds a full profile: 500 rows is ~600 KB, and that fetch runs
+// beside the channel open rather than blocking it.
+const MEMBER_PAGE_SIZE = 500;
+
 function readClosedDms(uid: string): string[] {
   try {
     const raw = window.localStorage.getItem(CLOSED_DMS_PREFIX + uid);
@@ -1304,7 +1310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Revisits skip the member refetch entirely: the roster changes
           // rarely, and probing for it costs a megabyte per page.
           needsMembers
-            ? supabase.rpc("get_server_members", { p_server_id: serverId, p_page: 1, p_page_size: 1000 })
+            ? supabase.rpc("get_server_members", { p_server_id: serverId, p_page: 1, p_page_size: MEMBER_PAGE_SIZE })
             : Promise.resolve({ data: null }),
         ]);
         if (activeServerRef.current !== serverId) return;
@@ -1371,14 +1377,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }));
           fullMembersRef.current = enriched;
           memberPageRef.current = 1;
-          const more = pageRows.length === 1000;
+          const more = pageRows.length === MEMBER_PAGE_SIZE;
           membersHasMoreRef.current = more;
           setMembersHasMore(more);
           setMembers(enriched);
           writeMembersCache(serverId);
         } else {
           fullMembersRef.current = cached!.members;
-          memberPageRef.current = Math.max(1, Math.ceil(cached!.members.length / 1000));
+          memberPageRef.current = Math.max(1, Math.ceil(cached!.members.length / MEMBER_PAGE_SIZE));
           const more = cached!.membersHasMore ?? false;
           membersHasMoreRef.current = more;
           setMembersHasMore(more);
@@ -1421,13 +1427,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.rpc("get_server_members", {
         p_server_id: serverId,
         p_page: nextPage,
-        p_page_size: 1000,
+        p_page_size: MEMBER_PAGE_SIZE,
       });
       if (error) throw error;
       if (activeServerRef.current !== serverId) return;
       const rows = (data ?? []) as (ServerMember & { profile: Profile })[];
       memberPageRef.current = nextPage;
-      const more = rows.length === 1000;
+      const more = rows.length === MEMBER_PAGE_SIZE;
       const roleIdsByMember = memberRoleIdsRef.current;
       const assignableRoleIds = assignableRoleIdsRef.current;
       const seen = new Set(fullMembersRef.current.map((m) => m.user_id));
