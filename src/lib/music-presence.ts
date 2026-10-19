@@ -21,9 +21,10 @@ export type { Listening };
 /* -------------------------------------------------- Connection state */
 
 /**
- * Connections made by older builds live under this key. They are imported
- * once, through the server, then removed. Nothing reads them for playback
- * any more.
+ * Connections made by older builds live under this key. The key was never
+ * bound to a Disband account, so it must not be imported automatically: on a
+ * shared browser that could attach one person's Spotify to another account.
+ * Settings offers an explicit "Import old connection" action instead.
  */
 const LEGACY_SPOTIFY_TOKENS_KEY = "disband:spotify-tokens";
 
@@ -56,12 +57,17 @@ function clearLegacySpotifyTokens(): void {
   }
 }
 
+/** Whether this browser still holds a pre-server-storage connection. */
+export function hasLegacySpotifyConnection(): boolean {
+  return readLegacySpotifyTokens() !== null;
+}
+
 /**
- * Move a pre-server-storage connection onto the account. Called once when the
- * app starts and again when Settings opens; harmless when there is nothing
- * to import. An invalid grant is dropped so the UI can offer Connect again.
+ * Explicitly move an old browser-only connection onto the signed-in account.
+ * Returns false when there is nothing to import or the grant has expired; an
+ * expired grant is removed so Settings can offer Connect again.
  */
-export async function migrateLegacySpotifyConnection(): Promise<boolean> {
+export async function importLegacySpotifyConnection(): Promise<boolean> {
   const legacy = readLegacySpotifyTokens();
   if (!legacy) return false;
   try {
@@ -76,7 +82,7 @@ export async function migrateLegacySpotifyConnection(): Promise<boolean> {
     }
     if (res.status === 400) clearLegacySpotifyTokens();
   } catch {
-    // Offline: keep the legacy tokens for the next attempt.
+    // Offline: keep the legacy tokens for another explicit attempt.
   }
   return false;
 }
@@ -256,6 +262,8 @@ export async function exchangeSpotifyCode(code: string): Promise<void> {
     body: JSON.stringify({ code, redirect_uri: spotifyRedirectUri() }),
   });
   if (!res.ok) throw new Error("Spotify token exchange failed");
+  // A fresh server connection supersedes any old browser-only one.
+  clearLegacySpotifyTokens();
 }
 
 /**
