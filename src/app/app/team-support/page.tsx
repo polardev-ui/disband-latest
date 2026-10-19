@@ -45,7 +45,7 @@ function StatusBadge({ status }: { status: string }) {
           : "bg-bg-tertiary text-text-muted ";
 
   return (
-    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${tone}`}>
+    <span className={`shrink-0 rounded-[3px] px-2.5 py-0.5 text-[11px] font-medium ${tone}`}>
       {status.replace("_", " ")}
     </span>
   );
@@ -215,16 +215,16 @@ export default function TeamSupportPage() {
   if (phase === "denied") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-primary px-6 text-center">
-        <div className="max-w-md rounded-md border border-divider bg-bg-secondary p-8 shadow-none">
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-text-muted">Access denied</p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-text-normal">Support staff only</h1>
+        <div className="max-w-md rounded-[3px] border border-divider bg-bg-secondary p-8 shadow-none">
+          <p className="font-mono text-[11px] uppercase tracking-[0.02em] text-text-muted">Access denied</p>
+          <h1 className="mt-3 text-2xl font-bold  text-text-normal">Support staff only</h1>
           <p className="mt-3 text-sm leading-6 text-text-muted">
             This account is signed in, but it is not on the Disband support staff list.
           </p>
           <button
             type="button"
             onClick={() => void logout()}
-            className="mt-6 rounded-md border border-divider bg-bg-tertiary px-4 py-2.5 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+            className="mt-6 rounded-[3px] border border-divider bg-bg-tertiary px-4 py-2.5 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
           >
             Log out
           </button>
@@ -235,30 +235,30 @@ export default function TeamSupportPage() {
 
   return (
     <div className="h-screen overflow-hidden bg-bg-primary text-text-normal">
-      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-bg-primary">
+      <header className="sticky top-0 z-20 border-b border-divider bg-bg-primary">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-4 px-4 sm:px-6">
           <div>
             <p className="text-xs text-text-muted">Staff tools</p>
-            <h1 className="text-[22px] font-extrabold tracking-tight">Team Support</h1>
+            <h1 className="text-[22px] font-bold ">Team Support</h1>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={() => void loadTickets()}
-              className="rounded-lg border border-divider bg-bg-secondary px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              className="rounded-[4px] border border-divider bg-bg-secondary px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
             >
               Refresh
             </button>
             <button
               type="button"
               onClick={() => void logout()}
-              className="rounded-lg border border-divider bg-bg-secondary px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              className="rounded-[4px] border border-divider bg-bg-secondary px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
             >
               Log out
             </button>
           </div>
         </div>
-        <div className="border-t border-divider bg-bg-secondary/70">
+        <div className="border-t border-divider bg-bg-secondary">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
             {([
               ["all", "All", counts.all],
@@ -269,7 +269,7 @@ export default function TeamSupportPage() {
                 key={id}
                 type="button"
                 onClick={() => setFilter(id)}
-                className={`rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                className={`rounded-[3px] px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
                   filter === id
                     ? "bg-brand px-4 text-white"
                     : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
@@ -284,11 +284,11 @@ export default function TeamSupportPage() {
       </header>
 
       <div className="mx-auto grid h-[calc(100vh-10.5rem)] max-w-7xl gap-4 p-4 sm:p-6 lg:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-divider bg-bg-secondary shadow-none">
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-divider bg-bg-secondary shadow-none">
           <div className="border-b border-divider px-5 py-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-text-muted">Requests</h2>
-              <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-text-muted">{visibleTickets.length}</span>
+              <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Requests</h2>
+              <span className="rounded-[3px] bg-bg-tertiary px-2.5 py-1 text-xs text-text-muted">{visibleTickets.length}</span>
             </div>
             <p className="mt-1 text-xs text-text-muted">Select a request to review, reply, and resolve.</p>
           </div>
@@ -309,9 +309,9 @@ export default function TeamSupportPage() {
                     key={item.id}
                     type="button"
                     onClick={() => setSelectedId(item.id)}
-                    className={`group w-full rounded-md border p-4 text-left transition-all ${
+                    className={`group w-full rounded-[3px] border p-4 text-left transition-colors ${
                       selected
-                        ? "border-brand/45 bg-brand/10 shadow-none"
+                        ? "border-brand/60 bg-brand/10 shadow-none"
                         : "border-transparent bg-bg-tertiary hover:border-divider hover:bg-bg-tertiary"
                     }`}
                   >
@@ -333,13 +333,13 @@ export default function TeamSupportPage() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 flex-col overflow-hidden rounded-md border border-divider bg-bg-secondary shadow-none">
+        <main className="flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-divider bg-bg-secondary shadow-none">
           {ticket ? (
             <>
               <header className="border-b border-divider px-5 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h2 className="truncate text-xl font-semibold tracking-tight">{ticket.subject}</h2>
+                    <h2 className="truncate text-xl font-semibold ">{ticket.subject}</h2>
                     <p className="mt-1 text-xs text-text-muted">
                       {ticket.email} · opened {formatTime(ticket.created_at)} · updated {formatTime(ticket.updated_at)}
                     </p>
@@ -348,7 +348,7 @@ export default function TeamSupportPage() {
                     type="button"
                     onClick={() => void resolveTicket()}
                     disabled={ticket.status === "closed" || replying}
-                    className="shrink-0 rounded-md border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium transition-colors hover:bg-interactive-hover disabled:opacity-50"
+                    className="shrink-0 rounded-[3px] border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium transition-colors hover:bg-interactive-hover disabled:opacity-50"
                   >
                     Mark resolved
                   </button>
@@ -362,11 +362,11 @@ export default function TeamSupportPage() {
                     return (
                       <article
                         key={message.id}
-                        className={`rounded-md border p-4 ${
+                        className={`rounded-[3px] border p-4 ${
                           human ? "border-brand/25 bg-brand/[0.09] ml-6 sm:ml-12" : "border-divider bg-bg-tertiary mr-6 sm:mr-12"
                         }`}
                       >
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-text-muted">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.02em] text-text-muted">
                           <strong className={human ? "text-brand" : "text-text-normal"}>
                             {human ? "Human support" : message.role === "tether" ? "Tether" : "User"}
                           </strong>
@@ -386,12 +386,12 @@ export default function TeamSupportPage() {
 
               <footer className="border-t border-divider bg-bg-secondary p-4">
                 {replyStatus && (
-                  <p className="mb-3 rounded-lg border border-divider bg-bg-tertiary px-3 py-2 text-xs text-text-muted">
+                  <p className="mb-3 rounded-[4px] border border-divider bg-bg-tertiary px-3 py-2 text-xs text-text-muted">
                     {replyStatus}
                   </p>
                 )}
                 {ticket.status === "closed" ? (
-                  <div className="rounded-md border border-status-online/20 bg-status-online/8 p-4 text-sm text-text-muted">
+                  <div className="rounded-[3px] border border-status-online/20 bg-status-online/8 p-4 text-sm text-text-muted">
                     This request is resolved and read-only. Use the conversation history above for follow-up context.
                   </div>
                 ) : (
@@ -402,13 +402,13 @@ export default function TeamSupportPage() {
                       rows={3}
                       maxLength={4000}
                       placeholder="Reply as human support…"
-                      className="min-h-[84px] flex-1 resize-y rounded-md border border-divider bg-bg-tertiary p-4 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-brand/50 focus:ring-2 focus:ring-brand/15"
+                      className="min-h-[84px] flex-1 resize-y rounded-[3px] border border-divider bg-bg-tertiary p-4 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc] "
                     />
                     <button
                       type="button"
                       onClick={() => void submitReply()}
                       disabled={replying || !reply.trim()}
-                      className="self-end rounded-md bg-brand px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                      className="self-end rounded-[3px] bg-brand px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                     >
                       {replying ? "Sending…" : "Reply"}
                     </button>

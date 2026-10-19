@@ -147,7 +147,7 @@ export function ProfilePreview({
         )}
 
         <div className="mt-4 border-t border-divider pt-3.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">About me</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">About me</p>
           <p className={`mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed ${bio.trim() ? "" : "text-text-muted"}`}>
             {bio.trim() || "Your bio will appear here."}
           </p>

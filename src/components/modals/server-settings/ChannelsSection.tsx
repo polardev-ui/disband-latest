@@ -110,7 +110,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
       ) : (
         groups.map((group) => (
           <section key={group.id ?? "none"} className="mb-6 last:mb-0">
-            <h3 className="mb-2 px-1 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-text-muted">{group.name}</h3>
+            <h3 className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">{group.name}</h3>
             <ul className="overflow-hidden rounded-lg bg-bg-secondary">
               {group.items.map((c) => {
                 const index = row++;
