@@ -1,5 +1,6 @@
 "use client";
 
+import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "./Tooltip";
 import {
@@ -523,11 +524,14 @@ export function ChannelList({
         const titleRow = (
           <>
             <span className="flex min-w-0 items-center gap-1.5">
-              {verified && (
-                <Tooltip label="Verified space" side="bottom">
-                  <IconVerified size={16} className="shrink-0 text-[#00a8fc]" />
-                </Tooltip>
-              )}
+              {(() => {
+                const kind = serverBadgeFor({ verified, catalystCount });
+                return kind ? (
+                  <Tooltip label={SERVER_BADGE_LABEL[kind]} side="bottom">
+                    <ServerBadge kind={kind} size={16} />
+                  </Tooltip>
+                ) : null;
+              })()}
               <span className={`truncate text-[16px] font-semibold leading-5 ${banner ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" : "text-header-primary"}`}>
                 {title}
               </span>
