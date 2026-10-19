@@ -7,6 +7,7 @@ import { IconVerified, IconPlus, IconCompass } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useLiveOnlineCount } from "@/hooks/useLiveOnlineCount";
 import type { Profile, Server, ServerFolder, ServerListState, ViewMode } from "@/lib/supabase/types";
 
 export interface DmRailUnread {
@@ -190,6 +191,10 @@ function ServerButton({
     const cached = serverCountCache.get(server.id);
     return cached && cached !== PENDING_COUNTS ? cached : null;
   });
+  // Online comes from live presence, not the stored status the counts RPC
+  // reads (that lags badly). It starts on first hover and then stays live.
+  const [hovered, setHovered] = useState(false);
+  const liveOnline = useLiveOnlineCount(server.id, hovered);
   const ensureCounts = () => {
     if (serverCountCache.has(server.id)) {
       const cached = serverCountCache.get(server.id);
@@ -222,7 +227,10 @@ function ServerButton({
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onMouseEnter={ensureCounts}
+      onMouseEnter={() => {
+        ensureCounts();
+        setHovered(true);
+      }}
       className="rail-item group relative flex w-full justify-center"
     >
       <RailPill state={active ? "active" : hasUnread ? "unread" : "none"} />
@@ -235,9 +243,13 @@ function ServerButton({
             <span>{server.name}</span>
             {counts && (
               <span className="text-xs font-medium">
-                <span className="text-text-muted">{counts.total} member{counts.total === 1 ? "" : "s"}</span>
-                <span className="text-text-muted"> · </span>
-                <span className="text-status-online">{counts.online} online</span>
+                <span className="text-text-muted">{counts.total.toLocaleString()} member{counts.total === 1 ? "" : "s"}</span>
+                {liveOnline !== null && (
+                  <>
+                    <span className="text-text-muted"> · </span>
+                    <span className="text-status-online">{liveOnline.toLocaleString()} online</span>
+                  </>
+                )}
               </span>
             )}
           </span>
