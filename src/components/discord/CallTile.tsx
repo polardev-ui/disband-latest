@@ -29,8 +29,10 @@ export function CallTile({
 
   // Tiles without an action render as plain containers: a focusable button
   // with cursor-default and no behavior is keyboard/screen-reader noise.
-  const tileClass = `group relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-bg-tertiary transition-shadow ${
-    speaking ? "ring-2 ring-status-online" : "ring-1 ring-divider"
+  // Camera-off tiles take the person's accent, darkened, the classic way.
+  const tint = profile && "accent_color" in profile ? profile.accent_color ?? null : null;
+  const tileClass = `group relative h-full min-h-0 w-full overflow-hidden rounded-lg transition-shadow duration-150 ${
+    speaking ? "shadow-[inset_0_0_0_2px_var(--status-online),inset_0_0_0_3px_#000]" : ""
   } ${onClick ? "cursor-pointer" : "cursor-default"}`;
 
   const content = (
@@ -47,16 +49,19 @@ export function CallTile({
           } ${self && kind === "camera" ? "-scale-x-100" : ""}`}
         />
       ) : (
-        <span className="flex h-full w-full items-center justify-center">
+        <span
+          className="flex h-full w-full items-center justify-center"
+          style={{ background: tint ? `color-mix(in srgb, ${tint} 55%, #1e1f22)` : "#2b2d31" }}
+        >
           <Avatar
             profile={profile ?? { display_name: label }}
             size="lg"
-            className="h-16 w-16 text-xl"
+            className={`!h-20 !w-20 !text-2xl transition-shadow ${speaking ? "shadow-[0_0_0_3px_var(--status-online)]" : ""}`}
           />
         </span>
       )}
 
-      <span className="pointer-events-none absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+      <span className="pointer-events-none absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-[4px] bg-black/60 px-1.5 py-0.5 text-[14px] font-medium leading-5 text-white opacity-0 transition-opacity group-hover:opacity-100">
         {muted && (
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.2" strokeLinecap="round" className="shrink-0 text-status-dnd">
@@ -67,7 +72,7 @@ export function CallTile({
         )}
         <span className="truncate">{label}</span>
         {kind === "screen" && (
-          <span className="shrink-0 rounded bg-status-online/25 px-1 text-[10px] font-bold uppercase tracking-wide text-status-online">
+          <span className="shrink-0 rounded-[4px] bg-status-dnd px-1 text-[10px] font-bold uppercase leading-[14px] text-white">
             Live
           </span>
         )}

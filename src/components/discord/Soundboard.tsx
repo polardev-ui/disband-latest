@@ -155,14 +155,14 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-all ${
+        className={`relative flex items-center justify-center rounded-full transition-colors ${
           compact
-            ? "bg-text-normal/10 text-text-normal hover:bg-text-normal/20 hover:scale-105"
-            : "bg-bg-tertiary text-text-normal hover:bg-interactive-hover"
+            ? `h-14 w-14 ${open ? "bg-white text-[#313338]" : "bg-[#2b2d31] text-white hover:bg-[#404249]"}`
+            : "h-9 w-9 bg-bg-tertiary text-text-normal hover:bg-interactive-hover"
         }`}
-        title="Open soundboard"
+        title="Soundboard"
       >
-        <IconMusic size={16} />
+        <IconMusic size={compact ? 24 : 16} />
         {sounds.length > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
             {sounds.length > 99 ? "99+" : sounds.length}
