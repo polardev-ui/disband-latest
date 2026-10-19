@@ -289,7 +289,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   // Connections tab: Spotify tokens live server-side (see music-presence
   // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
   const [spotifyConnected, setSpotifyConnected] = useState(false);
-  const [spotifyChecking, setSpotifyChecking] = useState(false);
+  const [spotifyChecking, setSpotifyChecking] = useState(true);
   const [spotifyPasteOpen, setSpotifyPasteOpen] = useState(false);
   const [spotifyPasteCode, setSpotifyPasteCode] = useState("");
   const [spotifyPasteBusy, setSpotifyPasteBusy] = useState(false);
@@ -1631,24 +1631,24 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       stacked
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        {spotifyConnected ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleSpotifyDisconnect()}
-                            className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
-                          >
-                            Disconnect
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={spotifyChecking}
-                            onClick={handleSpotifyConnect}
-                            className="rounded-[3px] bg-brand px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
-                          >
-                            Connect Spotify
-                          </button>
-                        )}
+                        {!spotifyChecking &&
+                          (spotifyConnected ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleSpotifyDisconnect()}
+                              className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+                            >
+                              Disconnect
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleSpotifyConnect}
+                              className="rounded-[3px] bg-brand px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
+                            >
+                              Connect Spotify
+                            </button>
+                          ))}
                         {spotifyNote && <p className="text-[13px] text-text-muted">{spotifyNote}</p>}
                         {spotifyPasteOpen && !spotifyConnected && (
                           <div className="mt-2 w-full space-y-2">
