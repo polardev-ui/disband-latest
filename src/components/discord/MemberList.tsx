@@ -20,6 +20,10 @@ interface MemberListProps {
   members: (ServerMember & { profile: Profile })[];
   roles: ServerRole[];
   loading?: boolean;
+  /** Another page of members exists beyond what is loaded. */
+  hasMore?: boolean;
+  /** Ask for the next member page (called as the end of the list nears). */
+  onLoadMore?: () => void;
   onMemberClick?: (member: ServerMember & { profile: Profile }) => void;
   onMemberContext?: (member: ServerMember & { profile: Profile }, x: number, y: number) => void;
 }
@@ -65,7 +69,7 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
-export function MemberList({ members, roles, loading, onMemberClick, onMemberContext }: MemberListProps) {
+export function MemberList({ members, roles, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
   const { presenceMap, listeningMap, serverTimeouts } = useApp();
 
   const timedOutIds = useMemo(() => {
@@ -136,8 +140,15 @@ export function MemberList({ members, roles, loading, onMemberClick, onMemberCon
 
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
-    if (el) setScrollTop(el.scrollTop);
-  }, []);
+    if (!el) return;
+    setScrollTop(el.scrollTop);
+    // Only the first member page arrives with the space; the rest stream in
+    // as the list is scrolled. Ask for the next page once its end comes into
+    // view — extra calls while one is in flight are ignored upstream.
+    if (hasMore && onLoadMore && el.scrollHeight - el.scrollTop - el.clientHeight < 1200) {
+      onLoadMore();
+    }
+  }, [hasMore, onLoadMore]);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -249,6 +260,16 @@ export function MemberList({ members, roles, loading, onMemberClick, onMemberCon
           ),
         )}
         <div style={{ height: padBottom }} aria-hidden />
+        {hasMore && (
+          <div className="flex flex-col gap-1 pt-1" aria-hidden>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2.5 rounded-[10px] px-2 py-1.5">
+                <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
+                <span className="skeleton-glimmer h-3 rounded" style={{ width: `${58 + ((i * 23) % 30)}%` }} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </aside>
   );

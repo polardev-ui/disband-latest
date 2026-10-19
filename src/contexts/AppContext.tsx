@@ -145,6 +145,9 @@ interface AppContextValue {
   dmLoading: boolean;
   groupLoading: boolean;
   membersLoading: boolean;
+  membersHasMore: boolean;
+  loadMoreMembers: () => Promise<void>;
+  loadAllMembers: () => Promise<void>;
   friendships: Friendship[];
   friends: Profile[];
   pendingIncoming: Friendship[];
@@ -428,6 +431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dmLoading, setDmLoading] = useState(false);
   const [groupLoading, setGroupLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [membersHasMore, setMembersHasMore] = useState(false);
   // DM rows the user explicitly closed (by friend id). Persisted per user;
   // a new incoming message or opening the DM again brings the row back.
   const [closedDmFriendIds, setClosedDmFriendIds] = useState<string[]>([]);
@@ -508,6 +512,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const autoAwayRef = useRef(false);
   const inCallRef = useRef(false);
   const signingOutRef = useRef(false);
+  // Member-list paging: opening a space loads only the first 1,000-row page
+  // of members (roles and profiles embedded); the rest streams in when the
+  // list is scrolled to its end. Five more pages is ~6 MB of JSON on a big
+  // space — that must never sit between a click and the channel rail.
+  const memberPageRef = useRef(1);
+  const membersHasMoreRef = useRef(false);
+  const loadingMoreMembersRef = useRef(false);
+  const memberFetchBlockedUntilRef = useRef(0);
+  const fullMembersRef = useRef<(ServerMember & { profile: Profile })[]>([]);
+  const memberRoleIdsRef = useRef<Map<string, string[]>>(new Map());
+  const assignableRoleIdsRef = useRef<Set<string>>(new Set());
+  const serverDetailsCacheRef = useRef<{ categories: ChannelCategory[]; channels: Channel[]; roles: ServerRole[] } | null>(null);
+  // A conversation switch can trigger the same load twice (the direct call in
+  // the select handler and the chat effect); share the first in-flight fetch
+  // instead of paying for the same request twice.
+  const inflightChannelLoadsRef = useRef(new Map<string, Promise<void>>());
+  const inflightDmLoadsRef = useRef(new Map<string, Promise<void>>());
+  const inflightGroupLoadsRef = useRef(new Map<string, Promise<void>>());
   sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
@@ -1201,132 +1223,251 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshCatalysts(ids, uid);
   }, [refreshCatalysts]);
 
-  const loadServerDetails = useCallback(async (serverId: string) => {
+  const writeMembersCache = useCallback((serverId: string) => {
+    const details = serverDetailsCacheRef.current;
+    if (!details) return;
+    const members = fullMembersRef.current;
+    setCache(
+      `server-details:${serverId}`,
+      {
+        categories: details.categories,
+        channels: details.channels,
+        members,
+        roles: details.roles,
+        membersHasMore: membersHasMoreRef.current,
+      },
+      undefined,
+      // Multi-megabyte rosters stay memory-only: base64-encoding them into
+      // localStorage on every write janks the main thread and usually blows
+      // the quota anyway.
+      { persist: members.length <= 300 },
+    );
+  }, []);
+
+  const loadServerDetails = useCallback(async (serverId: string, opts?: { refreshMembers?: boolean }) => {
     const cacheKey = `server-details:${serverId}`;
-    const cached = getCached<{ categories: ChannelCategory[]; channels: Channel[]; members: (ServerMember & { profile: Profile })[]; roles: ServerRole[] }>(cacheKey);
+    // A cached roster is served on revisits (within the TTL), but membership
+    // mutations — a kick, a ban, a role change, a join/leave event — pass
+    // refreshMembers so the roster they just changed is not read back stale.
+    const cached = opts?.refreshMembers
+      ? null
+      : getCached<{
+          categories: ChannelCategory[];
+          channels: Channel[];
+          members: (ServerMember & { profile: Profile })[];
+          roles: ServerRole[];
+          membersHasMore?: boolean;
+        }>(cacheKey);
     if (cached) {
       setCategories(cached.categories);
       setChannels(cached.channels);
-      setMembers(cached.members);
+      if (cached.members.length > 0) setMembers(cached.members);
       setServerRoles(cached.roles);
     }
-    // No cache (or a fresh switch): the member list shows skeletons, not "0".
-    if (!cached) setMembersLoading(true);
+    // No cache (or one without members yet): the member list shows skeletons,
+    // not "0".
+    if (!cached || cached.members.length === 0) setMembersLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: cats }, { data: chs }, { data: memRows }, { data: roles }, { data: roleRows }] = await Promise.all([
+
+    // Fast path — only what the channel rail needs. Members, roles and
+    // permissions used to be awaited here too, and on a large space their
+    // fetch is five 1,000-row pages (~6 MB of JSON with profiles embedded):
+    // the first message could not start loading until all of it had arrived,
+    // which is what made opening a space take seconds. Everything else now
+    // streams in behind the first paint.
+    const [{ data: cats }, { data: chs }] = await Promise.all([
       supabase.from("channel_categories").select("*").eq("server_id", serverId).order("position"),
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
-      supabase.rpc("get_server_members", { p_server_id: serverId, p_page: 1, p_page_size: 1000 }),
-      supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
-      supabase.from("member_roles").select("server_id, user_id, role_id").eq("server_id", serverId),
     ]);
-    const roleIdsByMember = new Map<string, string[]>();
-    for (const row of (roleRows ?? []) as { user_id: string; role_id: string }[]) {
-      const list = roleIdsByMember.get(row.user_id) ?? [];
-      list.push(row.role_id);
-      roleIdsByMember.set(row.user_id, list);
-    }
     const channelRows = (chs as Channel[]) ?? [];
-    const serverRoles = (roles as ServerRole[]) ?? [];
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
-    setServerRoles(serverRoles);
-    void (async () => {
-      const now = new Date().toISOString();
-      const [{ data: timeoutRows }, { data: banRows }] = await Promise.all([
-        supabase.from("server_timeouts").select("*").eq("server_id", serverId).gt("expires_at", now),
-        supabase.from("server_bans").select("server_id, user_id, banned_by, reason, created_at").eq("server_id", serverId),
-      ]);
-      setServerTimeouts((timeoutRows as ServerTimeout[]) ?? []);
-      const bans = (banRows ?? []) as Omit<ServerBan, "profile">[];
-      if (!bans.length) {
-        setServerBans([]);
-        return;
-      }
-      const profiles = await fetchProfilesByIds(supabase, bans.map((b) => b.user_id));
-      setServerBans(bans.map((b) => ({ ...b, profile: profiles.get(b.user_id) })));
-    })();
-
-    // Fetch all pages of members (PostgREST caps at db-max-rows, default 1000)
-    const allMemRows = [...(memRows as (ServerMember & { profile: Profile })[] ?? [])];
-    let page = 2;
-    while (true) {
-      const { data: pageRows } = await supabase.rpc("get_server_members", { p_server_id: serverId, p_page: page, p_page_size: 1000 });
-      if (!pageRows || (pageRows as any[]).length === 0) break;
-      allMemRows.push(...(pageRows as (ServerMember & { profile: Profile })[]));
-      if ((pageRows as any[]).length < 1000) break;
-      page++;
-    }
-
-    const assignableRoleIds = new Set(
-      serverRoles.filter((r) => !r.is_default).map((r) => r.id),
-    );
-    const sanitizeRoleIds = (ids: string[]) =>
-      ids.filter((id) => assignableRoleIds.has(id));
-    const memberRows = ((allMemRows as (ServerMember & { profile: Profile })[] | null) ?? []).filter(
-      (m) => m.profile != null,
-    );
-    if (memberRows.length === 0) {
-      setMembers([]);
-      setMembersLoading(false);
-      return channelRows;
-    }
-    const enrichedMembers = memberRows.map((m) => ({
-      ...m,
-      role_ids: sanitizeRoleIds(roleIdsByMember.get(m.user_id) ?? []),
-    }));
-    setMembers(enrichedMembers);
-    const uid = sessionRef.current?.user?.id ?? null;
-    if (uid) {
-      const { data: perms } = await supabase.rpc("my_server_permissions", { p_server_id: serverId });
-      if (perms && typeof perms === "object") {
-        const p = perms as Record<string, unknown>;
-        setServerPermissions({
-          kick: !!p.kick,
-          ban: !!p.ban,
-          manage_roles: !!p.manage_roles,
-          manage_server: !!p.manage_server,
-          manage_channels: !!p.manage_channels,
-          manage_messages: !!p.manage_messages,
-          manage_emojis: !!p.manage_emojis,
-          mention_everyone: !!p.mention_everyone,
-          send_messages: !!p.send_messages,
-          add_reactions: !!p.add_reactions,
-          attach_files: !!p.attach_files,
-          timeout_members: !!p.timeout_members,
-          pin_messages: !!p.pin_messages,
-          view_audit_log: !!p.view_audit_log,
-          create_invites: !!p.create_invites,
-        });
-      }
-      const { data: effects } = await supabase.rpc("my_channel_effects", { p_server_id: serverId });
-      if (Array.isArray(effects)) {
-        const map: Record<string, ChannelEffects> = {};
-        for (const row of effects as (ChannelEffects & { channel_id: string })[]) {
-          map[row.channel_id] = {
-            can_view: !!row.can_view,
-            can_post: !!row.can_post,
-            can_react: !!row.can_react,
-            can_attach: !!row.can_attach,
-          };
-        }
-        setChannelEffects(map);
-      }
-    }
-    const memForCache = memberRows.length > 0
-      ? enrichedMembers
-      : [];
-    setCache(cacheKey, {
+    serverDetailsCacheRef.current = {
       categories: (cats as ChannelCategory[]) ?? [],
       channels: channelRows,
-      members: memForCache,
-      roles: (roles as ServerRole[]) ?? [],
-    });
-    setMembersLoading(false);
-    return channelRows;
-  }, []);
+      roles: cached?.roles ?? [],
+    };
 
-  const loadMessages = useCallback(async (channelId: string) => {
+    void (async () => {
+      try {
+        const uid = sessionRef.current?.user?.id ?? null;
+        const needsMembers = !cached || cached.members.length === 0;
+        const [rolesRes, roleRowsRes, permsRes, effectsRes, memberPage1] = await Promise.all([
+          supabase.from("server_roles").select("*").eq("server_id", serverId).order("position"),
+          supabase.from("member_roles").select("server_id, user_id, role_id").eq("server_id", serverId),
+          uid
+            ? supabase.rpc("my_server_permissions", { p_server_id: serverId })
+            : Promise.resolve({ data: null }),
+          uid
+            ? supabase.rpc("my_channel_effects", { p_server_id: serverId })
+            : Promise.resolve({ data: null }),
+          // Revisits skip the member refetch entirely: the roster changes
+          // rarely, and probing for it costs a megabyte per page.
+          needsMembers
+            ? supabase.rpc("get_server_members", { p_server_id: serverId, p_page: 1, p_page_size: 1000 })
+            : Promise.resolve({ data: null }),
+        ]);
+        if (activeServerRef.current !== serverId) return;
+
+        const serverRoles = (rolesRes.data as ServerRole[]) ?? [];
+        setServerRoles(serverRoles);
+        const roleIdsByMember = new Map<string, string[]>();
+        for (const row of (roleRowsRes.data ?? []) as { user_id: string; role_id: string }[]) {
+          const list = roleIdsByMember.get(row.user_id) ?? [];
+          list.push(row.role_id);
+          roleIdsByMember.set(row.user_id, list);
+        }
+        memberRoleIdsRef.current = roleIdsByMember;
+        const assignableRoleIds = new Set(
+          serverRoles.filter((r) => !r.is_default).map((r) => r.id),
+        );
+        assignableRoleIdsRef.current = assignableRoleIds;
+        serverDetailsCacheRef.current = {
+          categories: serverDetailsCacheRef.current?.categories ?? [],
+          channels: serverDetailsCacheRef.current?.channels ?? [],
+          roles: serverRoles,
+        };
+
+        if (permsRes.data && typeof permsRes.data === "object") {
+          const p = permsRes.data as Record<string, unknown>;
+          setServerPermissions({
+            kick: !!p.kick,
+            ban: !!p.ban,
+            manage_roles: !!p.manage_roles,
+            manage_server: !!p.manage_server,
+            manage_channels: !!p.manage_channels,
+            manage_messages: !!p.manage_messages,
+            manage_emojis: !!p.manage_emojis,
+            mention_everyone: !!p.mention_everyone,
+            send_messages: !!p.send_messages,
+            add_reactions: !!p.add_reactions,
+            attach_files: !!p.attach_files,
+            timeout_members: !!p.timeout_members,
+            pin_messages: !!p.pin_messages,
+            view_audit_log: !!p.view_audit_log,
+            create_invites: !!p.create_invites,
+          });
+        }
+        if (Array.isArray(effectsRes.data)) {
+          const map: Record<string, ChannelEffects> = {};
+          for (const row of effectsRes.data as (ChannelEffects & { channel_id: string })[]) {
+            map[row.channel_id] = {
+              can_view: !!row.can_view,
+              can_post: !!row.can_post,
+              can_react: !!row.can_react,
+              can_attach: !!row.can_attach,
+            };
+          }
+          setChannelEffects(map);
+        }
+
+        if (needsMembers) {
+          const pageRows = (memberPage1.data ?? []) as (ServerMember & { profile: Profile })[];
+          const enriched = pageRows
+            .filter((m) => m.profile != null)
+            .map((m) => ({
+              ...m,
+              role_ids: (roleIdsByMember.get(m.user_id) ?? []).filter((id) => assignableRoleIds.has(id)),
+            }));
+          fullMembersRef.current = enriched;
+          memberPageRef.current = 1;
+          const more = pageRows.length === 1000;
+          membersHasMoreRef.current = more;
+          setMembersHasMore(more);
+          setMembers(enriched);
+          writeMembersCache(serverId);
+        } else {
+          fullMembersRef.current = cached!.members;
+          memberPageRef.current = Math.max(1, Math.ceil(cached!.members.length / 1000));
+          const more = cached!.membersHasMore ?? false;
+          membersHasMoreRef.current = more;
+          setMembersHasMore(more);
+        }
+        setMembersLoading(false);
+
+        const now = new Date().toISOString();
+        const [{ data: timeoutRows }, { data: banRows }] = await Promise.all([
+          supabase.from("server_timeouts").select("*").eq("server_id", serverId).gt("expires_at", now),
+          supabase.from("server_bans").select("server_id, user_id, banned_by, reason, created_at").eq("server_id", serverId),
+        ]);
+        if (activeServerRef.current !== serverId) return;
+        setServerTimeouts((timeoutRows as ServerTimeout[]) ?? []);
+        const bans = (banRows ?? []) as Omit<ServerBan, "profile">[];
+        if (!bans.length) {
+          setServerBans([]);
+          return;
+        }
+        const profiles = await fetchProfilesByIds(supabase, bans.map((b) => b.user_id));
+        if (activeServerRef.current !== serverId) return;
+        setServerBans(bans.map((b) => ({ ...b, profile: profiles.get(b.user_id) })));
+      } catch {
+        if (activeServerRef.current === serverId) setMembersLoading(false);
+      }
+    })();
+
+    return channelRows;
+  }, [writeMembersCache]);
+
+  // The next member page, requested when the member list is scrolled to its
+  // end. A no-op unless there is another page and nothing is in flight.
+  const loadMoreMembers = useCallback(async () => {
+    const serverId = activeServerRef.current;
+    if (!serverId || loadingMoreMembersRef.current || !membersHasMoreRef.current) return;
+    if (Date.now() < memberFetchBlockedUntilRef.current) return;
+    loadingMoreMembersRef.current = true;
+    try {
+      const supabase = getSupabaseClient();
+      const nextPage = memberPageRef.current + 1;
+      const { data, error } = await supabase.rpc("get_server_members", {
+        p_server_id: serverId,
+        p_page: nextPage,
+        p_page_size: 1000,
+      });
+      if (error) throw error;
+      if (activeServerRef.current !== serverId) return;
+      const rows = (data ?? []) as (ServerMember & { profile: Profile })[];
+      memberPageRef.current = nextPage;
+      const more = rows.length === 1000;
+      const roleIdsByMember = memberRoleIdsRef.current;
+      const assignableRoleIds = assignableRoleIdsRef.current;
+      const seen = new Set(fullMembersRef.current.map((m) => m.user_id));
+      const additions = rows
+        .filter((m) => m.profile != null && !seen.has(m.user_id))
+        .map((m) => ({
+          ...m,
+          role_ids: (roleIdsByMember.get(m.user_id) ?? []).filter((id) => assignableRoleIds.has(id)),
+        }));
+      if (additions.length) {
+        const next = [...fullMembersRef.current, ...additions];
+        fullMembersRef.current = next;
+        setMembers(next);
+      }
+      membersHasMoreRef.current = more;
+      setMembersHasMore(more);
+      writeMembersCache(serverId);
+    } catch {
+      // Keep the "more" flag; retry after a cooldown so a failing endpoint
+      // cannot loop once per scroll tick.
+      memberFetchBlockedUntilRef.current = Date.now() + 5000;
+    } finally {
+      loadingMoreMembersRef.current = false;
+    }
+  }, [writeMembersCache]);
+
+  // Settings surfaces that work across the whole roster (member management,
+  // role manager) need every page, unlike the member rail. They call this on
+  // open; it pages through the rest and stops early if a page fails.
+  const loadAllMembers = useCallback(async () => {
+    let guard = 0;
+    while (membersHasMoreRef.current && guard < 25) {
+      const before = fullMembersRef.current.length;
+      await loadMoreMembers();
+      if (fullMembersRef.current.length === before) break;
+      guard += 1;
+    }
+  }, [loadMoreMembers]);
+
+  const fetchChannelMessages = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
     // A failed fetch keeps whatever is on screen: wiping on error (or
     // replacing with a stale snapshot) is what blanked conversations until
@@ -1355,6 +1496,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMessagesLoading(false);
     }
   }, []);
+
+  // A channel switch can call this twice (the select handler and the chat
+  // effect); share the first in-flight fetch instead of paying twice.
+  const loadMessages = useCallback(async (channelId: string) => {
+    const inflight = inflightChannelLoadsRef.current.get(channelId);
+    if (inflight) return inflight;
+    const run = fetchChannelMessages(channelId);
+    inflightChannelLoadsRef.current.set(channelId, run);
+    try {
+      await run;
+    } finally {
+      if (inflightChannelLoadsRef.current.get(channelId) === run) {
+        inflightChannelLoadsRef.current.delete(channelId);
+      }
+    }
+  }, [fetchChannelMessages]);
 
   const loadMoreChannelMessages = useCallback(async () => {
     if (!activeChannelId || !channelHasMore || messages.length === 0) return;
@@ -1663,7 +1820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotesHasMore(hasMore);
   }, [userId, notesHasMore, notes]);
 
-  const loadDmMessages = useCallback(async (threadId: string) => {
+  const fetchDmMessages = useCallback(async (threadId: string) => {
     const supabase = getSupabaseClient();
     try {
       const { data } = await supabase
@@ -1687,6 +1844,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDmLoading(false);
     }
   }, []);
+
+  // A thread switch can call this twice (the select handler and the chat
+  // effect); share the first in-flight fetch instead of paying twice.
+  const loadDmMessages = useCallback(async (threadId: string) => {
+    const inflight = inflightDmLoadsRef.current.get(threadId);
+    if (inflight) return inflight;
+    const run = fetchDmMessages(threadId);
+    inflightDmLoadsRef.current.set(threadId, run);
+    try {
+      await run;
+    } finally {
+      if (inflightDmLoadsRef.current.get(threadId) === run) {
+        inflightDmLoadsRef.current.delete(threadId);
+      }
+    }
+  }, [fetchDmMessages]);
 
   const loadMoreDmMessages = useCallback(async () => {
     if (!activeDmThreadId || !dmHasMore || dmMessages.length === 0) return;
@@ -1757,7 +1930,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadGroupChats(userId);
   }, [userId, loadGroupChats]);
 
-  const loadGroupMessages = useCallback(async (groupId: string) => {
+  const fetchGroupMessages = useCallback(async (groupId: string) => {
     const supabase = getSupabaseClient();
     try {
       const { data } = await supabase
@@ -1781,6 +1954,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setGroupLoading(false);
     }
   }, []);
+
+  // A group switch can call this twice (the select handler and the chat
+  // effect); share the first in-flight fetch instead of paying twice.
+  const loadGroupMessages = useCallback(async (groupId: string) => {
+    const inflight = inflightGroupLoadsRef.current.get(groupId);
+    if (inflight) return inflight;
+    const run = fetchGroupMessages(groupId);
+    inflightGroupLoadsRef.current.set(groupId, run);
+    try {
+      await run;
+    } finally {
+      if (inflightGroupLoadsRef.current.get(groupId) === run) {
+        inflightGroupLoadsRef.current.delete(groupId);
+      }
+    }
+  }, [fetchGroupMessages]);
 
   const loadMoreGroupMessages = useCallback(async () => {
     if (!activeGroupChatId || !groupHasMore || groupMessages.length === 0) return;
@@ -1874,10 +2063,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await seedUnread(userId, threads);
 
     // Phase 2 — the open conversation and server details stream in after.
-    if (activeServerId) await loadServerDetails(activeServerId);
-    if (activeChannelId) await loadMessages(activeChannelId);
-    if (activeDmThreadId) await loadDmMessages(activeDmThreadId);
-    if (activeGroupChatId) await loadGroupMessages(activeGroupChatId);
+    // These are independent lookups, so they run together instead of stacking
+    // their round trips one behind the other.
+    await Promise.all([
+      activeServerId ? loadServerDetails(activeServerId) : Promise.resolve(),
+      activeChannelId ? loadMessages(activeChannelId) : Promise.resolve(),
+      activeDmThreadId ? loadDmMessages(activeDmThreadId) : Promise.resolve(),
+      activeGroupChatId ? loadGroupMessages(activeGroupChatId) : Promise.resolve(),
+    ]);
   }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerOrganization, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages, seedUnread]);
 
   useEffect(() => {
@@ -2636,7 +2829,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServerId}` },
-        () => void loadServerDetails(activeServerId),
+        // A join, leave or member update makes the cached roster stale; the
+        // refresh re-reads the first member page (the rest page in lazily).
+        () => void loadServerDetails(activeServerId, { refreshMembers: true }),
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
@@ -3919,7 +4114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_user_id: targetUserId,
     });
     if (error) return error.message;
-    await loadServerDetails(activeServerId);
+    await loadServerDetails(activeServerId, { refreshMembers: true });
     return null;
   }, [activeServerId, loadServerDetails]);
 
@@ -3931,7 +4126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_reason: reason ?? null,
     });
     if (error) return error.message;
-    await loadServerDetails(activeServerId);
+    await loadServerDetails(activeServerId, { refreshMembers: true });
     return null;
   }, [activeServerId, loadServerDetails]);
 
@@ -4160,7 +4355,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_role_ids: roleIds,
     });
     if (error) return error.message;
-    await loadServerDetails(activeServerId);
+    // The roster's role chips come from the member page, so refresh it too.
+    await loadServerDetails(activeServerId, { refreshMembers: true });
     return null;
   }, [activeServerId, loadServerDetails]);
 
@@ -5273,6 +5469,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dmLoading,
     groupLoading,
     membersLoading,
+    membersHasMore,
+    loadMoreMembers,
+    loadAllMembers,
     friendships,
     friends,
     pendingIncoming,

@@ -2070,6 +2070,8 @@ export function DiscordApp() {
           members={app.members}
           roles={app.serverRoles}
           loading={app.membersLoading}
+          hasMore={app.membersHasMore}
+          onLoadMore={() => void app.loadMoreMembers()}
           onMemberClick={(m) => openProfile(m.profile)}
           onMemberContext={handleMemberContext}
         />

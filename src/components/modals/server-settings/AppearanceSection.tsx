@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { safeImageUrl } from "@/lib/safe-url";
 import { serverInitials } from "@/lib/utils";
 import { IconTrash, IconUpload } from "@/components/icons";
@@ -16,6 +17,26 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
   const { upload } = useMediaUpload();
   const [busy, setBusy] = useState<"icon" | "banner" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The roster loads a page at a time, so its length undercounts on big
+  // spaces; ask the server for the real total for the invite card.
+  const [memberCount, setMemberCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void getSupabaseClient()
+      .rpc("get_server_member_counts", { p_server_id: server.id })
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!live) return;
+        const row = data as { total?: number | string } | null;
+        if (row && row.total != null) setMemberCount(Number(row.total));
+      });
+    return () => {
+      live = false;
+    };
+  }, [server.id]);
+
+  const shownCount = memberCount ?? members.length;
 
   const icon = safeImageUrl(server.icon_url);
   const banner = safeImageUrl(server.banner_url);
@@ -71,7 +92,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
                 <p className="truncate text-[15px] font-semibold text-text-normal">{server.name}</p>
                 <p className="text-[12px] text-text-muted">
                   <span className="mr-1 inline-block h-2 w-2 rounded-full bg-status-online align-middle" />
-                  {members.length} {members.length === 1 ? "member" : "members"}
+                  {shownCount} {shownCount === 1 ? "member" : "members"}
                 </p>
               </div>
               <span className="ml-auto rounded-[8px] bg-status-online px-3 py-1.5 text-[12.5px] font-semibold text-white">Join</span>

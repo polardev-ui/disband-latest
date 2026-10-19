@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { RolePicker } from "@/components/ui/RolePicker";
@@ -15,11 +15,17 @@ import type { SectionProps } from "./types";
 type Pending = { kind: "kick" | "ban"; userId: string; name: string } | null;
 
 export function MembersSection({ isOwner }: SectionProps) {
-  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, user } = useApp();
+  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, loadAllMembers, user } = useApp();
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+
+  // The member rail loads one page at a time; moderating the whole space
+  // (search, role assignment, kicks) needs every page.
+  useEffect(() => {
+    void loadAllMembers();
+  }, [loadAllMembers]);
 
   const canKick = isOwner || serverPermissions.kick;
   const canBan = isOwner || serverPermissions.ban;

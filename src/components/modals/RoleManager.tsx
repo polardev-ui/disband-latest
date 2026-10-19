@@ -67,7 +67,7 @@ const ICON_TYPES = "image/png,image/webp,image/gif,image/jpeg";
 type Tab = "display" | "permissions";
 
 export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
-  const { serverRoles, members, createRole, updateRole, deleteRole, moveRole, catalystCounts, activeServer } = useApp();
+  const { serverRoles, members, createRole, updateRole, deleteRole, moveRole, catalystCounts, activeServer, loadAllMembers } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("display");
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +94,12 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
     }
     knownIds.current = new Set(serverRoles.map((r) => r.id));
   }, [serverRoles]);
+
+  // Per-role member counts span the whole roster, which the member rail loads
+  // one page at a time; page in the rest while this panel is open.
+  useEffect(() => {
+    void loadAllMembers();
+  }, [loadAllMembers]);
 
   const memberCount = (role: ServerRole) =>
     role.is_default ? members.length : members.filter((m) => (m.role_ids?.length ? m.role_ids.includes(role.id) : m.role_id === role.id)).length;
