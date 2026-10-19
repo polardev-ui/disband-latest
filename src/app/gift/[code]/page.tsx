@@ -10,7 +10,7 @@ export default function GiftPage({ params }: { params: Promise<{ code: string }>
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12">
-      <div className="w-full max-w-[420px]">
+      <div className="w-full max-w-[650px]">
         <div className="mb-7 flex flex-col items-center text-center">
           <Logo adaptive size={44} className="h-11 w-11" priority />
           <h1 className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-text-normal">
