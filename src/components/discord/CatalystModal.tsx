@@ -165,21 +165,21 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
   if (!mounted || !server) return null;
 
   return (
-    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim p-4`} onClick={onClose}>
+    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4`} onClick={onClose}>
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-lg bg-overlay-panel shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
         role="dialog"
         aria-modal="true"
         aria-label="Server catalysts"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-1">
-          <h2 className="text-lg font-bold">Space Catalysts</h2>
+          <h2 className="text-[20px] font-semibold text-header-primary">Space Catalysts</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+            className="rounded-[3px] p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={18} />
           </button>
@@ -198,7 +198,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
           </p>
           {next && (
             <div className="mt-3">
-              <div className="h-1.5 overflow-hidden rounded-full bg-bg-accent">
+              <div className="h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
                 <div
                   className="h-full rounded-full bg-brand transition-[width]"
                   style={{ width: `${Math.round(progress * 100)}%` }}
@@ -212,7 +212,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
         </div>
 
         <div className="px-5 pt-4">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+          <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-text-muted">
             Perks at every level
           </p>
           <div className="space-y-2">
@@ -221,11 +221,11 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
               return (
                 <div
                   key={l.level}
-                  className={`rounded-lg border p-3 ${
-                    unlocked ? "border-status-online/25 bg-status-online/[0.04]" : "border-divider bg-text-normal/5"
+                  className={`rounded-[4px] border p-3 ${
+                    unlocked ? "border-transparent bg-bg-secondary" : "border-transparent bg-bg-secondary"
                   }`}
                 >
-                  <p className="mb-1.5 text-[13px] font-bold">
+                  <p className="mb-1.5 text-[14px] font-bold">
                     {l.name}
                     <span className="ml-1.5 font-normal text-text-muted">
                       · {l.min} {l.min === 1 ? "catalyst" : "catalysts"}
@@ -234,7 +234,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                   {l.perks.map((p) => (
                     <div key={p} className="flex items-start gap-2">
                       <Check locked={!unlocked} />
-                      <span className={`text-[13px] ${unlocked ? "" : "text-text-muted"}`}>{p}</span>
+                      <span className={`text-[14px] ${unlocked ? "" : "text-text-muted"}`}>{p}</span>
                     </div>
                   ))}
                 </div>
@@ -243,25 +243,25 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
           </div>
         </div>
 
-        <div className="mt-4 border-t border-divider px-5 py-4">
+        <div className="mt-4 border-t border-bg-tertiary px-5 py-4">
           <p className="text-sm font-bold">
             Monthly credits
           </p>
-          <p className="mt-0.5 text-[13px] text-text-muted">
+          <p className="mt-0.5 text-[14px] text-text-muted">
             {grant > 0 ? (
               <>Put a free monthly Catalyst on <span className="font-semibold text-text-normal">{server.name}</span> — {balance} of {grant} left</>
             ) : (
               <>Paid plans include free Catalysts every month — Aero gets {MONTHLY_GRANT}, Lite gets {LITE_MONTHLY_GRANT}.</>
             )}
           </p>
-          {error && <p className="mt-2 text-[13px] text-red-400">{error}</p>}
+          {error && <p className="mt-2 text-[14px] text-status-dnd">{error}</p>}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
               disabled={busy || balance <= 0}
               onClick={() => void doAllocate()}
               title={grant === 0 ? "A paid plan includes monthly credits" : balance <= 0 ? "No credits left this month" : "Spend a monthly credit"}
-              className="flex-1 rounded-lg bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-1 rounded-[3px] bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {busy ? "Working…" : "Boost this space"}
             </button>
@@ -270,7 +270,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                 type="button"
                 disabled={busy}
                 onClick={() => void doWithdraw()}
-                className="rounded-lg border border-divider px-3 py-2 text-sm text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+                className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
               >
                 Withdraw
               </button>
@@ -278,9 +278,9 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
           </div>
         </div>
 
-        <div className="border-t border-divider px-5 py-4">
+        <div className="bg-bg-secondary px-5 py-4">
           <p className="text-sm font-bold">Buy Catalysts</p>
-          <p className="mt-0.5 text-[13px] text-text-muted">
+          <p className="mt-0.5 text-[14px] text-text-muted">
             One-time purchase, never expire · {formatCents(unitCents)} each
           </p>
             {buySecret ? (
@@ -293,9 +293,9 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
             </div>
           ) : (
             <>
-              {buyError && <p className="mt-2 text-[13px] text-red-400">{buyError}</p>}
+              {buyError && <p className="mt-2 text-[14px] text-status-dnd">{buyError}</p>}
               <div className="mt-3 flex items-center gap-2">
-                <div className="flex items-center rounded-lg border border-divider">
+                <div className="flex items-center rounded-[3px] bg-bg-tertiary">
                   <button
                     type="button"
                     aria-label="Fewer"
@@ -318,7 +318,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                   type="button"
                   disabled={buying}
                   onClick={() => void startBuy()}
-                  className="flex-1 rounded-lg bg-[#fee75c] py-2 text-sm font-bold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="h-[38px] flex-1 rounded-[3px] bg-brand py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {buying ? "Starting…" : `Buy ${qty} · ${formatCents(unitCents * qty)}`}
                 </button>
