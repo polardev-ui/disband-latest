@@ -17,6 +17,9 @@ const moves = [
 
   // Installer downloads stream from GitHub on the server; web only.
   ["src/app/dl", `${stashRoot}/app-dl`],
+
+  // Discord-compatible webhook endpoints are server route handlers; web only.
+  ["src/app/webhook", `${stashRoot}/app-webhook`],
 ];
 
 function moveAside(from, to) {
