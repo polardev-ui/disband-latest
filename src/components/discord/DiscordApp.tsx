@@ -2109,6 +2109,7 @@ export function DiscordApp() {
 
       {app.viewMode === "space" && !isMobile && !searchOpen && membersVisible && (
         <MemberList
+          serverId={app.activeServerId}
           members={app.members}
           roles={app.serverRoles}
           loading={app.membersLoading}
