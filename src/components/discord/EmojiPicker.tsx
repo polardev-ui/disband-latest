@@ -101,11 +101,11 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
         {/* The classic emoji button: a grey face that colours in and grows. */}
         <span
           aria-hidden
-          className={`text-[22px] leading-none transition-[filter,transform] duration-100 ${
+          className={`flex leading-none transition-[filter,transform] duration-100 ${
             open ? "scale-[1.14] grayscale-0" : "grayscale group-hover/emoji:scale-[1.14] group-hover/emoji:grayscale-0"
           }`}
         >
-          🙂
+          <EmojiImg emoji="🙂" size="22px" />
         </span>
       </button>
 

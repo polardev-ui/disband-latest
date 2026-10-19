@@ -6,12 +6,13 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconAttach, IconGift, IconPoll, IconClose, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
+import { IconAttach, IconPoll, IconClose, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/composer-tokens";
 import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
 import { useMemberSearch } from "@/hooks/useMemberSearch";
 import { SlashCommandComposer } from "./SlashCommandComposer";
+import { SolidGiftIcon } from "@/components/icons/SolidIcons";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
@@ -1151,7 +1152,7 @@ export function ChatInput({
                 giftOpen ? "text-interactive-active" : "text-interactive-normal"
               }`}
             >
-              <IconGift size={24} />
+              <SolidGiftIcon size={24} />
             </button>
           )}
           <GifPicker

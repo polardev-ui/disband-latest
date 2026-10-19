@@ -1,5 +1,6 @@
 "use client";
 
+import { SolidGifIcon } from "@/components/icons/SolidIcons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { createPortal } from "react-dom";
@@ -320,9 +321,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
           open ? "text-interactive-active" : "text-interactive-normal"
         }`}
       >
-        <span className="rounded-[4px] border-2 border-current px-[3px] py-[2px] text-[10px] font-extrabold leading-none tracking-[0.02em]">
-          GIF
-        </span>
+        <SolidGifIcon size={24} />
       </button>
       {panel}
     </div>
