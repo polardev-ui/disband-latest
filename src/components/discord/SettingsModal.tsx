@@ -27,8 +27,9 @@ import {
   disconnectSpotify,
   exchangeSpotifyCode,
   getSpotifyConnection,
+  hasLegacySpotifyConnection,
+  importLegacySpotifyConnection,
   lastfmConfigured,
-  migrateLegacySpotifyConnection,
   readLastfmPending,
   readLastfmUsername,
   spotifyConnectUrl,
@@ -290,6 +291,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [spotifyChecking, setSpotifyChecking] = useState(true);
+  const [legacySpotifyAvailable, setLegacySpotifyAvailable] = useState(false);
+  const [legacySpotifyBusy, setLegacySpotifyBusy] = useState(false);
   const [spotifyPasteOpen, setSpotifyPasteOpen] = useState(false);
   const [spotifyPasteCode, setSpotifyPasteCode] = useState("");
   const [spotifyPasteBusy, setSpotifyPasteBusy] = useState(false);
@@ -303,10 +306,11 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     if (!open) return;
     let live = true;
     setSpotifyChecking(true);
-    // Import any connection left by a pre-server-storage build, then ask the
-    // server — not this browser's storage — whether the account is linked.
+    // Ask the server — not this browser's storage — whether the account is
+    // linked. An old browser-only connection is offered as an explicit import
+    // because that key was never bound to a Disband account.
+    setLegacySpotifyAvailable(hasLegacySpotifyConnection());
     void (async () => {
-      await migrateLegacySpotifyConnection().catch(() => {});
       const connected = await getSpotifyConnection().catch(() => false);
       if (!live) return;
       setSpotifyConnected(connected);
@@ -344,6 +348,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       const data = event.data as { type?: string; username?: string } | null;
       if (data?.type === "disband:spotify-connected") {
         setSpotifyConnected(true);
+        setLegacySpotifyAvailable(false);
         setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
       } else if (data?.type === "disband:lastfm-connected") {
         const name = typeof data.username === "string" ? data.username : "";
@@ -397,6 +402,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     try {
       await exchangeSpotifyCode(code);
       setSpotifyConnected(true);
+      setLegacySpotifyAvailable(false);
       setSpotifyPasteOpen(false);
       setSpotifyPasteCode("");
       setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
@@ -417,9 +423,31 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       return;
     }
     setSpotifyConnected(false);
+    setLegacySpotifyAvailable(false);
     setSpotifyNote("Disconnected — your profile no longer shows a track.");
     // Best-effort immediate clear; the poller clears it on its next tick too.
     void updateProfile({ listening: null });
+  }
+
+  async function handleImportLegacySpotify() {
+    if (legacySpotifyBusy) return;
+    setLegacySpotifyBusy(true);
+    setSpotifyNote(null);
+    try {
+      const imported = await importLegacySpotifyConnection();
+      const stillAvailable = hasLegacySpotifyConnection();
+      setLegacySpotifyAvailable(stillAvailable);
+      if (imported) {
+        setSpotifyConnected(true);
+        setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
+      } else if (stillAvailable) {
+        setSpotifyNote("Couldn't import the old connection. Try again, or connect Spotify.");
+      } else {
+        setSpotifyNote("The old connection has expired. Connect Spotify instead.");
+      }
+    } finally {
+      setLegacySpotifyBusy(false);
+    }
   }
 
   function saveLastfm() {
@@ -1649,6 +1677,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               Connect Spotify
                             </button>
                           ))}
+                        {!spotifyChecking && !spotifyConnected && legacySpotifyAvailable && (
+                          <button
+                            type="button"
+                            disabled={legacySpotifyBusy}
+                            onClick={() => void handleImportLegacySpotify()}
+                            title="Older Disband builds kept this connection in this browser only."
+                            className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
+                          >
+                            {legacySpotifyBusy ? "Importing…" : "Import old connection"}
+                          </button>
+                        )}
                         {spotifyNote && <p className="text-[13px] text-text-muted">{spotifyNote}</p>}
                         {spotifyPasteOpen && !spotifyConnected && (
                           <div className="mt-2 w-full space-y-2">

@@ -49,7 +49,6 @@ import {
 import {
   fetchLastfmNowPlaying,
   fetchSpotifyNowPlaying,
-  migrateLegacySpotifyConnection,
   readLastfmUsername,
   type Listening,
 } from "@/lib/music-presence";
@@ -1068,17 +1067,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    let ready = false;
-    void migrateLegacySpotifyConnection()
-      .catch(() => {})
-      .finally(() => {
-        if (!alive) return;
-        ready = true;
-        void tick();
-      });
-    const id = window.setInterval(() => {
-      if (ready) void tick();
-    }, 20_000);
+    void tick();
+    const id = window.setInterval(() => void tick(), 20_000);
     return () => {
       alive = false;
       window.clearInterval(id);
