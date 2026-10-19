@@ -10,8 +10,9 @@ import { ListeningLine } from "@/components/ui/ListeningLine";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Tooltip } from "./Tooltip";
 import { CartIcon } from "@/components/icons/CartIcon";
+import { SolidFriendsIcon, SolidNotesIcon } from "@/components/icons/SolidIcons";
 import { AeroIcon } from "@/components/icons/AeroIcon";
-import { IconClose, IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
+import { IconClose, IconFriends, IconGroup, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
@@ -209,7 +210,7 @@ export function HomePanel({
 
       <nav className="px-2 pt-2">
         <NavRow
-          icon={<IconFriends size={24} />}
+          icon={<SolidFriendsIcon size={24} />}
           label="Friends"
           active={onFriends}
           onClick={() => setViewHome()}
@@ -225,7 +226,7 @@ export function HomePanel({
           }
         />
         <NavRow
-          icon={<IconNotes size={24} />}
+          icon={<SolidNotesIcon size={24} />}
           label="Notes"
           active={viewMode === "notes"}
           onClick={() => void setViewNotes()}
