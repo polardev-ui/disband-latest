@@ -377,20 +377,15 @@ html[data-desktop] ::selection {
 .app-screen {
   min-height: 100vh;
 }
-@media (min-width: 769px) {
-  .app-screen {
-    min-height: calc(100vh - var(--desktop-titlebar-height));
-  }
-}
 html[data-desktop] .app-screen {
   min-height: calc(100vh - var(--desktop-titlebar-height));
 }
 
 /* The app bar. On the desktop it is the window's title bar: on macOS the
    draggable strip the native traffic lights float over, on Windows and Linux
-   the undecorated window's own control strip. On the wide web it is a slim
-   global bar; the mobile web app draws its own compact bar instead. It is also
-   where the global notification bell lives, so it is reachable from anywhere. */
+   the undecorated window's own control strip. It exists only in the desktop
+   app: on the web the browser already frames the page, and the channel
+   header's inbox carries notifications instead. */
 .desktop-titlebar {
   display: flex;
   align-items: center;
@@ -401,10 +396,8 @@ html[data-desktop] .app-screen {
   background-color: var(--bg-tertiary);
   border-bottom: 1px solid var(--divider);
 }
-@media (max-width: 768px) {
-  html:not([data-desktop]) .desktop-titlebar {
-    display: none;
-  }
+html:not([data-desktop]) .desktop-titlebar {
+  display: none;
 }
 html[data-desktop-os="macos"] .desktop-titlebar {
   border-bottom-color: transparent;
