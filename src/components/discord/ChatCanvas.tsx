@@ -248,6 +248,8 @@ interface ChatCanvasProps {
   getAuthorIconRole?: (authorId: string) => { icon?: string | null; name: string } | null | undefined;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
+  /** Before the channel icon; the phone layout puts its menu button here. */
+  headerLeading?: React.ReactNode;
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
 
@@ -294,6 +296,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     getAuthorIconRole,
     headerExtra,
     headerTrailing,
+    headerLeading,
     callPanel,
     channelIcon,
     introText,
@@ -773,6 +776,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   return (
     <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
+        {headerLeading}
         <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
           {channelIcon ?? (messageContext === "dm" ? <AtIcon /> : <IconHash size={24} />)}
         </span>

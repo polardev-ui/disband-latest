@@ -330,9 +330,16 @@ export function ChatInput({
   // drafting anything of length feel like typing through a letterbox.
   // Measured from the element's own line-height rather than assumed, so it
   // stays right if the font or density changes.
-  useEffect(() => {
+  const fitComposer = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
+    // Empty: one line. Measuring would count the placeholder, which wraps
+    // into a tall column if the box is laid out narrow first (phones).
+    if (!el.value) {
+      el.style.height = "";
+      el.style.overflowY = "hidden";
+      return;
+    }
     el.style.height = "auto";
     const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 21;
     const padding = el.offsetHeight - el.clientHeight
@@ -342,7 +349,26 @@ export function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     // Only scroll once it is actually capped, so short drafts never show a bar.
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }, [text, editingMessageId]);
+  }, []);
+
+  useEffect(() => {
+    fitComposer();
+  }, [text, editingMessageId, fitComposer, command]);
+
+  // Re-fit when the box changes width (window resize, sidebars opening),
+  // since the same text wraps onto a different number of lines.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let lastWidth = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === lastWidth) return;
+      lastWidth = el.clientWidth;
+      fitComposer();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitComposer, command]);
 
   const memberMatches = useMemberSearch(serverId, mentionCtx ? mentionCtx.query : null, members, 8);
 
