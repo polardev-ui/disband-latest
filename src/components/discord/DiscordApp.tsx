@@ -52,6 +52,7 @@ import {
   IconPhone,
   IconStar,
   IconNotes,
+  IconMegaphone,
   IconPin,
   IconPinOff,
   IconMenu,
@@ -1990,6 +1991,11 @@ export function DiscordApp() {
           key={app.activeChannelId}
           ref={channelChatRef}
           channelName={activeChannel.name}
+          // Announcement channels (read-only + managers only) carry the
+          // megaphone so the header matches the rail.
+          channelIcon={
+            activeChannel.read_only ? <IconMegaphone size={18} className="text-brand" /> : undefined
+          }
           composerLockedReason={
             myTimeoutLabel
               ? `You are timed out in this space for ${myTimeoutLabel}.`

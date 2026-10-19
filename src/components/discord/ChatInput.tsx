@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconAttach, IconGift, IconPoll, IconClose, IconHash, IconPlus, IconSend } from "@/components/icons";
+import { IconAttach, IconGift, IconPoll, IconClose, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { applyAtomicEveryone } from "@/lib/composer-tokens";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
@@ -695,7 +695,11 @@ export function ChatInput({
                 channelIdx === i ? "bg-interactive-selected" : ""
               }`}
             >
-              <IconHash size={15} className="shrink-0 text-text-muted" />
+              {c.read_only ? (
+                <IconMegaphone size={15} className="shrink-0 text-text-muted" />
+              ) : (
+                <IconHash size={15} className="shrink-0 text-text-muted" />
+              )}
               <span className="truncate font-medium">#{c.name}</span>
             </button>
           ))}
