@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { useApp } from "@/contexts/AppContext";
@@ -49,9 +49,58 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
   const [submenu, setSubmenu] = useState<"status" | "custom" | "accounts" | null>(null);
+  const [submenuPos, setSubmenuPos] = useState<{ left: number; top: number } | null>(null);
+  const statusBtnRef = useRef<HTMLButtonElement | null>(null);
+  const accountsBtnRef = useRef<HTMLButtonElement | null>(null);
   const [copyState, setCopyState] = useState("");
-  useOverlayDismiss(() => submenu ? setSubmenu(null) : onClose(), !exiting);
-  const toggleMenu = (next: "status" | "custom" | "accounts") => setSubmenu((current) => current === next ? null : next);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusFlyout = useRef(false);
+  const flyoutId = useId();
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  const closeSubmenu = (restoreFocus = false) => {
+    cancelClose();
+    focusFlyout.current = false;
+    if (restoreFocus) (submenu === "status" ? statusBtnRef : accountsBtnRef).current?.focus();
+    setSubmenu(null);
+  };
+  useOverlayDismiss(() => submenu ? closeSubmenu(submenu !== "custom") : onClose(), !exiting);
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => {
+      if (!flyoutRef.current?.contains(document.activeElement)) {
+        setSubmenu((current) => current === "custom" ? current : null);
+      }
+    }, 200);
+  };
+  const openFlyout = (next: "status" | "accounts", keyboard = false) => {
+    cancelClose();
+    focusFlyout.current = keyboard;
+    if (submenu !== next) setSubmenuPos(null);
+    setSubmenu(next);
+    if (keyboard && submenu === next) flyoutRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  };
+  const triggerProps = (next: "status" | "accounts") => ({
+    "aria-expanded": submenu === next,
+    "aria-haspopup": "dialog" as const,
+    "aria-controls": submenu === next ? flyoutId : undefined,
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => openFlyout(next, event.detail === 0),
+    onPointerEnter: (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.pointerType === "mouse") openFlyout(next);
+    },
+    onPointerLeave: scheduleClose,
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        openFlyout(next, true);
+      }
+    },
+  });
 
   const [customNote, setCustomNote] = useState(() => profile?.status_note ?? "");
   const [customDuration, setCustomDuration] = useState<StatusDurationId>(() =>
@@ -59,6 +108,47 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
   );
   const [savingCustom, setSavingCustom] = useState(false);
   const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
+
+  useLayoutEffect(() => {
+    if (submenu !== "status" && submenu !== "accounts") return;
+    const card = flyoutRef.current;
+    const trigger = (submenu === "status" ? statusBtnRef : accountsBtnRef).current;
+    const popup = popupRef.current;
+    if (!card || !trigger || !popup) return;
+    const update = () => {
+      const anchor = trigger.getBoundingClientRect();
+      const parent = popup.getBoundingClientRect();
+      const { width, height } = card.getBoundingClientRect();
+      const gap = 8;
+      const fitsRight = parent.right + gap + width <= window.innerWidth - gap;
+      const fitsLeft = parent.left - gap - width >= gap;
+      const left = fitsRight ? parent.right + gap : fitsLeft ? parent.left - gap - width : Math.max(gap, Math.min(anchor.left, window.innerWidth - width - gap));
+      // On narrow screens use the space above/below the row instead of pushing the card off-screen.
+      const preferredTop = fitsRight || fitsLeft ? anchor.top : anchor.top - height - gap >= gap ? anchor.top - height - gap : anchor.bottom + gap;
+      const top = Math.max(gap, Math.min(preferredTop, window.innerHeight - height - gap));
+      setSubmenuPos((current) => current?.left === left && current.top === top ? current : { left, top });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(card);
+    observer.observe(popup);
+    popup.addEventListener("animationend", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      observer.disconnect();
+      popup.removeEventListener("animationend", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [submenu, pos.left, pos.bottom]);
+
+  useLayoutEffect(() => {
+    if (submenuPos && focusFlyout.current) {
+      flyoutRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+      focusFlyout.current = false;
+    }
+  }, [submenuPos, submenu]);
 
   const name = profile ? displayName(profile) : user?.email?.split("@")[0] ?? "You";
   const currentUserId = profile?.id ?? user?.id ?? null;
@@ -102,6 +192,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
       setChanging(true);
       try {
         await updateProfile({ status } as any);
+        statusBtnRef.current?.focus();
         setSubmenu(null);
       } finally {
         setChanging(false);
@@ -161,13 +252,14 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
       ? getAccentBackground(profile)
       : profile?.accent_color ?? "var(--brand)";
   const sectionLabel = "px-2 pb-1.5 pt-1 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
-  const row = "group/row flex min-h-8 w-full items-center gap-2.5 rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white [&_span]:group-hover/row:!text-white";
+  const row = "group/row flex min-h-8 w-full items-center gap-2.5 rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white focus-visible:outline-none [&_span]:group-hover/row:!text-white";
 
   const content = (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
         className={`menu-pop${exiting ? " modal-pop-out" : ""} channel-scroll fixed z-40 w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg bg-bg-secondary-alt pb-4 shadow-[var(--elevation-high)]`}
+        ref={popupRef}
         role="dialog" aria-label="Your account"
         style={{ left: pos.left, bottom: pos.bottom, maxHeight: `calc(100dvh - ${pos.bottom + 8}px)` }}
       >
@@ -225,14 +317,14 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
 
         <div className="mx-4 rounded-b-lg bg-bg-floating p-2">
           <div className="mb-1 border-t border-bg-secondary pt-1" />
-          <button type="button" className={row} aria-expanded={submenu === "status"} onClick={() => toggleMenu("status")}>
+          <button ref={statusBtnRef} type="button" className={`${row} ${submenu === "status" ? "bg-brand-hover text-white" : ""}`} {...triggerProps("status")}>
             <StatusGlyph status={currentStatus} size={16} /><span className="flex-1">{currentStatus === "offline" ? "Invisible" : statusText}</span><IconChevron size={16} className="-rotate-90" />
           </button>
-          <button type="button" className={row} aria-expanded={submenu === "custom"} onClick={() => toggleMenu("custom")}>
+          <button type="button" className={row} aria-expanded={submenu === "custom"} onClick={() => { cancelClose(); setSubmenu((current) => current === "custom" ? null : "custom"); }}>
             <IconEdit size={16} /><span className="flex-1">{liveNote ? "Edit Custom Status" : "Set Custom Status"}</span>
           </button>
           <div className="my-1 border-t border-bg-secondary" />
-          <button type="button" className={row} aria-expanded={submenu === "accounts"} onClick={() => toggleMenu("accounts")}>
+          <button ref={accountsBtnRef} type="button" className={`${row} ${submenu === "accounts" ? "bg-brand-hover text-white" : ""}`} {...triggerProps("accounts")}>
             <span className="flex-1">Switch Accounts</span><IconChevron size={16} className="-rotate-90" />
           </button>
           <button type="button" className={row} disabled={!currentUserId} onClick={async () => {
@@ -294,26 +386,50 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
         </div>
 
         }
-        {submenu === "status" && <div className="mx-4 mt-2 rounded-[4px] bg-bg-floating p-2">
-          <p className={sectionLabel}>Presence</p>
-          {STATUS_OPTIONS.map((opt) => (
-            <button
-              key={opt.status}
-              type="button"
-              disabled={changing}
-              aria-pressed={currentStatus === opt.status}
-              onClick={() => void setStatus(opt.status)}
-              className={`${row} ${changing ? "opacity-50" : ""}`}
-            >
-              <StatusGlyph status={opt.status} size={12} className="shrink-0" />
-              <span className="flex-1">{opt.label}</span>
-              {currentStatus === opt.status && <IconCheck size={15} />}
-            </button>
-          ))}
-        </div>
+      </div>
+      {!exiting && (submenu === "status" || submenu === "accounts") && (
+        <div
+          ref={flyoutRef} id={flyoutId} role="dialog"
+          aria-label={submenu === "status" ? "Change status" : "Switch accounts"}
+          className={`channel-scroll fixed z-50 max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-[4px] bg-bg-floating p-2 shadow-[var(--elevation-high)] ${submenu === "status" ? "w-[240px]" : "w-[300px]"}`}
+          style={{ left: submenuPos?.left ?? 0, top: submenuPos?.top ?? 0, visibility: submenuPos ? "visible" : "hidden" }}
+          onPointerEnter={cancelClose} onPointerLeave={scheduleClose}
+          onFocus={cancelClose}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget) && !popupRef.current?.contains(event.relatedTarget)) closeSubmenu();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") { event.preventDefault(); closeSubmenu(true); }
+            if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+              event.preventDefault();
+              const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+              const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length;
+              buttons[next]?.focus();
+            }
+          }}
+        >
+        {submenu === "status" && (<>
 
-        }
-        {submenu === "accounts" && <div className="mx-4 mt-2 rounded-[4px] bg-bg-floating p-2">
+            <p className={sectionLabel}>Presence</p>
+            {STATUS_OPTIONS.map((opt) => (
+              <button
+                key={opt.status}
+                type="button"
+                disabled={changing}
+                aria-pressed={currentStatus === opt.status}
+                onClick={() => void setStatus(opt.status)}
+                className={`${row} ${changing ? "opacity-50" : ""}`}
+              >
+                <StatusGlyph status={opt.status} size={12} className="shrink-0" />
+                <span className="flex-1">{opt.label}</span>
+                {currentStatus === opt.status && <IconCheck size={15} />}
+              </button>
+            ))}
+          </>
+        )}
+
+        {submenu === "accounts" && <>
           <div className="flex items-center justify-between pr-1">
             <p className={sectionLabel}>Accounts</p>
             <button
@@ -399,8 +515,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               <span className="font-medium text-text-normal">Add an account</span>
             </button>
           </div>
-        </div>}
-      </div>
+        </>}
+      </div>)}
     </>
   );
 
