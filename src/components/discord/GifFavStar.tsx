@@ -13,8 +13,8 @@ export function FavStarButton({ active, onToggle }: { active: boolean; onToggle:
   return (
     <button
       type="button"
-      aria-label={active ? "Remove from favorites" : "Save to favorites"}
-      title={active ? "Remove from favorites" : "Save to favorites"}
+      aria-label={active ? "Remove from favourites" : "Save to favourites"}
+      title={active ? "Remove from favourites" : "Save to favourites"}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();

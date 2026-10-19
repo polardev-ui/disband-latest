@@ -154,7 +154,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
         {step === "customize" && (
           <div key="customize" className="view-enter">
             <div className="px-4 pb-2 pt-6">
-              <h2 className="text-[24px] font-bold leading-[30px] text-header-primary">Customize Your Space</h2>
+              <h2 className="text-[24px] font-bold leading-[30px] text-header-primary">Customise Your Space</h2>
               <p className="mt-2 text-[16px] leading-5 text-header-secondary">
                 Give your new space a personality with a name and an icon. You can always change it later.
               </p>
