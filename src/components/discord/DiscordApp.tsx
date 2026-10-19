@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useProfileMember } from "@/hooks/useProfileMember";
 import { usePresence } from "@/hooks/usePresence";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 import { useApp } from "@/contexts/AppContext";
@@ -461,11 +462,24 @@ export function DiscordApp() {
     return app.channels.filter((c) => app.channelEffects[c.id]?.can_view ?? true);
   }, [app.channels, app.channelEffects, canManageChannels]);
   const activeChannelEffect = activeChannel ? app.channelEffects[activeChannel.id] : undefined;
-  const profileServerMember = profileTarget
+  const loadedProfileMember = profileTarget
     ? app.members.find((m) => m.user_id === profileTarget.id)
     : undefined;
+  // Bumped after a role edit so a fetched membership row re-reads its roles.
+  const [profileMemberRefresh, setProfileMemberRefresh] = useState(0);
+  const fetchedProfileMember = useProfileMember(
+    app.viewMode === "space" ? app.activeServerId : null,
+    profileTarget?.id,
+    !!loadedProfileMember,
+    profileMemberRefresh,
+  );
+  // Prefer a freshly fetched row (it reflects the latest role edit), then the
+  // loaded roster, which on big spaces holds only part of the members.
+  const profileServerMember = fetchedProfileMember ?? loadedProfileMember;
   const profileCanManageRoles =
-    app.viewMode === "space" && (isServerOwner || app.serverPermissions.manage_roles);
+    app.viewMode === "space" && (isServerOwner || app.serverPermissions.manage_roles)
+    // The server refuses role edits on the owner, so don't offer them.
+    && profileTarget?.id !== app.activeServer?.owner_id;
 
   const getAuthorColor = useCallback(
     (authorId: string) => {
@@ -2175,6 +2189,7 @@ export function DiscordApp() {
             ? (roleIds) => {
                 void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
                   if (err) alert(err);
+                  else setProfileMemberRefresh((n) => n + 1);
                 });
               }
             : undefined
@@ -2276,6 +2291,7 @@ export function DiscordApp() {
             ? (roleIds) => {
                 void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
                   if (err) alert(err);
+                  else setProfileMemberRefresh((n) => n + 1);
                 });
               }
             : undefined
