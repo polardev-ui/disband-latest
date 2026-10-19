@@ -48,6 +48,15 @@ function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
   );
 }
 
+/** The "@" that heads a direct message. */
+function AtIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10c1.466 0 2.888-.322 4.229-.957l-.858-1.807A7.9 7.9 0 0 1 12 20c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8v1c0 .692-.313 2-1.5 2-1.396 0-1.494-1.819-1.5-2V8h-2v.025A4.954 4.954 0 0 0 12 7c-2.757 0-5 2.243-5 5s2.243 5 5 5c1.45 0 2.748-.631 3.662-1.621.588.796 1.501 1.621 2.838 1.621 2.273 0 3.5-2.061 3.5-4v-1c0-5.514-4.486-10-10-10Zm0 13c-1.654 0-3-1.346-3-3s1.346-3 3-3 3 1.346 3 3-1.346 3-3 3Z" />
+    </svg>
+  );
+}
+
 /** The date rule between days, centred text on a hairline. */
 function DayDivider({ label }: { label: string }) {
   return (
@@ -765,7 +774,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
         <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
-          {channelIcon ?? <IconHash size={24} />}
+          {channelIcon ?? (messageContext === "dm" ? <AtIcon /> : <IconHash size={24} />)}
         </span>
         <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-5 text-header-primary">{channelName}</h1>
         {headerExtra}
@@ -872,7 +881,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           </div>
         ) : (
         <ChatInput
-          placeholder={placeholder ?? `Message #${channelName}`}
+          placeholder={placeholder ?? (messageContext === "dm" ? `Message @${channelName}` : messageContext === "channel" ? `Message #${channelName}` : `Message ${channelName}`)}
           members={members}
           roles={roles}
           channels={channels}
