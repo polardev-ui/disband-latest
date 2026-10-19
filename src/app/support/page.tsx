@@ -181,7 +181,7 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
               placeholder="6-digit code"
               inputMode="numeric"
               autoComplete="one-time-code"
-              className="min-w-0 flex-1 rounded-[4px] border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.2em] outline-none placeholder:text-text-muted focus:border-brand/60 "
+              className="min-w-0 flex-1 rounded-[4px] border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.02em] outline-none placeholder:text-text-muted focus:border-brand/60 "
             />
             <button
               type="button"

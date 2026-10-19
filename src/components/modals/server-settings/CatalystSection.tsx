@@ -29,7 +29,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
             <IconSparkle size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-text-muted">Current level</p>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">Current level</p>
             <p className="text-[22px] font-semibold text-text-normal">
               {current.level === 0 ? "No level yet" : current.name}
             </p>
