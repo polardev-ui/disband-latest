@@ -42,10 +42,9 @@ function PlanCard({ tier, interval, currentPlan, onSubscribe }: {
   const accent = tier.highlighted;
 
   return (
-    <div className={`relative flex flex-col rounded-xl border p-6 ${accent ? "border-yellow-400/40 bg-yellow-400/[0.04]" : "border-divider bg-bg-secondary/50"}`}>
-      {accent && <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-yellow-400/20" />}
+    <div className={`relative flex flex-col rounded-[4px] border p-6 ${accent ? "border-brand bg-bg-secondary" : "border-transparent bg-bg-secondary"}`}>
       {tier.highlighted && !isCurrentPlan && (
-        <span className="absolute -top-2.5 left-5 rounded-full bg-[#fee75c] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black">
+        <span className="absolute -top-2.5 left-5 rounded-[3px] bg-brand px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
           Best deal
         </span>
       )}
@@ -81,10 +80,10 @@ function PlanCard({ tier, interval, currentPlan, onSubscribe }: {
         type="button"
         disabled={isCurrentPlan}
         onClick={() => onSubscribe(tier.id)}
-        className={`w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
+        className={`w-full h-[38px] rounded-[3px] py-2 text-sm font-semibold transition-all ${
           isCurrentPlan
             ? "cursor-not-allowed bg-text-normal/5 text-text-muted"
-            : "bg-[#fee75c] text-black hover:bg-[#f0d843] active:scale-[0.98]"
+            : "bg-brand text-white hover:bg-brand-hover"
         }`}
       >
         {isCurrentPlan ? "Current plan" : "Subscribe"}
@@ -108,7 +107,7 @@ function MobileNotice() {
 
   return (
     <div className="flex flex-col items-center gap-4 p-8 text-center">
-      <p className="text-lg font-bold">Mobile Not Supported</p>
+      <p className="text-[20px] font-semibold text-header-primary">Mobile Not Supported</p>
       <p className="text-sm text-text-muted">
         In-app purchases are not available on mobile. Open Disband in a desktop
         web browser to manage your subscription — or copy this page&apos;s link
@@ -117,7 +116,7 @@ function MobileNotice() {
       <button
         type="button"
         onClick={() => void copyLink()}
-        className="rounded-md border border-divider px-4 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+        className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
       >
         {copied ? "Copied" : "Copy page link"}
       </button>
@@ -160,7 +159,7 @@ function ActivationScreen({
   if (state === "stalled") {
     return (
       <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#fee75c]/20 text-2xl text-[#fee75c]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-[3px] bg-brand/20 text-2xl text-[#fee75c]">
           !
         </div>
         <p className="text-base font-semibold">Payment received</p>
@@ -180,7 +179,7 @@ function ActivationScreen({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-bg-accent px-4 py-2 text-sm font-semibold hover:bg-interactive-hover"
+            className="rounded bg-bg-tertiary px-4 py-2 text-sm font-semibold hover:bg-interactive-hover"
           >
             Close
           </button>
@@ -205,7 +204,7 @@ function ActivationScreen({
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
-        <p className="text-lg font-bold">
+        <p className="text-[20px] font-semibold text-header-primary">
           <span className="capitalize">{plan}</span> is active
         </p>
         <p className="text-sm text-text-muted">
@@ -226,7 +225,7 @@ function ActivationScreen({
       </div>
 
       {tier && (
-        <div className="mt-6 rounded-xl border border-status-online/25 bg-status-online/[0.04] p-4">
+        <div className="mt-6 rounded-[4px] border border-transparent bg-bg-secondary p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
             Now unlocked
           </p>
@@ -234,7 +233,7 @@ function ActivationScreen({
             {tier.features.map((f) => (
               <div key={f.label} className="flex items-start gap-2">
                 <CheckIcon />
-                <span className="text-[13px]">{f.label}</span>
+                <span className="text-[14px]">{f.label}</span>
               </div>
             ))}
           </div>
@@ -244,7 +243,7 @@ function ActivationScreen({
       <button
         type="button"
         onClick={onClose}
-        className="mt-5 w-full rounded-lg bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-hover"
+        className="mt-5 w-full rounded-[3px] bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-hover"
       >
         Start using Disband Aero
       </button>
@@ -297,17 +296,17 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   if (!mounted) return null;
 
   return (
-    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim`} onClick={onClose}>
+    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-black/85`} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Upgrade subscription"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-lg bg-overlay-panel shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
           <div>
-            <h2 className="text-lg font-bold">Upgrade</h2>
+            <h2 className="text-[20px] font-semibold text-header-primary">Upgrade</h2>
             {!checkoutClientSecret && !activation && isGranting(subscription?.status) && (
               <p className="mt-0.5 text-sm text-text-muted">
                 <span className="font-semibold text-text-normal capitalize">{plan}</span>
@@ -317,7 +316,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal">
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-[3px] p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal">
             <IconClose size={18} />
           </button>
         </div>
@@ -350,7 +349,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </div>
             )}
             {isAero ? (
-              <div className="rounded-xl border border-status-online/25 bg-status-online/[0.04] p-5">
+              <div className="rounded-[4px] border border-transparent bg-bg-secondary p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold">Disband Aero</h3>
                   <span className="rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-semibold text-status-online">
@@ -420,6 +419,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
             )}
           </div>
         )}
+        {!checkoutClientSecret && !activation && <div className="flex justify-end bg-bg-secondary p-4"><button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] text-header-primary hover:underline">Cancel</button></div>}
       </div>
     </div>
   );
