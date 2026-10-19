@@ -12,6 +12,7 @@ import { DiscordApp } from "@/components/discord/DiscordApp";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
 import { UpdateToast } from "@/components/desktop/UpdateToast";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
+import { SelfXssWarning } from "@/components/SelfXssWarning";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { MaintenanceNotice } from "@/components/maintenance/MaintenanceNotice";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -79,6 +80,7 @@ export function DisbandRoot() {
         <SkinBoundary>
         <ContextMenuProvider>
           <UpdateToast />
+          <SelfXssWarning />
           {}
           <MobileAppPromo />
           {}
