@@ -68,9 +68,10 @@ export function UserBadges({
           <Tooltip
             as="span"
             side="top"
+            disabled={tiersOpen}
             label={
               <span className="block text-center">
-                <span className="block">Disband Aero</span>
+                <span className="block">Disband {effectivePlan === "lite" ? "Lite" : "Aero"}</span>
                 <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
                   {tier.label} · {interactive ? "click for details" : `${months} months`}
                 </span>
@@ -81,14 +82,14 @@ export function UserBadges({
               <button
                 type="button"
                 onClick={() => setShowTiers(true)}
-                aria-label={`Aero subscriber, ${tier.label} tier`}
+                aria-label={`${effectivePlan === "lite" ? "Lite" : "Aero"} subscriber, ${tier.label} tier`}
                 className="inline-flex shrink-0 items-center"
               >
-                <SubscriptionMedallion tier={tier} super size={size} />
+                <SubscriptionMedallion tier={tier} super={effectivePlan !== "lite"} size={size} />
               </button>
             ) : (
               <span className="inline-flex shrink-0 items-center">
-                <SubscriptionMedallion tier={tier} super size={size} />
+                <SubscriptionMedallion tier={tier} super={effectivePlan !== "lite"} size={size} />
               </span>
             )}
           </Tooltip>

@@ -3,7 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconMessage, IconMore, IconPhone, IconSettings } from "@/components/icons";
@@ -12,7 +12,7 @@ import { RoleIcon } from "@/components/ui/RoleIcon";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { getAccentBackground, roleIsGradientAnimated, sanitizeHex, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, roleIsGradientAnimated, usesCustomAccent } from "@/lib/profileColor";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor, activeStatusNote, statusExpiryLabel, listeningFor } from "@/lib/presence";
@@ -86,7 +86,7 @@ function relativeAge(iso: string): string {
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="mt-5 first:mt-0">
-      <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">{label}</h3>
+      <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{label}</h3>
       {children}
     </section>
   );
@@ -100,7 +100,7 @@ function ProfileBanner({ profile }: { profile: Profile }) {
   // old flat grey, so an unconfigured profile still looks finished.
   const background = usesCustomAccent(profile)
     ? getAccentBackground(profile)
-    : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
+    : profile.accent_color ?? "var(--brand)";
   return (
     <div className="h-[180px] w-full overflow-hidden" style={{ background }}>
       {show && (
@@ -138,7 +138,7 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-xl border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-[4px] bg-bg-floating p-1 shadow-[var(--elevation-high)]"
         >
           {items.map((item) => (
             <button
@@ -149,7 +149,7 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
                 setOpen(false);
                 item.onClick();
               }}
-              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-[13.5px] font-medium transition-colors ${
+              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-[14px] font-medium transition-colors ${
                 item.danger
                   ? "text-status-dnd hover:bg-status-dnd/10"
                   : "text-text-normal hover:bg-interactive-hover"
@@ -224,11 +224,13 @@ export function UserProfileModal({
       return;
     }
     let live = true;
+    setMutualServerIds([]);
+    setMutualFriendIds([]);
     void loadMutuals(profile.id).then((m) => {
       if (!live) return;
       setMutualServerIds(m.serverIds);
       setMutualFriendIds(m.friendIds);
-    });
+    }).catch(() => undefined);
     return () => {
       live = false;
     };
@@ -240,7 +242,7 @@ export function UserProfileModal({
   const title = profile.display_name?.trim() || displayName(profile);
   const live = presenceStatusFor(profile, presenceMap);
   const statusNote = activeStatusNote(profile);
-  const listening = listeningFor(profile, listeningMap);
+  const listening = live === "offline" ? null : listeningFor(profile, listeningMap);
 
   // Replying to a status sends a DM quoting it, then jumps there so the
   // reply lands in front of both people. Same open-then-send beat as
@@ -287,15 +289,6 @@ export function UserProfileModal({
     onSetRoles(next.filter((id) => !defaultIds.has(id)));
   };
 
-  // The person's accent tints the top of the card and its edge.
-  const accent = usesCustomAccent(profile) ? sanitizeHex(profile.accent_color) : null;
-  const cardStyle: CSSProperties = accent
-    ? {
-        background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, var(--color-overlay-panel)) 0px, var(--color-overlay-panel) 300px)`,
-        borderColor: `color-mix(in srgb, ${accent} 30%, var(--color-divider))`,
-      }
-    : {};
-
   const overflow: { label: string; onClick: () => void; danger?: boolean }[] = [];
   if (!isSelf && !isBot && !isBlocked) {
     if (friend && onRemoveFriend) overflow.push({ label: "Remove friend", onClick: onRemoveFriend });
@@ -327,7 +320,7 @@ export function UserProfileModal({
       <>
         {friend && onMessage && (
           <button type="button" onClick={onMessage} className={BTN_SOLID}>
-            <IconMessage size={15} /> Message
+            <IconMessage size={15} /> Send Message
           </button>
         )}
         {friend && onVoiceCall && (
@@ -361,10 +354,10 @@ export function UserProfileModal({
   }
 
   const tabs = isSelf
-    ? [{ id: "about" as const, label: "About" }]
+    ? [{ id: "about" as const, label: "User Info" }]
     : [
-        { id: "about" as const, label: "About" },
-        { id: "spaces" as const, label: "Mutual Spaces", count: mutualServers.length },
+        { id: "about" as const, label: "User Info" },
+        { id: "spaces" as const, label: "Mutual Servers", count: mutualServers.length },
         { id: "friends" as const, label: "Mutual Friends", count: mutualFriends.length },
       ];
 
@@ -376,7 +369,6 @@ export function UserProfileModal({
         aria-modal="true"
         aria-label={title}
         className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100vh-3rem)] w-full max-w-[600px] overflow-y-auto rounded-lg bg-bg-secondary-alt text-text-normal shadow-[var(--elevation-high)]`}
-        style={cardStyle}
       >
         {/* Artwork sits above the banner and below the readable profile content. */}
         <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
@@ -393,8 +385,8 @@ export function UserProfileModal({
 
         <div className="relative z-10 px-6 pb-6">
           {/* Avatar overlaps the banner; actions sit level with its lower half. */}
-          <div className="flex items-end justify-between gap-3">
-            <div className="relative -mt-[68px] shrink-0 rounded-full bg-bg-secondary-alt p-[7px]" style={accent ? { background: "inherit" } : undefined}>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="relative -mt-[68px] shrink-0 rounded-full bg-bg-secondary-alt p-[7px]">
               <Avatar profile={profile} size="xl" className="!h-[120px] !w-[120px] !text-4xl" />
               <StatusDot status={live} size={22} ring="var(--bg-secondary-alt)" className="absolute bottom-1.5 right-1.5" />
             </div>
@@ -544,7 +536,7 @@ export function UserProfileModal({
                         {memberRoles.map((role) => (
                           <span
                             key={role.id}
-                            className={`inline-flex items-center gap-1.5 rounded-md border border-divider px-2 py-0.5 text-[12.5px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                            className={`inline-flex items-center gap-1.5 rounded-md border border-divider px-2 py-0.5 text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
                             style={
                               role.gradient_to?.trim()
                                 ? {
@@ -581,7 +573,7 @@ export function UserProfileModal({
                       maxLength={USER_NOTE_MAX}
                       placeholder="Click to add a note"
                       aria-label={`Private note about ${title}`}
-                      className="block w-full resize-none rounded-xl border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
+                      className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
                     />
                   </Section>
                 )}
@@ -596,12 +588,12 @@ export function UserProfileModal({
                   {mutualServers.map((s) => {
                     const icon = safeImageUrl(s.icon_url);
                     return (
-                      <li key={s.id} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                      <li key={s.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
                         {icon ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-xl object-cover" />
+                          <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-[4px] object-cover" />
                         ) : (
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg-accent text-[12px] font-semibold">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-bg-accent text-[12px] font-semibold">
                             {serverInitials(s.name)}
                           </span>
                         )}
@@ -618,11 +610,11 @@ export function UserProfileModal({
               ) : (
                 <ul className="-mx-2 space-y-0.5">
                   {mutualFriends.map((f) => (
-                    <li key={f.id} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                    <li key={f.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
                       <Avatar profile={f} size="sm" className="h-9 w-9" />
                       <span className="min-w-0">
                         <span className="block truncate text-[14px] font-medium">{displayName(f)}</span>
-                        {f.username && <span className="block truncate text-[12.5px] text-text-muted">@{f.username}</span>}
+                        {f.username && <span className="block truncate text-[12px] text-text-muted">@{f.username}</span>}
                       </span>
                     </li>
                   ))}

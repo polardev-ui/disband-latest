@@ -243,7 +243,7 @@ interface SpotifyPlayerResponse {
     duration_ms: number;
     external_urls?: { spotify?: string };
     artists?: { name: string }[];
-    album?: { images?: { url: string }[] };
+    album?: { name?: string; images?: { url: string }[] };
   } | null;
 }
 
@@ -258,6 +258,8 @@ export function spotifyToListening(data: SpotifyPlayerResponse | null): Listenin
     artists,
     artwork,
     track_url: data.item.external_urls?.spotify ?? null,
+    album: data.item.album?.name ?? null,
+    duration_ms: Number.isFinite(data.item.duration_ms) && data.item.duration_ms > 0 ? data.item.duration_ms : null,
     started_at: new Date(Date.now() - (data.progress_ms ?? 0)).toISOString(),
   };
 }

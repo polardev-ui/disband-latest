@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusDot, StatusGlyph } from "@/components/ui/StatusDot";
-import { IconCheck, IconPlus, IconSettings } from "@/components/icons";
+import { IconCheck, IconPlus, IconSettings, IconChevron, IconEdit } from "@/components/icons";
 import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import { displayName } from "@/lib/utils";
@@ -19,13 +20,6 @@ import {
   type StatusDurationId,
 } from "@/lib/presence";
 import type { UserStatus } from "@/lib/supabase/types";
-
-const STATUS_DOT_BG: Record<UserStatus, string> = {
-  online: "bg-status-online",
-  idle: "bg-status-idle",
-  dnd: "bg-status-dnd",
-  offline: "bg-status-offline",
-};
 
 const STATUS_OPTIONS: { status: UserStatus; label: string }[] = [
   { status: "online", label: "Online" },
@@ -54,6 +48,10 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
   const [changing, setChanging] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
+  const [submenu, setSubmenu] = useState<"status" | "custom" | "accounts" | null>(null);
+  const [copyState, setCopyState] = useState("");
+  useOverlayDismiss(() => submenu ? setSubmenu(null) : onClose(), !exiting);
+  const toggleMenu = (next: "status" | "custom" | "accounts") => setSubmenu((current) => current === next ? null : next);
 
   const [customNote, setCustomNote] = useState(() => profile?.status_note ?? "");
   const [customDuration, setCustomDuration] = useState<StatusDurationId>(() =>
@@ -104,6 +102,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
       setChanging(true);
       try {
         await updateProfile({ status } as any);
+        setSubmenu(null);
       } finally {
         setChanging(false);
       }
@@ -120,6 +119,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
         status_note: note || null,
         status_expires_at: note ? expiresAtForDuration(customDuration) : null,
       } as any);
+      setSubmenu(null);
     } finally {
       setSavingCustom(false);
     }
@@ -144,7 +144,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     if (!el) return;
     const update = () => {
       const r = el.getBoundingClientRect();
-      setPos({ left: r.left + 4, bottom: window.innerHeight - r.top + 8 });
+      setPos({ left: Math.max(8, Math.min(r.left + 4, window.innerWidth - 348)), bottom: Math.max(8, Math.min(window.innerHeight - r.top + 8, window.innerHeight - 160)) });
     };
     update();
     window.addEventListener("resize", update);
@@ -159,7 +159,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
   const bannerBg =
     profile && usesCustomAccent(profile)
       ? getAccentBackground(profile)
-      : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
+      : profile?.accent_color ?? "var(--brand)";
   const sectionLabel = "px-2 pb-1.5 pt-1 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
   const row = "group/row flex min-h-8 w-full items-center gap-2.5 rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white [&_span]:group-hover/row:!text-white";
 
@@ -167,8 +167,9 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className={`menu-pop${exiting ? " modal-pop-out" : ""} channel-scroll fixed z-40 max-h-[calc(100vh-100px)] w-[340px] overflow-y-auto rounded-lg bg-bg-secondary-alt pb-1 shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
-        style={{ left: pos.left, bottom: pos.bottom }}
+        className={`menu-pop${exiting ? " modal-pop-out" : ""} channel-scroll fixed z-40 w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg bg-bg-secondary-alt pb-4 shadow-[var(--elevation-high)]`}
+        role="dialog" aria-label="Your account"
+        style={{ left: pos.left, bottom: pos.bottom, maxHeight: `calc(100dvh - ${pos.bottom + 8}px)` }}
       >
         <div className="h-[60px] overflow-hidden" style={{ background: bannerBg }}>
           {bannerUrl && (
@@ -203,7 +204,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               )}
               <button
                 type="button"
-                onClick={onOpenSettings}
+                onClick={() => { onClose(); onOpenSettings(); }}
                 className="flex h-8 w-8 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover"
                 aria-label="Settings"
                 title="Settings"
@@ -222,15 +223,35 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           </div>
         </div>
 
-        <div className="mx-4 bg-bg-floating px-2 py-2 [&+div]:border-t [&+div]:border-[#2e2f34]">
+        <div className="mx-4 rounded-b-lg bg-bg-floating p-2">
+          <div className="mb-1 border-t border-bg-secondary pt-1" />
+          <button type="button" className={row} aria-expanded={submenu === "status"} onClick={() => toggleMenu("status")}>
+            <StatusGlyph status={currentStatus} size={16} /><span className="flex-1">{currentStatus === "offline" ? "Invisible" : statusText}</span><IconChevron size={16} className="-rotate-90" />
+          </button>
+          <button type="button" className={row} aria-expanded={submenu === "custom"} onClick={() => toggleMenu("custom")}>
+            <IconEdit size={16} /><span className="flex-1">{liveNote ? "Edit Custom Status" : "Set Custom Status"}</span>
+          </button>
+          <div className="my-1 border-t border-bg-secondary" />
+          <button type="button" className={row} aria-expanded={submenu === "accounts"} onClick={() => toggleMenu("accounts")}>
+            <span className="flex-1">Switch Accounts</span><IconChevron size={16} className="-rotate-90" />
+          </button>
+          <button type="button" className={row} disabled={!currentUserId} onClick={async () => {
+            try { await navigator.clipboard.writeText(currentUserId!); setCopyState("User ID copied"); }
+            catch { setCopyState("Could not copy User ID"); }
+          }}>Copy User ID</button>
+          {copyState && <p role="status" className="px-2 py-1 text-[12px] text-header-secondary">{copyState}</p>}
+        </div>
+
+        {submenu === "custom" && <div className="mx-4 mt-2 rounded-[4px] bg-bg-floating p-2">
           <p className={sectionLabel}>Custom status</p>
           <div className="px-1">
             <input
               value={customNote}
               onChange={(e) => setCustomNote(e.target.value)}
               placeholder="What are you up to?"
+              aria-label="Custom status"
               maxLength={128}
-              className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+              className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-[#00a8fc]"
             />
             <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
               {STATUS_DURATION_PRESETS.map((preset) => (
@@ -272,7 +293,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           </div>
         </div>
 
-        <div className="mx-4 bg-bg-floating px-2 py-2 [&+div]:border-t [&+div]:border-[#2e2f34]">
+        }
+        {submenu === "status" && <div className="mx-4 mt-2 rounded-[4px] bg-bg-floating p-2">
           <p className={sectionLabel}>Presence</p>
           {STATUS_OPTIONS.map((opt) => (
             <button
@@ -290,7 +312,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           ))}
         </div>
 
-        <div className="mx-4 bg-bg-floating px-2 py-2 [&+div]:border-t [&+div]:border-[#2e2f34]">
+        }
+        {submenu === "accounts" && <div className="mx-4 mt-2 rounded-[4px] bg-bg-floating p-2">
           <div className="flex items-center justify-between pr-1">
             <p className={sectionLabel}>Accounts</p>
             <button
@@ -314,8 +337,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                   <StatusDot status={currentStatus} size={8} ring="var(--interactive-selected)" className="absolute -bottom-1 -right-1" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] font-medium text-text-normal">{accountLabel(accounts.current)}</span>
-                  <span className="block truncate text-[11.5px] text-text-muted">{accounts.current.email}</span>
+                  <span className="block truncate text-[14px] font-medium text-text-normal">{accountLabel(accounts.current)}</span>
+                  <span className="block truncate text-[12px] text-text-muted">{accounts.current.email}</span>
                 </span>
                 <IconCheck size={15} className="shrink-0 text-text-normal" />
               </div>
@@ -341,8 +364,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                       className="h-7 w-7 text-xs"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13.5px] text-text-normal">{display}</span>
-                      <span className="block truncate text-[11.5px] text-text-muted">{acct.email}</span>
+                      <span className="block truncate text-[14px] text-text-normal">{display}</span>
+                      <span className="block truncate text-[12px] text-text-muted">{acct.email}</span>
                     </span>
                     {busy && (
                       <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />
@@ -376,7 +399,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               <span className="font-medium text-text-normal">Add an account</span>
             </button>
           </div>
-        </div>
+        </div>}
       </div>
     </>
   );

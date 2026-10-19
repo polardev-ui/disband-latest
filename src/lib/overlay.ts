@@ -7,7 +7,8 @@
 export const OVERLAY_Z = {
   // Tooltips sit above every layer: a badge in a popout or a button in
   // settings must still show its name on hover.
-  tooltip: 110,
+  tooltip: 150,
+  badgeDetails: 105,
   modal: 50,
   call: 60,
   modalNested: 70,

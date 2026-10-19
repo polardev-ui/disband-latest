@@ -35,6 +35,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
 
   useEffect(() => {
     let live = true;
+    setBannerFailed(false);
     setMutuals(null);
     setOpen(null);
     void loadMutuals(friend.id)
@@ -104,7 +105,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         )}
         {note && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{note}</p>}
 
-        <div className="my-3 h-px bg-[#2e2f34]" />
+        <div className="my-3 h-px bg-bg-secondary" />
 
         {friend.bio?.trim() && (
           <section className="mb-3">
@@ -130,10 +131,11 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
       {/* Mutuals, as expandable rows — the classic DM sidebar's bottom half. */}
       <div className="mx-4 mb-4 overflow-hidden rounded-lg bg-bg-floating">
         <MutualRow
-          label={`Mutual Servers — ${mutualServers.length}`}
+          label={`Mutual Servers — ${mutuals?.serverIds.length ?? "…"}`}
           open={open === "servers"}
           onToggle={() => setOpen((v) => (v === "servers" ? null : "servers"))}
         >
+          {mutuals && mutualServers.length === 0 && <p className="px-2 py-1 text-[14px] text-text-muted">No servers in common.</p>}
           {mutualServers.map((s) => (
             <button
               key={s.id}
@@ -151,12 +153,13 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
             </button>
           ))}
         </MutualRow>
-        <div className="mx-3 h-px bg-[#2e2f34]" />
+        <div className="mx-3 h-px bg-bg-secondary" />
         <MutualRow
-          label={`Mutual Friends — ${mutualFriends.length}`}
+          label={`Mutual Friends — ${mutuals?.friendIds.length ?? "…"}`}
           open={open === "friends"}
           onToggle={() => setOpen((v) => (v === "friends" ? null : "friends"))}
         >
+          {mutuals && mutualFriends.length === 0 && <p className="px-2 py-1 text-[14px] text-text-muted">No friends in common.</p>}
           {mutualFriends.map((f) => (
             <button
               key={f.id}

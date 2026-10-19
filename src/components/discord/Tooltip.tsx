@@ -7,6 +7,7 @@ import { OVERLAY_Z } from "@/lib/overlay";
 interface TooltipProps {
 
   label: React.ReactNode;
+  disabled?: boolean;
   children: React.ReactNode;
   side?: "right" | "left" | "top" | "bottom";
 
@@ -15,7 +16,7 @@ interface TooltipProps {
   className?: string;
 }
 
-export function Tooltip({ label, children, side = "right", as: Trigger = "div", className = "" }: TooltipProps) {
+export function Tooltip({ label, children, side = "right", disabled = false, as: Trigger = "div", className = "" }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -94,11 +95,12 @@ export function Tooltip({ label, children, side = "right", as: Trigger = "div", 
           setVisible(true);
         }}
         onBlur={() => setVisible(false)}
+        onClickCapture={() => setVisible(false)}
       >
         {children}
       </Trigger>
 
-      {mounted && visible
+      {mounted && visible && !disabled
         && createPortal(
           <div
             role="tooltip"

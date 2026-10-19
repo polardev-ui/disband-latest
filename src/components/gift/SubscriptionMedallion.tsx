@@ -1,5 +1,7 @@
 "use client";
 
+import { AeroIcon } from "@/components/icons/AeroIcon";
+
 export interface TierDef {
   key: string;
   label: string;
@@ -35,17 +37,9 @@ export function nextTier(months: number): TierDef | null {
   return TIERS.find((t) => t.months > months) ?? null;
 }
 
-/** Aero's own folded wing. Tier colours carry tenure without a glossy coin. */
+/** The same wing at every tenure; colour identifies the earned tier. */
 export function SubscriptionMedallion({
   tier, super: isSuper = false, size = 128, className = "",
 }: { tier: TierDef; super?: boolean; size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={`shrink-0 ${className}`} aria-hidden>
-      <path fill={tier.base} d="M2 5 22 2l-7 20-4-9Z" />
-      <path fill={tier.light} d="m2 5 20-3-11 11Z" />
-      <path fill={tier.deep} d="m11 13 11-11-7 20Z" />
-      <path fill={tier.light} d="m11 13 4 9-7-6Z" />
-      {isSuper && <path fill={tier.base} d="m2 13 5 6-5 2Z" />}
-    </svg>
-  );
+  return <AeroIcon size={size} className={className} colour={tier.base} highlight={tier.light} lite={!isSuper} />;
 }

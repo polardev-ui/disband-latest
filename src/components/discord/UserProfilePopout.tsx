@@ -7,6 +7,7 @@ import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
 import { Avatar } from "@/components/ui/Avatar";
+import { ListeningCard } from "@/components/ui/ListeningCard";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
 import { RoleIcon } from "@/components/ui/RoleIcon";
@@ -47,12 +48,6 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatElapsed(fromIso: string): string {
-  const s = Math.max(0, Math.floor((Date.now() - Date.parse(fromIso)) / 1000));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
-
 /**
  * The classic profile popout: opens beside whatever was clicked (a name in
  * chat, a member in the list), with the full profile one click away.
@@ -83,7 +78,6 @@ export function UserProfilePopout({
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
   const [message, setMessage] = useState("");
-  const [, tick] = useState(0);
   const badgeCount = useBadgeCount(p?.id, isSelf ? plan : undefined);
   const note = useUserNote(open && !isSelf ? user?.id : null, open && !isSelf ? p?.id : null);
 
@@ -96,19 +90,13 @@ export function UserProfilePopout({
     const h = ref.current?.offsetHeight ?? 480;
     const onLeftHalf = anchor.left + anchor.width / 2 < window.innerWidth / 2;
     const left = onLeftHalf
-      ? Math.min(anchor.right + GAP, window.innerWidth - WIDTH - 8)
+      ? Math.max(8, Math.min(anchor.right + GAP, window.innerWidth - WIDTH - 8))
       : Math.max(8, anchor.left - GAP - WIDTH);
     const top = Math.max(8, Math.min(anchor.top, window.innerHeight - h - 8));
     setPos({ left, top, side: onLeftHalf ? "right" : "left" });
   }, [open, anchor, p?.id]);
 
-  // The listening clock ticks while it's on screen.
-  const listening = p ? listeningFor(p, listeningMap) : null;
-  useEffect(() => {
-    if (!open || !listening) return;
-    const t = window.setInterval(() => tick((n) => n + 1), 1000);
-    return () => window.clearInterval(t);
-  }, [open, listening]);
+  const listening = p && presenceStatusFor(p, presenceMap) !== "offline" ? listeningFor(p, listeningMap) : null;
 
   if (!mounted || !p || typeof document === "undefined") return null;
 
@@ -136,7 +124,7 @@ export function UserProfilePopout({
         role="dialog"
         aria-label={`${displayName(p)}'s profile`}
         data-side={pos?.side ?? "right"}
-        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute w-[340px] overflow-hidden rounded-lg bg-bg-secondary-alt shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
+        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-16px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg bg-bg-secondary-alt shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
         style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden" }}
       >
         {/* Banner */}
@@ -218,42 +206,7 @@ export function UserProfilePopout({
             </div>
           </Section>
 
-          {listening && (
-            <Section
-              title={`Listening to ${listening.source === "spotify" ? "Spotify" : listening.source === "soundcloud" ? "SoundCloud" : "Last.fm"}`}
-              aside={
-                listening.source === "spotify" ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden className="text-[#1db954]">
-                    <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm4.6 14.4a.62.62 0 0 1-.86.2c-2.35-1.43-5.3-1.76-8.78-.96a.62.62 0 1 1-.28-1.22c3.8-.87 7.07-.5 9.7 1.12.3.18.4.57.21.86Zm1.22-2.73a.78.78 0 0 1-1.07.26c-2.69-1.65-6.78-2.13-9.96-1.17a.78.78 0 1 1-.45-1.49c3.63-1.1 8.14-.57 11.22 1.33.37.22.48.7.26 1.07Zm.1-2.84C14.7 8.92 9.37 8.75 6.29 9.68a.94.94 0 1 1-.54-1.8c3.53-1.07 9.41-.86 13.12 1.34a.94.94 0 0 1-.96 1.61Z" />
-                  </svg>
-                ) : null
-              }
-            >
-              <div className="flex items-center gap-2.5">
-                {listening.artwork && safeImageUrl(listening.artwork) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={safeImageUrl(listening.artwork)!} alt="" className="h-[60px] w-[60px] shrink-0 rounded-lg object-cover" />
-                ) : (
-                  <span className="h-[60px] w-[60px] shrink-0 rounded-lg bg-bg-secondary" />
-                )}
-                <div className="min-w-0 text-[14px] leading-[18px]">
-                  <p className="truncate font-semibold text-header-primary">{listening.track}</p>
-                  <p className="truncate text-text-normal">by {listening.artists}</p>
-                  <p className="mt-0.5 text-[12px] tabular-nums text-text-muted">{formatElapsed(listening.started_at)} elapsed</p>
-                </div>
-              </div>
-              {listening.track_url && (
-                <a
-                  href={listening.track_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2.5 flex h-8 items-center justify-center gap-1.5 rounded-[3px] bg-button-secondary text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
-                >
-                  Play on {listening.source === "spotify" ? "Spotify" : listening.source === "soundcloud" ? "SoundCloud" : "Last.fm"}
-                </a>
-              )}
-            </Section>
-          )}
+          {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
           {isServerMember && (roles.length > 0 || canManageRoles) && (
             <Section title={roles.length === 1 ? "Role" : "Roles"}>
