@@ -5,7 +5,6 @@ import { useApp } from "@/contexts/AppContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { CallTile, CallGrid } from "./CallTile";
 import { CallControls } from "./CallUI";
-import { Soundboard } from "./Soundboard";
 import { displayName } from "@/lib/utils";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { IconSpeaker } from "@/components/icons";
@@ -101,44 +100,22 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   }, [inThisChannel, channelId]);
 
   return (
-    <main className="call-enter flex min-w-0 flex-1 flex-col bg-gradient-to-b from-status-online/[0.06] to-bg-primary">
-      <header className="flex h-12 items-center gap-2 border-b border-divider px-4">
-        <IconSpeaker className={voice.joined ? "text-status-online" : "text-text-muted"} />
-        <h1 className="font-semibold">{channelName}</h1>
-        {voice.joined && (
-          <span className="ml-2 flex items-center gap-1.5 rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-status-online">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-online" />
-            Connected
-          </span>
-        )}
+    <main className="call-enter flex min-w-0 flex-1 flex-col bg-black">
+      <header className="flex h-12 shrink-0 items-center gap-2 px-4">
+        <IconSpeaker size={24} className="text-white/70" />
+        <h1 className="text-[16px] font-semibold text-white">{channelName}</h1>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center gap-4 overflow-hidden px-6 pt-4 pb-4">
-        <div className="text-center">
-          <div
-            className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${
-              voice.joined ? "bg-status-online/15 text-status-online" : "bg-bg-tertiary text-text-muted"
-            }`}
-          >
-            <IconSpeaker size={40} strokeWidth={1.5} />
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-4 overflow-hidden px-4 pb-4">
+        {!voice.joined && tiles.length === 0 ? (
+          // The classic empty state: a centred invitation to join.
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <h2 className="text-[24px] font-bold leading-[30px] text-white">{channelName}</h2>
+            <p className="mt-2 text-[16px] text-white/60">No one is currently in voice</p>
           </div>
-          <h2 className="mt-4 text-xl font-semibold">{voice.joined ? channelName : "Voice Channel"}</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            {voice.joined
-              ? `${voice.participants.length} connected`
-              : `${voice.participants.length} connected — join to talk`}
-          </p>
-        </div>
-
-        <CallGrid>
-          {tiles.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-text-muted">
-              No one is here yet.
-              <br />
-              Join to start the conversation.
-            </p>
-          ) : (
-            tiles.map((t) => (
+        ) : (
+          <CallGrid>
+            {tiles.map((t) => (
               <CallTile
                 key={t.key}
                 profile={t.profile}
@@ -148,81 +125,63 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
                 self={t.self}
                 muted={t.muted}
               />
-            ))
-          )}
-        </CallGrid>
-
-        <Soundboard />
+            ))}
+          </CallGrid>
+        )}
 
         {(voice.error || actionError) && (
-          <p role="alert" className="max-w-md rounded-lg border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-center text-sm text-status-dnd">
+          <p role="alert" className="max-w-md rounded-[4px] bg-status-dnd/15 px-3 py-2 text-center text-[14px] text-status-dnd">
             {actionError ?? voice.error}
           </p>
         )}
 
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex shrink-0 flex-col items-center gap-3 pb-2">
           {!voice.joined ? (
-            <button
-              type="button"
-              disabled={joining}
-              onClick={() => {
-                setJoining(true);
-                setActionError(null);
-                void requestNotificationPermissionFromGesture();
-                void voice.join();
-              }}
-              className="rounded-full bg-status-online px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-status-online/25 transition-all hover:scale-[1.03] hover:opacity-90 disabled:cursor-wait disabled:opacity-60 disabled:hover:scale-100"
-            >
-              {joining ? "Joining…" : "Join Voice"}
-            </button>
-          ) : (
             <>
-              <CallControls
-                micMuted={micMuted}
-                deafened={deafened}
-                onToggleMic={() => setMicMuted(!micMuted)}
-                onToggleDeafen={() => {
-                  const next = !deafened;
-                  setDeafened(next);
-                  if (next) setMicMuted(true);
+              {tiles.length > 0 && (
+                <p className="text-[14px] text-white/60">
+                  {voice.participants.length} {voice.participants.length === 1 ? "person is" : "people are"} in voice
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={joining}
+                onClick={() => {
+                  setJoining(true);
+                  setActionError(null);
+                  void requestNotificationPermissionFromGesture();
+                  void voice.join();
                 }}
-                onEnd={() => void voice.leave()}
-                onOpenSettings={onOpenSettings}
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionError(null);
-                    void session.toggleCamera().catch(() => setActionError("Couldn't access the camera."));
-                  }}
-                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
-                    session.cameraEnabled
-                      ? "bg-status-online text-white"
-                      : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
-                  }`}
-                >
-                  {session.cameraEnabled ? "Stop video" : "Turn on camera"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionError(null);
-                    void session.toggleScreenShare().catch(() => setActionError("Couldn't start screen sharing."));
-                  }}
-                  className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
-                    session.screenEnabled
-                      ? "bg-status-online text-white"
-                      : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
-                  }`}
-                >
-                  {session.screenEnabled ? "Stop sharing" : "Share screen"}
-                </button>
-              </div>
+                className="h-11 rounded-full bg-button-green px-6 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
+              >
+                {joining ? "Joining…" : "Join Voice"}
+              </button>
             </>
+          ) : (
+            <CallControls
+              micMuted={micMuted}
+              deafened={deafened}
+              cameraEnabled={session.cameraEnabled}
+              screenShareEnabled={session.screenEnabled}
+              onToggleMic={() => setMicMuted(!micMuted)}
+              onToggleDeafen={() => {
+                const next = !deafened;
+                setDeafened(next);
+                if (next) setMicMuted(true);
+              }}
+              onToggleCamera={() => {
+                setActionError(null);
+                void session.toggleCamera().catch(() => setActionError("Couldn't access the camera."));
+              }}
+              onToggleScreenShare={() => {
+                setActionError(null);
+                void session.toggleScreenShare().catch(() => setActionError("Couldn't start screen sharing."));
+              }}
+              onEnd={() => void voice.leave()}
+              onOpenSettings={onOpenSettings}
+            />
           )}
         </div>
-
       </div>
     </main>
   );

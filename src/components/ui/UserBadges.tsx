@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePresence } from "@/hooks/usePresence";
 import { Tooltip } from "@/components/discord/Tooltip";
 import { BadgeGlyph } from "@/lib/badge-icons";
+import { BadgeArt, hasBadgeArt } from "@/components/ui/BadgeArt";
 import { useBadges, type AwardedBadge } from "@/lib/badge-store";
 import { useEntitlement } from "@/lib/entitlement-store";
 import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components/gift/SubscriptionMedallion";
@@ -129,12 +130,19 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
         </span>
       }
     >
-      <span
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-        style={{ color: badge.accent, backgroundColor: `${badge.accent}2e` }}
-      >
-        <BadgeGlyph badgeKey={badge.key} size={size} />
-      </span>
+      {hasBadgeArt(badge.key) ? (
+        // Classic badges stand on their own: no tinted disc behind the art.
+        <span className="inline-flex shrink-0 items-center justify-center transition-transform hover:scale-110">
+          <BadgeArt badgeKey={badge.key} size={Math.max(size, 18)} />
+        </span>
+      ) : (
+        <span
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+          style={{ color: badge.accent, backgroundColor: `${badge.accent}2e` }}
+        >
+          <BadgeGlyph badgeKey={badge.key} size={size} />
+        </span>
+      )}
     </Tooltip>
   );
 }

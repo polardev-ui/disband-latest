@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
-import { Soundboard } from "./Soundboard";
+import { CallControls } from "./CallUI";
+import { Tooltip } from "./Tooltip";
 import { CallStage } from "./CallStage";
 import {
   IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff,
@@ -113,11 +114,8 @@ export function GroupCallStage({
     <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}>
      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
       {}
-      <p className="text-xs font-bold uppercase tracking-widest text-white/30">
-        Group Call
-      </p>
-      <h2 className="mt-1 text-lg font-semibold text-white">{groupName}</h2>
-      <p className="mt-1 text-sm text-white/50">
+      <h2 className="text-[16px] font-semibold text-white">{groupName}</h2>
+      <p className="mt-0.5 text-[12px] font-medium tabular-nums text-white/60">
         {presence.length} in voice{joined ? ` \u00b7 ${formatElapsed(elapsed)}` : ""}
         {ringingIds.size > 0 ? ` \u00b7 ${ringingIds.size} ringing` : ""}
       </p>
@@ -136,77 +134,41 @@ export function GroupCallStage({
       </div>
 
       {}
-      <div className="flex shrink-0 items-center gap-4 pb-3">
-        <button
-          type="button"
-          onClick={onToggleCamera}
-          title={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-text-normal/10 text-text-normal transition-colors hover:bg-text-normal/20"
-        >
-          {cameraEnabled ? <IconVideo size={20} /> : <IconVideoOff size={20} />}
-        </button>
-
-        {joined && onToggleScreenShare && (
-          <button
-            type="button"
-            onClick={onToggleScreenShare}
-            title={screenShareEnabled ? "Stop sharing" : "Share screen"}
-            className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-              screenShareEnabled
-                ? "bg-status-online/25 text-status-online ring-2 ring-status-online/40"
-                : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20"
-            }`}
-          >
-            {screenShareEnabled ? <IconScreenShareOff size={20} /> : <IconScreenShare size={20} />}
-          </button>
-        )}
-
+      <div className="flex shrink-0 items-center gap-4 pb-6 pt-2">
         {!joined ? (
           <>
-            <button
-              type="button"
-              onClick={onToggleMic}
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-white/80 transition-colors ${
-                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-white/10 hover:bg-white/20"
-              }`}
-              title={micMuted ? "Unmute before joining" : "Mute before joining"}
-            >
-              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
-            </button>
+            <Tooltip label={micMuted ? "Unmute before joining" : "Mute before joining"} side="top">
+              <button
+                type="button"
+                onClick={onToggleMic}
+                aria-label={micMuted ? "Unmute" : "Mute"}
+                className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+                  micMuted ? "bg-white text-status-dnd" : "bg-[#2b2d31] text-white hover:bg-[#404249]"
+                }`}
+              >
+                {micMuted ? <IconMicOff size={24} /> : <IconMic size={24} />}
+              </button>
+            </Tooltip>
             <button
               type="button"
               onClick={onJoin}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
-              title="Join voice"
+              className="flex h-14 items-center gap-2 rounded-full bg-button-green px-6 text-[16px] font-medium text-white transition-colors hover:bg-button-green-hover"
             >
-              <IconPhone size={22} />
+              <IconPhone size={22} /> Join Call
             </button>
           </>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={onToggleMic}
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-text-normal transition-colors ${
-                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-text-normal/10 hover:bg-text-normal/20"
-              }`}
-              title={micMuted ? "Unmute" : "Mute"}
-            >
-              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
-            </button>
-            <button
-              type="button"
-              onClick={onLeave}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105"
-              title="Leave voice"
-            >
-              <IconPhoneOff size={22} />
-            </button>
-          </>
+          <CallControls
+            micMuted={micMuted}
+            deafened={deafened}
+            cameraEnabled={cameraEnabled}
+            screenShareEnabled={screenShareEnabled}
+            onToggleMic={onToggleMic}
+            onToggleCamera={onToggleCamera}
+            onToggleScreenShare={onToggleScreenShare}
+            onEnd={onLeave}
+          />
         )}
-      </div>
-      <div className="px-4 pb-3">
-        <Soundboard compact />
       </div>
 
       {}
