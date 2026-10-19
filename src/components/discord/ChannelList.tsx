@@ -8,6 +8,7 @@ import {
   IconClose,
   IconHash,
   IconHeadphonesOff,
+  IconMegaphone,
   IconMicOff,
   IconPlus,
   IconSpeaker,
@@ -407,7 +408,15 @@ export function ChannelList({
           } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
           <span className={active || unread ? "text-text-normal/80" : "text-text-muted"}>
-            {ch.type === "text" ? <IconHash size={17} /> : <IconSpeaker size={17} />}
+            {ch.type === "text" ? (
+              ch.read_only ? (
+                <IconMegaphone size={17} />
+              ) : (
+                <IconHash size={17} />
+              )
+            ) : (
+              <IconSpeaker size={17} />
+            )}
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
           {}
@@ -667,6 +676,8 @@ export function ChannelList({
         >
           {dragGhost.kind === "category" ? (
             <IconChevron size={12} className="-rotate-90 shrink-0 text-text-muted" />
+          ) : channels.find((c) => c.id === dragGhost.id)?.read_only ? (
+            <IconMegaphone size={14} className="shrink-0 text-text-muted" />
           ) : (
             <IconHash size={14} className="shrink-0 text-text-muted" />
           )}

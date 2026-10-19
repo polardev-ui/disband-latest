@@ -43,6 +43,8 @@ type Token = string;
 export interface ChannelLite {
   id: string;
   name: string;
+  /** Announcement channels (read-only) render a megaphone instead of a #. */
+  read_only?: boolean;
 }
 
 const INLINE_RE =

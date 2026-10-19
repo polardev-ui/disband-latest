@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import type { ChannelType } from "@/lib/supabase/types";
-import { IconEdit, IconHash, IconPlus, IconSettings, IconSpeaker, IconTrash } from "@/components/icons";
+import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker, IconTrash } from "@/components/icons";
 import { ConfirmDialog, EmptyState, InlineError, Segmented, btn, enterStyle, iconBtn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
 
-type ChannelLite = { id: string; name: string; type: string; category_id?: string | null };
+type ChannelLite = { id: string; name: string; type: string; category_id?: string | null; read_only?: boolean };
 
 export function ChannelsSection({ onEditChannel }: SectionProps & {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
@@ -114,7 +114,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
               {group.items.map((c) => {
                 const index = row++;
-                const Icon = c.type === "voice" ? IconSpeaker : IconHash;
+                const Icon = c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;
                 return (
                   <li
                     key={c.id}

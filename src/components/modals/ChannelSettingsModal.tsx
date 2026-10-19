@@ -6,7 +6,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { IconClose, IconHash, IconSpeaker, IconTrash } from "@/components/icons";
+import { IconClose, IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
 import type { Channel } from "@/lib/supabase/types";
 
 type ActionKey = "can_view" | "can_post" | "can_react" | "can_attach";
@@ -180,11 +180,19 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-label="Channel settings" className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl`}>
         <header className="flex items-center gap-2 border-b border-divider px-5 py-4">
-          {channel.type === "text" ? <IconHash size={20} /> : <IconSpeaker size={20} />}
+          {channel.type === "text" ? (
+            readOnly ? (
+              <IconMegaphone size={20} />
+            ) : (
+              <IconHash size={20} />
+            )
+          ) : (
+            <IconSpeaker size={20} />
+          )}
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-bold text-text-normal">Channel Settings</h2>
             <p className="truncate text-xs text-text-muted">
-              {channel.type === "text" ? "Text channel" : "Voice channel"} · #{channel.name}
+              {channel.type === "text" ? (readOnly ? "Announcement channel" : "Text channel") : "Voice channel"} · #{channel.name}
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">
@@ -200,7 +208,15 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 <span className="text-xs font-semibold text-text-muted">Channel name</span>
                 <div className="mt-1 flex items-center">
                   <span className="mr-2 text-text-muted">
-                    {channel.type === "text" ? <IconHash size={14} /> : <IconSpeaker size={14} />}
+                    {channel.type === "text" ? (
+                      readOnly ? (
+                        <IconMegaphone size={14} />
+                      ) : (
+                        <IconHash size={14} />
+                      )
+                    ) : (
+                      <IconSpeaker size={14} />
+                    )}
                   </span>
                   <input
                     value={name}
