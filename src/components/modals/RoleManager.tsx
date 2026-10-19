@@ -54,6 +54,7 @@ export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; la
       { key: "manage_server", label: "Manage space", hint: "Edit the space's settings and invites." },
       { key: "create_invites", label: "Create invites", hint: "Share invite links." },
       { key: "manage_emojis", label: "Manage emoji", hint: "Add and remove custom emoji and sounds." },
+      { key: "manage_webhooks", label: "Manage webhooks", hint: "Create, edit and delete webhooks." },
       { key: "view_audit_log", label: "View audit log", hint: "See who did what." },
     ],
   },

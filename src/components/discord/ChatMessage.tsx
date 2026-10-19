@@ -9,6 +9,8 @@ import {
 } from "@/lib/utils";
 import { extractGiftCodes } from "@/lib/gifts";
 import { renderMarkdown } from "@/lib/markdown";
+import { embedColorHex, type Embed } from "@/lib/embeds";
+import { safeImageUrl } from "@/lib/safe-url";
 import {
   CustomEmojiImg,
   isSingleCustomEmoji,
@@ -49,6 +51,8 @@ export interface ChatMessageData {
   attachment_size?: number | null;
   reply_to_id?: string | null;
   reply_to?: ReplyPreview | null;
+  embeds?: Embed[] | null;
+  webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
   edited_at?: string | null;
   created_at: string;
   mentions?: string[];
@@ -113,6 +117,170 @@ function renderCustomEmojiMarkdown(
     }
   });
   return out;
+}
+
+function EmbedCard({
+  embed,
+  members,
+  onMentionClick,
+  channels,
+  onChannelClick,
+  onContentResize,
+}: {
+  embed: Embed;
+  members: Profile[];
+  onMentionClick?: (profile: Profile) => void;
+  channels?: ChannelLite[];
+  onChannelClick?: (channelId: string) => void;
+  onContentResize?: () => void;
+}) {
+  const authorIcon = safeImageUrl(embed.author?.icon_url);
+  const thumbnail = safeImageUrl(embed.thumbnail?.url);
+  const image = safeImageUrl(embed.image?.url);
+  const footerIcon = safeImageUrl(embed.footer?.icon_url);
+  const stamp =
+    embed.timestamp && !Number.isNaN(Date.parse(embed.timestamp))
+      ? new Date(embed.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : null;
+  const fieldMarkdown = (text: string) =>
+    renderMarkdown(text, members, onMentionClick, channels, onChannelClick);
+
+  return (
+    <div
+      className="flex max-w-[520px] overflow-hidden rounded-[4px] border-l-4 bg-bg-secondary px-4 pb-4 pl-3 pt-2"
+      style={{ borderLeftColor: embedColorHex(embed.color) ?? "#1e1f22" }}
+    >
+      <div className="min-w-0 flex-1">
+        {embed.author && (
+          <div className="mb-1 flex items-center gap-2">
+            {authorIcon && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={authorIcon} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+            )}
+            {embed.author.url ? (
+              <a
+                href={embed.author.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="truncate text-[14px] font-semibold text-header-primary hover:underline"
+              >
+                {embed.author.name}
+              </a>
+            ) : (
+              <span className="truncate text-[14px] font-semibold text-header-primary">{embed.author.name}</span>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          <div className="min-w-0 flex-1">
+            {embed.title && (
+              <p className="text-[16px] font-semibold leading-[22px] text-header-primary">
+                {embed.url ? (
+                  <a
+                    href={embed.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-[#00a8fc] hover:underline"
+                  >
+                    {embed.title}
+                  </a>
+                ) : (
+                  embed.title
+                )}
+              </p>
+            )}
+            {embed.description && (
+              <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">
+                {fieldMarkdown(embed.description)}
+              </div>
+            )}
+            {embed.fields && embed.fields.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                {embed.fields.map((field, i) => (
+                  <div
+                    key={`${field.name}-${i}`}
+                    className="min-w-0"
+                    style={{ flex: field.inline ? "1 1 30%" : "1 1 100%" }}
+                  >
+                    <p className="text-[14px] font-semibold leading-[18px] text-header-primary">{field.name}</p>
+                    <div className="mt-0.5 whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">
+                      {fieldMarkdown(field.value)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={image}
+                alt=""
+                loading="lazy"
+                onLoad={onContentResize}
+                className="mt-3 max-h-[300px] w-full rounded-[4px] object-contain"
+              />
+            )}
+          </div>
+          {thumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumbnail}
+              alt=""
+              loading="lazy"
+              onLoad={onContentResize}
+              className="h-20 w-20 shrink-0 rounded-[4px] object-cover"
+            />
+          )}
+        </div>
+
+        {(embed.footer || stamp) && (
+          <div className="mt-2 flex items-center gap-1.5 text-[12px] leading-[16px] text-text-muted">
+            {footerIcon && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={footerIcon} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+            )}
+            {embed.footer && <span className="min-w-0 break-words">{embed.footer.text}</span>}
+            {embed.footer && stamp && <span aria-hidden>•</span>}
+            {stamp && <span className="shrink-0">{stamp}</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MessageEmbeds({
+  embeds,
+  members,
+  onMentionClick,
+  channels,
+  onChannelClick,
+  onContentResize,
+}: {
+  embeds?: Embed[] | null;
+  members: Profile[];
+  onMentionClick?: (profile: Profile) => void;
+  channels?: ChannelLite[];
+  onChannelClick?: (channelId: string) => void;
+  onContentResize?: () => void;
+}) {
+  if (!embeds?.length) return null;
+  return (
+    <div className="mt-1 space-y-1">
+      {embeds.map((embed, i) => (
+        <EmbedCard
+          key={i}
+          embed={embed}
+          members={members}
+          onMentionClick={onMentionClick}
+          channels={channels}
+          onChannelClick={onChannelClick}
+          onContentResize={onContentResize}
+        />
+      ))}
+    </div>
+  );
 }
 
 function MessageBody({  content,
@@ -270,14 +438,30 @@ function ChatMessageImpl({
   customEmoji,
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
+  const webhook = message.webhook ?? null;
+  // Webhooks post as a backing bot profile. Show the webhook's own name and
+  // avatar instead, but keep the profile's other fields for colour/fallbacks.
+  const shownAuthor: Profile | undefined =
+    webhook && author
+      ? { ...author, display_name: webhook.name, avatar_url: webhook.avatar_url ?? author.avatar_url }
+      : webhook
+        ? ({
+            id: message.author_id ?? "webhook",
+            username: webhook.name,
+            display_name: webhook.name,
+            avatar_url: webhook.avatar_url,
+          } as Profile)
+        : author;
   const isOwn = message.author_id === currentUserId;
   const isSystem = !message.author_id;
-  const nameStyle = authorColor
-    ? { color: authorColor }
-    : author
-      ? getUsernameStyle(author)
-      : undefined;
-  const canOpenProfile = author && onAuthorClick;
+  const nameStyle = webhook
+    ? undefined
+    : authorColor
+      ? { color: authorColor }
+      : author
+        ? getUsernameStyle(author)
+        : undefined;
+  const canOpenProfile = !!shownAuthor && !!onAuthorClick && !webhook;
   const body = normalizeMessageContent(message.content);
   const reactionSummaries: ReactionSummary[] = summarizeReactions(reactions, message.id, currentUserId);
 
@@ -311,7 +495,7 @@ function ChatMessageImpl({
     // Several files on one message: the mosaic, rather than a stack of cards.
     <AttachmentGrid
       attachments={multi}
-      author={author}
+      author={shownAuthor}
       authorColor={authorColor}
       isOwn={isOwn}
       createdAt={message.created_at}
@@ -323,7 +507,7 @@ function ChatMessageImpl({
       name={message.attachment_name}
       size={message.attachment_size}
       onLoad={onContentResize}
-      author={author}
+      author={shownAuthor}
       authorColor={authorColor}
       isOwn={isOwn}
       createdAt={message.created_at}
@@ -334,6 +518,17 @@ function ChatMessageImpl({
   const replyBlock = message.reply_to ? (
     <ReplyQuote reply={message.reply_to} onJump={onJumpToReply} />
   ) : null;
+
+  const embedBlock = (
+    <MessageEmbeds
+      embeds={message.embeds}
+      members={members}
+      onMentionClick={onAuthorClick}
+      channels={channels}
+      onChannelClick={onChannelClick}
+      onContentResize={onContentResize}
+    />
+  );
 
   const reactionBlock = onToggleReaction ? (
     <MessageReactions reactions={reactionSummaries} onToggle={onToggleReaction} />
@@ -457,6 +652,7 @@ function ChatMessageImpl({
             {editedTag}
           </div>
         )}
+        {embedBlock}
         {attachment}
         {reactionBlock}
       </article>
@@ -487,13 +683,13 @@ function ChatMessageImpl({
           type="button"
           onClick={openAuthor}
           onContextMenu={authorContextMenu}
-          aria-label={`Open ${displayName(author)}'s profile`}
+          aria-label={`Open ${displayName(shownAuthor ?? {})}'s profile`}
           className={`absolute left-4 ${avatarTop} mt-0.5 rounded-full transition-transform active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
         >
-          <Avatar profile={author} size="md" />
+          <Avatar profile={shownAuthor ?? { display_name: "?" }} size="md" />
         </button>
       ) : (
-        <Avatar profile={author ?? { display_name: "?" }} size="md" className={`absolute left-4 ${avatarTop} mt-0.5`} />
+        <Avatar profile={shownAuthor ?? { display_name: "?" }} size="md" className={`absolute left-4 ${avatarTop} mt-0.5`} />
       )}
 
       <h3 className="flex min-h-[22px] flex-wrap items-center gap-x-1 leading-[22px]">
@@ -505,18 +701,18 @@ function ChatMessageImpl({
             className="text-[16px] font-medium leading-[22px] text-header-primary hover:underline focus:outline-none"
             style={nameStyle}
           >
-            {displayName(author)}
+            {displayName(shownAuthor ?? {})}
           </button>
         ) : (
           <span className="text-[16px] font-medium leading-[22px] text-header-primary" style={nameStyle}>
-            {displayName(author ?? {})}
+            {displayName(shownAuthor ?? {})}
           </span>
         )}
         {authorRoleIcon && (
           <RoleIcon icon={authorRoleIcon} name={authorRoleName ?? undefined} size={20} className="ml-0.5" />
         )}
-        <BotTag profile={author} size="sm" />
-        {author && <PlatformBadge userId={author.id} />}
+        <BotTag profile={shownAuthor} size="sm" />
+        {author && !webhook && <PlatformBadge userId={author.id} />}
         <time className="ml-1 select-none text-[12px] font-medium leading-[22px] text-text-muted" dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>
           {formatMessageTime(message.created_at)}
         </time>
@@ -527,6 +723,7 @@ function ChatMessageImpl({
           {editedTag}
         </div>
       )}
+      {embedBlock}
       {attachment}
       {reactionBlock}
     </article>
@@ -549,6 +746,16 @@ export function shouldGroupMessages(
 ): boolean {
   if (!prev || !prev.author_id || !msg.author_id) return false;
   if (prev.author_id !== msg.author_id) return false;
+  if (!!prev.webhook !== !!msg.webhook) return false;
+  if (
+    prev.webhook
+    && msg.webhook
+    && (prev.webhook.id !== msg.webhook.id
+      || prev.webhook.name !== msg.webhook.name
+      || prev.webhook.avatar_url !== msg.webhook.avatar_url)
+  ) {
+    return false;
+  }
   if (msg.reply_to_id) return false;
   // Grouped rows hide the header (avatar, name, full timestamp), so anything
   // that changes how the row reads starts a new group instead.
