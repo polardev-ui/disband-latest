@@ -1,7 +1,5 @@
 "use client";
 
-import { useId } from "react";
-
 export interface TierDef {
   key: string;
   label: string;
@@ -37,82 +35,17 @@ export function nextTier(months: number): TierDef | null {
   return TIERS.find((t) => t.months > months) ?? null;
 }
 
-const MARK = (light: string, deep: string) => (
-  <>
-    <path d="M12 2.6 16.6 11 12 21.4 7.4 11Z" fill={light} opacity={0.95} />
-    <path d="M12 7.4 14.3 11.4 12 17.4 9.7 11.4Z" fill={deep} opacity={0.55} />
-    <path d="M4.2 17.6h5.2L6.8 13.2Z" fill={light} opacity={0.8} />
-    <path d="M14.6 17.6h5.2L17.2 13.2Z" fill={light} opacity={0.8} />
-  </>
-);
-
+/** Aero's own folded wing. Tier colours carry tenure without a glossy coin. */
 export function SubscriptionMedallion({
   tier, super: isSuper = false, size = 128, className = "",
 }: { tier: TierDef; super?: boolean; size?: number; className?: string }) {
-  const rid = useId().replace(/:/g, "");
-  const box = 128;
-  const c = box / 2;
-  const r = 50;
-  const markScale = (r * 1.06) / 24;
-  const off = c - 12 * markScale;
-
-  const opal = tier.key === "opal";
-  const blend = [...TIERS.slice(0, 6).map((t) => t.base), TIERS[5].light, TIERS[2].light];
-
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${box} ${box}`} className={className} aria-hidden>
-      <defs>
-        <radialGradient id={`g${rid}`} cx="38%" cy="30%">
-          <stop offset="0%" stopColor={tier.light} />
-          <stop offset="62%" stopColor={tier.base} />
-          <stop offset="100%" stopColor={tier.deep} />
-        </radialGradient>
-        <clipPath id={`c${rid}`}><circle cx={c} cy={c} r={r} /></clipPath>
-        <filter id={`f${rid}`} x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation={r * 0.2} />
-        </filter>
-      </defs>
-
-      {isSuper && <circle cx={c} cy={c} r={r + 7} fill={tier.base} fillOpacity={0.18} />}
-
-      {opal ? (
-        <>
-          <g clipPath={`url(#c${rid})`}>
-            <circle cx={c} cy={c} r={r} fill="#dfe9f2" />
-            <g filter={`url(#f${rid})`}>
-              {blend.map((col, i) => {
-                const a = ((i * 360) / blend.length - 60) * (Math.PI / 180);
-                return (
-                  <circle key={i} cx={c + Math.cos(a) * r * 0.52} cy={c + Math.sin(a) * r * 0.52}
-                    r={r * 0.58} fill={col} fillOpacity={0.92} />
-                );
-              })}
-            </g>
-          </g>
-          <circle cx={c} cy={c} r={r} fill="none" stroke="#fff" strokeOpacity={0.85} strokeWidth={2} />
-          <circle cx={c} cy={c} r={r * 0.72} fill="#2b4a5c" fillOpacity={0.78} />
-          <circle cx={c} cy={c} r={r * 0.72} fill="none" stroke="#fff" strokeOpacity={0.55} strokeWidth={1.2} />
-        </>
-      ) : (
-        <>
-          <circle cx={c} cy={c} r={r} fill={`url(#g${rid})`} />
-          <circle cx={c} cy={c} r={r} fill="none" stroke={tier.light} strokeOpacity={0.85} strokeWidth={2} />
-          <circle cx={c} cy={c} r={r * 0.72} fill={tier.deep} fillOpacity={0.85} />
-          <circle cx={c} cy={c} r={r * 0.72} fill="none" stroke={tier.light} strokeOpacity={0.5} strokeWidth={1.2} />
-        </>
-      )}
-
-      <g transform={`translate(${off},${off}) scale(${markScale})`}>{MARK(tier.light, tier.deep)}</g>
-
-      {isSuper && [0, 90, 180, 270].map((deg) => {
-        const a = (deg - 90) * (Math.PI / 180);
-        const sx = c + Math.cos(a) * r;
-        const sy = c + Math.sin(a) * r;
-        return (
-          <path key={deg} d={`M${sx} ${sy - 5} ${sx + 5} ${sy} ${sx} ${sy + 5} ${sx - 5} ${sy}Z`}
-            fill={tier.light} />
-        );
-      })}
+    <svg width={size} height={size} viewBox="0 0 24 24" className={`shrink-0 ${className}`} aria-hidden>
+      <path fill={tier.base} d="M2 5 22 2l-7 20-4-9Z" />
+      <path fill={tier.light} d="m2 5 20-3-11 11Z" />
+      <path fill={tier.deep} d="m11 13 11-11-7 20Z" />
+      <path fill={tier.light} d="m11 13 4 9-7-6Z" />
+      {isSuper && <path fill={tier.base} d="m2 13 5 6-5 2Z" />}
     </svg>
   );
 }

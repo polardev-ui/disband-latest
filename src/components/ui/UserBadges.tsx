@@ -84,11 +84,11 @@ export function UserBadges({
                 aria-label={`Aero subscriber, ${tier.label} tier`}
                 className="inline-flex shrink-0 items-center"
               >
-                <SubscriptionMedallion tier={tier} super size={size + 7} />
+                <SubscriptionMedallion tier={tier} super size={size} />
               </button>
             ) : (
               <span className="inline-flex shrink-0 items-center">
-                <SubscriptionMedallion tier={tier} super size={size + 7} />
+                <SubscriptionMedallion tier={tier} super size={size} />
               </span>
             )}
           </Tooltip>
@@ -148,7 +148,7 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
       {hasBadgeArt(badge.key) ? (
         // Classic badges stand on their own: no tinted disc behind the art.
         <span className="inline-flex shrink-0 items-center justify-center">
-          <BadgeArt badgeKey={badge.key} size={Math.max(size, 18)} />
+          <BadgeArt badgeKey={badge.key} size={size} />
         </span>
       ) : (
         <span
