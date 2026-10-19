@@ -45,7 +45,7 @@ export function useMemberSearch(
         .from("server_members")
         .select("profile:profiles!server_members_user_id_fkey!inner(*)")
         .eq("server_id", serverId)
-        .or(`username.ilike.${safe}%,display_name.ilike.%${safe}%`, { referencedTable: "profiles" })
+        .or(`username.ilike.%${safe}%,display_name.ilike.%${safe}%`, { referencedTable: "profiles" })
         .limit(25);
       if (!live || error) return;
       const rows = ((data ?? []) as unknown as { profile: Profile | null }[])

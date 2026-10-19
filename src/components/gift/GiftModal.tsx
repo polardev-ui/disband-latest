@@ -70,7 +70,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
       onClick={onClose}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[460px] overflow-y-auto rounded-lg bg-bg-primary text-text-normal shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[440px] overflow-y-auto rounded-[4px] bg-bg-primary text-text-normal shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -87,7 +87,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
         {clientSecret && code ? (
           <div className="p-6">
             <p className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Checkout</p>
-            <h2 className="mt-1 text-[20px] font-semibold tracking-[-0.02em]">
+            <h2 className="mt-1 text-[20px] font-semibold leading-6">
               {GIFT_PLAN_NAME[plan]} · {monthsLabel(months)}
             </h2>
             <p className="mb-5 mt-1 text-[14px] text-text-muted">
@@ -104,7 +104,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
             <div className="flex items-center gap-3.5 pr-10">
               {tier && <SubscriptionMedallion tier={tier} super size={48} />}
               <div>
-                <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.02em]">Send a gift</h2>
+                <h2 className="text-[20px] font-semibold leading-tight">Send a gift</h2>
                 <p className="mt-0.5 text-[14px] text-text-muted">First person to claim it gets it.</p>
               </div>
             </div>
@@ -161,7 +161,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
                     }`}
                   >
                     <span className="text-[14px] font-medium">{m === 12 ? "1 yr" : `${m} mo`}</span>
-                    <span className={`mt-0.5 text-[12px] ${save > 0 ? "text-status-online" : "text-text-muted"}`}>
+                    <span className={`mt-0.5 text-[12px] ${save > 0 ? "text-[#23a55a]" : "text-text-muted"}`}>
                       {save > 0 ? `−${save}%` : "—"}
                     </span>
                   </button>
@@ -173,31 +173,33 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
               <span className="text-[14px] text-text-muted">
                 {GIFT_PLAN_NAME[plan]} · {monthsLabel(months)}
               </span>
-              <span className="text-[22px] font-semibold tabular-nums tracking-[-0.02em]">{formatPrice(price)}</span>
+              <span className="text-[22px] font-semibold tabular-nums">{formatPrice(price)}</span>
             </div>
             {saving > 0 && (
-              <p className="mt-1 text-right text-[12px] text-status-online">
+              <p className="mt-1 text-right text-[12px] text-[#23a55a]">
                 Saves {saving}% vs. monthly
               </p>
             )}
 
             {error && <p className="mt-3 text-[14px] text-status-dnd">{error}</p>}
 
-            <div className="-mx-6 -mb-6 mt-5 bg-bg-secondary p-4">
-            <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-3 text-[14px] text-header-primary hover:underline">Cancel</button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void startCheckout()}
-              className="h-[38px] rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
-            >
-              {busy ? "Starting checkout…" : `Continue to payment · ${formatPrice(price)}`}
-            </button>
-            </div>
-            <p className="mt-3 text-center text-[12px] leading-relaxed text-text-muted">
-              One-off payment. Nothing renews, and the gift can be claimed for a year.
-            </p>
+            <div className="-mx-6 -mb-6 mt-5 border-t border-divider bg-bg-secondary p-4">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button type="button" onClick={onClose} className="px-3 text-[14px] text-header-primary hover:underline">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void startCheckout()}
+                  className="h-[38px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                >
+                  {busy ? "Starting checkout…" : `Continue to payment · ${formatPrice(price)}`}
+                </button>
+              </div>
+              <p className="mt-3 text-center text-[12px] leading-relaxed text-text-muted">
+                One-off payment. Nothing renews, and the gift can be claimed for a year.
+              </p>
             </div>
           </div>
         )}

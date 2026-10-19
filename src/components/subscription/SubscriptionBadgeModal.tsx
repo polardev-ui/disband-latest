@@ -42,14 +42,14 @@ export function SubscriptionBadgeModal({
       onClick={onClose}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[680px] overflow-y-auto rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[680px] overflow-y-auto rounded-[8px] bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          className="absolute right-3 top-3 z-10 rounded-[3px] p-1.5 text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M18 6 6 18M6 6l12 12" />
@@ -64,7 +64,7 @@ export function SubscriptionBadgeModal({
             <SubscriptionMedallion tier={current} super={plan !== "lite"} size={64} />
           )}
           <div className="min-w-0">
-            <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-text-normal">
+            <h2 className="text-[20px] font-semibold leading-tight text-text-normal">
               {planName}
             </h2>
             <p className="mt-0.5 text-[14px] text-text-muted">
@@ -110,10 +110,10 @@ export function SubscriptionBadgeModal({
             return (
               <div
                 key={t.key}
-                className={`flex flex-col items-center rounded-[4px] px-1 py-2.5 text-center transition-colors ${
+                className={`flex flex-col items-center rounded-[4px] border border-transparent px-1 py-2.5 text-center transition-colors ${
                   isCurrent ? "bg-bg-secondary" : ""
                 }`}
-                style={isCurrent ? { borderColor: accent, boxShadow: `inset 0 0 0 1px ${accent}59` } : undefined}
+                style={isCurrent ? { borderColor: accent } : undefined}
               >
                 <span className={reached ? "" : "opacity-25 grayscale"}>
                   <SubscriptionMedallion tier={t} super={plan !== "lite"} size={46} />

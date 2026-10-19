@@ -85,8 +85,8 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   // still-loading. Show a skeleton, then an honest invalid state.
   if (loading) {
     return (
-      <div aria-label="Loading gift" role="status" className="@container mt-1.5 w-[650px] max-w-full animate-pulse overflow-hidden rounded-[4px] bg-bg-secondary">
-        <div className="grid grid-cols-1 @[480px]:grid-cols-[1.16fr_1fr]">
+      <div aria-label="Loading gift" role="status" className="@container mt-1.5 w-[580px] max-w-full animate-pulse overflow-hidden rounded-[4px] bg-bg-secondary">
+        <div className="grid grid-cols-1 @[480px]:grid-cols-[1.15fr_1fr]">
           <div className="order-2 flex min-h-[180px] flex-col p-4 @[480px]:order-1">
             <div className="h-4 w-5/6 rounded bg-bg-accent" />
             <div className="mt-3 h-3 w-3/4 rounded bg-bg-accent" />
@@ -100,7 +100,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   if (!gift) {
     return (
-      <div className="mt-1.5 w-[650px] max-w-full rounded-[4px] bg-bg-secondary px-4 py-3">
+      <div className="mt-1.5 w-[580px] max-w-full rounded-[4px] bg-bg-secondary px-4 py-3">
         <p className="text-[13px] text-text-muted">
           This gift link is invalid or has expired.
         </p>
@@ -183,9 +183,9 @@ export function GiftCardContent({ gift, buyerName, mine, claimedByMe, claiming, 
   const expires = new Date(gift.expires_at);
   const expiryLabel = Number.isNaN(expires.getTime()) ? null : expires.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   return (
-    <div className="@container mt-1.5 w-[650px] max-w-full overflow-hidden rounded-[4px] bg-bg-secondary">
-      <div className="grid grid-cols-1 @[480px]:grid-cols-[1.16fr_1fr]">
-        <div className="order-2 flex min-h-[170px] min-w-0 flex-col p-4 @[480px]:order-1">
+    <div className="@container mt-1.5 w-[580px] max-w-full overflow-hidden rounded-[4px] bg-bg-secondary">
+      <div className="grid grid-cols-1 @[480px]:grid-cols-[1.15fr_1fr]">
+        <div className="order-2 flex min-h-[165px] min-w-0 flex-col p-4 @[480px]:order-1">
           <h3 className="text-[16px] font-bold leading-5 text-header-primary">
             {mine ? "You sent a subscription gift!" : pending ? "A subscription gift for you!" : "You’ve been gifted a subscription!"}
           </h3>

@@ -95,7 +95,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
                   {shownCount} {shownCount === 1 ? "member" : "members"}
                 </p>
               </div>
-              <span className="ml-auto rounded-[8px] bg-status-online px-3 py-1.5 text-[12.5px] font-semibold text-white">Join</span>
+              <span className="ml-auto rounded-[3px] bg-status-online px-3 py-1.5 text-[13px] font-semibold text-white">Join</span>
             </div>
           </div>
         </div>

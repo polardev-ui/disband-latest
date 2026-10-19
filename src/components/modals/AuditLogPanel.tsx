@@ -163,7 +163,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
                 )}
                 {seconds !== null && <> for {formatDuration(seconds)}</>}
               </p>
-              {reason && <p className="mt-0.5 truncate text-[12.5px] text-text-muted">“{reason}”</p>}
+              {reason && <p className="mt-0.5 truncate text-[13px] text-text-muted">“{reason}”</p>}
             </div>
             <time dateTime={row.created_at} title={new Date(row.created_at).toLocaleString()} className="shrink-0 text-[12px] text-text-muted">
               {timeAgo(row.created_at)}

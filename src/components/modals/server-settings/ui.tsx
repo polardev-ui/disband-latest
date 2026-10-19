@@ -144,7 +144,7 @@ export function LevelLock({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-medium text-text-normal">{perk} unlock at Level {level}</p>
-        <p className="mt-0.5 text-[12.5px] text-text-muted">
+        <p className="mt-0.5 text-[13px] text-text-muted">
           {remaining === 1 ? "1 more Catalyst" : `${remaining} more Catalysts`} to go · {count}/{needed}
         </p>
         <div className="mt-2 h-1 max-w-[220px] overflow-hidden rounded-full bg-bg-accent">

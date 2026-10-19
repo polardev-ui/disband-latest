@@ -63,7 +63,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
               <Avatar profile={friend} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium text-text-normal">{displayName(friend)}</p>
-                {friend.username && <p className="truncate text-[12.5px] text-text-muted">@{friend.username}</p>}
+                {friend.username && <p className="truncate text-[13px] text-text-muted">@{friend.username}</p>}
               </div>
               <button
                 type="button"

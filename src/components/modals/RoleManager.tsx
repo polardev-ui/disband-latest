@@ -266,11 +266,11 @@ function RoleHeader({
     <div className="mb-4 flex items-center gap-3">
       <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 truncate text-[17px] font-semibold tracking-[-0.01em] text-text-normal">
+        <p className="flex items-center gap-1.5 truncate text-[16px] font-semibold text-header-primary">
           <span className="truncate">{role.is_default ? "@everyone" : role.name}</span>
           {role.icon && <RoleIcon icon={role.icon} name={role.name} size={17} />}
         </p>
-        <p className="text-[12.5px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
           {count} {count === 1 ? "member" : "members"}
           {role.is_default && " · everyone in the space has this role"}
         </p>
@@ -407,7 +407,7 @@ function DisplayTab({
             );
           })}
           <label
-            className="relative flex h-8 items-center gap-2 rounded-full border border-divider pl-1 pr-3 text-[12.5px] text-text-muted transition-colors hover:bg-interactive-hover"
+            className="relative flex h-8 items-center gap-2 rounded-[3px] border border-divider pl-1 pr-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover"
             title="Custom colour"
           >
             <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: color }} />
@@ -437,7 +437,7 @@ function DisplayTab({
             {role.gradient_to && (
               <>
                 <SettingRow label="Second colour">
-                  <label className="relative flex h-8 items-center gap-2 rounded-full border border-divider pl-1 pr-3 text-[12.5px] text-text-muted hover:bg-interactive-hover">
+                  <label className="relative flex h-8 items-center gap-2 rounded-[3px] border border-divider pl-1 pr-3 text-[13px] text-text-muted hover:bg-interactive-hover">
                     <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: gradient }} />
                     <span className="font-mono">{gradient.toLowerCase()}</span>
                     <input type="color" value={gradient} onChange={(e) => setGradient(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Gradient end colour" />
@@ -539,7 +539,7 @@ function RoleIconCard({
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-4 px-5 py-4">
-          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] border border-divider bg-bg-accent ${uploading ? "animate-pulse" : ""}`}>
+          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[4px] border border-divider bg-bg-accent ${uploading ? "animate-pulse" : ""}`}>
             {role.icon ? <RoleIcon icon={role.icon} name={role.name} size={30} /> : <IconShield size={20} className="text-text-muted" />}
           </div>
           <div className="min-w-0 flex-1 space-y-2.5">
@@ -558,7 +558,7 @@ function RoleIconCard({
                   className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-center text-[20px] outline-none placeholder:opacity-40 focus:border-[#00a8fc]"
                 />
               </div>
-              <span className="mt-6 text-[12.5px] text-text-muted">or</span>
+              <span className="mt-6 text-[13px] text-text-muted">or</span>
               <div className="mt-6 flex items-center gap-2">
                 <FilePickButton accept={ICON_TYPES} disabled={uploading} onPick={(f) => void pickImage(f)}>
                   <IconUpload size={15} /> {uploading ? "Uploading…" : "Upload image"}
@@ -583,7 +583,7 @@ function PermissionsTab({ role, run, update }: { role: ServerRole; run: Run; upd
   return (
     <div>
       {role.is_default && (
-        <p className="mb-5 rounded-[12px] border border-divider bg-bg-secondary px-4 py-3 text-[13px] leading-relaxed text-text-muted">
+        <p className="mb-5 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 text-[13px] leading-relaxed text-text-muted">
           @everyone can&apos;t hold moderation powers. Its message permissions are the default for every channel.
         </p>
       )}

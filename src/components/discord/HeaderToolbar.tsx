@@ -237,7 +237,7 @@ function InboxPopover({ mentions, unreads, onClose }: { mentions: any[]; unreads
                 <span className="text-[12px] font-semibold text-text-normal">{n.title}</span>
                 <span className="ml-auto text-[11px] text-text-muted">{new Date(n.created_at).toLocaleString()}</span>
               </div>
-              {n.body && <p className="mt-1 text-[12.5px] text-text-muted line-clamp-2">{n.body}</p>}
+              {n.body && <p className="mt-1 text-[13px] text-text-muted line-clamp-2">{n.body}</p>}
             </div>
           ))
         )}

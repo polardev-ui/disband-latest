@@ -106,7 +106,7 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
 
             <button type="button" onClick={onClose} className={`dg2-btn ${phase === "done" ? "is-in" : ""}`}
               disabled={phase !== "done"}>
-              Let&apos;s go
+              Done
             </button>
           </div>
         )}
@@ -117,7 +117,7 @@ export function ClaimAnimation({ plan, months, fromName, onClose }: ClaimAnimati
 
 const CSS = `
 .dg2-overlay{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;
-  background:rgba(8,9,11,.96);animation:dg2-fade .25s ease both;padding:24px}
+  background:rgba(0,0,0,.86);animation:dg2-fade .25s ease both;padding:24px}
 @keyframes dg2-fade{from{opacity:0}to{opacity:1}}
 .dg2-stage{width:100%;max-width:380px;text-align:center}
 
@@ -131,24 +131,24 @@ const CSS = `
 .dg2-medal{animation:dg2-settle .5s cubic-bezier(.2,.8,.2,1) both}
 @keyframes dg2-settle{from{transform:scale(.82);opacity:0}to{transform:none;opacity:1}}
 .dg2-kicker{margin:18px 0 0;font-size:13px;color:#8b909a;animation:dg2-up .4s .1s ease both}
-.dg2-title{margin:4px 0 0;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.1;
+.dg2-title{margin:4px 0 0;font-size:26px;font-weight:600;line-height:1.15;
   animation:dg2-up .4s .16s ease both}
-.dg2-sub{margin:6px 0 0;font-size:14px;color:#c4c8cf;animation:dg2-up .4s .22s ease both}
+.dg2-sub{margin:6px 0 0;font-size:14px;color:#b5bac1;animation:dg2-up .4s .22s ease both}
 @keyframes dg2-up{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
 
 .dg2-perks{list-style:none;margin:22px 0 0;padding:16px 0 0;width:100%;text-align:left;
   border-top:1px solid rgba(255,255,255,.08)}
-.dg2-perks li{display:flex;gap:10px;align-items:flex-start;padding:5px 0;font-size:13.5px;color:#e6e7eb;
+.dg2-perks li{display:flex;gap:10px;align-items:flex-start;padding:5px 0;font-size:13px;color:#dbdee1;
   opacity:0;transform:translateY(4px);transition:opacity .25s ease,transform .25s ease}
 .dg2-perks li.is-lit{opacity:1;transform:none}
-.dg2-perks em{font-style:normal;color:#8b909a}
+.dg2-perks em{font-style:normal;color:#949ba4}
 .dg2-tick{flex:0 0 auto;margin-top:3px;color:#23a559}
 
-.dg2-btn{margin:22px 0 0;width:100%;height:44px;border:0;border-radius:12px;background:#e6e7eb;color:#0b0c0e;
-  font-size:14.5px;font-weight:600;cursor:pointer;opacity:0;transform:translateY(4px);
-  transition:opacity .25s ease,transform .25s ease}
+.dg2-btn{margin:22px 0 0;width:100%;height:38px;border:0;border-radius:3px;background:#5865f2;color:#fff;
+  font-size:14px;font-weight:500;cursor:pointer;opacity:0;transform:translateY(4px);
+  transition:opacity .25s ease,transform .25s ease,background-color .15s ease}
 .dg2-btn.is-in{opacity:1;transform:none}
-.dg2-btn:hover{opacity:.9}
+.dg2-btn:hover{background:#4752c4}
 
 @media (prefers-reduced-motion: reduce){
   .dg2-overlay,.dg2-box,.dg2-lid,.dg2-medal,.dg2-kicker,.dg2-title,.dg2-sub{animation:none}

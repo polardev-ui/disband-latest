@@ -127,7 +127,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
       <SettingsSection title="Slots">
         <SlotMeter used={emoji.length} limit={limit} label="Custom emoji" />
         {bonus > 0 && (
-          <p className="border-t border-divider px-5 py-3 text-[12.5px] text-text-muted">
+          <p className="border-t border-divider px-5 py-3 text-[13px] text-text-muted">
             Includes <span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS}</span> from this space&apos;s Catalyst level.
           </p>
         )}
@@ -202,7 +202,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {src && <img src={src} alt={`:${e.name}:`} className="h-10 w-10 object-contain" loading="lazy" />}
-                  <span className="mt-2 w-full truncate text-center text-[12.5px] text-text-muted">:{e.name}:</span>
+                  <span className="mt-2 w-full truncate text-center text-[13px] text-text-muted">:{e.name}:</span>
                   <button
                     type="button"
                     onClick={() => setRemoving(e)}

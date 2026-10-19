@@ -50,7 +50,7 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
 
   if (applied) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-status-online/30 bg-status-online/10 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3 rounded-[4px] border border-status-online/30 bg-status-online/10 px-3 py-2.5">
         <div className="min-w-0">
           <p className="truncate text-[13px] font-semibold text-status-online">
             {applied.displayName || applied.promotionCode}
@@ -101,13 +101,13 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
           }}
           placeholder="Coupon code"
           aria-label="Coupon code"
-          className="min-w-0 flex-1 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[13px] uppercase tracking-wide text-text-normal outline-none placeholder:normal-case placeholder:tracking-normal placeholder:text-text-muted focus:border-brand/60"
+          className="min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-[13px] uppercase tracking-[0.02em] text-text-normal outline-none placeholder:normal-case placeholder:tracking-normal placeholder:text-text-muted focus:border-[#00a8fc]"
         />
         <button
           type="button"
           onClick={() => void apply()}
           disabled={busy || !code.trim()}
-          className="shrink-0 rounded-md bg-bg-accent px-3.5 py-2 text-[13px] font-semibold hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0 rounded-[3px] bg-bg-accent px-3.5 py-2 text-[13px] font-semibold hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Applying…" : "Apply"}
         </button>
@@ -122,7 +122,7 @@ function OrderSummary({ checkout }: { checkout: StripeCheckoutElementsValue }) {
   const hasDiscount = discount.minorUnitsAmount > 0;
 
   return (
-    <div className="space-y-1.5 rounded-lg bg-black/20 px-3.5 py-3 text-[13px]">
+    <div className="space-y-1.5 rounded-[4px] bg-bg-tertiary px-3.5 py-3 text-[13px]">
       <div className="flex justify-between text-text-muted">
         <span>Subtotal</span>
         <span>{subtotal.amount}</span>
@@ -175,7 +175,7 @@ function CheckoutForm({ onSuccess }: { onSuccess: () => void }) {
   if (checkoutState.type === "error") {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-status-dnd">{checkoutState.error.message}</p>
+        <p className="text-[14px] text-status-dnd">{checkoutState.error.message}</p>
       </div>
     );
   }
@@ -191,12 +191,12 @@ function CheckoutForm({ onSuccess }: { onSuccess: () => void }) {
       <PromotionCodeField checkout={checkout} />
       <OrderSummary checkout={checkout} />
 
-      {error && <p className="text-sm text-status-dnd">{error}</p>}
+      {error && <p className="text-[14px] text-status-dnd">{error}</p>}
 
       <button
         type="submit"
         disabled={!checkout.canConfirm || loading}
-        className="w-full rounded-lg bg-brand py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-[3px] bg-brand py-2.5 text-[14px] font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? "Processing…" : `Pay ${checkout.total.total.amount}`}
       </button>
@@ -217,7 +217,7 @@ export function StripeEmbeddedCheckout({
           <p className="text-[15px] font-semibold text-text-normal">
             Checkout is unavailable
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-text-muted">
+          <p className="mt-2 text-[14px] leading-5 text-text-muted">
             This build of Disband was deployed without a Stripe publishable key, so
             payments can&rsquo;t load. Nothing was charged.
           </p>
@@ -226,7 +226,7 @@ export function StripeEmbeddedCheckout({
           <button
             type="button"
             onClick={onCancel}
-            className="text-sm text-text-muted hover:text-text-normal"
+            className="text-[14px] text-text-muted hover:text-text-normal"
           >
             Back to plans
           </button>
@@ -244,7 +244,7 @@ export function StripeEmbeddedCheckout({
         <button
           type="button"
           onClick={onCancel}
-          className="text-sm text-text-muted hover:text-text-normal"
+          className="text-[14px] text-text-muted hover:text-text-normal"
         >
           Back to plans
         </button>

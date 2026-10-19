@@ -63,7 +63,7 @@ export function DiscordConnectPanel() {
 
   return (
     <div className="mx-auto max-w-xl px-6 py-16 sm:py-20">
-      <h1 className="text-3xl font-semibold tracking-[-0.02em] text-white sm:text-4xl">
+      <h1 className="text-3xl font-semibold text-white sm:text-4xl">
         Connect Discord
       </h1>
       <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-[#9aa0a8]">
@@ -71,7 +71,7 @@ export function DiscordConnectPanel() {
         Disband username.
       </p>
 
-      <div className="mt-8 rounded-xl border border-white/[0.08] bg-white/[0.02] p-6">
+      <div className="mt-8 rounded-[8px] border border-white/[0.08] bg-white/[0.02] p-6">
         {checking ? (
           <p className="text-sm text-[#6e727a]">Checking…</p>
         ) : !validGuild ? (

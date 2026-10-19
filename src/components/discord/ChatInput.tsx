@@ -746,7 +746,7 @@ export function ChatInput({
     <div className="relative shrink-0 px-4 pb-6">
       {windowDrag
         && createPortal(
-          <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8 backdrop-blur-sm">
+          <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8">
             <div className="modal-pop flex w-full max-w-lg flex-col items-center gap-3 rounded-lg border-2 border-dashed border-brand/70 bg-bg-secondary/95 px-10 py-12 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/15 text-brand">
                 <IconPlus size={30} />
