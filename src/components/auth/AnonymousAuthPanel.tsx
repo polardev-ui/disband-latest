@@ -21,8 +21,37 @@ type View = "create" | "login";
 type Step = "form" | "reveal" | "expired" | "purge-confirm" | "purged";
 
 const inputClass =
-  "w-full rounded-md border border-divider bg-bg-accent px-3.5 py-2.5 text-[15px] text-text-normal " +
-  "outline-none transition-colors placeholder:text-text-muted focus:border-brand/60";
+  "h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal " +
+  "outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]";
+
+const LABEL = "mb-2 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+const PRIMARY =
+  "flex h-11 w-full items-center justify-center rounded-[3px] bg-brand text-[16px] font-medium text-white " +
+  "transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50";
+const SECONDARY =
+  "flex h-11 w-full items-center justify-center rounded-[3px] bg-button-secondary text-[16px] font-medium text-white " +
+  "transition-colors hover:bg-button-secondary-hover";
+
+/**
+ * Why the check failed, in words a person can act on. Codes are Cloudflare's
+ * Turnstile client error codes. There is no way past a failure: the account
+ * is only created with a token the server verifies.
+ */
+function turnstileAdvice(code: string | null): string {
+  if (code && (code.startsWith("1106") || code === "200100")) {
+    return "Your device's clock looks wrong. Turn on automatic date and time, then retry.";
+  }
+  if (code && code.startsWith("1102")) {
+    return "Verification isn't set up for this address yet. Use disband.dev in your browser.";
+  }
+  if (code && (code.startsWith("1105") || code.startsWith("1101"))) {
+    return "Your browser isn't supported by the verification. Update it or try another browser.";
+  }
+  if (code && (code.startsWith("3") || code.startsWith("6"))) {
+    return "We couldn't verify this device. Turn off VPNs, proxies and content blockers, then retry.";
+  }
+  return "The verification couldn't load. Turn off content blockers for this page, then retry.";
+}
 
 const RESTRICTIONS = [
   "Can't create servers",
@@ -30,6 +59,11 @@ const RESTRICTIONS = [
   "Can't accept gifts",
   "Can't create bots",
 ];
+
+/** The server answers "TURNSTILE_REQUIRED"; the shared constant is a different sentinel. */
+function isTurnstileCode(code: string | undefined): boolean {
+  return code === TURNSTILE_REQUIRED || code === "TURNSTILE_REQUIRED";
+}
 
 function NewBadge() {
   return (
@@ -83,12 +117,13 @@ export function AnonymousAuthPanel({
   const [copied, setCopied] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
-  const [turnstileFailed, setTurnstileFailed] = useState(false);
+  // Set when the widget fails; holds Cloudflare's code ("" when it gave none).
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const busyRef = useRef(false);
 
   function resetTurnstile() {
     setTurnstileToken(null);
-    setTurnstileFailed(false);
+    setTurnstileError(null);
     setTurnstileKey((k) => k + 1);
   }
 
@@ -111,11 +146,11 @@ export function AnonymousAuthPanel({
       const result = await registerAnonymousAccount(tier, turnstileToken);
       if (result.error) {
         setError(
-          result.code === TURNSTILE_REQUIRED
+          isTurnstileCode(result.code)
             ? "Complete the verification challenge, then try again."
             : result.error,
         );
-        if (result.code === TURNSTILE_REQUIRED) resetTurnstile();
+        if (isTurnstileCode(result.code)) resetTurnstile();
         return;
       }
       setCreatedNumber(result.number ?? "");
@@ -188,7 +223,7 @@ export function AnonymousAuthPanel({
       }
       if (result.error) {
         setError(
-          result.code === TURNSTILE_REQUIRED
+          isTurnstileCode(result.code)
             ? "Complete the verification challenge, then try again."
             : result.error,
         );
@@ -212,7 +247,7 @@ export function AnonymousAuthPanel({
       const result = await exportAnonymousData(expired.number, turnstileToken);
       if (result.error) {
         setError(
-          result.code === TURNSTILE_REQUIRED
+          isTurnstileCode(result.code)
             ? "Complete the verification challenge, then try again."
             : result.error,
         );
@@ -235,7 +270,7 @@ export function AnonymousAuthPanel({
       const result = await purgeAnonymousAccount(expired.number, turnstileToken);
       if (result.error) {
         setError(
-          result.code === TURNSTILE_REQUIRED
+          isTurnstileCode(result.code)
             ? "Complete the verification challenge, then try again."
             : result.error,
         );
@@ -260,39 +295,43 @@ export function AnonymousAuthPanel({
     }
   }
 
+  // The action ties each token to this form step; the server checks it.
+  const turnstileAction =
+    step === "purge-confirm" ? "anon-purge" : step === "expired" ? "anon-export" : view === "create" ? "anon-register" : "anon-login";
+
   const turnstile = (
     <div className="space-y-2">
       <Turnstile
-        key={turnstileKey}
+        key={`${turnstileKey}-${turnstileAction}`}
         siteKey={PUBLIC_ENV.turnstileSiteKey}
-        onToken={setTurnstileToken}
-        onExpire={() => setTurnstileToken(null)}
-        onError={() => {
-          setTurnstileToken(null);
-          setTurnstileFailed(true);
+        action={turnstileAction}
+        onToken={(t) => {
+          setTurnstileToken(t);
+          setTurnstileError(null);
         }}
+        onExpire={() => setTurnstileToken(null)}
+        onError={(code) => {
+          setTurnstileToken(null);
+          setTurnstileError(code ?? "");
+        }}
+        className="flex min-h-[65px] justify-center"
       />
-      {turnstileFailed && (
-        <p className="rounded-md border border-divider bg-bg-accent px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted">
-          The verification couldn&apos;t load.{" "}
-          <button
-            type="button"
-            className="font-medium text-brand hover:underline"
-            onClick={resetTurnstile}
-          >
+      {turnstileError !== null && (
+        <p role="alert" className="rounded-[3px] bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+          {turnstileAdvice(turnstileError)}{" "}
+          <button type="button" className="font-medium text-[#00a8fc] hover:underline" onClick={resetTurnstile}>
             Retry
-          </button>{" "}
-          — or turn off content blockers for this page.
+          </button>
+          {turnstileError && turnstileError !== "timeout" && (
+            <span className="ml-1 text-[12px] text-text-muted">(code {turnstileError})</span>
+          )}
         </p>
       )}
     </div>
   );
 
   const errorBlock = error && (
-    <p
-      role="alert"
-      className="rounded-md border border-status-dnd/30 bg-status-dnd/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-dnd"
-    >
+    <p role="alert" className="text-[14px] leading-[18px] text-status-dnd">
       {error}
     </p>
   );
@@ -326,299 +365,243 @@ export function AnonymousAuthPanel({
               ? "A throwaway account with a randomised @disband.dev address. No email, no IP logging — just a 16-digit number."
               : "Enter your 16-digit account number to pick up where you left off.";
 
+  const spinner = <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />;
+
   return (
     <div
       className={
         overlay
-          ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade px-6 py-12 backdrop-blur-sm"
-          : "relative flex app-screen items-center justify-center overflow-hidden bg-bg-tertiary px-6 py-12"
+          ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/85 overlay-fade p-4"
+          : "relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#404eed] px-4 py-8"
       }
       onClick={overlay ? onClose : undefined}
     >
-      {!overlay && <ScatteredIcons />}
+      {!overlay && <ScatteredIcons tone="text-white" />}
+      {!overlay && (
+        <div className="absolute left-6 top-6 z-10 hidden items-center gap-2 sm:flex">
+          <Logo size={32} className="h-8 w-8" priority />
+          <span className="text-[20px] font-extrabold tracking-[-0.01em] text-white">Disband</span>
+        </div>
+      )}
       <div
-        className={
-          overlay
-            ? "modal-pop relative w-full max-w-[420px] rounded-lg bg-bg-tertiary p-6 shadow-[var(--elevation-high)]"
-            : "relative z-10 w-full max-w-[420px]"
-        }
+        className={`${overlay ? "classic-modal" : "z-10"} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[480px] overflow-y-auto rounded-[5px] bg-bg-primary p-6 shadow-[var(--elevation-high)] sm:p-8`}
         onClick={overlay ? (e) => e.stopPropagation() : undefined}
       >
-        <div className="mb-6 flex flex-col items-center text-center">
-          <Logo adaptive size={44} className="h-11 w-11" priority />
-          <h1 className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-text-normal">{heading}</h1>
-          <p className="mt-2 max-w-[21rem] text-[14px] leading-relaxed text-text-muted">{subheading}</p>
+        <div className="mb-5 text-center">
+          <h1 className="text-[24px] font-semibold leading-[30px] text-header-primary">{heading}</h1>
+          <p className="mt-2 text-[16px] leading-5 text-header-secondary">{subheading}</p>
         </div>
 
-        <div className="rounded-lg bg-bg-secondary p-6 shadow-[0_16px_50px_-20px_rgba(0,0,0,0.8)]">
-          {/* CREATE — tier picker ------------------------------------------- */}
-          {step === "form" && view === "create" && (
-            <div className="space-y-4">
+        {/* CREATE — tier picker */}
+        {step === "form" && view === "create" && (
+          <div className="space-y-5">
+            <div role="radiogroup" aria-label="How long the account lasts">
+              <span className={LABEL}>Account lasts</span>
               <div className="grid grid-cols-2 gap-2">
-                {ANON_TIER_ORDER.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTier(t)}
-                    aria-pressed={tier === t}
-                    className={
-                      "rounded-md border px-3 py-2.5 text-[14px] font-medium transition-colors " +
-                      (tier === t
-                        ? "border-brand/70 bg-brand/10 text-text-normal"
-                        : "border-divider text-text-muted hover:border-text-muted hover:bg-interactive-hover")
-                    }
-                  >
-                    {ANON_TIERS[t].label}
-                  </button>
-                ))}
+                {ANON_TIER_ORDER.map((t) => {
+                  const on = tier === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => setTier(t)}
+                      className={`flex h-11 items-center gap-2.5 rounded-[3px] px-3 text-left text-[16px] font-medium transition-colors ${
+                        on ? "bg-interactive-selected text-header-primary" : "bg-bg-secondary text-header-secondary hover:bg-interactive-hover hover:text-header-primary"
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-white" : "border-interactive-normal"}`}
+                      >
+                        {on && <span className="h-2.5 w-2.5 rounded-full bg-white" />}
+                      </span>
+                      {ANON_TIERS[t].label}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
 
-              <ul className="space-y-1.5 rounded-md border border-divider bg-bg-accent px-3.5 py-3">
+            <div>
+              <span className={LABEL}>Anonymous accounts can&apos;t</span>
+              <ul className="space-y-1.5 rounded-[3px] bg-bg-secondary px-3 py-2.5">
                 {RESTRICTIONS.map((r) => (
-                  <li key={r} className="flex items-center gap-2 text-[13px] text-text-muted">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="shrink-0 text-status-dnd">
+                  <li key={r} className="flex items-center gap-2 text-[14px] text-header-secondary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 text-status-dnd">
                       <path d="M18 6 6 18M6 6l12 12" />
                     </svg>
-                    {r}
+                    {r.replace(/^Can't (.)/, (_, c: string) => c.toUpperCase())}
                   </li>
                 ))}
               </ul>
-
-              {turnstile}
-              {errorBlock}
-
-              <button
-                type="button"
-                onClick={() => void handleCreate()}
-                disabled={loading || (!turnstileToken && !turnstileFailed)}
-                className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                ) : (
-                  `Create ${ANON_TIERS[tier].label} account`
-                )}
-              </button>
             </div>
-          )}
 
-          {/* REVEAL ---------------------------------------------------------- */}
-          {step === "reveal" && (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-brand/40 bg-brand/[0.06] px-4 py-4 text-center">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Your account number</p>
-                <p className="mt-2 select-all font-mono text-[22px] font-semibold tracking-[0.12em] text-text-normal">
-                  {createdNumber || "—"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void copyNumber()}
-                className="w-full rounded-md border border-divider py-2.5 text-[14px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
-              >
-                {copied ? "Copied!" : "Copy account number"}
-              </button>
-              <p className="rounded-md border border-status-dnd/30 bg-status-dnd/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-dnd">
-                We can&apos;t recover this number for you. If you lose it, the account is gone.
+            {turnstile}
+            {errorBlock}
+
+            <button type="button" onClick={() => void handleCreate()} disabled={loading || !turnstileToken} className={PRIMARY}>
+              {loading ? spinner : `Create ${ANON_TIERS[tier].label} Account`}
+            </button>
+          </div>
+        )}
+
+        {/* REVEAL */}
+        {step === "reveal" && (
+          <div className="space-y-4">
+            <div className="rounded-[3px] bg-bg-tertiary px-4 py-4 text-center">
+              <p className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Your account number</p>
+              <p className="mt-2 select-all font-mono text-[22px] font-semibold tracking-[0.12em] text-header-primary">
+                {createdNumber || "—"}
               </p>
-              {errorBlock}
-              <button
-                type="button"
-                onClick={() => void handleRevealContinue()}
-                disabled={loading}
-                className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                ) : (
-                  "I've saved it — continue"
-                )}
-              </button>
             </div>
-          )}
+            <button type="button" onClick={() => void copyNumber()} className={SECONDARY}>
+              {copied ? "Copied!" : "Copy Account Number"}
+            </button>
+            <p className="rounded-[3px] bg-[#f0b232]/15 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+              We can&apos;t recover this number for you. If you lose it, the account is gone.
+            </p>
+            {errorBlock}
+            <button type="button" onClick={() => void handleRevealContinue()} disabled={loading} className={PRIMARY}>
+              {loading ? spinner : "I've Saved It — Continue"}
+            </button>
+          </div>
+        )}
 
-          {/* LOGIN ----------------------------------------------------------- */}
-          {step === "form" && view === "login" && (
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-1.5 block text-[13px] font-medium text-text-normal">Account number</span>
-                <input
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={formatAccountNumber(numberInput)}
-                  onChange={(e) => setNumberInput(normalizeAccountNumber(e.target.value))}
-                  placeholder="0000 0000 0000 0000"
-                  className={inputClass + " font-mono tracking-[0.12em]"}
-                />
-              </label>
+        {/* LOGIN */}
+        {step === "form" && view === "login" && (
+          <div className="space-y-5">
+            <label className="block">
+              <span className={LABEL}>
+                Account number <span className="text-status-dnd">*</span>
+              </span>
+              <input
+                inputMode="numeric"
+                autoComplete="off"
+                value={formatAccountNumber(numberInput)}
+                onChange={(e) => setNumberInput(normalizeAccountNumber(e.target.value))}
+                placeholder="0000 0000 0000 0000"
+                className={inputClass + " font-mono tracking-[0.12em]"}
+              />
+            </label>
 
-              {turnstile}
-              {errorBlock}
+            {turnstile}
+            {errorBlock}
 
-              <button
-                type="button"
-                onClick={() => void handleLogin()}
-                disabled={loading || (!turnstileToken && !turnstileFailed)}
-                className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                ) : (
-                  "Log in"
-                )}
-              </button>
-            </div>
-          )}
+            <button type="button" onClick={() => void handleLogin()} disabled={loading || !turnstileToken} className={PRIMARY}>
+              {loading ? spinner : "Log In"}
+            </button>
+          </div>
+        )}
 
-          {/* EXPIRED --------------------------------------------------------- */}
-          {step === "expired" && expired && (
-            <div className="space-y-4">
-              <div className="rounded-md border border-divider bg-bg-accent px-3.5 py-3 text-[13px] leading-relaxed text-text-muted">
-                Expired on <span className="font-medium text-text-normal">{formatDay(expired.expiresAt)}</span>.
-                {expired.purged
-                  ? " Everything has already been deleted."
-                  : expired.canDownload
-                    ? ` You can download a copy of your data until ${formatDay(expired.purgeAfter)} (30 days).`
-                    : " The download window has closed; this data will be purged."}
-              </div>
+        {/* EXPIRED */}
+        {step === "expired" && expired && (
+          <div className="space-y-4">
+            <p className="rounded-[3px] bg-bg-secondary px-3 py-2.5 text-[14px] leading-[18px] text-header-secondary">
+              Expired on <span className="font-medium text-header-primary">{formatDay(expired.expiresAt)}</span>.
+              {expired.purged
+                ? " Everything has already been deleted."
+                : expired.canDownload
+                  ? ` You can download a copy of your data until ${formatDay(expired.purgeAfter)} (30 days).`
+                  : " The download window has closed; this data will be purged."}
+            </p>
 
-              {notice && (
-                <p className="rounded-md border border-status-online/25 bg-status-online/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-text-normal">
-                  {notice}
-                </p>
-              )}
-              {errorBlock}
+            {notice && <p className="text-[14px] leading-[18px] text-status-online">{notice}</p>}
+            {errorBlock}
 
-              {!expired.purged && expired.canDownload && (
-                <>
-                  {turnstile}
-                  <button
-                    type="button"
-                    onClick={() => void handleExport()}
-                    disabled={loading || (!turnstileToken && !turnstileFailed)}
-                    className="flex w-full items-center justify-center rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {loading ? (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                    ) : (
-                      "Download my data"
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("purge-confirm");
-                      setError(null);
-                      setNotice(null);
-                      resetTurnstile();
-                    }}
-                    className="w-full rounded-md border border-divider py-2.5 text-[14px] font-medium text-status-dnd transition-colors hover:border-status-dnd/50 hover:bg-status-dnd/10"
-                  >
-                    Deny the copy — delete everything now
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full rounded-md py-2 text-[14px] font-medium text-text-muted transition-colors hover:text-text-normal"
-              >
-                Back to sign in
-              </button>
-            </div>
-          )}
-
-          {/* PURGE CONFIRM --------------------------------------------------- */}
-          {step === "purge-confirm" && expired && (
-            <div className="space-y-4">
-              <p className="rounded-md border border-status-dnd/30 bg-status-dnd/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-dnd">
-                This is permanent. Your profile, messages, reactions, notes, saved GIFs and every
-                other trace of this account will be deleted right now, with no copy kept.
-              </p>
-              {turnstile}
-              {errorBlock}
-              <button
-                type="button"
-                onClick={() => void handlePurge()}
-                disabled={loading || (!turnstileToken && !turnstileFailed)}
-                className="flex w-full items-center justify-center rounded-md bg-status-dnd py-2.5 text-[15px] font-medium text-white transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                ) : (
-                  "Yes, delete everything permanently"
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("expired");
-                  setError(null);
-                  resetTurnstile();
-                }}
-                className="w-full rounded-md border border-divider py-2.5 text-[14px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {/* PURGED ---------------------------------------------------------- */}
-          {step === "purged" && (
-            <div className="space-y-4">
-              <p className="rounded-md border border-status-online/25 bg-status-online/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-text-normal">
-                Done. This account number now points at nothing. It can&apos;t be used to sign in
-                again.
-              </p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full rounded-md bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover"
-              >
-                Back to sign in
-              </button>
-            </div>
-          )}
-        </div>
-
-        {step === "form" && (
-          <p className="mt-6 text-center text-[14px] text-text-muted">
-            {view === "create" ? (
+            {!expired.purged && expired.canDownload && (
               <>
-                Already have a number?{" "}
-                <button
-                  type="button"
-                  onClick={() => switchView("login")}
-                  className="font-medium text-text-normal transition-colors hover:text-brand"
-                >
-                  Log in
+                {turnstile}
+                <button type="button" onClick={() => void handleExport()} disabled={loading || !turnstileToken} className={PRIMARY}>
+                  {loading ? spinner : "Download My Data"}
                 </button>
-              </>
-            ) : (
-              <>
-                Need a throwaway account?{" "}
                 <button
                   type="button"
-                  onClick={() => switchView("create")}
-                  className="font-medium text-text-normal transition-colors hover:text-brand"
+                  onClick={() => {
+                    setStep("purge-confirm");
+                    setError(null);
+                    setNotice(null);
+                    resetTurnstile();
+                  }}
+                  className="flex h-11 w-full items-center justify-center rounded-[3px] border border-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger"
                 >
-                  Create one
+                  Delete Everything Now
                 </button>
               </>
             )}
-          </p>
+          </div>
         )}
 
-        <p className="mt-4 text-center">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[13px] text-text-muted transition-colors hover:text-text-normal"
-          >
-            Back
-          </button>
-        </p>
+        {/* PURGE CONFIRM */}
+        {step === "purge-confirm" && expired && (
+          <div className="space-y-4">
+            <p className="rounded-[3px] bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+              This is permanent. Your profile, messages, reactions, notes, saved GIFs and every other trace of this
+              account will be deleted right now, with no copy kept.
+            </p>
+            {turnstile}
+            {errorBlock}
+            <button
+              type="button"
+              onClick={() => void handlePurge()}
+              disabled={loading || !turnstileToken}
+              className="flex h-11 w-full items-center justify-center rounded-[3px] bg-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? spinner : "Yes, Delete Everything"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("expired");
+                setError(null);
+                resetTurnstile();
+              }}
+              className={SECONDARY}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* PURGED */}
+        {step === "purged" && (
+          <div className="space-y-4">
+            <p className="rounded-[3px] bg-status-online/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+              Done. This account number now points at nothing and can&apos;t be used to sign in again.
+            </p>
+            <button type="button" onClick={onClose} className={PRIMARY}>
+              Back to Log In
+            </button>
+          </div>
+        )}
+
+        {/* Footer links, left-aligned like the login card */}
+        <div className="mt-3 space-y-1 text-[14px] text-text-muted">
+          {step === "form" &&
+            (view === "create" ? (
+              <p>
+                Already have a number?{" "}
+                <button type="button" onClick={() => switchView("login")} className="font-medium text-[#00a8fc] hover:underline">
+                  Log In
+                </button>
+              </p>
+            ) : (
+              <p>
+                Need a throwaway account?{" "}
+                <button type="button" onClick={() => switchView("create")} className="font-medium text-[#00a8fc] hover:underline">
+                  Create One
+                </button>
+              </p>
+            ))}
+          {step !== "purged" && (
+            <p>
+              <button type="button" onClick={onClose} className="font-medium text-[#00a8fc] hover:underline">
+                {step === "expired" ? "Back to Log In" : "Back"}
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
