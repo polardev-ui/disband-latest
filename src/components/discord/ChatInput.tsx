@@ -8,7 +8,10 @@ import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconAttach, IconGift, IconPoll, IconClose, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
-import { applyAtomicEveryone } from "@/lib/composer-tokens";
+import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/composer-tokens";
+import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
+import { useMemberSearch } from "@/hooks/useMemberSearch";
+import { SlashCommandComposer } from "./SlashCommandComposer";
 import { formatFileSize, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
@@ -104,6 +107,14 @@ function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: 
   );
 }
 
+/** The classic autocomplete popup above the composer, and its parts. */
+const AUTOCOMPLETE =
+  "menu-pop absolute bottom-full left-4 right-4 z-20 mb-2 max-h-[490px] overflow-y-auto rounded-lg bg-bg-secondary pb-2 shadow-[var(--elevation-high)]";
+const AUTOCOMPLETE_HEADER =
+  "px-3 pb-1 pt-3 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+const AUTOCOMPLETE_ROW =
+  "mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-[4px] px-2 text-left";
+
 /** Visible lines before the composer starts scrolling, matching Discord. */
 const COMPOSER_MAX_LINES = 16;
 
@@ -134,6 +145,13 @@ export function ChatInput({
   const [channelIdx, setChannelIdx] = useState(0);
   const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
+  // Members picked from the @ list: shown as "@Display Name", sent as @username.
+  const [spans, setSpans] = useState<MentionSpan[]>([]);
+  const spansRef = useRef(spans);
+  spansRef.current = spans;
+  const [slashIdx, setSlashIdx] = useState(0);
+  const [command, setCommand] = useState<{ def: SlashCommand; initial: Record<string, string> } | null>(null);
+  const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const { mounted: plusMounted, exiting: plusExiting } = usePresence(plusMenuOpen);
   const [giftOpen, setGiftOpen] = useState(false);
@@ -143,14 +161,37 @@ export function ChatInput({
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const chipLayerRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
 
-  const { subscriptionPlan, tetherProfile } = useApp();
+  const { subscriptionPlan, tetherProfile, serverPermissions } = useApp();
+
+  /**
+   Every text change goes through here so picked mentions stay atomic and
+   keep their offsets; `cursor` overrides where the caret lands.
+  */
+  const applyText = useCallback((prev: string, next: string, cursorAt?: number) => {
+    const r = applyAtomicEdit(prev, next, spansRef.current);
+    setText(r.text);
+    setSpans(r.spans);
+    const pos = r.cursor ?? cursorAt;
+    if (pos != null) {
+      setCursor(pos);
+      requestAnimationFrame(() => textareaRef.current?.setSelectionRange(pos, pos));
+    }
+    return r;
+  }, []);
+
+  const clearText = useCallback(() => {
+    setText("");
+    setSpans([]);
+  }, []);
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
       setText(editingContent);
+      setSpans([]);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [editingMessageId, editingContent]);
@@ -224,6 +265,37 @@ export function ChatInput({
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
 
+  // Slash commands: only offered when the composer starts with "/" and the
+  // user has the matching moderation permission.
+  const slashCtx = useMemo(() => {
+    const m = text.match(/^\/([a-zA-Z]*)$/);
+    return m && !editingMessageId ? { query: m[1].toLowerCase() } : null;
+  }, [text, editingMessageId]);
+  // Only in spaces, and only the commands this member is allowed to run.
+  const allowedCommands = useMemo(
+    () => (serverId ? SLASH_COMMANDS.filter((c) => serverPermissions?.[c.permission]) : []),
+    [serverId, serverPermissions],
+  );
+  const slashCommands = useMemo(
+    () => (slashCtx ? allowedCommands.filter((c) => c.name.startsWith(slashCtx.query)) : []),
+    [allowedCommands, slashCtx],
+  );
+  const showSlash = !!slashCtx && slashCommands.length > 0;
+
+  function enterCommand(def: SlashCommand, initial: Record<string, string> = {}) {
+    clearText();
+    setSlashIdx(0);
+    setError(null);
+    setCommandNotice(null);
+    setCommand({ def, initial });
+  }
+
+  useEffect(() => {
+    if (!commandNotice) return;
+    const t = window.setTimeout(() => setCommandNotice(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [commandNotice]);
+
   const emojiCtx = getEmojiQuery(text, cursor);
   const showEmoji = !!emojiCtx && !showMentions;
 
@@ -272,6 +344,8 @@ export function ChatInput({
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [text, editingMessageId]);
 
+  const memberMatches = useMemberSearch(serverId, mentionCtx ? mentionCtx.query : null, members, 8);
+
   const mentionItems = useMemo((): MentionItem[] => {
     if (!mentionCtx) return [];
     const q = mentionCtx.query.toLowerCase();
@@ -306,13 +380,15 @@ export function ChatInput({
             },
           ]
         : [];
-    const memberItems: MentionItem[] = members      .filter((m) => m.username && (q === "" || m.username!.toLowerCase().startsWith(q) || displayName(m).toLowerCase().includes(q)))
+    // Username and display name both match: "@tev" finds the member called
+    // Tev even when their username is something else.
+    const memberItems: MentionItem[] = memberMatches
       .map((m) => ({
         id: m.id,
         kind: "member" as const,
         label: displayName(m),
         sublabel: m.username ? `@${m.username}` : undefined,
-        insert: `@${m.username}`,
+        insert: `@${displayName(m)}`,
         profile: m,
       }));
     const roleItems: MentionItem[] = roles
@@ -326,7 +402,7 @@ export function ChatInput({
         color: r.color,
       }));
     return [...tetherItems, ...everyoneItems, ...memberItems, ...roleItems].slice(0, 8);
-  }, [mentionCtx, members, roles, tetherEnabled, tetherProfile, serverId]);
+  }, [mentionCtx, memberMatches, roles, tetherEnabled, tetherProfile, serverId]);
 
   // Validate at pick time so an oversize file never looks stageable only to
   // fail at send (uploadMedia enforces the same limit as a backstop).
@@ -405,13 +481,16 @@ export function ChatInput({
     const before = text.slice(0, mentionCtx.start);
     const after = text.slice(textareaRef.current.selectionStart);
     const next = `${before}${item.insert} ${after}`;
-    setText(next);
+    const pos = before.length + item.insert.length + 1;
+    const r = applyText(text, next, pos);
+    // A picked member becomes a token: "@Tev" on screen, "@5e" when sent.
+    if (item.kind === "member" && item.profile?.username && item.id !== "everyone" && item.insert !== "@tether") {
+      const start = before.length;
+      const span: MentionSpan = { start, end: start + item.insert.length, label: item.insert, username: item.profile.username };
+      if (r.text.slice(span.start, span.end) === span.label) setSpans([...r.spans, span]);
+    }
     setMentionIdx(0);
-    requestAnimationFrame(() => {
-      const pos = before.length + item.insert.length + 1;
-      textareaRef.current?.setSelectionRange(pos, pos);
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function insertChannel(item: ChannelLite) {
@@ -419,13 +498,9 @@ export function ChatInput({
     const before = text.slice(0, channelCtx.start);
     const after = text.slice(textareaRef.current.selectionStart);
     const next = `${before}#${item.name} ${after}`;
-    setText(next);
+    applyText(text, next, before.length + item.name.length + 2);
     setChannelIdx(0);
-    requestAnimationFrame(() => {
-      const pos = before.length + item.name.length + 2;
-      textareaRef.current?.setSelectionRange(pos, pos);
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function insertEmojiFromPicker(item: EmojiMatch) {
@@ -434,13 +509,9 @@ export function ChatInput({
     const after = text.slice(textareaRef.current.selectionStart);
     const spacer = after && !after.startsWith(" ") ? " " : "";
     const next = `${before}${item.emoji}${spacer}${after}`;
-    setText(next);
+    applyText(text, next, before.length + item.emoji.length + spacer.length);
     setEmojiIdx(0);
-    requestAnimationFrame(() => {
-      const pos = before.length + item.emoji.length + spacer.length;
-      textareaRef.current?.setSelectionRange(pos, pos);
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function insertEmoji(emoji: string) {
@@ -452,10 +523,8 @@ export function ChatInput({
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     const next = text.slice(0, start) + emoji + text.slice(end);
-    setText(next);
+    applyText(text, next, start + emoji.length);
     requestAnimationFrame(() => {
-      const pos = start + emoji.length;
-      ta.setSelectionRange(pos, pos);
       ta.focus();
       onTypingActivity?.();
     });
@@ -463,8 +532,9 @@ export function ChatInput({
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
+    const outgoing = resolveMentionSpans(text, spans);
     if (editingMessageId) {
-      const content = normalizeMessageContent(text);
+      const content = normalizeMessageContent(outgoing);
       if (!content) return;
       setError(null);
       const err = await onSend(content, { replyToId: undefined });
@@ -475,13 +545,32 @@ export function ChatInput({
       // Exit edit mode AND clear the composer: without this the edited text
       // stays in the box after Enter even though the edit already saved
       // (the parent clears its editing state, but this local draft is ours).
-      setText("");
+      clearText();
       onCancelEdit?.();
       return;
     }
 
-    const content = normalizeMessageContent(text);
+    const content = normalizeMessageContent(outgoing);
     if (!content && entries.length === 0) return;
+
+    // "/ban polar spamming" typed or pasted in one go opens as the command,
+    // prefilled, so it is checked before anything runs.
+    const typedCmd = entries.length === 0 ? content.match(/^\/([a-z]+)(?:\s+([\s\S]*))?$/i) : null;
+    const typedDef = typedCmd ? allowedCommands.find((c) => c.name === typedCmd[1].toLowerCase()) : undefined;
+    if (typedCmd && typedDef) {
+      const rest = (typedCmd[2] ?? "").trim();
+      const [userTok = "", ...more] = rest ? rest.split(/\s+/) : [];
+      const initial: Record<string, string> = {};
+      if (userTok) initial.user = userTok;
+      if (typedDef.name === "timeout") {
+        if (more[0]) initial.duration = more[0];
+        if (more.length > 1) initial.reason = more.slice(1).join(" ");
+      } else if (more.length) {
+        initial.reason = more.join(" ");
+      }
+      enterCommand(typedDef, initial);
+      return;
+    }
 
     setError(null);
     const replyToId = replyTo?.id;
@@ -490,7 +579,7 @@ export function ChatInput({
     // Clear the composer optimistically, but keep the reply chip until the
     // first message lands: the parent owns reply state, so clearing it early
     // would make it unrecoverable on failure.
-    setText("");
+    clearText();
     clear();
 
     // One message carries the caption and every file. This used to loop and
@@ -506,7 +595,8 @@ export function ChatInput({
         // Nothing landed — it is one insert now, so there is no partial
         // state to reconcile. Restore the draft exactly as it was. (clear()
         // revoked the preview URLs, so add() re-creates them.)
-        setText(content);
+        setText(text);
+        setSpans(spans);
         for (const f of pendingFiles) add(f);
         setError(err);
         return;
@@ -518,7 +608,8 @@ export function ChatInput({
     if (pendingFiles.length === 0 && content) {
       const err = await onSend(content, { replyToId });
       if (err) {
-        setText(content);
+        setText(text);
+        setSpans(spans);
         setError(err);
         return;
       }
@@ -550,7 +641,20 @@ export function ChatInput({
       if (editingMessageId) {
         e.preventDefault();
         onCancelEdit?.();
-        setText("");
+        clearText();
+        return;
+      }
+    }
+    if (showSlash) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const n = slashCommands.length;
+        setSlashIdx((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + n) % n);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        enterCommand(slashCommands[slashIdx] ?? slashCommands[0]);
         return;
       }
     }
@@ -629,51 +733,101 @@ export function ChatInput({
           document.body,
         )}
 
+      {commandNotice && !command && (
+        <div role="status" className="view-enter mb-2 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">
+          <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-online text-[10px] font-bold text-white">✓</span>
+          <span className="min-w-0 flex-1">{commandNotice}</span>
+          <span className="shrink-0 text-[12px] text-text-muted">Only you can see this</span>
+        </div>
+      )}
+
+      {showSlash && (
+        <div role="listbox" aria-label="Commands" className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>Commands</p>
+          {slashCommands.map((c, i) => (
+            <button
+              key={c.name}
+              type="button"
+              role="option"
+              aria-selected={slashIdx === i}
+              onMouseEnter={() => setSlashIdx(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                enterCommand(c);
+              }}
+              className={`${AUTOCOMPLETE_ROW} h-auto py-2 ${slashIdx === i ? "bg-interactive-hover" : ""}`}
+            >
+              <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M15.5 3 8.5 21" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[16px] leading-5">
+                  <span className="font-semibold text-header-primary">/{c.name}</span>
+                  {c.options.map((o) => (
+                    <span key={o.name} className="ml-2 text-[14px] text-header-secondary">{o.name}</span>
+                  ))}
+                </span>
+                <span className="block truncate text-[14px] leading-[18px] text-header-secondary">{c.description}</span>
+              </span>
+              <span className="shrink-0 text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">Disband</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {showMentions && mentionItems.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
+        <div role="listbox" aria-label="Mentions" className={AUTOCOMPLETE}>
           {(() => {
             let idx = 0;
             const membersList = mentionItems.filter((m) => m.kind === "member");
             const rolesList = mentionItems.filter((m) => m.kind === "role");
             return (
               <>
-                {membersList.length > 0 && (
-                  <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Members</p>
-                )}
+                {membersList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>Members</p>}
                 {membersList.map((item) => {
                   const myIdx = idx++;
                   return (
                     <button
                       key={`m-${item.id}`}
                       type="button"
+                      role="option"
+                      aria-selected={mentionIdx === myIdx}
+                      onMouseEnter={() => setMentionIdx(myIdx)}
                       onMouseDown={(e) => { e.preventDefault(); insertMention(item); }}
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                        mentionIdx === myIdx ? "bg-interactive-selected" : ""
-                      }`}
+                      className={`${AUTOCOMPLETE_ROW} ${mentionIdx === myIdx ? "bg-interactive-hover" : ""}`}
                     >
-                      {item.profile && <Avatar profile={item.profile} size="sm" />}
-                      <span className="truncate font-medium">{item.label}</span>
-                      {item.sublabel && <span className="ml-auto truncate text-xs text-text-muted">{item.sublabel}</span>}
+                      {item.profile ? (
+                        <Avatar profile={item.profile} size="sm" className="!h-6 !w-6 !text-[10px]" />
+                      ) : (
+                        <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center text-[18px] font-medium text-header-secondary">@</span>
+                      )}
+                      <span className="min-w-0 truncate text-[16px] font-medium text-header-primary">{item.id === "everyone" ? "@everyone" : item.label}</span>
+                      {item.sublabel && (
+                        <span className="ml-auto shrink-0 truncate pl-3 text-[14px] text-header-secondary">
+                          {item.sublabel.startsWith("@") ? item.sublabel.slice(1) : item.sublabel}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
-                {rolesList.length > 0 && (
-                  <p className="mt-1 px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Roles</p>
-                )}
+                {rolesList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>Roles</p>}
                 {rolesList.map((item) => {
                   const myIdx = idx++;
                   return (
                     <button
                       key={`r-${item.id}`}
                       type="button"
+                      role="option"
+                      aria-selected={mentionIdx === myIdx}
+                      onMouseEnter={() => setMentionIdx(myIdx)}
                       onMouseDown={(e) => { e.preventDefault(); insertMention(item); }}
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                        mentionIdx === myIdx ? "bg-interactive-selected" : ""
-                      }`}
+                      className={`${AUTOCOMPLETE_ROW} ${mentionIdx === myIdx ? "bg-interactive-hover" : ""}`}
                     >
-                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color ?? "#949ba4" }} />
-                      <span className="truncate font-medium" style={{ color: item.color ?? undefined }}>{item.label}</span>
-                      <span className="ml-auto text-xs text-text-muted">{item.sublabel}</span>
+                      <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center text-[18px] font-medium" style={{ color: item.color ?? "#949ba4" }}>@</span>
+                      <span className="truncate text-[16px] font-medium" style={{ color: item.color ?? undefined }}>{item.label}</span>
+                      <span className="ml-auto shrink-0 text-[14px] text-header-secondary">{item.sublabel}</span>
                     </button>
                   );
                 })}
@@ -684,48 +838,75 @@ export function ChatInput({
       )}
 
       {showChannels && channelItems.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
-          <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Channels</p>
+        <div role="listbox" aria-label="Channels" className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>Text Channels</p>
           {channelItems.map((c, i) => (
             <button
               key={c.id}
               type="button"
+              role="option"
+              aria-selected={channelIdx === i}
+              onMouseEnter={() => setChannelIdx(i)}
               onMouseDown={(e) => { e.preventDefault(); insertChannel(c); }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                channelIdx === i ? "bg-interactive-selected" : ""
-              }`}
+              className={`${AUTOCOMPLETE_ROW} ${channelIdx === i ? "bg-interactive-hover" : ""}`}
             >
               {c.read_only ? (
-                <IconMegaphone size={15} className="shrink-0 text-text-muted" />
+                <IconMegaphone size={20} className="shrink-0 text-channels-default" />
               ) : (
-                <IconHash size={15} className="shrink-0 text-text-muted" />
+                <IconHash size={20} className="shrink-0 text-channels-default" />
               )}
-              <span className="truncate font-medium">#{c.name}</span>
+              <span className="truncate text-[16px] font-medium text-header-primary">{c.name}</span>
             </button>
           ))}
         </div>
       )}
 
       {showEmoji && emojiItems.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
-          <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Emoji</p>
+        <div role="listbox" aria-label="Emoji" className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>Emoji matching :{emojiCtx?.query}</p>
           {emojiItems.map((item, i) => (
             <button
               key={`e-${item.shortcode}`}
               type="button"
+              role="option"
+              aria-selected={emojiIdx === i}
+              onMouseEnter={() => setEmojiIdx(i)}
               onMouseDown={(e) => { e.preventDefault(); insertEmojiFromPicker(item); }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                emojiIdx === i ? "bg-interactive-selected" : ""
-              }`}
+              className={`${AUTOCOMPLETE_ROW} ${emojiIdx === i ? "bg-interactive-hover" : ""}`}
             >
               <EmojiImg emoji={item.emoji} />
-              <span className="truncate font-medium">:{item.shortcode}:</span>
-              <span className="ml-auto shrink-0 text-xs text-text-muted">{item.emoji}</span>
+              <span className="truncate text-[16px] font-medium text-header-primary">:{item.shortcode}:</span>
             </button>
           ))}
         </div>
       )}
 
+      {command ? (
+        <SlashCommandComposer
+          key={command.def.name}
+          command={command.def}
+          initial={command.initial}
+          members={members}
+          serverId={serverId}
+          onExit={(restore) => {
+            setCommand(null);
+            setText(restore);
+            setSpans([]);
+            requestAnimationFrame(() => {
+              const el = textareaRef.current;
+              if (!el) return;
+              el.focus();
+              el.setSelectionRange(restore.length, restore.length);
+            });
+          }}
+          onDone={(message) => {
+            setCommand(null);
+            setCommandNotice(message);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
+        />
+      ) : (
+      <>
       {(replyTo || editingMessageId) && (
         <div className="flex h-[34px] items-center gap-2 rounded-t-lg bg-bg-secondary pl-4 pr-2 text-[14px]">
           <p className="min-w-0 flex-1 truncate text-header-secondary">
@@ -742,7 +923,7 @@ export function ChatInput({
           </p>
           <button
             type="button"
-            onClick={() => { onClearReply?.(); onCancelEdit?.(); setText(""); }}
+            onClick={() => { onClearReply?.(); onCancelEdit?.(); clearText(); }}
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-interactive-normal hover:text-interactive-active"
             aria-label="Cancel"
           >
@@ -875,46 +1056,41 @@ export function ChatInput({
             >
               <ComposerMarkdown text={text} />
             </div>
+            {/* Picked mentions, painted over the same glyphs as chips. Paint
+                only (background, colour), so the caret never drifts. */}
+            {spans.length > 0 && (
+              <div
+                ref={chipLayerRef}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[16px] leading-[22px] text-transparent"
+              >
+                {renderMentionChips(text, spans)}
+              </div>
+            )}
           <textarea
             ref={textareaRef}
             value={text}
             onChange={(e) => {
               const next = e.target.value;
               const selStart = e.target.selectionStart;
-              const placeCursor = (pos: number) => {
-                setCursor(pos);
-                requestAnimationFrame(() => {
-                  textareaRef.current?.setSelectionRange(pos, pos);
-                });
-              };
-              const token = getCompletedEmojiToken(next, selStart);
-              if (token) {
-                const emoji = lookupShortcode(token.code);
-                if (emoji) {
-                  const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
-                  const atomic = applyAtomicEveryone(text, replaced);
-                  const pos = atomic ? atomic.cursor : token.start + emoji.length;
-                  setText(atomic ? atomic.text : replaced);
-                  setCursor(pos);
-                  setMentionIdx(0);
-                  setEmojiIdx(0);
-                  requestAnimationFrame(() => {
-                    textareaRef.current?.setSelectionRange(pos, pos);
-                  });
-                  onTypingActivity?.();
-                  return;
-                }
+              // Typing a full command name and a space switches to the chips.
+              const typed = next.match(/^\/([a-z]+) $/i);
+              const def = typed ? allowedCommands.find((c) => c.name === typed[1].toLowerCase()) : undefined;
+              if (def) {
+                enterCommand(def);
+                return;
               }
-              const atomic = applyAtomicEveryone(text, next);
-              if (atomic) {
-                setText(atomic.text);
-                placeCursor(atomic.cursor);
+              const token = getCompletedEmojiToken(next, selStart);
+              const emoji = token ? lookupShortcode(token.code) : null;
+              if (token && emoji) {
+                const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
+                applyText(text, replaced, token.start + emoji.length);
               } else {
-                setText(next);
-                setCursor(selStart);
+                if (applyText(text, next).cursor == null) setCursor(selStart);
               }
               setMentionIdx(0);
               setEmojiIdx(0);
+              setSlashIdx(0);
               onTypingActivity?.();
             }}
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
@@ -930,6 +1106,9 @@ export function ChatInput({
               // long enough to scroll, or the two drift apart.
               if (highlightRef.current) {
                 highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+              }
+              if (chipLayerRef.current) {
+                chipLayerRef.current.scrollTop = e.currentTarget.scrollTop;
               }
             }}
           />
@@ -978,6 +1157,8 @@ export function ChatInput({
           </p>
         )}
       </form>
+      </>
+      )}
 
       {giftMounted && (
         <GiftModal
@@ -1007,4 +1188,23 @@ export function ChatInput({
       />
     </div>
   );
+}
+
+/** The composer text with each picked mention wrapped as a chip. */
+function renderMentionChips(text: string, spans: MentionSpan[]) {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of [...spans].sort((a, b) => a.start - b.start)) {
+    out.push(text.slice(last, m.start));
+    out.push(
+      <span key={m.start} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
+        {text.slice(m.start, m.end)}
+      </span>,
+    );
+    last = m.end;
+  }
+  out.push(text.slice(last));
+  // A trailing newline needs a character after it to take up its line.
+  out.push("\u200b");
+  return out;
 }
