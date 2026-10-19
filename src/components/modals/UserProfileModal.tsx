@@ -17,6 +17,7 @@ import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor, activeStatusNote, statusExpiryLabel, listeningFor } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { StatusDot } from "@/components/ui/StatusDot";
 import { ListeningCard } from "@/components/ui/ListeningCard";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { USER_NOTE_MAX, useUserNote } from "@/hooks/useUserNote";
@@ -64,14 +65,14 @@ interface UserProfileModalProps {
   onSetRoles?: (roleIds: string[]) => void;
 }
 
+// Classic profile buttons: green "Send Message", blurple, grey; 3px corners.
 const BTN_BASE =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] px-3.5 text-[13.5px] font-semibold transition-[background-color,opacity,transform] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
-/** High-contrast neutral: near-white on dark themes, near-black on light ones. */
-const BTN_SOLID = `${BTN_BASE} bg-text-normal text-bg-primary hover:opacity-90`;
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-[3px] px-4 text-[14px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+const BTN_SOLID = `${BTN_BASE} bg-button-green text-white hover:bg-button-green-hover`;
 const BTN_BRAND = `${BTN_BASE} bg-brand text-white hover:bg-brand-hover`;
-const BTN_QUIET = `${BTN_BASE} border border-divider bg-bg-accent text-text-normal hover:bg-interactive-hover`;
+const BTN_QUIET = `${BTN_BASE} bg-button-secondary text-white hover:bg-button-secondary-hover`;
 const BTN_ICON =
-  "inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-divider bg-bg-accent text-text-normal transition-colors hover:bg-interactive-hover";
+  "inline-flex h-8 w-8 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover";
 
 function relativeAge(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -101,7 +102,7 @@ function ProfileBanner({ profile }: { profile: Profile }) {
     ? getAccentBackground(profile)
     : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
   return (
-    <div className="h-[128px] w-full overflow-hidden" style={{ background }}>
+    <div className="h-[180px] w-full overflow-hidden" style={{ background }}>
       {show && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url!} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
@@ -369,12 +370,12 @@ export function UserProfileModal({
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-      <button type="button" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label="Close" />
+      <button type="button" className={`absolute inset-0 bg-overlay-scrim-strong overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} relative max-h-[calc(100vh-3rem)] w-full max-w-[440px] overflow-y-auto rounded-[22px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]`}
+        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100vh-3rem)] w-full max-w-[600px] overflow-y-auto rounded-lg bg-bg-secondary-alt text-text-normal shadow-[var(--elevation-high)]`}
         style={cardStyle}
       >
         {/* Artwork sits above the banner and below the readable profile content. */}
@@ -393,17 +394,15 @@ export function UserProfileModal({
         <div className="relative z-10 px-6 pb-6">
           {/* Avatar overlaps the banner; actions sit level with its lower half. */}
           <div className="flex items-end justify-between gap-3">
-            <div className="relative -mt-[52px] shrink-0 rounded-full bg-overlay-panel p-[5px]" style={accent ? { background: "inherit" } : undefined}>
-              <Avatar profile={profile} size="xl" />
-              <span className="absolute bottom-1 right-1 rounded-full bg-overlay-panel p-[3px]">
-                <StatusIndicator status={live} size="md" />
-              </span>
+            <div className="relative -mt-[68px] shrink-0 rounded-full bg-bg-secondary-alt p-[7px]" style={accent ? { background: "inherit" } : undefined}>
+              <Avatar profile={profile} size="xl" className="!h-[120px] !w-[120px] !text-4xl" />
+              <StatusDot status={live} size={22} ring="var(--bg-secondary-alt)" className="absolute bottom-1.5 right-1.5" />
             </div>
             {actions && <div className="flex flex-wrap items-center justify-end gap-2 pb-1">{actions}</div>}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            <h2 className="min-w-0 break-words text-[24px] font-semibold leading-tight tracking-[-0.02em]">
+            <h2 className="min-w-0 break-words text-[24px] font-semibold leading-[30px] text-header-primary">
               <DisplayName profile={{ ...profile, display_name: title }} />
             </h2>
             <UserBadges userId={profile.id} plan={plan ?? "free"} size={18} variant="full" />
@@ -434,9 +433,9 @@ export function UserProfileModal({
             <div className="group/status relative mt-3.5 w-fit max-w-full">
               <span
                 aria-hidden
-                className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-divider bg-bg-accent"
+                className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 bg-bg-floating"
               />
-              <div className="rounded-2xl border border-divider bg-bg-accent px-3.5 py-2">
+              <div className="rounded-lg bg-bg-floating px-3.5 py-2">
                 {!isSelf && (
                   <button
                     type="button"
