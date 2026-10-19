@@ -32,12 +32,9 @@ function CallbackInner() {
     }
     void (async () => {
       try {
-        const tokens = await exchangeSpotifyCode(code);
-        try {
-          window.localStorage.setItem("disband:spotify-tokens", JSON.stringify(tokens));
-        } catch {
-          // Private mode etc: connection just won't persist.
-        }
+        // The server stores the tokens against the signed-in account, so the
+        // connection follows the user to the desktop app and other devices.
+        await exchangeSpotifyCode(code);
         setState("done");
         setMessage("Spotify connected! You can close this tab.");
         // Tell the opener (settings) to pick it up immediately.
@@ -84,7 +81,7 @@ function CallbackInner() {
                   () => setCopied(false),
                 );
               }}
-              className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              className="w-full rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
             >
               {copied ? "Copied" : "Copy code"}
             </button>
@@ -98,7 +95,7 @@ function CallbackInner() {
           <button
             type="button"
             onClick={() => window.close()}
-            className="mt-6 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            className="mt-6 rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
           >
             Close this tab
           </button>

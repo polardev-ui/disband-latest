@@ -24,16 +24,16 @@ import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import {
   clearLastfmPending,
-  clearSpotifyTokens,
+  disconnectSpotify,
   exchangeSpotifyCode,
+  getSpotifyConnection,
   lastfmConfigured,
+  migrateLegacySpotifyConnection,
   readLastfmPending,
   readLastfmUsername,
-  readSpotifyTokens,
   spotifyConnectUrl,
   spotifyClientId,
   writeLastfmUsername,
-  writeSpotifyTokens,
 } from "@/lib/music-presence";
 import { isTauri } from "@/lib/platform";
 import { BadgeGlyph } from "@/lib/badge-icons";
@@ -286,9 +286,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Connections tab: Spotify tokens live in localStorage (see music-presence
+  // Connections tab: Spotify tokens live server-side (see music-presence
   // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
   const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyChecking, setSpotifyChecking] = useState(false);
   const [spotifyPasteOpen, setSpotifyPasteOpen] = useState(false);
   const [spotifyPasteCode, setSpotifyPasteCode] = useState("");
   const [spotifyPasteBusy, setSpotifyPasteBusy] = useState(false);
@@ -300,7 +301,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
   useEffect(() => {
     if (!open) return;
-    setSpotifyConnected(Boolean(readSpotifyTokens()));
+    let live = true;
+    setSpotifyChecking(true);
+    // Import any connection left by a pre-server-storage build, then ask the
+    // server — not this browser's storage — whether the account is linked.
+    void (async () => {
+      await migrateLegacySpotifyConnection().catch(() => {});
+      const connected = await getSpotifyConnection().catch(() => false);
+      if (!live) return;
+      setSpotifyConnected(connected);
+      setSpotifyChecking(false);
+    })();
     setLastfmSaved(false);
     setLastfmNote(null);
     // A one-click connect may have finished while the modal was closed; the
@@ -320,6 +331,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     } else {
       setLastfmUser("");
     }
+    return () => {
+      live = false;
+    };
   }, [open, user?.id]);
 
   // The OAuth callback pages ping us when a popup finishes connecting.
@@ -357,10 +371,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     const url = spotifyConnectUrl(user?.id ?? "disband");
     if (!url) return;
     if (isTauri()) {
-      // The desktop WebView refuses window.open, and even if it didn't, the
-      // callback page lives on www.disband.dev — a different storage origin —
-      // so the tokens could never reach the app. Open the real browser and
-      // finish with the code it hands back.
+      // The desktop WebView refuses window.open. Open the real browser and
+      // finish with the code it hands back; the exchange stores the tokens
+      // server-side against this signed-in account.
       void (async () => {
         try {
           const { invoke } = await import("@tauri-apps/api/core");
@@ -382,8 +395,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setSpotifyPasteBusy(true);
     setSpotifyPasteError(null);
     try {
-      const tokens = await exchangeSpotifyCode(code);
-      writeSpotifyTokens(tokens);
+      await exchangeSpotifyCode(code);
       setSpotifyConnected(true);
       setSpotifyPasteOpen(false);
       setSpotifyPasteCode("");
@@ -398,7 +410,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   }
 
   async function handleSpotifyDisconnect() {
-    clearSpotifyTokens();
+    try {
+      await disconnectSpotify();
+    } catch {
+      setSpotifyNote("Couldn't disconnect Spotify. Try again in a moment.");
+      return;
+    }
     setSpotifyConnected(false);
     setSpotifyNote("Disconnected — your profile no longer shows a track.");
     // Best-effort immediate clear; the poller clears it on its next tick too.
@@ -1605,7 +1622,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     description="Link your Spotify account and the track you're playing shows on your profile card, live."
                   >
                     <SettingRow
-                      label={spotifyConnected ? "Connected" : "Not connected"}
+                      label={spotifyChecking ? "Checking…" : spotifyConnected ? "Connected" : "Not connected"}
                       description={
                         spotifyConnected
                           ? "Polled every 20 seconds while Disband is open — on desktop it keeps working from the tray."
@@ -1618,15 +1635,16 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           <button
                             type="button"
                             onClick={() => void handleSpotifyDisconnect()}
-                            className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                            className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                           >
                             Disconnect
                           </button>
                         ) : (
                           <button
                             type="button"
+                            disabled={spotifyChecking}
                             onClick={handleSpotifyConnect}
-                            className="rounded-md bg-brand px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                            className="rounded-[3px] bg-brand px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                           >
                             Connect Spotify
                           </button>
@@ -1643,13 +1661,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 value={spotifyPasteCode}
                                 onChange={(e) => setSpotifyPasteCode(e.target.value)}
                                 placeholder="paste the code"
-                                className="w-64 rounded-md border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
+                                className="w-64 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
                               />
                               <button
                                 type="button"
                                 disabled={spotifyPasteBusy || !spotifyPasteCode.trim()}
                                 onClick={() => void finishSpotifyPaste()}
-                                className="rounded-md bg-brand px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                                className="rounded-[3px] bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                               >
                                 {spotifyPasteBusy ? "Connecting…" : "Connect"}
                               </button>

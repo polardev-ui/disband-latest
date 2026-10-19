@@ -6,6 +6,8 @@ import { getSupabaseClient, isAccessTokenExpired, refreshSessionOnce } from "@/l
 import type { Session } from "@supabase/supabase-js";
 
 export interface FavGif {
+  /** Stable numeric identity generated from the canonical URL. */
+  id?: number;
   url: string;
   title: string | null;
 }
@@ -96,7 +98,7 @@ export function useGifFavorites() {
     // the url column exactly.
     const stored = (cache ?? []).find((f) => gifFavKey(f.url) === key);
     if (active) {
-      cache = [...(cache ?? []).filter((f) => gifFavKey(f.url) !== key), { url, title }];
+      cache = [...(cache ?? []).filter((f) => gifFavKey(f.url) !== key), { id: stored?.id, url, title }];
     } else {
       cache = (cache ?? []).filter((f) => gifFavKey(f.url) !== key);
     }
@@ -105,11 +107,28 @@ export function useGifFavorites() {
       const res = await fetch("/api/gifs/favorites", {
         method: active ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ url: active ? url : (stored?.url ?? url), title }),
+        body: JSON.stringify(
+          active
+            ? { url, title }
+            : stored?.id != null
+              ? { id: stored.id }
+              : { url: stored?.url ?? url },
+        ),
       });
-      if (!res.ok && prev) {
-        cache = prev;
-        notify();
+      if (!res.ok) {
+        if (prev) {
+          cache = prev;
+          notify();
+        }
+      } else if (active) {
+        // Adopt the server's numeric id — and, for an alias of an existing
+        // favourite, its stored URL — so a later unstar is unambiguous.
+        const json = (await res.json().catch(() => null)) as { favorite?: FavGif } | null;
+        if (json?.favorite) {
+          const favorite = json.favorite;
+          cache = (cache ?? []).map((f) => (gifFavKey(f.url) === key ? favorite : f));
+          notify();
+        }
       }
     } catch {
       if (prev) {

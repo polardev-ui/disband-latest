@@ -49,9 +49,8 @@ import {
 import {
   fetchLastfmNowPlaying,
   fetchSpotifyNowPlaying,
+  migrateLegacySpotifyConnection,
   readLastfmUsername,
-  readSpotifyTokens,
-  writeSpotifyTokens,
   type Listening,
 } from "@/lib/music-presence";
 import {
@@ -1026,27 +1025,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     const tick = async () => {
-      const tokens = readSpotifyTokens();
       const lastfmUser = readLastfmUsername(userId);
-      if (!tokens && !lastfmUser) {
-        // Nothing connected (or disconnected since): drop any live state.
+      let next: Listening | null = null;
+      let spotifyConnected = false;
+      let failed = false;
+      try {
+        // The server owns the tokens, so this also sees a connection made in
+        // the web app while the desktop app was closed, and vice versa.
+        const res = await fetchSpotifyNowPlaying();
+        if (!alive) return;
+        spotifyConnected = res.connected;
+        next = res.listening;
+      } catch {
+        failed = true;
+      }
+      if (!spotifyConnected && !lastfmUser) {
+        // The server said this account has no connection (and there is no
+        // Last.fm fallback). A provider error, on the other hand, keeps the
+        // last known track until the next tick.
+        if (failed) return;
         if (lastKey !== "disconnected") {
           lastKey = "disconnected";
           if (listeningRef.current) publish(null);
         }
         return;
-      }
-      let next: Listening | null = null;
-      let failed = false;
-      if (tokens) {
-        try {
-          const res = await fetchSpotifyNowPlaying(tokens);
-          if (!alive) return;
-          if (res.tokens !== tokens) writeSpotifyTokens(res.tokens);
-          next = res.listening;
-        } catch {
-          failed = true;
-        }
       }
       if (!next && lastfmUser) {
         try {
@@ -1066,8 +1068,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void tick();
-    const id = window.setInterval(() => void tick(), 20_000);
+    let ready = false;
+    void migrateLegacySpotifyConnection()
+      .catch(() => {})
+      .finally(() => {
+        if (!alive) return;
+        ready = true;
+        void tick();
+      });
+    const id = window.setInterval(() => {
+      if (ready) void tick();
+    }, 20_000);
     return () => {
       alive = false;
       window.clearInterval(id);
