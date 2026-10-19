@@ -91,7 +91,7 @@ export function HeaderToolbar({
     }`;
 
   return (
-    <div className={`flex items-center gap-4 ${className ?? ""}`}>
+    <div className={`flex items-center gap-3 md:gap-4 ${className ?? ""}`}>
       {canMute && (
         <div className="relative">
           <Tooltip label="Notification Settings" side="bottom">
@@ -147,7 +147,14 @@ export function HeaderToolbar({
       )}
 
       {showSearch && (
-        <div className="relative">
+        <Tooltip label="Search" side="bottom">
+          <button type="button" aria-label="Search" onClick={() => onOpenSearch()} className={`lg:hidden ${iconBtn(!!searchOpen)}`}>
+            <IconSearch size={22} />
+          </button>
+        </Tooltip>
+      )}
+      {showSearch && (
+        <div className="relative hidden lg:block">
           <input
             type="text"
             readOnly

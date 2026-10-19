@@ -1,51 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
-import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { StatusDot } from "@/components/ui/StatusDot";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { ListeningCard } from "@/components/ui/ListeningCard";
-import { IconClose, IconFriends, IconPhone } from "@/components/icons";
-import { displayName } from "@/lib/utils";
-import {
-  activeStatusNote,
-  listeningFor,
-  presenceStatusFor,
-  statusExpiryLabel,
-} from "@/lib/presence";
-import {
-  getProfilePanelMutedColor,
-  getProfilePanelStyle,
-  getAccentBackground,
-} from "@/lib/profileColor";
+import { BotTag } from "@/components/ui/BotTag";
+import { IconChevron } from "@/components/icons";
+import { displayName, serverInitials } from "@/lib/utils";
+import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
+import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
-import { useEffect, useRef, useState } from "react";
 import type { Profile } from "@/lib/supabase/types";
-
-function BioPreview({ bio, onMore }: { bio: string; onMore: () => void }) {
-  const ref = useRef<HTMLParagraphElement>(null);
-  const [truncated, setTruncated] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (el) setTruncated(el.scrollHeight > el.clientHeight + 1);
-  }, [bio]);
-  return (
-    <div className="mt-2.5">
-      <p ref={ref} className="line-clamp-3 whitespace-pre-wrap text-[13px] leading-snug opacity-90">
-        {bio}
-      </p>
-      {truncated && (
-        <button
-          type="button"
-          onClick={onMore}
-          className="mt-0.5 text-xs font-semibold text-brand hover:underline"
-        >
-          more
-        </button>
-      )}
-    </div>
-  );
-}
 
 interface DmProfileRailProps {
   friend: Profile;
@@ -54,120 +21,174 @@ interface DmProfileRailProps {
   onOpenFullProfile: () => void;
 }
 
-export function DmProfileRail({ friend, onClose, onVoiceCall, onOpenFullProfile }: DmProfileRailProps) {
-  const { presenceMap, listeningMap } = useApp();
+/**
+ * The profile panel beside a DM, in the classic layout: banner, avatar with a
+ * cut-out status, badges, then a dark card with the bio, member-since date,
+ * what they're listening to, and mutual spaces and friends.
+ */
+export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps) {
+  const { presenceMap, listeningMap, loadMutuals, servers, friends, selectServer, openDmWithFriend } = useApp();
   const [bannerFailed, setBannerFailed] = useState(false);
-  const panelStyle = getProfilePanelStyle(friend);
-  const mutedColor = getProfilePanelMutedColor(friend);
+  const [mutuals, setMutuals] = useState<{ serverIds: string[]; friendIds: string[] } | null>(null);
+  const [open, setOpen] = useState<"servers" | "friends" | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setMutuals(null);
+    setOpen(null);
+    void loadMutuals(friend.id)
+      .then((m) => {
+        if (live) setMutuals(m);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [friend.id, loadMutuals]);
+
   const live = presenceStatusFor(friend, presenceMap);
   const note = activeStatusNote(friend);
   const listening = live === "offline" ? null : listeningFor(friend, listeningMap);
-  const bannerUrl = safeImageUrl(friend.banner_url);
+  const banner = bannerFailed ? null : safeImageUrl(friend.banner_url);
+  const bannerBg = usesCustomAccent(friend) ? getAccentBackground(friend) : friend.accent_color ?? "#5865f2";
+  const mutualServers = (mutuals?.serverIds ?? []).map((id) => servers.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s);
+  const mutualFriends = (mutuals?.friendIds ?? []).map((id) => friends.find((f) => f.id === id)).filter((f): f is Profile => !!f);
 
   return (
     <aside
       aria-label={`${displayName(friend)}'s profile`}
-      className="flex min-h-0 w-72 shrink-0 flex-col overflow-y-auto border-l border-divider"
-      style={panelStyle}
+      className="channel-scroll flex min-h-0 w-[340px] shrink-0 flex-col overflow-y-auto bg-bg-secondary-alt"
     >
-      <div className="relative h-20 shrink-0" style={{ background: getAccentBackground(friend) }}>
-        {bannerUrl && !bannerFailed && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={bannerUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            onError={() => setBannerFailed(true)}
-          />
-        )}
+      <div className="relative shrink-0">
+        <div className="h-[120px]" style={{ background: bannerBg }}>
+          {banner && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={banner} alt="" className="h-full w-full object-cover" onError={() => setBannerFailed(true)} />
+          )}
+        </div>
         <button
           type="button"
-          onClick={onClose}
-          aria-label="Hide profile panel"
-          className="absolute right-2 top-2 rounded-full bg-black/40 p-1.5 text-white transition-colors hover:bg-black/60"
+          onClick={onOpenFullProfile}
+          aria-label="View full profile"
+          className="group/avatar absolute left-4 top-[76px] rounded-full bg-bg-secondary-alt p-1.5"
         >
-          <IconClose size={16} />
+          <span className="relative block">
+            <Avatar profile={friend} size="xl" className="!h-20 !w-20 !text-2xl" />
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
+              View Profile
+            </span>
+            <StatusDot status={live} size={16} ring="var(--bg-secondary-alt)" className="absolute -bottom-0.5 -right-0.5" />
+          </span>
         </button>
-      </div>
-
-      <div className="px-4 pb-4">
-        <div className="relative -mt-9 mb-2 w-fit">
-          <Avatar profile={friend} size="lg" className="ring-4 ring-black/25" />
-          <span
-            className="absolute -bottom-0.5 -right-0.5 rounded-full p-0.5"
-            style={{ background: panelStyle.background }}
-          >
-            <StatusIndicator status={live} size="md" />
+        <div className="flex min-h-[44px] justify-end px-4 pt-3">
+          <span className="flex max-w-[180px] flex-wrap justify-end gap-1 rounded-lg bg-bg-floating px-1 py-0.5 empty:hidden">
+            <UserBadges userId={friend.id} size={22} variant="full" />
           </span>
         </div>
+      </div>
 
-        <h2 className="text-lg font-bold leading-tight">{displayName(friend)}</h2>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {friend.username && (
-            <p className="text-[13px]" style={{ color: mutedColor }}>
-              @{friend.username}
-            </p>
-          )}
-          {friend.pronouns?.trim() && (
-            <span className="rounded bg-brand/20 px-1.5 py-px text-[11px] font-semibold text-brand">
-              {friend.pronouns.trim()}
-            </span>
-          )}
+      <div className="mx-4 mb-4 mt-7 rounded-lg bg-bg-floating p-3">
+        <div className="flex items-center gap-1">
+          <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">{displayName(friend)}</h2>
+          <BotTag profile={friend} size="sm" />
         </div>
+        <p className="text-[14px] leading-[18px] text-header-primary">
+          {friend.username ?? ""}
+          {friend.pronouns?.trim() && <span className="text-header-secondary"> • {friend.pronouns.trim()}</span>}
+        </p>
+        {note && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{note}</p>}
 
-        <div className="mt-1.5">
-          <UserBadges userId={friend.id} plan="free" size={16} variant="full" />
-        </div>
-
-        {note && (
-          <div className="mt-2.5 flex items-start gap-2 rounded-2xl bg-black/20 px-2.5 py-2">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 opacity-70">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <div className="min-w-0">
-              <p className="break-words text-[13px] leading-snug">{note}</p>
-              <p className="mt-0.5 text-[11px] opacity-60">
-                {statusExpiryLabel(friend.status_expires_at)}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {listening && (
-          <div className="mt-2.5">
-            <ListeningCard listening={listening} />
-          </div>
-        )}
+        <div className="my-3 h-px bg-[#2e2f34]" />
 
         {friend.bio?.trim() && (
-          <BioPreview bio={friend.bio.trim()} onMore={onOpenFullProfile} />
+          <section className="mb-3">
+            <h3 className="mb-1.5 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">About Me</h3>
+            <p className="whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">{friend.bio.trim()}</p>
+          </section>
         )}
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" style={{ color: mutedColor }}>
-          <StatusIndicator status={live} size="sm" showLabel />
-          <span>
-            Member since{" "}
-            {new Date(friend.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-          </span>
-        </div>
+        <section className="mb-3">
+          <h3 className="mb-1.5 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">Member Since</h3>
+          <p className="text-[14px] leading-[18px] text-text-normal">
+            {new Date(friend.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+          </p>
+        </section>
 
-        <div className="mt-3 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={onVoiceCall}
-            className="flex w-full items-center justify-center gap-1.5 rounded-full bg-status-online px-3 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
-          >
-            <IconPhone size={16} /> Voice Call
-          </button>
-          <button
-            type="button"
-            onClick={onOpenFullProfile}
-            className="flex w-full items-center justify-center gap-1.5 rounded-full bg-black/25 px-3 py-2.5 text-sm font-bold backdrop-blur-sm transition-all hover:bg-black/35 active:scale-[0.98]"
-          >
-            <IconFriends size={16} /> Full Profile
-          </button>
-        </div>
+        {listening && (
+          <section className="mb-1">
+            <ListeningCard listening={listening} />
+          </section>
+        )}
       </div>
+
+      {/* Mutuals, as expandable rows — the classic DM sidebar's bottom half. */}
+      <div className="mx-4 mb-4 overflow-hidden rounded-lg bg-bg-floating">
+        <MutualRow
+          label={`Mutual Servers — ${mutualServers.length}`}
+          open={open === "servers"}
+          onToggle={() => setOpen((v) => (v === "servers" ? null : "servers"))}
+        >
+          {mutualServers.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => void selectServer(s.id)}
+              className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
+            >
+              {safeImageUrl(s.icon_url) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={safeImageUrl(s.icon_url)!} alt="" className="h-6 w-6 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-bg-primary text-[9px] font-semibold">{serverInitials(s.name)}</span>
+              )}
+              <span className="truncate">{s.name}</span>
+            </button>
+          ))}
+        </MutualRow>
+        <div className="mx-3 h-px bg-[#2e2f34]" />
+        <MutualRow
+          label={`Mutual Friends — ${mutualFriends.length}`}
+          open={open === "friends"}
+          onToggle={() => setOpen((v) => (v === "friends" ? null : "friends"))}
+        >
+          {mutualFriends.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => void openDmWithFriend(f.id)}
+              className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
+            >
+              <Avatar profile={f} size="sm" className="!h-6 !w-6 !text-[10px]" />
+              <span className="truncate">{displayName(f)}</span>
+            </button>
+          ))}
+        </MutualRow>
+      </div>
+
+      <button
+        type="button"
+        onClick={onOpenFullProfile}
+        className="mx-4 mb-4 mt-auto h-8 rounded-[3px] text-[14px] font-medium text-header-secondary transition-colors hover:bg-interactive-hover hover:text-header-primary"
+      >
+        View Full Profile
+      </button>
     </aside>
+  );
+}
+
+function MutualRow({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex h-11 w-full items-center justify-between px-3 text-left text-[14px] font-medium text-header-secondary transition-colors hover:text-header-primary"
+      >
+        {label}
+        <IconChevron size={16} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
+      </button>
+      {open && <div className="view-enter px-1 pb-2">{children}</div>}
+    </div>
   );
 }
