@@ -149,7 +149,7 @@ export function ImageLightbox({
   const resolved = safeImageUrl(src);
   const hasPrev = !!onPrev && !!position && position.index > 0;
   const hasNext = !!onNext && !!position && position.index < position.total - 1;
-  const mediaClass = `max-h-[calc(100vh-152px)] max-w-[calc(100vw-160px)] select-none rounded-[6px] object-contain transition-transform duration-200 ease-out ${
+  const mediaClass = `max-h-[calc(100vh-152px)] max-w-[calc(100vw-32px)] sm:max-w-[calc(100vw-160px)] select-none object-contain transition-transform duration-200 ease-out ${
     zoomIndex > 0 ? "cursor-zoom-out" : "cursor-zoom-in"
   }`;
   const mediaStyle = { transform: `scale(${zoom})`, transformOrigin: origin };
@@ -158,14 +158,14 @@ export function ImageLightbox({
     <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.lightbox }} role="dialog" aria-modal="true" aria-label="Image viewer">
       <button
         type="button"
-        className={`overlay-fade${exiting ? " overlay-fade-out" : ""} absolute inset-0 bg-black`}
+        className={`overlay-fade${exiting ? " overlay-fade-out" : ""} absolute inset-0 bg-black/90`}
         onClick={onClose}
         aria-label="Close viewer"
       />
 
       {/* Top bar: who posted it on the left, tools on the right. */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center justify-between gap-4 px-5">
-        <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center justify-between gap-2 px-2 sm:gap-4 sm:px-5">
+        <div className="pointer-events-auto hidden min-w-0 items-center gap-3 sm:flex">
           {author && (
             <>
               <Avatar profile={author} size="sm" />
@@ -192,7 +192,7 @@ export function ImageLightbox({
           )}
         </div>
 
-        <div className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-[12px] border border-white/10 bg-[#141519] p-1">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-1 ml-auto rounded-[4px] bg-bg-floating p-1">
           <ToolbarButton label="Zoom out (−)" onClick={zoomOut} disabled={zoomIndex === 0}>
             <IconZoomOut size={18} />
           </ToolbarButton>
@@ -200,7 +200,7 @@ export function ImageLightbox({
             type="button"
             onClick={() => setZoomIndex(0)}
             title="Reset zoom (0)"
-            className="h-8 w-12 rounded-[8px] text-[12px] tabular-nums text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="h-8 w-12 rounded-[3px] text-[12px] tabular-nums text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -228,7 +228,7 @@ export function ImageLightbox({
         ) : (
           // The entrance animation lives on this wrapper: it ends holding a
           // transform of its own, which on the media itself overrode the zoom.
-          <div key={resolved} className={`modal-pop${exiting ? " modal-pop-out" : ""} pointer-events-none flex items-center justify-center`}>
+          <div key={resolved} className={`modal-pop${exiting ? " modal-pop-out" : ""} pointer-events-none flex flex-col items-start justify-center`}>
           {animated ? (
           <video
             src={resolved}
@@ -253,6 +253,7 @@ export function ImageLightbox({
             style={mediaStyle}
           />
           )}
+          <button type="button" onClick={() => safeWindowOpen(src)} className="pointer-events-auto mt-2 text-[14px] text-white/70 hover:text-white hover:underline">Open in Browser</button>
           </div>
         )}
       </div>
@@ -269,13 +270,13 @@ export function ImageLightbox({
       )}
 
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-center justify-center px-6">
-        <p className="truncate text-[12.5px] text-white/45">{fileName}</p>
+        <p className="truncate text-[12px] text-white/50">{fileName}</p>
       </footer>
 
       {toast && (
         <div
           role="status"
-          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-[3px] border border-white/10 bg-[#141519] px-3.5 py-2 text-[13px] text-white"
+          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-[3px] border border-white/10 bg-[#141519] px-3.5 py-2 text-[14px] text-white"
         >
           {toast}
         </div>
@@ -303,7 +304,7 @@ function ToolbarButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-[8px] text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+      className="flex h-8 w-8 items-center justify-center rounded-[3px] text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
     >
       {children}
     </button>
