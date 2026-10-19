@@ -50,6 +50,8 @@ export interface Profile {
     artists: string;
     artwork: string | null;
     track_url?: string | null;
+    album?: string | null;
+    duration_ms?: number | null;
     started_at: string;
   } | null;
   created_at: string;

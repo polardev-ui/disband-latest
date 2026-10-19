@@ -10,6 +10,7 @@ import { ListeningLine } from "@/components/ui/ListeningLine";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Tooltip } from "./Tooltip";
 import { CartIcon } from "@/components/icons/CartIcon";
+import { AeroIcon } from "@/components/icons/AeroIcon";
 import { IconClose, IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
@@ -230,7 +231,7 @@ export function HomePanel({
           onClick={() => void setViewNotes()}
         />
         <NavRow
-          icon={<IconCrown size={24} />}
+          icon={<AeroIcon size={24} />}
           label="Aero"
           accent
           onClick={() => onOpenSubscription?.()}

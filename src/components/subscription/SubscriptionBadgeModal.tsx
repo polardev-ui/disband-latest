@@ -1,5 +1,6 @@
 "use client";
 
+import { OVERLAY_Z } from "@/lib/overlay";
 import { createPortal } from "react-dom";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import {
@@ -18,8 +19,8 @@ export function SubscriptionBadgeModal({
 }) {
   const current = tierForMonths(tenureMonths);
   const next = nextTier(tenureMonths);
-  const accent = "#fee75c";
-  const planName = "Disband Aero";
+  const accent = current?.base ?? "var(--brand)";
+  const planName = plan === "lite" ? "Disband Lite" : "Disband Aero";
 
   const spanStart = current?.months ?? 0;
   const spanEnd = next?.months ?? spanStart;
@@ -33,14 +34,15 @@ export function SubscriptionBadgeModal({
 
   const body = (
     <div
-      className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-overlay-scrim p-4 backdrop-blur-sm`}
+      className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 flex items-center justify-center overflow-y-auto bg-overlay-scrim p-4`}
+      style={{ zIndex: OVERLAY_Z.badgeDetails }}
       role="dialog"
       aria-modal="true"
       aria-label={`${planName} subscription badge`}
       onClick={onClose}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[680px] overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[680px] overflow-y-auto rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -56,14 +58,13 @@ export function SubscriptionBadgeModal({
 
         {}
         <div
-          className="flex items-center gap-4 px-7 py-6"
-          style={{ background: `linear-gradient(135deg, ${accent}1f, transparent 65%)` }}
+          className="flex items-center gap-4 px-5 py-6 pr-12"
         >
           {current && (
-            <SubscriptionMedallion tier={current} super size={64} />
+            <SubscriptionMedallion tier={current} super={plan !== "lite"} size={64} />
           )}
           <div className="min-w-0">
-            <h2 className="text-[22px] font-extrabold leading-tight tracking-[-0.01em] text-text-normal">
+            <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-text-normal">
               {planName}
             </h2>
             <p className="mt-0.5 text-[14px] text-text-muted">
@@ -75,18 +76,18 @@ export function SubscriptionBadgeModal({
 
         {}
         <div className="px-7">
-          <div className="rounded-xl bg-bg-tertiary px-4 py-3.5">
+          <div className="rounded-[4px] bg-bg-tertiary px-4 py-3.5">
             {next ? (
               <>
                 <div className="mb-2 flex items-baseline justify-between gap-3">
-                  <span className="text-[13.5px] font-semibold text-text-normal">
+                  <span className="text-[14px] font-semibold text-text-normal">
                     {monthsLabel(remaining)} until {next.label}
                   </span>
                   <span className="text-[12px] tabular-nums text-text-muted">
                     {tenureMonths} / {next.months} months
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-bg-accent">
+                <div className="h-2 overflow-hidden rounded-full bg-bg-secondary">
                   <div
                     className="h-full rounded-full transition-[width] duration-500"
                     style={{ width: `${progress * 100}%`, background: accent }}
@@ -94,7 +95,7 @@ export function SubscriptionBadgeModal({
                 </div>
               </>
             ) : (
-              <p className="text-center text-[13.5px] font-semibold text-text-normal">
+              <p className="text-center text-[14px] font-semibold text-text-normal">
                 Every tier unlocked — {monthsLabel(tenureMonths)} subscribed.
               </p>
             )}
@@ -102,22 +103,22 @@ export function SubscriptionBadgeModal({
         </div>
 
         {}
-        <div className="grid grid-cols-4 gap-x-2 gap-y-4 px-7 py-6 sm:grid-cols-7">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-4 px-7 py-6 sm:grid-cols-7">
           {TIERS.map((t) => {
             const reached = tenureMonths >= t.months;
             const isCurrent = current?.key === t.key;
             return (
               <div
                 key={t.key}
-                className={`flex flex-col items-center rounded-xl px-1 py-2.5 text-center transition-colors ${
-                  isCurrent ? "bg-text-normal/10 ring-1 ring-inset" : ""
+                className={`flex flex-col items-center rounded-[4px] px-1 py-2.5 text-center transition-colors ${
+                  isCurrent ? "bg-bg-secondary" : ""
                 }`}
                 style={isCurrent ? { borderColor: accent, boxShadow: `inset 0 0 0 1px ${accent}59` } : undefined}
               >
                 <span className={reached ? "" : "opacity-25 grayscale"}>
-                  <SubscriptionMedallion tier={t} super size={46} />
+                  <SubscriptionMedallion tier={t} super={plan !== "lite"} size={46} />
                 </span>
-                <p className={`mt-1.5 text-[12.5px] font-semibold ${
+                <p className={`mt-1.5 text-[12px] font-semibold ${
                   reached ? "text-text-normal" : "text-text-muted"
                 }`}>
                   {t.label}
