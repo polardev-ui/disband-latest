@@ -78,31 +78,29 @@ function NotificationRow({
       <button
         type="button"
         onClick={() => onSelect(notification)}
-        className={`flex w-full items-start gap-3 border-b border-divider/40 px-3.5 py-3 text-left transition-colors hover:bg-interactive-hover ${
-          unread ? "bg-brand/[0.05]" : ""
-        }`}
+        className="mx-2 flex w-[calc(100%-16px)] items-start gap-3 rounded-[4px] px-2 py-2.5 text-left transition-colors hover:bg-interactive-hover"
       >
-        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${accent}`}>
-          <Icon size={16} />
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${accent}`}>
+          <Icon size={20} />
         </span>
         <span className="min-w-0 flex-1">
           <span
-            className={`block break-words text-[13px] leading-snug ${
-              unread ? "font-semibold text-text-normal" : "font-medium text-text-muted"
+            className={`block break-words text-[16px] leading-5 ${
+              unread ? "font-semibold text-header-primary" : "font-medium text-header-secondary"
             }`}
           >
             {notification.title}
           </span>
           {notification.body && (
-            <span className="mt-0.5 line-clamp-2 block break-words text-[12.5px] leading-snug text-text-muted">
+            <span className="mt-0.5 line-clamp-2 block break-words text-[14px] leading-[18px] text-header-secondary">
               {notification.body}
             </span>
           )}
-          <span className="mt-1 block text-[11px] font-medium text-text-muted/70">
+          <span className="mt-1 block text-[12px] text-text-muted">
             {timeAgo(notification.created_at)}
           </span>
         </span>
-        {unread && <span aria-label="Unread" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />}
+        {unread && <span aria-label="Unread" className="mt-2 h-2 w-2 shrink-0 rounded-full bg-status-dnd" />}
       </button>
     </li>
   );
@@ -124,16 +122,18 @@ function FilterTab({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-semibold transition-colors ${
+      className={`flex h-7 items-center gap-1.5 rounded-[4px] px-2 text-[14px] font-medium transition-colors ${
         active
-          ? "bg-interactive-selected text-text-normal"
-          : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+          ? "bg-interactive-selected text-interactive-active"
+          : "text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
       }`}
     >
       {children}
-      <span className={`rounded-full px-1.5 text-[10px] font-bold ${active ? "bg-brand text-white" : "bg-interactive-hover text-text-muted"}`}>
-        {count > 99 ? "99+" : count}
-      </span>
+      {count > 0 && (
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
     </button>
   );
 }
@@ -141,13 +141,13 @@ function FilterTab({
 function EmptyState({ unreadOnly }: { unreadOnly: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-interactive-hover text-text-muted">
-        <IconInbox size={22} />
+      <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-bg-tertiary text-interactive-normal">
+        <IconInbox size={30} />
       </span>
-      <p className="text-[13px] font-semibold text-text-normal">
+      <p className="text-[16px] font-semibold text-header-primary">
         {unreadOnly ? "You’re all caught up" : "No notifications yet"}
       </p>
-      <p className="mt-1 max-w-[15rem] text-[12px] leading-relaxed text-text-muted">
+      <p className="mt-1 max-w-[17rem] text-[14px] leading-[18px] text-header-secondary">
         {unreadOnly
           ? "Nothing unread right now."
           : "Mentions, replies, and messages will show up here."}
@@ -271,43 +271,36 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
             role="dialog"
             aria-label="Notifications"
             style={pos}
-            className={`notif-pop${exiting ? " notif-pop-out" : ""} fixed z-[120] flex w-[22rem] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-2xl border border-divider bg-overlay-panel shadow-[0_20px_50px_-16px_rgba(0,0,0,0.75)]`}
+            className={`notif-pop${exiting ? " notif-pop-out" : ""} fixed z-[120] flex w-[480px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}
           >
-            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-divider px-3.5 py-2.5">
+            <header className="shrink-0 bg-bg-tertiary px-4 pb-3 pt-4">
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand/[0.14] text-brand">
-                  <IconBell size={14} />
-                </span>
-                <h2 className="text-[14px] font-bold text-text-normal">Notifications</h2>
-                {unread > 0 && (
-                  <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                )}
+                <IconInbox size={24} className="text-interactive-normal" />
+                <h2 className="flex-1 text-[20px] font-bold leading-6 text-header-primary">Inbox</h2>
+                <button
+                  type="button"
+                  onClick={() => void markNotificationsRead()}
+                  disabled={unread === 0}
+                  title="Mark all as read"
+                  aria-label="Mark all as read"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-default disabled:opacity-40"
+                >
+                  <IconCheckAll size={18} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => void markNotificationsRead()}
-                disabled={unread === 0}
-                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-brand transition-colors hover:bg-brand/[0.12] disabled:cursor-default disabled:opacity-40"
-              >
-                <IconCheckAll size={14} />
-                All read
-              </button>
+              <div className="mt-3 flex gap-2">
+                <FilterTab active={filter === "all"} count={0} onClick={() => setFilter("all")}>
+                  All
+                </FilterTab>
+                <FilterTab active={filter === "unread"} count={unread} onClick={() => setFilter("unread")}>
+                  Unreads
+                </FilterTab>
+              </div>
             </header>
 
-            <div className="flex shrink-0 gap-1 border-b border-divider px-2 py-1.5">
-              <FilterTab active={filter === "all"} count={notifications.length} onClick={() => setFilter("all")}>
-                All
-              </FilterTab>
-              <FilterTab active={filter === "unread"} count={unread} onClick={() => setFilter("unread")}>
-                Unread
-              </FilterTab>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
               {navError && (
-                <p role="alert" className="border-b border-divider bg-status-dnd/10 px-3.5 py-2 text-xs text-status-dnd">
+                <p role="alert" className="mx-4 mt-3 rounded-[4px] bg-status-dnd/10 px-3 py-2 text-[14px] text-status-dnd">
                   {navError}
                 </p>
               )}
@@ -316,7 +309,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
               ) : (
                 groups.map((group) => (
                   <section key={group.label}>
-                    <p className="sticky top-0 z-[1] border-b border-divider/40 bg-overlay-panel/95 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-muted backdrop-blur">
+                    <p className="sticky top-0 z-[1] bg-bg-secondary px-4 pb-1 pt-4 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
                       {group.label}
                     </p>
                     <ul>

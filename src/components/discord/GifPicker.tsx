@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { createPortal } from "react-dom";
 import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
@@ -76,12 +77,12 @@ function FavThumb({ fav, onSelect, onRemove }: {
         type="button"
         onClick={() => { onSelect(fav.url); }}
         className="block w-full"
-        title={fav.title ?? "Favorite GIF"}
+        title={fav.title ?? "Favourite GIF"}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={fav.url}
-          alt={fav.title ?? "Favorite GIF"}
+          alt={fav.title ?? "Favourite GIF"}
           loading="lazy"
           className="h-24 w-full object-cover"
           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -95,6 +96,8 @@ function FavThumb({ fav, onSelect, onRemove }: {
 export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [preview, setPreview] = useState("Find a GIF for the moment");
+  useOverlayDismiss(() => setOpen(false), open);
   const [query, setQuery] = useState("");
   const [gifs, setGifs] = useState<GiphyImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -113,7 +116,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
     const btn = btnRef.current;
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
-    const width = 320;
+    const width = Math.min(432, window.innerWidth - 16);
     const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
     setPanelPos({
       left,
@@ -197,30 +200,32 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
       ? createPortal(
           <div
             id="gif-picker-panel"
-            className="fixed z-[100] flex max-h-[min(20rem,50vh)] flex-col overflow-hidden rounded-2xl border border-divider bg-bg-secondary shadow-2xl"
+            role="dialog" aria-label="GIF picker"
+            className="menu-pop fixed z-[100] flex h-[420px] flex-col overflow-hidden rounded-[4px] bg-bg-secondary shadow-[var(--elevation-high)]"
             style={{
               left: panelPos.left,
               bottom: panelPos.bottom,
               width: panelPos.width,
+              maxHeight: `calc(100dvh - ${panelPos.bottom + 8}px)`,
             }}
           >
-            <div className="flex shrink-0 items-center gap-2 border-b border-divider p-2">
+            <div className="relative z-[1] flex shrink-0 items-center gap-2 p-3 shadow-[var(--elevation-low)]">
               {tab === "search" ? (
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search KLIPY"
-                  className="min-w-0 flex-1 rounded-full bg-bg-accent px-3.5 py-1.5 text-sm text-text-normal outline-none focus:ring-1 focus:ring-brand"
+                  autoFocus aria-label="Search GIFs" placeholder="Search KLIPY for GIFs"
+                  className="h-8 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
                 />
               ) : (
                 <p className="min-w-0 flex-1 px-1 text-sm font-semibold text-text-normal">
-                  Favorited
+                  Favourites
                 </p>
               )}
               <button
                 type="button"
-                aria-label={tab === "favorites" ? "Back to search" : "View favorited GIFs"}
-                title={tab === "favorites" ? "Back to search" : "Favorited"}
+                aria-label={tab === "favorites" ? "Back to search" : "View favourite GIFs"}
+                title={tab === "favorites" ? "Back to search" : "Favourites"}
                 onClick={() => setTab((t) => (t === "favorites" ? "search" : "favorites"))}
                 className={`rounded p-1.5 transition-colors hover:bg-interactive-hover ${
                   tab === "favorites" ? "text-yellow-400" : "text-text-muted hover:text-text-normal"
@@ -228,11 +233,15 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               >
                 <IconStar size={17} className={tab === "favorites" ? "fill-yellow-400" : ""} />
               </button>
-              <button type="button" onClick={() => setOpen(false)} className="rounded p-1 text-text-muted hover:text-text-normal">
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close GIF picker" className="rounded p-1 text-text-muted hover:text-text-normal">
                 <IconClose size={16} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+            <div className="flex min-h-0 flex-1">
+            <nav aria-label="GIF categories" className="channel-scroll flex w-[88px] shrink-0 flex-col gap-1 overflow-y-auto bg-bg-tertiary p-2">
+              {["Trending", "Favourites", "Happy", "Thanks", "Celebrate", "Hello"].map(c => <button key={c} type="button" aria-pressed={c === "Favourites" ? tab === "favorites" : tab === "search" && query === (c === "Trending" ? "" : c)} onClick={() => {setTab(c === "Favourites" ? "favorites" : "search"); if(c !== "Favourites") setQuery(c === "Trending" ? "" : c);}} className="rounded-[3px] px-1 py-2 text-left text-[12px] font-medium text-interactive-normal hover:bg-interactive-hover hover:text-white aria-pressed:bg-interactive-selected aria-pressed:text-white">{c}</button>)}
+            </nav>
+            <div className="channel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-2" onMouseOver={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}} onFocus={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}}>
               {tab === "favorites" ? (
                 !favsLoaded && favorites.length === 0 ? (
                   <p className="py-4 text-center text-sm text-text-muted">Loading…</p>
@@ -284,6 +293,8 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               </>
               )}
             </div>
+            </div>
+            <footer className="flex h-12 shrink-0 items-center justify-between gap-2 bg-bg-secondary-alt px-3 text-[12px] text-header-secondary"><span className="truncate">{preview}</span><span className="shrink-0 font-bold">KLIPY</span></footer>
           </div>,
           document.body,
         )
