@@ -1,3 +1,5 @@
+import type { Embed, MessageWebhookInfo } from "@/lib/embeds";
+
 export type ThemePreference = "light" | "dark" | "midnight" | "sunset" | string;
 export type UserStatus = "online" | "idle" | "dnd" | "offline";
 export type FriendshipStatus = "pending" | "accepted" | "blocked";
@@ -101,6 +103,7 @@ export type ServerPermissionKey =
   | "manage_channels"
   | "manage_messages"
   | "manage_emojis"
+  | "manage_webhooks"
   | "mention_everyone"
   | "send_messages"
   | "add_reactions"
@@ -221,6 +224,10 @@ export interface DbMessage {
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
   mentions: string[];
+  /** Discord-shaped rich embeds from a webhook or bot. */
+  embeds?: Embed[] | null;
+  /** Present when the message was posted by a webhook. */
+  webhook?: MessageWebhookInfo | null;
   created_at: string;
   edited_at: string | null;
   display_id: number;

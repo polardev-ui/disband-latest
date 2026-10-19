@@ -29,6 +29,7 @@ import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator
 import { OverviewSection } from "./server-settings/OverviewSection";
 import { AppearanceSection } from "./server-settings/AppearanceSection";
 import { InvitesSection } from "./server-settings/InvitesSection";
+import { WebhooksSection } from "./server-settings/WebhooksSection";
 import { CatalystSection } from "./server-settings/CatalystSection";
 import { ChannelsSection } from "./server-settings/ChannelsSection";
 import { MembersSection } from "./server-settings/MembersSection";
@@ -49,6 +50,7 @@ type Section =
   | "overview"
   | "appearance"
   | "invite"
+  | "integrations"
   | "catalysts"
   | "members"
   | "roles"
@@ -75,6 +77,7 @@ const NAV: NavItem[] = [
   { id: "overview", label: "Overview", group: "Space", icon: IconSettings, description: "Your space's name, description and whether people can find it." },
   { id: "appearance", label: "Icon & banner", group: "Space", icon: IconImage, ownerOnly: true, description: "The pictures people see in the sidebar, on invites and in Discover." },
   { id: "invite", label: "Invites", group: "Space", icon: IconLink, description: "Share a link, claim a custom one, or send invites to friends." },
+  { id: "integrations", label: "Integrations", group: "Space", icon: IconLink, permission: "manage_webhooks", description: "Webhooks that post into this space from other services." },
   { id: "catalysts", label: "Catalysts", group: "Space", icon: IconSparkle, description: "Perks unlocked by members boosting this space." },
   { id: "members", label: "Members", group: "People", icon: IconFriends, permission: "manage_roles", description: "Everyone in this space. Assign roles, kick or ban." },
   { id: "roles", label: "Roles", group: "People", icon: IconShield, permission: "manage_roles", description: "Group members, give them a colour and icon, and decide what they can do." },
@@ -203,6 +206,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
       {current.id === "overview" && <OverviewSection {...shared} />}
       {current.id === "appearance" && <AppearanceSection {...shared} />}
       {current.id === "invite" && <InvitesSection {...shared} />}
+      {current.id === "integrations" && <WebhooksSection {...shared} />}
       {current.id === "catalysts" && <CatalystSection {...shared} />}
       {current.id === "members" && <MembersSection {...shared} />}
       {current.id === "roles" && <RoleManager onBoost={boost} />}

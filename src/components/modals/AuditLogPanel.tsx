@@ -6,7 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconLeave, IconLock, IconNotes, IconTimer, IconTrash } from "@/components/icons";
+import { IconLeave, IconLink, IconLock, IconNotes, IconTimer, IconTrash } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -29,6 +29,10 @@ const ACTIONS: Record<string, { label: string; icon: ComponentType<{ size?: numb
   "channel.message.delete": { label: "deleted a message", icon: IconTrash, tone: "muted" },
   "dm.message.delete": { label: "deleted a DM", icon: IconTrash, tone: "muted" },
   "group.message.delete": { label: "deleted a group message", icon: IconTrash, tone: "muted" },
+  "webhook.create": { label: "created", icon: IconLink, tone: "muted" },
+  "webhook.update": { label: "updated", icon: IconLink, tone: "muted" },
+  "webhook.token_reset": { label: "reset the URL for", icon: IconLink, tone: "muted" },
+  "webhook.delete": { label: "deleted", icon: IconLink, tone: "danger" },
 };
 
 function timeAgo(iso: string): string {
@@ -128,6 +132,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
         const target = row.target_id && row.target_type === "user" ? (byId.get(row.target_id) ?? extraProfiles.get(row.target_id) ?? null) : null;
         const reason = typeof row.details?.reason === "string" && row.details.reason ? row.details.reason : null;
         const seconds = typeof row.details?.seconds === "number" ? row.details.seconds : null;
+        const webhookName = typeof row.details?.name === "string" && row.details.name ? row.details.name : "a webhook";
         return (
           <li key={row.id} className="view-enter flex items-start gap-3 border-b border-divider px-4 py-3 last:border-b-0" style={enterStyle(i)}>
             <div className="relative shrink-0">
@@ -148,6 +153,12 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
                   <>
                     {" "}
                     <span className="font-medium text-text-normal">{target ? displayName(target) : "a former member"}</span>
+                  </>
+                )}
+                {row.target_type === "webhook" && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-text-normal">{webhookName}</span>
                   </>
                 )}
                 {seconds !== null && <> for {formatDuration(seconds)}</>}
