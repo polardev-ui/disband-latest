@@ -17,7 +17,7 @@ export function DmUnreadBadge({ friend, count, onClick }: DmUnreadBadgeProps) {
     <button
       type="button"
       onClick={onClick}
-      className="fixed left-4 top-4 z-[90] flex items-center gap-3 rounded-full border border-black/30 bg-bg-secondary/95 py-1.5 pl-1.5 pr-4 shadow-xl backdrop-blur-md transition-transform hover:scale-[1.02]"
+      className="fixed left-4 top-4 z-[90] flex items-center gap-3 rounded-full border border-black/30 bg-bg-secondary/95 py-1.5 pl-1.5 pr-4 shadow-[var(--elevation-high)] backdrop-blur-md transition-transform hover:scale-[1.02]"
       aria-label={`${count} unread messages`}
     >
       <div className="relative">

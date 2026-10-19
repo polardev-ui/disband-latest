@@ -339,7 +339,7 @@ export function AnonymousAuthPanel({
       <div
         className={
           overlay
-            ? "modal-pop relative w-full max-w-[420px] rounded-2xl bg-bg-tertiary p-6 shadow-2xl"
+            ? "modal-pop relative w-full max-w-[420px] rounded-lg bg-bg-tertiary p-6 shadow-[var(--elevation-high)]"
             : "relative z-10 w-full max-w-[420px]"
         }
         onClick={overlay ? (e) => e.stopPropagation() : undefined}
@@ -350,7 +350,7 @@ export function AnonymousAuthPanel({
           <p className="mt-2 max-w-[21rem] text-[14px] leading-relaxed text-text-muted">{subheading}</p>
         </div>
 
-        <div className="rounded-xl border border-divider bg-bg-secondary p-6 shadow-[0_16px_50px_-20px_rgba(0,0,0,0.8)]">
+        <div className="rounded-lg bg-bg-secondary p-6 shadow-[0_16px_50px_-20px_rgba(0,0,0,0.8)]">
           {/* CREATE — tier picker ------------------------------------------- */}
           {step === "form" && view === "create" && (
             <div className="space-y-4">

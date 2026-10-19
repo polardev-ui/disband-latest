@@ -1124,7 +1124,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       >
                         +
                       </button>
-                      <span className="w-12 shrink-0 text-right text-[13.5px] tabular-nums text-text-muted">
+                      <span className="w-12 shrink-0 text-right text-[14px] tabular-nums text-text-muted">
                         {Math.round(zoom * 100)}%
                       </span>
                     </div>
@@ -1149,7 +1149,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               setMotion(opt.id);
                               setStoredMotion(opt.id);
                             }}
-                            className={`flex-1 rounded-[9px] px-3 py-1.5 text-[13.5px] font-medium transition-colors ${
+                            className={`flex-1 rounded-[3px] px-3 py-1.5 text-[14px] font-medium transition-colors ${
                               motion === opt.id
                                 ? "bg-interactive-selected text-text-normal shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
                                 : "text-text-muted hover:text-text-normal"
@@ -1184,7 +1184,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               setTheme(t.id);
                               void savePreference({ theme: t.id });
                             }}
-                            className={`overflow-hidden rounded-2xl border text-left transition-[border-color,box-shadow] duration-150 ${
+                            className={`overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-150 ${
                               selected
                                 ? "border-brand"
                                 : "border-divider hover:border-text-muted/40"
@@ -1259,7 +1259,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         <button
                           type="button"
                           onClick={() => void enableDesktopNotifications()}
-                          className="inline-flex h-9 items-center gap-2 rounded-[3px] bg-brand px-3.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                          className="inline-flex h-9 items-center gap-2 rounded-[3px] bg-brand px-3.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
                         >
                           <IconBell size={15} />
                           Allow
@@ -1405,7 +1405,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
                   </p>
 
-                  <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                  <div className="rounded-lg bg-bg-secondary p-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <p className="text-xs font-semibold uppercase text-text-muted">Current Plan</p>
@@ -1443,7 +1443,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                  <div className="rounded-lg bg-bg-secondary p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 space-y-1">
                         <p className="text-sm font-bold text-text-normal">Gift a subscription</p>
@@ -1481,7 +1481,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </div>
                   </div>
                   {myGifts && (myGifts.sent.length > 0 || myGifts.received.length > 0) && (
-                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                    <div className="rounded-lg bg-bg-secondary p-4">
                       <p className="text-sm font-bold text-text-normal">Your gifts</p>
                       <p className="text-xs text-text-muted">
                         Everything you&apos;ve bought or claimed. The link stays here until someone uses it.
@@ -1563,7 +1563,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       type="button"
                       onClick={exportHistory}
                       disabled={exporting}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-divider bg-bg-secondary p-4 text-sm text-text-muted hover:bg-bg-accent disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-bg-secondary p-4 text-sm text-text-muted hover:bg-bg-accent disabled:opacity-50"
                     >
                       <IconDownload size={16} />
                       {exporting ? "Exporting..." : "Export Message History (JSON)"}
@@ -1578,7 +1578,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     Share your code and earn when friends join with it.
                   </p>
                   <MyReferralCard />
-                  <div className="flex flex-col gap-1.5 rounded-lg border border-divider bg-bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-1.5 rounded-lg bg-bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-[13px] font-medium text-text-normal">Live leaderboard</p>
                       <p className="mt-0.5 text-[12px] text-text-muted">

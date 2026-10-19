@@ -400,7 +400,7 @@ function ChatMessageImpl({
           onEdit={onEdit}
           onMoreActions={onContextMenu}
         />
-        <div className="overflow-hidden rounded-xl border border-brand/30 bg-bg-secondary shadow-[0_0_0_1px_rgba(0,0,0,0.2)]">
+        <div className="overflow-hidden rounded-lg border border-brand/30 bg-bg-secondary shadow-[0_0_0_1px_rgba(0,0,0,0.2)]">
           <div className="flex items-center gap-2 border-b border-divider bg-brand/10 px-4 py-2.5">
             <Avatar profile={author} size="sm" />
             <span className="text-[15px] font-semibold text-text-normal">Disband</span>

@@ -205,7 +205,7 @@ export function BotsPanel() {
       >
         {isAnonymous && (
           <div className="border-b border-divider px-4 py-4">
-            <p className="text-[13.5px] leading-relaxed text-text-muted">
+            <p className="text-[14px] leading-relaxed text-text-muted">
               Anonymous accounts can&apos;t create bots. Bots you were invited to can still be managed
               here.
             </p>
@@ -362,7 +362,7 @@ export function BotsPanel() {
             className={`absolute inset-0 bg-overlay-scrim overlay-fade${inviteExiting ? " overlay-fade-out" : ""}`}
             onClick={() => setInvitingBot(null)}
           />
-          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-xl bg-bg-primary p-5 shadow-2xl`}>
+          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-lg bg-bg-primary p-5 shadow-[var(--elevation-high)]`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[16px] font-semibold text-text-normal">

@@ -245,7 +245,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                           <button
                             type="button"
                             onClick={() => playVoiceSoundboardSound(sound.url)}
-                            className="flex w-full flex-col items-start gap-1 rounded-xl border border-divider bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
+                            className="flex w-full flex-col items-start gap-1 rounded-lg bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
                           >
                             <span className="text-xl leading-none">{sound.emoji}</span>
                             <span className="max-w-full truncate text-xs font-medium text-text-normal">
@@ -289,7 +289,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                       key={sound.id}
                       type="button"
                       onClick={() => playVoiceSoundboardSound(sound.url)}
-                      className="flex w-full flex-col items-start gap-1 rounded-xl border border-divider bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
+                      className="flex w-full flex-col items-start gap-1 rounded-lg bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
                     >
                       <span className="text-xl leading-none">{sound.emoji}</span>
                       <span className="max-w-full truncate text-xs font-medium text-text-normal">

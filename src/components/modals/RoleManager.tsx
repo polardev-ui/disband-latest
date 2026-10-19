@@ -166,7 +166,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
                     type="button"
                     onClick={() => setSelectedId(r.id)}
                     aria-current={active ? "true" : undefined}
-                    className={`group flex h-9 w-full items-center gap-2 rounded-[10px] px-2 text-left transition-colors duration-150 ${
+                    className={`group flex h-9 w-full items-center gap-2 rounded-[4px] px-2 text-left transition-colors duration-150 ${
                       active ? "bg-interactive-selected" : "hover:bg-interactive-hover"
                     }`}
                   >
@@ -177,7 +177,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
                       <IconGripVertical size={14} />
                     </span>
                     <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
-                    <span className={`min-w-0 flex-1 truncate text-[13.5px] ${active ? "font-medium text-text-normal" : "text-text-normal/90"}`}>
+                    <span className={`min-w-0 flex-1 truncate text-[14px] ${active ? "font-medium text-text-normal" : "text-text-normal/90"}`}>
                       {r.is_default ? "@everyone" : r.name}
                     </span>
                     {r.icon && <RoleIcon icon={r.icon} name={r.name} size={14} />}

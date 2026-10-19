@@ -102,11 +102,11 @@ export function BotInviteCard({ code }: { code: string }) {
         </Link>
 
         {loading ? (
-          <div className="w-full max-w-md rounded-xl bg-bg-primary p-8 text-center text-sm text-text-muted shadow-2xl">
+          <div className="w-full max-w-md rounded-lg bg-bg-primary p-8 text-center text-sm text-text-muted shadow-[var(--elevation-high)]">
             Loading invite…
           </div>
         ) : notFound || !invite ? (
-          <div className="w-full max-w-md rounded-xl bg-bg-primary p-8 text-center shadow-2xl">
+          <div className="w-full max-w-md rounded-lg bg-bg-primary p-8 text-center shadow-[var(--elevation-high)]">
             <h1 className="text-lg font-semibold text-text-normal">Invite not found</h1>
             <p className="mt-2 text-sm leading-relaxed text-text-muted">
               This invite link doesn&apos;t exist or is no longer valid. Ask the bot&apos;s developer
@@ -120,7 +120,7 @@ export function BotInviteCard({ code }: { code: string }) {
             </Link>
           </div>
         ) : (
-          <div className="w-full max-w-md overflow-hidden rounded-xl bg-bg-primary shadow-2xl">
+          <div className="w-full max-w-md overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]">
             <div className="border-b border-divider px-6 py-5 text-center">
               <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
                 Bot invite
@@ -157,7 +157,7 @@ export function BotInviteCard({ code }: { code: string }) {
                     <div key={scope} className="flex items-start gap-2.5 rounded-md bg-bg-secondary px-3 py-2.5">
                       <span className="mt-0.5 text-status-online">✓</span>
                       <div className="min-w-0">
-                        <p className="text-[13.5px] font-medium text-text-normal">
+                        <p className="text-[14px] font-medium text-text-normal">
                           {BOT_SCOPE_LABELS[scope]?.label ?? scope}
                         </p>
                         <p className="text-[12px] leading-relaxed text-text-muted">

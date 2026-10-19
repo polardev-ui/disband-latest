@@ -1572,7 +1572,7 @@ export function DiscordApp() {
       )}
 
       {call.callNotice && (
-        <div className="fixed bottom-6 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-4 py-3 text-sm shadow-xl">
+        <div className="fixed bottom-6 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-3 rounded-lg bg-bg-secondary px-4 py-3 text-sm shadow-[var(--elevation-high)]">
           <span>{call.callNotice}</span>
           {call.canRetryCall && (
             <button
@@ -1592,7 +1592,7 @@ export function DiscordApp() {
               className="absolute inset-0 bg-overlay-scrim overlay-fade"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <div className="relative flex h-full w-[min(86vw,22rem)] shadow-2xl">
+            <div className="relative flex h-full w-[min(86vw,22rem)] shadow-[var(--elevation-high)]">
               <ServerList
                 servers={app.servers}
                 activeServerId={app.activeServerId}

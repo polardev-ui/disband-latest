@@ -235,7 +235,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
           setMenu({ x: event.clientX, y: event.clientY });
         }}
         onClick={showVideo ? onFocus : undefined}
-        className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media transition-shadow duration-150 ${
+        className={`relative h-full w-full overflow-hidden rounded-lg bg-overlay-media transition-shadow duration-150 ${
           showVideo && onFocus ? "cursor-pointer " : ""
         }${
           speaking ? "ring-[3px] ring-status-online" : "ring-1 ring-white/10"
@@ -265,7 +265,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
         <>
           <div className="fixed inset-0 z-[135]" onClick={() => setMenu(null)} />
           <div
-            className="fixed z-[140] min-w-60 rounded-xl border border-divider bg-bg-secondary p-3 shadow-2xl"
+            className="fixed z-[140] min-w-60 rounded-lg bg-bg-secondary p-3 shadow-[var(--elevation-high)]"
             style={{ left: Math.min(menu.x, window.innerWidth - 260), top: Math.min(menu.y, window.innerHeight - 240) }}
           >
             <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">Participant</div>
@@ -360,7 +360,7 @@ function ScreenTile({
   return (
     <div
       ref={boxRef}
-      className={`group relative h-full w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10 ${
+      className={`group relative h-full w-full overflow-hidden rounded-lg bg-black ring-1 ring-white/10 ${
         watching && onFocus ? "cursor-pointer" : ""
       }`}
       onClick={watching ? onFocus : undefined}
