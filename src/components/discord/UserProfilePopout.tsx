@@ -8,7 +8,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { UserBadges } from "@/components/ui/UserBadges";
+import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { BotTag } from "@/components/ui/BotTag";
@@ -84,6 +84,7 @@ export function UserProfilePopout({
   const [pos, setPos] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
   const [message, setMessage] = useState("");
   const [, tick] = useState(0);
+  const badgeCount = useBadgeCount(p?.id, isSelf ? plan : undefined);
   const note = useUserNote(open && !isSelf ? user?.id : null, open && !isSelf ? p?.id : null);
 
   useOverlayDismiss(onClose, open);
@@ -164,10 +165,12 @@ export function UserProfilePopout({
         </button>
 
         {/* Badges, top right under the banner */}
-        <div className="flex min-h-[44px] justify-end px-4 pt-3">
-          <span className="flex max-w-[180px] flex-wrap justify-end gap-1 rounded-lg bg-bg-floating px-1 py-0.5 empty:hidden">
-            <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" />
-          </span>
+        <div className="flex min-h-[44px] justify-end pl-[116px] pr-4 pt-3">
+          {badgeCount > 0 && badgeCount <= HEADER_BADGE_LIMIT && (
+            <span className="rounded-lg bg-bg-floating p-1">
+              <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" className="justify-end" />
+            </span>
+          )}
         </div>
 
         {/* Inner card */}
@@ -180,6 +183,9 @@ export function UserProfilePopout({
             {p.username ?? ""}
             {p.pronouns?.trim() && <span className="text-header-secondary"> • {p.pronouns.trim()}</span>}
           </p>
+          {badgeCount > HEADER_BADGE_LIMIT && (
+            <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" className="mt-2" />
+          )}
           {statusNote && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{statusNote}</p>}
 
           <div className="my-3 h-px bg-[#2e2f34]" />
