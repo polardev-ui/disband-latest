@@ -117,7 +117,7 @@ export function ProfilePreview({
           />
         </div>
 
-        <h3 className="mt-2.5 break-words text-[21px] font-semibold leading-tight tracking-[-0.02em]">
+        <h3 className="mt-2.5 break-words text-[20px] font-semibold leading-tight">
           <DisplayName profile={{ ...profile, display_name: name }} />
         </h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[14px] text-text-muted">

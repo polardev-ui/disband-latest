@@ -181,10 +181,10 @@ export function PlatformModerationPanel() {
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => results.length > 0 && setDropdownOpen(true)}
               placeholder="Search by username or display name…"
-              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+              className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
             />
             {dropdownOpen && (searching || results.length > 0 || query.trim().length > 0) && (
-              <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-divider bg-bg-secondary shadow-lg">
+              <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-[4px] border border-divider bg-bg-floating shadow-[var(--elevation-high)]">
                 {searching && (
                   <p className="px-3 py-3 text-xs text-text-muted">Searching…</p>
                 )}
@@ -217,7 +217,7 @@ export function PlatformModerationPanel() {
         <input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+          className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
         />
       </label>
 
@@ -228,7 +228,7 @@ export function PlatformModerationPanel() {
           autoComplete="off"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+          className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
         />
       </label>
 

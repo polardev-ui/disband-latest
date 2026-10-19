@@ -31,7 +31,7 @@ export function EmailChangeStatus() {
   const copy = STATES[state] ?? STATES.invalid;
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg-primary px-6">
-      <div className="w-full max-w-md rounded-2xl border border-divider bg-bg-secondary p-8 text-center">
+      <div className="w-full max-w-md rounded-[8px] border border-divider bg-bg-secondary p-8 text-center">
         <p className="text-xl font-semibold text-text-normal">{copy.title}</p>
         <p className="mt-3 text-sm leading-relaxed text-text-muted">{copy.body}</p>
       </div>

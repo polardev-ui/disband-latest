@@ -377,7 +377,7 @@ export function UserProfileModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-[3px] bg-black/60 text-white transition-colors hover:bg-black/75"
           aria-label="Close profile"
         >
           <IconClose size={16} />
@@ -536,7 +536,7 @@ export function UserProfileModal({
                         {memberRoles.map((role) => (
                           <span
                             key={role.id}
-                            className={`inline-flex items-center gap-1.5 rounded-md border border-divider px-2 py-0.5 text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                            className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && !isSelf && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
                             style={
                               role.gradient_to?.trim()
                                 ? {
@@ -549,9 +549,22 @@ export function UserProfileModal({
                             {role.icon && <RoleIcon icon={role.icon} name={role.name} size={14} />}
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
                             {role.name}
+                            {canManageRoles && !isSelf && onSetRoles && (
+                              <button
+                                type="button"
+                                onClick={() => toggleRole(role.id)}
+                                aria-label={`Remove the ${role.name} role`}
+                                title={`Remove ${role.name}`}
+                                className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                  <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
                           </span>
                         ))}
-                        {memberRoles.length === 0 && (!canManageRoles || isSelf) && (
+                        {memberRoles.length === 0 && (
                           <p className="text-[13px] text-text-muted">No roles assigned.</p>
                         )}
                         {canManageRoles && !isSelf && onSetRoles && (

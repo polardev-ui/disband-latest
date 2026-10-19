@@ -30,7 +30,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-text-muted">Current level</p>
-            <p className="text-[22px] font-semibold tracking-[-0.02em] text-text-normal">
+            <p className="text-[22px] font-semibold text-text-normal">
               {current.level === 0 ? "No level yet" : current.name}
             </p>
           </div>
@@ -77,7 +77,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
                     </span>
                     <span className="min-w-0">
                       <span className={`block text-[14px] font-medium ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{perk.title}</span>
-                      <span className="block text-[12.5px] text-text-muted">{perk.body}</span>
+                      <span className="block text-[13px] text-text-muted">{perk.body}</span>
                     </span>
                   </li>
                 ))}

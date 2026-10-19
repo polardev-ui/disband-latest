@@ -170,7 +170,7 @@ function VanityCard({
               </button>
             )}
           </div>
-          <p className="mt-2 truncate text-[12.5px] text-text-muted">
+          <p className="mt-2 truncate text-[13px] text-text-muted">
             {preview}
           </p>
         </div>

@@ -114,7 +114,7 @@ export function BotInviteCard({ code }: { code: string }) {
             </p>
             <Link
               href="/home"
-              className="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              className="mt-6 inline-block rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
             >
               Back to Disband
             </Link>
@@ -154,7 +154,7 @@ export function BotInviteCard({ code }: { code: string }) {
                 </p>
                 <div className="space-y-2">
                   {invite.scopes.map((scope) => (
-                    <div key={scope} className="flex items-start gap-2.5 rounded-md bg-bg-secondary px-3 py-2.5">
+                    <div key={scope} className="flex items-start gap-2.5 rounded-[3px] bg-bg-secondary px-3 py-2.5">
                       <span className="mt-0.5 text-status-online">✓</span>
                       <div className="min-w-0">
                         <p className="text-[14px] font-medium text-text-normal">
@@ -174,7 +174,7 @@ export function BotInviteCard({ code }: { code: string }) {
               </div>
 
               {error && (
-                <p className="mt-4 rounded-md bg-status-dnd/10 px-3 py-2 text-[12.5px] text-status-dnd">
+                <p className="mt-4 rounded-[3px] bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">
                   {error}
                 </p>
               )}
@@ -188,7 +188,7 @@ export function BotInviteCard({ code }: { code: string }) {
                       type="button"
                       onClick={() => void act("decline")}
                       disabled={busy}
-                      className="flex items-center justify-center gap-1.5 rounded-md border border-divider px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
+                      className="flex items-center justify-center gap-1.5 rounded-[3px] border border-divider px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
                     >
                       <IconClose size={15} />
                       Decline
@@ -197,7 +197,7 @@ export function BotInviteCard({ code }: { code: string }) {
                       type="button"
                       onClick={() => void act("approve")}
                       disabled={busy}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                     >
                       <span aria-hidden>✓</span>
                       {busy ? "Working…" : `Add to ${invite.server.name}`}
@@ -206,7 +206,7 @@ export function BotInviteCard({ code }: { code: string }) {
                 ) : (
                   <Link
                     href="/login"
-                    className="block w-full rounded-md bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+                    className="block w-full rounded-[3px] bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
                   >
                     Sign in to approve
                   </Link>
@@ -214,7 +214,7 @@ export function BotInviteCard({ code }: { code: string }) {
               ) : (
                 <Link
                   href="/home"
-                  className="block w-full rounded-md bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+                  className="block w-full rounded-[3px] bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
                 >
                   Back to Disband
                 </Link>

@@ -15,7 +15,7 @@ export default function BugReportPage() {
       <MarketingNav />
 
       <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-6 py-12">
-        <section className="relative w-full max-w-2xl overflow-hidden rounded-2xl p-8 sm:p-12">
+        <section className="relative w-full max-w-2xl overflow-hidden rounded-[8px] p-8 sm:p-12">
           <div className="absolute left-0 right-0 top-0 h-4 bg-[repeating-linear-gradient(-45deg,#facc15_0px,#facc15_12px,#090a0c_12px,#090a0c_24px)]" />
           <div className="absolute bottom-0 left-0 right-0 h-4 bg-[repeating-linear-gradient(45deg,#facc15_0px,#facc15_12px,#090a0c_12px,#090a0c_24px)]" />
 

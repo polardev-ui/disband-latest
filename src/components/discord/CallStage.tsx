@@ -255,7 +255,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
             <MemberAvatar member={member} speaking={false} />
           </span>
         )}
-        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
           {member.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
           <span className="truncate">{member.label}</span>
           {member.ringing && <span className="shrink-0 text-[11px] text-white/50">Ringing…</span>}
@@ -389,7 +389,7 @@ function ScreenTile({
 
       {hasAudio && <audio ref={audioRef} autoPlay playsInline className="hidden" />}
 
-      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
         <span className="truncate">{screen.label}</span>
         <span className="shrink-0 rounded bg-status-dnd px-1 text-[10px] font-bold uppercase tracking-wide text-white">
           Live

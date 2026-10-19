@@ -111,7 +111,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                 <IconMusic size={18} className="shrink-0 text-brand" />
                 <span className="min-w-0 flex-1 truncate text-[14px] text-text-normal">{file.name}</span>
                 <span className="shrink-0 text-[12px] tabular-nums text-text-muted">{(file.size / 1024).toFixed(0)} KB</span>
-                <button type="button" onClick={() => setFile(null)} className="shrink-0 text-[12.5px] text-text-muted hover:text-text-normal">
+                <button type="button" onClick={() => setFile(null)} className="shrink-0 text-[13px] text-text-muted hover:text-text-normal">
                   Change
                 </button>
               </div>

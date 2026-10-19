@@ -1023,7 +1023,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </span>
                           <label htmlFor={`badge-${badge.key}`} className="min-w-0 flex-1 cursor-pointer">
                             <span className="block text-[14px] font-medium text-text-normal">{badge.name}</span>
-                            <span className="block truncate text-[12.5px] text-text-muted">
+                            <span className="block truncate text-[13px] text-text-muted">
                               {badge.visible ? badge.description : "Hidden from your profile"}
                             </span>
                           </label>
@@ -1058,7 +1058,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   {error && <p className="text-sm text-status-dnd">{error}</p>}
 
                   {(profileDirty || saving || saved) && (
-                    <div className="sticky bottom-0 -mx-8 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-overlay-panel/95 px-8 py-3 backdrop-blur">
+                    <div className="sticky bottom-0 -mx-8 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-overlay-panel px-8 py-3">
                       <button
                         type="button"
                         onClick={resetProfileEdits}
@@ -1205,7 +1205,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                   <span className="ml-auto text-[12px] font-medium text-brand">Active</span>
                                 ) : null}
                               </div>
-                              <p className="mt-0.5 text-[12.5px] text-text-muted">{t.description}</p>
+                              <p className="mt-0.5 text-[13px] text-text-muted">{t.description}</p>
                             </div>
                           </button>
                         );
@@ -1405,19 +1405,19 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
                   </p>
 
-                  <div className="rounded-lg bg-bg-secondary p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold uppercase text-text-muted">Current Plan</p>
+                  <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Current plan</p>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-bold capitalize">{subPlan}</span>
+                          <span className="text-[16px] font-semibold capitalize text-header-primary">{subPlan}</span>
                           <SubscriptionBadge plan={subPlan} />
                         </div>
                         {subscription?.status === "active" && (
                           <div className="space-y-0.5 pt-1">
                             {subscription.current_period_end && (
-                              <p className="text-xs text-text-muted">
-                                Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", {
+                              <p className="text-[12px] text-text-muted">
+                                Renews {new Date(subscription.current_period_end).toLocaleDateString("en-GB", {
                                   year: "numeric", month: "long", day: "numeric",
                                 })}
                               </p>
@@ -1426,33 +1426,33 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </div>
                         )}
                         {subscription?.status === "past_due" && (
-                          <p className="text-xs text-status-dnd">Payment failed</p>
+                          <p className="text-[12px] text-status-dnd">Payment failed</p>
                         )}
                         {subscription?.status === "canceled" && (
-                          <p className="text-xs text-text-muted">Canceled</p>
+                          <p className="text-[12px] text-text-muted">Cancelled</p>
                         )}
                       </div>
                       <div className="flex flex-col gap-2">
                         <button
                           type="button"
                           onClick={() => setShowSubscription(true)}
-                          className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover"
+                          className="h-8 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                         >
                           {subPlan === "free" ? "Upgrade" : "Manage"}
                         </button>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg bg-bg-secondary p-4">
+                  <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-bold text-text-normal">Gift a subscription</p>
-                        <p className="text-xs text-text-muted">
+                        <p className="text-[16px] font-medium leading-6 text-header-primary">Gift a subscription</p>
+                        <p className="text-[13px] leading-5 text-text-muted">
                           Pay once for Aero or Lite. Send the link in a DM or a channel — first to claim it gets it.
                         </p>
                         {giftLink && (
                           <div className="flex items-center gap-2 pt-1">
-                            <code className="min-w-0 flex-1 truncate rounded bg-bg-tertiary px-2 py-1 text-xs text-text-normal">
+                            <code className="min-w-0 flex-1 truncate rounded-[3px] bg-bg-tertiary px-2 py-1 text-[12px] text-text-normal">
                               {giftLink}
                             </code>
                             <button
@@ -1464,7 +1464,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 );
                                 window.setTimeout(() => setGiftCopied(false), 2000);
                               }}
-                              className="shrink-0 rounded border border-divider px-2 py-1 text-xs font-semibold text-text-normal hover:bg-interactive-hover"
+                              className="shrink-0 rounded-[3px] border border-divider px-2 py-1 text-[12px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                             >
                               {giftCopied ? "Copied" : "Copy"}
                             </button>
@@ -1474,21 +1474,21 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       <button
                         type="button"
                         onClick={() => { setGiftCopied(false); setGifting(true); }}
-                        className="shrink-0 rounded bg-[#fee75c] px-3 py-1.5 text-sm font-bold text-black transition-opacity hover:opacity-90"
+                        className="h-8 shrink-0 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                       >
                         Gift
                       </button>
                     </div>
                   </div>
                   {myGifts && (myGifts.sent.length > 0 || myGifts.received.length > 0) && (
-                    <div className="rounded-lg bg-bg-secondary p-4">
-                      <p className="text-sm font-bold text-text-normal">Your gifts</p>
-                      <p className="text-xs text-text-muted">
+                    <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
+                      <p className="text-[16px] font-medium leading-6 text-header-primary">Your gifts</p>
+                      <p className="text-[13px] leading-5 text-text-muted">
                         Everything you&apos;ve bought or claimed. The link stays here until someone uses it.
                       </p>
                       <div className="mt-3 space-y-2">
                         {myGifts.sent.map((g) => (
-                          <div key={g.code} className="flex items-center justify-between gap-3 rounded-md bg-bg-tertiary px-3 py-2">
+                          <div key={g.code} className="flex items-center justify-between gap-3 rounded-[4px] bg-bg-tertiary px-3 py-2">
                             <div className="min-w-0">
                               <p className="truncate text-[13px] font-semibold text-text-normal">
                                 {GIFT_PLAN_NAME[g.plan]} · {monthsLabel(g.months)}
@@ -1510,7 +1510,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                     2000,
                                   );
                                 }}
-                                className="shrink-0 rounded border border-divider px-2 py-1 text-xs font-semibold text-text-normal hover:bg-interactive-hover"
+                                className="shrink-0 rounded-[3px] border border-divider px-2 py-1 text-[12px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                               >
                                 {copiedGiftCode === g.code ? "Copied" : "Copy link"}
                               </button>
@@ -1518,7 +1518,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </div>
                         ))}
                         {myGifts.received.map((g) => (
-                          <div key={`r-${g.code}`} className="flex items-center justify-between gap-3 rounded-md bg-bg-tertiary px-3 py-2">
+                          <div key={`r-${g.code}`} className="flex items-center justify-between gap-3 rounded-[4px] bg-bg-tertiary px-3 py-2">
                             <div className="min-w-0">
                               <p className="truncate text-[13px] font-semibold text-text-normal">
                                 {GIFT_PLAN_NAME[g.plan]} · {monthsLabel(g.months)}
@@ -1631,10 +1631,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             Connect Spotify
                           </button>
                         )}
-                        {spotifyNote && <p className="text-[12.5px] text-text-muted">{spotifyNote}</p>}
+                        {spotifyNote && <p className="text-[13px] text-text-muted">{spotifyNote}</p>}
                         {spotifyPasteOpen && !spotifyConnected && (
                           <div className="mt-2 w-full space-y-2">
-                            <p className="text-[12.5px] text-text-muted">
+                            <p className="text-[13px] text-text-muted">
                               Spotify opened in your browser. Approve access there, copy the code
                               Spotify shows, and paste it here.
                             </p>
@@ -1655,7 +1655,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               </button>
                             </div>
                             {spotifyPasteError && (
-                              <p className="text-[12.5px] text-status-dnd">{spotifyPasteError}</p>
+                              <p className="text-[13px] text-status-dnd">{spotifyPasteError}</p>
                             )}
                           </div>
                         )}
@@ -1677,7 +1677,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         >
                           Connect Last.fm
                         </button>
-                        <span className="text-[12.5px] text-text-muted">or type a username</span>
+                        <span className="text-[13px] text-text-muted">or type a username</span>
                         <input
                           value={lastfmUser}
                           onChange={(e) => {
@@ -1696,13 +1696,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         >
                           Save
                         </button>
-                        {lastfmSaved && <span className="text-[12.5px] text-status-online">Saved.</span>}
+                        {lastfmSaved && <span className="text-[13px] text-status-online">Saved.</span>}
                         {!lastfmConfigured() && (
-                          <span className="text-[12.5px] text-text-muted">
+                          <span className="text-[13px] text-text-muted">
                             Not configured on this build yet.
                           </span>
                         )}
-                        {lastfmNote && <p className="text-[12.5px] text-text-muted">{lastfmNote}</p>}
+                        {lastfmNote && <p className="text-[13px] text-text-muted">{lastfmNote}</p>}
                       </div>
                     </SettingRow>
                   </SettingsSection>
