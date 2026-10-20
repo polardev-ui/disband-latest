@@ -1655,6 +1655,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         { id: "spotify", label: "Spotify", icon: <SpotifyMark />, onClick: handleSpotifyConnect, done: spotifyConnected },
                         { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
                         { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: () => void handleLastfmConnect(), done: false },
+                        { id: "ytmusic", label: "YouTube Music (via Last.fm)", icon: <YoutubeMusicMark />, onClick: () => document.getElementById("conn-ytmusic")?.scrollIntoView({ behavior: "smooth", block: "center" }), done: false },
                       ].map((svc) => (
                         <Tooltip key={svc.id} label={svc.done ? `${svc.label} · connected` : svc.label} side="top">
                           <button
@@ -1785,6 +1786,38 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     {!lastfmConfigured() && <p className="mt-2 text-[14px] text-header-secondary">Not configured on this build yet.</p>}
                     {lastfmNote && <p className="mt-2 text-[14px] text-header-secondary">{lastfmNote}</p>}
                   </ConnectionCard>
+
+                  {/* YouTube Music: no public now-playing API, so it rides on Last.fm */}
+                  <div id="conn-ytmusic">
+                    <ConnectionCard
+                      icon={<YoutubeMusicMark size={32} />}
+                      name="YouTube Music"
+                      status={lastfmSaved && lastfmUser.trim() ? "Shows through your Last.fm" : "Works through Last.fm"}
+                      connected={lastfmSaved && !!lastfmUser.trim()}
+                      actions={
+                        <a
+                          href="https://web-scrobbler.com/"
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="flex h-8 items-center rounded-[3px] bg-[#ff0000] px-4 text-[14px] font-medium text-white hover:brightness-95"
+                        >
+                          Get the scrobbler
+                        </a>
+                      }
+                    >
+                      <p className="text-[14px] text-header-secondary">
+                        YouTube Music doesn&apos;t let apps see what you&apos;re playing, so it comes through Last.fm:
+                      </p>
+                      <ol className="mt-2 list-decimal space-y-1 pl-5 text-[14px] text-text-normal">
+                        <li>Connect Last.fm above.</li>
+                        <li>
+                          On a computer, install <span className="font-medium">Web Scrobbler</span> for your browser and sign it in to Last.fm. On Android,{" "}
+                          <span className="font-medium">Pano Scrobbler</span> does the same for the app.
+                        </li>
+                        <li>Play something on YouTube Music. It shows on your profile within a minute.</li>
+                      </ol>
+                    </ConnectionCard>
+                  </div>
 
                   <p className="mt-6 text-[14px] text-header-secondary">
                     Your listening card (artwork, track and artist) shows on your profile to everyone who can see it. Disconnect an account to hide it instantly.
@@ -1953,6 +1986,16 @@ function SoundcloudMark({ size = 26 }: { size?: number }) {
       <circle cx="12" cy="12" r="11" fill="#ff5500" />
       <path d="M10 15.5V9.6a3.8 3.8 0 0 1 7.2 1.4 2.3 2.3 0 0 1 .3 4.5Z" fill="#fff" />
       <path d="M8.6 15.5v-5M7.2 15.5v-3.6M5.8 15.5V13" stroke="#fff" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function YoutubeMusicMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#ff0000" />
+      <circle cx="12" cy="12" r="5.6" fill="none" stroke="#fff" strokeWidth="1.3" />
+      <path d="M10.6 9.6v4.8l4-2.4Z" fill="#fff" />
     </svg>
   );
 }
