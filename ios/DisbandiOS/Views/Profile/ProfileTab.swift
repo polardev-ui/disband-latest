@@ -390,7 +390,7 @@ struct EditProfileSheet: View {
                 } header: {
                     Text("Username")
                 } footer: {
-                    Text("2–25 characters: letters, numbers and underscores.")
+                    Text("1–25 characters: letters, numbers and underscores.")
                 }
                 Section {
                     TextField("e.g. she/her, they/them", text: $pronouns)
@@ -542,8 +542,8 @@ struct EditProfileSheet: View {
         if text.localizedCaseInsensitiveContains("not allowed") {
             return "That username isn't allowed."
         }
-        if text.localizedCaseInsensitiveContains("2–25") || text.localizedCaseInsensitiveContains("2-25") {
-            return "Usernames must be 2–25 characters: letters, numbers and underscores."
+        if text.localizedCaseInsensitiveContains("1–25") || text.localizedCaseInsensitiveContains("1-25") || text.localizedCaseInsensitiveContains("2–25") || text.localizedCaseInsensitiveContains("2-25") {
+            return "Usernames must be 1–25 characters: letters, numbers and underscores."
         }
         if text.localizedCaseInsensitiveContains("limit") {
             return "You've changed your username too many times today. Try again tomorrow."

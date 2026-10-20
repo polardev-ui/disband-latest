@@ -197,8 +197,8 @@ final class AppState {
         let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
         let display = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.count >= 2 else {
-            authError = "Username must be at least 2 characters (letters, numbers, and underscores)."
+        guard normalized.count >= 1 else {
+            authError = "Username must be at least 1 character (letters, numbers, and underscores)."
             return
         }
         do {
