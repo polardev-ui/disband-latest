@@ -24,6 +24,7 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 
 const WIDTH = 340;
 const GAP = 12;
+const BOTTOM_MARGIN = 72;
 
 export interface UserProfilePopoutProps {
   profile: Profile | null;
@@ -90,12 +91,14 @@ export function UserProfilePopout({
   useLayoutEffect(() => {
     if (!open || !anchor) return;
     const place = () => {
-      const h = Math.min(ref.current?.offsetHeight ?? 480, window.innerHeight - 16);
+      // A roomy bottom margin: on macOS the window often runs behind the Dock,
+      // so "just inside the viewport" can still be hidden.
+      const h = Math.min(ref.current?.offsetHeight ?? 480, window.innerHeight - BOTTOM_MARGIN - 8);
       const onLeftHalf = anchor.left + anchor.width / 2 < window.innerWidth / 2;
       const left = onLeftHalf
         ? Math.max(8, Math.min(anchor.right + GAP, window.innerWidth - WIDTH - 8))
         : Math.max(8, anchor.left - GAP - WIDTH);
-      const top = Math.max(8, Math.min(anchor.top, window.innerHeight - h - 8));
+      const top = Math.max(8, Math.min(anchor.top, window.innerHeight - h - BOTTOM_MARGIN));
       setPos((prev) =>
         prev && prev.left === left && prev.top === top ? prev : { left, top, side: onLeftHalf ? "right" : "left" },
       );
@@ -139,7 +142,7 @@ export function UserProfilePopout({
         role="dialog"
         aria-label={`${displayName(p)}'s profile`}
         data-side={pos?.side ?? "right"}
-        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-16px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg bg-bg-secondary-alt shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
+        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg bg-bg-secondary-alt shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
         style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden" }}
       >
         {/* Banner */}
