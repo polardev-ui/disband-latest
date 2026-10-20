@@ -42,14 +42,30 @@ function formatAuthError(error: { message?: string; status?: number } | null | u
 export async function getMfaAssurance(): Promise<MfaAssurance> {
   const { data, error } = await supabase().auth.mfa.getAuthenticatorAssuranceLevel();
   if (error || !data) {
-
-    return { currentLevel: null, nextLevel: null, mfaRequired: true };
+    // A missing or unreadable assurance level must not lock a user out when
+    // there is no verified second factor to challenge them with.
+    const { factors } = await listAllMfaFactors().catch(() => ({ factors: [], error: null }));
+    const hasVerified = (factors ?? []).some((factor) => factor.status === "verified");
+    return { currentLevel: null, nextLevel: null, mfaRequired: hasVerified };
   }
   const mfaRequired = data.currentLevel !== "aal2" && data.nextLevel === "aal2";
+  if (!mfaRequired) {
+    return {
+      currentLevel: data.currentLevel,
+      nextLevel: data.nextLevel,
+      mfaRequired: false,
+    };
+  }
+  // Supabase can report AAL2 as the next level while the account has no
+  // verified factor left (for example after a removed or orphaned factor).
+  // In that case there is nothing to challenge, so do not trap the session
+  // behind the MFA screen.
+  const { factors } = await listAllMfaFactors().catch(() => ({ factors: [], error: null }));
+  const hasVerified = (factors ?? []).some((factor) => factor.status === "verified");
   return {
     currentLevel: data.currentLevel,
     nextLevel: data.nextLevel,
-    mfaRequired,
+    mfaRequired: hasVerified,
   };
 }
 
