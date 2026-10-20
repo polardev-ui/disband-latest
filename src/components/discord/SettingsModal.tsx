@@ -548,8 +548,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       return;
     }
     const sanitizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-    if (sanitizedUsername.length < 1) {
-      setError("Username must be at least 1 character (letters, numbers, and underscores).");
+    if (sanitizedUsername.length < 2) {
+      setError("Username must be at least 2 characters (letters, numbers, and underscores).");
       return;
     }
     if (!displayName.trim()) {

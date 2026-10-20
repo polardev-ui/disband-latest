@@ -43,8 +43,8 @@ export function usernameContainsBlockedWord(username: string): boolean {
 export function usernameFormatError(username: string): string | null {
   const norm = username.trim().toLowerCase();
   if (!norm) return "Enter a username";
-  if (!/^[a-z0-9_]{1,25}$/.test(norm)) {
-    return "Use 1–25 letters, numbers, or underscores";
+  if (!/^[a-z0-9_]{2,25}$/.test(norm)) {
+    return "Use 2–25 letters, numbers, or underscores";
   }
   if (usernameContainsBlockedWord(norm)) {
     return "That username is not allowed";
