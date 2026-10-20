@@ -737,6 +737,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) console.error("mark_dm_read failed", error.message);
   }, []);
 
+  const markGroupReadNow = useCallback(async (groupId: string) => {
+    // PostgREST builders are lazy: a bare `void rpc(...)` never sends a request.
+    const { error } = await getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
+    if (error) console.error("mark_group_read failed", error.message);
+  }, []);
+
   const clearDmUnread = useCallback((threadId: string) => {
     setDmUnreadMap((prev) => {
       if (!prev.has(threadId)) return prev;
@@ -837,6 +843,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.rpc("get_group_unread"),
     ]);
 
+    if (sessionRef.current?.user.id !== uid) return;
     setDmUnreadMap((prev) => {
       const next = new Map<string, { friend: Profile; count: number; latestAt: string }>();
       for (const row of dm ?? []) {
@@ -859,7 +866,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupUnreadMap((prev) => {
       const next = new Map<string, number>();
       for (const row of grp ?? []) {
-        if (row.unread_count > 0) next.set(row.group_id, row.unread_count);
+        if (row.unread_count > 0 && !(viewModeRef.current === "group" && activeGroupRef.current === row.group_id && document.visibilityState === "visible")) next.set(row.group_id, row.unread_count);
       }
       return next;
     });
@@ -1288,6 +1295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
     ]);
     const channelRows = (chs as Channel[]) ?? [];
+    if (activeServerRef.current !== serverId) return channelRows;
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
     serverDetailsCacheRef.current = {
@@ -2190,6 +2198,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadGroupChats(uid),
     ]);
     const threads = await loadDmThreads(uid);
+    if (groupId && viewModeRef.current === "group" && activeGroupRef.current === groupId && document.visibilityState === "visible") {
+      clearGroupUnread(groupId);
+      await markGroupReadNow(groupId);
+    }
     await seedUnread(uid, threads);
   }, [loadDmMessages, loadMessages, loadGroupMessages, loadDmThreads, loadGroupChats, seedUnread]);
 
@@ -2202,6 +2214,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (viewModeRef.current === "dm" && activeDmRef.current) {
         clearDmUnread(activeDmRef.current);
         void markDmReadNow(activeDmRef.current);
+      }
+      if (viewModeRef.current === "group" && activeGroupRef.current) {
+        clearGroupUnread(activeGroupRef.current);
+        void markGroupReadNow(activeGroupRef.current);
       }
       void refreshConversation();
       void (async () => {
@@ -2740,6 +2756,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const msg = payload.new as GroupMessage;
 
           if (msg.group_id !== activeGroupRef.current) return;
+          if (document.visibilityState === "visible") {
+            clearGroupUnread(msg.group_id);
+            void markGroupReadNow(msg.group_id);
+          }
           void (async () => {
             if (msg.author_id == null) {
               setGroupMessages((prev) =>
@@ -3184,7 +3204,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
 
-          if (!(viewModeRef.current === "group" && activeGroupRef.current === msg.group_id)) {
+          if (viewModeRef.current === "group" && activeGroupRef.current === msg.group_id && document.visibilityState === "visible") {
+            clearGroupUnread(msg.group_id);
+            void markGroupReadNow(msg.group_id);
+          } else {
             setGroupUnreadMap((prev) => {
               const next = new Map(prev);
               next.set(msg.group_id, (next.get(msg.group_id) ?? 0) + 1);
@@ -3640,31 +3663,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const selectServer = useCallback(async (serverId: string) => {
     markActivity();
+    if (viewModeRef.current === "space" && activeServerRef.current === serverId && activeChannelRef.current) return;
     persistActiveServerChannel();
+    viewModeRef.current = "space";
+    activeServerRef.current = serverId;
+    activeChannelRef.current = null;
+    activeDmRef.current = null;
+    activeGroupRef.current = null;
     setViewMode("space");
     setActiveServerId(serverId);
+    setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
+    setMessages([]);
+    setMessagesLoading(true);
+    setChannelHasMore(false);
     clearServerIndicator(serverId);
-    const channelRows = await loadServerDetails(serverId);
+    const channelRows = await loadServerDetails(serverId).catch(() => []);
+    // A slow response from a previous navigation must not select a channel.
+    if (activeServerRef.current !== serverId || viewModeRef.current !== "space") return;
     const savedId = getLastChannelId(serverId);
-    const saved = savedId ? channelRows.find((c) => c.id === savedId) : null;
-    const target = saved ?? channelRows.find((c) => c.type === "text") ?? channelRows[0];
+    const target = channelRows.find(c => c.id === activeChannelRef.current)
+      ?? channelRows.find(c => c.id === savedId)
+      ?? channelRows.find(c => c.type === "text") ?? channelRows[0];
     if (target) {
-      setActiveChannelId(target.id);
-
-      setMessages([]);
-      setMessagesLoading(true);
-      setChannelHasMore(false);
+      // The fallback selector may already have loaded this channel while the
+      // server details request was pending. Never clear that loaded result.
+      if (activeChannelRef.current !== target.id) {
+        activeChannelRef.current = target.id;
+        setActiveChannelId(target.id);
+        setMessages([]);
+        setMessagesLoading(true);
+      }
       await loadMessages(target.id);
     } else {
-      setActiveChannelId(null);
+      setMessagesLoading(false);
     }
   }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity]);
 
   const selectChannel = useCallback((channelId: string) => {
     markActivity();
-
+    if (activeChannelRef.current === channelId && viewModeRef.current === "space") return;
+    viewModeRef.current = "space";
     activeChannelRef.current = channelId;
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
@@ -3719,6 +3759,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectGroupChat = useCallback(async (groupId: string) => {
     markActivity();
     persistActiveServerChannel();
+    viewModeRef.current = "group";
+    activeChannelRef.current = null;
     setViewMode("group");
     setActiveGroupChatId(groupId);
     activeGroupRef.current = groupId;
@@ -3729,9 +3771,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupHasMore(false);
     setGroupLoading(true);
     clearGroupUnread(groupId);
-    void getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
-    await loadGroupMessages(groupId);
-  }, [loadGroupMessages, clearGroupUnread, persistActiveServerChannel, markActivity]);
+    await Promise.all([markGroupReadNow(groupId), loadGroupMessages(groupId)]);
+  }, [loadGroupMessages, clearGroupUnread, markGroupReadNow, persistActiveServerChannel, markActivity]);
 
   const routeToNotification = useCallback(async (link: string | null, at?: string | null) => {
     const target = parseNotificationLink(link);
