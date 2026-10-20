@@ -23,9 +23,9 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
 
   return (
     <div className="pb-10">
-      <section className="mb-8 overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
         <div className="flex items-center gap-4 px-5 py-5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-brand/12 text-brand">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
             <IconSparkle size={22} />
           </span>
           <div className="min-w-0 flex-1">

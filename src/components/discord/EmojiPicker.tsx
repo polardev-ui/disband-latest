@@ -6,7 +6,6 @@ import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { searchEmojis } from "@/lib/emoji-shortcodes";
 import { twemojiUrl } from "@/components/ui/Twemoji";
 import { safeImageUrl } from "@/lib/safe-url";
-import { IconSmile } from "@/components/icons";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -97,11 +96,17 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
         aria-label="Insert emoji"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal ${
-          open ? "bg-interactive-hover text-text-normal" : "text-text-muted"
-        }`}
+        className="group/emoji mt-[6px] flex h-8 w-10 items-center justify-center"
       >
-        <IconSmile size={20} />
+        {/* The classic emoji button: a grey face that colours in and grows. */}
+        <span
+          aria-hidden
+          className={`text-[22px] leading-none transition-[filter,transform] duration-100 ${
+            open ? "scale-[1.14] grayscale-0" : "grayscale group-hover/emoji:scale-[1.14] group-hover/emoji:grayscale-0"
+          }`}
+        >
+          🙂
+        </span>
       </button>
 
       {mounted && open

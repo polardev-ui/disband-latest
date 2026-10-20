@@ -54,7 +54,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
   return (
     <div className="pb-10">
       {/* Create */}
-      <section className="mb-8 overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
         <div className="flex flex-wrap items-center gap-3 px-5 py-4">
           <Segmented
             label="Channel type"
@@ -70,7 +70,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               aria-label="Category"
-              className="h-9 rounded-[10px] border border-divider bg-bg-accent px-2.5 text-[13.5px] text-text-normal outline-none focus:border-brand"
+              className="h-9 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[13.5px] text-text-normal outline-none focus:border-[#00a8fc]"
             >
               <option value="">No category</option>
               {categories.map((c) => (
@@ -92,7 +92,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               }}
               placeholder={type === "text" ? "new-channel" : "Lounge"}
               aria-label="New channel name"
-              className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
+              className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
             />
           </label>
           <button type="button" onClick={() => void create()} disabled={creating || !name.trim()} className={`${btn.primary} h-10`}>
@@ -104,14 +104,14 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
       <InlineError>{error}</InlineError>
 
       {groups.length === 0 ? (
-        <div className="rounded-2xl border border-divider bg-bg-secondary">
+        <div className="rounded-lg bg-bg-secondary">
           <EmptyState icon={<IconHash size={20} />} title="No channels yet" body="Create the first one above." />
         </div>
       ) : (
         groups.map((group) => (
           <section key={group.id ?? "none"} className="mb-6 last:mb-0">
             <h3 className="mb-2 px-1 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-text-muted">{group.name}</h3>
-            <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+            <ul className="overflow-hidden rounded-lg bg-bg-secondary">
               {group.items.map((c) => {
                 const index = row++;
                 const Icon = c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;

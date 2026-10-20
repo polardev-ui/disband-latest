@@ -205,33 +205,37 @@ function ReplyQuote({
   onJump?: (id: string) => void;
 }) {
   const label = reply.author ? displayName(reply.author as Profile) : "Unknown";
+  // The spine curls from the avatar column up into the quoted line.
+  const spine = (
+    <span aria-hidden className="absolute -left-[38px] top-[9px] h-[13px] w-[33px] rounded-tl-[6px] border-l-2 border-t-2 border-[#4e5058]" />
+  );
 
-  // The target may be outside the loaded window (paginated away) or deleted.
-  // buildReplyPreviews synthesizes a `deleted` placeholder in that case so
-  // the reply doesn't silently lose its quote — show an honest fallback.
+  // The target may be outside the loaded window or deleted; buildReplyPreviews
+  // synthesizes a `deleted` placeholder so the reply keeps an honest quote.
   if (reply.deleted) {
     return (
-      <div
-        className="mb-1 flex max-w-full items-center gap-2 rounded border-l-2 border-divider bg-interactive-hover/40 px-2 py-1"
-        aria-label="Original message unavailable"
-      >
-        <span className="truncate text-xs italic text-text-muted">Original message unavailable</span>
+      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message unavailable">
+        {spine}
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
+        <span className="truncate italic text-text-muted">Original message was deleted</span>
       </div>
     );
   }
 
   const preview =
     normalizeMessageContent(reply.content)
-    || (reply.attachment_type === "file" ? "Attachment" : reply.attachment_type ?? "Attachment");
+    || (reply.attachment_type === "file" ? "Click to see attachment" : "Click to see attachment");
 
   return (
     <button
       type="button"
       onClick={() => onJump?.(reply.id)}
-      className="mb-1 flex max-w-full items-stretch gap-2 rounded border-l-2 border-brand/60 bg-interactive-hover/40 px-2 py-1 text-left hover:bg-interactive-hover/60"
+      className="group/reply relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-left text-[14px] leading-[18px]"
     >
-      <span className="shrink-0 text-xs font-semibold text-brand">{label}</span>
-      <span className="truncate text-xs text-text-muted">{preview}</span>
+      {spine}
+      <Avatar profile={(reply.author as Profile) ?? { display_name: label }} size="sm" className="!h-4 !w-4 shrink-0 !text-[8px]" />
+      <span className="shrink-0 font-medium text-header-primary opacity-[0.64] group-hover/reply:opacity-100">@{label}</span>
+      <span className="truncate text-text-muted group-hover/reply:text-text-normal">{preview.replace(/\s+/g, " ")}</span>
     </button>
   );
 }
@@ -336,10 +340,10 @@ function ChatMessageImpl({
   ) : null;
 
   const editedTag = message.edited_at ? (
-    <span className="text-[10px] text-text-muted">(edited)</span>
+    <span className="ml-1 select-none text-[10px] leading-none text-text-muted" title={new Date(message.edited_at).toLocaleString()}>(edited)</span>
   ) : null;
 
-  const highlightClass = highlight ? "bg-brand/10 ring-1 ring-brand/30" : "";
+  const highlightClass = highlight ? "!bg-brand/10 shadow-[inset_2px_0_0_0_var(--brand)]" : "";
 
   const mentionedYou = !!(
     (currentUserId && message.mentions?.includes(currentUserId))
@@ -353,8 +357,8 @@ function ChatMessageImpl({
   );
   const pingedYou = mentionedYou || repliedToYou;
   const rowBgClass = pingedYou
-    ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_3px_0_0_0_var(--ping-bar)]"
-    : "hover:bg-interactive-hover/30";
+    ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-bar)]"
+    : "hover:bg-bg-message-hover";
 
   if (isSystem) {
     const sysText = normalizeMessageContent(message.content);
@@ -429,7 +433,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative ${COMPACT_INDENT} pr-4 py-0 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+        className={`group relative min-h-[22px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -443,20 +447,12 @@ function ChatMessageImpl({
           onEdit={onEdit}
           onMoreActions={onContextMenu}
         />
-        <time className="pointer-events-none absolute left-1 top-1/2 w-14 -translate-y-1/2 text-right text-[10px] text-text-muted opacity-0 group-hover:opacity-100">
+        <time className="pointer-events-none absolute left-0 top-[5px] w-[56px] select-none text-right text-[11px] leading-[22px] text-text-muted opacity-0 group-hover:opacity-100">
           {formatMessageTime(message.created_at).split(" at ").pop()}
         </time>
-        {message.sending && (
-          <span className="mr-1 inline-flex items-center">
-            <svg className="h-3 w-3 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-            </svg>
-          </span>
-        )}
         {replyBlock}
         {body && (
-          <div className="min-w-0">
+          <div className="min-w-0 text-[16px] leading-[22px] text-text-normal">
             <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
             {editedTag}
           </div>
@@ -467,77 +463,72 @@ function ChatMessageImpl({
     );
   }
 
+  const avatarTop = replyBlock ? "top-[26px]" : "top-0.5";
   return (
     <article
       id={`msg-${message.id}`}
-      className={`group mt-[18px] flex items-start gap-4 px-4 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+      className={`group relative mt-[17px] min-h-[44px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
-      {showHeader ? (
-        canOpenProfile ? (
+      <MessageActionBar
+        message={message}
+        currentUserId={currentUserId}
+        onReply={onReply}
+        onToggleReaction={onToggleReaction}
+        onOpenReactionPicker={onOpenReactionPicker}
+        onForward={onForward}
+        onEdit={onEdit}
+        onMoreActions={onContextMenu}
+      />
+      {replyBlock}
+      {canOpenProfile ? (
+        <button
+          type="button"
+          onClick={openAuthor}
+          onContextMenu={authorContextMenu}
+          aria-label={`Open ${displayName(author)}'s profile`}
+          className={`absolute left-4 ${avatarTop} mt-0.5 rounded-full transition-transform active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
+        >
+          <Avatar profile={author} size="md" />
+        </button>
+      ) : (
+        <Avatar profile={author ?? { display_name: "?" }} size="md" className={`absolute left-4 ${avatarTop} mt-0.5`} />
+      )}
+
+      <h3 className="flex min-h-[22px] flex-wrap items-center gap-x-1 leading-[22px]">
+        {canOpenProfile ? (
           <button
             type="button"
             onClick={openAuthor}
             onContextMenu={authorContextMenu}
-            className="mt-0.5 shrink-0 self-start rounded-full focus:outline-none focus:ring-2 focus:ring-brand"
+            className="text-[16px] font-medium leading-[22px] text-header-primary hover:underline focus:outline-none"
+            style={nameStyle}
           >
-            <Avatar profile={author} size="md" />
+            {displayName(author)}
           </button>
         ) : (
-          <Avatar profile={author ?? { display_name: "?" }} size="md" className="mt-0.5 shrink-0 self-start" />
-        )
-      ) : null}
-
-      <div className="relative min-w-0 flex-1 pt-0.5">
-        <MessageActionBar
-          message={message}
-          currentUserId={currentUserId}
-          onReply={onReply}
-          onToggleReaction={onToggleReaction}
-          onOpenReactionPicker={onOpenReactionPicker}
-          onForward={onForward}
-          onEdit={onEdit}
-          onMoreActions={onContextMenu}
-        />
-        {showHeader && (
-          <header className="mb-0.5 flex items-baseline gap-2 leading-none">
-            {canOpenProfile ? (
-              <button
-                type="button"
-                onClick={openAuthor}
-                onContextMenu={authorContextMenu}
-                className="text-[15px] font-medium hover:underline focus:outline-none"
-                style={nameStyle}
-              >
-                {displayName(author)}
-              </button>
-            ) : (
-              <span className="text-[15px] font-medium" style={nameStyle}>
-                {displayName(author ?? {})}
-              </span>
-            )}
-            {authorRoleIcon && (
-              <RoleIcon icon={authorRoleIcon} name={authorRoleName ?? undefined} size={16} className="self-center" />
-            )}
-            {isOwn && <span className="rounded bg-brand/30 px-1 text-[10px] font-semibold text-brand">You</span>}
-            <BotTag profile={author} size="sm" />
-            {author && <PlatformBadge userId={author.id} />}
-            <time className="text-xs text-text-muted">{formatMessageTime(message.created_at)}</time>
-            {message.sending && (
-              <svg className="h-3 w-3 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            )}
-            {editedTag}
-          </header>
+          <span className="text-[16px] font-medium leading-[22px] text-header-primary" style={nameStyle}>
+            {displayName(author ?? {})}
+          </span>
         )}
-        {replyBlock}
-        {body && <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />}
-        {attachment}
-        {reactionBlock}
-      </div>
+        {authorRoleIcon && (
+          <RoleIcon icon={authorRoleIcon} name={authorRoleName ?? undefined} size={20} className="ml-0.5" />
+        )}
+        <BotTag profile={author} size="sm" />
+        {author && <PlatformBadge userId={author.id} />}
+        <time className="ml-1 select-none text-[12px] font-medium leading-[22px] text-text-muted" dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>
+          {formatMessageTime(message.created_at)}
+        </time>
+      </h3>
+      {body && (
+        <div className="min-w-0 text-[16px] leading-[22px] text-text-normal">
+          <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+          {editedTag}
+        </div>
+      )}
+      {attachment}
+      {reactionBlock}
     </article>
   );
 }

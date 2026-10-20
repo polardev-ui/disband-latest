@@ -11,8 +11,9 @@ import { listeningFor } from "@/lib/presence";
 import type { Listening } from "@/lib/music-presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
 import { RoleIcon } from "@/components/ui/RoleIcon";
+import { StatusDot } from "@/components/ui/StatusDot";
 import { useApp } from "@/contexts/AppContext";
-import { IconCrown, IconShield } from "@/components/icons";
+import { IconShield } from "@/components/icons";
 import { Tooltip } from "./Tooltip";
 import type { Profile, ServerMember, ServerRole, UserStatus } from "@/lib/supabase/types";
 
@@ -233,16 +234,16 @@ export function MemberList({ members, roles, loading, hasMore, onLoadMore, onMem
     <aside
       ref={scrollerRef}
       onScroll={onScroll}
-      className="flex w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary"
+      className="member-scroll flex w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary"
     >
-      <div className="px-4 py-4">
+      <div className="pb-5 pl-2 pr-0">
         <div style={{ height: padTop }} aria-hidden />
         {visible.map((item) =>
           item.kind === "header" ? (
             <h2
               key={item.key}
               data-member-header
-              className="flex items-end px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted"
+              className="flex h-10 items-end truncate pb-1 pl-2 pr-2 pt-6 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default"
             >
               {item.label} — {item.count}
             </h2>
@@ -316,17 +317,17 @@ function Row({
         e.preventDefault();
         onContext?.(m, e.clientX, e.clientY);
       }}
-      className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 transition-all duration-150 ease-in-out hover:bg-interactive-hover"
+      className={`group my-px flex h-[42px] w-[224px] items-center gap-3 rounded-[4px] px-2 transition-colors duration-75 hover:bg-interactive-hover ${
+        live === "offline" ? "opacity-30 hover:opacity-100" : ""
+      }`}
     >
       <div className="relative shrink-0">
         <Avatar profile={p} size="sm" />
-        {live !== "offline" && (
-          <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-secondary ${STATUS_BG[live]}`} />
-        )}
+        {live !== "offline" && <StatusDot status={live} ring="var(--bg-secondary)" className="absolute -bottom-[3px] -right-[3px] group-hover:![background:var(--interactive-hover)]" />}
       </div>
       <span className="flex min-w-0 flex-1 flex-col items-start">
       <span
-        className={`flex w-full min-w-0 items-center gap-1.5 truncate text-[15px] leading-[18px] ${live === "offline" ? "text-text-muted" : "text-text-normal"}`}
+        className={`flex w-full min-w-0 items-center gap-1 truncate text-[16px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
         style={color ? { color } : undefined}
       >
         <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""}`} style={gradStyle ?? undefined}>{displayName(p)}</span>
@@ -334,13 +335,15 @@ function Row({
         <BotTag profile={p} size="sm" />
         <PlatformBadge userId={p.id} />
         {m.role === "owner" && (
-          <Tooltip label="Owner" side="top" as="span">
-            <IconShield size={14} className="shrink-0 text-status-online" />
+          <Tooltip label="Space Owner" side="top" as="span">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="shrink-0 text-[#f0b232]">
+              <path fill="currentColor" fillRule="evenodd" d="M13.656 4.938 11.5 7.094 8.438 3.25a.555.555 0 0 0-.876 0L4.5 7.094 2.344 4.938a.5.5 0 0 0-.844.437l1.375 6.25c.05.23.255.375.488.375h9.274a.5.5 0 0 0 .488-.375l1.375-6.25a.5.5 0 0 0-.844-.437ZM3 13.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5Z" />
+            </svg>
           </Tooltip>
         )}
         {m.role === "admin" && (
           <Tooltip label="Admin" side="top" as="span">
-            <IconCrown size={14} className="shrink-0 text-[#f0b232]" />
+            <IconShield size={14} className="shrink-0 text-interactive-normal" />
           </Tooltip>
         )}
         {timedOut && (
@@ -351,7 +354,7 @@ function Row({
           </Tooltip>
         )}
       </span>
-      {listening && <ListeningLine listening={listening} className="w-full !leading-[14px]" />}
+      {listening && <ListeningLine listening={listening} className="w-full !leading-[16px]" />}
       </span>
     </button>
   );

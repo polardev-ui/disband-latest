@@ -15,9 +15,9 @@ export interface ThemeDefinition {
 export const THEMES: ThemeDefinition[] = [
   {
     id: "dark",
-    label: "Disband Dark",
-    description: "Near-black, hairline borders — the default",
-    swatch: ["#0b0c0e", "#101114", "#141519", "#5865f2"],
+    label: "Dark",
+    description: "The classic dark look — the default",
+    swatch: ["#1e1f22", "#2b2d31", "#313338", "#5865f2"],
   },
   {
     id: "midnight",
@@ -28,7 +28,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: "light",
     mode: "light",
-    label: "Disband Light",
+    label: "Light",
     description: "Bright and clean",
     swatch: ["#e3e5e8", "#f2f3f5", "#ffffff", "#5865f2"],
   },

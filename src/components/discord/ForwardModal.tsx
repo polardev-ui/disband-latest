@@ -57,7 +57,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
   const content = (
     <>
       <div className={`fixed inset-0 z-40 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Forward message" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto w-[calc(100%-16px)] max-w-md rounded-t-2xl border border-divider bg-bg-secondary shadow-2xl transition-all duration-200 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl ${exiting ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
+      <div role="dialog" aria-modal="true" aria-label="Forward message" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto w-[calc(100%-16px)] max-w-md rounded-t-2xl border border-divider bg-bg-secondary shadow-[var(--elevation-high)] transition-all duration-200 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg ${exiting ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
         <div className="border-b border-divider px-4 py-3">
           <h3 className="text-sm font-semibold text-text-normal">Forward message</h3>
           <input

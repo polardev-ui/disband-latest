@@ -100,7 +100,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
 
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <div className="overflow-hidden rounded-lg bg-bg-secondary">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="flex items-center gap-3 border-b border-divider px-4 py-3.5 last:border-b-0">
             <div className="h-8 w-8 animate-pulse rounded-full bg-bg-accent" />
@@ -113,14 +113,14 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-2xl border border-divider bg-bg-secondary">
+      <div className="rounded-lg bg-bg-secondary">
         <EmptyState icon={<IconNotes size={20} />} title="Nothing logged yet" body="Kicks, bans, timeouts and deleted messages will show up here." />
       </div>
     );
   }
 
   return (
-    <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+    <ul className="overflow-hidden rounded-lg bg-bg-secondary">
       {rows.map((row, i) => {
         const action = ACTIONS[row.action];
         const Icon = action?.icon ?? IconNotes;

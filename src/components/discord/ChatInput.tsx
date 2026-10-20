@@ -612,7 +612,7 @@ export function ChatInput({
   }
 
   return (
-    <div className="relative shrink-0 px-1 pb-2">
+    <div className="relative shrink-0 px-4 pb-6">
       {windowDrag
         && createPortal(
           <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8 backdrop-blur-sm">
@@ -727,24 +727,28 @@ export function ChatInput({
       )}
 
       {(replyTo || editingMessageId) && (
-        <div className="flex items-center gap-2 rounded-t-[14px] border border-b-0 border-divider bg-bg-secondary px-3 py-2 text-sm">
-          <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
-            <p className="text-xs font-semibold text-brand">
-              {editingMessageId ? "Editing message" : `Replying to ${replyTo?.author ? displayName(replyTo.author as Profile) : "message"}`}
-            </p>
-            {!editingMessageId && replyTo && (
-              <p className="truncate text-xs text-text-muted">
-                {normalizeMessageContent(replyTo.content) || replyTo.attachment_type || "Attachment"}
-              </p>
+        <div className="flex h-[34px] items-center gap-2 rounded-t-lg bg-bg-secondary pl-4 pr-2 text-[14px]">
+          <p className="min-w-0 flex-1 truncate text-header-secondary">
+            {editingMessageId ? (
+              "Editing message — escape to cancel"
+            ) : (
+              <>
+                Replying to{" "}
+                <span className="font-semibold text-header-primary">
+                  {replyTo?.author ? displayName(replyTo.author as Profile) : "message"}
+                </span>
+              </>
             )}
-          </div>
+          </p>
           <button
             type="button"
             onClick={() => { onClearReply?.(); onCancelEdit?.(); setText(""); }}
-            className="shrink-0 text-text-muted hover:text-text-normal"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-interactive-normal hover:text-interactive-active"
             aria-label="Cancel"
           >
-            <IconClose size={16} />
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-interactive-normal text-bg-secondary hover:bg-interactive-active">
+              <IconClose size={11} strokeWidth={3} />
+            </span>
           </button>
         </div>
       )}
@@ -758,7 +762,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-[14px] border border-divider bg-bg-accent transition-[border-color,box-shadow] duration-150 focus-within:border-brand ${dragOver ? "border-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-lg bg-bg-composer ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -768,7 +772,7 @@ export function ChatInput({
           </div>
         )}
 
-        <div className="flex items-end gap-1 px-2 py-[10px]">
+        <div className="flex items-start gap-0 pl-4 pr-2.5">
           <div ref={plusMenuRef} className="relative shrink-0">
             <button
               type="button"
@@ -782,11 +786,13 @@ export function ChatInput({
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
               }}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
-                plusMenuOpen ? "bg-interactive-hover text-text-normal" : "text-text-muted"
-              }`}
+              className="group/plus -ml-4 flex h-[44px] w-[56px] shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <IconPlus size={20} />
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-bg-composer transition-colors ${
+                plusMenuOpen ? "bg-interactive-active" : "bg-interactive-normal group-hover/plus:bg-interactive-active"
+              }`}>
+                <IconPlus size={16} strokeWidth={3} />
+              </span>
             </button>
             {allowPolls && plusMounted && (
               <div
@@ -805,7 +811,7 @@ export function ChatInput({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`modal-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[260px] rounded-[14px] border border-divider bg-overlay-surface p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]`}
+                className={`menu-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-[4px] bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]`}
               >
                 {[
                   {
@@ -832,14 +838,13 @@ export function ChatInput({
                     autoFocus={i === 0}
                     disabled={item.disabled}
                     onClick={() => { setPlusMenuOpen(false); item.onSelect(); }}
-                    className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-interactive-hover focus-visible:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
+                    className="group/item flex w-full items-center gap-2 rounded-[2px] px-2 py-1.5 text-left text-interactive-normal outline-none hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-divider bg-bg-accent text-text-normal">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                       {item.icon}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[14px] font-medium leading-tight text-text-normal">{item.label}</span>
-                      <span className="mt-0.5 block truncate text-[12.5px] leading-tight text-text-muted">{item.hint}</span>
+                      <span className="block text-[14px] font-medium leading-[18px]">{item.label}</span>
                     </span>
                   </button>
                 ))}
@@ -859,14 +864,14 @@ export function ChatInput({
               layer (absolute, inset-0) has to share or the caret drifts. The
               textarea used to be inline-block, so its wrapper also reserved
               descender space beneath it and the text sat ~3px high. */}
-          <div className="flex min-h-8 min-w-0 flex-1 items-center px-1">
+          <div className="flex min-h-[44px] min-w-0 flex-1 items-center py-[11px]">
           <div className="relative w-full">
             {/* The styled layer. aria-hidden: the textarea is the real input,
                 and a screen reader must not read the text twice. */}
             <div
               ref={highlightRef}
               aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[15px] leading-[22px] text-text-normal [@media(pointer:coarse)]:text-base"
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[16px] leading-[22px] text-text-normal"
             >
               <ComposerMarkdown text={text} />
             </div>
@@ -919,7 +924,7 @@ export function ChatInput({
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             rows={1}
             enterKeyHint="send"
-            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[15px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted/80 focus:outline-none [@media(pointer:coarse)]:text-base"
+            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal placeholder:text-[#6d6f78] focus:outline-none"
             onScroll={(e) => {
               // Keep the styled layer pinned to the textarea once the text is
               // long enough to scroll, or the two drift apart.
@@ -937,14 +942,13 @@ export function ChatInput({
               title={editingMessageId ? "Finish editing before sending a gift" : "Send a gift"}
               disabled={!!editingMessageId}
               onClick={() => setGiftOpen(true)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
-                giftOpen ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+              className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
+                giftOpen ? "text-interactive-active" : "text-interactive-normal"
               }`}
             >
-              <IconGift size={20} />
+              <IconGift size={24} />
             </button>
           )}
-          <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
             disabled={!!editingMessageId}
             onSelect={(url) => {
@@ -955,12 +959,13 @@ export function ChatInput({
               onClearReply?.();
             }}
           />
+          <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           {(text.trim() || entries.length > 0) && (
             <button
               type="submit"
               aria-label={editingMessageId ? "Save edit" : "Send message"}
               title={editingMessageId ? "Save edit" : "Send message"}
-              className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors duration-150 hover:bg-brand-hover active:scale-95"
+              className="ml-1 mt-[6px] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover [@media(pointer:coarse)]:flex"
             >
               <IconSend size={16} />
             </button>

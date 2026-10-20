@@ -67,7 +67,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
         role="dialog"
         aria-modal="true"
         aria-label="Create a poll"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-2xl`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-4 shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -90,7 +90,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
             placeholder="What&apos;s your favorite color?"
             maxLength={200}
             autoFocus
-            className="w-full rounded-md border border-divider bg-bg-accent px-3 py-2 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+            className="w-full rounded-md border border-divider bg-bg-accent px-3 py-2 text-sm text-text-normal placeholder:text-text-muted focus:border-[#00a8fc] focus:outline-none focus:ring-2 focus:ring-brand/40"
           />
         </label>
 
@@ -102,7 +102,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
                 onChange={(e) => updateOption(i, e.target.value)}
                 placeholder={`Option ${i + 1}`}
                 maxLength={100}
-                className="flex-1 rounded-md border border-divider bg-bg-accent px-3 py-2 text-sm text-text-normal placeholder:text-text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                className="flex-1 rounded-md border border-divider bg-bg-accent px-3 py-2 text-sm text-text-normal placeholder:text-text-muted focus:border-[#00a8fc] focus:outline-none focus:ring-2 focus:ring-brand/40"
               />
               {options.length > 2 && (
                 <button

@@ -5,6 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { IconBell, IconBellOff, IconPin, IconSearch, IconFriends, IconInbox } from "@/components/icons";
+import { Tooltip } from "./Tooltip";
 
 type MuteLevel = "all" | "mentions" | "nothing";
 
@@ -84,33 +85,38 @@ export function HeaderToolbar({
 
   const inboxCount = unreads.length;
 
+  const iconBtn = (on: boolean) =>
+    `flex h-6 w-6 shrink-0 items-center justify-center transition-colors ${
+      on ? "text-interactive-active" : "text-interactive-normal hover:text-interactive-active"
+    }`;
+
   return (
-    <div className={`flex items-center gap-1 ${className ?? ""}`}>
+    <div className={`flex items-center gap-4 ${className ?? ""}`}>
       {canMute && (
         <div className="relative">
-          <button
-            type="button"
-            title={muteLevel === "nothing" ? "Muted" : muteLevel === "mentions" ? "Mentions only" : "Notifications all"}
-            onClick={() => setMuteOpen((v) => !v)}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-interactive-hover ${
-              muteLevel === "nothing" ? "text-text-muted" : "text-text-muted hover:text-text-normal"
-            }`}
-          >
-            {muteLevel === "nothing" ? <IconBellOff size={18} /> : <IconBell size={18} />}
-          </button>
+          <Tooltip label="Notification Settings" side="bottom">
+            <button
+              type="button"
+              aria-label="Notification Settings"
+              onClick={() => setMuteOpen((v) => !v)}
+              className={iconBtn(muteOpen)}
+            >
+              {muteLevel === "nothing" ? <IconBellOff size={24} /> : <IconBell size={24} />}
+            </button>
+          </Tooltip>
           {muteOpen && (
-            <div className="absolute right-0 top-10 z-50 w-44 rounded-lg border border-divider bg-bg-secondary p-1 shadow-xl">
+            <div className="menu-pop absolute right-0 top-9 z-50 w-[220px] origin-top-right rounded-[4px] bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]">
               {(["all", "mentions", "nothing"] as MuteLevel[]).map((l) => (
                 <button
                   key={l}
                   type="button"
                   onClick={() => { void setLevel(l); setMuteOpen(false); }}
-                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-interactive-hover ${
-                    muteLevel === l ? "text-brand" : "text-text-normal"
-                  }`}
+                  className="group/opt flex w-full items-center justify-between rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white"
                 >
-                  {l === "nothing" ? <IconBellOff size={15} /> : <IconBell size={15} />}
-                  {l === "all" ? "All messages" : l === "mentions" ? "Mentions only" : "Nothing"}
+                  {l === "all" ? "All Messages" : l === "mentions" ? "Only @mentions" : "Nothing"}
+                  <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 ${muteLevel === l ? "border-brand group-hover/opt:border-white" : "border-current"}`}>
+                    {muteLevel === l && <span className="h-2 w-2 rounded-full bg-brand group-hover/opt:bg-white" />}
+                  </span>
                 </button>
               ))}
             </div>
@@ -119,69 +125,70 @@ export function HeaderToolbar({
       )}
 
       {showPins && onTogglePins && (
-        <button
-          type="button"
-          title="Pinned messages"
-          aria-pressed={!!pinnedOpen}
-          onClick={onTogglePins}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-interactive-hover ${
-            pinnedOpen ? "text-brand" : "text-text-muted hover:text-text-normal"
-          }`}
-        >
-          <IconPin size={18} />
-        </button>
+        <Tooltip label="Pinned Messages" side="bottom">
+          <button type="button" aria-label="Pinned Messages" aria-pressed={!!pinnedOpen} onClick={onTogglePins} className={iconBtn(!!pinnedOpen)}>
+            <IconPin size={24} />
+          </button>
+        </Tooltip>
+      )}
+
+      {showMembersToggle && onToggleMembers && (
+        <Tooltip label={membersVisible ? "Hide Member List" : "Show Member List"} side="bottom">
+          <button
+            type="button"
+            aria-label={membersVisible ? "Hide Member List" : "Show Member List"}
+            aria-pressed={membersVisible}
+            onClick={onToggleMembers}
+            className={iconBtn(!!membersVisible)}
+          >
+            <IconFriends size={24} />
+          </button>
+        </Tooltip>
       )}
 
       {showSearch && (
         <div className="relative">
-          <IconSearch size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             type="text"
             readOnly
             onFocus={() => onOpenSearch()}
             placeholder="Search"
-            className="h-8 w-[240px] rounded-md bg-bg-accent pl-8 pr-3 text-[13px] text-text-normal placeholder:text-text-muted outline-none transition-[width] duration-200 focus:w-[320px] focus:ring-1 focus:ring-brand/40"
+            aria-label="Search"
+            className="h-6 w-36 rounded-[4px] bg-bg-tertiary pl-1.5 pr-7 text-[14px] text-text-normal outline-none transition-[width] duration-200 ease-out placeholder:text-text-muted focus:w-60"
           />
-          {searchOpen && onCloseSearch && (
-            <button type="button" onClick={onCloseSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-normal">×</button>
+          {searchOpen && onCloseSearch ? (
+            <button type="button" aria-label="Clear search" onClick={onCloseSearch} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-interactive-normal hover:text-interactive-active">×</button>
+          ) : (
+            <IconSearch size={16} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted" />
           )}
         </div>
       )}
 
-      {showMembersToggle && onToggleMembers && (
-        <button
-          type="button"
-          title={membersVisible ? "Hide members" : "Show members"}
-          aria-pressed={membersVisible}
-          onClick={onToggleMembers}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-interactive-hover ${
-            membersVisible ? "text-brand" : "text-text-muted hover:text-text-normal"
-          }`}
-        >
-          <IconFriends size={18} />
-        </button>
-      )}
-
       <div className="relative">
-        <button
-          type="button"
-          title="Inbox"
-          onClick={() => setInboxOpen((v) => !v)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-all hover:bg-interactive-hover hover:text-text-normal"
-        >
-          <IconInbox size={18} />
-          {inboxCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold text-white">
-              {inboxCount > 99 ? "99+" : inboxCount}
-            </span>
-          )}
-        </button>
+        <Tooltip label="Inbox" side="bottom">
+          <button type="button" aria-label="Inbox" onClick={() => setInboxOpen((v) => !v)} className={`relative ${iconBtn(inboxOpen)}`}>
+            <IconInbox size={24} />
+            {inboxCount > 0 && (
+              <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-[3px] border-bg-primary bg-status-dnd px-0.5 text-[10px] font-bold text-white">
+                {inboxCount > 99 ? "99+" : inboxCount}
+              </span>
+            )}
+          </button>
+        </Tooltip>
         {inboxOpen && (
-          <div className="absolute right-0 top-10 z-50 w-[480px] rounded-lg border border-divider bg-bg-secondary shadow-2xl">
+          <div className="menu-pop absolute right-0 top-9 z-50 w-[480px] origin-top-right overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]">
             <InboxPopover mentions={mentions} unreads={unreads} onClose={() => setInboxOpen(false)} />
           </div>
         )}
       </div>
+
+      <Tooltip label="Help" side="bottom">
+        <a href="/support" target="_blank" rel="noreferrer" aria-label="Help" className={iconBtn(false)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
+            <path fill="currentColor" d="M12 2C6.486 2 2 6.487 2 12c0 5.515 4.486 10 10 10s10-4.485 10-10c0-5.513-4.486-10-10-10Zm0 16.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm1-4.375V15h-2v-2h1c1.104 0 2-.897 2-2 0-1.104-.896-2-2-2s-2 .896-2 2H8c0-2.205 1.795-4 4-4s4 1.795 4 4a4.01 4.01 0 0 1-3 3.875Z" />
+          </svg>
+        </a>
+      </Tooltip>
     </div>
   );
 }
@@ -192,20 +199,33 @@ function InboxPopover({ mentions, unreads, onClose }: { mentions: any[]; unreads
   useOverlayDismiss(onClose, true);
   return (
     <div className="flex max-h-[480px] flex-col">
-      <div className="flex items-center justify-between border-b border-divider px-4 py-3">
-        <h3 className="text-sm font-semibold text-text-normal">Inbox</h3>
-        <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">×</button>
-      </div>
-      <div className="flex gap-1 border-b border-divider px-3 py-2 text-[12px]">
-        <button onClick={() => setTab("mentions")} className={`rounded px-2 py-0.5 ${tab === "mentions" ? "bg-brand/20 text-text-normal" : "text-text-muted hover:bg-interactive-hover"}`}>Mentions ({mentions.length})</button>
-        <button onClick={() => setTab("unreads")} className={`rounded px-2 py-0.5 ${tab === "unreads" ? "bg-brand/20 text-text-normal" : "text-text-muted hover:bg-interactive-hover"}`}>Unreads ({unreads.length})</button>
+      <div className="bg-bg-tertiary px-4 pt-4">
+        <div className="flex items-center gap-2">
+          <IconInbox size={24} className="text-header-primary" />
+          <h3 className="text-[20px] font-semibold leading-6 text-header-primary">Inbox</h3>
+        </div>
+        <div className="mt-3 flex gap-4 text-[14px] font-medium">
+          {(["mentions", "unreads"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`border-b-2 pb-2.5 transition-colors ${tab === t ? "border-brand text-header-primary" : "border-transparent text-interactive-normal hover:text-interactive-active"}`}
+            >
+              {t === "mentions" ? `Mentions (${mentions.length})` : `Unreads (${unreads.length})`}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {list.length === 0 ? (
-          <p className="px-3 py-8 text-center text-[13px] text-text-muted">Nothing here.</p>
+          <div className="flex flex-col items-center px-3 py-10 text-center">
+            <p className="text-[16px] font-semibold text-header-primary">You&apos;re all caught up!</p>
+            <p className="mt-1 text-[14px] text-text-muted">Come back for notifications, mentions and unreads.</p>
+          </div>
         ) : (
           list.slice(0, 50).map((n) => (
-            <div key={n.id} className="mb-1.5 rounded-lg border border-divider bg-bg-accent/30 px-3 py-2">
+            <div key={n.id} className="mb-2 rounded-lg bg-bg-primary px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] font-semibold text-text-normal">{n.title}</span>
                 <span className="ml-auto text-[11px] text-text-muted">{new Date(n.created_at).toLocaleString()}</span>

@@ -78,6 +78,9 @@ import { HeaderToolbar } from "./HeaderToolbar";
 import SearchPanel from "./SearchPanel";
 import { DmProfileRail } from "./DmProfileRail";
 import { CatalystModal } from "./CatalystModal";
+import { CallIndicator } from "./CallIndicator";
+import { QuickSwitcher } from "./QuickSwitcher";
+import { UserProfilePopout } from "./UserProfilePopout";
 
 export function DiscordApp() {
   const app = useApp();
@@ -88,6 +91,18 @@ export function DiscordApp() {
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
+  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
+  // Ctrl/⌘+K opens the Quick Switcher from anywhere in the app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setQuickSwitcherOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [shopCategory, setShopCategory] = useState<ShopCategory>("ring");
   const [shopPurchase, setShopPurchase] = useState<string | null>(null);
   const [giftReturn, setGiftReturn] = useState<string | null>(null);
@@ -105,6 +120,19 @@ export function DiscordApp() {
   const [pendingFolderServer, setPendingFolderServer] = useState<Server | null>(null);
   const [channelSettingsChannel, setChannelSettingsChannel] = useState<Channel | null>(null);
   const [profileTarget, setProfileTarget] = useState<Profile | null>(null);
+  // Profiles open as a popout beside whatever was clicked; "View Full
+  // Profile" (or a keyboard open with nothing to anchor to) uses the modal.
+  const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
+  const [profileFull, setProfileFull] = useState(false);
+  const lastPointer = useRef<{ rect: DOMRect; at: number } | null>(null);
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const el = (e.target as Element | null)?.closest?.("[data-member-row], button, [role=button], a, img");
+      if (el) lastPointer.current = { rect: el.getBoundingClientRect(), at: Date.now() };
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, []);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [pinnedOpen, setPinnedOpen] = useState(false);
@@ -456,7 +484,12 @@ export function DiscordApp() {
     [app],
   );
 
-  const openProfile = useCallback((profile: Profile) => setProfileTarget(profile), []);
+  const openProfile = useCallback((profile: Profile) => {
+    const recent = lastPointer.current && Date.now() - lastPointer.current.at < 1500 ? lastPointer.current.rect : null;
+    setProfileAnchor(recent);
+    setProfileFull(!recent);
+    setProfileTarget(profile);
+  }, []);
 
   const handleAuthorClick = useCallback(
     (author: Profile) => {
@@ -1454,7 +1487,7 @@ export function DiscordApp() {
   };
 
   return (
-    <div className="h-full w-full overflow-hidden bg-bg-primary">
+    <div className="app-base-layer h-full w-full overflow-hidden bg-bg-primary">
       <div
         className="h-full w-full origin-top-left"
         style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
@@ -1598,6 +1631,7 @@ export function DiscordApp() {
                   onGroupContext={handleGroupContext}
                   onOpenSubscription={() => setSubscriptionOpen(true)}
                   onOpenShop={() => setShopOpen(true)}
+                    onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                 />
               ) : (
                 <ChannelList
@@ -1616,6 +1650,7 @@ export function DiscordApp() {
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
                   onOpenServerSettings={() => setServerSettingsOpen(true)}
+                    onOpenServerMenu={app.activeServer ? (x, y) => handleServerContext(app.activeServer!, x, y) : undefined}
                   onChannelContext={handleChannelContext}
                   onCategoryContext={handleCategoryContext}
                   onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
@@ -1631,19 +1666,12 @@ export function DiscordApp() {
         )
       ) : (
         <>
-          {/* A column so the UserPanel can span the rail and the panel beside
-              it. The rail and the panel are a ROW inside it — nesting them
-              directly in the column stacked them vertically, which collapsed
-              the panel to its header.
-
-              The width is pinned to the rail (72px) plus a panel (280px)
-              rather than left to auto. On auto the column takes its widest
-              child's max-content, and the UserPanel's name and custom status
-              have no natural limit — a long status widened the whole column and
-              opened a gap beside the chat. A definite width is also what lets
-              the `truncate` inside the UserPanel do anything at all. */}
-          <div className="relative flex h-full min-h-0 w-[352px] shrink-0 flex-col">
-            <div className="flex min-h-0 flex-1">
+          {/* The rail runs full height; beside it a 240px column holds the
+              channel or DM list, then the Voice Connected card and the user
+              panel — the classic arrangement. The column has a definite width
+              so the user panel's long names and statuses truncate instead of
+              widening the sidebar. */}
+          <div className="relative flex h-full min-h-0 shrink-0">
               <ServerList
                 servers={app.servers}
                 activeServerId={app.activeServerId}
@@ -1664,8 +1692,12 @@ export function DiscordApp() {
                 onReorderFolders={handleReorderFolders}
               />
 
+            {/* The 240px column: channels or DMs on top, then the Voice
+                Connected card and the user panel, exactly as wide as the list. */}
+            <div className="flex h-full min-h-0 w-60 flex-col bg-bg-secondary">
+            <div className="flex min-h-0 flex-1">
               {app.viewMode === "discover" ? (
-                <div className="flex min-h-0">
+                <div className="flex min-h-0 w-full">
                   <DiscoverSidebar
                     tab={discoverTab}
                     onTabChange={setDiscoverTab}
@@ -1674,7 +1706,7 @@ export function DiscordApp() {
                   />
                 </div>
               ) : app.viewMode === "home" || app.viewMode === "dm" || app.viewMode === "group" || app.viewMode === "notes" ? (
-                <div className="flex min-h-0">
+                <div className="flex min-h-0 w-full">
                   <HomePanel
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1685,10 +1717,11 @@ export function DiscordApp() {
                     onGroupContext={handleGroupContext}
                     onOpenSubscription={() => setSubscriptionOpen(true)}
                     onOpenShop={() => setShopOpen(true)}
+                    onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                   />
                 </div>
               ) : (
-                <div className="flex min-h-0">
+                <div className="flex min-h-0 w-full">
                   <ChannelList
                     title={app.activeServer?.name ?? "Space"}
                     verified={app.activeServer?.verified}
@@ -1705,6 +1738,7 @@ export function DiscordApp() {
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
                     onOpenServerSettings={() => setServerSettingsOpen(true)}
+                    onOpenServerMenu={app.activeServer ? (x, y) => handleServerContext(app.activeServer!, x, y) : undefined}
                     onChannelContext={handleChannelContext}
                     onCategoryContext={handleCategoryContext}
                     onMoveChannel={(channelId, categoryId, index) => void app.moveChannel(channelId, categoryId, index)}
@@ -1717,7 +1751,9 @@ export function DiscordApp() {
                 </div>
               )}
             </div>
+            <CallIndicator />
             <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
+            </div>
           </div>
         </>
       )}
@@ -2083,9 +2119,40 @@ export function DiscordApp() {
         />
       )}
 
+      <UserProfilePopout
+        profile={profileTarget && !profileFull ? profileTarget : null}
+        anchor={profileAnchor}
+        onClose={() => setProfileTarget(null)}
+        onOpenFullProfile={() => setProfileFull(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        isSelf={profileTarget?.id === app.user?.id}
+        plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
+        isServerMember={!!profileServerMember}
+        memberJoinedAt={profileServerMember?.joined_at ?? null}
+        serverName={app.activeServer?.name ?? null}
+        serverIcon={app.activeServer?.icon_url ?? null}
+        serverRoles={app.serverRoles}
+        canManageRoles={profileCanManageRoles}
+        memberRoleIds={
+          profileServerMember?.role_ids && profileServerMember.role_ids.length > 0
+            ? profileServerMember.role_ids
+            : profileServerMember?.role_id
+              ? [profileServerMember.role_id]
+              : []
+        }
+        onSetRoles={
+          profileTarget && profileCanManageRoles
+            ? (roleIds) => {
+                void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
+                  if (err) alert(err);
+                });
+              }
+            : undefined
+        }
+      />
       <UserProfileModal
         profile={profileTarget}
-        open={!!profileTarget}
+        open={!!profileTarget && profileFull}
         onClose={() => setProfileTarget(null)}
         isSelf={profileTarget?.id === app.user?.id}
         plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
@@ -2228,6 +2295,7 @@ export function DiscordApp() {
 
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
       <ReleaseModal />
+      <QuickSwitcher open={quickSwitcherOpen} onClose={() => setQuickSwitcherOpen(false)} />
       {folderDialogMounted && shownFolderDialog && (
         <ServerFolderDialog
           exiting={folderDialogExiting}

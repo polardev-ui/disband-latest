@@ -52,7 +52,7 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
 
   return (
     <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}>
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Create a group chat" className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-2xl border border-divider bg-bg-secondary p-6 shadow-2xl`}>
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Create a group chat" className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg border border-divider bg-bg-secondary p-6 shadow-[var(--elevation-high)]`}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-text-normal">Create Group Chat</h2>
           <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">

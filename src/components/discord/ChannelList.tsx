@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CallIndicator } from "./CallIndicator";
 import { Tooltip } from "./Tooltip";
 import {
   IconChevron,
@@ -55,6 +54,8 @@ interface ChannelListProps {
   onOpenCatalysts?: () => void;
   /** Server banner shown behind the header title with a fade. Null = plain header. */
   bannerUrl?: string | null;
+  /** Opens the space dropdown menu at a screen point (the header's dropdown). */
+  onOpenServerMenu?: (x: number, y: number) => void;
 }
 
 function MiniAvatar({ profile }: { profile?: Profile }) {
@@ -62,7 +63,7 @@ function MiniAvatar({ profile }: { profile?: Profile }) {
   const accent = getAvatarStyle(profile ?? {});
   return (
     <span
-      className="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[9px] font-bold"
+      className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold"
       style={accent}
     >
       {profile?.avatar_url ? (
@@ -111,6 +112,7 @@ export function ChannelList({
   catalystCount,
   onOpenCatalysts,
   bannerUrl,
+  onOpenServerMenu,
 }: ChannelListProps) {
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => getCollapsedCategories());
@@ -375,13 +377,10 @@ export function ChannelList({
     const mentions = active ? 0 : getMentionCount?.(ch.id) ?? 0;
     return (
       <div key={ch.id} className="relative">
-        {overChannelId === ch.id && <div className="absolute inset-x-1 -top-0.5 h-0.5 rounded bg-brand" />}
-        {}
+        {overChannelId === ch.id && <div className="absolute inset-x-2 -top-0.5 h-0.5 rounded bg-brand" />}
+        {/* The unread pill, flush with the sidebar's left edge. */}
         {unread && (
-          <span
-            aria-hidden
-            className="absolute -left-[5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-text-normal"
-          />
+          <span aria-hidden className="absolute -left-2 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-header-primary" />
         )}
         <button
           type="button"
@@ -399,54 +398,65 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`group/drag mb-px flex h-8 w-full items-center gap-2 rounded-[10px] px-2.5 text-[14.5px] transition-colors duration-100 ${
+          className={`group/chan relative flex h-8 w-full items-center gap-1.5 rounded-[4px] px-2 text-[16px] font-medium leading-5 transition-colors duration-75 ${
             active
-              ? "bg-interactive-selected font-medium text-text-normal"
+              ? "bg-interactive-selected text-interactive-active"
               : unread
-                ? "font-medium text-text-normal hover:bg-interactive-hover"
-                : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
+                ? "text-interactive-active hover:bg-interactive-hover"
+                : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
+          }`}
         >
-          <span className={active || unread ? "text-text-normal/80" : "text-text-muted"}>
+          <span className={`shrink-0 ${active || unread ? "text-interactive-active/70" : "text-channels-default"}`}>
             {ch.type === "text" ? (
-              ch.read_only ? (
-                <IconMegaphone size={17} />
-              ) : (
-                <IconHash size={17} />
-              )
+              ch.read_only ? <IconMegaphone size={20} /> : <IconHash size={20} />
             ) : (
-              <IconSpeaker size={17} />
+              <IconSpeaker size={20} />
             )}
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
-          {}
           {mentions > 0 && (
-            <span className="ml-1 shrink-0 rounded-full bg-status-dnd px-[6px] py-[1px] text-[11px] font-bold leading-[16px] text-white">
+            <span className="ml-1 flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white">
               {mentions > 99 ? "99+" : mentions}
             </span>
           )}
-          {ch.type === "voice" && participants.length > 0 && (
-            <>
-              <span className="shrink-0 text-[11px] font-semibold text-text-muted">{participants.length}</span>
-              {(() => {
-                const start = voiceStartTimes.get(ch.id);
-                return start !== undefined ? (
-                  <span className="shrink-0 rounded-[5px] bg-status-online/10 px-[4px] py-[1px] text-[10px] font-bold tabular-nums leading-[13px] text-status-online">
-                    {formatCallDuration(now - start)}
-                  </span>
-                ) : null;
-              })()}
-            </>
+          {ch.type === "voice" && participants.length > 0 && (() => {
+            const start = voiceStartTimes.get(ch.id);
+            return start !== undefined ? (
+              <span className="shrink-0 text-[12px] font-medium tabular-nums text-channels-default">
+                {formatCallDuration(now - start)}
+              </span>
+            ) : null;
+          })()}
+          {/* Classic hover actions: invite and settings ride the row. */}
+          {canManageChannels && mentions === 0 && !(ch.type === "voice" && participants.length > 0) && (
+            <span className="hidden shrink-0 items-center gap-1 text-interactive-normal group-hover/chan:flex">
+              <span
+                role="button"
+                tabIndex={-1}
+                aria-label={`Edit ${ch.name}`}
+                title="Edit Channel"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChannelContext?.(ch, e.clientX, e.clientY);
+                }}
+                className="hover:text-interactive-active"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path fillRule="evenodd" clipRule="evenodd" d="M19.738 10H22V14H19.739C19.498 14.931 19.1 15.798 18.565 16.564L20 18L18 20L16.565 18.564C15.797 19.099 14.932 19.498 14 19.738V22H10V19.738C9.069 19.498 8.203 19.099 7.436 18.564L6 20L4 18L5.436 16.564C4.901 15.799 4.502 14.932 4.262 14H2V10H4.262C4.502 9.068 4.9 8.202 5.436 7.436L4 6L6 4L7.436 5.436C8.202 4.9 9.068 4.502 10 4.262V2H14V4.261C14.932 4.502 15.797 4.9 16.565 5.435L18 3.999L20 5.999L18.564 7.436C19.099 8.202 19.498 9.069 19.738 10ZM12 16C14.209 16 16 14.209 16 12C16 9.791 14.209 8 12 8C9.791 8 8 9.791 8 12C8 14.209 9.791 16 12 16Z" />
+                </svg>
+              </span>
+            </span>
           )}
         </button>
         {ch.type === "voice" && participants.length > 0 && (
-          <div className="mb-1 flex flex-col gap-0.5 pb-1 pl-8">
+          <div className="pb-1 pl-9">
             {participants.map((vp) => (
-              <span key={vp.user_id} className="flex items-center gap-1.5 text-[12px] text-text-muted">
+              <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default hover:bg-interactive-hover hover:text-text-normal">
                 <MiniAvatar profile={vp.profile} />
                 <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : "Unknown"}</span>
-                {vp.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
-                {vp.deafened && <IconHeadphonesOff size={12} className="shrink-0 text-status-dnd" />}
+                {vp.muted && <IconMicOff size={16} className="shrink-0 text-interactive-normal" />}
+                {vp.deafened && <IconHeadphonesOff size={16} className="shrink-0 text-interactive-normal" />}
               </span>
             ))}
           </div>
@@ -476,11 +486,11 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors duration-150 ${
-            overCatId === cat.id ? "text-brand" : "text-text-muted hover:text-text-normal"
-          } ${canManageChannels ? "cursor-grab active:cursor-grabbing" : ""}`}
+          className={`flex min-w-0 flex-1 items-center gap-0.5 pb-1 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] transition-colors duration-100 ${
+            overCatId === cat.id ? "text-brand" : "text-channels-default hover:text-text-normal"
+          }`}
         >
-          <IconChevron size={12} className={`shrink-0 transition-transform duration-150 ${open ? "" : "-rotate-90"}`} />
+          <IconChevron size={12} className={`-ml-0.5 shrink-0 transition-transform duration-100 ${open ? "" : "-rotate-90"}`} />
           <span className="truncate">{cat.name}</span>
         </button>
         {canManageChannels && (
@@ -488,9 +498,10 @@ export function ChannelList({
             type="button"
             onClick={() => startAddChannel(cat.id)}
             aria-label={`Add channel to ${cat.name}`}
-            className="shrink-0 rounded p-0.5 text-text-muted opacity-0 transition-opacity hover:text-text-normal group-hover/cat:opacity-100 focus-visible:opacity-100"
+            title="Create Channel"
+            className="mt-3 shrink-0 text-interactive-normal hover:text-interactive-active"
           >
-            <IconPlus size={12} />
+            <IconPlus size={18} />
           </button>
         )}
       </div>
@@ -498,94 +509,72 @@ export function ChannelList({
   };
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col bg-bg-secondary">
-      {showServerHeader && (
-        bannerUrl && safeImageUrl(bannerUrl) ? (
-          <div className="relative h-24 shrink-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={safeImageUrl(bannerUrl)!}
-              alt=""
-              draggable={false}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-bg-secondary" />
-            <div className="absolute right-2 top-2 flex items-center gap-1">
-              {canManageChannels && (
-                <button
-                  type="button"
-                  onClick={() => setAddingCategory((v) => !v)}
-                  aria-label="Create category"
-                  className="rounded bg-black/40 p-1 text-white/80 transition-colors hover:text-white"
-                >
-                  <IconPlus size={16} />
-                </button>
+    <aside className="flex w-full min-w-0 flex-col bg-bg-secondary">
+      {showServerHeader && (() => {
+        const banner = bannerUrl ? safeImageUrl(bannerUrl) : null;
+        const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+          if (!onOpenServerMenu) {
+            onOpenServerSettings?.();
+            return;
+          }
+          const r = e.currentTarget.getBoundingClientRect();
+          onOpenServerMenu(r.left + 10, r.bottom + 6);
+        };
+        const titleRow = (
+          <>
+            <span className="flex min-w-0 items-center gap-1.5">
+              {verified && (
+                <Tooltip label="Verified space" side="bottom">
+                  <IconVerified size={16} className="shrink-0 text-[#00a8fc]" />
+                </Tooltip>
               )}
-            </div>
+              <span className={`truncate text-[16px] font-semibold leading-5 ${banner ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" : "text-header-primary"}`}>
+                {title}
+              </span>
+            </span>
+            <IconChevron size={18} className={`shrink-0 ${banner ? "text-white" : "text-interactive-normal"}`} />
+          </>
+        );
+        return banner ? (
+          <div className="relative h-[138px] shrink-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={banner} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-black/50 to-transparent" />
             <button
               type="button"
-              onClick={onOpenServerSettings}
-              className="absolute inset-x-0 bottom-0 flex min-w-0 items-center justify-between px-4 pb-2 pt-6 text-left"
+              onClick={openMenu}
+              className="absolute inset-x-0 top-0 flex h-12 min-w-0 items-center justify-between px-4 text-left transition-colors hover:bg-white/5"
             >
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="truncate text-[15px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{title}</span>
-                {verified && (
-                  <Tooltip label="This space is officially verified by Disband">
-                    <IconVerified size={15} className="shrink-0 text-sky-400" />
-                  </Tooltip>
-                )}
-              </span>
-              <IconChevron size={18} className="shrink-0 text-white/70" />
+              {titleRow}
             </button>
           </div>
         ) : (
-        <div className="flex h-12 shrink-0 items-center border-b border-divider px-4">
           <button
             type="button"
-            onClick={onOpenServerSettings}
-            className="flex min-w-0 flex-1 items-center justify-between py-2 text-left transition-all duration-150 ease-in-out hover:text-text-normal"
+            onClick={openMenu}
+            className="relative z-[1] flex h-12 w-full shrink-0 items-center justify-between px-4 text-left shadow-[var(--elevation-low)] transition-colors hover:bg-interactive-hover"
           >
-            <span className="flex min-w-0 items-center gap-1">
-              <span className="truncate text-[15px] font-semibold">{title}</span>
-              {verified && (
-                <Tooltip label="This space is officially verified by Disband">
-                  <IconVerified size={15} className="shrink-0 text-sky-400" />
-                </Tooltip>
-              )}
-            </span>
-            <IconChevron size={18} className="shrink-0 text-text-muted" />
+            {titleRow}
           </button>
-          {canManageChannels && (
-            <button
-              type="button"
-              onClick={() => setAddingCategory((v) => !v)}
-              aria-label="Create category"
-              className="ml-1 shrink-0 rounded p-1 text-text-muted transition-colors hover:text-text-normal"
-            >
-              <IconPlus size={16} />
-            </button>
-          )}
-        </div>
-        )
-      )}
+        );
+      })()}
       {onOpenCatalysts && (
         <button
           type="button"
           onClick={onOpenCatalysts}
-          title="View space Catalysts"
-          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-brand/25 bg-brand/[0.06] px-2.5 py-1.5 text-left transition-colors hover:bg-brand/[0.12]"
+          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-[4px] px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
-            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden className="shrink-0 text-[#ff73fa]">
+            <path fill="currentColor" d="M12 2 5 7v10l7 5 7-5V7l-7-5Zm0 3.2 4.5 3.2v7.2L12 18.8l-4.5-3.2V8.4L12 5.2Z" />
           </svg>
-          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-text-normal">
-            {catalystCount ?? 0} {(catalystCount ?? 0) === 1 ? "Catalyst" : "Catalysts"}
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-header-secondary">
+            {(catalystCount ?? 0) > 0 ? `Level ${(catalystCount ?? 0) >= 6 ? 3 : (catalystCount ?? 0) >= 3 ? 2 : 1} · ${catalystCount} ${(catalystCount ?? 0) === 1 ? "Boost" : "Boosts"}` : "Boost this space"}
           </span>
-          <span className="shrink-0 text-[11px] font-bold text-brand">Boost</span>
+          <IconChevron size={12} className="-rotate-90 shrink-0 text-interactive-normal" />
         </button>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="channel-scroll flex-1 overflow-y-auto pb-2 pl-2 pr-2">
         {addingCategory && (
           <div className="mb-1 flex items-center gap-1">
             <input
@@ -635,8 +624,8 @@ export function ChannelList({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`flex min-w-0 flex-1 items-center gap-0.5 px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors duration-150 ${
-                  overCatId === "uncategorized" ? "text-brand" : "text-text-muted hover:text-text-normal"
+                className={`flex min-w-0 flex-1 items-center gap-0.5 pb-1 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] transition-colors duration-100 ${
+                  overCatId === "uncategorized" ? "text-brand" : "text-channels-default hover:text-text-normal"
                 }`}
               >
                 <IconChevron
@@ -652,9 +641,10 @@ export function ChannelList({
                   type="button"
                   onClick={() => startAddChannel(null)}
                   aria-label="Add uncategorized channel"
-                  className="shrink-0 rounded p-0.5 text-text-muted opacity-0 transition-opacity hover:text-text-normal group-hover/cat:opacity-100 focus-visible:opacity-100"
+                  title="Create Channel"
+                  className="mt-3 shrink-0 text-interactive-normal hover:text-interactive-active"
                 >
-                  <IconPlus size={12} />
+                  <IconPlus size={18} />
                 </button>
               )}
             </div>
@@ -685,7 +675,6 @@ export function ChannelList({
         </div>
       )}
 
-      <CallIndicator />
     </aside>
   );
 }

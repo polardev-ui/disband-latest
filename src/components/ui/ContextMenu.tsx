@@ -279,7 +279,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             data-context-menu
             role="menu"
             aria-labelledby={menuId}
-            className={`modal-pop${menuExiting ? " pop-out" : ""} fixed min-w-[200px] max-h-[70vh] overflow-y-auto overscroll-contain rounded-[14px] border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)] [@media(pointer:coarse)]:min-w-[240px]`}
+            className={`menu-pop${menuExiting ? " pop-out" : ""} fixed min-w-[188px] max-w-[320px] max-h-[70vh] overflow-y-auto overscroll-contain rounded-[4px] bg-bg-floating px-2 py-1.5 shadow-[var(--elevation-high)] [@media(pointer:coarse)]:min-w-[240px]`}
             style={{
               zIndex: OVERLAY_Z.contextMenu,
               left: Math.min(shownMenu.x, window.innerWidth - 200),
@@ -291,7 +291,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             </span>
             {shownMenu.items.map((item, i) =>
               item.separator ? (
-                <div key={item.id} role="separator" className="my-1 h-px bg-divider" />
+                <div key={item.id} role="separator" className="mx-1 my-1 h-px bg-[#2e2f34]" />
               ) : (
                 <button
                   key={item.id}
@@ -303,14 +303,14 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                     if (!item.disabled) item.onClick?.();
                     closeMenu();
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left text-[13.5px] transition-colors duration-100 disabled:opacity-40 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:py-2.5 [@media(pointer:coarse)]:text-[15px] ${
+                  className={`my-0.5 flex min-h-8 w-full items-center gap-2 rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium leading-[18px] outline-none disabled:opacity-50 [@media(pointer:coarse)]:py-2.5 [@media(pointer:coarse)]:text-[15px] ${
                     item.danger
-                      ? "text-status-dnd hover:bg-status-dnd/10"
-                      : "text-text-normal hover:bg-interactive-hover"
+                      ? "text-status-dnd hover:bg-button-danger hover:text-white focus-visible:bg-button-danger focus-visible:text-white"
+                      : "text-interactive-normal hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white"
                   }`}
                 >
-                  {item.icon && <span className="w-4 shrink-0 opacity-80">{item.icon}</span>}
-                  {item.label}
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.icon && <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{item.icon}</span>}
                 </button>
               ),
             )}

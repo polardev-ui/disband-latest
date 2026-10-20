@@ -73,7 +73,7 @@ export function MembersSection({ isOwner }: SectionProps) {
 
       <InlineError>{error}</InlineError>
 
-      <div className="mt-3 overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <div className="mt-3 overflow-hidden rounded-lg bg-bg-secondary">
         {shown.length === 0 ? (
           <EmptyState icon={<IconFriends size={20} />} title={query ? "Nobody matches that" : "No members yet"} />
         ) : (

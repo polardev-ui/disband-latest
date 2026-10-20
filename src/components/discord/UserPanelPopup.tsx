@@ -160,13 +160,13 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
       ? getAccentBackground(profile)
       : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
   const sectionLabel = "px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/80";
-  const row = "flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2 text-left text-[13.5px] transition-colors hover:bg-interactive-hover";
+  const row = "flex h-9 w-full items-center gap-2.5 rounded-[3px] px-2 text-left text-[13.5px] transition-colors hover:bg-interactive-hover";
 
   const content = (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} fixed z-40 max-h-[calc(100vh-100px)] w-[320px] overflow-y-auto rounded-[20px] border border-divider bg-overlay-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} fixed z-40 max-h-[calc(100vh-100px)] w-[320px] overflow-y-auto rounded-lg border border-divider bg-overlay-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]`}
         style={{ left: pos.left, bottom: pos.bottom }}
       >
         <div className="h-[84px] overflow-hidden" style={{ background: bannerBg }}>
@@ -197,7 +197,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                     onClose();
                     onOpenProfile();
                   }}
-                  className="inline-flex h-8 items-center rounded-[10px] border border-divider px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+                  className="inline-flex h-8 items-center rounded-[3px] border border-divider px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                 >
                   View profile
                 </button>
@@ -205,7 +205,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               <button
                 type="button"
                 onClick={onOpenSettings}
-                className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
                 aria-label="Settings"
                 title="Settings"
               >
@@ -231,7 +231,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               onChange={(e) => setCustomNote(e.target.value)}
               placeholder="What are you up to?"
               maxLength={128}
-              className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-brand"
+              className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/70 focus:border-[#00a8fc]"
             />
             <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Clear custom status after">
               {STATUS_DURATION_PRESETS.map((preset) => (
@@ -255,7 +255,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                 type="button"
                 disabled={savingCustom}
                 onClick={() => void saveCustomStatus()}
-                className="h-8 flex-1 rounded-[10px] bg-text-normal text-[13px] font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="h-8 flex-1 rounded-[3px] bg-text-normal text-[13px] font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {savingCustom ? "Saving…" : "Set status"}
               </button>
@@ -264,7 +264,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                   type="button"
                   disabled={savingCustom}
                   onClick={() => void clearCustomStatus()}
-                  className="h-8 rounded-[10px] border border-divider px-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
+                  className="h-8 rounded-[3px] border border-divider px-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:opacity-50"
                 >
                   Clear
                 </button>
@@ -305,7 +305,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
 
           <div className="flex flex-col gap-px">
             {accounts.current && (
-              <div className="flex items-center gap-2.5 rounded-[10px] bg-interactive-selected px-2 py-1.5">
+              <div className="flex items-center gap-2.5 rounded-[3px] bg-interactive-selected px-2 py-1.5">
                 <span className="relative shrink-0">
                   <Avatar
                     size="sm"
@@ -330,7 +330,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
               return (
                 <div
                   key={acct.user_id}
-                  className="group flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-interactive-hover"
+                  className="group flex items-center gap-2.5 rounded-[3px] px-2 py-1.5 transition-colors hover:bg-interactive-hover"
                 >
                   <button
                     type="button"

@@ -305,11 +305,11 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             return next;
           });
         }}
-        className={`flex h-8 items-center rounded-lg px-1.5 transition-colors hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
-          open ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+        className={`mt-[6px] flex h-8 w-10 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
+          open ? "text-interactive-active" : "text-interactive-normal"
         }`}
       >
-        <span className="rounded-[5px] border-[1.5px] border-current px-1 py-px text-[10px] font-bold leading-none tracking-wide">
+        <span className="rounded-[4px] border-2 border-current px-[3px] py-[2px] text-[10px] font-extrabold leading-none tracking-[0.02em]">
           GIF
         </span>
       </button>
