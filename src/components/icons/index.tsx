@@ -77,6 +77,7 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
+  Trophy,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -147,6 +148,12 @@ export const IconImage = icon(Image);
 export const IconLock = icon(Lock);
 export const IconMessage = icon(MessageCircle);
 export const IconBug = icon(Bug);
+export function IconGame({ size = 20, className }: IconProps) {
+  return <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" className={className} fill="currentColor">
+    <path fillRule="evenodd" d="M7.2 5h9.6a4 4 0 0 1 3.9 3.1l1.7 7.5a3.2 3.2 0 0 1-5.3 3.1L14.9 17H9.1l-2.2 1.7a3.2 3.2 0 0 1-5.3-3.1l1.7-7.5A4 4 0 0 1 7.2 5ZM7 8v2H5v2h2v2h2v-2h2v-2H9V8H7Zm10 1a1.3 1.3 0 1 0 0 2.6A1.3 1.3 0 0 0 17 9Zm-2 3a1.3 1.3 0 1 0 0 2.6A1.3 1.3 0 0 0 15 12Z" clipRule="evenodd"/>
+  </svg>;
+}
+export const IconTrophy = icon(Trophy);
 export const IconCheck = icon(Check);
 export const IconChevronRight = icon(ChevronRight);
 export const IconChevronLeft = icon(ChevronLeft);

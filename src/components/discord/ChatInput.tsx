@@ -6,20 +6,22 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconAttach, IconPoll, IconClose, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
+import { IconAttach, IconPoll, IconClose, IconGame, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
 import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/composer-tokens";
 import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
 import { useMemberSearch } from "@/hooks/useMemberSearch";
 import { SlashCommandComposer } from "./SlashCommandComposer";
 import { SolidGiftIcon } from "@/components/icons/SolidIcons";
-import { formatFileSize, type ReplyPreview } from "@/lib/messages";
+import { formatFileSize, type MessageSendOptions, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ChannelLite } from "@/lib/markdown";
 import { GifPicker } from "./GifPicker";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
+import { ActivityPicker } from "./activities/ActivityPicker";
+import { createActivity, type ActivityKind } from "@/lib/activities";
 import { ComposerMarkdown } from "./ComposerMarkdown";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
@@ -37,12 +39,14 @@ interface ChatInputProps {
   editingMessageId?: string | null;
   editingContent?: string;
   onCancelEdit?: () => void;
-  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" | "poll" }; replyToId?: string | null; pendingFile?: File; pendingFiles?: File[]; maxUploadBytes?: number }) => Promise<string | null>;
+  onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   onTypingActivity?: () => void;
   maxUploadBytes?: number;
   serverId?: string | null;
 
   allowPolls?: boolean;
+  activityScope?: { kind: "channel" | "dm" | "group"; id: string } | null;
+  onActivityCreated?: (activityId: string) => void;
 
   focusSignal?: number;
 
@@ -134,6 +138,8 @@ export function ChatInput({
   maxUploadBytes = 50 * 1024 * 1024,
   serverId,
   allowPolls = false,
+  activityScope = null,
+  onActivityCreated,
   focusSignal,
   tetherEnabled,
   allowGifts = false,
@@ -159,6 +165,9 @@ export function ChatInput({
   const { mounted: giftMounted, exiting: giftExiting } = usePresence(giftOpen);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [pollOpen, setPollOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityBusy, setActivityBusy] = useState<ActivityKind | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -642,6 +651,30 @@ export function ChatInput({
       }
     }
     onClearReply?.();
+  }
+
+  async function startActivity(kind: ActivityKind) {
+    if (!activityScope || activityBusy || editingMessageId) return;
+    setActivityBusy(kind);
+    setActivityError(null);
+    try {
+      const activity = await createActivity(kind, activityScope.kind, activityScope.id);
+      const err = await onSend("", {
+        attachment: { url: activity.id, type: "activity" },
+        replyToId: replyTo?.id,
+      });
+      if (err) {
+        setActivityError(err);
+        return;
+      }
+      setActivityOpen(false);
+      onClearReply?.();
+      onActivityCreated?.(activity.id);
+    } catch (err) {
+      setActivityError(err instanceof Error ? err.message : "Couldn't start that activity.");
+    } finally {
+      setActivityBusy(null);
+    }
   }
 
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -1166,6 +1199,46 @@ export function ChatInput({
             }}
           />
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
+          {activityScope && !editingMessageId && (
+            <button
+              type="button"
+              aria-label="Start an activity"
+              aria-expanded={activityOpen}
+              aria-haspopup="dialog"
+              title="Start an activity"
+              onClick={() => {
+                setActivityError(null);
+                setActivityOpen((value) => !value);
+              }}
+              className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active ${
+                activityOpen || activityBusy ? "text-interactive-active" : "text-interactive-normal"
+              }`}
+            >
+              <svg aria-hidden viewBox="0 0 512 512" className="h-5 w-5 fill-current">
+                <path d="M377.408,213.333H277.333v-128c0-11.755,9.579-21.333,21.333-21.333C310.421,64,320,73.579,320,85.333v21.333
+			c0,35.285,28.715,64,64,64c35.285,0,64-28.715,64-64V21.333C448,9.557,438.443,0,426.667,0s-21.333,9.557-21.333,21.333v85.333
+			c0,11.755-9.579,21.333-21.333,21.333c-11.755,0-21.333-9.579-21.333-21.333V85.333c0-35.285-28.715-64-64-64
+			c-35.285,0-64,28.715-64,64v128h-98.283C61.184,213.333,0,280.32,0,362.667C0,433.941,48.064,510.976,119.637,512h2.069
+			c18.795,0,49.323-3.413,81.152-13.12c33.365-10.197,74.773-10.197,108.053-0.021c34.133,10.453,70.677,12.992,83.328,13.141
+			C466.987,510.613,512,433.408,512,362.667C512,280.32,451.627,213.333,377.408,213.333z M192,384h-21.333v21.333
+			c0,11.776-9.557,21.333-21.333,21.333S128,417.109,128,405.333V384h-21.333c-11.776,0-21.333-9.557-21.333-21.333
+			s9.557-21.333,21.333-21.333H128V320c0-11.776,9.557-21.333,21.333-21.333s21.333,9.557,21.333,21.333v21.333H192
+			c11.776,0,21.333,9.557,21.333,21.333S203.776,384,192,384z M362.667,298.667c11.776,0,21.333,9.557,21.333,21.333
+			s-9.557,21.333-21.333,21.333s-21.333-9.557-21.333-21.333S350.891,298.667,362.667,298.667z M320,384
+			c-11.776,0-21.333-9.557-21.333-21.333s9.557-21.333,21.333-21.333s21.333,9.557,21.333,21.333S331.776,384,320,384z
+			 M362.667,426.667c-11.776,0-21.333-9.557-21.333-21.333S350.891,384,362.667,384S384,393.557,384,405.333
+			S374.443,426.667,362.667,426.667z M405.333,384C393.557,384,384,374.443,384,362.667s9.557-21.333,21.333-21.333
+			s21.333,9.557,21.333,21.333S417.109,384,405.333,384z"/>
+              </svg>
+            </button>
+          )}
+          <ActivityPicker
+            open={activityOpen}
+            busyKind={activityBusy}
+            error={activityError}
+            onClose={() => setActivityOpen(false)}
+            onPick={(kind) => void startActivity(kind)}
+          />
           {(text.trim() || entries.length > 0) && (
             <button
               type="submit"

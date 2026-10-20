@@ -7,6 +7,7 @@ import { DangerousDownloadModal } from "./DangerousDownloadModal";
 import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
 import { PollCard } from "./PollCard";
+import { ActivityCard } from "./activities/ActivityCard";
 import { AudioPlayer } from "./media/AudioPlayer";
 import { VideoPlayer } from "./VideoPlayer";
 import { safeDownload, safeImageUrl } from "@/lib/safe-url";
@@ -24,6 +25,7 @@ interface MessageAttachmentProps {
   createdAt?: string;
 
   currentUserId?: string | null;
+  onOpenActivity?: (activityId: string) => void;
 }
 
 const mediaClass =
@@ -73,6 +75,7 @@ export function MessageAttachment({
   isOwn,
   createdAt,
   currentUserId,
+  onOpenActivity,
 }: MessageAttachmentProps) {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
@@ -168,6 +171,10 @@ export function MessageAttachment({
 
   if (type === "poll") {
     return <PollCard pollId={url} currentUserId={currentUserId} />;
+  }
+
+  if (type === "activity") {
+    return <ActivityCard activityId={url} onOpen={onOpenActivity ?? (() => undefined)} />;
   }
 
   if (type === "audio") {

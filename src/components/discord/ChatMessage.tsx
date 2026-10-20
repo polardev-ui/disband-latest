@@ -46,7 +46,7 @@ export interface ChatMessageData {
   content: string;
   attachment_url?: string | null;
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
-  attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
   reply_to_id?: string | null;
@@ -84,6 +84,7 @@ interface ChatMessageProps {
   onOpenReactionPicker?: () => void;
   onForward?: () => void;
   onEdit?: () => void;
+  onOpenActivity?: (activityId: string) => void;
   highlight?: boolean;
   onContentResize?: () => void;
   channels?: ChannelLite[];
@@ -430,6 +431,7 @@ function ChatMessageImpl({
   onOpenReactionPicker,
   onForward,
   onEdit,
+  onOpenActivity,
   highlight,
   members = [],
   onContentResize,
@@ -512,6 +514,7 @@ function ChatMessageImpl({
       isOwn={isOwn}
       createdAt={message.created_at}
       currentUserId={currentUserId}
+      onOpenActivity={onOpenActivity}
     />
   ) : null;
 

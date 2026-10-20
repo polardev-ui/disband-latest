@@ -14,6 +14,7 @@ import {
 import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
 import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
+import { ActivityModal } from "./activities/ActivityModal";
 import { ReactionPicker } from "./MessageReactions";
 import { IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
@@ -108,6 +109,7 @@ interface MessageRowProps {
   onForward: (message: ChatMessageData) => void;
   onReply: (reply: ReplyPreview) => void;
   onEdit: (edit: { id: string; content: string } | null) => void;
+  onOpenActivity: (activityId: string) => void;
   onOpenReactionPicker: (messageId: string) => void;
   onJumpToReply: (messageId: string) => void;
   onContentResize: () => void;
@@ -147,6 +149,7 @@ const MessageRow = memo(function MessageRow({
   onForward,
   onReply,
   onEdit,
+  onOpenActivity,
   onOpenReactionPicker,
   onJumpToReply,
   onContentResize,
@@ -226,6 +229,7 @@ const MessageRow = memo(function MessageRow({
           }, 10);
         } : undefined}
         onDoubleClick={canReact ? () => onToggleReaction(message.id, "👍") : undefined}
+        onOpenActivity={onOpenActivity}
         onContentResize={onContentResize}
       />
     </div>
@@ -356,6 +360,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
   }, [highlightMessageId]);
   const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
+  const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
+  const openActivity = useCallback((activityId: string) => setActiveActivityId(activityId), []);
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
   const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
@@ -855,6 +861,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     onForward={handleForward}
                     onReply={handleReply}
                     onEdit={setEditing}
+                    onOpenActivity={openActivity}
                     onOpenReactionPicker={handleOpenReactionPicker}
                     onJumpToReply={jumpToMessage}
                     onContentResize={handleContentResize}
@@ -899,12 +906,15 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           maxUploadBytes={maxUploadBytes}
           serverId={typingScope?.serverId}
           allowPolls={messageContext === "channel" || messageContext === "group"}
+          activityScope={typingScope}
+          onActivityCreated={openActivity}
           focusSignal={composerFocus}
           tetherEnabled={messageContext !== "notes"}
           allowGifts={messageContext !== "notes"}
         />
         )}
       </div>
+      <ActivityModal activityId={activeActivityId} onClose={() => setActiveActivityId(null)} />
     </main>
   );
 });

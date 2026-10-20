@@ -4606,7 +4606,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
@@ -4756,7 +4756,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
@@ -4908,7 +4908,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
@@ -5061,7 +5061,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
