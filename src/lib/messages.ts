@@ -1,6 +1,6 @@
 import type { Profile } from "@/lib/supabase/types";
 
-export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio";
+export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity";
 export type MessageContext = "channel" | "dm" | "group" | "notes";
 
 export interface MessageAttachmentPayload {

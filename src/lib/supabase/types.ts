@@ -216,7 +216,7 @@ export interface DbMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -245,7 +245,7 @@ export interface DbDmMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -268,7 +268,7 @@ export interface DbNote {
   user_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -316,7 +316,7 @@ export interface GroupMessage {
   author_id: string | null;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -507,14 +507,14 @@ export interface Database {
           author_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
           edited_at?: string | null;
@@ -534,14 +534,14 @@ export interface Database {
           author_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
@@ -553,7 +553,7 @@ export interface Database {
           user_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
@@ -565,7 +565,7 @@ export interface Database {
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
