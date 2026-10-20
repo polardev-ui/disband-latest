@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   factorLabel,
+  getPasskeyMfaStatus,
   listVerifiedMfaFactors,
   verifyPasskeyChallenge,
   verifyTotpChallenge,
@@ -16,18 +17,22 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingFactors, setLoadingFactors] = useState(true);
+  const [passkeyReady, setPasskeyReady] = useState(false);
 
   useEffect(() => {
     void (async () => {
-      const list = await listVerifiedMfaFactors();
+      const [list, passkeyStatus] = await Promise.all([
+        listVerifiedMfaFactors(),
+        getPasskeyMfaStatus(),
+      ]);
       setFactors(list);
+      setPasskeyReady(Boolean(passkeyStatus.data?.ready));
       setSelectedFactorId(list.find((f) => f.factor_type === "totp")?.id ?? list[0]?.id ?? "");
       setLoadingFactors(false);
     })();
   }, []);
 
   const totpFactors = factors.filter((f) => f.factor_type === "totp");
-  const passkeyFactors = factors.filter((f) => f.factor_type === "webauthn");
 
   async function submitTotp(e: React.FormEvent) {
     e.preventDefault();
@@ -40,10 +45,10 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
     onVerified();
   }
 
-  async function usePasskey(factorId: string) {
+  async function usePasskey() {
     setLoading(true);
     setError(null);
-    const err = await verifyPasskeyChallenge(factorId);
+    const err = await verifyPasskeyChallenge();
     setLoading(false);
     if (err) { setError(err); return; }
     onVerified();
@@ -53,7 +58,7 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
     return <p className="py-4 text-center text-sm text-text-muted">Loading…</p>;
   }
 
-  if (factors.length === 0) {
+  if (totpFactors.length === 0 && !passkeyReady) {
     return (
       <p className="rounded border border-status-dnd/40 bg-status-dnd/10 px-3 py-2.5 text-sm text-status-dnd">
         This account has two-factor authentication enabled, but no working method is
@@ -109,22 +114,19 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
         </form>
       )}
 
-      {passkeyFactors.length > 0 && (
+      {passkeyReady && (
         <div className={totpFactors.length > 0 ? "space-y-2" : "space-y-2"}>
           {totpFactors.length > 0 && (
             <p className="text-center text-xs uppercase tracking-wide text-text-muted">or</p>
           )}
-          {passkeyFactors.map((factor) => (
-            <button
-              key={factor.id}
-              type="button"
-              disabled={loading}
-              onClick={() => void usePasskey(factor.id)}
-              className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
-            >
-              {loading ? "…" : `Use ${factorLabel(factor)}`}
-            </button>
-          ))}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void usePasskey()}
+            className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
+          >
+            {loading ? "…" : "Use a passkey"}
+          </button>
         </div>
       )}
 

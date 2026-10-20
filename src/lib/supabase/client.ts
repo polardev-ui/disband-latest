@@ -119,6 +119,7 @@ function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClie
       persistSession: true,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+      experimental: { passkey: true },
       storage: typeof window !== "undefined" ? window.localStorage : undefined,
     },
   });
@@ -258,6 +259,26 @@ export function getSupabaseClient(): SupabaseClient {
   const raw = createBrowserSupabaseClient(url, anonKey);
   browserClient = wrapSupabaseClient(raw);
   return browserClient;
+}
+
+/**
+ * A memory-only client for passkey ceremonies. Keeping the passkey sign-in
+ * off the main client means a cancelled prompt, or a passkey for the wrong
+ * account, cannot disturb the password session the user already has.
+ */
+export function createPasskeyProbeClient(): SupabaseClient | null {
+  const url = PUBLIC_ENV.supabaseUrl;
+  const anonKey = PUBLIC_ENV.supabaseAnonKey;
+  if (!url || !anonKey) return null;
+  return createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      experimental: { passkey: true },
+      storageKey: `disband-passkey-probe-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    },
+  });
 }
 
 export function isSupabaseConfigured(): boolean {
