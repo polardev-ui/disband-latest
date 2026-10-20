@@ -1,5 +1,6 @@
 "use client";
 
+import { Tooltip } from "./Tooltip";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -1645,53 +1646,75 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
               {tab === "connections" && (
                 <div className="pb-20">
-                  <SettingsSection
-                    title="Spotify"
-                    description="Link your Spotify account and the track you're playing shows on your profile card, live."
-                  >
-                    <SettingRow
-                      label={spotifyChecking ? "Checking…" : spotifyConnected ? "Connected" : "Not connected"}
-                      description={
-                        spotifyConnected
-                          ? "Polled every 20 seconds while Disband is open — on desktop it keeps working from the tray."
-                          : "Read-only: we only see the currently-playing track. Nothing else is touched."
-                      }
-                      stacked
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        {!spotifyChecking &&
-                          (spotifyConnected ? (
-                            <button
-                              type="button"
-                              onClick={() => void handleSpotifyDisconnect()}
-                              className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
-                            >
-                              Disconnect
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={handleSpotifyConnect}
-                              className="rounded-[3px] bg-brand px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
-                            >
-                              Connect Spotify
-                            </button>
-                          ))}
-                        {!spotifyChecking && !spotifyConnected && legacySpotifyAvailable && (
+                  {/* Discord's "Add accounts to your profile" strip */}
+                  <div className="mb-8 rounded-lg bg-bg-secondary p-4">
+                    <h3 className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Add accounts to your profile</h3>
+                    <p className="mt-1 text-[14px] text-header-secondary">This information won&apos;t be shared outside of Disband without your permission.</p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {[
+                        { id: "spotify", label: "Spotify", icon: <SpotifyMark />, onClick: handleSpotifyConnect, done: spotifyConnected },
+                        { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: () => void handleLastfmConnect(), done: false },
+                      ].map((svc) => (
+                        <Tooltip key={svc.id} label={svc.done ? `${svc.label} · connected` : svc.label} side="top">
                           <button
                             type="button"
-                            disabled={legacySpotifyBusy}
-                            onClick={() => void handleImportLegacySpotify()}
-                            title="Older Disband builds kept this connection in this browser only."
-                            className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
+                            onClick={svc.onClick}
+                            aria-label={`Connect ${svc.label}`}
+                            className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-tertiary transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-interactive-hover"
                           >
-                            {legacySpotifyBusy ? "Importing…" : "Import old connection"}
+                            {svc.icon}
+                            {svc.done && (
+                              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-bg-secondary bg-status-online">
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                              </span>
+                            )}
                           </button>
-                        )}
-                        {spotifyNote && <p className="text-[13px] text-text-muted">{spotifyNote}</p>}
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Spotify */}
+                  <ConnectionCard
+                    icon={<SpotifyMark size={32} />}
+                    name="Spotify"
+                    status={spotifyChecking ? "Checking…" : spotifyConnected ? "Connected · shows what you're playing" : "Not connected"}
+                    connected={spotifyConnected}
+                    actions={
+                      spotifyChecking ? null : spotifyConnected ? (
+                        <button type="button" onClick={() => void handleSpotifyDisconnect()} className="h-8 rounded-[3px] px-3 text-[14px] font-medium text-white hover:underline">
+                          Disconnect
+                        </button>
+                      ) : (
+                        <>
+                          {legacySpotifyAvailable && (
+                            <button
+                              type="button"
+                              disabled={legacySpotifyBusy}
+                              onClick={() => void handleImportLegacySpotify()}
+                              title="Older Disband builds kept this connection in this browser only."
+                              className="h-8 rounded-[3px] bg-button-secondary px-3 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50"
+                            >
+                              {legacySpotifyBusy ? "Importing…" : "Import old connection"}
+                            </button>
+                          )}
+                          <button type="button" onClick={handleSpotifyConnect} className="h-8 rounded-[3px] bg-[#1db954] px-4 text-[14px] font-medium text-white hover:brightness-95">
+                            Connect
+                          </button>
+                        </>
+                      )
+                    }
+                  >
+                    <p className="text-[14px] text-header-secondary">
+                      {spotifyConnected
+                        ? "Checked every 20 seconds while Disband is open. On desktop it keeps working from the tray."
+                        : "Read-only: we only see the track you're playing. Nothing else is touched."}
+                    </p>
+                    {spotifyNote && <p className="mt-2 text-[14px] text-header-secondary">{spotifyNote}</p>}
                         {spotifyPasteOpen && !spotifyConnected && (
                           <div className="mt-2 w-full space-y-2">
-                            <p className="text-[13px] text-text-muted">
+                            <p className="text-[14px] text-text-muted">
                               Spotify opened in your browser. Approve access there, copy the code
                               Spotify shows, and paste it here.
                             </p>
@@ -1700,80 +1723,72 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 value={spotifyPasteCode}
                                 onChange={(e) => setSpotifyPasteCode(e.target.value)}
                                 placeholder="paste the code"
-                                className="w-64 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
+                                className="w-64 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 font-mono text-[14px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
                               />
                               <button
                                 type="button"
                                 disabled={spotifyPasteBusy || !spotifyPasteCode.trim()}
                                 onClick={() => void finishSpotifyPaste()}
-                                className="rounded-[3px] bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                                className="rounded-[3px] bg-brand px-3.5 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                               >
                                 {spotifyPasteBusy ? "Connecting…" : "Connect"}
                               </button>
                             </div>
                             {spotifyPasteError && (
-                              <p className="text-[13px] text-status-dnd">{spotifyPasteError}</p>
+                              <p className="text-[14px] text-status-dnd">{spotifyPasteError}</p>
                             )}
                           </div>
                         )}
-                      </div>
-                    </SettingRow>
-                  </SettingsSection>
+                  </ConnectionCard>
 
-                  <SettingsSection
-                    title="SoundCloud"
-                    description="SoundCloud doesn't let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud → Settings → Connections), then connect Last.fm here — what you play appears on your profile within a minute, even from another device."
+                  {/* Last.fm (and SoundCloud through it) */}
+                  <ConnectionCard
+                    icon={<LastfmMark size={32} />}
+                    name="Last.fm"
+                    status={lastfmSaved && lastfmUser.trim() ? `Connected as ${lastfmUser.trim()}` : "Also brings in SoundCloud plays"}
+                    connected={lastfmSaved && !!lastfmUser.trim()}
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => void handleLastfmConnect()}
+                        disabled={!lastfmConfigured()}
+                        className="h-8 rounded-[3px] bg-[#d51007] px-4 text-[14px] font-medium text-white hover:brightness-95 disabled:opacity-40"
+                      >
+                        Connect
+                      </button>
+                    }
                   >
-                    <SettingRow label="Last.fm" stacked>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleLastfmConnect()}
-                          disabled={!lastfmConfigured()}
-                          className="rounded-md bg-brand px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40"
-                        >
-                          Connect Last.fm
-                        </button>
-                        <span className="text-[13px] text-text-muted">or type a username</span>
-                        <input
-                          value={lastfmUser}
-                          onChange={(e) => {
-                            setLastfmUser(e.target.value);
-                            setLastfmSaved(false);
-                          }}
-                          placeholder="your last.fm username"
-                          disabled={!lastfmConfigured()}
-                          className="w-56 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:border-[#00a8fc] disabled:opacity-50"
-                        />
-                        <button
-                          type="button"
-                          onClick={saveLastfm}
-                          disabled={!lastfmConfigured()}
-                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-40"
-                        >
-                          Save
-                        </button>
-                        {lastfmSaved && <span className="text-[13px] text-status-online">Saved.</span>}
-                        {!lastfmConfigured() && (
-                          <span className="text-[13px] text-text-muted">
-                            Not configured on this build yet.
-                          </span>
-                        )}
-                        {lastfmNote && <p className="text-[13px] text-text-muted">{lastfmNote}</p>}
-                      </div>
-                    </SettingRow>
-                  </SettingsSection>
+                    <p className="text-[14px] text-header-secondary">
+                      SoundCloud doesn&apos;t let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud › Settings › Connections), then connect Last.fm here. What you play appears on your profile within a minute, even from another device.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        value={lastfmUser}
+                        onChange={(e) => {
+                          setLastfmUser(e.target.value);
+                          setLastfmSaved(false);
+                        }}
+                        placeholder="Or type your Last.fm username"
+                        disabled={!lastfmConfigured()}
+                        className="h-9 w-64 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc] disabled:opacity-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveLastfm}
+                        disabled={!lastfmConfigured()}
+                        className="h-9 rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-40"
+                      >
+                        Save
+                      </button>
+                      {lastfmSaved && <span className="text-[14px] text-status-online">Saved.</span>}
+                    </div>
+                    {!lastfmConfigured() && <p className="mt-2 text-[14px] text-header-secondary">Not configured on this build yet.</p>}
+                    {lastfmNote && <p className="mt-2 text-[14px] text-header-secondary">{lastfmNote}</p>}
+                  </ConnectionCard>
 
-                  <SettingsSection
-                    title="How it shows up"
-                    description="People see a small card on your profile — artwork, track and artist. The track name scrolls if it's too long for the card."
-                  >
-                    <SettingRow label="Visibility" description="Your listening card is visible to everyone who can view your profile." stacked>
-                      <p className="text-[13px] text-text-muted">
-                        Disconnect either account above to hide it instantly.
-                      </p>
-                    </SettingRow>
-                  </SettingsSection>
+                  <p className="mt-6 text-[14px] text-header-secondary">
+                    Your listening card (artwork, track and artist) shows on your profile to everyone who can see it. Disconnect an account to hide it instantly.
+                  </p>
                 </div>
               )}
 
@@ -1873,5 +1888,71 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         {deleteError && <p className="mt-3 text-[14px] text-status-dnd">{deleteError}</p>}
       </ClassicModal>
     </>
+  );
+}
+
+/** One connected-service card, Discord style. */
+function ConnectionCard({
+  icon,
+  name,
+  status,
+  connected,
+  actions,
+  children,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  status: string;
+  connected: boolean;
+  actions: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className="mb-4 overflow-hidden rounded-lg bg-bg-secondary">
+      <header className="flex items-center gap-3 bg-bg-tertiary/60 px-4 py-3">
+        <span className="shrink-0">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-[16px] font-semibold text-header-primary">
+            {name}
+            {connected && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-status-online">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            )}
+          </p>
+          <p className="truncate text-[12px] text-header-secondary">{status}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      </header>
+      {children && <div className="px-4 py-3">{children}</div>}
+    </section>
+  );
+}
+
+function SpotifyMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#1db954" />
+      <path d="M6.5 9.3c3.8-1.1 8-.8 11.2 1M7 12.6c3.1-.9 6.5-.6 9.2.9M7.6 15.6c2.5-.6 5-.4 7.1.7" fill="none" stroke="#000" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LastfmMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#d51007" />
+      <text x="12" y="15.6" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#fff" fontFamily="inherit">fm</text>
+    </svg>
+  );
+}
+
+function SoundcloudMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#ff5500" />
+      <path d="M10 15.5V9.6a3.8 3.8 0 0 1 7.2 1.4 2.3 2.3 0 0 1 .3 4.5Z" fill="#fff" />
+      <path d="M8.6 15.5v-5M7.2 15.5v-3.6M5.8 15.5V13" stroke="#fff" strokeWidth="1" strokeLinecap="round" />
+    </svg>
   );
 }
