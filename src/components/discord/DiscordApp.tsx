@@ -373,11 +373,12 @@ export function DiscordApp() {
     const serverId = app.activeServerId;
     if (!serverId || app.activeChannelId || app.channels.length === 0) return;
 
+    const serverChannels = app.channels.filter(c => c.server_id === serverId);
     const savedId = getLastChannelId(serverId);
     const target =
-      (savedId ? app.channels.find((c) => c.id === savedId) : undefined)
-      ?? app.channels.find((c) => c.type === "text")
-      ?? app.channels[0];
+      (savedId ? serverChannels.find((c) => c.id === savedId) : undefined)
+      ?? serverChannels.find((c) => c.type === "text")
+      ?? serverChannels[0];
     if (target) app.selectChannel(target.id);
   }, [app.viewMode, app.activeServerId, app.activeChannelId, app.channels, app.selectChannel]);
   const isVoice = activeChannel?.type === "voice";
