@@ -62,7 +62,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
       className="channel-scroll flex min-h-0 w-[340px] shrink-0 flex-col overflow-y-auto bg-bg-secondary-alt"
     >
       <div className="relative shrink-0">
-        <div className="h-[120px]" style={{ background: bannerBg }}>
+        <div className="relative h-[120px] overflow-hidden" style={{ background: bannerBg }}>
           {banner && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={banner} alt="" className="h-full w-full object-cover" onError={() => setBannerFailed(true)} />
