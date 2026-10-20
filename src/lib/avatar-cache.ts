@@ -61,6 +61,9 @@ export async function getCachedAvatarUrl(remoteUrl: string): Promise<string | nu
 export async function storeAvatar(remoteUrl: string): Promise<void> {
   try {
     if (!dbSupported() || objectUrls.has(remoteUrl)) return;
+    // Local previews (an image picked but not yet saved) are already in
+    // memory; fetching blob:/data: URLs is also blocked by our CSP.
+    if (!/^https?:/i.test(remoteUrl)) return;
     const res = await fetch(remoteUrl, { mode: "cors", credentials: "omit" });
     if (!res.ok) return;
     const blob = await res.blob();
