@@ -134,8 +134,8 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         }
       } else {
         const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-        if (sanitized.length < 1) {
-          setError("Username must be at least 1 character (letters, numbers, and underscores).");
+        if (sanitized.length < 2) {
+          setError("Username must be at least 2 characters (letters, numbers, and underscores).");
         } else if (password !== confirmPassword) {
           setError("Passwords don't match. Re-enter them and try again.");
         } else {

@@ -19,7 +19,7 @@ struct AuthView: View {
 
     private var signupValid: Bool {
         mode == .signIn
-            || (!username.isEmpty && normalizedUsername.count >= 1
+            || (!username.isEmpty && normalizedUsername.count >= 2
                 && !email.isEmpty && password.count >= 6
                 && password == confirmPassword && usernameProblem == nil)
     }
@@ -49,7 +49,7 @@ struct AuthView: View {
                     // clears the message rather than spamming the RPC.
                     guard mode == .signUp else { usernameProblem = nil; return }
                     let candidate = normalizedUsername
-                    guard candidate.count >= 1 else { usernameProblem = nil; return }
+                    guard candidate.count >= 2 else { usernameProblem = nil; return }
                     usernameProblem = await DatabaseService.usernameUnavailableReason(candidate)
                 }
 
