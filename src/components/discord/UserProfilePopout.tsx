@@ -85,15 +85,30 @@ export function UserProfilePopout({
 
   // Place beside the anchor: to its right when it's on the left half of the
   // window, otherwise to its left; vertically aligned and kept on screen.
+  // Re-placed whenever the card changes height (badges, roles and notes load
+  // after it opens) or the window resizes, so it never runs off the bottom.
   useLayoutEffect(() => {
     if (!open || !anchor) return;
-    const h = ref.current?.offsetHeight ?? 480;
-    const onLeftHalf = anchor.left + anchor.width / 2 < window.innerWidth / 2;
-    const left = onLeftHalf
-      ? Math.max(8, Math.min(anchor.right + GAP, window.innerWidth - WIDTH - 8))
-      : Math.max(8, anchor.left - GAP - WIDTH);
-    const top = Math.max(8, Math.min(anchor.top, window.innerHeight - h - 8));
-    setPos({ left, top, side: onLeftHalf ? "right" : "left" });
+    const place = () => {
+      const h = Math.min(ref.current?.offsetHeight ?? 480, window.innerHeight - 16);
+      const onLeftHalf = anchor.left + anchor.width / 2 < window.innerWidth / 2;
+      const left = onLeftHalf
+        ? Math.max(8, Math.min(anchor.right + GAP, window.innerWidth - WIDTH - 8))
+        : Math.max(8, anchor.left - GAP - WIDTH);
+      const top = Math.max(8, Math.min(anchor.top, window.innerHeight - h - 8));
+      setPos((prev) =>
+        prev && prev.left === left && prev.top === top ? prev : { left, top, side: onLeftHalf ? "right" : "left" },
+      );
+    };
+    place();
+    const el = ref.current;
+    const ro = typeof ResizeObserver !== "undefined" && el ? new ResizeObserver(place) : null;
+    if (ro && el) ro.observe(el);
+    window.addEventListener("resize", place);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", place);
+    };
   }, [open, anchor, p?.id]);
 
   const listening = p && presenceStatusFor(p, presenceMap) !== "offline" ? listeningFor(p, listeningMap) : null;
