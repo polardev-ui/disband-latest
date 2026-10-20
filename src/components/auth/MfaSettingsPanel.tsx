@@ -4,16 +4,31 @@ import { useCallback, useEffect, useState } from "react";
 import {
   completeTotpEnrollment,
   factorLabel,
+  getPasskeyMfaStatus,
   listAllMfaFactors,
+  listUserPasskeys,
+  passkeysSupported,
+  registerPasskeyMfa,
+  removePasskey,
   startTotpEnrollment,
   totpQrSrc,
   unenrollMfaFactor,
   type MfaFactor,
   type TotpEnrollment,
 } from "@/lib/mfa";
+import type { PasskeySummary } from "@/lib/passkey-mfa-shared";
+
+function passkeyDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 export function MfaSettingsPanel() {
   const [factors, setFactors] = useState<MfaFactor[]>([]);
+  const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
+  const [secretConfigured, setSecretConfigured] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -22,17 +37,32 @@ export function MfaSettingsPanel() {
   const [totpCode, setTotpCode] = useState("");
   // Two-step removal: first click arms the confirm, second click removes.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmingPasskeyId, setConfirmingPasskeyId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const result = await listAllMfaFactors();
-    setFactors(result.factors);
-    if (result.error) setError(result.error);
-    setLoading(false);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const [factorResult, passkeyResult, statusResult] = await Promise.race([
+        Promise.all([listAllMfaFactors(), listUserPasskeys(), getPasskeyMfaStatus()]),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("timeout")), 15_000); }),
+      ]);
+      setFactors(factorResult.factors);
+      setPasskeys(passkeyResult.passkeys);
+      setSecretConfigured(statusResult.data?.secretConfigured ?? false);
+      const loadError = factorResult.error ?? passkeyResult.error ?? statusResult.error;
+      if (loadError) setError(loadError);
+    } catch {
+      setError("Could not load your security methods. Close settings and try again.");
+    } finally {
+      clearTimeout(timeout);
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
+    setPasskeySupported(passkeysSupported());
     void reload();
   }, [reload]);
 
@@ -48,6 +78,21 @@ export function MfaSettingsPanel() {
     }
     setTotpSetup(result.data);
     setTotpCode("");
+    void reload();
+  }
+
+  async function addPasskey() {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    const err = await registerPasskeyMfa();
+    setBusy(false);
+    if (err) {
+      setError(err);
+      void reload();
+      return;
+    }
+    setMessage("Passkey added.");
     void reload();
   }
 
@@ -92,6 +137,35 @@ export function MfaSettingsPanel() {
     void reload();
   }
 
+  async function removePasskeyRow(passkeyId: string) {
+    const isLastPasskey = passkeys.length <= 1;
+    const hasVisibleTotp = factors.some(
+      (factor) => factor.status === "verified" && factor.factor_type === "totp",
+    );
+
+    if (confirmingPasskeyId !== passkeyId) {
+      if (secretConfigured && isLastPasskey && !hasVisibleTotp) {
+        setError("Add an authenticator app before removing your last passkey, or you could be locked out.");
+        setMessage(null);
+        return;
+      }
+      setConfirmingPasskeyId(passkeyId);
+      setError(null);
+      setMessage(null);
+      return;
+    }
+
+    setConfirmingPasskeyId(null);
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    const err = await removePasskey(passkeyId);
+    setBusy(false);
+    if (err) setError(err);
+    else setMessage("Passkey removed.");
+    void reload();
+  }
+
   async function copyManualKey() {
     if (!totpSetup) return;
     try {
@@ -105,10 +179,11 @@ export function MfaSettingsPanel() {
 
   const verified = factors.filter((f) => f.status === "verified");
   const pending = factors.filter((f) => f.status !== "verified");
+  const hasPasskeyMethod = passkeys.length > 0 && secretConfigured;
 
   const HEADING = "text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
   const BTN = "inline-flex h-8 min-w-[60px] items-center justify-center rounded-[3px] px-4 text-[14px] font-medium leading-4 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50";
-  const enabled = verified.length > 0;
+  const enabled = verified.length > 0 || hasPasskeyMethod;
 
   return (
     <div>
@@ -117,68 +192,127 @@ export function MfaSettingsPanel() {
         <div className="min-w-0 flex-1">
           <p className="text-[14px] leading-5 text-header-secondary">
             {enabled
-              ? "Your account is protected by an extra layer of security. Signing in needs your password plus a code from your authenticator app."
-              : "Protect your Disband account with an extra layer of security. Once configured, you'll be required to enter both your password and an authentication code from your mobile phone in order to sign in."}
+              ? "Your account is protected by an extra layer of security. Signing in needs your password plus a code from your authenticator app or a passkey."
+              : "Protect your Disband account with an extra layer of security. Add an authenticator app or a passkey, then sign in with your password plus that second factor."}
           </p>
 
           {loading ? (
             <p className="mt-4 text-[14px] text-text-muted">Loading security methods…</p>
           ) : (
-            [...verified, ...pending].length > 0 && (
-              <div className="mt-4 overflow-hidden rounded-lg bg-bg-secondary">
-                {[...verified, ...pending].map((factor) => {
-                  const isLastVerified = factor.status === "verified" && verified.length <= 1;
-                  const confirming = confirmingId === factor.id;
-                  return (
-                    <div key={factor.id} className="flex items-center justify-between gap-3 border-b border-bg-tertiary px-4 py-3 last:border-b-0">
-                      <div className="min-w-0">
-                        <p className="truncate text-[16px] font-medium text-header-primary">{factorLabel(factor)}</p>
-                        <p className="text-[12px] text-header-secondary">
-                          {factor.factor_type === "totp"
-                            ? "Authenticator app"
-                            : factor.factor_type === "webauthn"
-                              ? "Passkey"
-                              : factor.factor_type}
-                          {factor.status !== "verified" ? " · setup incomplete" : ""}
-                        </p>
-                      </div>
-                      {isLastVerified ? (
-                        <span
-                          title="Your last verified method can't be removed — add another one first."
-                          className="shrink-0 cursor-not-allowed text-[14px] text-text-muted/60"
-                        >
-                          Remove
-                        </span>
-                      ) : confirming ? (
-                        <span className="flex shrink-0 items-center gap-2">
-                          <button type="button" disabled={busy} onClick={() => setConfirmingId(null)} className="px-2 text-[14px] font-medium text-white hover:underline disabled:opacity-50">
-                            Keep
-                          </button>
-                          <button type="button" disabled={busy} onClick={() => void removeFactor(factor.id)} className={`${BTN} bg-button-danger hover:bg-button-danger-hover`}>
+            <>
+              {[...verified, ...pending].length > 0 && (
+                <div className="mt-4 overflow-hidden rounded-lg bg-bg-secondary">
+                  {[...verified, ...pending].map((factor) => {
+                    const isLastVerified = factor.status === "verified" && verified.length <= 1 && !hasPasskeyMethod;
+                    const confirming = confirmingId === factor.id;
+                    return (
+                      <div key={factor.id} className="flex items-center justify-between gap-3 border-b border-bg-tertiary px-4 py-3 last:border-b-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-[16px] font-medium text-header-primary">{factorLabel(factor)}</p>
+                          <p className="text-[12px] text-header-secondary">
+                            {factor.factor_type === "totp"
+                              ? "Authenticator app"
+                              : factor.factor_type === "webauthn"
+                                ? "Passkey"
+                                : factor.factor_type}
+                            {factor.status !== "verified" ? " · setup incomplete" : ""}
+                          </p>
+                        </div>
+                        {isLastVerified ? (
+                          <span
+                            title="Your last verified method can't be removed — add another one first."
+                            className="shrink-0 cursor-not-allowed text-[14px] text-text-muted/60"
+                          >
+                            Remove
+                          </span>
+                        ) : confirming ? (
+                          <span className="flex shrink-0 items-center gap-2">
+                            <button type="button" disabled={busy} onClick={() => setConfirmingId(null)} className="px-2 text-[14px] font-medium text-white hover:underline disabled:opacity-50">
+                              Keep
+                            </button>
+                            <button type="button" disabled={busy} onClick={() => void removeFactor(factor.id)} className={`${BTN} bg-button-danger hover:bg-button-danger-hover`}>
+                              Remove
+                            </button>
+                          </span>
+                        ) : (
+                          <button type="button" disabled={busy} onClick={() => void removeFactor(factor.id)} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
                             Remove
                           </button>
-                        </span>
-                      ) : (
-                        <button type="button" disabled={busy} onClick={() => void removeFactor(factor.id)} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {passkeys.length > 0 && (
+                <div className="mt-4 overflow-hidden rounded-lg bg-bg-secondary">
+                  {passkeys.map((passkey) => {
+                    const confirming = confirmingPasskeyId === passkey.id;
+                    return (
+                      <div key={passkey.id} className="flex items-center justify-between gap-3 border-b border-bg-tertiary px-4 py-3 last:border-b-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-[16px] font-medium text-header-primary">
+                            {passkey.friendly_name?.trim() || "Passkey"}
+                          </p>
+                          <p className="text-[12px] text-header-secondary">
+                            Passkey{passkey.created_at ? ` · added ${passkeyDate(passkey.created_at)}` : ""}
+                          </p>
+                        </div>
+                        {confirming ? (
+                          <span className="flex shrink-0 items-center gap-2">
+                            <button type="button" disabled={busy} onClick={() => setConfirmingPasskeyId(null)} className="px-2 text-[14px] font-medium text-white hover:underline disabled:opacity-50">
+                              Keep
+                            </button>
+                            <button type="button" disabled={busy} onClick={() => void removePasskeyRow(passkey.id)} className={`${BTN} bg-button-danger hover:bg-button-danger-hover`}>
+                              Remove
+                            </button>
+                          </span>
+                        ) : (
+                          <button type="button" disabled={busy} onClick={() => void removePasskeyRow(passkey.id)} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {passkeys.length > 0 && !secretConfigured && (
+                <p className="mt-2 text-[12px] leading-4 text-status-dnd">
+                  Passkey sign-in isn’t fully set up for this account. Remove the passkey and add it again.
+                </p>
+              )}
+            </>
           )}
 
           {!totpSetup && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void beginTotpSetup()}
-              className={`${BTN} mt-4 bg-brand hover:bg-brand-hover`}
-            >
-              {enabled ? "Add Another Authenticator" : "Enable Two-Factor Auth"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void beginTotpSetup()}
+                className={`${BTN} bg-brand hover:bg-brand-hover`}
+              >
+                {enabled ? "Add Authenticator App" : "Set Up Authenticator App"}
+              </button>
+              <button
+                type="button"
+                disabled={busy || loading || !passkeySupported}
+                onClick={() => void addPasskey()}
+                className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}
+              >
+                Add a Passkey
+              </button>
+            </div>
+          )}
+          {!totpSetup && (
+            <p className="mt-2 text-[12px] leading-4 text-text-muted">
+              {passkeySupported
+                ? "A passkey uses Face ID, Touch ID, Windows Hello, or a hardware security key. You still sign in with your password first."
+                : "Passkeys need a secure browser window. Open Disband in your browser to add one."}
+            </p>
           )}
         </div>
         {!enabled && <TwoFactorArt />}
