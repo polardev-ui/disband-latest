@@ -70,7 +70,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
       onClick={onClose}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[460px] rounded-[20px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[460px] rounded-lg border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -120,7 +120,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
                     role="radio"
                     aria-checked={on}
                     onClick={() => setPlan(p)}
-                    className={`flex items-center gap-3 rounded-[14px] border px-4 py-3 text-left transition-colors ${
+                    className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
                       on ? "border-text-normal/70 bg-interactive-selected" : "border-divider hover:bg-interactive-hover"
                     }`}
                   >

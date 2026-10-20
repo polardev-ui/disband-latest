@@ -165,7 +165,7 @@ function ReactionListDialog({
               }`}
             >
               <EmojiImg emoji={r.emoji} size="1.35em" />
-              <span className="font-semibold tabular-nums">{r.count}</span>
+              <span className="min-w-[9px] text-center font-semibold tabular-nums">{r.count}</span>
             </button>
           ))}
         </div>
@@ -244,7 +244,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
   if (reactions.length === 0 && !onOpenPicker) return null;
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1">
+    <div className="mt-0.5 flex flex-wrap items-center gap-1 pt-0.5">
       {reactions.map((r) => (
         <button
           key={r.emoji}
@@ -255,10 +255,10 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
             setHovered({ emoji: r.emoji, el: e.currentTarget });
           }}
           onMouseLeave={scheduleClose}
-          className={`inline-flex h-[26px] items-center gap-1.5 rounded-lg border px-2 text-[13px] transition-all active:scale-95 ${
+          className={`reaction-pill inline-flex h-6 items-center gap-1.5 rounded-[8px] border px-1.5 text-[14px] transition-colors ${
             r.reacted
-              ? "border-brand/50 bg-brand/20 text-text-normal"
-              : "border-divider bg-bg-secondary text-text-muted hover:border-brand/30 hover:bg-interactive-hover"
+              ? "border-brand bg-brand/15 text-[#c9cdfb]"
+              : "border-transparent bg-bg-secondary text-interactive-normal hover:border-[#4e5058]"
           }`}
         >
           <EmojiImg emoji={r.emoji} />
@@ -269,7 +269,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
         <button
           type="button"
           onClick={onOpenPicker}
-          className="inline-flex h-[26px] w-[30px] items-center justify-center rounded-lg border border-divider bg-bg-secondary text-base text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+          className="inline-flex h-6 w-8 items-center justify-center rounded-[8px] border border-transparent bg-bg-secondary text-base text-interactive-normal opacity-0 transition-opacity hover:border-[#4e5058] group-hover:opacity-100"
           aria-label="Add reaction"
         >
           +

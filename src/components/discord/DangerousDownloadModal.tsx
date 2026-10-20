@@ -28,7 +28,7 @@ export function DangerousDownloadModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="download-warning-title"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-[var(--elevation-high)]`}
       >
         <h2 id="download-warning-title" className="text-lg font-semibold text-text-normal">
           Potentially dangerous download

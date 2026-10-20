@@ -8,6 +8,10 @@ export interface CallIndicatorState {
   startedAt: number | null;
   hangup: (() => void) | null;
   focus: (() => void) | null;
+  /** Second line under "Voice Connected": the space or "Direct call". */
+  sublabel?: string;
+  camera?: { on: boolean; toggle: () => void } | null;
+  screen?: { on: boolean; toggle: () => void } | null;
 }
 
 const defaultState: CallIndicatorState = {

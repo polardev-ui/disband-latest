@@ -45,7 +45,7 @@ export function SkinLapsedNotice() {
       <div
         role="dialog"
         aria-labelledby="skin-lapsed-title"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md overflow-hidden rounded-xl bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
       >
         <div className="border-b border-divider px-6 py-5">
           <h2 id="skin-lapsed-title" className="text-lg font-bold text-text-normal">

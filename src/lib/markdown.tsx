@@ -27,7 +27,7 @@ function FencedCode({ code, language, langLabel }: { code: string; language: str
               </span>
             )}
           </div>
-          <pre className="overflow-x-auto rounded-md bg-bg-accent p-3 font-mono text-[13px] leading-relaxed">
+          <pre className="max-w-[90%] overflow-x-auto rounded-[4px] border border-bg-tertiary bg-bg-secondary p-2 font-mono text-[14px] leading-[18px]">
             <code>{code.replace(/\n$/, "")}</code>
           </pre>
         </div>
@@ -85,7 +85,7 @@ function renderInlineTokens(
       }
       const user = members.find((x) => x.username?.toLowerCase() === uname.toLowerCase());
       const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
-      const chipClass = "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
+      const chipClass = "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (user && onMentionClick) {
         out.push(
@@ -115,7 +115,7 @@ function renderInlineTokens(
       const name = token.slice(1).toLowerCase();
       const channel = channels?.find((c) => c.name.toLowerCase() === name);
       const chipClass =
-        "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
+        "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (channel && onChannelClick) {
         out.push(
@@ -145,7 +145,7 @@ function renderInlineTokens(
       out.push(
         <code
           key={key}
-          className="rounded bg-bg-accent px-1.5 py-0.5 font-mono text-[0.875em] text-text-normal"
+          className="rounded-[3px] bg-bg-secondary px-[0.2em] py-0 font-mono text-[0.85em] leading-[1.125rem] text-text-normal"
         >
           {token.slice(1, -1)}
         </code>,
@@ -205,7 +205,7 @@ function renderInlineTokens(
           href={linkFor(token)}
           target="_blank"
           rel="noopener noreferrer"
-          className="break-all text-brand hover:underline"
+          className="break-all text-text-link hover:underline"
         >
           {token}
         </a>,

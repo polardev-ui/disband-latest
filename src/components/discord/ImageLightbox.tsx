@@ -275,7 +275,7 @@ export function ImageLightbox({
       {toast && (
         <div
           role="status"
-          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-[10px] border border-white/10 bg-[#141519] px-3.5 py-2 text-[13px] text-white"
+          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-[3px] border border-white/10 bg-[#141519] px-3.5 py-2 text-[13px] text-white"
         >
           {toast}
         </div>

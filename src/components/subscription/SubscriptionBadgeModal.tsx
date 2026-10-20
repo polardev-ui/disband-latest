@@ -40,7 +40,7 @@ export function SubscriptionBadgeModal({
       onClick={onClose}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[680px] overflow-hidden rounded-2xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[680px] overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

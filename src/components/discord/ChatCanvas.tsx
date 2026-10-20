@@ -37,17 +37,28 @@ import type { Profile, ServerRole } from "@/lib/supabase/types";
 function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
   return (
     <div
-      className={`${animate ? "divider-in " : ""}relative my-3 flex items-center px-4`}
+      className={`${animate ? "divider-in " : ""}relative mx-4 mb-2 mt-6 flex h-0 items-center border-t border-status-dnd`}
       role="separator"
       aria-label="New messages"
     >
-      <div className="h-px flex-1 bg-brand/60" />
-      <span className="mx-3 shrink-0 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand">
-        New messages
+      <span className="absolute -top-[9px] right-0 rounded-[8px] rounded-l-none bg-status-dnd py-px pl-1 pr-1.5 text-[10px] font-bold uppercase leading-[13px] text-white before:absolute before:-left-[5px] before:top-0 before:h-full before:w-[6px] before:bg-status-dnd before:[clip-path:polygon(100%_0,100%_100%,0_50%)]">
+        New
       </span>
-      <div className="h-px flex-1 bg-brand/60" />
     </div>
   );
+}
+
+/** The date rule between days, centred text on a hairline. */
+function DayDivider({ label }: { label: string }) {
+  return (
+    <div role="separator" aria-label={label} className="relative mx-4 mb-0.5 mt-6 flex h-0 items-center justify-center border-t border-divider">
+      <span className="bg-bg-primary px-1 text-[12px] font-semibold leading-[13px] text-text-muted">{label}</span>
+    </div>
+  );
+}
+
+function dayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
 export interface ChatCanvasHandle {
@@ -64,6 +75,8 @@ const EMPTY_REACTIONS: MessageReaction[] = [];
 interface MessageRowProps {
   message: ChatMessageData;
   grouped: boolean;
+  /** Set on the first message of a new calendar day. */
+  dayBreak?: string | null;
   showDivider: boolean;
   dividerAnimate: boolean;
   highlight: boolean;
@@ -102,6 +115,7 @@ interface MessageRowProps {
 const MessageRow = memo(function MessageRow({
   message,
   grouped,
+  dayBreak,
   showDivider,
   dividerAnimate,
   highlight,
@@ -399,6 +413,18 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
     return flags;
   }, [enriched, currentUserId, currentUserName]);
+
+  // A date rule above the first message of each calendar day.
+  const dayBreaks = useMemo(() => {
+    const out = new Array<string | null>(enriched.length);
+    let prev = "";
+    for (let i = 0; i < enriched.length; i += 1) {
+      const d = new Date(enriched[i].created_at).toDateString();
+      out[i] = d !== prev ? dayLabel(enriched[i].created_at) : null;
+      prev = d;
+    }
+    return out;
+  }, [enriched]);
 
   // Per-message reaction lookup. The old code ran `reactions.filter(...)`
   // per row (O(rows × reactions)) on every render; one grouped pass is O(n).
@@ -737,18 +763,18 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
   return (
     <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-divider px-4">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
-          {channelIcon ?? <IconHash size={18} className="text-brand" />}
+      <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
+        <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
+          {channelIcon ?? <IconHash size={24} />}
         </span>
-        <h1 className="min-w-0 flex-1 truncate text-[15px] font-bold">{channelName}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-5 text-header-primary">{channelName}</h1>
         {headerExtra}
         {headerTrailing}
       </header>
 
       {callPanel && <div className="shrink-0">{callPanel}</div>}
 
-      <div ref={scrollRef} data-selectable className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] py-4">
+      <div ref={scrollRef} data-selectable className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pb-6 pt-4">
         <div ref={contentRef}>
           {loading && messages.length === 0 ? (
             <MessageSkeleton />
@@ -766,16 +792,23 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                 </div>
               )}
 
-              {/* Welcome banner only at true history start: while older
-                  messages can still load, this sits mid-history. */}
+              {/* The channel intro, only at the true start of history. */}
               {!hasMore && (
-              <div className="mb-4 flex items-center px-4">
-                <div className="h-px flex-1 bg-divider" />
-                <span className="mx-4 text-xs font-semibold text-text-muted">
-                  {introText ?? `Welcome to #${channelName}`}
-                </span>
-                <div className="h-px flex-1 bg-divider" />
-              </div>
+                <div className="mx-4 mb-2 mt-4 flex flex-col items-start">
+                  <span className="mb-2 flex h-[68px] w-[68px] items-center justify-center rounded-full bg-button-secondary text-white [&_svg]:h-10 [&_svg]:w-10">
+                    {messageContext === "channel" ? <IconHash size={42} /> : (channelIcon ?? <IconHash size={42} />)}
+                  </span>
+                  <h3 className="my-2 text-[32px] font-bold leading-10 text-header-primary">
+                    {messageContext === "channel" ? `Welcome to #${channelName}!` : channelName}
+                  </h3>
+                  <p className="text-[16px] leading-5 text-header-secondary">
+                    {introText ?? (messageContext === "channel"
+                      ? `This is the start of the #${channelName} channel.`
+                      : messageContext === "dm"
+                        ? `This is the beginning of your direct message history with ${channelName}.`
+                        : `Welcome to the beginning of ${channelName}.`)}
+                  </p>
+                </div>
               )}
 
               {enriched.map((msg, i) => {
@@ -785,7 +818,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   <MessageRow
                     key={msg.id}
                     message={msg}
-                    grouped={grouped}
+                    grouped={grouped && !dayBreaks[i]}
+                    dayBreak={dayBreaks[i]}
                     showDivider={newMessagesDividerId === msg.id}
                     dividerAnimate={!(currentUserId && msg.author_id === currentUserId)}
                     highlight={highlightId === msg.id}
@@ -832,7 +866,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           groupContext={messageContext === "channel" || messageContext === "group"}
         />
         {composerLockedReason ? (
-          <div className="mx-1 mb-2 flex min-h-[54px] items-center gap-2 rounded-[14px] border border-divider bg-bg-accent px-4 py-2">
+          <div className="mx-4 mb-6 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
             <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
           </div>

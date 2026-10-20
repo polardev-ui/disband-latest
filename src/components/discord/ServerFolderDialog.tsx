@@ -58,7 +58,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-2xl`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-xs rounded-xl bg-bg-secondary p-5 shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-bold text-text-normal">{title}</h2>
@@ -73,7 +73,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
             }}
             maxLength={32}
             placeholder="My folder"
-            className="mt-1.5 w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-sm font-normal normal-case tracking-normal text-text-normal outline-none placeholder:text-text-muted focus:border-brand"
+            className="mt-1.5 w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-sm font-normal normal-case tracking-normal text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
         </label>
         <p className="mb-1.5 mt-4 text-xs font-bold uppercase tracking-wide text-text-muted">Folder color</p>

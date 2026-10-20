@@ -167,7 +167,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
   return (
     <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-overlay-scrim p-4`} onClick={onClose}>
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-lg bg-overlay-panel shadow-[var(--elevation-high)]`}
         role="dialog"
         aria-modal="true"
         aria-label="Server catalysts"

@@ -302,7 +302,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
         role="dialog"
         aria-modal="true"
         aria-label="Upgrade subscription"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl bg-overlay-panel shadow-2xl`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-lg bg-overlay-panel shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">

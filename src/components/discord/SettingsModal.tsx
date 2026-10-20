@@ -16,6 +16,7 @@ import {
   Hint,
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
+import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
 import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
@@ -689,151 +690,85 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-        <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-        {/* A fixed-size window: the old one sized itself to each page, so the
-            whole dialog jumped every time you changed tabs. */}
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Settings"
-          className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex h-[min(820px,calc(100vh-3rem))] w-full max-w-[1080px] overflow-hidden rounded-[22px] border border-divider bg-overlay-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)]`}
-        >
-          <nav aria-label="Settings sections" className="hidden w-[256px] shrink-0 flex-col border-r border-divider bg-bg-secondary sm:flex">
-            <div className="px-3 pb-2 pt-4">
-              {profile && (
-                <button
-                  type="button"
-                  onClick={() => setTab("profile")}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-interactive-hover"
-                >
-                  <Avatar profile={profile} size="md" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-[14px] font-semibold leading-tight text-text-normal">
-                      {profile.display_name || profile.username}
-                    </span>
-                    <span className="block truncate text-[12.5px] text-text-muted">Edit profile</span>
-                  </span>
-                </button>
-              )}
-              <label className="relative mt-3 block">
-                <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  value={navQuery}
-                  onChange={(e) => setNavQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Enter jumps to the first match, so search-then-Enter works
-                    // without touching the mouse.
-                    if (e.key === "Enter" && navMatches[0]) {
-                      setTab(navMatches[0].id);
-                      setNavQuery("");
-                    }
-                  }}
-                  placeholder="Search settings"
-                  aria-label="Search settings"
-                  className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand"
-                />
-              </label>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-              {navQuery.trim() && navMatches.length === 0 && (
-                <p className="px-2 py-3 text-[13px] text-text-muted">No settings match “{navQuery.trim()}”.</p>
-              )}
-              {NAV_GROUPS.map((group) => {
-                const items = navMatches.filter((t) => t.group === group);
-                if (items.length === 0) return null;
-                return (
-                  <div key={group} className="mt-3 first:mt-1">
-                    <h2 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/80">
-                      {group}
-                    </h2>
-                    {items.map((t) => {
-                      const active = tab === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          aria-current={active ? "page" : undefined}
-                          onClick={() => {
-                            setTab(t.id);
-                            setNavQuery("");
-                          }}
-                          className={`relative mb-px flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] transition-colors duration-150 ${
-                            active
-                              ? "bg-interactive-selected font-medium text-text-normal"
-                              : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-                          }`}
-                        >
-                          {active && <span aria-hidden className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-brand" />}
-                          <span className={active ? "text-text-normal" : "text-text-muted"}>{t.icon}</span>
-                          {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="border-t border-divider p-3">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  window.location.href = "/bug-report";
+      <SettingsLayer
+        label="User Settings"
+        exiting={exiting}
+        onClose={onClose}
+        contentKey={tab}
+        mobileNav={
+          <select
+            value={tab}
+            onChange={(e) => setTab(e.target.value as SettingsTab)}
+            aria-label="Settings section"
+            className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
+          >
+            {TABS.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
+        }
+        sidebar={
+          <>
+            <label className="relative mb-3 block px-2.5">
+              <input
+                value={navQuery}
+                onChange={(e) => setNavQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && navMatches[0]) {
+                    setTab(navMatches[0].id);
+                    setNavQuery("");
+                  }
                 }}
-                className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-              >
-                <IconBug size={17} />
-                Report a bug
-              </button>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] text-status-dnd transition-colors hover:bg-status-dnd/10"
-              >
-                <IconLeave size={17} />
-                Log out
-              </button>
-            </div>
-          </nav>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="flex items-start justify-between gap-4 px-8 pb-4 pt-6">
-              <div className="min-w-0">
-                <select
-                  value={tab}
-                  onChange={(e) => setTab(e.target.value as SettingsTab)}
-                  aria-label="Settings section"
-                  className="w-full rounded-[10px] border border-divider bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:border-brand sm:hidden"
-                >
-                  {TABS.map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
+                placeholder="Search"
+                aria-label="Search settings"
+                className="h-7 w-full rounded-[4px] bg-bg-tertiary px-1.5 pr-7 text-[14px] text-text-normal outline-none placeholder:text-text-muted"
+              />
+              <IconSearch size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted" />
+            </label>
+            {navQuery.trim() && navMatches.length === 0 && (
+              <p className="px-2.5 py-2 text-[14px] text-text-muted">No settings match “{navQuery.trim()}”.</p>
+            )}
+            {NAV_GROUPS.map((group, gi) => {
+              const items = navMatches.filter((t) => t.group === group);
+              if (items.length === 0) return null;
+              return (
+                <div key={group}>
+                  {gi > 0 && <SettingsNavSeparator />}
+                  <SettingsNavHeader>{group === "Account" ? "User Settings" : "App Settings"}</SettingsNavHeader>
+                  {items.map((t) => (
+                    <SettingsNavItem
+                      key={t.id}
+                      active={tab === t.id}
+                      onClick={() => {
+                        setTab(t.id);
+                        setNavQuery("");
+                      }}
+                    >
+                      {t.label}
+                    </SettingsNavItem>
                   ))}
-                </select>
-                <h1 className="hidden text-[22px] font-semibold tracking-[-0.02em] text-text-normal sm:block">
-                  {activeTab?.label ?? "Settings"}
-                </h1>
-                {activeTab?.description && (
-                  <p className="mt-1 hidden text-[14px] text-text-muted sm:block">{activeTab.description}</p>
-                )}
-              </div>
-              <div className="flex shrink-0 flex-col items-center gap-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Close settings"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-                >
-                  <IconClose size={17} />
-                </button>
-                <span aria-hidden className="hidden text-[10.5px] font-medium uppercase tracking-wide text-text-muted/70 sm:block">Esc</span>
-              </div>
-            </header>
-
-            <div key={tab} className="view-enter flex-1 overflow-y-auto px-8 pb-8 pt-2">
-              <div className="max-w-[720px]">
+                </div>
+              );
+            })}
+            <SettingsNavSeparator />
+            <SettingsNavItem
+              onClick={() => {
+                onClose();
+                window.location.href = "/bug-report";
+              }}
+            >
+              Report a Bug
+            </SettingsNavItem>
+            <SettingsNavSeparator />
+            <SettingsNavItem onClick={() => void signOut()} trailing={<IconLeave size={16} />}>
+              Log Out
+            </SettingsNavItem>
+            <SettingsNavSeparator />
+            <p className="px-2.5 py-2 text-[12px] leading-4 text-text-muted">Disband {process.env.NEXT_PUBLIC_APP_VERSION ?? ""}</p>
+          </>
+        }
+      >
+        <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">{activeTab?.label ?? "Settings"}</h2>
               {tab === "profile" && (
                 <div className="pb-20">
                   {profile && (
@@ -1105,7 +1040,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           className={`flex items-center gap-3.5 border-b border-divider px-5 py-3.5 transition-opacity duration-200 last:border-b-0 ${badge.visible ? "" : "opacity-60"}`}
                         >
                           <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px]"
                             style={{ backgroundColor: `${badge.accent}24`, color: badge.accent }}
                             aria-hidden
                           >
@@ -1211,7 +1146,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             value={newEmail}
                             onChange={(e) => setNewEmail(e.target.value)}
                             placeholder="New email address"
-                            className="w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-brand"
+                            className="w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
                           />
                           <div className="flex items-center gap-2">
                             <button
@@ -1390,7 +1325,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
                         aria-label="Zoom out"
                       >
                         −
@@ -1408,7 +1343,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
                         aria-label="Zoom in"
                       >
                         +
@@ -1548,7 +1483,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         <button
                           type="button"
                           onClick={() => void enableDesktopNotifications()}
-                          className="inline-flex h-9 items-center gap-2 rounded-[10px] bg-brand px-3.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                          className="inline-flex h-9 items-center gap-2 rounded-[3px] bg-brand px-3.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-hover"
                         >
                           <IconBell size={15} />
                           Allow
@@ -1932,7 +1867,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 value={spotifyPasteCode}
                                 onChange={(e) => setSpotifyPasteCode(e.target.value)}
                                 placeholder="paste the code"
-                                className="w-64 rounded-md border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-brand"
+                                className="w-64 rounded-md border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
                               />
                               <button
                                 type="button"
@@ -1975,7 +1910,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           }}
                           placeholder="your last.fm username"
                           disabled={!lastfmConfigured()}
-                          className="w-56 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:border-brand disabled:opacity-50"
+                          className="w-56 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:border-[#00a8fc] disabled:opacity-50"
                         />
                         <button
                           type="button"
@@ -2029,11 +1964,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </SettingsLayer>
 
       {cropSource && (
         <AvatarCropModal

@@ -128,7 +128,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
           <button type="button" onClick={() => void create()} disabled={creating} className={`${btn.secondary} mb-3 w-full`}>
             <IconPlus size={15} /> {creating ? "Creating…" : "Create role"}
           </button>
-          <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary p-1.5">
+          <ul className="overflow-hidden rounded-lg bg-bg-secondary p-1.5">
             {sorted.map((r, i) => {
               const active = selected?.id === r.id;
               const dropTarget = overId === r.id && dragId && dragId !== r.id;
@@ -195,7 +195,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
         {/* Editor */}
         <div className="min-w-0">
           {!selected ? (
-            <div className="rounded-2xl border border-divider bg-bg-secondary">
+            <div className="rounded-lg bg-bg-secondary">
               <EmptyState icon={<IconShield size={20} />} title="No roles yet" body="Create one to start grouping members." />
             </div>
           ) : (
@@ -381,7 +381,7 @@ function DisplayTab({
                 }
               }}
               aria-label="Role name"
-              className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 text-[14px] text-text-normal outline-none focus:border-brand"
+              className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
             />
           </div>
         </SettingsSection>
@@ -554,7 +554,7 @@ function RoleIconCard({
                     if (e.key === "Enter") commitEmoji();
                   }}
                   placeholder="🛡️"
-                  className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-center text-[20px] outline-none placeholder:opacity-40 focus:border-brand"
+                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-center text-[20px] outline-none placeholder:opacity-40 focus:border-[#00a8fc]"
                 />
               </div>
               <span className="mt-6 text-[12.5px] text-text-muted">or</span>

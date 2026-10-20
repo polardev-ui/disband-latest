@@ -16,22 +16,24 @@ import { pushEscapeHandler, handleTopmostEscape } from "@/lib/overlay";
 
 export { SettingsSection, SettingRow, Toggle, settingsInputClass, Hint } from "@/components/discord/settings/SettingsPrimitives";
 
+// Classic buttons: 38px, 3px radius, solid fills; "ghost" is the underlined
+// text link used for Cancel/Back in modal footers.
 const BTN_BASE =
-  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[10px] px-4 text-[13.5px] font-semibold transition-[background-color,color,opacity,transform] duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60";
+  "inline-flex h-[38px] min-w-[60px] shrink-0 items-center justify-center gap-2 rounded-[3px] px-4 text-[14px] font-medium leading-4 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a8fc]";
 
 export const btn = {
   primary: `${BTN_BASE} bg-brand text-white hover:bg-brand-hover`,
-  secondary: `${BTN_BASE} border border-divider bg-transparent text-text-normal hover:bg-interactive-hover`,
-  danger: `${BTN_BASE} bg-status-dnd text-white hover:opacity-90`,
-  dangerGhost: `${BTN_BASE} border border-status-dnd/40 text-status-dnd hover:bg-status-dnd/10`,
-  ghost: `${BTN_BASE} px-3 text-text-muted hover:bg-interactive-hover hover:text-text-normal`,
+  secondary: `${BTN_BASE} bg-button-secondary text-white hover:bg-button-secondary-hover`,
+  danger: `${BTN_BASE} bg-button-danger text-white hover:bg-button-danger-hover`,
+  dangerGhost: `${BTN_BASE} border border-button-danger text-white hover:bg-button-danger`,
+  ghost: `${BTN_BASE} bg-transparent text-white hover:underline`,
 };
 
 export const iconBtn =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-text-muted transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal transition-colors duration-150 hover:bg-interactive-hover hover:text-interactive-active disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60";
 
 export const iconBtnDanger =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-text-muted transition-colors duration-150 hover:bg-status-dnd/12 hover:text-status-dnd disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-dnd/50";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal transition-colors duration-150 hover:bg-status-dnd/12 hover:text-status-dnd disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-dnd/50";
 
 /** Stagger list rows in by index, capped so long lists don't crawl. */
 export function enterStyle(index: number): React.CSSProperties {
@@ -41,7 +43,7 @@ export function enterStyle(index: number): React.CSSProperties {
 export function FieldLabel({ children, htmlFor, aside }: { children: ReactNode; htmlFor?: string; aside?: ReactNode }) {
   return (
     <div className="mb-1.5 flex items-baseline justify-between gap-3">
-      <label htmlFor={htmlFor} className="text-[12.5px] font-medium text-text-muted">
+      <label htmlFor={htmlFor} className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
         {children}
       </label>
       {aside && <span className="text-[12px] tabular-nums text-text-muted/80">{aside}</span>}
@@ -68,7 +70,7 @@ export function SearchField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={label}
-        className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-brand"
+        className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-[#00a8fc]"
       />
     </label>
   );
@@ -272,7 +274,7 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-[10px] border border-divider bg-bg-accent p-0.5">
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-[3px] border border-transparent bg-bg-tertiary p-0.5">
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -344,16 +346,16 @@ export function ConfirmDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
-      <button type="button" aria-label="Cancel" className="overlay-fade absolute inset-0 bg-overlay-scrim" onClick={onCancel} />
+      <button type="button" aria-label="Cancel" className="overlay-fade absolute inset-0 bg-overlay-scrim-strong" onClick={onCancel} />
       <div
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="modal-pop relative w-full max-w-[420px] overflow-hidden rounded-[18px] border border-divider bg-overlay-panel shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]"
+        className="classic-modal relative w-full max-w-[440px] overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]"
       >
         <div className="px-6 pb-5 pt-6">
-          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-text-normal">{title}</h2>
-          {body && <div className="mt-2 text-[13.5px] leading-relaxed text-text-muted">{body}</div>}
+          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{title}</h2>
+          {body && <div className="mt-2 text-[16px] leading-5 text-text-normal">{body}</div>}
           {input && (
             <div className="mt-4">
               <FieldLabel htmlFor="confirm-input">{input.label}</FieldLabel>
@@ -364,7 +366,7 @@ export function ConfirmDialog({
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={input.placeholder}
                 maxLength={200}
-                className="w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-brand"
+                className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
               />
             </div>
           )}
@@ -378,12 +380,12 @@ export function ConfirmDialog({
                 autoFocus
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
-                className="w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] text-text-normal outline-none focus:border-status-dnd"
+                className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal outline-none focus:border-status-dnd"
               />
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-divider bg-bg-secondary px-6 py-3.5">
+        <div className="flex justify-end gap-2 bg-bg-secondary p-4">
           <button type="button" onClick={onCancel} className={btn.ghost}>
             Cancel
           </button>

@@ -13,9 +13,11 @@ import { playVoiceSoundboardSound } from "@/lib/voice-mixer";
 
 interface SoundboardProps {
   compact?: boolean;
+  /** "panel": the wide button in the Voice Connected card; opens up and to the right. */
+  variant?: "round" | "panel";
 }
 
-export function Soundboard({ compact = false }: SoundboardProps) {
+export function Soundboard({ compact = false, variant = "round" }: SoundboardProps) {
   const { servers, activeServer, user } = useApp();
   const userId = user?.id ?? null;
 
@@ -133,7 +135,21 @@ export function Soundboard({ compact = false }: SoundboardProps) {
     servers.find((server) => server.id === effectiveServerId)?.name ?? "Server sounds";
 
   return (
-    <div ref={rootRef} className="relative inline-block">
+    <div ref={rootRef} className={variant === "panel" ? "relative flex flex-1" : "relative inline-block"}>
+      {variant === "panel" ? (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label="Open soundboard"
+          className={`flex h-8 flex-1 items-center justify-center rounded-[4px] transition-colors ${
+            open ? "bg-interactive-selected text-interactive-active" : "bg-bg-secondary text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
+          }`}
+        >
+          <IconMusic size={18} />
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -153,12 +169,15 @@ export function Soundboard({ compact = false }: SoundboardProps) {
           </span>
         )}
       </button>
+      )}
 
       {visible && (
         <div
           role="dialog"
           aria-label="Soundboard"
-          className={`absolute bottom-12 right-0 z-[150] w-[340px] max-w-[calc(100vw-2rem)] origin-bottom-right rounded-2xl border border-divider bg-bg-secondary p-3 shadow-2xl transition duration-200 ease-out ${
+          className={`absolute z-[150] w-[340px] max-w-[calc(100vw-2rem)] rounded-lg bg-bg-secondary p-3 shadow-[0_8px_16px_rgba(0,0,0,0.24)] transition duration-150 ease-out ${
+            variant === "panel" ? "bottom-10 left-0 origin-bottom-left" : "bottom-12 right-0 origin-bottom-right"
+          } ${
             open ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2 pointer-events-none"
           }`}
         >

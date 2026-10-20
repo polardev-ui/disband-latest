@@ -54,7 +54,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   return (
     <div
       ref={panelRef}
-      className="mx-2 mb-2 flex h-[54px] shrink-0 items-center gap-0.5 rounded-[14px] border border-divider bg-bg-accent px-1.5"
+      className="flex h-[52px] shrink-0 items-center gap-0.5 bg-bg-secondary-alt px-2"
       onContextMenu={onContextMenu}
     >
       {popupMounted && (
@@ -69,77 +69,82 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
       <button
         type="button"
         onClick={handleAvatarClick}
-        title="View your profile"
-        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] p-1 text-left transition-colors duration-100 hover:bg-interactive-hover"
+        aria-label="Open your profile"
+        className="-ml-0.5 mr-1 flex min-w-[120px] flex-1 items-center gap-2 rounded-[4px] py-1 pl-0.5 pr-2 text-left transition-colors duration-100 hover:bg-interactive-selected"
       >
         <div className="relative shrink-0">
           <Avatar profile={profile ?? { display_name: name }} size="sm" />
           <span
-            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-bg-accent ${STATUS_BG[status]}`}
+            className={`absolute -bottom-0.5 -right-0.5 h-[14px] w-[14px] rounded-full border-[3px] border-bg-secondary-alt ${STATUS_BG[status]}`}
           />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-semibold leading-tight text-text-normal">{name}</p>
+          <div className="flex items-center gap-1">
+            <p className="truncate text-[14px] font-semibold leading-[18px] text-header-primary">{name}</p>
             <SubscriptionBadge plan={plan} tooltip />
           </div>
-          {liveNote ? (
-            <span
-              title="Click to edit your status"
-              className="mt-0.5 flex max-w-full items-center gap-1"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <span className="truncate text-[11px] leading-tight text-text-normal">{liveNote}</span>
-            </span>
-          ) : (
-            <p className="truncate text-xs leading-tight text-text-muted">{statusLabelText}</p>
-          )}
+          <p className="truncate text-[12px] leading-[13px] text-header-secondary">
+            {liveNote ?? statusLabelText}
+          </p>
         </div>
       </button>
 
-      {/* Mic/deafen controls always visible — work anywhere via app state */}
-      <Tooltip label={micMuted ? "Unmute" : "Mute"} side="top">
-        <button
-          type="button"
-          aria-pressed={micMuted}
-          onClick={() => setMicMuted(!micMuted)}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors duration-100 ${
-            micMuted ? "bg-status-dnd/10 text-status-dnd hover:bg-status-dnd/15" : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          }`}
-        >
-          {micMuted ? <IconMicOff size={18} /> : <IconMic size={18} />}
-        </button>
-      </Tooltip>
-
-      <Tooltip label={deafened ? "Undeafen" : "Deafen"} side="top">
-        <button
-          type="button"
-          aria-pressed={deafened}
-          onClick={() => {
-            const next = !deafened;
-            setDeafened(next);
-            if (next) setMicMuted(true);
-          }}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-colors duration-100 ${
-            deafened ? "bg-status-dnd/10 text-status-dnd hover:bg-status-dnd/15" : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-          }`}
-        >
-          {deafened ? <IconHeadphonesOff size={18} /> : <IconHeadphones size={18} />}
-        </button>
-      </Tooltip>
-
-
-      <Tooltip label="Settings" side="top">
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-text-muted transition-colors duration-100 hover:bg-interactive-hover hover:text-text-normal"
-        >
-          <IconSettings size={18} />
-        </button>
-      </Tooltip>
+      <PanelIconButton
+        label={micMuted ? "Unmute" : "Mute"}
+        pressed={micMuted}
+        danger={micMuted}
+        onClick={() => setMicMuted(!micMuted)}
+      >
+        {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
+      </PanelIconButton>
+      <PanelIconButton
+        label={deafened ? "Undeafen" : "Deafen"}
+        pressed={deafened}
+        danger={deafened}
+        onClick={() => {
+          const next = !deafened;
+          setDeafened(next);
+          if (next) setMicMuted(true);
+        }}
+      >
+        {deafened ? <IconHeadphonesOff size={20} /> : <IconHeadphones size={20} />}
+      </PanelIconButton>
+      <PanelIconButton label="User Settings" onClick={onOpenSettings} spin>
+        <IconSettings size={20} />
+      </PanelIconButton>
     </div>
+  );
+}
+
+/** The 32px icon buttons on the user panel. Muted/deafened turn red. */
+function PanelIconButton({
+  label,
+  pressed,
+  danger,
+  spin,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed?: boolean;
+  danger?: boolean;
+  spin?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip label={label} side="top">
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={pressed}
+        onClick={onClick}
+        className={`group flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] transition-colors duration-100 hover:bg-interactive-selected ${
+          danger ? "text-status-dnd" : "text-interactive-normal hover:text-interactive-active"
+        }`}
+      >
+        <span className={spin ? "transition-transform duration-500 group-hover:rotate-90" : undefined}>{children}</span>
+      </button>
+    </Tooltip>
   );
 }
