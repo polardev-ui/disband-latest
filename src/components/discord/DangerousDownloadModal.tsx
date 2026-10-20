@@ -43,7 +43,7 @@ export function DangerousDownloadModal({
           alt=""
           aria-hidden
           draggable={false}
-          className="pointer-events-none absolute left-1/2 top-0 z-0 w-[165px] -translate-x-1/2 -translate-y-[92%] select-none sm:w-[215px]"
+          className="pointer-events-none absolute left-1/2 top-0 z-0 w-[165px] -translate-x-1/2 -translate-y-[89%] select-none sm:w-[215px]"
         />
         <div
           role="dialog"
