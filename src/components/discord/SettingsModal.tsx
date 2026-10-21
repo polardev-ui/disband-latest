@@ -653,22 +653,27 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       return;
     }
     setSaving(true);
-    const err = await updateProfile({
-      display_name: displayName.trim(),
-      username: sanitizedUsername,
-      bio: bio.trim() || null,
-      pronouns: pronouns.trim() || null,
-      status_note: statusNote.trim() || null,
-      status_expires_at: statusNote.trim() ? expiresAtForDuration(statusDuration) : null,
-      accent_color: useDefaultAccent ? null : accent1,
-      accent_color_2: useDefaultAccent ? null : accent2,
-      status,
-    });
-    setSaving(false);
-    if (err) setError(err);
-    else {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+    try {
+      const err = await updateProfile({
+        display_name: displayName.trim(),
+        username: sanitizedUsername,
+        bio: bio.trim() || null,
+        pronouns: pronouns.trim() || null,
+        status_note: statusNote.trim() || null,
+        status_expires_at: statusNote.trim() ? expiresAtForDuration(statusDuration) : null,
+        accent_color: useDefaultAccent ? null : accent1,
+        accent_color_2: useDefaultAccent ? null : accent2,
+        status,
+      });
+      if (err) setError(err);
+      else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save your profile.");
+    } finally {
+      setSaving(false);
     }
   }
 
