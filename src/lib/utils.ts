@@ -15,7 +15,7 @@ export function formatMessageTime(iso: string): string {
 /** Usernames named by @mentions, in first-seen order, without duplicates. */
 export function parseMentionTokens(content: string): string[] {
   const tokens = new Set<string>();
-  const re = /@([a-zA-Z0-9_]{2,32})/g;
+  const re = /(?<![\w.])@([a-zA-Z0-9_]{1,32})/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
     const token = m[1].toLowerCase();
@@ -48,7 +48,7 @@ export function mentionsEveryone(content: string): boolean {
 export function mentionsUsername(content: string, username: string | null | undefined): boolean {
   if (!username) return false;
   const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`@${escaped}\\b`, "i").test(content);
+  return new RegExp(`(?<![\\w.])@${escaped}\\b`, "i").test(content);
 }
 
 export function isValidMentionToken(

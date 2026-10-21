@@ -70,7 +70,7 @@ enum ChatMarkdown {
 
     private static func applyMentions(to ns: NSMutableAttributedString, baseFont: UIFont, tint: UIColor) {
         let text = ns.string
-        guard let regex = try? NSRegularExpression(pattern: "(?<![\\w.])@[a-zA-Z0-9_]{2,32}") else { return }
+        guard let regex = try? NSRegularExpression(pattern: "(?<![\\w.])@[a-zA-Z0-9_]{1,32}") else { return }
         for match in regex.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length)) {
             if ns.attribute(.link, at: match.range.location, effectiveRange: nil) != nil { continue }
             let username = String((text as NSString).substring(with: match.range).dropFirst())
