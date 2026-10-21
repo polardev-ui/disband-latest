@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, type ReactNode } from "react";
+import { Fragment, memo, useMemo, type ReactNode } from "react";
 import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
 import { readAttachments } from "@/lib/message-attachments";
 import {
@@ -22,6 +22,7 @@ import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { summarizeReactions, type ReactionSummary } from "@/lib/messages";
+import { useProfiles } from "@/lib/profile-store";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconVerified } from "@/components/icons";
 import { BotTag } from "@/components/ui/BotTag";
@@ -467,6 +468,19 @@ function ChatMessageImpl({
   const body = normalizeMessageContent(message.content);
   const reactionSummaries: ReactionSummary[] = summarizeReactions(reactions, message.id, currentUserId);
 
+  // A mention must stay a mention even when the mentioned person is outside
+  // the member window the chat happens to have loaded (large spaces only keep
+  // a page of the roster) or has just had a role removed. The message carries
+  // the resolved user ids, so load those profiles and merge them into the
+  // render list for this row.
+  const mentionedProfiles = useProfiles(message.mentions ?? []);
+  const renderMembers = useMemo(() => {
+    if (mentionedProfiles.size === 0) return members;
+    const known = new Set(members.map((m) => m.id));
+    const extra = [...mentionedProfiles.values()].filter((p) => !known.has(p.id));
+    return extra.length ? [...members, ...extra] : members;
+  }, [members, mentionedProfiles]);
+
   function openAuthor() {
     if (author && onAuthorClick) onAuthorClick(author);
   }
@@ -501,6 +515,7 @@ function ChatMessageImpl({
       authorColor={authorColor}
       isOwn={isOwn}
       createdAt={message.created_at}
+      onLoad={onContentResize}
     />
   ) : message.attachment_url ? (
     <MessageAttachment
@@ -525,7 +540,7 @@ function ChatMessageImpl({
   const embedBlock = (
     <MessageEmbeds
       embeds={message.embeds}
-      members={members}
+      members={renderMembers}
       onMentionClick={onAuthorClick}
       channels={channels}
       onChannelClick={onChannelClick}
@@ -616,7 +631,7 @@ function ChatMessageImpl({
             )}
             {embedBody && (
               <div className={embedTitle ? "mt-1" : ""}>
-                <MessageBody content={embedBody} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+                <MessageBody content={embedBody} members={renderMembers} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
               </div>
             )}
           </div>
@@ -651,7 +666,7 @@ function ChatMessageImpl({
         {replyBlock}
         {body && (
           <div className="min-w-0 text-[16px] leading-[22px] text-text-normal">
-            <MessageBody content={body} members={members} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+            <MessageBody content={body} members={renderMembers} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
             {editedTag}
           </div>
         )}
@@ -722,7 +737,7 @@ function ChatMessageImpl({
       </h3>
       {body && (
         <div className="min-w-0 text-[16px] leading-[22px] text-text-normal">
-          <MessageBody content={body} members={members} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+          <MessageBody content={body} members={renderMembers} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
           {editedTag}
         </div>
       )}

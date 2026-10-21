@@ -24,7 +24,7 @@
 
 export interface Rule {
   id: string;
-  category: "csam" | "bestiality" | "gore" | "solicitation";
+  category: "csam" | "bestiality" | "gore" | "solicitation" | "hate" | "threat";
   severity: "block" | "review";
   suspend: boolean;
   pattern: RegExp;
@@ -108,6 +108,29 @@ export const RULES: Rule[] = [
     note: "Mentions gore; could be discussion or a rule being quoted.",
   },
 
+  // ----- Hate speech: never auto-actioned by the global sweep -----
+  // A reported message containing a direct slur is actioned by the hourly
+  // report pass (one-day messaging suspension). The five-hour text sweep only
+  // opens a review flag, because the same word appears in reports, quotes and
+  // rules text. `demoted` below keeps those contexts out of the report action.
+  {
+    id: "hate.nword",
+    category: "hate",
+    severity: "review",
+    suspend: false,
+    // Hard R and the common -a / -uh variants, including basic leetspeak.
+    pattern: /\b(?:n[i1!|l][gq]{2}(?:e|3)r|n[i1!|l][gq]{2}(?:a|@|4|u)(?:h)?)\b/i,
+    note: "Racial slur; report context and direct use decide the penalty.",
+  },
+  {
+    id: "threat.direct_violence",
+    category: "threat",
+    severity: "review",
+    suspend: false,
+    pattern: /\b(?:i(?:'m| am| will|'ll| gonna| going to)|we(?:'re| are| will|'ll| gonna| going to))\s+(?:kill|murder|stab|shoot|beat|hurt|rape)\s+(?:you|u|him|her|them|yourself)\b/i,
+    note: "A direct threat of violence; context decides, but reports are actioned.",
+  },
+
   // ----- Weaker signals: reviewed by a person, never auto-actioned -----
   {
     id: "csam.loli",
@@ -130,6 +153,8 @@ export const RULES: Rule[] = [
 export interface RuleHit {
   rule: Rule;
   excerpt: string;
+  /** The wording looks like a report/quote/rules discussion, not an attack. */
+  demoted?: boolean;
 }
 
 // Only the start of a field is examined. Every rule uses a bounded window, but
@@ -167,9 +192,13 @@ export function scanText(input: string | null | undefined): RuleHit[] {
   // drop, so it still reaches a human.
   const discussing = DISCUSSING.test(body);
   const graded = discussing
-    ? hits.map((h) => (h.rule.severity === "block"
-        ? { ...h, rule: { ...h.rule, severity: "review" as const } }
-        : h))
+    ? hits.map((h) => ({
+        ...h,
+        demoted: true,
+        rule: h.rule.severity === "block"
+          ? { ...h.rule, severity: "review" as const }
+          : h.rule,
+      }))
     : hits;
 
   // Blocks before reviews, so the strongest verdict decides the action.

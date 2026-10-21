@@ -67,6 +67,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
   const [buySecret, setBuySecret] = useState<string | null>(null);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
+  const buyingRef = useRef(false);
 
   const [unitCents, setUnitCents] = useState(CATALYST_PRICE_CENTS);
 
@@ -125,7 +126,9 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
   }, [server, busy, withdrawCatalyst]);
 
   const startBuy = useCallback(async () => {
-    if (!server || buying) return;
+    // A fast double-click can race the `buying` render and create two sessions.
+    if (!server || buyingRef.current) return;
+    buyingRef.current = true;
     setBuying(true);
     setBuyError(null);
     try {
@@ -143,9 +146,10 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
     } catch {
       setBuyError("Couldn't start checkout.");
     } finally {
+      buyingRef.current = false;
       setBuying(false);
     }
-  }, [server, buying, qty]);
+  }, [server, qty]);
 
   const handleBuySuccess = useCallback(() => {
     setBuySecret(null);

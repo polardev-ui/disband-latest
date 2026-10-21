@@ -75,6 +75,10 @@ export function useGroupCallManager(
   incomingRingGroupRef.current = incomingRing?.groupId ?? null;
   const [error, setError] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  // Group calls can have several peers. At least one connected peer means
+  // media is actually flowing; `joined` alone only means we acquired a mic.
+  const [connectedPeerIds, setConnectedPeerIds] = useState<Set<string>>(new Set());
+  const connectedSoundRef = useRef(false);
 
   useVoiceMinutes(phase === "active");
 
@@ -171,6 +175,8 @@ export function useGroupCallManager(
     setJoined(false);
     setRingingIds(new Set());
     setConnectedAt(null);
+    setConnectedPeerIds(new Set());
+    connectedSoundRef.current = false;
     stopRingtone();
   }, []);
 
@@ -260,6 +266,19 @@ export function useGroupCallManager(
         }
       };
       pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          setConnectedPeerIds((prev) => {
+            if (prev.has(remoteId)) return prev;
+            const next = new Set(prev);
+            next.add(remoteId);
+            return next;
+          });
+          setConnectedAt((prev) => prev ?? Date.now());
+          if (!connectedSoundRef.current) {
+            connectedSoundRef.current = true;
+            playCallConnected();
+          }
+        }
         if (pc.connectionState === "failed") {
           const attempts = (iceRetryRef.current.get(remoteId) ?? 0) + 1;
           iceRetryRef.current.set(remoteId, attempts);
@@ -284,6 +303,12 @@ export function useGroupCallManager(
           pc.close();
           peersRef.current.delete(remoteId);
           iceRetryRef.current.delete(remoteId);
+          setConnectedPeerIds((prev) => {
+            if (!prev.has(remoteId)) return prev;
+            const next = new Set(prev);
+            next.delete(remoteId);
+            return next;
+          });
           const dropTimer = offerTimersRef.current.get(remoteId);
           if (dropTimer !== undefined) {
             window.clearTimeout(dropTimer);
@@ -374,6 +399,12 @@ export function useGroupCallManager(
         }
         setRemoteStreams((prev) => {
           const next = new Map(prev);
+          next.delete(payload.from);
+          return next;
+        });
+        setConnectedPeerIds((prev) => {
+          if (!prev.has(payload.from)) return prev;
+          const next = new Set(prev);
           next.delete(payload.from);
           return next;
         });
@@ -512,9 +543,6 @@ export function useGroupCallManager(
         await subscribeSignal(gid);
         const supabase = getSupabaseClient();
         await supabase.from("group_call_presence").upsert({ group_id: gid, user_id: userId });
-        setJoined(true);
-        setConnectedAt(Date.now());
-        playCallConnected();
         const { data: rows } = await supabase.from("group_call_presence").select("*").eq("group_id", gid);
         const profileMap = await fetchProfilesByIds(supabase, (rows ?? []).map((r) => r.user_id));
         const loaded: GroupCallParticipant[] = (rows ?? []).map((r) => ({
@@ -523,7 +551,14 @@ export function useGroupCallManager(
           profile: profileMap.get(r.user_id),
         }));
         setPresence(loaded);
-        await connectToExisting(loaded.filter((p) => p.user_id !== userId));
+        setJoined(true);
+        const others = loaded.filter((p) => p.user_id !== userId);
+        if (others.length === 0) {
+          setConnectedAt(Date.now());
+          connectedSoundRef.current = true;
+          playCallConnected();
+        }
+        await connectToExisting(others);
       } catch (e) {
         setError((e as Error).message);
         await cleanup();
@@ -798,6 +833,7 @@ export function useGroupCallManager(
     presence,
     inCallUserIds,
     ringingIds,
+    connectedPeerIds,
     localStream,
     remoteStreams,
 

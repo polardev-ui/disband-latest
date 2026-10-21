@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
-import { IconVerified, IconPlus, IconCompass } from "@/components/icons";
+import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
+import { IconPlus, IconCompass } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -109,6 +110,7 @@ export function resolveFolderDrop(folders: ServerFolder[], dragId: string, targe
 
 interface ServerListProps {
   servers: Server[];
+  catalystCounts?: Record<string, number>;
   activeServerId: string | null;
   viewMode: ViewMode;
   dmUnreads: DmRailUnread[];
@@ -160,6 +162,7 @@ const serverCountCache = new Map<string, ServerCounts>();
 
 function ServerButton({
   server,
+  catalystCount,
   active,
   hasUnread,
   draggable,
@@ -173,6 +176,7 @@ function ServerButton({
   onDragEnd,
 }: {
   server: Server;
+  catalystCount?: number;
   active: boolean;
   hasUnread: boolean;
   draggable: boolean;
@@ -223,6 +227,7 @@ function ServerButton({
       );
   };
   const icon = safeImageUrl(server.icon_url);
+  const badgeKind = serverBadgeFor({ verified: server.verified, partner: server.partner, catalystCount });
   return (
     <div
       onDragOver={onDragOver}
@@ -240,7 +245,14 @@ function ServerButton({
         side="right"
         label={
           <span className="flex flex-col items-start gap-0.5">
-            <span>{server.name}</span>
+            <span className="flex items-center gap-1">
+              {badgeKind && (
+                <span title={SERVER_BADGE_LABEL[badgeKind]} className="inline-flex">
+                  <ServerBadge kind={badgeKind} size={14} />
+                </span>
+              )}
+              <span>{server.name}</span>
+            </span>
             {counts && (
               <span className="text-xs font-medium">
                 <span className="text-text-muted">{counts.total.toLocaleString()} member{counts.total === 1 ? "" : "s"}</span>
@@ -277,9 +289,12 @@ function ServerButton({
               {serverInitials(server.name)}
             </span>
           )}
-          {server.verified && (
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-bg-tertiary">
-              <IconVerified size={14} className="shrink-0 text-[#00a8fc]" />
+          {badgeKind && (
+            <span
+              title={SERVER_BADGE_LABEL[badgeKind]}
+              className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-bg-tertiary"
+            >
+              <ServerBadge kind={badgeKind} size={14} />
             </span>
           )}
         </button>
@@ -303,6 +318,7 @@ function RailSeparator() {
 
 export function ServerList({
   servers,
+  catalystCounts,
   activeServerId,
   viewMode,
   dmUnreads,
@@ -397,6 +413,7 @@ export function ServerList({
       <ServerButton
         key={server.id}
         server={server}
+        catalystCount={catalystCounts?.[server.id] ?? 0}
         active={active}
         hasUnread={hasUnread}
         draggable
@@ -432,7 +449,7 @@ export function ServerList({
           >
             <span data-active={homeActive || undefined} className="rail-icon rail-icon-fill h-12 w-12">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" draggable={false} className="h-7 w-7 object-contain brightness-0 invert" />
+              <img src="/logo.png" alt="" draggable={false} className="h-8 w-8 object-contain brightness-0 invert" />
             </span>
           </button>
         </Tooltip>

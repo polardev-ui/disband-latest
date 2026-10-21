@@ -228,7 +228,6 @@ const MessageRow = memo(function MessageRow({
             composer?.focus();
           }, 10);
         } : undefined}
-        onDoubleClick={canReact ? () => onToggleReaction(message.id, "👍") : undefined}
         onOpenActivity={onOpenActivity}
         onContentResize={onContentResize}
       />
@@ -345,6 +344,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   // if they were reading slightly scrolled up (where the follow gate below
   // would otherwise hold their position).
   const followOnceRef = useRef(false);
+  const sentSuppressUntilRef = useRef(0);
   const tickingRef = useRef(false);
   const prevFirstIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
@@ -367,6 +367,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const readScopeRef = useRef<ReadCursorScope | null>(null);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  // Lags one render behind messagesRef so a scope change can still save the
+  // previous conversation's read cursor before its messages are replaced.
+  const prevMessagesRef = useRef(messages);
 
   // Latest-parent-handler ref. DiscordApp passes several inline arrows
   // (`onToggleReaction={(id, emoji) => ...}`), which get a new identity on every
@@ -562,14 +565,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     if (
       prevScope
       && (!nextScope || prevScope.kind !== nextScope.kind || prevScope.id !== nextScope.id)
-      && messagesRef.current.length > 0
+      && prevMessagesRef.current.length > 0
     ) {
-      setReadCursor(prevScope, messagesRef.current);
+      setReadCursor(prevScope, prevMessagesRef.current);
     }
 
     readScopeRef.current = nextScope;
     setNewMessagesDividerId(null);
   }, [readCursorScope?.kind, readCursorScope?.id]);
+
+  // Keep prevMessagesRef one render behind messagesRef.
+  useEffect(() => {
+    prevMessagesRef.current = messages;
+  });
 
   // Recomputed on every message change with no once-per-scope lock: the
   // stored read cursor can advance while the scope is active (e.g. new
@@ -578,6 +586,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   // divider is keyed by message id.
   useEffect(() => {
     if (!readCursorScope || messages.length === 0) return;
+    // After the user sends, suppress the divider for a short window so the
+    // optimistic row and its server echo cannot reintroduce a "NEW" line
+    // between the user's own consecutive messages.
+    if (Date.now() < sentSuppressUntilRef.current) {
+      setNewMessagesDividerId(null);
+      return;
+    }
     setNewMessagesDividerId(findNewMessagesDividerId(messages, readCursorScope));
   }, [messages, readCursorScope]);
 
@@ -697,7 +712,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       // way down. Unforced, scrollToBottom gives up once the content has
       // grown more than NEAR_BOTTOM_PX, which is why a channel with images
       // used to land just short of the end.
-      scrollToBottom("auto", pinToBottomRef.current);
+      scrollToBottom("auto", pinToBottomRef.current || stickToBottomRef.current);
     });
     ro.observe(target);
     return () => ro.disconnect();
@@ -773,8 +788,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     // messages: only clear once the send actually lands.
     const err = await onSend(content, options);
     if (!err) {
+      sentSuppressUntilRef.current = Date.now() + 60000;
       setNewMessagesDividerId(null);
-      if (readCursorScope) markChatReadNow(readCursorScope);
+      if (readCursorScope) {
+        setReadCursor(readCursorScope, messagesRef.current);
+        markChatReadNow(readCursorScope);
+      }
     }
     return err;
   }
@@ -880,13 +899,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       />
 
       <div className="shrink-0">
-        <TypingIndicator
-          typers={typers}
-          members={renderMembers}
-          groupContext={messageContext === "channel" || messageContext === "group"}
-        />
         {composerLockedReason ? (
-          <div className="mx-4 mb-6 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
+          <div className="mx-4 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
             <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
           </div>
@@ -913,6 +927,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           allowGifts={messageContext !== "notes"}
         />
         )}
+        <TypingIndicator
+          typers={typers}
+          members={renderMembers}
+          groupContext={messageContext === "channel" || messageContext === "group"}
+        />
       </div>
       <ActivityModal activityId={activeActivityId} onClose={() => setActiveActivityId(null)} />
     </main>

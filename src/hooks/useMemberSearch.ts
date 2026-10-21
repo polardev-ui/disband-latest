@@ -38,17 +38,17 @@ export function useMemberSearch(
     }
     let live = true;
     // Short debounce: one request per pause in typing, not per keystroke.
+    // The RPC resolves the whole roster in one round trip instead of making
+    // PostgREST filter a 5,000-row join, which is what made the @ list crawl
+    // in large spaces.
     const t = window.setTimeout(async () => {
-      // PostgREST filter values: escape the pattern characters and commas.
-      const safe = q.replace(/[%_\\,()]/g, (c) => `\\${c}`);
-      const { data, error } = await getSupabaseClient()
-        .from("server_members")
-        .select("profile:profiles!server_members_user_id_fkey!inner(*)")
-        .eq("server_id", serverId)
-        .or(`username.ilike.%${safe}%,display_name.ilike.%${safe}%`, { referencedTable: "profiles" })
-        .limit(25);
+      const { data, error } = await getSupabaseClient().rpc("search_server_members", {
+        p_server_id: serverId,
+        p_query: q,
+        p_limit: 25,
+      });
       if (!live || error) return;
-      const rows = ((data ?? []) as unknown as { profile: Profile | null }[])
+      const rows = ((data ?? []) as { profile: Profile | null }[])
         .map((r) => r.profile)
         .filter((p): p is Profile => !!p);
       cache.set(key, rows);

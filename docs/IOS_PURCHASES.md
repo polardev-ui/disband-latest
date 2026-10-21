@@ -91,8 +91,26 @@ supabase secrets set \
 `APPSTORE_ENVIRONMENT` is only a ledger fallback for a transaction that omits
 its environment. Verification tries production first, then sandbox, and
 subscription status uses the environment Apple returned. Sandbox purchases
-must work against the live backend during App Review; they are recorded as
-`Sandbox` so they can be distinguished from paid production transactions.
+must work against the live backend during App Review, but they are free, so
+production only turns one into an entitlement for an account explicitly listed
+in `apple_sandbox_testers`. Every other sandbox receipt is refused and the
+StoreKit transaction is finished without granting anything.
+
+Add the App Review account (or a developer QA account) before submitting:
+
+```sql
+insert into public.apple_sandbox_testers (user_id, note, expires_at)
+values (
+  '<account uuid>',
+  'App Review 1.13.1',
+  '2027-01-31T00:00:00Z'
+);
+```
+
+Use a short expiry for App Review and delete the row afterwards. The table is
+service-role only; there is no client UI for it. A development Supabase
+project can use `APPSTORE_ALLOW_SANDBOX=true` instead, so every sandbox
+purchase is accepted locally. Never set that on production.
 
 ### 4. Deploy
 

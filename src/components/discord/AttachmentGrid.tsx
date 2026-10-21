@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { safeImageUrl } from "@/lib/safe-url";
 import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
+import { MessageAttachment as MessageAttachmentView } from "./MessageAttachment";
+import type { AttachmentType } from "@/lib/messages";
 import type { Profile } from "@/lib/supabase/types";
 
 export interface MessageAttachment {
@@ -56,12 +58,14 @@ export function AttachmentGrid({
   authorColor,
   isOwn,
   createdAt,
+  onLoad,
 }: {
   attachments: MessageAttachment[];
   author?: Profile;
   authorColor?: string | null;
   isOwn?: boolean;
   createdAt?: string;
+  onLoad?: () => void;
 }) {
   const images = attachments.filter((a) => isImage(a));
   const others = attachments.filter((a) => !isImage(a));
@@ -133,7 +137,7 @@ export function AttachmentGrid({
             {tile(images[2], 2, "min-h-0 flex-1")}
           </div>
         </div>
-        {others.length > 0 && <OtherFiles others={others} />}
+        {others.length > 0 && <OtherFiles others={others} onLoad={onLoad} />}
         {lightbox}
       </div>
     );
@@ -163,7 +167,7 @@ export function AttachmentGrid({
         </div>
       )}
 
-      {others.length > 0 && <OtherFiles others={others} />}
+      {others.length > 0 && <OtherFiles others={others} onLoad={onLoad} />}
       {lightbox}
     </div>
   );
@@ -213,21 +217,18 @@ function GridTile({ attachment, index, className, onOpen }: {
   );
 }
 
-function OtherFiles({ others }: { others: MessageAttachment[] }) {  return (
+function OtherFiles({ others, onLoad }: { others: MessageAttachment[]; onLoad?: () => void }) {
+  return (
     <>
       {others.map((a, i) => (
-        <a
+        <MessageAttachmentView
           key={a.url + i}
-          href={safeImageUrl(a.url) ?? undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 flex items-center gap-2 rounded-md bg-bg-accent px-3 py-2 text-sm text-text-normal hover:bg-interactive-hover"
-        >
-          <span className="truncate">{a.name ?? "Attachment"}</span>
-          {a.size ? (
-            <span className="ml-auto shrink-0 text-xs text-text-muted">{formatSize(a.size)}</span>
-          ) : null}
-        </a>
+          url={a.url}
+          type={(a.type as AttachmentType | null | undefined) ?? null}
+          name={a.name}
+          size={a.size}
+          onLoad={onLoad}
+        />
       ))}
     </>
   );
@@ -239,8 +240,4 @@ function isImage(a: MessageAttachment): boolean {
   return /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(a.url);
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+

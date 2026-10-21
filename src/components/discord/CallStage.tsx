@@ -149,8 +149,8 @@ function useAnyLiveVideo(streams: (MediaStream | null | undefined)[]): boolean {
 function RingRipple() {
   return (
     <>
-      <span className="call-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-white/80" />
-      <span className="call-ripple-delayed pointer-events-none absolute inset-0 rounded-full border-2 border-white/80" />
+      <span className="call-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-header-primary/80" />
+      <span className="call-ripple-delayed pointer-events-none absolute inset-0 rounded-full border-2 border-header-primary/80" />
     </>
   );
 }
@@ -185,8 +185,8 @@ function MemberCircle({ member }: { member: StageMember }) {
   return (
     <div className="flex w-28 flex-col items-center gap-2">
       <MemberAvatar member={member} speaking={speaking} />
-      <span className="max-w-full truncate text-sm font-medium text-white/80">{member.label}</span>
-      {member.ringing && <span className="-mt-1.5 text-[11px] text-white/40">Ringing…</span>}
+      <span className="max-w-full truncate text-sm font-medium text-header-primary">{member.label}</span>
+      {member.ringing && <span className="-mt-1.5 text-[11px] text-header-secondary">Ringing…</span>}
     </div>
   );
 }

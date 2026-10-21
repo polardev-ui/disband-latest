@@ -6,6 +6,8 @@ export interface CallIndicatorState {
   kind: CallIndicatorKind | null;
   label: string;
   startedAt: number | null;
+  /** True only once media can actually flow (or nobody else is connected). */
+  connected?: boolean;
   hangup: (() => void) | null;
   focus: (() => void) | null;
   /** Second line under "Voice Connected": the space or "Direct call". */

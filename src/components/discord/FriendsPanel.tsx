@@ -261,7 +261,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={tab === "online" ? "Search online friends" : "Search friends"}
-              className="w-full rounded-[4px] border border-transparent bg-bg-tertiary py-[5px] pl-2 pr-10 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:ring-0 focus:ring-brand/20"
+              className="w-full rounded-[4px] border border-transparent bg-bg-tertiary py-[5px] pl-9 pr-10 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:ring-0 focus:ring-brand/20"
             />
             {query && (
               <button
@@ -555,7 +555,7 @@ export function ActiveNowPanel() {
         ) : (
           <ul className="space-y-2 pt-1">
             {active.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 rounded-lg border border-bg-secondary bg-bg-secondary px-4 py-3 transition-colors hover:bg-interactive-hover">
+              <li key={f.id} className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 transition-colors hover:bg-interactive-hover">
                 <StatusAvatar profile={f} presence={presenceMap} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-text-normal">

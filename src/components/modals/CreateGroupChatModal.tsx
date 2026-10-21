@@ -17,8 +17,11 @@ interface CreateGroupChatModalProps {
   onClose: () => void;
 }
 
-/** Group DMs hold ten people: you and nine friends. */
+/** Group DMs hold ten people: you and nine friends. Discord still needs a
+ *  real group, so creation starts at three friends (four people including
+ *  you). Once the group exists the owner can remove people freely. */
 const MAX_PICKS = 9;
+const MIN_PICKS = 3;
 
 /*
  Discord's "Select Friends" popout: a count line, a search box that also
@@ -46,6 +49,7 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
   if (!mounted) return null;
 
   const left = MAX_PICKS - selected.length;
+  const need = Math.max(0, MIN_PICKS - selected.length);
   const q = search.trim().toLowerCase();
   const shown = friends.filter((f) => !q || `${displayName(f)} ${f.username ?? ""}`.toLowerCase().includes(q));
   const picked = selected.map((id) => friends.find((f) => f.id === id)).filter((f): f is Profile => !!f);
@@ -58,7 +62,10 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (selected.length === 0) return;
+    if (selected.length < MIN_PICKS) {
+      setError(`Select at least ${MIN_PICKS} friends to start a group DM.`);
+      return;
+    }
     setLoading(true);
     setError(null);
     // No name given: use the members' names, as Discord does.
@@ -88,7 +95,11 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
             <div>
               <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Select Friends</h2>
               <p className="mt-1 text-[12px] text-header-secondary">
-                {left === 0 ? "This group has a 10 member limit." : `You can add ${left} more friend${left === 1 ? "" : "s"}.`}
+                {left === 0
+                  ? "This group has a 10 member limit."
+                  : need > 0
+                    ? `Add ${need} more friend${need === 1 ? "" : "s"} to start — 10 members max.`
+                    : `You can add ${left} more friend${left === 1 ? "" : "s"}.`}
               </p>
             </div>
             <button type="button" aria-label="Close" onClick={onClose} className="text-interactive-normal hover:text-interactive-active">
@@ -186,10 +197,10 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
           {error && <p className="mb-3 text-[14px] text-status-dnd">{error}</p>}
           <button
             type="submit"
-            disabled={loading || selected.length === 0}
+            disabled={loading || selected.length < MIN_PICKS}
             className="h-[38px] w-full rounded-[3px] bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Creating…" : "Create Group DM"}
+            {loading ? "Creating…" : selected.length < MIN_PICKS ? `Select ${need} more friend${need === 1 ? "" : "s"}` : "Create Group DM"}
           </button>
         </div>
       </form>

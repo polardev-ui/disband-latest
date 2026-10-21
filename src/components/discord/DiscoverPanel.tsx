@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CommunityBackdrop } from "@/components/ui/CommunityBackdrop";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { IconCheck, IconClose, IconSearch, IconCompass, IconSparkle, IconVerified } from "@/components/icons";
+import { IconCheck, IconClose, IconSearch, IconCompass, IconSparkle } from "@/components/icons";
+import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { Tooltip } from "./Tooltip";
@@ -21,6 +22,7 @@ export interface DiscoverableServer {
   online_count?: number;
   created_at: string;
   verified?: boolean;
+  partner?: boolean;
 }
 
 export type DiscoverTab = "popular" | "new";
@@ -309,6 +311,7 @@ export function DiscoverView({
           <ul key={tab} className="view-enter grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
             {visible.map((server) => {
               const banner = safeImageUrl(server.banner_url);
+              const badgeKind = serverBadgeFor({ verified: server.verified, partner: server.partner });
               return (
                 <li
                   key={server.id}
@@ -326,9 +329,9 @@ export function DiscoverView({
 
                   <div className="flex min-w-0 flex-1 flex-col px-4 pb-4 pt-9">
                     <p className="flex min-w-0 items-center gap-1 text-[16px] font-semibold leading-5 text-header-primary">
-                      {server.verified && (
-                        <Tooltip label="Verified" side="top">
-                          <IconVerified size={16} className="shrink-0 text-[#23a55a]" />
+                      {badgeKind && (
+                        <Tooltip label={SERVER_BADGE_LABEL[badgeKind]} side="top">
+                          <ServerBadge kind={badgeKind} size={16} />
                         </Tooltip>
                       )}
                       <span className="truncate">{server.name}</span>

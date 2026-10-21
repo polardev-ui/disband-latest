@@ -30,6 +30,7 @@ import {
   getSpotifyConnection,
   hasLegacySpotifyConnection,
   importLegacySpotifyConnection,
+  fetchLastfmSession,
   lastfmConfigured,
   readLastfmPending,
   readLastfmUsername,
@@ -98,7 +99,7 @@ interface SettingsModalProps {
 const TABS = [
   { id: "account" as const, label: "My Account", group: "Account", icon: <IconLock size={17} />,
     description: "Email, password, two-factor and account controls.",
-    keywords: "email password 2fa mfa two-factor authenticator security delete export data" },
+    keywords: "email password 2fa mfa two-factor authenticator passkey security delete export data" },
   { id: "profile" as const, label: "Profiles", group: "Account", icon: <IconUser size={17} />,
     description: "How you appear to everyone on Disband.",
     keywords: "avatar banner name display username bio about pronouns status note accent colour badges" },
@@ -302,6 +303,24 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [lastfmUser, setLastfmUser] = useState("");
   const [lastfmSaved, setLastfmSaved] = useState(false);
   const [lastfmNote, setLastfmNote] = useState<string | null>(null);
+  const lastfmPollRef = useRef<number | null>(null);
+
+  const stopLastfmPoll = useCallback(() => {
+    if (lastfmPollRef.current !== null) {
+      window.clearInterval(lastfmPollRef.current);
+      lastfmPollRef.current = null;
+    }
+  }, []);
+
+  const adoptLastfm = useCallback((name: string) => {
+    if (!user?.id || !name) return;
+    writeLastfmUsername(user.id, name);
+    clearLastfmPending();
+    setLastfmUser(name);
+    setLastfmSaved(true);
+    setLastfmNote(`Connected as ${name} — what you play on SoundCloud now shows on your profile.`);
+    stopLastfmPoll();
+  }, [user?.id, stopLastfmPoll]);
 
   useEffect(() => {
     if (!open) return;
@@ -332,6 +351,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       } else {
         if (pending) clearLastfmPending();
         setLastfmUser(saved ?? "");
+        // A username already in storage is a completed connection. Without
+        // this, reopening Settings showed the value but left the card
+        // "Not connected" and kept the Connect button visible.
+        setLastfmSaved(Boolean(saved));
       }
     } else {
       setLastfmUser("");
@@ -353,18 +376,18 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
       } else if (data?.type === "disband:lastfm-connected") {
         const name = typeof data.username === "string" ? data.username : "";
-        if (name && user?.id) {
-          writeLastfmUsername(user.id, name);
-          clearLastfmPending();
-          setLastfmUser(name);
-          setLastfmSaved(true);
-          setLastfmNote(`Connected as ${name} — what you play on SoundCloud now shows on your profile.`);
-        }
+        if (name && user?.id) adoptLastfm(name);
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [open, user?.id]);
+  }, [open, user?.id, adoptLastfm]);
+
+  // Don't keep polling Last.fm after the settings modal closes or unmounts.
+  useEffect(() => {
+    if (!open) stopLastfmPoll();
+    return () => stopLastfmPoll();
+  }, [open, stopLastfmPoll]);
 
   function handleSpotifyConnect() {
     if (!spotifyClientId()) {
@@ -468,10 +491,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       return;
     }
     setLastfmNote(null);
+    stopLastfmPoll();
     try {
       const res = await apiFetch("/api/music/lastfm/token", { method: "POST" });
-      const data = (await res.json().catch(() => null)) as { authUrl?: string; error?: string } | null;
-      if (!res.ok || !data?.authUrl) {
+      const data = (await res.json().catch(() => null)) as {
+        authUrl?: string;
+        token?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.authUrl || !data.token) {
         setLastfmNote(
           res.status === 503
             ? "One-click connect isn't set up on the server yet — paste your username below instead."
@@ -480,10 +508,56 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         return;
       }
       const popup = window.open(data.authUrl, "disband-lastfm-connect", "width=520,height=760,popup=yes");
-      if (!popup) setLastfmNote("Allow pop-ups for this site, then try again.");
+      if (!popup) {
+        setLastfmNote("Allow pop-ups for this site, then try again.");
+        return;
+      }
+
+      // Some Last.fm API apps have no callback URL registered, so approving
+      // ends on Last.fm's own "you can close this window" page and our
+      // callback never runs. Poll the short-lived token here instead; when
+      // the popup closes, check once more immediately.
+      const token = data.token;
+      const deadline = Date.now() + 5 * 60_000;
+      const check = async (): Promise<boolean> => {
+        try {
+          const name = await fetchLastfmSession(token);
+          adoptLastfm(name);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      lastfmPollRef.current = window.setInterval(() => {
+        if (Date.now() > deadline) {
+          stopLastfmPoll();
+          setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+          return;
+        }
+        if (popup.closed) {
+          stopLastfmPoll();
+          void check().then((ok) => {
+            if (!ok) {
+              setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+            }
+          });
+          return;
+        }
+        void check();
+      }, 4_000);
     } catch {
       setLastfmNote("Couldn't start the Last.fm connection. Try again in a moment.");
     }
+  }
+
+  function handleLastfmDisconnect() {
+    if (!user?.id) return;
+    stopLastfmPoll();
+    writeLastfmUsername(user.id, null);
+    clearLastfmPending();
+    setLastfmUser("");
+    setLastfmSaved(false);
+    setLastfmNote("Last.fm disconnected. Your profile will stop showing its tracks.");
   }
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
@@ -1654,7 +1728,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       {[
                         { id: "spotify", label: "Spotify", icon: <SpotifyMark />, onClick: handleSpotifyConnect, done: spotifyConnected },
                         { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
-                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: () => void handleLastfmConnect(), done: false },
+                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
                         { id: "ytmusic", label: "YouTube Music (via Last.fm)", icon: <YoutubeMusicMark />, onClick: () => document.getElementById("conn-ytmusic")?.scrollIntoView({ behavior: "smooth", block: "center" }), done: false },
                       ].map((svc) => (
                         <Tooltip key={svc.id} label={svc.done ? `${svc.label} · connected` : svc.label} side="top">
@@ -1709,7 +1783,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   >
                     <p className="text-[14px] text-header-secondary">
                       {spotifyConnected
-                        ? "Checked every 20 seconds while Disband is open. On desktop it keeps working from the tray."
+                        ? "Checked every few seconds while Disband is open. On desktop it keeps working from the tray."
                         : "Read-only: we only see the track you're playing. Nothing else is touched."}
                     </p>
                     {spotifyNote && <p className="mt-2 text-[14px] text-header-secondary">{spotifyNote}</p>}
@@ -1749,14 +1823,24 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     status={lastfmSaved && lastfmUser.trim() ? `Connected as ${lastfmUser.trim()}` : "Also brings in SoundCloud plays"}
                     connected={lastfmSaved && !!lastfmUser.trim()}
                     actions={
-                      <button
-                        type="button"
-                        onClick={() => void handleLastfmConnect()}
-                        disabled={!lastfmConfigured()}
-                        className="h-8 rounded-[3px] bg-[#d51007] px-4 text-[14px] font-medium text-white hover:brightness-95 disabled:opacity-40"
-                      >
-                        Connect
-                      </button>
+                      lastfmSaved && lastfmUser.trim() ? (
+                        <button
+                          type="button"
+                          onClick={handleLastfmDisconnect}
+                          className="h-8 rounded-[3px] px-3 text-[14px] font-medium text-white hover:underline"
+                        >
+                          Disconnect
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleLastfmConnect()}
+                          disabled={!lastfmConfigured()}
+                          className="h-8 rounded-[3px] bg-[#d51007] px-4 text-[14px] font-medium text-white hover:brightness-95 disabled:opacity-40"
+                        >
+                          Connect
+                        </button>
+                      )
                     }
                   >
                     <p className="text-[14px] text-header-secondary">

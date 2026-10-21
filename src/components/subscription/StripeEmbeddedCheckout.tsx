@@ -6,7 +6,7 @@ import {
   PaymentElement,
   useCheckoutElements,
 } from "@stripe/react-stripe-js/checkout";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { StripeCheckoutElementsValue } from "@stripe/react-stripe-js/checkout";
 
 interface StripeEmbeddedCheckoutProps {
@@ -145,16 +145,22 @@ function CheckoutForm({ onSuccess }: { onSuccess: () => void }) {
   const checkoutState = useCheckoutElements();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // A ref, not just `loading`: a fast double-click can deliver both clicks
+  // before React applies the disabled state and re-renders the button.
+  const submitting = useRef(false);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (submitting.current) return;
       if (checkoutState.type !== "success") return;
       if (!checkoutState.checkout.canConfirm) return;
+      submitting.current = true;
       setLoading(true);
       setError(null);
       const result = await checkoutState.checkout.confirm();
       if (result.type === "error") {
+        submitting.current = false;
         setError(result.error.message);
         setLoading(false);
       } else {

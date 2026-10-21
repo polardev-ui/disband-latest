@@ -65,7 +65,12 @@ export function CallIndicator() {
   const hangup = state.hangup ?? (voice ? () => void session.disconnect() : null);
   const camera = state.camera ?? (voice ? { on: session.cameraEnabled, toggle: () => void session.toggleCamera() } : null);
   const screen = state.screen ?? (voice ? { on: session.screenEnabled, toggle: () => void session.toggleScreenShare() } : null);
-  const elapsed = state.startedAt ? formatElapsed(Math.max(0, now - state.startedAt)) : null;
+  // Presence is written before the peer connection is ready, so the card must
+  // wait for a connected peer (or for nobody else to be in the channel).
+  const voiceConnected = session.joined &&
+    (session.participants.length <= 1 || session.connectedPeerIds.size > 0);
+  const connected = voice ? voiceConnected : !!state.connected;
+  const elapsed = connected && state.startedAt ? formatElapsed(Math.max(0, now - state.startedAt)) : null;
 
   return (
     <div className="rtc-enter shrink-0 border-b border-divider/60 bg-bg-secondary-alt px-2 pb-2 pt-2">
@@ -74,7 +79,7 @@ export function CallIndicator() {
           <div className="flex items-center gap-1">
             <SignalIcon quality={quality} />
             <span className="truncate text-[14px] font-semibold leading-[18px]" style={{ color: quality === "bad" ? "var(--status-dnd)" : "var(--status-online)" }}>
-              {state.startedAt ? "Voice Connected" : "Connecting…"}
+              {connected ? "Voice Connected" : "Connecting…"}
             </span>
           </div>
           <button

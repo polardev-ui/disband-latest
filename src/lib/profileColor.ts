@@ -89,6 +89,42 @@ function mixHex(a: string, b: string, weightB = 0.5): string {
   return `#${[r, g, bl].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
+function rgba(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(17, 18, 20, ${alpha})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+/**
+ * Profile themes are always painted on a dark base. Mixing the chosen colour
+ * into that base keeps white text readable even when someone picks white,
+ * yellow or another very light colour for their profile. A plain overlay
+ * would leave those profiles washed out and the text unreadable.
+ */
+const PROFILE_CARD_BASE = "#111214";
+
+function profileTone(color: string, weight: number): string {
+  let w = weight;
+  let tone = mixHex(PROFILE_CARD_BASE, color, w);
+  while (w > 0.18 && relativeLuminance(tone) > 0.1) {
+    w -= 0.025;
+    tone = mixHex(PROFILE_CARD_BASE, color, w);
+  }
+  return tone;
+}
+
+export interface ProfileCardTheme {
+  /** Background and text tokens for a profile painted in the user's colours. */
+  style: CSSProperties;
+  /** Tints a banner image so the theme runs from the banner into the card. */
+  bannerTint: string;
+  /** The surface colour behind the overlapping avatar and status dot. */
+  avatarRing: string;
+  /** Solid accent for the profile's primary action. */
+  primary: string;
+  primaryText: "#ffffff" | "#060607";
+}
+
 function lightenHex(hex: string, targetLuminance = 0.55): string {
   const rgb = hexToRgb(hex);
   if (!rgb) return hex;
@@ -118,6 +154,62 @@ export function getProfilePanelStyle(profile: ProfileAccentFields): CSSPropertie
 export function getProfilePanelMutedColor(profile: ProfileAccentFields): string {
   const sample = getAccentSampleColor(profile);
   return contrastTextColor(sample) === "#ffffff" ? "rgba(255,255,255,0.72)" : "rgba(6,6,7,0.62)";
+}
+
+/**
+ * The Discord-style profile theme: the two accent colours are mixed into a
+ * dark base, then blended through a soft diagonal gradient with a gentle
+ * colour bloom at each end. The result is matte rather than glossy, and it
+ * works for a single colour too — the same colour gets a top-to-bottom depth
+ * instead of a flat fill.
+ *
+ * Returns null for profiles that still use the default style so those keep
+ * the app's ordinary card surface.
+ */
+export function getProfileCardTheme(profile: ProfileAccentFields): ProfileCardTheme | null {
+  if (!usesCustomAccent(profile)) return null;
+
+  const c1 = sanitizeHex(profile.accent_color);
+  const c2 = sanitizeHex(profile.accent_color_2);
+  const top = profileTone(c1, 0.38);
+  const bottom = profileTone(c2, 0.34);
+  const middle = mixHex(top, bottom, 0.52);
+
+  return {
+    style: {
+      background: [
+        `radial-gradient(120% 85% at 8% 0%, ${rgba(c1, 0.12)} 0%, transparent 58%)`,
+        `radial-gradient(115% 95% at 94% 104%, ${rgba(c2, 0.14)} 0%, transparent 62%)`,
+        `linear-gradient(160deg, ${top} 0%, ${middle} 54%, ${bottom} 100%)`,
+      ].join(", "),
+      color: "#ffffff",
+      textShadow: "0 1px 2px rgba(0,0,0,0.28)",
+      // Scope the profile's text and surface tokens to the themed card. This
+      // keeps the card readable in the light theme too, where the ordinary
+      // header and muted tokens are dark.
+      "--header-primary": "#ffffff",
+      "--header-secondary": "#e3e5e8",
+      "--text-normal": "#f2f3f5",
+      "--text-muted": "#cdd1d6",
+      "--text-link": "#9ecbff",
+      "--interactive-normal": "#d7dade",
+      "--interactive-active": "#ffffff",
+      "--channels-default": "#cdd1d6",
+      "--divider": "rgba(255,255,255,0.16)",
+      "--bg-floating": "rgba(17,18,20,0.82)",
+      "--overlay-surface": "rgba(17,18,20,0.86)",
+      "--overlay-panel": "rgba(17,18,20,0.86)",
+      "--bg-accent": "rgba(17,18,20,0.28)",
+      "--bg-tertiary": "rgba(17,18,20,0.32)",
+      "--bg-secondary": "rgba(17,18,20,0.24)",
+      "--interactive-hover": "rgba(255,255,255,0.08)",
+      "--interactive-selected": "rgba(255,255,255,0.12)",
+    } as CSSProperties,
+    bannerTint: `linear-gradient(180deg, ${rgba(c1, 0.48)} 0%, ${rgba(c1, 0.2)} 38%, ${rgba(top, 0.36)} 72%, ${top} 100%)`,
+    avatarRing: top,
+    primary: c1,
+    primaryText: contrastTextColor(c1),
+  };
 }
 
 export function getAccentBackground(profile: ProfileAccentFields): string {

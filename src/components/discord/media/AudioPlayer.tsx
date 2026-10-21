@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Download, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { saveMedia } from "@/lib/media-actions";
 import {
   PLAYBACK_RATES,
@@ -165,7 +165,7 @@ export function AudioPlayer({
   return (
     <div
       ref={cardRef}
-      className="mt-1 w-full max-w-md rounded-[14px] border border-divider bg-bg-secondary p-3"
+      className="mt-1 w-full max-w-[520px] rounded-[4px] border border-divider bg-bg-secondary p-3"
       onKeyDown={(e) => {
         // Space/K play-pause when focus is inside the card but not on a control.
         if ((e.key === " " || e.key === "k") && e.target === e.currentTarget) {
@@ -181,14 +181,17 @@ export function AudioPlayer({
           onClick={toggle}
           disabled={!src || failed}
           aria-label={isPlaying ? "Pause" : "Play"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-text-normal text-bg-primary transition-[transform,opacity] hover:opacity-90 active:scale-95 disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-[transform,opacity] hover:bg-brand-hover active:scale-95 disabled:opacity-40"
         >
           {isPlaying ? <Pause size={17} fill="currentColor" strokeWidth={0} /> : <Play size={17} fill="currentColor" strokeWidth={0} className="translate-x-px" />}
         </button>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="truncate text-[14px] font-medium text-text-normal" title={fileName}>{fileName}</p>
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-[15px] font-medium text-text-link" title={fileName}>
+              <Music size={14} className="shrink-0 text-text-link" />
+              <span className="truncate">{fileName}</span>
+            </p>
             <span className="shrink-0 text-[12px] tabular-nums text-text-muted">
               {isPlaying || current > 0 ? `${formatTime(current)} / ` : ""}
               {formatTime(duration)}
@@ -208,14 +211,14 @@ export function AudioPlayer({
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-1 pl-[52px]">
+      <div className="mt-2 flex items-center gap-1 pl-[48px]">
         {sizeLabel && <span className="mr-auto text-[12px] text-text-muted">{sizeLabel}</span>}
         {!sizeLabel && <span className="mr-auto" />}
         <button
           type="button"
           onClick={cycleRate}
           title="Playback speed"
-          className="h-7 min-w-[38px] rounded-md px-1.5 text-[12px] font-medium tabular-nums text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          className="h-7 min-w-[38px] rounded-[3px] px-1.5 text-[12px] font-medium tabular-nums text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           {rate}×
         </button>
@@ -224,7 +227,7 @@ export function AudioPlayer({
           onClick={() => el && (el.muted = !el.muted)}
           aria-label={muted ? "Unmute" : "Mute"}
           title={muted ? "Unmute" : "Mute"}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          className="flex h-7 w-7 items-center justify-center rounded-[3px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
         </button>
@@ -234,7 +237,7 @@ export function AudioPlayer({
             onClick={() => void saveMedia(src, fileName)}
             aria-label="Download"
             title="Download"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+            className="flex h-7 w-7 items-center justify-center rounded-[3px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
           >
             <Download size={15} />
           </button>

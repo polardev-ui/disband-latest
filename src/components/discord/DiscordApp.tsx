@@ -42,11 +42,13 @@ import { ReleaseModal } from "@/components/modals/ReleaseModal";
 const ServerSettingsModal = dynamic(() => import("@/components/modals/ServerSettingsModal").then(m => m.ServerSettingsModal));
 const ChannelSettingsModal = dynamic(() => import("@/components/modals/ChannelSettingsModal").then(m => m.ChannelSettingsModal));
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
+import { ReportModal, type ReportTarget } from "@/components/modals/ReportModal";
 import {
   IconCopy,
   IconClose,
   IconLeave,
   IconSettings,
+  IconShield,
   IconTrash,
   IconFriends,
   IconGroup,
@@ -63,6 +65,7 @@ import {
   IconFolderPlus,
   IconFolderMinus,
   IconTimer,
+  IconVerified,
 } from "@/components/icons";
 const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
 const ShopModal = dynamic(() => import("@/components/shop/ShopModal").then(m => m.ShopModal));
@@ -139,6 +142,7 @@ export function DiscordApp() {
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<ChatMessageData | null>(null);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const [showDmProfile, setShowDmProfile] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -177,6 +181,20 @@ export function DiscordApp() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    // Payment-failure emails (and the lapsed-theme notice) link straight to
+    // Settings → Subscription, where "Manage billing" opens the Stripe portal
+    // and lets the member replace the declined card.
+    if (params.get("settings") === "subscriptions") {
+      setSettingsInitialTab("subscriptions");
+      setSettingsOpen(true);
+      params.delete("settings");
+      const query = params.toString();
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+      );
+    }
     if (params.get("redirect_status") === "succeeded") {
       setCheckoutSuccess(true);
       window.history.replaceState({}, "", window.location.pathname);
@@ -478,7 +496,8 @@ export function DiscordApp() {
   // loaded roster, which on big spaces holds only part of the members.
   const profileServerMember = fetchedProfileMember ?? loadedProfileMember;
   const profileCanManageRoles =
-    app.viewMode === "space" && (isServerOwner || app.serverPermissions.manage_roles)
+    app.viewMode === "space" &&
+    (isServerOwner || (app.serverPermissions.manage_roles && app.serverPermissions.manage_server))
     // The server refuses role edits on the owner, so don't offer them.
     && profileTarget?.id !== app.activeServer?.owner_id;
 
@@ -521,6 +540,27 @@ export function DiscordApp() {
     [app],
   );
 
+  const setSpaceBadge = useCallback(
+    async (serverId: string, patch: Partial<Pick<Server, "partner" | "verified">>) => {
+      try {
+        const res = await apiFetch("/api/admin/space-badges", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serverId, ...patch }),
+        });
+        if (!res.ok) {
+          const json = (await res.json().catch(() => null)) as { error?: string } | null;
+          window.alert(json?.error ?? "Could not update the space badge.");
+          return;
+        }
+        await app.refreshAll();
+      } catch {
+        window.alert("Could not reach the server. Try again.");
+      }
+    },
+    [app],
+  );
+
   const handleServerContext = useCallback(
     (server: Server, x: number, y: number) => {
       const isOwner = server.owner_id === app.user?.id;
@@ -529,6 +569,22 @@ export function DiscordApp() {
         app.serverListState.some((s) => s.server_id === server.id && s.folder_id === f.id),
       );
       const items: ContextMenuItem[] = [
+        ...(app.profile?.show_owner_badge
+          ? [
+              {
+                id: "partner-badge",
+                label: server.partner ? "Remove Partner Badge" : "Mark as Partner",
+                icon: <IconStar size={16} />,
+                onClick: () => void setSpaceBadge(server.id, { partner: !server.partner }),
+              } as ContextMenuItem,
+              {
+                id: "verified-badge",
+                label: server.verified ? "Remove Verified Badge" : "Mark as Verified",
+                icon: <IconVerified size={16} />,
+                onClick: () => void setSpaceBadge(server.id, { verified: !server.verified }),
+              } as ContextMenuItem,
+            ]
+          : []),
         {
           id: "settings",
           label: "Space Settings",
@@ -616,7 +672,7 @@ export function DiscordApp() {
       ];
       openMenu(x, y, items);
     },
-    [app, openMenu, subPlan],
+    [app, openMenu, subPlan, setSpaceBadge],
   );
 
   const handleFolderContext = useCallback(
@@ -945,6 +1001,21 @@ export function DiscordApp() {
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(String(message.display_id ?? message.id)),
         },
+        ...(context !== "notes" && !isOwn && message.author_id
+          ? [
+              {
+                id: "report",
+                label: "Report Message",
+                icon: <IconShield size={16} />,
+                onClick: () =>
+                  setReportTarget({
+                    kind: "message",
+                    surface: context as "channel" | "dm" | "group",
+                    message,
+                  }),
+              } as ContextMenuItem,
+            ]
+          : []),
         ...(isOwn && normalizeMessageContent(message.content)
           ? [
               {
@@ -1350,9 +1421,9 @@ export function DiscordApp() {
   });
 
   const channelMessages = useMemo(
-    () => app.messages.map(mapChatMessage),
+    () => app.messages.filter((m) => m.channel_id === app.activeChannelId).map(mapChatMessage),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [app.messages],
+    [app.messages, app.activeChannelId],
   );
   const dmMessages = useMemo(
     () => app.dmMessages.map(mapChatMessage),
@@ -1419,17 +1490,26 @@ export function DiscordApp() {
     return map;
   }, [activeGroup]);
 
-  const lastCallRef = useRef<{ kind: string; startedAt: number } | null>(null);
+  const lastCallRef = useRef<{ kind: string; startedAt: number | null } | null>(null);
   useEffect(() => {
     const activeKind = dmCallActive ? "dm" : groupCall.joined ? "group" : app.voiceJoinedChannelId ? "voice" : null;
     if (!activeKind) {
       lastCallRef.current = null;
-      setCallIndicatorState({ active: false, kind: null, label: "", startedAt: null, hangup: null, focus: null });
+      setCallIndicatorState({ active: false, kind: null, label: "", startedAt: null, connected: false, hangup: null, focus: null });
       return;
     }
-    if (!lastCallRef.current || lastCallRef.current.kind !== activeKind) {
-      lastCallRef.current = { kind: activeKind, startedAt: Date.now() };
-    }
+    const dmConnected = activeKind === "dm" && call.rtcConnected;
+    const groupConnected = activeKind === "group" &&
+      (groupCall.presence.filter((p) => p.user_id !== app.user?.id).length === 0 ||
+        groupCall.connectedPeerIds.size > 0);
+    // Voice channels decide this inside the indicator from the session.
+    const connected = activeKind === "voice" ? true : activeKind === "dm" ? dmConnected : groupConnected;
+    const previous = lastCallRef.current;
+    const current = !previous || previous.kind !== activeKind
+      ? { kind: activeKind, startedAt: connected ? Date.now() : null }
+      : previous;
+    if (connected && current.startedAt === null) current.startedAt = Date.now();
+    lastCallRef.current = current;
     const label =
       activeKind === "dm" && callBannerPeer
         ? `Call with ${displayName(callBannerPeer)}`
@@ -1455,14 +1535,19 @@ export function DiscordApp() {
       active: true,
       kind: activeKind,
       label,
-      startedAt: lastCallRef.current.startedAt,
+      startedAt: current.startedAt,
+      connected,
       hangup,
       focus,
     });
   }, [
     dmCallActive,
+    call.rtcConnected,
     groupCall.joined,
+    groupCall.presence,
+    groupCall.connectedPeerIds,
     app.voiceJoinedChannelId,
+    app.user?.id,
     callBannerPeer,
     activeGroup,
     activeChannel,
@@ -1477,8 +1562,9 @@ export function DiscordApp() {
           peer={callBannerPeer}
           selfProfile={app.profile}
           title={displayName(callBannerPeer)}
-          subtitle={call.phase === "outgoing" ? "Calling… waiting for answer" : "Connected — you're live"}
+          subtitle={call.phase === "outgoing" ? "Calling… waiting for answer" : "Connecting…"}
           phase={call.phase === "outgoing" ? "outgoing" : "active"}
+          connected={call.rtcConnected}
           localStream={call.localStream}
           remoteStream={call.remoteStream}
           localScreen={call.localScreen}
@@ -1629,6 +1715,7 @@ export function DiscordApp() {
             <div className="relative flex h-full w-[min(86vw,22rem)] shadow-[var(--elevation-high)]">
               <ServerList
                 servers={app.servers}
+                catalystCounts={app.catalystCounts}
                 activeServerId={app.activeServerId}
                 viewMode={app.viewMode}
                 dmUnreads={app.dmUnreads}
@@ -1673,6 +1760,7 @@ export function DiscordApp() {
                 <ChannelList
                   title={app.activeServer?.name ?? "Space"}
                   verified={app.activeServer?.verified}
+                  partner={app.activeServer?.partner}
                   bannerUrl={app.activeServer?.banner_url ?? null}
                   categories={app.categories}
                   channels={visibleChannels}
@@ -1714,6 +1802,7 @@ export function DiscordApp() {
           <div className="relative flex h-full min-h-0 shrink-0">
               <ServerList
                 servers={app.servers}
+                catalystCounts={app.catalystCounts}
                 activeServerId={app.activeServerId}
                 viewMode={app.viewMode}
                 dmUnreads={app.dmUnreads}
@@ -1765,6 +1854,7 @@ export function DiscordApp() {
                   <ChannelList
                     title={app.activeServer?.name ?? "Space"}
                     verified={app.activeServer?.verified}
+                    partner={app.activeServer?.partner}
                     bannerUrl={app.activeServer?.banner_url ?? null}
                     categories={app.categories}
                     channels={app.channels}
@@ -1913,6 +2003,7 @@ export function DiscordApp() {
                 selfId={app.user?.id ?? ""}
                 localStream={groupCall.localStream}
                 remoteStreams={groupCall.remoteStreams}
+                connectedPeerIds={groupCall.connectedPeerIds}
                 remoteScreens={groupCall.remoteScreens}
                 remoteScreenAudio={groupCall.remoteScreenAudio}
                 screenShareEnabled={groupCall.screenShareEnabled}
@@ -2276,6 +2367,11 @@ export function DiscordApp() {
             : undefined
         }
         onOpenSettings={() => setSettingsOpen(true)}
+        onReport={
+          profileTarget && profileTarget.id !== app.user?.id
+            ? () => setReportTarget({ kind: "profile", profile: profileTarget })
+            : undefined
+        }
         isServerMember={!!profileServerMember}
         serverRoles={app.serverRoles}
         canManageRoles={profileCanManageRoles}
@@ -2339,6 +2435,7 @@ export function DiscordApp() {
           timeoutTarget ? app.timeoutMember(timeoutTarget.userId, seconds, reason || undefined) : null
         }
       />
+      <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
       <ReleaseModal />

@@ -6,7 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconLeave, IconLink, IconLock, IconNotes, IconTimer, IconTrash } from "@/components/icons";
+import { IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -33,6 +33,8 @@ const ACTIONS: Record<string, { label: string; icon: ComponentType<{ size?: numb
   "webhook.update": { label: "updated", icon: IconLink, tone: "muted" },
   "webhook.token_reset": { label: "reset the URL for", icon: IconLink, tone: "muted" },
   "webhook.delete": { label: "deleted", icon: IconLink, tone: "danger" },
+  "space.partner_set": { label: "updated the Partner badge on", icon: IconStar, tone: "muted" },
+  "space.verified_set": { label: "updated the Verified badge on", icon: IconVerified, tone: "muted" },
 };
 
 function timeAgo(iso: string): string {
@@ -132,7 +134,14 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
         const target = row.target_id && row.target_type === "user" ? (byId.get(row.target_id) ?? extraProfiles.get(row.target_id) ?? null) : null;
         const reason = typeof row.details?.reason === "string" && row.details.reason ? row.details.reason : null;
         const seconds = typeof row.details?.seconds === "number" ? row.details.seconds : null;
-        const webhookName = typeof row.details?.name === "string" && row.details.name ? row.details.name : "a webhook";
+        const targetName = typeof row.details?.name === "string" && row.details.name ? row.details.name : null;
+        const webhookName = targetName ?? "a webhook";
+        const badgeLabel =
+          row.action === "space.partner_set"
+            ? `${row.details?.enabled === false ? "removed" : "granted"} the Partner badge on`
+            : row.action === "space.verified_set"
+              ? `${row.details?.enabled === false ? "removed" : "granted"} the Verified badge on`
+              : action?.label ?? row.action;
         return (
           <li key={row.id} className="view-enter flex items-start gap-3 border-b border-divider px-4 py-3 last:border-b-0" style={enterStyle(i)}>
             <div className="relative shrink-0">
@@ -148,7 +157,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
             <div className="min-w-0 flex-1">
               <p className="text-[14px] leading-snug text-text-muted">
                 <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? "Someone" : "Disband"}</span>{" "}
-                {action?.label ?? row.action}
+                {badgeLabel}
                 {row.target_type === "user" && (
                   <>
                     {" "}
@@ -159,6 +168,12 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
                   <>
                     {" "}
                     <span className="font-medium text-text-normal">{webhookName}</span>
+                  </>
+                )}
+                {row.target_type === "space" && targetName && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-text-normal">{targetName}</span>
                   </>
                 )}
                 {seconds !== null && <> for {formatDuration(seconds)}</>}

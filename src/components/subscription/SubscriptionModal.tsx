@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useApp } from "@/contexts/AppContext";
@@ -259,6 +259,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("month");
   const [activation, setActivation] = useState<"activating" | "active" | "stalled" | null>(null);
+  const startingCheckout = useRef(false);
   const mobile = isMobileBrowser();
   const isAero = isGranting(subscription?.status) && plan === "aero";
 
@@ -272,12 +273,19 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   }, [activate]);
 
   const handleSubscribe = useCallback(async (tierId: string) => {
+    // Double-clicking the plan card used to open two checkout sessions.
+    if (startingCheckout.current) return;
+    startingCheckout.current = true;
     setCheckoutError(null);
-    const result = await startCheckout(tierId as "aero" | "lite", interval);
-    if (result && (result.startsWith("cs_") || result.startsWith("seti_"))) {
-      setCheckoutClientSecret(result);
-    } else if (result) {
-      setCheckoutError(result);
+    try {
+      const result = await startCheckout(tierId as "aero" | "lite", interval);
+      if (result && (result.startsWith("cs_") || result.startsWith("seti_"))) {
+        setCheckoutClientSecret(result);
+      } else if (result) {
+        setCheckoutError(result);
+      }
+    } finally {
+      startingCheckout.current = false;
     }
   }, [startCheckout, interval]);
 

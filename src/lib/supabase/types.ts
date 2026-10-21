@@ -85,6 +85,7 @@ export interface Server {
   vanity_code?: string | null;
   discoverable?: boolean;
   verified?: boolean;
+  partner?: boolean;
   created_at: string;
 }
 
@@ -736,6 +737,14 @@ export interface Database {
           role: MemberRole;
           profile: Profile;
         })[];
+      };
+      resolve_server_mentions: {
+        Args: { p_server_id: string; p_usernames: string[] };
+        Returns: { user_id: string; username: string }[];
+      };
+      search_server_members: {
+        Args: { p_server_id: string; p_query: string; p_limit?: number };
+        Returns: { profile: Profile }[];
       };
       set_channel_role_permission: {
         Args: {

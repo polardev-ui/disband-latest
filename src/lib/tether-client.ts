@@ -30,6 +30,7 @@ export interface TetherInfo {
   display_name: string | null;
   avatar_url: string | null;
   is_bot: boolean;
+  created_at: string;
 }
 
 /**
@@ -50,6 +51,7 @@ export async function fetchTetherInfo(): Promise<TetherInfo | null> {
       display_name: data.display_name ?? "Tether",
       avatar_url: data.avatar_url ?? null,
       is_bot: true,
+      created_at: data.created_at ?? "",
     };
   } catch {
     return null;
