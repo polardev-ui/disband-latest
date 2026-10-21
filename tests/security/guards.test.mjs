@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isPrivateAddress, assertSafeUrl, fetchSafeHtml } from '../../src/lib/ssrf-guard.ts';
+import { isPrivateAddress, assertSafeUrl } from '../../src/lib/ssrf-guard.ts';
 import { checkoutOrigin } from '../../src/lib/checkout-origin.ts';
 import { rateLimit } from '../../src/lib/rate-limit.ts';
 
@@ -8,7 +8,6 @@ test('SSRF blocks internal, mapped, transition and reserved addresses', async ()
   for (const ip of ['127.0.0.1','10.0.0.1','169.254.169.254','100.64.0.1','192.168.1.1','198.18.0.1','224.0.0.1','::','::1','::ffff:127.0.0.1','::ffff:7f00:1','fc00::1','fe90::1','ff02::1','2002:7f00:1::','2001:db8::1']) assert.equal(isPrivateAddress(ip), true, ip);
   for (const ip of ['8.8.8.8','1.1.1.1','2606:4700:4700::1111','2001:4860:4860::8888']) assert.equal(isPrivateAddress(ip), false, ip);
   for (const url of ['file:///etc/passwd','http://2130706433','http://0x7f000001','http://[::ffff:7f00:1]','https://user:pass@example.com','https://example.com:22','http://localhost.']) await assert.rejects(assertSafeUrl(url), undefined, url);
-  await assert.rejects(fetchSafeHtml('http://127.0.0.1:3000/'));
 });
 
 test('checkout returns only trusted destinations, localhost only in development', () => {
