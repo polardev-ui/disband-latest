@@ -202,6 +202,10 @@ export async function POST(req: Request) {
             periods.periodEnd,
             periods.canceledAt,
           );
+          if (plan === "aero") {
+            const sb = getServiceSupabase();
+            if (sb) await sb.rpc("refresh_user_badges", { p_user: userId });
+          }
         }
         break;
       }
@@ -281,6 +285,10 @@ export async function POST(req: Request) {
               periods.canceledAt,
             );
             await accrueTenure(userId, invoice.id);
+            if (plan === "aero") {
+              const sb = getServiceSupabase();
+              if (sb) await sb.rpc("refresh_user_badges", { p_user: userId });
+            }
           }
         }
         break;
@@ -326,6 +334,10 @@ export async function POST(req: Request) {
             periods.periodEnd,
             periods.canceledAt,
           );
+          if (plan2 === "aero" && userId2) {
+            const sb = getServiceSupabase();
+            if (sb) await sb.rpc("refresh_user_badges", { p_user: userId2 });
+          }
         }
         break;
       }
