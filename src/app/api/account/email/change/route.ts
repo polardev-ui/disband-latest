@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Could not start the email change." }, { status: 500 });
     }
 
-    const confirmUrl = `${PUBLIC_ENV.webAppUrl.replace(/\/$/, "")}/email-change/confirm?token=${tokenOld}&which=old`;
+    const confirmUrl = `${PUBLIC_ENV.webAppUrl.replace(/\/$/, "")}/api/account/email/confirm?token=${tokenOld}&which=old`;
     await sendResendEmail({
       to: currentEmail,
       subject: "Confirm your Disband email change",
