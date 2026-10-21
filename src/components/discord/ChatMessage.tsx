@@ -21,7 +21,7 @@ import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
 import { RoleIcon } from "@/components/ui/RoleIcon";
-import { summarizeReactions, type ReactionSummary } from "@/lib/messages";
+import { summarizeReactions, toReplyAuthor, type ReactionSummary } from "@/lib/messages";
 import { useProfiles } from "@/lib/profile-store";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconVerified } from "@/components/icons";
@@ -380,14 +380,27 @@ function ReplyQuote({
     <span aria-hidden className="absolute -left-[38px] top-[9px] h-[13px] w-[33px] rounded-tl-[6px] border-l-2 border-t-2 border-[#4e5058]" />
   );
 
-  // The target may be outside the loaded window or deleted; buildReplyPreviews
-  // synthesizes a `deleted` placeholder so the reply keeps an honest quote.
+  // The target may be outside the loaded window. Until its preview arrives,
+  // keep the quote's footprint without claiming the message was deleted — a
+  // real delete nulls reply_to_id in the database.
+  if (reply.pending) {
+    return (
+      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Loading original message">
+        {spine}
+        <span className="h-4 w-4 shrink-0 rounded-full bg-button-secondary" />
+        <span className="truncate italic text-text-muted">Original message</span>
+      </div>
+    );
+  }
+
+  // Only set when a target lookup finished without returning a row; the
+  // ordinary outside-the-window case renders the fetched quote instead.
   if (reply.deleted) {
     return (
       <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message unavailable">
         {spine}
         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
-        <span className="truncate italic text-text-muted">Original message was deleted</span>
+        <span className="truncate italic text-text-muted">Original message unavailable</span>
       </div>
     );
   }
@@ -403,7 +416,7 @@ function ReplyQuote({
       className="group/reply relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-left text-[14px] leading-[18px]"
     >
       {spine}
-      <Avatar profile={(reply.author as Profile) ?? { display_name: label }} size="sm" className="!h-4 !w-4 shrink-0 !text-[8px]" />
+      <Avatar profile={reply.author ?? { display_name: label }} size="sm" className="!h-4 !w-4 shrink-0 !text-[8px]" />
       <span className="shrink-0 font-medium text-header-primary opacity-[0.64] group-hover/reply:opacity-100">@{label}</span>
       <span className="truncate text-text-muted group-hover/reply:text-text-normal">{preview.replace(/\s+/g, " ")}</span>
     </button>
@@ -807,21 +820,33 @@ function replyPreviewEqual(a: ReplyPreview | null | undefined, b: ReplyPreview |
     && a.content === b.content
     && a.attachment_type === b.attachment_type
     && !!a.deleted === !!b.deleted
+    && !!a.pending === !!b.pending
     && (a.author?.id ?? null) === (b.author?.id ?? null)
     && (a.author?.username ?? null) === (b.author?.username ?? null)
     && (a.author?.display_name ?? null) === (b.author?.display_name ?? null)
+    && (a.author?.avatar_url ?? null) === (b.author?.avatar_url ?? null)
+    && (a.author?.avatar_crop ?? null) === (b.author?.avatar_crop ?? null)
+    && (a.author?.accent_color ?? null) === (b.author?.accent_color ?? null)
+    && (a.author?.accent_color_2 ?? null) === (b.author?.accent_color_2 ?? null)
+    && (a.author?.equipped_ring_effect ?? null) === (b.author?.equipped_ring_effect ?? null)
   );
 }
 
-export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[] {
+export function buildReplyPreviews<T extends ChatMessageData>(
+  messages: T[],
+  resolved?: ReadonlyMap<string, ReplyPreview>,
+): T[] {
   const map = new Map(messages.map((m) => [m.id, m]));
   return messages.map((m) => {
     if (!m.reply_to_id) return m;
-    const target = map.get(m.reply_to_id);
+    // A row in the loaded window is the freshest source (it reflects edits).
+    // Otherwise use the preview fetched for a target that sits in older,
+    // paginated-away history.
+    const target = map.get(m.reply_to_id) ?? resolved?.get(m.reply_to_id);
     if (!target) {
-      // Target outside the loaded window (paginated or trimmed away) or
-      // deleted: synthesize a placeholder so the reply keeps its quote.
-      // Callers that already resolved a richer preview keep it.
+      // The preview fetch is still in flight. Keep the quote's footprint but
+      // don't call it deleted: reply_to_id is only non-null while the target
+      // exists.
       if (m.reply_to) return m;
       return {
         ...m,
@@ -830,7 +855,7 @@ export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[
           author_id: null,
           content: "",
           attachment_type: null,
-          deleted: true,
+          pending: true,
         },
       };
     }
@@ -839,9 +864,7 @@ export function buildReplyPreviews<T extends ChatMessageData>(messages: T[]): T[
       author_id: target.author_id,
       content: target.content,
       attachment_type: target.attachment_type,
-      author: target.author
-        ? { id: target.author.id, username: target.author.username, display_name: target.author.display_name }
-        : undefined,
+      author: toReplyAuthor(target.author),
     };
     // Preserve object identity when the resolved quote hasn't changed so the
     // memoized row doesn't re-render when an unrelated message arrives: a new

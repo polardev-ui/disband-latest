@@ -20,7 +20,8 @@ import { IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
 import { TypingIndicator } from "./TypingIndicator";
 import { useApp } from "@/contexts/AppContext";
-import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { toReplyAuthor, type MessageSendOptions, type MessageContext, type MessageReaction, type ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
 import {
   findNewMessagesDividerId,
@@ -69,6 +70,132 @@ function DayDivider({ label }: { label: string }) {
 
 function dayLabel(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+}
+
+const REPLY_AUTHOR_COLUMNS = "id, username, display_name, avatar_url, accent_color, accent_color_2, avatar_crop, equipped_ring_effect";
+const REPLY_TARGET_COLUMNS = `id, author_id, content, attachment_type, author:profiles(${REPLY_AUTHOR_COLUMNS})`;
+
+interface ReplyTargetRow {
+  id: string;
+  author_id: string | null;
+  content: string;
+  attachment_type: ReplyPreview["attachment_type"];
+  author?: Profile | Profile[] | null;
+}
+
+interface NoteReplyTargetRow {
+  id: string;
+  user_id: string;
+  content: string;
+  attachment_type: ReplyPreview["attachment_type"];
+}
+
+function replyTable(context: MessageContext): string {
+  switch (context) {
+    case "channel": return "messages";
+    case "dm": return "dm_messages";
+    case "group": return "group_messages";
+    case "notes": return "notes";
+  }
+}
+
+/**
+ * Loads reply targets that aren't in the rendered message window. Replies used
+ * to point at paginated-away history and render as "deleted"; reply_to_id is
+ * only non-null while the target exists, so those quotes were simply missing
+ * their data. Fetch a compact preview (content plus the author's avatar
+ * fields) and let buildReplyPreviews merge it in.
+ */
+async function fetchReplyPreviews(
+  context: MessageContext,
+  ids: string[],
+  noteAuthor: Profile | null | undefined,
+): Promise<Map<string, ReplyPreview> | null> {
+  if (ids.length === 0) return new Map();
+  const supabase = getSupabaseClient();
+  try {
+    if (context === "notes") {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("id, user_id, content, attachment_type")
+        .in("id", ids);
+      if (error) return null;
+      const out = new Map<string, ReplyPreview>();
+      for (const row of (data ?? []) as NoteReplyTargetRow[]) {
+        out.set(row.id, {
+          id: row.id,
+          author_id: row.user_id,
+          content: row.content,
+          attachment_type: row.attachment_type,
+          author: toReplyAuthor(noteAuthor),
+        });
+      }
+      return out;
+    }
+
+    const { data, error } = await supabase
+      .from(replyTable(context))
+      .select(REPLY_TARGET_COLUMNS)
+      .in("id", ids);
+    if (error) return null;
+    const out = new Map<string, ReplyPreview>();
+    for (const row of (data ?? []) as ReplyTargetRow[]) {
+      const author = Array.isArray(row.author) ? row.author[0] : row.author;
+      out.set(row.id, {
+        id: row.id,
+        author_id: row.author_id,
+        content: row.content,
+        attachment_type: row.attachment_type,
+        author: toReplyAuthor(author),
+      });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function useReplyPreviews(
+  messages: ChatMessageData[],
+  messageContext: MessageContext,
+  noteAuthor: Profile | null | undefined,
+): ReadonlyMap<string, ReplyPreview> {
+  const [previews, setPreviews] = useState<Map<string, ReplyPreview>>(() => new Map());
+  const requestedRef = useRef<Set<string>>(new Set());
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const loaded = new Set(messages.map((m) => m.id));
+    const ids: string[] = [];
+    for (const m of messages) {
+      const id = m.reply_to_id;
+      if (!id || loaded.has(id) || previews.has(id) || requestedRef.current.has(id)) continue;
+      requestedRef.current.add(id);
+      ids.push(id);
+    }
+    if (ids.length === 0) return;
+
+    void fetchReplyPreviews(messageContext, ids, noteAuthor).then((found) => {
+      if (!aliveRef.current) return;
+      if (!found) {
+        for (const id of ids) requestedRef.current.delete(id);
+        return;
+      }
+      if (found.size === 0) return;
+      setPreviews((prev) => {
+        const next = new Map(prev);
+        for (const [id, preview] of found) next.set(id, preview);
+        return next;
+      });
+    });
+  }, [messages, messageContext, noteAuthor, previews]);
+
+  return previews;
 }
 
 export interface ChatCanvasHandle {
@@ -222,7 +349,7 @@ const MessageRow = memo(function MessageRow({
         onForward={canForward ? () => onForward(message) : undefined}
         onEdit={currentUserId === message.author_id ? () => {
           onEdit({ id: message.id, content: message.content });
-          onReply({ id: message.id, author_id: message.author_id, content: message.content, attachment_type: message.attachment_type, author: message.author ? { id: message.author.id, username: message.author.username, display_name: message.author.display_name } : undefined } as any);
+          onReply({ id: message.id, author_id: message.author_id, content: message.content, attachment_type: message.attachment_type, author: toReplyAuthor(message.author) });
           setTimeout(() => {
             const composer = document.querySelector('textarea[placeholder*="Message"], textarea[placeholder*="Note"]') as HTMLTextAreaElement | null;
             composer?.focus();
@@ -401,7 +528,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     notifyTyping();
   }, [notifyTyping]);
 
-  const { tetherProfile } = useApp();
+  const {
+    tetherProfile,
+    profile: currentProfile,
+    loadChannelContextWindow,
+    loadDmContextWindow,
+    loadGroupContextWindow,
+  } = useApp();
+  const replyPreviews = useReplyPreviews(messages, messageContext, currentProfile);
   // Tether is a mentionable entity but never a real server member: append its
   // profile to the render list so "@tether" tokenizes as a blue mention chip
   // in message bodies. Notes aren't a Tether surface, so leave those alone.
@@ -420,7 +554,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     highlightMessage: (messageId) => setHighlightId(messageId),
   }));
 
-  const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
+  const enriched = useMemo(() => buildReplyPreviews(messages, replyPreviews), [messages, replyPreviews]);
 
   // Grouping decides whether a row shows its author header. It depends only on
   // the enriched list and the viewer, but it used to run per row on every
@@ -533,6 +667,30 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     setHighlightId(messageId);
     setTimeout(() => setHighlightId(null), 2000);
   }, []);
+
+  // A reply target can live outside the loaded page. Load a window around it
+  // before scrolling, instead of leaving the newly-resolved quote unclickable.
+  const handleJumpToReply = useCallback(async (messageId: string) => {
+    if (document.getElementById(`msg-${messageId}`)) {
+      jumpToMessage(messageId);
+      return;
+    }
+    let loaded = false;
+    if (messageContext === "channel") {
+      loaded = await loadChannelContextWindow(messageId);
+    } else if (messageContext === "dm") {
+      loaded = await loadDmContextWindow(messageId);
+    } else if (messageContext === "group") {
+      loaded = await loadGroupContextWindow(messageId);
+    }
+    if (loaded) setTimeout(() => jumpToMessage(messageId), 200);
+  }, [
+    jumpToMessage,
+    loadChannelContextWindow,
+    loadDmContextWindow,
+    loadGroupContextWindow,
+    messageContext,
+  ]);
 
   const requestLoadMore = useCallback(async () => {
     if (!hasMore || !onLoadMore || loadingMoreRef.current) return;
@@ -882,7 +1040,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     onEdit={setEditing}
                     onOpenActivity={openActivity}
                     onOpenReactionPicker={handleOpenReactionPicker}
-                    onJumpToReply={jumpToMessage}
+                    onJumpToReply={handleJumpToReply}
                     onContentResize={handleContentResize}
                   />
                 );
