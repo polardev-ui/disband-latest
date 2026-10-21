@@ -1,61 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assertSafeUrl, fetchSafeHtml } from "@/lib/ssrf-guard";
+import { assertSafeUrl } from "@/lib/ssrf-guard";
 import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const MEDIA_API =
   process.env.NEXT_PUBLIC_MEDIA_API_URL ?? "https://cdn.disband.dev/v1";
-
-function decodeHtml(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function metaContent(html: string, key: string): string | undefined {
-  const re = new RegExp(
-    `<meta[^>]+(?:property|name)=["']${key}["'][^>]+content=["']([^"']+)["']|` +
-      `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${key}["']`,
-    "i",
-  );
-  const match = html.match(re);
-  return decodeHtml((match?.[1] ?? match?.[2] ?? "").trim()) || undefined;
-}
-
-async function scrapeOpenGraph(url: string) {
-  const html = await fetchSafeHtml(url);
-  if (!html) return null;
-  const title =
-    metaContent(html, "og:title")
-    ?? metaContent(html, "twitter:title")
-    ?? html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
-  const description =
-    metaContent(html, "og:description")
-    ?? metaContent(html, "description")
-    ?? metaContent(html, "twitter:description");
-  const image =
-    metaContent(html, "og:image")
-    ?? metaContent(html, "twitter:image");
-
-  if (!title && !description && !image) return null;
-
-  let hostname = url;
-  try {
-    hostname = new URL(url).hostname;
-  } catch {
-
-  }
-
-  return {
-    title: decodeHtml(title ?? hostname),
-    description: description ? decodeHtml(description) : undefined,
-    image: image && /^https:\/\//i.test(image) ? decodeHtml(image) : undefined,
-    site: hostname,
-  };
-}
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req) || "unknown";
@@ -67,6 +16,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing url parameter." }, { status: 400 });
   }
 
+  // The media service performs the actual fetch with its own DNS/redirect
+  // protections. Do not fall back to fetching user-supplied URLs from this
+  // process: a hostname can resolve to a private address after validation.
   try {
     await assertSafeUrl(target);
   } catch {
@@ -85,18 +37,8 @@ export async function GET(req: NextRequest) {
       });
     }
   } catch {
-
+    // fall through to a bounded, non-fetching error
   }
 
-  try {
-    const scraped = await scrapeOpenGraph(target);
-    if (!scraped) {
-      return NextResponse.json({ error: "Preview unavailable." }, { status: 502 });
-    }
-    return NextResponse.json(scraped, {
-      headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" },
-    });
-  } catch {
-    return NextResponse.json({ error: "Preview unavailable." }, { status: 502 });
-  }
+  return NextResponse.json({ error: "Preview unavailable." }, { status: 502 });
 }
