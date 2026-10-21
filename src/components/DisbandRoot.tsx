@@ -19,17 +19,27 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
 
 function InviteBootstrap() {
-  const { ready, session, joinServerByInvite } = useApp();
+  const { ready, session, joinServerByInvite, joinServerById } = useApp();
   const handled = useRef(false);
 
   useEffect(() => {
     if (!ready || !session || handled.current) return;
-    const m = window.location.pathname.match(/\/server\/([a-zA-Z0-9]{7})\/?$/);
+    const m = window.location.pathname.match(/\/server\/([a-zA-Z0-9-]{7,36})\/?$/);
     if (!m) return;
     handled.current = true;
     const code = m[1];
     window.history.replaceState({}, "", "/app");
-    void joinServerByInvite(code);
+    if (/^[a-zA-Z0-9]{7}$/.test(code)) {
+      void joinServerByInvite(code);
+      return;
+    }
+    // A pasted Space ID (32 hex chars, optionally hyphenated as a UUID) is
+    // not an invite code, but we can still join when the space is discoverable.
+    const compact = code.replace(/-/g, "");
+    if (/^[a-fA-F0-9]{32}$/.test(compact)) {
+      const id = `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
+      void joinServerById(id);
+    }
   }, [ready, session, joinServerByInvite]);
 
   return null;
