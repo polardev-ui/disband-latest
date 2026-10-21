@@ -74,7 +74,7 @@ import { apiFetch } from "@/lib/api";
 import { shopItem, type ShopCategory } from "@/lib/shop";
 import type { Channel, ChannelCategory, Profile, Server, ServerFolder } from "@/lib/supabase/types";
 import { ServerFolderDialog } from "@/components/discord/ServerFolderDialog";
-import type { MessageContext } from "@/lib/messages";
+import { toReplyAuthor, type MessageContext } from "@/lib/messages";
 import type { ChatMessageData } from "./ChatMessage";
 import { ForwardModal, type ForwardDestination } from "./ForwardModal";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
@@ -936,9 +936,7 @@ export function DiscordApp() {
               author_id: message.author_id,
               content: message.content,
               attachment_type: message.attachment_type,
-              author: message.author
-                ? { id: message.author.id, username: message.author.username, display_name: message.author.display_name }
-                : undefined,
+              author: toReplyAuthor(message.author),
             });
           },
         },

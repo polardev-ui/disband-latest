@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { ChatMessageData } from "./ChatMessage";
-import type { ReplyPreview } from "@/lib/messages";
+import { toReplyAuthor, type ReplyPreview } from "@/lib/messages";
 
 const QUICK_EMOJIS = ["\u{1f44d}", "\u{2764}\u{fe0f}", "\u{1f602}", "\u{1f62e}", "\u{1f622}"];
 
@@ -34,9 +34,7 @@ export function MessageActionBar({
       author_id: message.author_id,
       content: message.content,
       attachment_type: message.attachment_type,
-      author: message.author
-        ? { id: message.author.id, username: message.author.username, display_name: message.author.display_name }
-        : undefined,
+      author: toReplyAuthor(message.author),
     };
   }, [message]);
 
