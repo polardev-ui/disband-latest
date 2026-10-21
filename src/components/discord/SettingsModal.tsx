@@ -265,6 +265,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   // preview card immediately, while the upload + profile write happen
   // quietly in the background. Cleared once the real URL lands.
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [pendingAvatarCrop, setPendingAvatarCrop] = useState<AvatarCrop | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [pendingBannerFile, setPendingBannerFile] = useState<File | null>(null);
   const previewUrlsRef = useRef<{ avatar: string | null; banner: string | null }>({ avatar: null, banner: null });
@@ -656,6 +658,16 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
     setSaving(true);
     try {
+      let avatarUrl: string | null = null;
+      let avatarCrop: AvatarCrop | null = pendingAvatarCrop;
+      if (pendingAvatarFile) {
+        const res = await upload(pendingAvatarFile);
+        if (!res) {
+          setError("Couldn't upload your profile picture. Please try again.");
+          return;
+        }
+        avatarUrl = res.url;
+      }
       let bannerUrl: string | null = null;
       if (pendingBannerFile) {
         const res = await upload(pendingBannerFile);
@@ -676,13 +688,26 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         status,
       };
       if (usernameChanged) patch.username = sanitizedUsername;
+      if (pendingAvatarFile && avatarUrl) {
+        patch.avatar_url = avatarUrl;
+        if (avatarCrop) patch.avatar_crop = avatarCrop;
+      }
       if (pendingBannerFile && bannerUrl) patch.banner_url = bannerUrl;
       const err = await updateProfile(patch as Parameters<typeof updateProfile>[0]);
-      if (!err && pendingBannerFile) {
-        if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
-        previewUrlsRef.current.banner = null;
-        setBannerPreview(null);
-        setPendingBannerFile(null);
+      if (!err) {
+        if (pendingAvatarFile) {
+          if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+          previewUrlsRef.current.avatar = null;
+          setAvatarPreview(null);
+          setPendingAvatarFile(null);
+          setPendingAvatarCrop(null);
+        }
+        if (pendingBannerFile) {
+          if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+          previewUrlsRef.current.banner = null;
+          setBannerPreview(null);
+          setPendingBannerFile(null);
+        }
       }
       if (err) setError(err);
       else {
@@ -697,6 +722,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   }
 
   const profileDirty = !!profile && (
+    avatarPreview !== null ||
     bannerPreview !== null ||
     displayName !== (profile.display_name ?? "") ||
     username !== (profile.username ?? "") ||
@@ -714,6 +740,19 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   function resetProfileEdits() {
     if (!profile) return;
     setError(null);
+    if (pendingAvatarFile) {
+      if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+      previewUrlsRef.current.avatar = null;
+      setAvatarPreview(null);
+      setPendingAvatarFile(null);
+      setPendingAvatarCrop(null);
+    }
+    if (pendingBannerFile) {
+      if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+      previewUrlsRef.current.banner = null;
+      setBannerPreview(null);
+      setPendingBannerFile(null);
+    }
     setDisplayName(profile.display_name ?? "");
     setUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
@@ -738,17 +777,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setCropOpen(true);
   }
 
-  async function saveAvatarCrop(crop: AvatarCrop) {
+  function saveAvatarCrop(crop: AvatarCrop) {
     if (!cropSourceFile) return;
-    const res = await upload(cropSourceFile);
-    if (res) {
-      await updateProfile({ avatar_url: res.url, avatar_crop: crop });
-    }
-    // Either the real URL is live on the profile now, or the upload failed
-    // — either way the local preview has served its purpose.
-    if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
-    previewUrlsRef.current.avatar = null;
-    setAvatarPreview(null);
+    setPendingAvatarCrop(crop);
     setCropOpen(false);
     if (cropSource) URL.revokeObjectURL(cropSource);
     setCropSource(null);
@@ -1953,8 +1984,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           imageUrl={cropSource}
           onClose={() => {
             setCropOpen(false);
-            URL.revokeObjectURL(cropSource);
+            if (cropSource) URL.revokeObjectURL(cropSource);
             setCropSource(null);
+            setCropSourceFile(null);
+            if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+            previewUrlsRef.current.avatar = null;
+            setAvatarPreview(null);
+            setPendingAvatarFile(null);
+            setPendingAvatarCrop(null);
           }}
           onSave={(crop) => void saveAvatarCrop(crop)}
         />
