@@ -137,7 +137,7 @@ object ChatMarkdown {
         Rule("_", SpanStyle(fontStyle = FontStyle.Italic)),
     )
 
-    private val MENTION = Regex("@[A-Za-z0-9_.]{2,32}")
+    private val MENTION = Regex("(?<![\\w.])@[A-Za-z0-9_.]{1,32}")
 
     /**
      * Inline markers, resolved left to right.
