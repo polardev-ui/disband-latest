@@ -163,6 +163,49 @@ export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
   );
 }
 
+/**
+ * The small connection line used by every voice surface. `connected` must
+ * come from the peer connection, not from `joined`: joining only means the
+ * microphone is live, and on a slow ICE path the first words arrive seconds
+ * later. Until then this says "Connecting…" rather than "Voice Connected".
+ */
+export function VoiceStatus({
+  connected,
+  elapsed = null,
+  label = "Voice Connected",
+  className = "",
+}: {
+  connected: boolean;
+  elapsed?: number | null;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={`inline-flex items-center gap-1.5 text-[12px] font-medium leading-4 ${
+        connected ? "text-status-online" : "text-header-secondary"
+      } ${className}`}
+    >
+      <span
+        aria-hidden
+        className={`h-2 w-2 shrink-0 rounded-full ${
+          connected ? "bg-status-online" : "bg-status-idle animate-pulse"
+        }`}
+      />
+      {connected ? (
+        <span className="truncate">
+          {label}
+          {elapsed !== null && elapsed >= 0 ? ` · ${formatElapsed(elapsed)}` : ""}
+        </span>
+      ) : (
+        <span className="truncate">Connecting…</span>
+      )}
+    </span>
+  );
+}
+
 function formatElapsed(ms: number): string {
   const total = Math.floor(ms / 1000);
   const h = Math.floor(total / 3600);
@@ -176,6 +219,7 @@ interface CallPanelProps {
   title: string;
   subtitle: string;
   phase: "outgoing" | "active";
+  connected?: boolean;
   peer?: Profile;
   selfProfile?: Profile | null;
   localStream?: MediaStream | null;
@@ -198,7 +242,7 @@ interface CallPanelProps {
 }
 
 export function CallPanel({
-  title, subtitle, phase, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen, remoteScreenAudio,
+  title, subtitle, phase, connected = false, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen, remoteScreenAudio,
   connectedAt, micMuted, deafened, cameraEnabled, screenShareEnabled,
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd, onOpenSettings,
@@ -220,12 +264,19 @@ export function CallPanel({
 
   if (calling) {
     return (
-      <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black py-10">
+      <div className="call-enter flex shrink-0 flex-col bg-bg-primary">
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-divider px-4">
+          <span className="truncate text-[14px] font-semibold text-header-primary">{title}</span>
+          <span className="ml-auto flex items-center gap-1.5 text-[12px] font-medium leading-4 text-header-secondary">
+            <span aria-hidden className="h-2 w-2 rounded-full bg-status-idle animate-pulse" />
+            Calling…
+          </span>
+        </div>
 
         {/* Was h-44 (176px) for two 16:9 tiles side by side, which is the
             squashed strip in the screenshot. Sized to the viewport now. */}
         <div
-          className="flex w-full max-w-4xl shrink-0 flex-col px-6 py-3"
+          className="mx-auto flex w-full max-w-4xl shrink-0 flex-col px-6 py-3"
           style={{ height: "min(42vh, 380px)" }}
         >
           <CallStage
@@ -237,57 +288,61 @@ export function CallPanel({
             ]}
           />
         </div>
-        <p className="mb-1 text-[20px] font-semibold text-white">{title}</p>
-        <p className="mb-8 text-[14px] text-white/60">{subtitle || "Ringing…"}</p>
-        <CallControls
-          micMuted={micMuted} deafened={deafened}
-          cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
-          onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
-          onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
-          onEnd={onEnd} onOpenSettings={onOpenSettings}
-        />
+        <p className="mb-8 text-center text-[14px] text-header-secondary">{subtitle || "Ringing…"}</p>
+        <div className="flex justify-center pb-6">
+          <CallControls
+            micMuted={micMuted} deafened={deafened}
+            cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+            onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+            onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+            onEnd={onEnd} onOpenSettings={onOpenSettings}
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className="call-enter flex shrink-0 flex-col overflow-hidden bg-black"
+      className="call-enter flex shrink-0 flex-col overflow-hidden bg-bg-primary"
       style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}
     >
-     <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
-      <p className="self-start rounded-[4px] bg-black/60 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-white/80">
-        {elapsed > 0 ? formatElapsed(elapsed) : subtitle}
-      </p>
-
-      {}
-      <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-3xl"} flex-1 flex-col py-3`}>
-        <CallStage
-          deafened={deafened}
-          onFocusChange={setFocused}
-          screens={[
-            ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
-            ...(remoteScreen && peer
-              ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
-              : []),
-          ]}
-          members={[
-            ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
-            ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
-          ]}
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-divider px-4">
+        <span className="truncate text-[14px] font-semibold text-header-primary">{title}</span>
+        <VoiceStatus
+          className="ml-auto"
+          connected={connected}
+          elapsed={connected ? elapsed : null}
         />
       </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
+        <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-3xl"} flex-1 flex-col py-3`}>
+          <CallStage
+            deafened={deafened}
+            onFocusChange={setFocused}
+            screens={[
+              ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
+              ...(remoteScreen && peer
+                ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
+                : []),
+            ]}
+            members={[
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
+            ]}
+          />
+        </div>
 
-      <div className="shrink-0 pb-6 pt-2">
-        <CallControls
-          micMuted={micMuted} deafened={deafened}
-          cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
-          onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
-          onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
-          onEnd={onEnd} onOpenSettings={onOpenSettings}
-        />
+        <div className="shrink-0 pb-6 pt-2">
+          <CallControls
+            micMuted={micMuted} deafened={deafened}
+            cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+            onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+            onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+            onEnd={onEnd} onOpenSettings={onOpenSettings}
+          />
+        </div>
       </div>
-     </div>
       <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </div>
   );

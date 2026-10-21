@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
@@ -158,6 +158,44 @@ export function HomePanel({
     : null;
   const showTetherRow = subscriptionPlan === "aero" && tetherProfile && !tetherThreadId;
 
+  // DMs and group chats share one list so a DM with fresh activity can sit
+  // above an older group chat instead of being trapped beneath it. Unread
+  // conversations stay pinned to the top.
+  const mixedConversations = useMemo(() => {
+    const items: {
+      kind: "group" | "dm";
+      id: string;
+      unread: number;
+      sortAt: string;
+      group?: GroupChatWithMembers;
+      entry?: (typeof dmListEntries)[number];
+    }[] = [];
+    for (const g of groupChats) {
+      items.push({
+        kind: "group",
+        id: `group:${g.id}`,
+        unread: getGroupUnreadCount(g.id),
+        sortAt: g.created_at,
+        group: g,
+      });
+    }
+    for (const entry of dmListEntries) {
+      items.push({
+        kind: "dm",
+        id: entry.key,
+        unread: entry.unreadCount,
+        sortAt: entry.sortAt,
+        entry,
+      });
+    }
+    return items.sort((a, b) => {
+      const aUnread = a.unread > 0 ? 1 : 0;
+      const bUnread = b.unread > 0 ? 1 : 0;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+      return b.sortAt.localeCompare(a.sortAt);
+    });
+  }, [groupChats, dmListEntries, getGroupUnreadCount]);
+
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
       await selectDmThread(entry.threadId);
@@ -260,75 +298,57 @@ export function HomePanel({
                 </button>
               </Tooltip>
             </div>
-            {groupChats.map((g) => {
-              const inCallCount = groupCallCounts.get(g.id) ?? 0;
-              const unreadCount = getGroupUnreadCount(g.id);
-              const active = viewMode === "group" && activeGroupChatId === g.id;
-              return (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => void selectGroupChat(g.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onGroupContext?.(g, e.clientX, e.clientY);
-                  }}
-                  className={`mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
-                    active ? "bg-interactive-selected text-interactive-active" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
-                  }`}
-                >
-                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `hsl(${(g.id.charCodeAt(0) * 37) % 360} 55% 45%)` }}>
-                    <IconGroup size={18} />
-                    {inCallCount > 0 && (
-                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
-                    )}
-                    {unreadCount > 0 && (
-                      <span
-                        key={unreadCount}
-                        className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
-                      >
-                        {unreadCount > 99 ? "99+" : String(unreadCount)}
+            {mixedConversations.map((item) => {
+              if (item.kind === "group") {
+                const g = item.group!;
+                const inCallCount = groupCallCounts.get(g.id) ?? 0;
+                const unreadCount = item.unread;
+                const active = viewMode === "group" && activeGroupChatId === g.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void selectGroupChat(g.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onGroupContext?.(g, e.clientX, e.clientY);
+                    }}
+                    className={`mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+                      active ? "bg-interactive-selected text-interactive-active" : unreadCount > 0 ? "text-interactive-active hover:bg-interactive-hover" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
+                    }`}
+                  >
+                    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `hsl(${(g.id.charCodeAt(0) * 37) % 360} 55% 45%)` }}>
+                      <IconGroup size={18} />
+                      {inCallCount > 0 && (
+                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
+                      )}
+                      {unreadCount > 0 && (
+                        <span
+                          key={unreadCount}
+                          className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
+                        >
+                          {unreadCount > 99 ? "99+" : String(unreadCount)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
+                      <span className="block truncate text-[12px] leading-4 text-text-muted">
+                        {g.members.length} members
+                        {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
                       </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
-                    <span className="block truncate text-[12px] leading-4 text-text-muted">
-                      {g.members.length} members
-                      {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+                    </div>
+                  </button>
+                );
+              }
 
-            {showTetherRow && tetherProfile && (
-              <button
-                key="tether-dm"
-                type="button"
-                onClick={() => void openDmWithFriend(tetherProfile.id)}
-                title="Message Tether directly"
-                className="mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left text-channels-default transition-colors duration-75 hover:bg-interactive-hover hover:text-text-normal"
-              >
-                <div className="relative">
-                  <Avatar profile={tetherProfile} size="sm" />
-                  <StatusDot status="online" className="absolute -bottom-[3px] -right-[3px]" />
-                </div>
-                <span className="truncate text-[16px] font-medium">{displayName(tetherProfile)}</span>
-                <span className="ml-auto shrink-0 rounded bg-super/15 px-1 text-[10px] font-bold uppercase tracking-wide text-super">
-                  Aero
-                </span>
-              </button>
-            )}
-            {dmListEntries.map((entry) => {
+              const entry = item.entry!;
               const active = viewMode === "dm" && entry.threadId && activeDmThreadId === entry.threadId;
               return (
                 <button
-                  key={entry.key}
+                  key={item.id}
                   type="button"
                   onClick={(e) => {
-                    // A long-press already opened the menu; don't also open
-                    // the conversation when the finger lifts.
                     if (dmLongPress.current.fired) {
                       dmLongPress.current.fired = false;
                       e.preventDefault();
@@ -393,7 +413,26 @@ export function HomePanel({
                 </button>
               );
             })}
-            {dmListEntries.length === 0 && (
+
+            {showTetherRow && tetherProfile && (
+              <button
+                key="tether-dm"
+                type="button"
+                onClick={() => void openDmWithFriend(tetherProfile.id)}
+                title="Message Tether directly"
+                className="mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left text-channels-default transition-colors duration-75 hover:bg-interactive-hover hover:text-text-normal"
+              >
+                <div className="relative">
+                  <Avatar profile={tetherProfile} size="sm" />
+                  <StatusDot status="online" className="absolute -bottom-[3px] -right-[3px]" />
+                </div>
+                <span className="truncate text-[16px] font-medium">{displayName(tetherProfile)}</span>
+                <span className="ml-auto shrink-0 rounded bg-super/15 px-1 text-[10px] font-bold uppercase tracking-wide text-super">
+                  Aero
+                </span>
+              </button>
+            )}
+            {mixedConversations.length === 0 && (
               <p className="px-2 py-2 text-sm text-text-muted">Add friends to start chatting.</p>
             )}
           </>

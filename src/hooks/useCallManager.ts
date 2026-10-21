@@ -77,6 +77,10 @@ export function useCallManager(
   const [error, setError] = useState<string | null>(null);
   const [callNotice, setCallNotice] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  // `phase === "active"` starts when the call is answered, before ICE/DTLS
+  // finishes. The UI must not claim you're connected until this flips.
+  const [rtcConnected, setRtcConnected] = useState(false);
+  const mediaConnectedRef = useRef(false);
 
   useVoiceMinutes(phase === "active");
 
@@ -156,6 +160,8 @@ export function useCallManager(
     setCameraEnabled(false);
     cameraRef.current = false;
     setConnectedAt(null);
+    setRtcConnected(false);
+    mediaConnectedRef.current = false;
     activeCallIdRef.current = null;
     activePeerIdRef.current = null;
   }, [cleanupRtc]);
@@ -194,6 +200,8 @@ export function useCallManager(
 
   const setupRtc = useCallback(async (callId: string, peerId: string, asCaller: boolean) => {
     if (!userId) return;
+    setRtcConnected(false);
+    mediaConnectedRef.current = false;
     try {
       await warmUpMediaDevices();
       const raw = await getDisbandUserMedia({
@@ -318,6 +326,12 @@ export function useCallManager(
 
           clearDisconnectTimer();
           iceRetryRef.current = 0;
+          setRtcConnected(true);
+          if (!mediaConnectedRef.current) {
+            mediaConnectedRef.current = true;
+            setConnectedAt(Date.now());
+            playCallConnected();
+          }
           if (reconnectingRef.current) {
             reconnectingRef.current = false;
             setCallNotice("Reconnected.");
@@ -327,11 +341,15 @@ export function useCallManager(
         }
         if (state === "failed") {
           clearDisconnectTimer();
+          setRtcConnected(false);
+          mediaConnectedRef.current = false;
           retryIce();
           return;
         }
         if (state === "disconnected") {
 
+          setRtcConnected(false);
+          mediaConnectedRef.current = false;
           if (disconnectTimerRef.current !== null) return;
           disconnectTimerRef.current = window.setTimeout(() => {
             disconnectTimerRef.current = null;
@@ -646,8 +664,6 @@ export function useCallManager(
     activePeerIdRef.current = incoming.fromId;
     setPhase("active");
     setIncoming(null);
-    setConnectedAt(Date.now());
-    playCallConnected();
     try {
       await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
 
@@ -745,8 +761,6 @@ export function useCallManager(
         } else if (p.type === "accept" && p.callId && phaseRef.current === "outgoing") {
           stopRingtone();
           setPhase("active");
-          setConnectedAt(Date.now());
-          playCallConnected();
           try {
             await setupRtc(p.callId, p.from, true);
           } catch {
@@ -805,6 +819,7 @@ export function useCallManager(
     error,
     callNotice,
     connectedAt,
+    rtcConnected,
     startCall,
     acceptCall,
     rejectCall,

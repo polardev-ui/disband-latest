@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
-import { CallTile, CallGrid } from "./CallTile";
-import { CallControls } from "./CallUI";
+import { CallStage, type StageMember, type StageScreen } from "./CallStage";
+import { CallControls, VoiceStatus } from "./CallUI";
 import { displayName } from "@/lib/utils";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
-import { IconSpeaker } from "@/components/icons";
+import { IconPhone, IconSpeaker } from "@/components/icons";
 
 interface VoicePanelProps {
   channelId: string;
@@ -17,7 +17,6 @@ interface VoicePanelProps {
 
 export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePanelProps) {
   const {
-    profile,
     user,
     loadVoicePresence,
     voicePresence,
@@ -25,7 +24,6 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     deafened,
     setMicMuted,
     setDeafened,
-    setVoiceJoinedChannelId,
   } = useApp();
 
   const session = useVoiceSession();
@@ -36,6 +34,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   // otherwise it flips from "Join" to nothing with no feedback.
   const [joining, setJoining] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
 
   const members = inThisChannel ? session.participants : voicePresence;
   const voice = {
@@ -46,6 +45,13 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     leave: () => session.disconnect(),
   };
 
+  const remoteMembers = members.filter((p) => p.user_id !== user?.id);
+  // `joined` means our mic is live and presence is written. Audio only works
+  // once at least one peer's ICE/DTLS handshake finishes, which can lag
+  // behind noticeably on a slow or relayed path.
+  const connecting = voice.joined && remoteMembers.length > 0 &&
+    !remoteMembers.some((p) => session.connectedPeerIds.has(p.user_id));
+
   useEffect(() => {
     if (voice.joined || voice.error) {
       setJoining(false);
@@ -53,42 +59,48 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     }
   }, [voice.joined, voice.error]);
 
-  const tiles = [
-    ...members.map((p) => {
-      const isSelf = p.user_id === user?.id;
-      const prof = p.profile ?? { display_name: "?", username: "?" };
-      return {
-        key: p.user_id,
-        profile: prof,
-        label: displayName(prof) + (isSelf ? " (you)" : ""),
-        stream: inThisChannel
-          ? (isSelf ? session.localStream : session.remoteStreams.get(p.user_id)) ?? null
-          : null,
-        kind: "camera" as const,
-        self: isSelf,
-        // Remote mute/deafen come from presence (previously dropped, so only
-        // the local user ever showed a mute icon). Deafened implies muted.
-        muted: isSelf ? micMuted : !!(p.muted || p.deafened),
-      };
-    }),
-    ...members.flatMap((p) => {
-      const isSelf = p.user_id === user?.id;
-      const stream = isSelf ? session.localScreen : session.remoteScreens.get(p.user_id);
-      if (!stream || !inThisChannel) return [];
-      const prof = p.profile ?? { display_name: "?", username: "?" };
-      return [{
-        key: `screen:${p.user_id}`,
-        profile: prof,
-        label: `${displayName(prof)}'s screen`,
-        stream,
-        kind: "screen" as const,
-        self: false,
-        muted: false,
-      }];
-    }),
-  ];
+  useEffect(() => {
+    if (!voice.joined || connecting) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const tick = () => setElapsed(Math.max(0, Date.now() - started));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [voice.joined, connecting, channelId]);
 
-  tiles.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "screen" ? -1 : 1));
+  const stageMembers: StageMember[] = members.map((p) => {
+    const isSelf = p.user_id === user?.id;
+    return {
+      id: p.user_id,
+      profile: p.profile,
+      label: p.profile ? displayName(p.profile) + (isSelf ? " (you)" : "") : isSelf ? "You" : "Member",
+      stream: inThisChannel
+        ? (isSelf ? session.localStream : session.remoteStreams.get(p.user_id)) ?? null
+        : null,
+      mirrored: isSelf,
+      // Remote mute/deafen come from presence (previously dropped, so only
+      // the local user ever showed a mute icon). Deafened implies muted.
+      muted: isSelf ? micMuted : !!(p.muted || p.deafened),
+    };
+  });
+
+  const stageScreens: StageScreen[] = members.flatMap((p) => {
+    const isSelf = p.user_id === user?.id;
+    const stream = isSelf ? session.localScreen : session.remoteScreens.get(p.user_id);
+    if (!stream || !inThisChannel) return [];
+    return [{
+      id: `screen:${p.user_id}`,
+      profile: p.profile,
+      label: isSelf
+        ? "Your screen"
+        : p.profile ? `${displayName(p.profile)}'s screen` : "Screen",
+      stream,
+      local: isSelf,
+    }];
+  });
 
   useEffect(() => {
     void loadVoicePresence(channelId);
@@ -100,33 +112,35 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
   }, [inThisChannel, channelId]);
 
   return (
-    <main className="call-enter flex min-w-0 flex-1 flex-col bg-black">
-      <header className="flex h-12 shrink-0 items-center gap-2 px-4">
-        <IconSpeaker size={24} className="text-white/70" />
-        <h1 className="text-[16px] font-semibold text-white">{channelName}</h1>
+    <main className="call-enter flex min-w-0 flex-1 flex-col bg-bg-primary">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4">
+        <IconSpeaker size={20} className="shrink-0 text-text-muted" />
+        <h1 className="min-w-0 truncate text-[16px] font-semibold text-header-primary">{channelName}</h1>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          {members.length > 0 && (
+            <span className="hidden text-[12px] text-header-secondary sm:inline">
+              {members.length} in voice
+            </span>
+          )}
+          {voice.joined && (
+            <VoiceStatus connected={!connecting} elapsed={connecting ? null : elapsed} />
+          )}
+        </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center gap-4 overflow-hidden px-4 pb-4">
-        {!voice.joined && tiles.length === 0 ? (
-          // The classic empty state: a centred invitation to join.
+      <div className="flex min-h-0 flex-1 flex-col items-center overflow-hidden px-4 pb-4">
+        {!voice.joined && members.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <h2 className="text-[24px] font-bold leading-[30px] text-white">{channelName}</h2>
-            <p className="mt-2 text-[16px] text-white/60">No one is currently in voice</p>
+            <span className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-bg-secondary text-text-muted">
+              <IconSpeaker size={34} />
+            </span>
+            <h2 className="text-[20px] font-bold leading-6 text-header-primary">{channelName}</h2>
+            <p className="mt-1.5 text-[14px] text-header-secondary">No one is currently in voice</p>
           </div>
         ) : (
-          <CallGrid>
-            {tiles.map((t) => (
-              <CallTile
-                key={t.key}
-                profile={t.profile}
-                label={t.label}
-                stream={t.stream}
-                kind={t.kind}
-                self={t.self}
-                muted={t.muted}
-              />
-            ))}
-          </CallGrid>
+          <div className="flex min-h-0 w-full max-w-5xl flex-1 flex-col py-4">
+            <CallStage members={stageMembers} screens={stageScreens} />
+          </div>
         )}
 
         {(voice.error || actionError) && (
@@ -138,8 +152,8 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         <div className="flex shrink-0 flex-col items-center gap-3 pb-2">
           {!voice.joined ? (
             <>
-              {tiles.length > 0 && (
-                <p className="text-[14px] text-white/60">
+              {members.length > 0 && (
+                <p className="text-[14px] text-header-secondary">
                   {voice.participants.length} {voice.participants.length === 1 ? "person is" : "people are"} in voice
                 </p>
               )}
@@ -152,8 +166,9 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
                   void requestNotificationPermissionFromGesture();
                   void voice.join();
                 }}
-                className="h-11 rounded-full bg-button-green px-6 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
+                className="flex h-12 items-center gap-2 rounded-full bg-button-green px-6 text-[15px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
               >
+                <IconPhone size={20} />
                 {joining ? "Joining…" : "Join Voice"}
               </button>
             </>

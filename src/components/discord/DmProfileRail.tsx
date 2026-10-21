@@ -10,7 +10,7 @@ import { BotTag } from "@/components/ui/BotTag";
 import { IconChevron } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
-import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -53,33 +53,47 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
   const listening = live === "offline" ? null : listeningFor(friend, listeningMap);
   const banner = bannerFailed ? null : safeImageUrl(friend.banner_url);
   const bannerBg = usesCustomAccent(friend) ? getAccentBackground(friend) : friend.accent_color ?? "#5865f2";
+  const theme = getProfileCardTheme(friend);
   const mutualServers = (mutuals?.serverIds ?? []).map((id) => servers.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s);
   const mutualFriends = (mutuals?.friendIds ?? []).map((id) => friends.find((f) => f.id === id)).filter((f): f is Profile => !!f);
 
   return (
     <aside
       aria-label={`${displayName(friend)}'s profile`}
-      className="channel-scroll flex min-h-0 w-[340px] shrink-0 flex-col overflow-y-auto bg-bg-secondary-alt"
+      className={`channel-scroll flex min-h-0 w-[340px] shrink-0 flex-col overflow-y-auto ${theme ? "" : "bg-bg-secondary-alt"}`}
+      style={theme?.style}
     >
       <div className="relative shrink-0">
-        <div className="relative h-[120px] overflow-hidden" style={{ background: bannerBg }}>
+        <div className="relative h-[120px] overflow-hidden" style={{ background: banner && !theme ? bannerBg : undefined }}>
           {banner && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={banner} alt="" className="h-full w-full object-cover" onError={() => setBannerFailed(true)} />
+            <div
+              className="absolute inset-0"
+              style={theme ? {
+                // Fade the image into the rail's gradient instead of ending
+                // on a hard colour line across the profile.
+                maskImage: "linear-gradient(180deg, #000 0%, #000 68%, transparent 100%)",
+                WebkitMaskImage: "linear-gradient(180deg, #000 0%, #000 68%, transparent 100%)",
+              } : undefined}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={banner} alt="" className="h-full w-full object-cover" onError={() => setBannerFailed(true)} />
+              {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
+            </div>
           )}
         </div>
         <button
           type="button"
           onClick={onOpenFullProfile}
           aria-label="View full profile"
-          className="group/avatar absolute left-4 top-[76px] rounded-full bg-bg-secondary-alt p-1.5"
+          className={`group/avatar absolute left-4 top-[76px] rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
+          style={theme ? { backgroundColor: theme.avatarRing } : undefined}
         >
           <span className="relative block">
             <Avatar profile={friend} size="xl" className="!h-20 !w-20 !text-2xl" />
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
               View Profile
             </span>
-            <StatusDot status={live} size={16} ring="var(--bg-secondary-alt)" className="absolute -bottom-0.5 -right-0.5" />
+            <StatusDot status={live} size={16} ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"} className="absolute -bottom-0.5 -right-0.5" />
           </span>
         </button>
         <div className="flex min-h-[44px] justify-end pl-[116px] pr-4 pt-3">
@@ -91,7 +105,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         </div>
       </div>
 
-      <div className="mx-4 mb-4 mt-7 rounded-lg bg-bg-floating p-3">
+      <div className={`mx-4 mb-4 mt-7 rounded-lg p-3 ${theme ? "bg-black/10" : "bg-bg-floating"}`}>
         <div className="flex items-center gap-1">
           <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">{displayName(friend)}</h2>
           <BotTag profile={friend} size="sm" />
@@ -105,7 +119,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         )}
         {note && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{note}</p>}
 
-        <div className="my-3 h-px bg-bg-secondary" />
+        <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-bg-secondary"}`} />
 
         {friend.bio?.trim() && (
           <section className="mb-3">
@@ -147,7 +161,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={safeImageUrl(s.icon_url)!} alt="" className="h-6 w-6 rounded-full object-cover" />
               ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-bg-primary text-[9px] font-semibold">{serverInitials(s.name)}</span>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold ${theme ? "bg-white/10" : "bg-bg-primary"}`}>{serverInitials(s.name)}</span>
               )}
               <span className="truncate">{s.name}</span>
             </button>

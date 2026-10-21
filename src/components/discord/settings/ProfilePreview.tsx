@@ -3,7 +3,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { IconUpload } from "@/components/icons";
-import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
@@ -56,17 +56,26 @@ export function ProfilePreview({
   const banner = safeImageUrl(profile.banner_url);
   const pronouns = profile.pronouns?.trim();
   const note = profile.status_note?.trim();
+  const theme = getProfileCardTheme(profile);
   const bannerBg = usesCustomAccent(profile)
     ? getAccentBackground(profile)
     : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
 
   return (
-    <div className="overflow-hidden rounded-lg border border-divider bg-overlay-panel text-text-normal">
+    <div
+      className={`overflow-hidden rounded-lg border border-divider ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
+      style={theme?.style}
+    >
       <label className="group relative block cursor-pointer" title={onChangeBanner ? "Change banner" : undefined}>
-        <div className="h-[136px] w-full" style={{ background: bannerBg }}>
+        <div className="relative h-[136px] w-full overflow-hidden" style={{ background: bannerBg }}>
           {banner && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={banner} alt="" className="h-full w-full object-cover" />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              {theme && (
+                <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />
+              )}
+            </>
           )}
         </div>
         {onChangeBanner && (
@@ -89,7 +98,10 @@ export function ProfilePreview({
       </label>
 
       <div className="px-5 pb-5">
-        <div className="relative -mt-[46px] w-fit rounded-full bg-overlay-panel p-[5px]">
+        <div
+          className={`relative -mt-[46px] w-fit rounded-full p-[5px] ${theme ? "" : "bg-overlay-panel"}`}
+          style={theme ? { backgroundColor: theme.avatarRing } : undefined}
+        >
           <label className="group relative block cursor-pointer rounded-full" title={onChangeAvatar ? "Change avatar" : undefined}>
             <Avatar profile={profile} size="lg" />
             {onChangeAvatar && (
@@ -112,7 +124,8 @@ export function ProfilePreview({
             )}
           </label>
           <span
-            className={`absolute bottom-1.5 right-1.5 h-[18px] w-[18px] rounded-full border-[3px] border-overlay-panel ${STATUS_BG[status]}`}
+            className={`absolute bottom-1.5 right-1.5 h-[18px] w-[18px] rounded-full border-[3px] ${theme ? "" : "border-overlay-panel"} ${STATUS_BG[status]}`}
+            style={theme ? { borderColor: theme.avatarRing } : undefined}
             title={STATUS_LABEL[status]}
           />
         </div>

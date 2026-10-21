@@ -12,17 +12,27 @@ export function formatMessageTime(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) + ` ${time}`;
 }
 
+/** Usernames named by @mentions, in first-seen order, without duplicates. */
+export function parseMentionTokens(content: string): string[] {
+  const tokens = new Set<string>();
+  const re = /@([a-zA-Z0-9_]{2,32})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const token = m[1].toLowerCase();
+    if (token === "everyone") continue;
+    tokens.add(token);
+    if (tokens.size >= 100) break;
+  }
+  return [...tokens];
+}
+
 export function parseMentions(
   content: string,
   members: { id: string; username: string | null }[],
   authorId?: string,
 ): string[] {
   const ids = new Set<string>();
-  const re = /@([a-zA-Z0-9_]{2,32})/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    const token = m[1].toLowerCase();
-    if (token === "everyone") continue;
+  for (const token of parseMentionTokens(content)) {
     const user = members.find((u) => u.username?.toLowerCase() === token);
     if (user) ids.add(user.id);
   }
@@ -45,13 +55,15 @@ export function isValidMentionToken(
   token: string,
   members: { username: string | null }[],
 ): boolean {
-  if (token.toLowerCase() === "everyone") return members.length > 0;
+  if (token.toLowerCase() === "everyone") return true;
   return members.some((m) => m.username?.toLowerCase() === token.toLowerCase());
 }
 
 export function normalizeMessageContent(content: string): string {
-  let text = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  text = text.replace(/\n{2,}/g, "\n");
+  const text = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Keep intentional blank lines from Shift+Enter. Only trailing blank lines
+  // are removed; collapsing every run of newlines made the composer show
+  // spacing that disappeared the moment the message was sent.
   const lines = text.split("\n");
   while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
     lines.pop();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { sendPaymentFailedEmail } from "@/lib/billing-email";
 import type Stripe from "stripe";
 import { normalizePlan, type SubscriptionPlan } from "@/lib/subscription";
 
@@ -81,6 +82,14 @@ async function cancelSubscription(subscriptionId: string) {
 
 function getMetadata(sub: Stripe.Subscription): Record<string, string> {
   return sub.metadata ?? {};
+}
+
+/** Stripe moved `subscription` under `parent` in recent API versions. */
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const ref = invoice.parent?.subscription_details?.subscription
+    ?? (invoice as unknown as { subscription?: string | Stripe.Subscription | null }).subscription;
+  if (!ref) return null;
+  return typeof ref === "string" ? ref : ref.id;
 }
 
 export async function POST(req: Request) {
@@ -197,12 +206,65 @@ export async function POST(req: Request) {
         break;
       }
 
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const subId = invoiceSubscriptionId(invoice);
+        if (!subId) break;
+
+        const service = getServiceSupabase();
+        if (!service) throw new Error("Database unavailable");
+
+        const sub = await getStripe().subscriptions.retrieve(subId);
+        const meta = getMetadata(sub);
+        const customerId = typeof invoice.customer === "string"
+          ? invoice.customer
+          : invoice.customer?.id ?? (sub.customer as string);
+        let userId: string | undefined = meta.user_id;
+
+        if (!userId) {
+          // Older subscriptions predate metadata; fall back to the mirrored
+          // row the checkout and subscription webhooks maintain.
+          const { data: mirrored } = await service
+            .from("subscriptions")
+            .select("user_id")
+            .or(`stripe_subscription_id.eq.${subId},stripe_customer_id.eq.${customerId}`)
+            .maybeSingle();
+          userId = (mirrored as { user_id?: string } | null)?.user_id;
+        }
+
+        if (!userId) {
+          console.error("Stripe payment failed for an unknown subscription", subId);
+          break;
+        }
+
+        const { data: authUser, error: authError } = await service.auth.admin.getUserById(userId);
+        if (authError) throw new Error(authError.message);
+        const email = authUser?.user?.email;
+        if (!email) {
+          console.error("Stripe payment failed for a member without an email", userId);
+          break;
+        }
+
+        const sent = await sendPaymentFailedEmail(service, {
+          invoiceId: invoice.id,
+          userId,
+          email,
+          amountDue: invoice.amount_due,
+          currency: invoice.currency,
+          hostedInvoiceUrl: invoice.hosted_invoice_url,
+          subscriptionStatus: sub.status,
+        });
+        if (sent === "duplicate") {
+          console.log("Payment-failure email already sent", invoice.id);
+        }
+        break;
+      }
+
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
-        const invSubId = invoice.parent?.subscription_details?.subscription
-          ?? (invoice as unknown as { subscription: string | null }).subscription;
+        const invSubId = invoiceSubscriptionId(invoice);
         if (invSubId) {
-          const sub = await getStripe().subscriptions.retrieve(typeof invSubId === "string" ? invSubId : invSubId.id);
+          const sub = await getStripe().subscriptions.retrieve(invSubId);
           const meta = getMetadata(sub);
           const userId = meta.user_id;
           const plan = meta.plan ? normalizePlan(meta.plan) : undefined;

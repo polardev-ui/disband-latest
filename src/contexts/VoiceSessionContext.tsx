@@ -13,6 +13,7 @@ interface VoiceSession {
   connectedChannelName: string | null;
   joined: boolean;
   participants: ReturnType<typeof useVoiceChannel>["participants"];
+  connectedPeerIds: Set<string>;
   error: string | null;
 
   remoteStreams: Map<string, MediaStream>;
@@ -106,6 +107,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     connectedChannelName,
     joined: voice.joined,
     participants: voice.participants,
+    connectedPeerIds: voice.connectedPeerIds,
     error: voice.error,
     remoteStreams: voice.remoteStreams,
     remoteScreens: voice.remoteScreens,
@@ -119,6 +121,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     disconnect,
     peek,
   }), [connectedChannelId, connectedChannelName, voice.joined, voice.participants,
+       voice.connectedPeerIds,
        voice.error, voice.remoteStreams, voice.remoteScreens, voice.localScreen,
        voice.localStream, voice.cameraEnabled, voice.screenEnabled,
        voice.toggleCamera, voice.toggleScreenShare,

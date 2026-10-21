@@ -29,10 +29,10 @@ export function PinnedMessagesPanel({
 
   const content = (
     <>
-      <div className={`fixed inset-0 z-40 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Pinned messages" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl`}>
-        <div className="flex items-center justify-between border-b border-divider px-4 py-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-text-normal">
+      <div className={`fixed inset-0 z-40 bg-transparent overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Pinned messages" className={`menu-pop${exiting ? " modal-pop-out" : ""} fixed right-2 top-[56px] z-50 flex max-h-[calc(100dvh-72px)] w-[420px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-[4px] bg-bg-secondary shadow-[var(--elevation-high)]`}>
+        <div className="flex h-12 shrink-0 items-center justify-between bg-bg-primary px-4 shadow-[var(--elevation-low)]">
+          <h3 className="flex items-center gap-2 text-[16px] font-semibold text-text-normal">
             <IconPin size={16} className="text-text-muted" />
             Pinned Messages
           </h3>
@@ -48,7 +48,7 @@ export function PinnedMessagesPanel({
 
         <p className="border-b border-divider px-4 py-2 text-xs text-text-muted">{threadName}</p>
 
-        <div className="max-h-80 overflow-y-auto p-2">
+        <div className="channel-scroll min-h-0 overflow-y-auto p-3">
           {pins.length === 0 ? (
             <p className="py-10 text-center text-xs text-text-muted">
               No pinned messages yet.
@@ -59,7 +59,7 @@ export function PinnedMessagesPanel({
             pins.map((pin) => (
               <div
                 key={pin.id}
-                className="group flex items-start gap-3 rounded px-2 py-2 transition-colors hover:bg-interactive-hover"
+                className="group mb-2 flex items-start gap-3 rounded-[4px] bg-bg-primary px-3 py-3 transition-colors hover:bg-interactive-hover"
               >
                 <span className="mt-0.5 shrink-0 text-brand">
                   <IconPin size={14} />

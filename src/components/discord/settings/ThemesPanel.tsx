@@ -128,7 +128,7 @@ export function ThemesPanel() {
         <div className="mb-2 flex items-baseline justify-between gap-3">
           <h3 className="text-[14.5px] font-semibold text-text-normal">Custom CSS</h3>
           <a
-            href="/docs/themes"
+            href="https://docs.disband.dev/docs/themes/"
             target="_blank"
             rel="noreferrer"
             className="text-xs font-semibold text-text-link hover:underline"

@@ -12,7 +12,7 @@ import { RoleIcon } from "@/components/ui/RoleIcon";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { getAccentBackground, roleIsGradientAnimated, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, getProfileCardTheme, roleIsGradientAnimated, usesCustomAccent } from "@/lib/profileColor";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor, activeStatusNote, statusExpiryLabel, listeningFor } from "@/lib/presence";
@@ -27,13 +27,12 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 /*
  The profile card.
 
- It used to be painted edge to edge in the user's accent colour (a flat grey
- for anyone who hadn't picked one) with the text colour flipped to match —
- Discord's profile-theme look, and the reason every card read as a different
- app. The card is now always the app's own dark (or light) surface, so type,
- tabs and fields behave the same on every profile. The accent still belongs to
- the person: it fills the banner when there's no image, tints the top of the
- card, and edges the border.
+ A profile with its own colours is painted in a Discord-style theme: the two
+ accents are mixed into a dark base and blended through a soft diagonal
+ gradient, so the banner and body read as one surface without losing white
+ text. Profiles that haven't picked colours keep the app's ordinary card
+ surface. The accent also fills the banner when there's no image and colours
+ the primary "Edit profile" action.
 */
 
 type ProfileTab = "about" | "spaces" | "friends";
@@ -48,6 +47,7 @@ interface UserProfileModalProps {
   onDeclineFriend?: () => void;
   onVoiceCall?: () => void;
   onOpenSettings?: () => void;
+  onReport?: () => void;
   onRemoveFriend?: () => void;
   onBlock?: () => void;
   onUnblock?: () => void;
@@ -74,13 +74,32 @@ const BTN_QUIET = `${BTN_BASE} bg-button-secondary text-white hover:bg-button-se
 const BTN_ICON =
   "inline-flex h-8 w-8 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover";
 
-function relativeAge(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+function relativeAge(timestamp: number): string {
+  const days = Math.floor((Date.now() - timestamp) / 86_400_000);
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
   if (days < 1) return rtf.format(0, "day");
   if (days < 30) return rtf.format(-days, "day");
   if (days < 365) return rtf.format(-Math.floor(days / 30), "month");
   return rtf.format(-Math.floor(days / 365), "year");
+}
+
+/**
+ * Profiles can arrive from partial sources (the Tether info endpoint, cached
+ * payloads, older rows) without a usable created_at. Treat those as unknown
+ * rather than passing NaN to Intl.RelativeTimeFormat, which throws.
+ */
+function memberSince(iso: string | null | undefined): { date: string; age: string } | null {
+  if (!iso) return null;
+  const timestamp = new Date(iso).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return {
+    date: new Date(timestamp).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    age: relativeAge(timestamp),
+  };
 }
 
 function Section({ label, children }: { label: string; children: ReactNode }) {
@@ -96,16 +115,22 @@ function ProfileBanner({ profile }: { profile: Profile }) {
   const [failed, setFailed] = useState(false);
   const url = safeImageUrl(profile.banner_url);
   const show = url && !failed;
+  const theme = getProfileCardTheme(profile);
   // No image and no accent of their own: a quiet brand wash instead of the
   // old flat grey, so an unconfigured profile still looks finished.
   const background = usesCustomAccent(profile)
     ? getAccentBackground(profile)
     : profile.accent_color ?? "var(--brand)";
   return (
-    <div className="h-[180px] w-full overflow-hidden" style={{ background }}>
+    <div className="relative h-[180px] w-full overflow-hidden" style={{ background }}>
       {show && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url!} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url!} alt="" className="absolute inset-0 h-full w-full object-cover" onError={() => setFailed(true)} />
+          {theme && (
+            <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />
+          )}
+        </>
       )}
     </div>
   );
@@ -178,6 +203,7 @@ export function UserProfileModal({
   onDeclineFriend,
   onVoiceCall,
   onOpenSettings,
+  onReport,
   onRemoveFriend,
   onBlock,
   onUnblock,
@@ -243,6 +269,7 @@ export function UserProfileModal({
   const live = presenceStatusFor(profile, presenceMap);
   const statusNote = activeStatusNote(profile);
   const listening = live === "offline" ? null : listeningFor(profile, listeningMap);
+  const joined = memberSince(profile.created_at);
 
   // Replying to a status sends a DM quoting it, then jumps there so the
   // reply lands in front of both people. Same open-then-send beat as
@@ -266,6 +293,7 @@ export function UserProfileModal({
     }
   }
   const isBot = !!profile.is_bot;
+  const theme = getProfileCardTheme(profile);
 
   const mutualServers = mutualServerIds
     .map((id) => servers.find((s) => s.id === id))
@@ -290,9 +318,14 @@ export function UserProfileModal({
   };
 
   const overflow: { label: string; onClick: () => void; danger?: boolean }[] = [];
-  if (!isSelf && !isBot && !isBlocked) {
-    if (friend && onRemoveFriend) overflow.push({ label: "Remove friend", onClick: onRemoveFriend });
-    if (onBlock) overflow.push({ label: "Block", onClick: onBlock, danger: true });
+  if (!isSelf && !isBot) {
+    if (!isBlocked) {
+      if (friend && onRemoveFriend) overflow.push({ label: "Remove friend", onClick: onRemoveFriend });
+      if (onBlock) overflow.push({ label: "Block", onClick: onBlock, danger: true });
+    }
+    // Blocking someone is not a substitute for reporting them. Keep the
+    // report action available after a block, when the evidence matters most.
+    if (onReport) overflow.push({ label: "Report profile", onClick: onReport, danger: true });
   }
 
   let actions: ReactNode = null;
@@ -304,7 +337,8 @@ export function UserProfileModal({
           onClose();
           onOpenSettings();
         }}
-        className={BTN_QUIET}
+        className={`${BTN_BASE} ${theme ? "transition-[filter] hover:brightness-110" : "bg-button-secondary text-white hover:bg-button-secondary-hover"}`}
+        style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
       >
         <IconSettings size={15} /> Edit profile
       </button>
@@ -368,7 +402,8 @@ export function UserProfileModal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100vh-3rem)] w-full max-w-[600px] overflow-y-auto rounded-lg bg-bg-secondary-alt text-text-normal shadow-[var(--elevation-high)]`}
+        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100vh-3rem)] w-full max-w-[600px] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[var(--elevation-high)]`}
+        style={theme?.style}
       >
         {/* Artwork sits above the banner and below the readable profile content. */}
         <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
@@ -386,9 +421,17 @@ export function UserProfileModal({
         <div className="relative z-10 px-6 pb-6">
           {/* Avatar overlaps the banner; actions sit level with its lower half. */}
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="relative -mt-[68px] shrink-0 rounded-full bg-bg-secondary-alt p-[7px]">
+            <div
+              className={`relative -mt-[68px] shrink-0 rounded-full p-[7px] ${theme ? "" : "bg-bg-secondary-alt"}`}
+              style={theme ? { backgroundColor: theme.avatarRing } : undefined}
+            >
               <Avatar profile={profile} size="xl" className="!h-[120px] !w-[120px] !text-4xl" />
-              <StatusDot status={live} size={22} ring="var(--bg-secondary-alt)" className="absolute bottom-1.5 right-1.5" />
+              <StatusDot
+                status={live}
+                size={22}
+                ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
+                className="absolute bottom-1.5 right-1.5"
+              />
             </div>
             {actions && <div className="flex flex-wrap items-center justify-end gap-2 pb-1">{actions}</div>}
           </div>
@@ -516,16 +559,14 @@ export function UserProfileModal({
                   </Section>
                 )}
 
-                <Section label="Disband member since">
-                  <p className="text-[14px]">
-                    {new Date(profile.created_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                    <span className="text-text-muted"> · {relativeAge(profile.created_at)}</span>
-                  </p>
-                </Section>
+                {joined && (
+                  <Section label="Disband member since">
+                    <p className="text-[14px]">
+                      {joined.date}
+                      <span className="text-text-muted"> · {joined.age}</span>
+                    </p>
+                  </Section>
+                )}
 
                 {isServerMember && (
                   <Section label="Roles">

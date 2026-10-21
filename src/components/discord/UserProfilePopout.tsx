@@ -16,7 +16,7 @@ import { BotTag } from "@/components/ui/BotTag";
 import { IconClose, IconEdit } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
-import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
 import { OVERLAY_Z } from "@/lib/overlay";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
@@ -122,6 +122,7 @@ export function UserProfilePopout({
   const statusNote = activeStatusNote(p);
   const banner = safeImageUrl(p.banner_url);
   const bannerBg = usesCustomAccent(p) ? getAccentBackground(p) : p.accent_color ?? "#5865f2";
+  const theme = getProfileCardTheme(p);
   const roles = serverRoles.filter((r) => !r.is_default && memberRoleIds.includes(r.id)).sort((a, b) => b.position - a.position);
 
   async function sendQuickMessage() {
@@ -142,14 +143,17 @@ export function UserProfilePopout({
         role="dialog"
         aria-label={`${displayName(p)}'s profile`}
         data-side={pos?.side ?? "right"}
-        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg bg-bg-secondary-alt shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
-        style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden" }}
+        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
+        style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
       >
         {/* Banner */}
-        <div className={`relative ${banner ? "h-[120px]" : "h-[60px]"}`} style={{ background: bannerBg }}>
+        <div className={`relative overflow-hidden ${banner ? "h-[120px]" : "h-[60px]"}`} style={{ background: bannerBg }}>
           {banner && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={banner} alt="" className="h-full w-full object-cover" />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
+            </>
           )}
         </div>
 
@@ -158,15 +162,20 @@ export function UserProfilePopout({
           type="button"
           onClick={onOpenFullProfile}
           aria-label="View full profile"
-          className="group/avatar absolute left-4 rounded-full bg-bg-secondary-alt p-1.5"
-          style={{ top: banner ? 76 : 16 }}
+          className={`group/avatar absolute left-4 rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
+          style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
         >
           <span className="relative block">
             <Avatar profile={p} size="xl" className="!h-20 !w-20 !text-2xl" />
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
               View Profile
             </span>
-            <StatusDot status={live} size={16} ring="var(--bg-secondary-alt)" className="absolute -bottom-0.5 -right-0.5" />
+            <StatusDot
+              status={live}
+              size={16}
+              ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
+              className="absolute -bottom-0.5 -right-0.5"
+            />
           </span>
         </button>
 
@@ -180,7 +189,7 @@ export function UserProfilePopout({
         </div>
 
         {/* Inner card */}
-        <div className="mx-4 mb-4 mt-7 rounded-lg bg-bg-floating p-3">
+        <div className={`mx-4 mb-4 mt-7 rounded-lg p-3 ${theme ? "bg-black/10" : "bg-bg-floating"}`}>
           <div className="flex items-center gap-1">
             <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">{displayName(p)}</h2>
             <BotTag profile={p} size="sm" />
@@ -194,7 +203,7 @@ export function UserProfilePopout({
           )}
           {statusNote && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{statusNote}</p>}
 
-          <div className="my-3 h-px bg-[#2e2f34]" />
+          <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-[#2e2f34]"}`} />
 
           {p.bio?.trim() && (
             <Section title="About Me">
@@ -283,7 +292,10 @@ export function UserProfilePopout({
                 onClose();
                 onOpenSettings?.();
               }}
-              className="mt-1 flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] bg-button-secondary text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
+              className={`mt-1 flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] text-[14px] font-medium text-white transition-[filter] ${
+                theme ? "hover:brightness-110" : "bg-button-secondary hover:bg-button-secondary-hover"
+              }`}
+              style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
             >
               <IconEdit size={16} /> Edit Profile
             </button>

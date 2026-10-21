@@ -12,7 +12,6 @@ import {
   IconMicOff,
   IconPlus,
   IconSpeaker,
-  IconVerified,
 } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { getAvatarStyle } from "@/lib/profileColor";
@@ -42,6 +41,7 @@ interface ChannelListProps {
   onCategoryContext?: (category: ChannelCategory, x: number, y: number) => void;
   showServerHeader?: boolean;
   verified?: boolean;
+  partner?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
   onMoveCategory?: (categoryId: string, index: number) => void;
   onCreateChannel?: (name: string, type: ChannelType, categoryId: string | null) => Promise<string | null>;
@@ -104,6 +104,7 @@ export function ChannelList({
   onCategoryContext,
   showServerHeader = true,
   verified,
+  partner,
   onMoveChannel,
   onMoveCategory,
   onCreateChannel,
@@ -525,7 +526,7 @@ export function ChannelList({
           <>
             <span className="flex min-w-0 items-center gap-1.5">
               {(() => {
-                const kind = serverBadgeFor({ verified, catalystCount });
+                const kind = serverBadgeFor({ verified, partner, catalystCount });
                 return kind ? (
                   <Tooltip label={SERVER_BADGE_LABEL[kind]} side="bottom">
                     <ServerBadge kind={kind} size={16} />

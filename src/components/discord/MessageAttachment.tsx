@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { giphyDisplayUrl, giphyMp4Url } from "@/lib/giphy";
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
-import { DangerousDownloadModal } from "./DangerousDownloadModal";
+import { FileAttachmentCard } from "./FileAttachmentCard";
 import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
 import { PollCard } from "./PollCard";
 import { ActivityCard } from "./activities/ActivityCard";
 import { AudioPlayer } from "./media/AudioPlayer";
 import { VideoPlayer } from "./VideoPlayer";
-import { safeDownload, safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
 
 interface MessageAttachmentProps {
@@ -77,7 +77,6 @@ export function MessageAttachment({
   currentUserId,
   onOpenActivity,
 }: MessageAttachmentProps) {
-  const [downloadOpen, setDownloadOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -138,35 +137,7 @@ export function MessageAttachment({
   );
 
   if (type === "file") {
-    return (
-      <>
-        <div className="mt-1 flex max-w-md items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-3 py-2.5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-accent text-xs font-bold text-brand">
-            {fileExtension(fileName).slice(0, 4)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-text-normal">{fileName}</p>
-            {sizeLabel && <p className="text-xs text-text-muted">{sizeLabel}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={() => setDownloadOpen(true)}
-            className="shrink-0 rounded bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
-          >
-            Download
-          </button>
-        </div>
-        <DangerousDownloadModal
-          open={downloadOpen}
-          fileName={fileName}
-          onClose={() => setDownloadOpen(false)}
-          onContinue={() => {
-            safeDownload(url, fileName);
-            setDownloadOpen(false);
-          }}
-        />
-      </>
-    );
+    return <FileAttachmentCard url={url} name={fileName} size={size} />;
   }
 
   if (type === "poll") {
@@ -218,7 +189,7 @@ export function MessageAttachment({
           <>
             {!mediaLoaded && skeleton}
             <span className={mediaLoaded ? "" : "hidden"}>
-              <VideoPlayer src={imgSrc} onLoad={handleMediaLoad} fileName={fileName} />
+              <VideoPlayer src={imgSrc} onLoad={handleMediaLoad} fileName={fileName} size={size} />
             </span>
           </>
         ) : (
