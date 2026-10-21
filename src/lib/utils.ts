@@ -129,6 +129,13 @@ function shareableAppOrigin(): string {
   const origin = window.location.origin;
 
   if (!/^https?:\/\//i.test(origin)) return web;
+  // The desktop shell runs on tauri.localhost, which is not a shareable
+  // address — an invite copied there would point at the user's own machine.
+  try {
+    if (new URL(origin).hostname === "tauri.localhost") return web;
+  } catch {
+    return web;
+  }
   return origin;
 }
 
