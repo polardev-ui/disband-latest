@@ -26,6 +26,12 @@ final class ChatViewModel {
     private var isSelfDm = false
     var loading = true
     var loadError: String?
+    /// Older pages are loaded as the reader reaches the top of the
+    /// conversation. A window used to be limited to the newest fifty
+    /// messages, with no way to reach anything before them.
+    private(set) var hasMoreHistory = false
+    private(set) var loadingOlder = false
+    static let pageSize = 50
     /// A send that the server refused. Shown above the composer; `loadError`
     /// only appears in an empty conversation, so a rejected send in a busy
     /// channel used to fail with no sign at all.
@@ -36,6 +42,8 @@ final class ChatViewModel {
     private var profileCache: [String: Profile] = [:]
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
+    private var deleteChannel: RealtimeChannelV2?
+    private var deleteTask: Task<Void, Never>?
     private var reactionChannel: RealtimeChannelV2?
     private var reactionTask: Task<Void, Never>?
     nonisolated(unsafe) private var foregroundObserver: NSObjectProtocol?
@@ -81,6 +89,7 @@ final class ChatViewModel {
         await load()
         await loadReactions()
         await subscribe()
+        await subscribeDeletes()
         await subscribeReactions()
         await detectSelfDm()
         await subscribeTyping()
@@ -158,32 +167,72 @@ final class ChatViewModel {
 
     func stop() {
         listenTask?.cancel()
+        deleteTask?.cancel()
         reactionTask?.cancel()
         typingTask?.cancel()
         for task in typingTimers.values { task.cancel() }
         typingTimers = [:]
-        let ch = channel, rc = reactionChannel, tc = typingChannel
-        channel = nil; reactionChannel = nil; typingChannel = nil
-        Task { await ch?.unsubscribe(); await rc?.unsubscribe(); await tc?.unsubscribe() }
-    }
-
-    /// Resolve a replied-to message from the loaded set (for inline previews).
-    func repliedMessage(for message: DisplayMessage) -> DisplayMessage? {
-        guard let id = message.replyToId else { return nil }
-        return messages.first { $0.id == id }
+        let ch = channel, dc = deleteChannel, rc = reactionChannel, tc = typingChannel
+        channel = nil; deleteChannel = nil; reactionChannel = nil; typingChannel = nil
+        Task { await ch?.unsubscribe(); await dc?.unsubscribe(); await rc?.unsubscribe(); await tc?.unsubscribe() }
     }
 
     // MARK: - Loading
 
-    /// Fetch the history once.
-    private func fetchMessages() async throws -> [DisplayMessage] {
+    /// Fetch the newest page, or the page immediately before `before`.
+    private func fetchMessages(before: String? = nil) async throws -> [DisplayMessage] {
         switch source {
         case .channel(let id, _):
-            return try await DatabaseService.messages(channelId: id).map(DisplayMessage.init)
+            return try await DatabaseService.messages(
+                channelId: id, limit: Self.pageSize, before: before
+            ).map(DisplayMessage.init)
         case .dm(let threadId, _):
-            return try await DatabaseService.dmMessages(threadId: threadId).map(DisplayMessage.init)
+            return try await DatabaseService.dmMessages(
+                threadId: threadId, limit: Self.pageSize, before: before
+            ).map(DisplayMessage.init)
         case .group(let id, _):
-            return try await DatabaseService.groupMessages(groupId: id).map(DisplayMessage.init)
+            return try await DatabaseService.groupMessages(
+                groupId: id, limit: Self.pageSize, before: before
+            ).map(DisplayMessage.init)
+        }
+    }
+
+    private var oldestLoadedAt: String? {
+        messages.first(where: { !$0.pending })?.createdAt
+    }
+
+    /// Load the page before the oldest message currently in memory.
+    ///
+    /// The returned Bool tells the list whether anything was inserted above
+    /// the current position, so it can keep the reader's place instead of
+    /// letting the new page shove the thread downward.
+    @discardableResult
+    func loadOlder() async -> Bool {
+        guard !loadingOlder, hasMoreHistory, let before = oldestLoadedAt else { return false }
+        loadingOlder = true
+        defer { loadingOlder = false }
+
+        do {
+            let older = try await fetchMessages(before: before)
+            let known = Set(messages.map(\.id))
+            let fresh = older.filter { !known.contains($0.id) }
+            if !fresh.isEmpty {
+                messages.insert(contentsOf: fresh, at: 0)
+                for m in fresh { if let a = m.author { profileCache[a.id] = a } }
+                cacheNow()
+                await loadReactions(for: fresh.map(\.id), replacing: false)
+            }
+            // A short page means there is nothing older left. If every row
+            // came back as a duplicate the page was still full, so keep the
+            // door open for another attempt.
+            if older.count < Self.pageSize {
+                hasMoreHistory = false
+            }
+            return !fresh.isEmpty
+        } catch {
+            // Leave `hasMoreHistory` alone: this is usually a transient
+            // network failure, and the top-of-list sentinel should retry.
+            return false
         }
     }
 
@@ -227,7 +276,29 @@ final class ChatViewModel {
             let stillPending = messages.filter { opt in
                 opt.pending && !loaded.contains { matches(opt, $0) }
             }
-            messages = loaded + stillPending
+            // Also keep pages the reader already pulled in. Re-opening a
+            // channel used to throw that history away and drop them back at
+            // the newest fifty, even though the cache had more.
+            let loadedIds = Set(loaded.map(\.id))
+            let oldestFresh = loaded.first?.createdAt
+            let olderPages: [DisplayMessage]
+            if let oldestFresh {
+                olderPages = messages.filter { old in
+                    !old.pending && !loadedIds.contains(old.id) && old.createdAt < oldestFresh
+                }
+            } else {
+                // A successful empty page means the conversation is empty,
+                // not that the cache should keep showing deleted history.
+                olderPages = []
+            }
+            messages = olderPages + loaded + stillPending
+            // If the newest page was full there is probably another one
+            // above it. A cached older page also means more may exist above
+            // that, so keep the sentinel available until a short page proves
+            // otherwise.
+            hasMoreHistory = olderPages.isEmpty
+                ? loaded.count >= Self.pageSize
+                : true
             cacheNow()
         } catch {
             // The retry above has already been spent, so this is what the
@@ -532,15 +603,38 @@ final class ChatViewModel {
     // MARK: - Reactions
 
     func loadReactions() async {
-        let ids = messages.map(\.id)
-        guard !ids.isEmpty else { reactions = [:]; return }
-        let all = (try? await DatabaseService.reactions(context: source.contextType, messageIds: ids)) ?? []
+        await loadReactions(for: messages.map(\.id), replacing: true)
+    }
+
+    /// Fetch reactions for a page without refetching the entire history.
+    /// Long conversations can contain thousands of ids; PostgREST puts an
+    /// `in(...)` filter in the URL, so send them in chunks.
+    private func loadReactions(for ids: [String], replacing: Bool) async {
+        guard !ids.isEmpty else {
+            if replacing { reactions = [:] }
+            return
+        }
+        var all: [MessageReaction] = []
+        let chunkSize = 100
+        for start in stride(from: 0, to: ids.count, by: chunkSize) {
+            let end = min(start + chunkSize, ids.count)
+            let chunk = Array(ids[start..<end])
+            if let rows = try? await DatabaseService.reactions(
+                context: source.contextType, messageIds: chunk
+            ) {
+                all.append(contentsOf: rows)
+            }
+        }
         var grouped: [String: [ReactionSummary]] = [:]
         for id in ids {
             let s = summarize(all, messageId: id)
             if !s.isEmpty { grouped[id] = s }
         }
-        reactions = grouped
+        if replacing {
+            reactions = grouped
+        } else {
+            reactions.merge(grouped) { _, new in new }
+        }
         cacheNow()
     }
 
@@ -581,6 +675,28 @@ final class ChatViewModel {
                             reacted: $0.value.reacted, userIds: $0.value.userIds)
         }
         .sorted { $0.count > $1.count }
+    }
+
+    private func subscribeDeletes() async {
+        // No filter: see RealtimeService.observeDeletes. A filtered delete
+        // subscription silently misses every event because the old row only
+        // carries its primary key.
+        let (ch, stream) = await RealtimeService.observeDeletes(
+            table: source.realtimeTable, filter: nil
+        )
+        deleteChannel = ch
+        deleteTask = Task { [weak self] in
+            for await id in stream {
+                await self?.handleDelete(id)
+            }
+        }
+    }
+
+    private func handleDelete(_ id: String) {
+        guard messages.contains(where: { $0.id == id }) else { return }
+        messages.removeAll { $0.id == id }
+        reactions.removeValue(forKey: id)
+        cacheNow()
     }
 
     private func subscribeReactions() async {

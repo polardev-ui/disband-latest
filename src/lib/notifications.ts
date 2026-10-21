@@ -80,6 +80,17 @@ export function isRecipientDoNotDisturb(
   return profile.status === "dnd" || profile.preferred_status === "dnd";
 }
 
+// Tracks the signed-in user's own presence so notification sounds can be
+// suppressed while they are in Do Not Disturb (the OS/browser only mutes
+// push alerts, not the in-app pop).
+let currentUserStatus: UserStatus | null = null;
+export function setCurrentUserStatus(status: UserStatus | null | undefined) {
+  currentUserStatus = status ?? null;
+}
+export function isCurrentUserDoNotDisturb(): boolean {
+  return currentUserStatus === "dnd";
+}
+
 const NOTIFICATION_POP_URL = "/sounds/notificationpop.mp3";
 const POP_VOLUME = 0.85;
 
@@ -196,6 +207,7 @@ async function playWebPop(): Promise<boolean> {
  */
 export async function playNotificationPop(): Promise<boolean> {
   if (typeof window === "undefined" || !getUserSettings().soundEnabled) return false;
+  if (isCurrentUserDoNotDisturb()) return false;
   if (await playNativePop()) return true;
   return playWebPop();
 }
@@ -229,7 +241,7 @@ export function alertIncomingDm(
   recipient: { status?: UserStatus; preferred_status?: UserStatus | null } | null | undefined,
   threadId: string,
 ) {
-  if (isRecipientDoNotDisturb(recipient)) return;
+  if (isRecipientDoNotDisturb(recipient) || isCurrentUserDoNotDisturb()) return;
   const target = { kind: "dm" as const, threadId };
   if (!shouldDeliverOsNotification(target)) return;
   if (getUserSettings().soundEnabled) void playDmPing();
@@ -241,6 +253,7 @@ export function alertMention(
   body: string | undefined,
   target: NotificationTarget,
 ) {
+  if (isCurrentUserDoNotDisturb()) return;
   if (!shouldDeliverOsNotification(target)) return;
   void playMentionPing();
   showSystemNotification(title, body, undefined, notificationTag(target, "mention"));
@@ -369,6 +382,7 @@ function showWebNotification(
 }
 
 export function notifyUser(title: string, body?: string, target?: NotificationTarget) {
+  if (isCurrentUserDoNotDisturb() && target?.kind !== "call") return;
   if (target && !shouldDeliverOsNotification(target)) return;
   // Calls have their own ringtone; everything else gets the pop.
   if (target?.kind !== "call") void playNotificationPop();

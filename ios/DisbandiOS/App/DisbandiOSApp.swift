@@ -56,6 +56,10 @@ struct DisbandiOSApp: App {
                     await presence.start(userId: appState.currentUserId,
                                          status: appState.profile?.status ?? .online)
                 }
+                .onChange(of: appState.profile) { _, profile in
+                    PushManager.shared.doNotDisturb =
+                        profile?.status == .dnd || profile?.preferredStatus == .dnd
+                }
                 .task(id: appState.currentUserId) {
                     await call.start(userId: appState.currentUserId)
                     // Relay credentials in hand before the first call, not

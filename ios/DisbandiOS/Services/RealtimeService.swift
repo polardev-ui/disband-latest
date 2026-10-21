@@ -38,6 +38,37 @@ enum RealtimeService {
         return (channel, stream)
     }
 
+    /// Observe DELETEs on `table`, yielding the deleted row's primary key.
+    ///
+    /// The filter is intentionally optional and the callers below pass `nil`:
+    /// Supabase only carries the old row's primary key unless the table uses
+    /// `REPLICA IDENTITY FULL`, so a `channel_id=eq.…` filter would never
+    /// match a delete and the event would be dropped silently.
+    static func observeDeletes(
+        table: String,
+        filter: String? = nil
+    ) async -> (channel: RealtimeChannelV2, stream: AsyncStream<String>) {
+        let topic = "rt-del:\(table):\(UUID().uuidString.prefix(8))"
+        let channel = client.channel(topic)
+        let changes = channel.postgresChange(
+            DeleteAction.self, schema: "public", table: table, filter: filter
+        )
+        await channel.subscribe()
+
+        let stream = AsyncStream<String> { continuation in
+            let task = Task {
+                for await change in changes {
+                    if case let .string(id) = change.oldRecord["id"] {
+                        continuation.yield(id)
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+        return (channel, stream)
+    }
+
     /// Observe *any* change (insert, update, delete) on `table`, emitting a tick
     /// per change. Use when the reaction is "go re-read the row" rather than
     /// decoding the payload — an UPDATE is what carries a plan upgrade, so
