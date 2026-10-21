@@ -266,6 +266,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   // quietly in the background. Cleared once the real URL lands.
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [pendingBannerFile, setPendingBannerFile] = useState<File | null>(null);
   const previewUrlsRef = useRef<{ avatar: string | null; banner: string | null }>({ avatar: null, banner: null });
   useEffect(() => {
     const leftovers = previewUrlsRef.current;
@@ -655,6 +656,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
     setSaving(true);
     try {
+      let bannerUrl: string | null = null;
+      if (pendingBannerFile) {
+        const res = await upload(pendingBannerFile);
+        if (!res) {
+          setError("Couldn't upload your banner. Please try again.");
+          return;
+        }
+        bannerUrl = res.url;
+      }
       const patch: Record<string, unknown> = {
         display_name: displayName.trim(),
         bio: bio.trim() || null,
@@ -666,7 +676,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         status,
       };
       if (usernameChanged) patch.username = sanitizedUsername;
+      if (pendingBannerFile && bannerUrl) patch.banner_url = bannerUrl;
       const err = await updateProfile(patch as Parameters<typeof updateProfile>[0]);
+      if (!err && pendingBannerFile) {
+        if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+        previewUrlsRef.current.banner = null;
+        setBannerPreview(null);
+        setPendingBannerFile(null);
+      }
       if (err) setError(err);
       else {
         setSaved(true);
@@ -680,6 +697,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   }
 
   const profileDirty = !!profile && (
+    bannerPreview !== null ||
     displayName !== (profile.display_name ?? "") ||
     username !== (profile.username ?? "") ||
     bio !== (profile.bio ?? "") ||
@@ -737,21 +755,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setCropSourceFile(null);
   }
 
-  async function handleBanner(file: File) {
-    const url = URL.createObjectURL(file);
+  function handleBanner(file: File) {
     if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+    const url = URL.createObjectURL(file);
     previewUrlsRef.current.banner = url;
     setBannerPreview(url);
-    try {
-      const res = await upload(file);
-      if (res) await updateProfile({ banner_url: res.url });
-    } finally {
-      if (previewUrlsRef.current.banner === url) {
-        URL.revokeObjectURL(url);
-        previewUrlsRef.current.banner = null;
-        setBannerPreview(null);
-      }
-    }
+    setPendingBannerFile(file);
   }
 
   async function savePreference(
