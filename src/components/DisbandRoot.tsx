@@ -30,7 +30,9 @@ function InviteBootstrap() {
     const code = m[1];
     window.history.replaceState({}, "", "/app");
     if (/^[a-zA-Z0-9]{7}$/.test(code)) {
-      void joinServerByInvite(code);
+      void joinServerByInvite(code).then((err) => {
+        if (err) window.alert(`Couldn't join space: ${err}`);
+      });
       return;
     }
     // A pasted Space ID (32 hex chars, optionally hyphenated as a UUID) is
@@ -38,7 +40,9 @@ function InviteBootstrap() {
     const compact = code.replace(/-/g, "");
     if (/^[a-fA-F0-9]{32}$/.test(compact)) {
       const id = `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
-      void joinServerById(id);
+      void joinServerById(id).then((err) => {
+        if (err) window.alert(`Couldn't join space: ${err}`);
+      });
     }
   }, [ready, session, joinServerByInvite]);
 
