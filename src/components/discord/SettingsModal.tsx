@@ -644,7 +644,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       return;
     }
     const sanitizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-    if (sanitizedUsername.length < 2) {
+    const usernameChanged = sanitizedUsername !== (profile?.username ?? "").trim().toLowerCase();
+    if (usernameChanged && sanitizedUsername.length < 2) {
       setError("Username must be at least 2 characters (letters, numbers, and underscores).");
       return;
     }
@@ -654,9 +655,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
     setSaving(true);
     try {
-      const err = await updateProfile({
+      const patch: Record<string, unknown> = {
         display_name: displayName.trim(),
-        username: sanitizedUsername,
         bio: bio.trim() || null,
         pronouns: pronouns.trim() || null,
         status_note: statusNote.trim() || null,
@@ -664,7 +664,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         accent_color: useDefaultAccent ? null : accent1,
         accent_color_2: useDefaultAccent ? null : accent2,
         status,
-      });
+      };
+      if (usernameChanged) patch.username = sanitizedUsername;
+      const err = await updateProfile(patch as Parameters<typeof updateProfile>[0]);
       if (err) setError(err);
       else {
         setSaved(true);
