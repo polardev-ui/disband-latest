@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Disband",
-  "version": "2.32.110",
+  "version": "2.32.111",
   "identifier": "me.wsgpolar.disband",
   "build": {
     "frontendDist": "../out",
