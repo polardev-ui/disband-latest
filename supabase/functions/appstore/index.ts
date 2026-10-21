@@ -353,6 +353,10 @@ async function applyTransaction(
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" }).throwOnError();
 
+    if (planStatus !== "canceled") {
+      await db.rpc("refresh_user_badges", { p_user: userId });
+    }
+
     return { granted: `aero:${planStatus}` };
   }
 

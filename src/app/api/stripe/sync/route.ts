@@ -114,6 +114,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to save subscription" }, { status: 500 });
     }
 
+    if (granting && plan === "aero") {
+      await admin.rpc("refresh_user_badges", { p_user: user.id });
+    }
+
     return NextResponse.json({
       synced: true,
       plan: granting ? plan : "free",
