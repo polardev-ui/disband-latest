@@ -15,9 +15,11 @@ export function formatMessageTime(iso: string): string {
 /** Usernames named by @mentions, in first-seen order, without duplicates. */
 export function parseMentionTokens(content: string): string[] {
   const tokens = new Set<string>();
-  const re = /(?<![\w.])@([a-zA-Z0-9_]{1,32})/g;
+  const re = /@([a-zA-Z0-9_]{1,32})/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
+    // Don't treat the domain in an email address as an @mention.
+    if (m.index > 0 && /[\w.]/.test(content[m.index - 1])) continue;
     const token = m[1].toLowerCase();
     if (token === "everyone") continue;
     tokens.add(token);
@@ -48,7 +50,12 @@ export function mentionsEveryone(content: string): boolean {
 export function mentionsUsername(content: string, username: string | null | undefined): boolean {
   if (!username) return false;
   const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<![\\w.])@${escaped}\\b`, "i").test(content);
+  const re = new RegExp(`@${escaped}\\b`, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    if (m.index === 0 || !/[\w.]/.test(content[m.index - 1])) return true;
+  }
+  return false;
 }
 
 export function isValidMentionToken(
