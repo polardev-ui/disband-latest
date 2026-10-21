@@ -129,14 +129,25 @@ function shareableAppOrigin(): string {
   const origin = window.location.origin;
 
   if (!/^https?:\/\//i.test(origin)) return web;
-  // The desktop shell runs on tauri.localhost, which is not a shareable
-  // address — an invite copied there would point at the user's own machine.
+  let host: string;
   try {
-    if (new URL(origin).hostname === "tauri.localhost") return web;
+    host = new URL(origin).hostname;
   } catch {
     return web;
   }
-  return origin;
+  // The desktop shell runs on tauri.localhost, which is not a shareable
+  // address — an invite copied there would point at the user's own machine.
+  if (host === "tauri.localhost") return web;
+  // Canonicalise to the host that actually serves the app. Both disband.dev
+  // and www.disband.dev historically appear in links, but only the canonical
+  // host's redirect + middleware chain is reliable for /server/... invites.
+  try {
+    const url = new URL(web);
+    if (url.hostname === "disband.dev") url.hostname = "www.disband.dev";
+    return url.origin;
+  } catch {
+    return web;
+  }
 }
 
 export function getInviteUrl(code: string): string {
