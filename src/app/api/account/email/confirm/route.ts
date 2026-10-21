@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       .eq("id", row.id);
     if (error) return redirectTo("invalid");
 
-    const confirmUrl = `${PUBLIC_ENV.webAppUrl.replace(/\/$/, "")}/email-change/confirm?token=${row.token_new}&which=new`;
+    const confirmUrl = `${PUBLIC_ENV.webAppUrl.replace(/\/$/, "")}/api/account/email/confirm?token=${row.token_new}&which=new`;
     await sendResendEmail({
       to: row.new_email,
       subject: "Confirm your new Disband email",
