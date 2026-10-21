@@ -664,6 +664,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         const res = await upload(pendingAvatarFile);
         if (!res) {
           setError("Couldn't upload your profile picture. Please try again.");
+          if (typeof window !== "undefined") window.alert("Couldn't upload your profile picture. Please try again.");
           return;
         }
         avatarUrl = res.url;
@@ -673,6 +674,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         const res = await upload(pendingBannerFile);
         if (!res) {
           setError("Couldn't upload your banner. Please try again.");
+          if (typeof window !== "undefined") window.alert("Couldn't upload your banner. Please try again.");
           return;
         }
         bannerUrl = res.url;
@@ -709,8 +711,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           setPendingBannerFile(null);
         }
       }
-      if (err) setError(err);
-      else {
+      if (err) {
+        setError(err);
+        if (typeof window !== "undefined") window.alert(err);
+      } else {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       }
