@@ -29,7 +29,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
   };
 
   return (
-    <div className="group/code relative my-1.5">
+    <div className="group/code relative my-1 max-w-[90%]">
       <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-2">
         {language && (
           <span className="rounded bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
@@ -51,10 +51,10 @@ export function CodeBlock({ code, language }: { code: string; language: string }
       <Highlight code={code.replace(/\n$/, "")} language={lang} theme={themes.vsDark}>
         {({ className, style, tokens, getLineProps, getTokenProps }) => (
           <pre
-            className={`${className} overflow-x-auto rounded-md p-3 font-mono text-[13px] leading-relaxed`}
+            className={`${className} overflow-x-auto rounded-[4px] border border-bg-tertiary p-2 font-mono text-[14px] leading-[18px]`}
             // The theme brings its own background, which is what makes the
             // highlighting legible regardless of the app's current theme.
-            style={{ ...style, background: "var(--bg-accent)" }}
+            style={{ ...style, background: "var(--bg-secondary)" }}
           >
             <code>
               {tokens.map((line, i) => (

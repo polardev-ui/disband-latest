@@ -7,7 +7,7 @@ import { GIFT_PLAN_NAME, monthsLabel, type GiftPlan } from "@/lib/gifts";
 import { invalidateEntitlement } from "@/lib/entitlement-store";
 import { invalidateBadges } from "@/lib/badge-store";
 import { ClaimAnimation } from "./ClaimAnimation";
-import { SubscriptionMedallion, TIERS, tierForMonths } from "./SubscriptionMedallion";
+import { GiftArtwork } from "./GiftArtwork";
 
 interface GiftRow {
   code: string;
@@ -85,16 +85,14 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   // still-loading. Show a skeleton, then an honest invalid state.
   if (loading) {
     return (
-      <div aria-label="Loading gift" className="mt-1.5 max-w-[420px] animate-pulse overflow-hidden rounded-[16px] border border-divider bg-bg-secondary">
-        <div className="flex items-center gap-3.5 p-4">
-          <div className="h-[46px] w-[46px] rounded-full bg-bg-accent" />
-          <div className="flex-1">
-            <div className="h-3 w-1/3 rounded bg-bg-accent" />
-            <div className="mt-2 h-4 w-1/2 rounded bg-bg-accent" />
+      <div aria-label="Loading gift" role="status" className="@container mt-1.5 w-[580px] max-w-full animate-pulse overflow-hidden rounded-[4px] bg-bg-secondary">
+        <div className="grid grid-cols-1 @[480px]:grid-cols-[1.15fr_1fr]">
+          <div className="order-2 flex min-h-[180px] flex-col p-4 @[480px]:order-1">
+            <div className="h-4 w-5/6 rounded bg-bg-accent" />
+            <div className="mt-3 h-3 w-3/4 rounded bg-bg-accent" />
+            <div className="mt-auto h-8 w-20 rounded-[3px] bg-bg-accent" />
           </div>
-        </div>
-        <div className="border-t border-divider px-4 py-3">
-          <div className="h-9 w-full rounded-[10px] bg-bg-accent" />
+          <div className="order-1 h-[160px] bg-bg-accent @[480px]:order-2 @[480px]:h-full" />
         </div>
       </div>
     );
@@ -102,7 +100,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   if (!gift) {
     return (
-      <div className="mt-1.5 max-w-[420px] rounded-[16px] border border-divider bg-bg-secondary px-4 py-3">
+      <div className="mt-1.5 w-[580px] max-w-full rounded-[4px] bg-bg-secondary px-4 py-3">
         <p className="text-[13px] text-text-muted">
           This gift link is invalid or has expired.
         </p>
@@ -111,10 +109,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   }
 
   const mine = gift.buyer_id === userId;
-  const claimedByMe = gift.claimed_by === userId;
-  const gone = gift.status === "claimed" || gift.status === "expired" || gift.status === "refunded";
-
-  const accent = gift.plan === "lite" ? "#7dd3fc" : "#fee75c";
+  const claimedByMe = Boolean(userId && gift.status === "claimed" && gift.claimed_by === userId);
 
   async function claim() {
     if (claiming) return;
@@ -152,64 +147,11 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   return (
     <>
-      <div className="mt-1.5 max-w-[420px] overflow-hidden rounded-[16px] border border-divider bg-bg-secondary">
-        <div className={`flex items-center gap-3.5 p-4 ${gone && !claimedByMe ? "opacity-60" : ""}`}>
-          <span className="shrink-0">
-            <SubscriptionMedallion tier={tierForMonths(gift.months) ?? TIERS[0]} super size={46} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[12.5px] text-text-muted">
-              {mine ? "Your gift" : `Gift from ${buyerName}`}
-            </p>
-            <p className="truncate text-[15.5px] font-semibold leading-snug">
-              <span style={{ color: accent }}>{GIFT_PLAN_NAME[gift.plan]}</span>
-              <span className="font-normal text-text-muted"> · {monthsLabel(gift.months)}</span>
-            </p>
-            {!gone && gift.status !== "pending" && (
-              <p className="text-[12.5px] text-text-muted">First to claim it gets it</p>
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-divider px-4 py-3">
-          {claimedByMe ? (
-            <p className="flex items-center gap-2 text-[13.5px] font-medium text-status-online">
-              <Tick /> Claimed by you
-            </p>
-          ) : gift.status === "claimed" ? (
-            <p className="text-[13.5px] text-text-muted">Already claimed</p>
-          ) : gift.status === "expired" ? (
-            <p className="text-[13.5px] text-text-muted">This gift expired</p>
-          ) : gift.status === "refunded" ? (
-            <p className="text-[13.5px] text-text-muted">The buyer refunded this gift — it is no longer valid</p>
-          ) : gift.status === "pending" ? (
-            <div className="flex items-center gap-2.5">
-              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" aria-hidden />
-              <p className="flex-1 text-[13.5px] text-text-muted">Waiting for payment to clear…</p>
-              <button
-                type="button"
-                disabled={refreshing}
-                onClick={() => void refresh()}
-                className="shrink-0 rounded-md px-2 py-1 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
-              >
-                {refreshing ? "Checking…" : "Refresh"}
-              </button>
-            </div>
-          ) : mine ? (
-            <p className="text-[13.5px] text-text-muted">Waiting for someone to claim it</p>
-          ) : (
-            <button
-              type="button"
-              disabled={claiming}
-              onClick={() => void claim()}
-              className="h-9 w-full rounded-[10px] bg-text-normal text-[14px] font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {claiming ? "Claiming…" : "Claim gift"}
-            </button>
-          )}
-          {error && <p className="mt-2 text-[12.5px] text-status-dnd">{error}</p>}
-        </div>
-      </div>
+      <GiftCardContent
+        gift={gift} buyerName={buyerName} mine={mine} claimedByMe={claimedByMe}
+        claiming={claiming} refreshing={refreshing} error={error}
+        onClaim={() => void claim()} onRefresh={() => void refresh()}
+      />
 
       {celebrate && (
         <ClaimAnimation
@@ -220,6 +162,66 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
         />
       )}
     </>
+  );
+}
+
+interface GiftCardContentProps {
+  gift: GiftRow;
+  buyerName: string;
+  mine?: boolean;
+  claimedByMe?: boolean;
+  claiming?: boolean;
+  refreshing?: boolean;
+  error?: string | null;
+  onClaim: () => void;
+  onRefresh: () => void;
+}
+
+export function GiftCardContent({ gift, buyerName, mine, claimedByMe, claiming, refreshing, error, onClaim, onRefresh }: GiftCardContentProps) {
+  const gone = ["claimed", "expired", "refunded"].includes(gift.status);
+  const pending = gift.status === "pending";
+  const expires = new Date(gift.expires_at);
+  const expiryLabel = Number.isNaN(expires.getTime()) ? null : expires.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return (
+    <div className="@container mt-1.5 w-[580px] max-w-full overflow-hidden rounded-[4px] bg-bg-secondary">
+      <div className="grid grid-cols-1 @[480px]:grid-cols-[1.15fr_1fr]">
+        <div className="order-2 flex min-h-[165px] min-w-0 flex-col p-4 @[480px]:order-1">
+          <h3 className="text-[16px] font-bold leading-5 text-header-primary">
+            {mine ? "You sent a subscription gift!" : pending ? "A subscription gift for you!" : "You’ve been gifted a subscription!"}
+          </h3>
+          <p className="mt-2 break-words text-[13px] leading-[18px] text-header-secondary">
+            {mine ? "You gifted" : <><strong className="font-semibold">{buyerName}</strong> has gifted you</>} <strong className="font-semibold">{monthsLabel(gift.months)}</strong> of <strong className="font-semibold">{GIFT_PLAN_NAME[gift.plan]}</strong>.
+          </p>
+          <div className="mt-auto pt-5">
+            {claimedByMe ? (
+              <p role="status" className="flex items-center gap-2 text-[13px] font-medium text-status-online"><Tick /> Accepted by you</p>
+            ) : gone ? (
+              <p role="status" className="text-[13px] text-text-muted">
+                {gift.status === "claimed" ? "Already accepted" : gift.status === "expired" ? "This gift has expired." : "This gift was refunded and is no longer available."}
+              </p>
+            ) : pending ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <p role="status" className="flex min-w-0 flex-1 items-center gap-2 text-[12px] leading-4 text-text-muted">
+                  <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" aria-hidden />Waiting for payment to clear…
+                </p>
+                <button type="button" disabled={refreshing} onClick={onRefresh} className="rounded-[3px] bg-button-secondary px-3 py-1.5 text-[12px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50">{refreshing ? "Checking…" : "Refresh"}</button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                {mine ? <p className="text-[13px] text-text-muted">Waiting to be accepted</p> : (
+                  <button type="button" disabled={claiming} onClick={onClaim} className="h-8 rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60">{claiming ? "Accepting…" : "Accept"}</button>
+                )}
+                {expiryLabel && <time dateTime={gift.expires_at} title={expires.toLocaleString("en-GB")} className="pb-1 text-[11px] text-text-muted">Expires {expiryLabel}</time>}
+              </div>
+            )}
+            {error && <p role="alert" className="mt-2 text-[12px] text-status-dnd">{error}</p>}
+          </div>
+        </div>
+        <div className={`order-1 min-w-0 @[480px]:order-2 ${gone && !claimedByMe ? "opacity-50 grayscale" : ""}`}>
+          <GiftArtwork plan={gift.plan} />
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -23,14 +23,14 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
 
   return (
     <div className="pb-10">
-      <section className="mb-8 overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
         <div className="flex items-center gap-4 px-5 py-5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-brand/12 text-brand">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
             <IconSparkle size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-text-muted">Current level</p>
-            <p className="text-[22px] font-semibold tracking-[-0.02em] text-text-normal">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">Current level</p>
+            <p className="text-[22px] font-semibold text-text-normal">
               {current.level === 0 ? "No level yet" : current.name}
             </p>
           </div>
@@ -77,7 +77,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
                     </span>
                     <span className="min-w-0">
                       <span className={`block text-[14px] font-medium ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{perk.title}</span>
-                      <span className="block text-[12.5px] text-text-muted">{perk.body}</span>
+                      <span className="block text-[13px] text-text-muted">{perk.body}</span>
                     </span>
                   </li>
                 ))}

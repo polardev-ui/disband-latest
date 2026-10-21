@@ -1,14 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { listeningFor } from "@/lib/presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
-import { IconClose, IconFriends, IconGroup, IconPlus, IconNotes, IconCrown, IconSparkle } from "@/components/icons";
-import { CallIndicator } from "./CallIndicator";
+import { StatusDot } from "@/components/ui/StatusDot";
+import { Tooltip } from "./Tooltip";
+import { CartIcon } from "@/components/icons/CartIcon";
+import { SolidFriendsIcon, SolidNotesIcon } from "@/components/icons/SolidIcons";
+import { AeroIcon } from "@/components/icons/AeroIcon";
+import { IconClose, IconFriends, IconGroup, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
@@ -26,6 +30,8 @@ interface HomePanelProps {
   onGroupContext?: (group: GroupChatWithMembers, x: number, y: number) => void;
   onOpenSubscription?: () => void;
   onOpenShop?: () => void;
+  /** Opens the Ctrl/⌘+K quick switcher. */
+  onOpenQuickSwitcher?: () => void;
 }
 
 function NavRow({
@@ -47,18 +53,12 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className={`mb-px flex h-10 w-full items-center gap-3 rounded-[10px] px-2.5 text-left transition-colors duration-100 ${
-        active ? "bg-interactive-selected" : "hover:bg-interactive-hover"
+      className={`group/nav mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+        active ? "bg-interactive-selected text-interactive-active" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
       }`}
     >
-      <span
-        className={`flex h-6 w-6 shrink-0 items-center justify-center transition-colors duration-150 ${
-          accent ? "text-super" : active ? "text-text-normal" : "text-text-muted"
-        }`}
-      >
-        {icon}
-      </span>
-      <span className={`min-w-0 flex-1 truncate text-[14.5px] ${active ? "font-medium text-text-normal" : "text-text-muted"}`}>{label}</span>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${accent ? "text-[#ff73fa]" : ""}`}>{icon}</span>
+      <span className="min-w-0 flex-1 truncate text-[16px] font-medium leading-5">{label}</span>
       {trailing}
     </button>
   );
@@ -73,7 +73,7 @@ function DmRowBadge({ count }: { count: number }) {
   return (
     <span
       key={count}
-      className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
+      className="badge-pop ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white"
     >
       {label}
     </span>
@@ -87,6 +87,7 @@ export function HomePanel({
   onGroupContext,
   onOpenSubscription,
   onOpenShop,
+  onOpenQuickSwitcher,
 }: HomePanelProps) {
   const {
     pendingIncoming,
@@ -157,6 +158,44 @@ export function HomePanel({
     : null;
   const showTetherRow = subscriptionPlan === "aero" && tetherProfile && !tetherThreadId;
 
+  // DMs and group chats share one list so a DM with fresh activity can sit
+  // above an older group chat instead of being trapped beneath it. Unread
+  // conversations stay pinned to the top.
+  const mixedConversations = useMemo(() => {
+    const items: {
+      kind: "group" | "dm";
+      id: string;
+      unread: number;
+      sortAt: string;
+      group?: GroupChatWithMembers;
+      entry?: (typeof dmListEntries)[number];
+    }[] = [];
+    for (const g of groupChats) {
+      items.push({
+        kind: "group",
+        id: `group:${g.id}`,
+        unread: getGroupUnreadCount(g.id),
+        sortAt: g.created_at,
+        group: g,
+      });
+    }
+    for (const entry of dmListEntries) {
+      items.push({
+        kind: "dm",
+        id: entry.key,
+        unread: entry.unreadCount,
+        sortAt: entry.sortAt,
+        entry,
+      });
+    }
+    return items.sort((a, b) => {
+      const aUnread = a.unread > 0 ? 1 : 0;
+      const bUnread = b.unread > 0 ? 1 : 0;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+      return b.sortAt.localeCompare(a.sortAt);
+    });
+  }, [groupChats, dmListEntries, getGroupUnreadCount]);
+
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
       await selectDmThread(entry.threadId);
@@ -196,15 +235,20 @@ export function HomePanel({
   }
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden bg-bg-secondary">
-      <header className="flex h-12 items-center border-b border-divider px-4">
-        <IconFriends className="mr-2 text-text-muted" />
-        <span className="flex-1 font-semibold text-text-normal">Friends</span>
-      </header>
+    <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-secondary">
+      <div className="flex h-12 shrink-0 items-center px-2.5 shadow-[var(--elevation-low)]">
+        <button
+          type="button"
+          onClick={() => onOpenQuickSwitcher?.()}
+          className="h-7 w-full truncate rounded-[4px] bg-bg-tertiary px-1.5 text-left text-[14px] font-medium leading-6 text-text-muted"
+        >
+          Find or start a conversation
+        </button>
+      </div>
 
       <nav className="px-2 pt-2">
         <NavRow
-          icon={<IconFriends size={18} />}
+          icon={<SolidFriendsIcon size={24} />}
           label="Friends"
           active={onFriends}
           onClick={() => setViewHome()}
@@ -212,7 +256,7 @@ export function HomePanel({
             pendingIncoming.length > 0 ? (
               <span
                 key={pendingIncoming.length}
-                className="badge-pop rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white"
+                className="badge-pop flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white"
               >
                 {pendingIncoming.length > 99 ? "99+" : pendingIncoming.length}
               </span>
@@ -220,121 +264,91 @@ export function HomePanel({
           }
         />
         <NavRow
-          icon={<IconNotes size={18} />}
+          icon={<SolidNotesIcon size={24} />}
           label="Notes"
           active={viewMode === "notes"}
           onClick={() => void setViewNotes()}
         />
         <NavRow
-          icon={<IconCrown size={18} />}
-          label="Upgrade"
+          icon={<AeroIcon size={24} />}
+          label="Aero"
           accent
           onClick={() => onOpenSubscription?.()}
         />
         <NavRow
-          icon={<IconSparkle size={18} />}
-          label="Disband Shop"
+          icon={<CartIcon />}
+          label="Shop"
           onClick={() => onOpenShop?.()}
         />
       </nav>
 
-      <div className="mx-4 my-2 h-px bg-divider" />
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-2">
+      <div className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2">
         {(
           <>
-            <div className="flex items-center justify-between px-2 py-1">
-              <p className="text-xs font-bold uppercase text-text-muted">Group Chats — {groupChats.length}</p>
-              <button
-                type="button"
-                onClick={() => setCreateGroupOpen(true)}
-                title="Create group"
-                className="rounded p-0.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-              >
-                <IconPlus size={16} />
-              </button>
-            </div>
-            {groupChats.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => setCreateGroupOpen(true)}
-                className="w-full rounded px-2 py-2 text-left text-sm text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-              >
-                No group chats yet — <span className="font-semibold text-brand">start one</span>.
-              </button>
-            ) : null}
-            {groupChats.map((g) => {
-              const inCallCount = groupCallCounts.get(g.id) ?? 0;
-              const unreadCount = getGroupUnreadCount(g.id);
-              const active = viewMode === "group" && activeGroupChatId === g.id;
-              return (
+            <div className="group/dmh flex h-10 items-center justify-between pb-1 pl-2 pr-2 pt-[18px]">
+              <p className="text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default group-hover/dmh:text-text-normal">Direct Messages</p>
+              <Tooltip label="Create DM" side="top">
                 <button
-                  key={g.id}
                   type="button"
-                  onClick={() => void selectGroupChat(g.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onGroupContext?.(g, e.clientX, e.clientY);
-                  }}
-                  className={`mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
-                    active ? "bg-interactive-selected" : ""
-                  }`}
+                  onClick={() => setCreateGroupOpen(true)}
+                  aria-label="Create DM"
+                  className="text-interactive-normal hover:text-interactive-active"
                 >
-                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-divider bg-bg-accent text-text-muted">
-                    <IconGroup size={17} />
-                    {inCallCount > 0 && (
-                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
-                    )}
-                    {unreadCount > 0 && (
-                      <span
-                        key={unreadCount}
-                        className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
-                      >
-                        {unreadCount > 99 ? "99+" : String(unreadCount)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{g.name}</span>
-                    <span className="block truncate text-[11px] text-text-muted">
-                      {g.members.length} members
-                      {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
-                    </span>
-                  </div>
+                  <IconPlus size={16} />
                 </button>
-              );
-            })}
+              </Tooltip>
+            </div>
+            {mixedConversations.map((item) => {
+              if (item.kind === "group") {
+                const g = item.group!;
+                const inCallCount = groupCallCounts.get(g.id) ?? 0;
+                const unreadCount = item.unread;
+                const active = viewMode === "group" && activeGroupChatId === g.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void selectGroupChat(g.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onGroupContext?.(g, e.clientX, e.clientY);
+                    }}
+                    className={`mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+                      active ? "bg-interactive-selected text-interactive-active" : unreadCount > 0 ? "text-interactive-active hover:bg-interactive-hover" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
+                    }`}
+                  >
+                    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `hsl(${(g.id.charCodeAt(0) * 37) % 360} 55% 45%)` }}>
+                      <IconGroup size={18} />
+                      {inCallCount > 0 && (
+                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
+                      )}
+                      {unreadCount > 0 && (
+                        <span
+                          key={unreadCount}
+                          className="badge-pop absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold text-white"
+                        >
+                          {unreadCount > 99 ? "99+" : String(unreadCount)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
+                      <span className="block truncate text-[12px] leading-4 text-text-muted">
+                        {g.members.length} members
+                        {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
+                      </span>
+                    </div>
+                  </button>
+                );
+              }
 
-            <p className="mt-3 px-2 py-1 text-xs font-bold uppercase text-text-muted">
-              Direct Messages — {dmListEntries.length}
-            </p>
-            {showTetherRow && tetherProfile && (
-              <button
-                key="tether-dm"
-                type="button"
-                onClick={() => void openDmWithFriend(tetherProfile.id)}
-                title="Message Tether directly"
-                className="mb-px flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover"
-              >
-                <div className="relative">
-                  <Avatar profile={tetherProfile} size="sm" />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
-                </div>
-                <span className="truncate text-sm">{displayName(tetherProfile)}</span>
-                <span className="ml-auto shrink-0 rounded bg-super/15 px-1 text-[10px] font-bold uppercase tracking-wide text-super">
-                  Aero
-                </span>
-              </button>
-            )}
-            {dmListEntries.map((entry) => {
+              const entry = item.entry!;
               const active = viewMode === "dm" && entry.threadId && activeDmThreadId === entry.threadId;
               return (
                 <button
-                  key={entry.key}
+                  key={item.id}
                   type="button"
                   onClick={(e) => {
-                    // A long-press already opened the menu; don't also open
-                    // the conversation when the finger lifts.
                     if (dmLongPress.current.fired) {
                       dmLongPress.current.fired = false;
                       e.preventDefault();
@@ -351,21 +365,24 @@ export function HomePanel({
                   onPointerUp={dmRowPointerEnd}
                   onPointerCancel={dmRowPointerEnd}
                   onPointerLeave={dmRowPointerEnd}
-                  className={`group/dmrow mb-px flex w-full select-none items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-interactive-hover ${
-                    active ? "bg-interactive-selected" : ""
+                  className={`group/dmrow mb-0.5 flex h-[42px] w-full select-none items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+                    active ? "bg-interactive-selected text-interactive-active" : entry.unreadCount > 0 ? "text-interactive-active hover:bg-interactive-hover" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
                   }`}
                 >
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <Avatar profile={entry.friend} size="sm" />
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${STATUS_BG[presenceMap.get(entry.friend.id) ?? "offline"]}`} />
-                    <DmRowBadge count={entry.unreadCount} />
+                    <StatusDot
+                      status={presenceMap.get(entry.friend.id) ?? "offline"}
+                      ring={active ? "var(--interactive-selected)" : "var(--bg-secondary)"}
+                      className="absolute -bottom-[3px] -right-[3px] group-hover/dmrow:![background:var(--interactive-hover)]"
+                    />
                   </div>
                   {(() => {
                     const live = presenceMap.get(entry.friend.id) ?? "offline";
                     const listening = live === "offline" ? null : listeningFor(entry.friend, listeningMap);
                     return (
                       <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-sm">{displayName(entry.friend)}</span>
+                        <span className="truncate text-[16px] font-medium leading-5">{displayName(entry.friend)}</span>
                         {listening && <ListeningLine listening={listening} />}
                       </span>
                     );
@@ -386,21 +403,42 @@ export function HomePanel({
                         closeDmThread(entry.friend.id);
                       }
                     }}
-                    className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted opacity-0 transition-opacity hover:bg-interactive-hover hover:text-text-normal focus-visible:opacity-100 group-hover/dmrow:opacity-100 group-hover/dmrow:flex"
+                    className="hidden h-4 w-4 shrink-0 items-center justify-center text-interactive-normal hover:text-interactive-active focus-visible:flex group-hover/dmrow:flex"
                   >
-                    <IconClose size={13} />
+                    <IconClose size={16} />
+                  </span>
+                  <span className="group-hover/dmrow:hidden">
+                    <DmRowBadge count={entry.unreadCount} />
                   </span>
                 </button>
               );
             })}
-            {dmListEntries.length === 0 && (
+
+            {showTetherRow && tetherProfile && (
+              <button
+                key="tether-dm"
+                type="button"
+                onClick={() => void openDmWithFriend(tetherProfile.id)}
+                title="Message Tether directly"
+                className="mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left text-channels-default transition-colors duration-75 hover:bg-interactive-hover hover:text-text-normal"
+              >
+                <div className="relative">
+                  <Avatar profile={tetherProfile} size="sm" />
+                  <StatusDot status="online" className="absolute -bottom-[3px] -right-[3px]" />
+                </div>
+                <span className="truncate text-[16px] font-medium">{displayName(tetherProfile)}</span>
+                <span className="ml-auto shrink-0 rounded bg-super/15 px-1 text-[10px] font-bold uppercase tracking-wide text-super">
+                  Aero
+                </span>
+              </button>
+            )}
+            {mixedConversations.length === 0 && (
               <p className="px-2 py-2 text-sm text-text-muted">Add friends to start chatting.</p>
             )}
           </>
         )}
       </div>
 
-      <CallIndicator />
       <CreateGroupChatModal open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </aside>
   );

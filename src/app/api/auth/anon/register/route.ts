@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { getClientIp } from "@/lib/request-ip";
+import { getClientIp, hashIp } from "@/lib/request-ip";
+import { persistentRateLimitCheck } from "@/lib/auth-guard";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { requireTurnstile } from "@/lib/turnstile";
 import { formatAccountNumber, isAnonTier } from "@/lib/anon-accounts";
 import {
   expiryForTier,
@@ -24,8 +25,9 @@ export const dynamic = "force-dynamic";
  * session so the caller drops straight into the app. The number is returned
  * exactly once and is the only way back in.
  *
- * No IP address is persisted: the burst guard below is the in-process rate
- * limiter, and the Turnstile check is not given a remote IP.
+ * No IP address is stored: creation is capped per network against a keyed
+ * hash in short-lived rate-limit buckets, and the Turnstile check is not
+ * given a remote IP.
  */
 export async function POST(request: Request) {
   const ip = getClientIp(request) || "unknown";
@@ -39,12 +41,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  if (process.env.TURNSTILE_SECRET_KEY && (!body.turnstileToken || !(await verifyTurnstileToken(body.turnstileToken)))) {
-    return NextResponse.json(
-      { error: "Please complete the verification challenge.", code: "TURNSTILE_REQUIRED" },
-      { status: 403 },
-    );
-  }
+  // Fail closed: no token, a bad token, a token from another form, or a
+  // server without the secret all stop here (see requireTurnstile).
+  const blocked = await requireTurnstile(body.turnstileToken, { action: "anon-register" });
+  if (blocked) return blocked;
 
   if (!isAnonTier(body.tier)) {
     return NextResponse.json({ error: "Choose how long the account should last." }, { status: 400 });
@@ -54,6 +54,23 @@ export async function POST(request: Request) {
   const service = getServiceSupabase();
   if (!service) {
     return NextResponse.json({ error: "Anonymous accounts are unavailable right now." }, { status: 503 });
+  }
+
+  // Turnstile stops scripts; this caps what one network can make even when a
+  // person solves every challenge (the server-botting case). Counted against
+  // a keyed hash of the address in short-lived buckets, never the address.
+  if (ip !== "unknown") {
+    const ipHash = hashIp(ip);
+    const hit = await persistentRateLimitCheck(service, [
+      { key: `anon:ip:${ipHash}:hr`, max: 3, windowSeconds: 3600 },
+      { key: `anon:ip:${ipHash}:day`, max: 6, windowSeconds: 86400 },
+    ]);
+    if (hit) {
+      return NextResponse.json(
+        { error: "Too many anonymous accounts from your network. Try again later." },
+        { status: 429, headers: { "Retry-After": "3600" } },
+      );
+    }
   }
 
   const number = generateAccountNumber();

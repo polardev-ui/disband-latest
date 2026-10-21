@@ -2,26 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
-import { Soundboard } from "./Soundboard";
+import { CallControls, VoiceStatus } from "./CallUI";
+import { Tooltip } from "./Tooltip";
 import { CallStage } from "./CallStage";
 import {
-  IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff,
+  IconGroup, IconPhone, IconPhoneOff, IconVideo, IconVideoOff, IconMic, IconMicOff,
   IconScreenShare, IconScreenShareOff,
 } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
-
-// Shared shape with CallUI's timer: h:mm:ss past the hour, mm:ss within it.
-function formatElapsed(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
 
 interface GroupCallStageProps {
   groupName: string;
@@ -33,6 +24,7 @@ interface GroupCallStageProps {
   selfId?: string | null;
   localStream: MediaStream | null;
   remoteStreams: Map<string, MediaStream>;
+  connectedPeerIds: Set<string>;
 
   remoteScreens: Map<string, MediaStream>;
   remoteScreenAudio?: Map<string, MediaStream>;
@@ -53,7 +45,7 @@ interface GroupCallStageProps {
 
 export function GroupCallStage({
   groupName, members, presence, ringingIds, joined,
-  selfId, localStream, remoteStreams, remoteScreens, remoteScreenAudio, screenShareEnabled, onToggleScreenShare,
+  selfId, localStream, remoteStreams, connectedPeerIds, remoteScreens, remoteScreenAudio, screenShareEnabled, onToggleScreenShare,
   localScreen, cameraEnabled,
   micMuted, deafened, connectedAt, onJoin, onLeave, onToggleCamera, onToggleMic,
 }: GroupCallStageProps) {
@@ -65,9 +57,9 @@ export function GroupCallStage({
   const joinedAtRef = useRef<number>(0);
 
   useEffect(() => {
-    if (joined) {
+    if (joined && connectedAt) {
       // Prefer the manager timestamp so remounts don't restart the clock.
-      joinedAtRef.current = connectedAt ?? Date.now();
+      joinedAtRef.current = connectedAt;
       const tick = () => setElapsed(Math.max(0, Date.now() - joinedAtRef.current));
       tick();
       const id = setInterval(tick, 1000);
@@ -109,130 +101,104 @@ export function GroupCallStage({
   });
 
 
+  const remotePresence = presence.filter((p) => p.user_id !== selfId);
+  const connecting = joined && remotePresence.length > 0 &&
+    !remotePresence.some((p) => connectedPeerIds.has(p.user_id));
+
   return (
-    <div className="flex shrink-0 flex-col overflow-hidden bg-black" style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}>
-     <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
-      {}
-      <p className="text-xs font-bold uppercase tracking-widest text-white/30">
-        Group Call
-      </p>
-      <h2 className="mt-1 text-lg font-semibold text-white">{groupName}</h2>
-      <p className="mt-1 text-sm text-white/50">
-        {presence.length} in voice{joined ? ` \u00b7 ${formatElapsed(elapsed)}` : ""}
-        {ringingIds.size > 0 ? ` \u00b7 ${ringingIds.size} ringing` : ""}
-      </p>
-
-      {}
-      <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-4xl"} flex-1 flex-col py-3`}>
-        {joined && people.length + shares.length === 0 ? (
-          <p className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white/50">
-            You&apos;re the only one here.
-            <br />
-            Others can join from the group.
-          </p>
-        ) : (
-        <CallStage members={people} screens={shares} deafened={deafened} onFocusChange={setFocused} />
-        )}
+    <div
+      className="call-enter flex shrink-0 flex-col overflow-hidden border-b border-divider bg-bg-primary"
+      style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}
+    >
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4">
+        <IconGroup size={20} className="shrink-0 text-text-muted" />
+        <h2 className="min-w-0 truncate text-[16px] font-semibold text-header-primary">{groupName}</h2>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <span className="hidden text-[12px] text-header-secondary sm:inline">
+            {presence.length} in voice
+            {ringingIds.size > 0 ? ` · ${ringingIds.size} ringing` : ""}
+          </span>
+          {joined && (
+            <VoiceStatus connected={!connecting} elapsed={connectedAt ? elapsed : null} />
+          )}
+        </div>
       </div>
 
-      {}
-      <div className="flex shrink-0 items-center gap-4 pb-3">
-        <button
-          type="button"
-          onClick={onToggleCamera}
-          title={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-text-normal/10 text-text-normal transition-colors hover:bg-text-normal/20"
-        >
-          {cameraEnabled ? <IconVideo size={20} /> : <IconVideoOff size={20} />}
-        </button>
+      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pb-1 pt-2">
+        <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-4xl"} flex-1 flex-col py-3`}>
+          {joined && people.length + shares.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-bg-secondary text-text-muted">
+                <IconGroup size={32} />
+              </span>
+              <p className="text-sm font-medium text-header-primary">You&apos;re the only one here.</p>
+              <p className="text-sm text-header-secondary">Others can join from the group.</p>
+            </div>
+          ) : (
+            <CallStage members={people} screens={shares} deafened={deafened} onFocusChange={setFocused} />
+          )}
+        </div>
 
-        {joined && onToggleScreenShare && (
-          <button
-            type="button"
-            onClick={onToggleScreenShare}
-            title={screenShareEnabled ? "Stop sharing" : "Share screen"}
-            className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-              screenShareEnabled
-                ? "bg-status-online/25 text-status-online ring-2 ring-status-online/40"
-                : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20"
-            }`}
-          >
-            {screenShareEnabled ? <IconScreenShareOff size={20} /> : <IconScreenShare size={20} />}
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-4 pb-6 pt-2">
+          {!joined ? (
+            <>
+              <Tooltip label={micMuted ? "Unmute before joining" : "Mute before joining"} side="top">
+                <button
+                  type="button"
+                  onClick={onToggleMic}
+                  aria-label={micMuted ? "Unmute" : "Mute"}
+                  className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+                    micMuted ? "bg-white text-status-dnd" : "bg-bg-secondary text-white hover:bg-bg-tertiary"
+                  }`}
+                >
+                  {micMuted ? <IconMicOff size={24} /> : <IconMic size={24} />}
+                </button>
+              </Tooltip>
+              <button
+                type="button"
+                onClick={onJoin}
+                className="flex h-14 items-center gap-2 rounded-full bg-button-green px-6 text-[16px] font-medium text-white transition-colors hover:bg-button-green-hover"
+              >
+                <IconPhone size={22} /> Join Call
+              </button>
+            </>
+          ) : (
+            <CallControls
+              micMuted={micMuted}
+              deafened={deafened}
+              cameraEnabled={cameraEnabled}
+              screenShareEnabled={screenShareEnabled}
+              onToggleMic={onToggleMic}
+              onToggleCamera={onToggleCamera}
+              onToggleScreenShare={onToggleScreenShare}
+              onEnd={onLeave}
+            />
+          )}
+        </div>
 
-        {!joined ? (
-          <>
-            <button
-              type="button"
-              onClick={onToggleMic}
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-white/80 transition-colors ${
-                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-white/10 hover:bg-white/20"
-              }`}
-              title={micMuted ? "Unmute before joining" : "Mute before joining"}
-            >
-              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
-            </button>
-            <button
-              type="button"
-              onClick={onJoin}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-status-online text-white shadow-lg shadow-status-online/30 transition-transform hover:scale-105"
-              title="Join voice"
-            >
-              <IconPhone size={22} />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={onToggleMic}
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-text-normal transition-colors ${
-                micMuted ? "bg-status-dnd/80 hover:bg-status-dnd" : "bg-text-normal/10 hover:bg-text-normal/20"
-              }`}
-              title={micMuted ? "Unmute" : "Mute"}
-            >
-              {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
-            </button>
-            <button
-              type="button"
-              onClick={onLeave}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105"
-              title="Leave voice"
-            >
-              <IconPhoneOff size={22} />
-            </button>
-          </>
-        )}
+        {[...remoteStreams.entries()].map(([uid, stream]) => (
+          <audio
+            key={uid}
+            data-call-user={uid}
+            ref={(el) => {
+              // Guard identity: the old version re-set srcObject and re-played
+              // on every render, which restarts audible playback (stutter /
+              // double-volume against the context-level element).
+              if (el && el.srcObject !== stream) {
+                el.srcObject = stream;
+                el.muted = deafened;
+                void applyAudioOutputToElement(el, getPreferredAudioOutputId());
+                import("@/lib/call-participant-settings").then((m) =>
+                  m.applyParticipantAudioControls(el, uid),
+                );
+                void el.play().catch(() => {});
+              }
+            }}
+            autoPlay
+            playsInline
+          />
+        ))}
       </div>
-      <div className="px-4 pb-3">
-        <Soundboard compact />
-      </div>
-
-      {}
-      {[...remoteStreams.entries()].map(([uid, stream]) => (
-        <audio
-          key={uid}
-          data-call-user={uid}
-          ref={(el) => {
-            // Guard identity: the old version re-set srcObject and re-played
-            // on every render, which restarts audible playback (stutter /
-            // double-volume against the context-level element).
-            if (el && el.srcObject !== stream) {
-              el.srcObject = stream;
-              el.muted = deafened;
-              void applyAudioOutputToElement(el, getPreferredAudioOutputId());
-              import("@/lib/call-participant-settings").then((m) =>
-                m.applyParticipantAudioControls(el, uid),
-              );
-              void el.play().catch(() => {});
-            }
-          }}
-          autoPlay
-          playsInline
-        />
-      ))}
-     </div>
       <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </div>
   );

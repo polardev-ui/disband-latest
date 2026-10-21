@@ -26,6 +26,27 @@
   --color-overlay-scrim: var(--overlay-scrim);
   --color-overlay-scrim-strong: var(--overlay-scrim-strong);
 
+  /* Classic Discord surfaces. Themes that don't define them fall back to the
+     nearest existing token, so every theme keeps working. */
+  --color-bg-floating: var(--bg-floating, var(--overlay-surface));
+  --color-bg-secondary-alt: var(--bg-secondary-alt, var(--bg-secondary));
+  --color-bg-composer: var(--bg-composer, var(--bg-accent));
+  --color-bg-message-hover: var(--bg-message-hover, var(--interactive-hover));
+  --color-header-primary: var(--header-primary, var(--text-normal));
+  --color-header-secondary: var(--header-secondary, var(--text-muted));
+  --color-interactive-normal: var(--interactive-normal, var(--text-muted));
+  --color-interactive-active: var(--interactive-active, var(--text-normal));
+  --color-interactive-muted: var(--interactive-muted, var(--text-muted));
+  --color-channels-default: var(--channels-default, var(--text-muted));
+  --color-button-secondary: var(--button-secondary, var(--bg-accent));
+  --color-button-secondary-hover: var(--button-secondary-hover, var(--interactive-selected));
+  --color-button-green: var(--button-green, var(--status-online));
+  --color-button-green-hover: var(--button-green-hover, var(--status-online));
+  --color-button-danger: var(--button-danger, var(--status-dnd));
+  --color-button-danger-hover: var(--button-danger-hover, var(--status-dnd));
+  --color-mention-bg: var(--mention-bg, rgb(240 178 50 / 0.1));
+  --color-mention-border: var(--mention-border, var(--status-idle));
+
   --radius-sm: var(--skin-radius-sm, 0.125rem);
   --radius-md: var(--skin-radius-md, 0.375rem);
   --radius-lg: var(--skin-radius-lg, 0.5rem);
@@ -33,7 +54,7 @@
   --radius-2xl: var(--skin-radius-2xl, 1rem);
   --radius-3xl: var(--skin-radius-3xl, 1.5rem);
 
-  --font-sans: var(--skin-font, var(--font-geist-sans, var(--font-discord)));
+  --font-sans: var(--skin-font, var(--font-noto, var(--font-discord)));
 }
 
 @font-face {
@@ -51,47 +72,66 @@
 }
 
 /*
- Disband Dark — the default theme, web and desktop only (iOS and Android draw
- their own native palettes and are deliberately untouched).
+ Dark — the default theme, web and desktop only (iOS and Android draw their
+ own native palettes and are deliberately untouched).
 
- This used to be Discord's grey ladder (#313338 / #2b2d31 / #1e1f22), which is
- the single biggest reason the app read as a Discord clone. It is now a
- near-black, very slightly cool neutral where depth comes from hairline
- borders (--divider) rather than from stacking three greys.
+ The classic Discord dark palette: three stacked greys give the layout its
+ depth instead of borders.
 
-   tertiary  #0b0c0e  space rail, the deepest layer
-   secondary #101114  sidebars and cards
-   primary   #141519  the conversation canvas
-   accent    #1b1c21  fields, chips, the composer
+   tertiary   #1e1f22  space rail, inputs
+   secondary  #2b2d31  channel list, member list
+   sec-alt    #232428  user panel
+   primary    #313338  the conversation
+   floating   #111214  popouts, menus, tooltips
 
  The theme id stays "dark": it is stored on the profile and read by the mobile
  apps, so a new id would arrive there as an unknown theme.
 */
 :root,
 [data-theme="dark"] {
-  --bg-primary: #141519;
-  --bg-secondary: #101114;
-  --bg-tertiary: #0b0c0e;
-  --bg-accent: #1b1c21;
-  --interactive-hover: #1d1e23;
-  --interactive-selected: #25272d;
+  --bg-primary: #313338;
+  --bg-secondary: #2b2d31;
+  --bg-tertiary: #1e1f22;
+  --bg-accent: #1e1f22;
+  --bg-secondary-alt: #232428;
+  --bg-floating: #111214;
+  --bg-composer: #383a40;
+  --bg-message-hover: #2e3035;
+  --interactive-hover: #35373c;
+  --interactive-selected: #404249;
+  --interactive-normal: #b5bac1;
+  --interactive-active: #ffffff;
+  --interactive-muted: #4e5058;
+  --channels-default: #80848e;
+  --header-primary: #f2f3f5;
+  --header-secondary: #b5bac1;
   --brand: #5865f2;
   --brand-hover: #4752c4;
-  --text-normal: #e6e7eb;
-  --text-muted: #8b909a;
-  --text-link: #6aa9ff;
-  --status-online: #23a559;
+  --text-normal: #dbdee1;
+  --text-muted: #949ba4;
+  --text-link: #00a8fc;
+  --status-online: #23a55a;
   --status-idle: #f0b232;
   --status-dnd: #f23f43;
   --status-offline: #80848e;
-  --divider: #222429;
+  --divider: #3f4147;
+  --button-secondary: #4e5058;
+  --button-secondary-hover: #6d6f78;
+  --button-green: #248046;
+  --button-green-hover: #1a6334;
+  --button-danger: #da373c;
+  --button-danger-hover: #a12828;
+  --mention-bg: rgb(240 177 50 / 0.08);
+  --mention-border: #f0b132;
   --font-discord: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial,
     sans-serif;
-  --overlay-surface: #111215;
-  --overlay-panel: #131418;
-  --overlay-media: #1a1b20;
-  --overlay-scrim: rgb(0 0 0 / 0.72);
-  --overlay-scrim-strong: rgb(0 0 0 / 0.86);
+  --overlay-surface: #111214;
+  --overlay-panel: #313338;
+  --overlay-media: #2b2d31;
+  --overlay-scrim: rgb(0 0 0 / 0.7);
+  --overlay-scrim-strong: rgb(0 0 0 / 0.85);
+  --elevation-low: 0 1px 0 hsl(0 0% 0.8% / 0.2), 0 1.5px 0 hsl(240 7.7% 2.5% / 0.05), 0 2px 0 hsl(0 0% 0.8% / 0.05);
+  --elevation-high: 0 8px 16px hsl(0 0% 0% / 0.24);
 }
 
 [data-theme="midnight"] {
@@ -118,23 +158,41 @@
   --bg-secondary: #f2f3f5;
   --bg-tertiary: #e3e5e8;
   --bg-accent: #e3e5e8;
-  --interactive-hover: #e3e5e8;
-  --interactive-selected: #d4d7dc;
+  --bg-secondary-alt: #ebedef;
+  --bg-floating: #ffffff;
+  --bg-composer: #ebedef;
+  --bg-message-hover: #f7f7f7;
+  --interactive-hover: #e8e9ec;
+  --interactive-selected: #d7d9dd;
+  --interactive-normal: #4e5058;
+  --interactive-active: #060607;
+  --interactive-muted: #c4c9ce;
+  --channels-default: #5c5e66;
+  --header-primary: #060607;
+  --header-secondary: #4e5058;
   --brand: #5865f2;
   --brand-hover: #4752c4;
   --text-normal: #313338;
   --text-muted: #5c5e66;
   --text-link: #006ce7;
-  --status-online: #23a559;
+  --status-online: #23a55a;
   --status-idle: #f0b232;
   --status-dnd: #f23f43;
   --status-offline: #80848e;
-  --divider: #e3e5e8;
+  --divider: #e1e2e4;
+  --button-secondary: #6d6f78;
+  --button-secondary-hover: #4e5058;
+  --button-green: #248046;
+  --button-green-hover: #1a6334;
+  --button-danger: #da373c;
+  --button-danger-hover: #a12828;
   --overlay-surface: #ffffff;
   --overlay-panel: #ffffff;
   --overlay-media: #f2f3f5;
-  --overlay-scrim: rgb(0 0 0 / 0.45);
-  --overlay-scrim-strong: rgb(0 0 0 / 0.6);
+  --overlay-scrim: rgb(0 0 0 / 0.6);
+  --overlay-scrim-strong: rgb(0 0 0 / 0.8);
+  --elevation-low: 0 1px 0 hsl(0 0% 0% / 0.08);
+  --elevation-high: 0 8px 16px hsl(0 0% 0% / 0.16);
 }
 
 [data-theme="sunset"] {
@@ -319,20 +377,15 @@ html[data-desktop] ::selection {
 .app-screen {
   min-height: 100vh;
 }
-@media (min-width: 769px) {
-  .app-screen {
-    min-height: calc(100vh - var(--desktop-titlebar-height));
-  }
-}
 html[data-desktop] .app-screen {
   min-height: calc(100vh - var(--desktop-titlebar-height));
 }
 
 /* The app bar. On the desktop it is the window's title bar: on macOS the
    draggable strip the native traffic lights float over, on Windows and Linux
-   the undecorated window's own control strip. On the wide web it is a slim
-   global bar; the mobile web app draws its own compact bar instead. It is also
-   where the global notification bell lives, so it is reachable from anywhere. */
+   the undecorated window's own control strip. It exists only in the desktop
+   app: on the web the browser already frames the page, and the channel
+   header's inbox carries notifications instead. */
 .desktop-titlebar {
   display: flex;
   align-items: center;
@@ -343,10 +396,8 @@ html[data-desktop] .app-screen {
   background-color: var(--bg-tertiary);
   border-bottom: 1px solid var(--divider);
 }
-@media (max-width: 768px) {
-  html:not([data-desktop]) .desktop-titlebar {
-    display: none;
-  }
+html:not([data-desktop]) .desktop-titlebar {
+  display: none;
 }
 html[data-desktop-os="macos"] .desktop-titlebar {
   border-bottom-color: transparent;
@@ -424,9 +475,11 @@ html[data-desktop-os="linux"] .desktop-titlebar-controls {
 @keyframes tooltip-enter {
   from {
     opacity: 0;
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
+    transform: none;
   }
 }
 
@@ -434,9 +487,14 @@ html[data-desktop-os="linux"] .desktop-titlebar-controls {
    (centering per side), and an animation that writes `transform` would
    override it when the fill mode holds the end frame. */
 
+/* Tooltips grow out of the side they point at, the way Discord's do. */
 .tooltip-content {
-  animation: tooltip-enter 0.12s ease-out forwards;
+  animation: tooltip-enter 0.1s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  transform-origin: left center;
 }
+.tooltip-content[data-side="left"] { transform-origin: right center; }
+.tooltip-content[data-side="top"] { transform-origin: center bottom; }
+.tooltip-content[data-side="bottom"] { transform-origin: center top; }
 
 @keyframes marketing-fade-up {
   from {
@@ -518,19 +576,46 @@ img.twemoji {
   transform: scale(0.6);
 }
 
+/* Typing dots: each dot brightens and lifts just after the one before it. */
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.typing-dot {
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Classic modal entrance: scale up from 0.9 with a touch of overshoot. */
 @keyframes modal-pop {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    transform: scale(0.9);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
 }
 
 .modal-pop {
-  animation: modal-pop 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  animation: modal-pop 0.22s cubic-bezier(0.18, 1.25, 0.4, 1) forwards;
 }
 
 @keyframes overlay-fade {
@@ -555,11 +640,11 @@ img.twemoji {
 @keyframes modal-pop-out {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(8px) scale(0.97);
+    transform: scale(0.94);
   }
 }
 
@@ -754,7 +839,8 @@ img.twemoji {
   .view-enter,
   .msg-enter,
   .divider-in,
-  .badge-pop {
+  .badge-pop,
+  .typing-dot {
     animation: none;
   }
 }
@@ -779,6 +865,7 @@ img.twemoji {
 [data-motion="reduced"] .msg-enter,
 [data-motion="reduced"] .divider-in,
 [data-motion="reduced"] .badge-pop,
+[data-motion="reduced"] .typing-dot,
 [data-motion="reduced"] .animate-pulse,
 [data-motion="reduced"] .animate-ping,
 [data-motion="reduced"] .animate-spin {
@@ -1461,4 +1548,139 @@ img.twemoji {
     animation: none;
     opacity: 0.4;
   }
+}
+
+/* ===================================================================== */
+/* Classic layout: space rail                                             */
+/* ===================================================================== */
+.rail-scroll { scrollbar-width: none; }
+.rail-scroll::-webkit-scrollbar { display: none; }
+
+/* The left-edge pill. A dot for unread, a short bar on hover, a tall bar for
+   the selected item — height animates between them. */
+.rail-pill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 8px;
+  height: 0;
+  margin-left: -4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--header-primary, #f2f3f5);
+  transform: translateY(-50%);
+  transition: height 0.2s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.2s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+.rail-pill[data-state="unread"] { height: 8px; opacity: 1; }
+.rail-item:hover .rail-pill:not([data-state="active"]) { height: 20px; opacity: 1; }
+.rail-pill[data-state="active"] { height: 40px; opacity: 1; }
+
+/* Circle at rest, rounded square when hovered or selected. */
+.rail-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: border-radius 0.15s ease-out, background-color 0.15s ease-out, color 0.15s ease-out;
+}
+.rail-item:hover .rail-icon,
+.rail-icon[data-active] { border-radius: 16px; }
+.rail-item:active .rail-icon { transform: translateY(1px); }
+
+/* Spaces without a picture, and the home button: grey, brand when active. */
+.rail-icon-fill { background: var(--bg-primary); color: var(--text-normal); }
+.rail-item:hover .rail-icon-fill,
+.rail-icon-fill[data-active] { background: var(--brand); color: #fff; }
+
+/* Add / Explore: green glyph that fills in on hover. */
+.rail-icon-action { background: var(--bg-primary); color: var(--status-online); }
+.rail-item:hover .rail-icon-action,
+.rail-icon-action[data-active] { background: var(--status-online); color: #fff; }
+
+.rail-enter { animation: rail-enter 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes rail-enter {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-pill, .rail-icon { transition: none; }
+  .rail-enter { animation: none; }
+}
+
+/* Popout menus (context menus, the composer's + menu) scale in quickly. */
+.menu-pop { animation: menu-pop 0.1s cubic-bezier(0.2, 0.8, 0.3, 1) both; transform-origin: bottom left; }
+@keyframes menu-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Thin classic scrollbars: channel list and member list hide the track. */
+.channel-scroll, .member-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.channel-scroll:hover, .member-scroll:hover { scrollbar-color: var(--bg-tertiary) transparent; }
+.channel-scroll::-webkit-scrollbar, .member-scroll::-webkit-scrollbar { width: 4px; }
+.channel-scroll::-webkit-scrollbar-thumb, .member-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+.channel-scroll:hover::-webkit-scrollbar-thumb, .member-scroll:hover::-webkit-scrollbar-thumb { background: var(--bg-tertiary); }
+/* The chat scroller keeps a visible track, like the classic message list. */
+.chat-scroll::-webkit-scrollbar { width: 16px; }
+.chat-scroll::-webkit-scrollbar-track { background: var(--bg-secondary-alt, var(--bg-secondary)); border: 4px solid var(--bg-primary); border-radius: 8px; }
+.chat-scroll::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border: 4px solid transparent; background-clip: padding-box; border-radius: 8px; min-height: 40px; }
+@media (prefers-reduced-motion: reduce) { .menu-pop { animation: none; } }
+
+/* Classic modal entrance: a quick scale-up from 0.9 with a slight overshoot,
+   over a fading backdrop. */
+.classic-modal { animation: classic-modal-in 0.22s cubic-bezier(0.18, 1.25, 0.4, 1) both; }
+.classic-modal-out { animation: classic-modal-out 0.12s ease-in both; }
+@keyframes classic-modal-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes classic-modal-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .classic-modal, .classic-modal-out { animation: none; }
+}
+
+/* Profile popouts slide in from the side they open towards. */
+.profile-popout { animation: popout-in-right 0.14s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.profile-popout[data-side="left"] { animation-name: popout-in-left; }
+.profile-popout-out { animation: popout-out 0.1s ease-in both !important; }
+@keyframes popout-in-right { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes popout-in-left { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+@keyframes popout-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .profile-popout, .profile-popout-out { animation: none !important; } }
+
+/* ===================================================================== */
+/* Classic full-screen settings layers                                    */
+/* ===================================================================== */
+/* The app steps back while a settings layer is open… */
+.app-base-layer {
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.2s ease;
+  transform-origin: center;
+}
+body.layer-open .app-base-layer {
+  transform: scale(0.93);
+  opacity: 0;
+  pointer-events: none;
+}
+/* …and the layer zooms in to meet it. */
+.settings-layer { animation: settings-layer-in 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.settings-layer-out { animation: settings-layer-out 0.15s ease-in both; }
+@keyframes settings-layer-in {
+  from { opacity: 0; transform: scale(1.1); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes settings-layer-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: scale(1.1); }
+}
+.settings-sidebar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.settings-sidebar:hover { scrollbar-color: var(--bg-tertiary) transparent; }
+.settings-scroll::-webkit-scrollbar { width: 8px; }
+.settings-scroll::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .app-base-layer { transition: none; }
+  .settings-layer, .settings-layer-out { animation: none; }
 }

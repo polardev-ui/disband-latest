@@ -17,13 +17,13 @@ export interface LeaderRow {
 function Board({ rows, empty }: { rows: LeaderRow[]; empty: string }) {
   if (rows.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-divider px-5 py-10 text-center text-[14px] text-text-muted">
+      <p className="rounded-[8px] border border-dashed border-divider px-5 py-10 text-center text-[14px] text-text-muted">
         {empty}
       </p>
     );
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-divider">
+    <div className="overflow-x-auto rounded-[8px] border border-divider">
       <table className="w-full border-collapse text-left text-[14px]">
         <thead>
           <tr className="border-b border-divider bg-bg-accent text-[11px] uppercase tracking-wide text-text-muted">
@@ -64,7 +64,7 @@ export function ReferralLeaderboard({ rows }: { rows: LeaderRow[] }) {
         <div className="mx-auto max-w-[720px]">
           <div className="flex flex-col items-center text-center">
             <Logo adaptive size={44} className="h-11 w-11" priority />
-            <h1 className="mt-5 text-[30px] font-semibold tracking-[-0.02em] text-text-normal">
+            <h1 className="mt-5 text-[30px] font-semibold text-text-normal">
               Referral Leaderboard
             </h1>
             <p className="mt-2 max-w-[34rem] text-[15px] leading-relaxed text-text-muted">

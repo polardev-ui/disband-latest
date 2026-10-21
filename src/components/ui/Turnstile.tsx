@@ -7,7 +7,10 @@ interface TurnstileProps {
   siteKey: string;
   onToken: (token: string) => void;
   onExpire?: () => void;
-  onError?: () => void;
+  /** Cloudflare's error code (e.g. 300030), when it gives one. */
+  onError?: (code?: string) => void;
+  /** Bound into the token; the server checks it, so a token solved for one form can't be reused on another. */
+  action?: string;
   className?: string;
 }
 
@@ -19,9 +22,10 @@ declare global {
         options: {
           sitekey: string;
           theme?: "light" | "dark" | "auto";
+          action?: string;
           callback?: (token: string) => void;
           "expired-callback"?: () => void;
-          "error-callback"?: () => void;
+          "error-callback"?: (code?: string) => void;
         },
       ) => string;
       remove: (widgetId: string) => void;
@@ -29,7 +33,7 @@ declare global {
   }
 }
 
-export function Turnstile({ siteKey, onToken, onExpire, onError, className }: TurnstileProps) {
+export function Turnstile({ siteKey, onToken, onExpire, onError, action, className }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -45,9 +49,10 @@ export function Turnstile({ siteKey, onToken, onExpire, onError, className }: Tu
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: siteKey,
       theme: "dark",
+      ...(action ? { action } : {}),
       callback: (token) => onTokenRef.current(token),
       "expired-callback": () => onExpireRef.current?.(),
-      "error-callback": () => { onExpireRef.current?.(); onErrorRef.current?.(); },
+      "error-callback": (code) => { onExpireRef.current?.(); onErrorRef.current?.(code); },
     });
   };
 
@@ -55,7 +60,16 @@ export function Turnstile({ siteKey, onToken, onExpire, onError, className }: Tu
 
     render();
 
+    // A widget that never draws (frame blocked, script stalled) fires no
+    // error callback, leaving a silent gap. If nothing has been drawn after a
+    // while, report it as an error so the page can say so.
+    const stalled = window.setTimeout(() => {
+      const host = containerRef.current?.firstElementChild as HTMLElement | null;
+      if (!host || host.offsetHeight === 0) onErrorRef.current?.("timeout");
+    }, 12_000);
+
     return () => {
+      window.clearTimeout(stalled);
       if (widgetIdRef.current !== null && window.turnstile) {
         window.turnstile.remove(widgetIdRef.current);
         widgetIdRef.current = null;

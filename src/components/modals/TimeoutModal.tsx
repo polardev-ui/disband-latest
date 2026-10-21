@@ -5,7 +5,7 @@ import { usePresence } from "@/hooks/usePresence";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconTimer } from "@/components/icons";
+import { IconClose } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -104,41 +104,37 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={busy ? undefined : onClose} />
+      <div className={`absolute inset-0 bg-black/85 overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={busy ? undefined : onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Time out ${displayName(profile)}`}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl`}
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[440px] overflow-y-auto rounded-lg bg-bg-primary p-4 pt-5 shadow-[var(--elevation-high)]`}
       >
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
           disabled={busy}
-          className="absolute right-4 top-4 text-text-muted transition-colors hover:text-text-normal"
+          className="absolute right-3 top-4 text-interactive-normal transition-colors hover:text-interactive-active"
         >
-          <IconClose size={18} />
+          <IconClose size={22} />
         </button>
 
-        <div className="flex items-center gap-3">
-          <Avatar profile={profile} size="md" />
-          <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-text-normal">
-              <IconTimer size={18} />
-              Time out
-            </h2>
-            <p className="truncate text-sm text-text-muted">{displayName(profile)}</p>
-          </div>
+        <div className="flex items-center gap-2 pr-8">
+          <Avatar profile={profile} size="sm" className="!h-6 !w-6 !text-[10px]" />
+          <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">
+            Timeout {displayName(profile)}
+          </h2>
         </div>
 
-        <p className="mt-4 text-sm text-text-muted">
+        <p className="mt-3 text-[14px] leading-[18px] text-header-secondary">
           They stay in the space but cannot send messages, react, or speak until the
           timeout expires.
         </p>
 
         <fieldset className="mt-4">
-          <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <legend className="mb-2 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
             Duration
           </legend>
           <div className="flex flex-wrap gap-2">
@@ -148,10 +144,10 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
                 type="button"
                 aria-pressed={preset === p.seconds}
                 onClick={() => setPreset(p.seconds)}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                className={`h-8 rounded-full px-3 text-[12px] font-bold uppercase transition-colors ${
                   preset === p.seconds
                     ? "bg-brand text-white"
-                    : "bg-bg-secondary text-text-normal hover:bg-interactive-hover"
+                    : "bg-bg-tertiary text-header-secondary hover:bg-interactive-hover hover:text-header-primary"
                 }`}
               >
                 {p.label}
@@ -161,10 +157,10 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
               type="button"
               aria-pressed={preset === null}
               onClick={() => setPreset(null)}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              className={`h-8 rounded-full px-3 text-[12px] font-bold uppercase transition-colors ${
                 preset === null
                   ? "bg-brand text-white"
-                  : "bg-bg-secondary text-text-normal hover:bg-interactive-hover"
+                  : "bg-bg-tertiary text-header-secondary hover:bg-interactive-hover hover:text-header-primary"
               }`}
             >
               Custom
@@ -180,13 +176,13 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
                 autoFocus
                 onChange={(e) => setAmount(e.target.value)}
                 aria-label="Timeout length"
-                className="w-28 rounded-md bg-bg-secondary px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                className="w-28 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none focus:border-[#00a8fc]"
               />
               <select
                 value={unit.id}
                 onChange={(e) => setUnit(UNITS.find((u) => u.id === e.target.value) ?? UNITS[0])}
                 aria-label="Timeout unit"
-                className="flex-1 rounded-md bg-bg-secondary px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                className="flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none focus:border-[#00a8fc]"
               >
                 {UNITS.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -199,7 +195,7 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
         </fieldset>
 
         <label className="mt-4 block">
-          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <span className="mb-2 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
             Reason <span className="normal-case text-text-muted">(optional)</span>
           </span>
           <input
@@ -207,11 +203,11 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
             maxLength={200}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Shown in the audit log"
-            className="w-full rounded-md bg-bg-secondary px-3 py-2 text-sm text-text-normal outline-none placeholder:text-text-muted focus:ring-2 focus:ring-brand"
+            className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
         </label>
 
-        <div className="mt-4 rounded-md border border-divider bg-bg-secondary px-3 py-2 text-sm">
+        <div className="mt-4 rounded-[4px] bg-bg-secondary px-3 py-2 text-[14px]">
           {tooLong ? (
             <span className="text-status-dnd">Timeouts cannot be longer than 28 days.</span>
           ) : valid && expiresAt ? (
@@ -236,12 +232,12 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
 
         {error && <p className="mt-3 text-sm text-status-dnd">{error}</p>}
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="-mx-4 -mb-4 mt-6 flex justify-end gap-2 rounded-b-lg bg-bg-secondary p-4">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-md px-4 py-2 text-sm text-text-normal transition-colors hover:underline disabled:opacity-50"
+            className="h-[38px] px-4 text-[14px] font-medium text-white transition-colors hover:underline disabled:opacity-50"
           >
             Cancel
           </button>
@@ -249,7 +245,7 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
             type="button"
             onClick={() => void submit()}
             disabled={!valid || busy}
-            className="rounded-md bg-status-dnd px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="h-[38px] rounded-[3px] bg-button-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-button-danger-hover disabled:opacity-50"
           >
             {busy ? "Timing out…" : "Time out"}
           </button>

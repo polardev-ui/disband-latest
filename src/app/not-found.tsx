@@ -18,7 +18,7 @@ export default function NotFound() {
       </header>
 
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <p className="font-mono text-sm font-semibold tracking-[0.35em] text-[#5865f2]">
+        <p className="font-mono text-sm font-semibold tracking-[0.02em] text-[#5865f2]">
           404
         </p>
         <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">

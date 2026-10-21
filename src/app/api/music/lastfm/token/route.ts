@@ -34,7 +34,11 @@ export async function POST(request: Request) {
     const authUrl =
       "https://www.last.fm/api/auth/?" +
       new URLSearchParams({ api_key: config.apiKey, token: data.token }).toString();
-    return NextResponse.json({ authUrl });
+    // Last.fm's browser flow can end on Last.fm's own "you can close this
+    // window" page when no callback URL is registered for the API account.
+    // Return the short-lived token so the client can finish the exchange by
+    // polling instead of depending on that redirect (see SettingsModal).
+    return NextResponse.json({ authUrl, token: data.token });
   } catch {
     return NextResponse.json({ error: "Couldn't start the Last.fm connection." }, { status: 502 });
   }

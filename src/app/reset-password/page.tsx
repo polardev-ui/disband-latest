@@ -63,7 +63,7 @@ function ResetPasswordGate() {
         </Link>
       )}
       <div className="flex min-h-screen items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-xl">
+        <div className="w-full max-w-sm rounded-[8px] bg-bg-secondary p-8 shadow-[var(--elevation-high)]">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3 flex justify-center">
               <Logo adaptive size={56} className="h-14 w-14" priority />

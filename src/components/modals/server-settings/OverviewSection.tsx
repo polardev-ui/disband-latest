@@ -81,7 +81,7 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
               className={`${settingsInputClass} resize-none leading-relaxed disabled:opacity-60`}
             />
           </div>
-          {!isOwner && <p className="text-[12.5px] text-text-muted">Only the owner can change these.</p>}
+          {!isOwner && <p className="text-[13px] text-text-muted">Only the owner can change these.</p>}
         </div>
       </SettingsSection>
 
@@ -105,8 +105,8 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
       <InlineError>{error}</InlineError>
 
       {isOwner && (dirty || saving || savedFlash) && (
-        <div className="view-enter sticky bottom-0 -mx-8 mt-8 flex items-center justify-between gap-3 border-t border-divider bg-overlay-panel/95 px-8 py-3 backdrop-blur">
-          <p className="text-[13.5px] text-text-muted">{savedFlash ? "Saved." : "You have unsaved changes."}</p>
+        <div className="view-enter sticky bottom-0 -mx-8 mt-8 flex items-center justify-between gap-3 border-t border-divider bg-overlay-panel px-8 py-3">
+          <p className="text-[14px] text-text-muted">{savedFlash ? "Saved." : "You have unsaved changes."}</p>
           <div className="flex gap-2">
             {dirty && (
               <button

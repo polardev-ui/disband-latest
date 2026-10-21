@@ -60,7 +60,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
 
   return (
     <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}>
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Invite to group" className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-2xl`}>
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Invite to group" className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-[var(--elevation-high)]`}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">Invite friends</h2>
           <button type="button" onClick={onClose}><IconClose size={20} /></button>

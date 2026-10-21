@@ -6,6 +6,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { apiFetch } from "@/lib/api";
 import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbeddedCheckout";
 import { IconClose } from "@/components/icons";
+import { CartIcon } from "@/components/icons/CartIcon";
 import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
 import {
   SHOP_CATEGORIES,
@@ -173,17 +174,20 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={clientSecret ? undefined : onClose} />
+      <div className={`absolute inset-0 bg-overlay-scrim-strong overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={clientSecret ? undefined : onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Disband Shop"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl`}
+        className={`classic-modal${exiting ? " classic-modal-out" : ""} relative flex max-h-[85vh] w-full max-w-[860px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
       >
-        <header className="flex items-center gap-3 border-b border-divider px-5 py-4">
+        <header className="flex items-center gap-3 px-4 pb-2 pt-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+            <CartIcon size={22} />
+          </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold text-text-normal">Disband Shop</h2>
-            <p className="truncate text-[13px] text-text-muted">
+            <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Shop</h2>
+            <p className="truncate text-[14px] leading-[18px] text-header-secondary">
               Buy once, wear it everywhere. No subscription.
             </p>
           </div>
@@ -191,9 +195,9 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="text-text-muted transition-colors hover:text-text-normal"
+            className="flex h-8 w-8 items-center justify-center rounded-[4px] text-interactive-normal transition-colors hover:text-interactive-active"
           >
-            <IconClose size={18} />
+            <IconClose size={24} />
           </button>
         </header>
 
@@ -216,17 +220,17 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
           </div>
         ) : (
           <>
-            <nav className="flex gap-2 border-b border-divider px-5 py-3">
+            <nav className="flex gap-5 border-b border-divider px-4">
               {SHOP_CATEGORIES.map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   aria-pressed={tab === c.id}
                   onClick={() => setTab(c.id)}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                  className={`-mb-px border-b-2 py-3 text-[16px] font-medium leading-5 transition-colors ${
                     tab === c.id
-                      ? "bg-brand text-white"
-                      : "bg-bg-secondary text-text-muted hover:text-text-normal"
+                      ? "border-brand text-interactive-active"
+                      : "border-transparent text-interactive-normal hover:border-interactive-normal/50 hover:text-text-normal"
                   }`}
                 >
                   {c.label}
@@ -251,7 +255,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
 
             {error && <p className="px-5 pt-2 text-[13px] text-status-dnd">{error}</p>}
 
-            <div className="grid grid-cols-1 gap-3 overflow-y-auto p-5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((item) => (
                 <ShopCard
                   key={item.id}
@@ -290,11 +294,11 @@ function ShopCard({
   onEquip: () => void;
 }) {
   return (
-    <article className="flex flex-col rounded-lg border border-divider bg-bg-secondary p-3">
+    <article className="shop-card flex flex-col rounded-lg bg-bg-secondary p-3 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--elevation-high)]">
       <ShopPreview item={item} self={self} />
 
       <div className="mt-3 flex items-baseline gap-2">
-        <h3 className="text-sm font-semibold text-text-normal">{item.name}</h3>
+        <h3 className="text-[16px] font-semibold text-header-primary">{item.name}</h3>
         {(() => {
           const sale = effectivePriceCents(item.priceCents, item.salePriceCents);
           return sale < item.priceCents ? (
@@ -314,7 +318,7 @@ function ShopCard({
           );
         })()}
       </div>
-      <p className="mt-0.5 flex-1 text-[12px] leading-4 text-text-muted">{item.description}</p>
+      <p className="mt-1 flex-1 text-[14px] leading-[18px] text-text-muted">{item.description}</p>
 
       <div className="mt-3">
         {!owned ? (
@@ -322,12 +326,12 @@ function ShopCard({
             type="button"
             disabled={busy}
             onClick={onBuy}
-            className="w-full rounded-md bg-brand px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="h-[38px] w-full rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
           >
             {busy ? "Opening…" : `Buy ${formatPrice(effectivePriceCents(item.priceCents, item.salePriceCents))}`}
           </button>
         ) : equipped ? (
-          <div className="w-full rounded-md bg-bg-accent px-3 py-2 text-center text-sm font-medium text-text-muted">
+          <div className="flex h-[38px] w-full items-center justify-center rounded-[3px] border border-status-online/60 text-[14px] font-medium text-status-online">
             Equipped
           </div>
         ) : (
@@ -335,7 +339,7 @@ function ShopCard({
             type="button"
             disabled={busy}
             onClick={onEquip}
-            className="w-full rounded-md bg-bg-accent px-3 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
+            className="h-[38px] w-full rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
           >
             {busy ? "…" : "Equip"}
           </button>

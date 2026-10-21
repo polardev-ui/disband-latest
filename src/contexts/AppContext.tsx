@@ -17,7 +17,7 @@ import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveS
 import { memberIconRole } from "@/lib/role-icons";
 import { getSavedRefreshToken, saveSwitchRefreshToken, clearSavedRefreshToken } from "@/lib/switch-refresh-tokens";
 import { isTauri } from "@/lib/platform";
-import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground } from "@/lib/notifications";
+import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground, setCurrentUserStatus } from "@/lib/notifications";
 import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
@@ -36,7 +36,7 @@ import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
 import { refreshOwnBadges } from "@/lib/badge-store";
-import { parseMentions, normalizeMessageContent, displayName } from "@/lib/utils";
+import { parseMentions, parseMentionTokens, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   AWAY_AFTER_MS,
   flattenPresenceListening,
@@ -50,8 +50,6 @@ import {
   fetchLastfmNowPlaying,
   fetchSpotifyNowPlaying,
   readLastfmUsername,
-  readSpotifyTokens,
-  writeSpotifyTokens,
   type Listening,
 } from "@/lib/music-presence";
 import {
@@ -412,6 +410,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => { setCurrentUserStatus(profile?.status ?? (profile as { preferred_status?: UserStatus } | null)?.preferred_status); }, [profile]);
   const [tetherProfile, setTetherProfile] = useState<Profile | null>(null);
   const [officialProfile, setOfficialProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
@@ -451,6 +450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     manage_channels: false,
     manage_messages: false,
     manage_emojis: false,
+    manage_webhooks: false,
     mention_everyone: false,
     send_messages: false,
     add_reactions: false,
@@ -719,7 +719,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    return entries.sort((a, b) => b.sortAt.localeCompare(a.sortAt));
+    // Order by actual conversation activity, not by when the friendship was
+    // created: a freshly added (or re-added) friend with no messages must not
+    // jump above threads you have actually talked in. Unread DMs stay pinned
+    // to the top until they are read.
+    return entries.sort((a, b) => {
+      const aUnread = a.unreadCount > 0 ? 1 : 0;
+      const bUnread = b.unreadCount > 0 ? 1 : 0;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+      const aThread = a.threadId ? 1 : 0;
+      const bThread = b.threadId ? 1 : 0;
+      if (aThread !== bThread) return bThread - aThread;
+      return b.sortAt.localeCompare(a.sortAt);
+    });
   }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds]);
 
   const serverUnreadIds = useMemo(() => [...serverIndicators], [serverIndicators]);
@@ -736,6 +748,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markDmReadNow = useCallback(async (threadId: string) => {
     const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
     if (error) console.error("mark_dm_read failed", error.message);
+  }, []);
+
+  const markGroupReadNow = useCallback(async (groupId: string) => {
+    // PostgREST builders are lazy: a bare `void rpc(...)` never sends a request.
+    const { error } = await getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
+    if (error) console.error("mark_group_read failed", error.message);
   }, []);
 
   const clearDmUnread = useCallback((threadId: string) => {
@@ -838,6 +856,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.rpc("get_group_unread"),
     ]);
 
+    if (sessionRef.current?.user.id !== uid) return;
     setDmUnreadMap((prev) => {
       const next = new Map<string, { friend: Profile; count: number; latestAt: string }>();
       for (const row of dm ?? []) {
@@ -860,7 +879,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupUnreadMap((prev) => {
       const next = new Map<string, number>();
       for (const row of grp ?? []) {
-        if (row.unread_count > 0) next.set(row.group_id, row.unread_count);
+        if (row.unread_count > 0 && !(viewModeRef.current === "group" && activeGroupRef.current === row.group_id && document.visibilityState === "visible")) next.set(row.group_id, row.unread_count);
       }
       return next;
     });
@@ -993,12 +1012,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Music presence: while a Spotify connection exists, poll what's playing
   // and mirror it onto presence (live, seen by everyone online) and the
-  // profile row (persisted, seen when we're offline). Only track *changes*
-  // are published; the row is written on each change, not each poll.
+  // profile row (persisted, seen when we're offline). Polling is fast while
+  // the window is visible so a track change or restart appears immediately;
+  // it backs off while hidden. Only meaningful changes are published.
   useEffect(() => {
     if (!userId || !configured) return;
     let alive = true;
+    let inFlight = false;
     let lastKey: string | null = null;
+    let lastPublished: Listening | null = null;
+    let timer: number | null = null;
     const supabase = getSupabaseClient();
 
     const publish = (listening: Listening | null) => {
@@ -1024,52 +1047,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
     };
 
+    const trackKey = (listening: Listening | null) => listening
+      ? `${listening.source}|${listening.track}|${listening.artists}|${listening.album ?? ""}`
+      : "idle";
+
     const tick = async () => {
-      const tokens = readSpotifyTokens();
-      const lastfmUser = readLastfmUsername(userId);
-      if (!tokens && !lastfmUser) {
-        // Nothing connected (or disconnected since): drop any live state.
-        if (lastKey !== "disconnected") {
-          lastKey = "disconnected";
-          if (listeningRef.current) publish(null);
-        }
-        return;
-      }
-      let next: Listening | null = null;
-      let failed = false;
-      if (tokens) {
+      if (!alive || inFlight) return;
+      inFlight = true;
+      try {
+        const lastfmUser = readLastfmUsername(userId);
+        let next: Listening | null = null;
+        let spotifyConnected = false;
+        let failed = false;
         try {
-          const res = await fetchSpotifyNowPlaying(tokens);
+          // The server owns the tokens, so this also sees a connection made in
+          // the web app while the desktop app was closed, and vice versa.
+          const res = await fetchSpotifyNowPlaying();
           if (!alive) return;
-          if (res.tokens !== tokens) writeSpotifyTokens(res.tokens);
+          spotifyConnected = res.connected;
           next = res.listening;
         } catch {
           failed = true;
         }
-      }
-      if (!next && lastfmUser) {
-        try {
-          next = await fetchLastfmNowPlaying(lastfmUser);
-        } catch {
-          failed = true;
+        if (!spotifyConnected && !lastfmUser) {
+          // The server said this account has no connection (and there is no
+          // Last.fm fallback). A provider error, on the other hand, keeps the
+          // last known track until the next tick.
+          if (failed) return;
+          if (lastKey !== "disconnected") {
+            lastKey = "disconnected";
+            lastPublished = null;
+            if (listeningRef.current) publish(null);
+          }
+          return;
         }
-      }
-      if (!alive) return;
-      // A provider error is not proof of silence: keep the last known state
-      // and let the next tick decide.
-      if (!next && failed) return;
-      const key = next ? `${next.source}|${next.track}|${next.artists}` : "idle";
-      if (key !== lastKey) {
-        lastKey = key;
-        publish(next);
+        if (!next && lastfmUser) {
+          try {
+            next = await fetchLastfmNowPlaying(lastfmUser);
+          } catch {
+            failed = true;
+          }
+        }
+        if (!alive) return;
+        // A provider error is not proof of silence: keep the last known state
+        // and let the next tick decide.
+        if (!next && failed) return;
+        const key = trackKey(next);
+        // A restart/seek of the same song keeps the track fields identical but
+        // moves started_at. Compare against the last *published* value, not
+        // the previous poll (which naturally drifts by a second or two), so a
+        // real seek/restart is published but polling jitter is ignored.
+        const drift = next && lastPublished && key === trackKey(lastPublished)
+          ? Math.abs(Date.parse(next.started_at) - Date.parse(lastPublished.started_at))
+          : 0;
+        const changed = key !== lastKey || drift > 2_000;
+        if (changed) {
+          lastKey = key;
+          lastPublished = next;
+          publish(next);
+        }
+      } finally {
+        inFlight = false;
       }
     };
 
+    const schedule = () => {
+      if (!alive) return;
+      const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+      timer = window.setTimeout(async () => {
+        await tick();
+        schedule();
+      }, hidden ? 30_000 : 5_000);
+    };
+
+    const wake = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void tick();
+    };
+
     void tick();
-    const id = window.setInterval(() => void tick(), 20_000);
+    schedule();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", wake);
+    }
+    window.addEventListener("focus", wake);
     return () => {
       alive = false;
-      window.clearInterval(id);
+      if (timer !== null) window.clearTimeout(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", wake);
+      }
+      window.removeEventListener("focus", wake);
       // Polling has stopped, so the persisted row is now stale — clear it
       // so an approaching viewer isn't told about yesterday's song.
       listeningRef.current = null;
@@ -1286,6 +1354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
     ]);
     const channelRows = (chs as Channel[]) ?? [];
+    if (activeServerRef.current !== serverId) return channelRows;
     setCategories((cats as ChannelCategory[]) ?? []);
     setChannels(channelRows);
     serverDetailsCacheRef.current = {
@@ -1344,6 +1413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             manage_channels: !!p.manage_channels,
             manage_messages: !!p.manage_messages,
             manage_emojis: !!p.manage_emojis,
+            manage_webhooks: !!p.manage_webhooks,
             mention_everyone: !!p.mention_everyone,
             send_messages: !!p.send_messages,
             add_reactions: !!p.add_reactions,
@@ -1489,7 +1559,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (activeChannelRef.current !== channelId) return;
 
       const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
-      setMessages((prev) => mergeFetchedRows(prev, rows));
+      setMessages((prev) => {
+        const switching = prev.some((m) => m.channel_id !== channelId);
+        if (switching || prev.length === 0) return rows;
+        return mergeFetchedRows(prev, rows);
+      });
       setChannelHasMore(hasMore);
       setMessagesLoading(false);
 
@@ -1758,9 +1832,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     const withFriends = enriched.filter((t): t is DmThread & { friend: Profile } => !!t.friend);
     setDmThreads(withFriends);
-    // Returned (not just set) so callers like seedUnread can use the fresh
-    // list immediately instead of a stale closure over state.
-    return withFriends;
 
     const ids = threads.map((t) => t.id);
     if (ids.length) {
@@ -1777,6 +1848,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDmThreadActivity((prev) => ({ ...activity, ...prev }));
       }
     }
+
+    // Returned (not just set) so callers like seedUnread can use the fresh
+    // list immediately instead of a stale closure over state.
+    return withFriends;
   }, []);
 
   const bumpFriendActivity = useCallback((friendId: string, at?: string) => {
@@ -1841,6 +1916,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDmMessages((prev) => mergeFetchedRows(prev, rows));
       setDmHasMore(hasMore);
       setDmLoading(false);
+      if (rows.length > 0) {
+        const latest = rows.reduce((acc, m) => (m.created_at > acc ? m.created_at : acc), rows[0].created_at);
+        bumpDmThreadActivity(threadId, latest);
+      }
       const ids = rows.map((m) => m.id);
       const rxn = await loadReactionsForMessages(supabase, "dm", ids);
       if (activeDmRef.current !== threadId) return;
@@ -1849,7 +1928,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (activeDmRef.current !== threadId) return;
       setDmLoading(false);
     }
-  }, []);
+  }, [bumpDmThreadActivity]);
 
   // A thread switch can call this twice (the select handler and the chat
   // effect); share the first in-flight fetch instead of paying twice.
@@ -1976,6 +2055,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [fetchGroupMessages]);
+
+  // Safety net for dropped realtime events: poll the open conversation so a
+  // message that the live subscription missed still appears without having
+  // to leave and come back. Also catch up whenever the tab regains focus.
+  useEffect(() => {
+    if (!configured || !userId) return;
+    const tick = () => {
+      if (activeDmThreadId) void loadDmMessages(activeDmThreadId);
+      if (activeGroupChatId) void loadGroupMessages(activeGroupChatId);
+    };
+    const id = window.setInterval(tick, 1000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [configured, userId, activeDmThreadId, activeGroupChatId, loadDmMessages, loadGroupMessages]);
 
   const loadMoreGroupMessages = useCallback(async () => {
     if (!activeGroupChatId || !groupHasMore || groupMessages.length === 0) return;
@@ -2187,6 +2286,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadGroupChats(uid),
     ]);
     const threads = await loadDmThreads(uid);
+    if (groupId) {
+      clearGroupUnread(groupId);
+      await markGroupReadNow(groupId);
+    }
     await seedUnread(uid, threads);
   }, [loadDmMessages, loadMessages, loadGroupMessages, loadDmThreads, loadGroupChats, seedUnread]);
 
@@ -2199,6 +2302,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (viewModeRef.current === "dm" && activeDmRef.current) {
         clearDmUnread(activeDmRef.current);
         void markDmReadNow(activeDmRef.current);
+      }
+      if (viewModeRef.current === "group" && activeGroupRef.current) {
+        clearGroupUnread(activeGroupRef.current);
+        void markGroupReadNow(activeGroupRef.current);
       }
       void refreshConversation();
       void (async () => {
@@ -2291,12 +2398,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshRestrictions = useCallback(async () => {
+    if (!userId) {
+      setRestrictions([]);
+      return;
+    }
     const supabase = getSupabaseClient();
     const { data } = await supabase
       .from("account_restrictions")
-      .select("restriction");
+      .select("restriction")
+      .eq("user_id", userId);
     setRestrictions((data as { restriction: string }[] | null)?.map((r) => r.restriction) ?? []);
-  }, []);
+  }, [userId]);
 
   const hasRestriction = useCallback(
     (restriction: string) => restrictions.includes(restriction),
@@ -2561,7 +2673,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
+        { event: "DELETE", schema: "public", table: "messages" },
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -2676,7 +2788,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
+        { event: "DELETE", schema: "public", table: "dm_messages" },
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setDmMessages((prev) => prev.filter((m) => m.id !== id));
@@ -2737,6 +2849,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const msg = payload.new as GroupMessage;
 
           if (msg.group_id !== activeGroupRef.current) return;
+          if (document.visibilityState === "visible") {
+            clearGroupUnread(msg.group_id);
+            void markGroupReadNow(msg.group_id);
+          }
           void (async () => {
             if (msg.author_id == null) {
               setGroupMessages((prev) =>
@@ -2764,7 +2880,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
+        { event: "DELETE", schema: "public", table: "group_messages" },
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setGroupMessages((prev) => prev.filter((m) => m.id !== id));
@@ -3181,7 +3297,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
 
-          if (!(viewModeRef.current === "group" && activeGroupRef.current === msg.group_id)) {
+          if (viewModeRef.current === "group" && activeGroupRef.current === msg.group_id && document.visibilityState === "visible") {
+            clearGroupUnread(msg.group_id);
+            void markGroupReadNow(msg.group_id);
+          } else {
             setGroupUnreadMap((prev) => {
               const next = new Map(prev);
               next.set(msg.group_id, (next.get(msg.group_id) ?? 0) + 1);
@@ -3637,31 +3756,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const selectServer = useCallback(async (serverId: string) => {
     markActivity();
+    if (viewModeRef.current === "space" && activeServerRef.current === serverId && activeChannelRef.current) return;
     persistActiveServerChannel();
+    viewModeRef.current = "space";
+    activeServerRef.current = serverId;
+    activeChannelRef.current = null;
+    activeDmRef.current = null;
+    activeGroupRef.current = null;
     setViewMode("space");
     setActiveServerId(serverId);
+    setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
+    setMessages([]);
+    setMessagesLoading(true);
+    setChannelHasMore(false);
     clearServerIndicator(serverId);
-    const channelRows = await loadServerDetails(serverId);
+    const channelRows = await loadServerDetails(serverId).catch(() => []);
+    // A slow response from a previous navigation must not select a channel.
+    if (activeServerRef.current !== serverId || viewModeRef.current !== "space") return;
     const savedId = getLastChannelId(serverId);
-    const saved = savedId ? channelRows.find((c) => c.id === savedId) : null;
-    const target = saved ?? channelRows.find((c) => c.type === "text") ?? channelRows[0];
+    const target = channelRows.find(c => c.id === activeChannelRef.current)
+      ?? channelRows.find(c => c.id === savedId)
+      ?? channelRows.find(c => c.type === "text") ?? channelRows[0];
     if (target) {
-      setActiveChannelId(target.id);
-
-      setMessages([]);
-      setMessagesLoading(true);
-      setChannelHasMore(false);
+      // The fallback selector may already have loaded this channel while the
+      // server details request was pending. Never clear that loaded result.
+      if (activeChannelRef.current !== target.id) {
+        activeChannelRef.current = target.id;
+        setActiveChannelId(target.id);
+        setMessages([]);
+        setMessagesLoading(true);
+      }
       await loadMessages(target.id);
     } else {
-      setActiveChannelId(null);
+      setMessagesLoading(false);
     }
   }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity]);
 
   const selectChannel = useCallback((channelId: string) => {
     markActivity();
-
+    if (activeChannelRef.current === channelId && viewModeRef.current === "space") return;
+    viewModeRef.current = "space";
     activeChannelRef.current = channelId;
     setActiveChannelId(channelId);
     setActiveDmThreadId(null);
@@ -3716,6 +3852,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectGroupChat = useCallback(async (groupId: string) => {
     markActivity();
     persistActiveServerChannel();
+    viewModeRef.current = "group";
+    activeChannelRef.current = null;
     setViewMode("group");
     setActiveGroupChatId(groupId);
     activeGroupRef.current = groupId;
@@ -3726,9 +3864,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupHasMore(false);
     setGroupLoading(true);
     clearGroupUnread(groupId);
-    void getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
-    await loadGroupMessages(groupId);
-  }, [loadGroupMessages, clearGroupUnread, persistActiveServerChannel, markActivity]);
+    await Promise.all([markGroupReadNow(groupId), loadGroupMessages(groupId)]);
+  }, [loadGroupMessages, clearGroupUnread, markGroupReadNow, persistActiveServerChannel, markActivity]);
 
   const routeToNotification = useCallback(async (link: string | null, at?: string | null) => {
     const target = parseNotificationLink(link);
@@ -4361,10 +4498,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_role_ids: roleIds,
     });
     if (error) return error.message;
-    // The roster's role chips come from the member page, so refresh it too.
-    await loadServerDetails(activeServerId, { refreshMembers: true });
+
+    // Patch the member in place instead of refreshing the roster. A refresh
+    // resets the member list to page one, which drops anyone the user loaded
+    // from a later page — and with them, every mention chip for that person
+    // in the channel (the chat renderer validates mentions against `members`).
+    const nextRoleIds = roleIds.filter((id) => assignableRoleIdsRef.current.has(id));
+    // Keep the legacy single-role column in sync too: profile surfaces fall
+    // back to it when `role_ids` is empty.
+    const highestRoleId = nextRoleIds
+      .map((id) => serverRoles.find((role) => role.id === id))
+      .filter((role): role is ServerRole => !!role)
+      .sort((a, b) => b.position - a.position)[0]?.id ?? null;
+    memberRoleIdsRef.current.set(targetUserId, nextRoleIds);
+    const patch = (member: ServerMember & { profile: Profile }) =>
+      member.user_id === targetUserId
+        ? { ...member, role_ids: nextRoleIds, role_id: highestRoleId }
+        : member;
+    fullMembersRef.current = fullMembersRef.current.map(patch);
+    setMembers((current) => current.map(patch));
+    writeMembersCache(activeServerId);
     return null;
-  }, [activeServerId, loadServerDetails]);
+  }, [activeServerId, serverRoles, writeMembersCache]);
 
   const hasServerPermission = useCallback(
     (permission: ServerPermissionKey) => serverPermissions[permission],
@@ -4561,6 +4716,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void askTether(messageId, surface);
   }, [subscriptionPlan]);
 
+  /**
+   * Resolve every @username in a channel message against the whole space.
+   *
+   * The composer only holds a window of the roster, so parsing against
+   * `members` used to drop mentions of anyone outside that window (which on a
+   * 5,000-member space is most people). Known names resolve locally; the rest
+   * go to a space-scoped RPC before the message is inserted, so the mention
+   * array — and therefore the notification and push — is complete.
+   */
+  const resolveServerMentionIds = useCallback(async (content: string): Promise<string[]> => {
+    const tokens = parseMentionTokens(content);
+    if (!tokens.length) return [];
+
+    const byUsername = new Map(
+      members
+        .map((m) => m.profile)
+        .filter((p) => !!p.username)
+        .map((p) => [p.username!.toLowerCase(), p.id] as const),
+    );
+    const ids = new Set<string>();
+    const missing: string[] = [];
+    for (const token of tokens) {
+      const id = byUsername.get(token);
+      if (id) ids.add(id);
+      else missing.push(token);
+    }
+
+    if (missing.length > 0 && activeServerId) {
+      const { data, error } = await getSupabaseClient().rpc("resolve_server_mentions", {
+        p_server_id: activeServerId,
+        p_usernames: missing,
+      });
+      if (!error) {
+        for (const row of (data ?? []) as { user_id: string }[]) ids.add(row.user_id);
+      }
+    }
+
+    return [...ids];
+  }, [members, activeServerId]);
+
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
     if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
@@ -4570,8 +4765,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!normalized && !attachment && !pendingFile && !pendingFiles?.length) return "Empty message";
     const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
+    const mentionIds = await resolveServerMentionIds(normalized);
     if (userId) {
-      const pingErr = checkMentionSend(userId, parseMentions(normalized, members.map((m) => m.profile), userId), normalized);
+      const pingErr = checkMentionSend(userId, mentionIds, normalized);
       if (pingErr) return pingErr;
     }
 
@@ -4603,7 +4799,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
@@ -4624,7 +4820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_size: attSize,
       attachments: optimisticAttachments,
       reply_to_id: replyToId ?? null,
-      mentions: parseMentions(normalized, members.map((m) => m.profile), userId),
+      mentions: mentionIds,
       created_at: new Date().toISOString(),
       edited_at: null,
       author: profile,
@@ -4673,7 +4869,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const mentionIds = parseMentions(normalized, members.map((m) => m.profile), userId);
     const { data, error } = await getSupabaseClient()
       .from("messages")
       .insert({
@@ -4707,7 +4902,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     fireTetherAsk(saved.id, "server", normalized);
     return null;
-  }, [userId, activeChannelId, profile, members, markActivity, fireTetherAsk]);
+  }, [userId, activeChannelId, profile, resolveServerMentionIds, markActivity, fireTetherAsk]);
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
@@ -4753,7 +4948,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
@@ -4905,7 +5100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",
@@ -5058,7 +5253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attType = attachmentKind(files[0]);
       attName = files[0].name;
       attSize = files[0].size;
-    } else if (attachment) {
+    } else if (attachment && attachment.type !== "poll" && attachment.type !== "activity") {
       optimisticAttachments = [{
         url: attachment.url,
         type: (attachment.type as StoredAttachment["type"]) ?? "file",

@@ -13,9 +13,11 @@ import { playVoiceSoundboardSound } from "@/lib/voice-mixer";
 
 interface SoundboardProps {
   compact?: boolean;
+  /** "panel": the wide button in the Voice Connected card; opens up and to the right. */
+  variant?: "round" | "panel";
 }
 
-export function Soundboard({ compact = false }: SoundboardProps) {
+export function Soundboard({ compact = false, variant = "round" }: SoundboardProps) {
   const { servers, activeServer, user } = useApp();
   const userId = user?.id ?? null;
 
@@ -133,32 +135,49 @@ export function Soundboard({ compact = false }: SoundboardProps) {
     servers.find((server) => server.id === effectiveServerId)?.name ?? "Server sounds";
 
   return (
-    <div ref={rootRef} className="relative inline-block">
+    <div ref={rootRef} className={variant === "panel" ? "relative flex flex-1" : "relative inline-block"}>
+      {variant === "panel" ? (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label="Open soundboard"
+          className={`flex h-8 flex-1 items-center justify-center rounded-[4px] transition-colors ${
+            open ? "bg-interactive-selected text-interactive-active" : "bg-bg-secondary text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
+          }`}
+        >
+          <IconMusic size={18} />
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-all ${
+        className={`relative flex items-center justify-center rounded-full transition-colors ${
           compact
-            ? "bg-text-normal/10 text-text-normal hover:bg-text-normal/20 hover:scale-105"
-            : "bg-bg-tertiary text-text-normal hover:bg-interactive-hover"
+            ? `h-14 w-14 ${open ? "bg-white text-[#313338]" : "bg-[#2b2d31] text-white hover:bg-[#404249]"}`
+            : "h-9 w-9 bg-bg-tertiary text-text-normal hover:bg-interactive-hover"
         }`}
-        title="Open soundboard"
+        title="Soundboard"
       >
-        <IconMusic size={16} />
+        <IconMusic size={compact ? 24 : 16} />
         {sounds.length > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
             {sounds.length > 99 ? "99+" : sounds.length}
           </span>
         )}
       </button>
+      )}
 
       {visible && (
         <div
           role="dialog"
           aria-label="Soundboard"
-          className={`absolute bottom-12 right-0 z-[150] w-[340px] max-w-[calc(100vw-2rem)] origin-bottom-right rounded-2xl border border-divider bg-bg-secondary p-3 shadow-2xl transition duration-200 ease-out ${
+          className={`absolute z-[150] w-[340px] max-w-[calc(100vw-2rem)] rounded-lg bg-bg-secondary p-3 shadow-[0_8px_16px_rgba(0,0,0,0.24)] transition duration-150 ease-out ${
+            variant === "panel" ? "bottom-10 left-0 origin-bottom-left" : "bottom-12 right-0 origin-bottom-right"
+          } ${
             open ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2 pointer-events-none"
           }`}
         >
@@ -168,7 +187,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
               <p className="text-xs text-text-muted">
                 {tab === "server"
                   ? `${activeServerName} · ${serverSounds.length} sounds`
-                  : `Favorited sounds (${favoriteSounds.length})`}
+                  : `Favourited sounds (${favoriteSounds.length})`}
               </p>
             </div>
             <button
@@ -193,7 +212,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
                     : "text-text-muted hover:bg-bg-secondary hover:text-text-normal"
                 }`}
               >
-                {value === "server" ? "Sounds" : "Favorites"}
+                {value === "server" ? "Sounds" : "Favourites"}
               </button>
             ))}
           </div>
@@ -226,7 +245,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
                           <button
                             type="button"
                             onClick={() => playVoiceSoundboardSound(sound.url)}
-                            className="flex w-full flex-col items-start gap-1 rounded-xl border border-divider bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
+                            className="flex w-full flex-col items-start gap-1 rounded-lg bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
                           >
                             <span className="text-xl leading-none">{sound.emoji}</span>
                             <span className="max-w-full truncate text-xs font-medium text-text-normal">
@@ -242,8 +261,8 @@ export function Soundboard({ compact = false }: SoundboardProps) {
                                 ? "bg-brand/20 text-brand"
                                 : "bg-black/20 text-white/70 opacity-0 group-hover:opacity-100"
                             }`}
-                            title={favorite ? "Remove favorite" : "Add favorite"}
-                            aria-label={favorite ? "Remove favorite" : "Add favorite"}
+                            title={favorite ? "Remove favourite" : "Add favourite"}
+                            aria-label={favorite ? "Remove favourite" : "Add favourite"}
                           >
                             {toggling === sound.id ? "…" : favorite ? "★" : "☆"}
                           </button>
@@ -258,7 +277,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
                     </p>
                     {!userId && (
                       <p className="mt-1 text-xs text-text-muted">
-                        Log in to favorite sounds.
+                        Log in to favourite sounds.
                       </p>
                     )}
                   </div>
@@ -270,7 +289,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
                       key={sound.id}
                       type="button"
                       onClick={() => playVoiceSoundboardSound(sound.url)}
-                      className="flex w-full flex-col items-start gap-1 rounded-xl border border-divider bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
+                      className="flex w-full flex-col items-start gap-1 rounded-lg bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-brand hover:bg-bg-secondary"
                     >
                       <span className="text-xl leading-none">{sound.emoji}</span>
                       <span className="max-w-full truncate text-xs font-medium text-text-normal">
@@ -285,7 +304,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
               ) : (
                 <div className="py-8 text-center">
                   <p className="text-xs text-text-muted">
-                    No favorite sounds yet.
+                    No favourite sounds yet.
                   </p>
                   <p className="mt-1 text-xs text-text-muted">
                     Star sounds from the Sounds tab to reach them from every device.

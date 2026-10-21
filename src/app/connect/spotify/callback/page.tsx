@@ -32,12 +32,9 @@ function CallbackInner() {
     }
     void (async () => {
       try {
-        const tokens = await exchangeSpotifyCode(code);
-        try {
-          window.localStorage.setItem("disband:spotify-tokens", JSON.stringify(tokens));
-        } catch {
-          // Private mode etc: connection just won't persist.
-        }
+        // The server stores the tokens against the signed-in account, so the
+        // connection follows the user to the desktop app and other devices.
+        await exchangeSpotifyCode(code);
         setState("done");
         setMessage("Spotify connected! You can close this tab.");
         // Tell the opener (settings) to pick it up immediately.
@@ -57,7 +54,7 @@ function CallbackInner() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg-primary px-6">
-      <div className="w-full max-w-sm rounded-2xl border border-divider bg-bg-secondary p-8 text-center">
+      <div className="w-full max-w-sm rounded-[8px] border border-divider bg-bg-secondary p-8 text-center">
         <p className="text-lg font-semibold text-text-normal">
           {state === "done"
             ? "Connected ✓"
@@ -70,7 +67,7 @@ function CallbackInner() {
         <p className="mt-2 text-sm text-text-muted">{message}</p>
         {state === "manual" && (
           <div className="mt-4 space-y-3">
-            <code className="block break-all rounded-lg border border-divider bg-bg-tertiary px-3 py-2 text-left font-mono text-[12.5px] text-text-normal">
+            <code className="block break-all rounded-[4px] border border-divider bg-bg-tertiary px-3 py-2 text-left font-mono text-[13px] text-text-normal">
               {code}
             </code>
             <button
@@ -84,11 +81,11 @@ function CallbackInner() {
                   () => setCopied(false),
                 );
               }}
-              className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              className="w-full rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
             >
               {copied ? "Copied" : "Copy code"}
             </button>
-            <p className="text-[12.5px] leading-relaxed text-text-muted">
+            <p className="text-[13px] leading-relaxed text-text-muted">
               In Disband: Settings → Connections → Connect Spotify → paste the code. It
               expires in a few minutes.
             </p>
@@ -98,7 +95,7 @@ function CallbackInner() {
           <button
             type="button"
             onClick={() => window.close()}
-            className="mt-6 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            className="mt-6 rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
           >
             Close this tab
           </button>

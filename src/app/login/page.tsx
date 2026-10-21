@@ -42,7 +42,7 @@ function LoginGate() {
       {!isTauri() && (
         <Link
           href="/home"
-          className="absolute left-6 top-6 z-10 flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-text-normal"
+          className="absolute right-6 top-6 z-20 flex items-center gap-2 text-[14px] font-medium text-white/80 hover:text-white hover:underline"
         >
           ← Back to home
         </Link>

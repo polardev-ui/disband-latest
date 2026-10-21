@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePresence } from "@/hooks/usePresence";
 import { Tooltip } from "@/components/discord/Tooltip";
 import { BadgeGlyph } from "@/lib/badge-icons";
+import { BadgeArt, hasBadgeArt } from "@/components/ui/BadgeArt";
 import { useBadges, type AwardedBadge } from "@/lib/badge-store";
 import { useEntitlement } from "@/lib/entitlement-store";
 import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components/gift/SubscriptionMedallion";
@@ -59,7 +60,7 @@ export function UserBadges({
       <span
         className={
           full
-            ? `flex flex-wrap items-center gap-1.5 ${className}`
+            ? `flex flex-wrap items-center gap-0.5 ${className}`
             : `inline-flex shrink-0 items-center gap-1 ${className}`
         }
       >
@@ -67,9 +68,10 @@ export function UserBadges({
           <Tooltip
             as="span"
             side="top"
+            disabled={tiersOpen}
             label={
               <span className="block text-center">
-                <span className="block">Disband Aero</span>
+                <span className="block">Disband {effectivePlan === "lite" ? "Lite" : "Aero"}</span>
                 <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
                   {tier.label} · {interactive ? "click for details" : `${months} months`}
                 </span>
@@ -80,14 +82,14 @@ export function UserBadges({
               <button
                 type="button"
                 onClick={() => setShowTiers(true)}
-                aria-label={`Aero subscriber, ${tier.label} tier`}
-                className="inline-flex shrink-0 items-center transition-transform hover:scale-110"
+                aria-label={`${effectivePlan === "lite" ? "Lite" : "Aero"} subscriber, ${tier.label} tier`}
+                className="inline-flex shrink-0 items-center"
               >
-                <SubscriptionMedallion tier={tier} super size={size + 7} />
+                <SubscriptionMedallion tier={tier} super={effectivePlan !== "lite"} size={size} />
               </button>
             ) : (
               <span className="inline-flex shrink-0 items-center">
-                <SubscriptionMedallion tier={tier} super size={size + 7} />
+                <SubscriptionMedallion tier={tier} super={effectivePlan !== "lite"} size={size} />
               </span>
             )}
           </Tooltip>
@@ -111,6 +113,21 @@ export function UserBadges({
   );
 }
 
+/**
+ How many pips the full variant draws (badges plus the Aero medallion).
+ Profile cards use it to choose between the classic header box, which holds
+ one row, and a wrapping row inside the card for long collections.
+*/
+export function useBadgeCount(userId: string | null | undefined, plan?: SubscriptionPlan): number {
+  const badges = useBadges(userId, { fresh: true });
+  const ent = useEntitlement(userId);
+  const effective = plan && plan !== "free" ? plan : ent.plan;
+  return badges.length + (effective !== "free" ? 1 : 0);
+}
+
+/** The header box beside the avatar fits one row of 22px badges. */
+export const HEADER_BADGE_LIMIT = 8;
+
 function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
   const detail = badgeDetail(badge);
   return (
@@ -129,12 +146,19 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
         </span>
       }
     >
-      <span
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-        style={{ color: badge.accent, backgroundColor: `${badge.accent}2e` }}
-      >
-        <BadgeGlyph badgeKey={badge.key} size={size} />
-      </span>
+      {hasBadgeArt(badge.key) ? (
+        // Classic badges stand on their own: no tinted disc behind the art.
+        <span className="inline-flex shrink-0 items-center justify-center">
+          <BadgeArt badgeKey={badge.key} size={size} />
+        </span>
+      ) : (
+        <span
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+          style={{ color: badge.accent, backgroundColor: `${badge.accent}2e` }}
+        >
+          <BadgeGlyph badgeKey={badge.key} size={size} />
+        </span>
+      )}
     </Tooltip>
   );
 }

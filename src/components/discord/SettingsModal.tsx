@@ -1,5 +1,6 @@
 "use client";
 
+import { Tooltip } from "./Tooltip";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -16,22 +17,26 @@ import {
   Hint,
 } from "./settings/SettingsPrimitives";
 import { MicTest } from "./settings/MicTest";
+import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
+import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
+import { MyAccountPanel } from "./settings/MyAccountPanel";
 import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
-import { requestEmailChange } from "@/lib/email-change";
 import {
   clearLastfmPending,
-  clearSpotifyTokens,
+  disconnectSpotify,
   exchangeSpotifyCode,
+  getSpotifyConnection,
+  hasLegacySpotifyConnection,
+  importLegacySpotifyConnection,
+  fetchLastfmSession,
   lastfmConfigured,
   readLastfmPending,
   readLastfmUsername,
-  readSpotifyTokens,
   spotifyConnectUrl,
   spotifyClientId,
   writeLastfmUsername,
-  writeSpotifyTokens,
 } from "@/lib/music-presence";
 import { isTauri } from "@/lib/platform";
 import { BadgeGlyph } from "@/lib/badge-icons";
@@ -41,8 +46,6 @@ import { apiFetch } from "@/lib/api";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic } from "@/components/icons";
-import { NewPasswordForm } from "@/components/auth/NewPasswordForm";
-import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { OfficialBroadcastPanel } from "@/components/discord/OfficialBroadcastPanel";
@@ -94,24 +97,24 @@ interface SettingsModalProps {
 }
 
 const TABS = [
-  { id: "profile" as const, label: "Profile", group: "Account", icon: <IconUser size={17} />,
+  { id: "account" as const, label: "My Account", group: "Account", icon: <IconLock size={17} />,
+    description: "Email, password, two-factor and account controls.",
+    keywords: "email password 2fa mfa two-factor authenticator passkey security delete export data" },
+  { id: "profile" as const, label: "Profiles", group: "Account", icon: <IconUser size={17} />,
     description: "How you appear to everyone on Disband.",
     keywords: "avatar banner name display username bio about pronouns status note accent colour badges" },
-  { id: "account" as const, label: "Account & Security", group: "Account", icon: <IconLock size={17} />,
-    description: "Email, password, two-factor and account controls.",
-    keywords: "email password 2fa mfa two-factor authenticator security delete export data" },
-  { id: "subscriptions" as const, label: "Subscription", group: "Account", icon: <IconCrown size={17} />,
-    description: "Your plan, billing and perks.",
-    keywords: "aero lite plan billing upgrade gift perks premium" },
-  { id: "referrals" as const, label: "Referrals", group: "Account", icon: <IconGift size={17} />,
-    description: "Invite people and track what you've earned.",
-    keywords: "invite referral link rewards friends" },
-  { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
-    description: "Create and manage bots that act on your behalf.",
-    keywords: "bot token api developer webhook" },
   { id: "connections" as const, label: "Connections", group: "Account", icon: <IconMusic size={17} />,
     description: "Spotify and SoundCloud — show what you're listening to.",
     keywords: "spotify soundcloud lastfm music listening currently playing connect integrate account" },
+  { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
+    description: "Create and manage bots that act on your behalf.",
+    keywords: "bot token api developer webhook" },
+  { id: "subscriptions" as const, label: "Subscription", group: "Billing", icon: <IconCrown size={17} />,
+    description: "Your plan, billing and perks.",
+    keywords: "aero lite plan billing upgrade gift perks premium" },
+  { id: "referrals" as const, label: "Referrals", group: "Billing", icon: <IconGift size={17} />,
+    description: "Invite people and track what you've earned.",
+    keywords: "invite referral link rewards friends" },
   { id: "appearance" as const, label: "Appearance", group: "App", icon: <IconPalette size={17} />,
     description: "Zoom, motion and theme mode.",
     keywords: "zoom scale size motion animation reduced dark light mode" },
@@ -129,7 +132,12 @@ const TABS = [
     keywords: "links previews embeds images gif media unfurl" },
 ];
 
-const NAV_GROUPS = ["Account", "App"] as const;
+const NAV_GROUPS = ["Account", "Billing", "App"] as const;
+const NAV_GROUP_LABEL: Record<(typeof NAV_GROUPS)[number], string> = {
+  Account: "User Settings",
+  Billing: "Billing Settings",
+  App: "App Settings",
+};
 
 function formatBytes(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
@@ -192,11 +200,8 @@ function giftStatusLine(g: GiftRowSummary, received = false): string {
 
 export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
-  const { profile, user, updateProfile, updatePassword, requestPasswordReset, signOut, requestAccountDeletion, cancelAccountDeletion } = useApp();
+  const { profile, user, updateProfile, signOut, requestAccountDeletion } = useApp();
   const isAnonymous = profile?.account_type === "anonymous";
-  const isPendingDeletion = Boolean(profile?.deletion_requested_at);
-  const pendingCancelUntil = profile?.deletion_cancel_until ?? null;
-  const pendingPurgeAt = profile?.deletion_purge_at ?? null;
 
   const [myAllBadges, setMyAllBadges] = useState<Array<AwardedBadge & { visible: boolean }>>([]);
   const [badgeError, setBadgeError] = useState<string | null>(null);
@@ -232,7 +237,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const { upload, isUploading } = useMediaUpload();
   const [zoom, setZoom] = useZoom();
   const [motion, setMotion] = useState<MotionPreference>(() => getStoredMotion());
-  const [tab, setTab] = useState<SettingsTab>("profile");
+  const [tab, setTab] = useState<SettingsTab>("account");
   useEffect(() => {
     if (open && initialTab) setTab(initialTab);
   }, [open, initialTab]);
@@ -282,18 +287,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [copiedId, setCopiedId] = useState(false);
-  const [signingOutAll, setSigningOutAll] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [emailChangeOpen, setEmailChangeOpen] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
-  const [emailChangeBusy, setEmailChangeBusy] = useState(false);
-  const [emailChangeSent, setEmailChangeSent] = useState(false);
-  // Connections tab: Spotify tokens live in localStorage (see music-presence
+  // Connections tab: Spotify tokens live server-side (see music-presence
   // lib); Last.fm is a username lookup and carries SoundCloud scrobbles.
   const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyChecking, setSpotifyChecking] = useState(true);
+  const [legacySpotifyAvailable, setLegacySpotifyAvailable] = useState(false);
+  const [legacySpotifyBusy, setLegacySpotifyBusy] = useState(false);
   const [spotifyPasteOpen, setSpotifyPasteOpen] = useState(false);
   const [spotifyPasteCode, setSpotifyPasteCode] = useState("");
   const [spotifyPasteBusy, setSpotifyPasteBusy] = useState(false);
@@ -302,10 +303,39 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [lastfmUser, setLastfmUser] = useState("");
   const [lastfmSaved, setLastfmSaved] = useState(false);
   const [lastfmNote, setLastfmNote] = useState<string | null>(null);
+  const lastfmPollRef = useRef<number | null>(null);
+
+  const stopLastfmPoll = useCallback(() => {
+    if (lastfmPollRef.current !== null) {
+      window.clearInterval(lastfmPollRef.current);
+      lastfmPollRef.current = null;
+    }
+  }, []);
+
+  const adoptLastfm = useCallback((name: string) => {
+    if (!user?.id || !name) return;
+    writeLastfmUsername(user.id, name);
+    clearLastfmPending();
+    setLastfmUser(name);
+    setLastfmSaved(true);
+    setLastfmNote(`Connected as ${name} — what you play on SoundCloud now shows on your profile.`);
+    stopLastfmPoll();
+  }, [user?.id, stopLastfmPoll]);
 
   useEffect(() => {
     if (!open) return;
-    setSpotifyConnected(Boolean(readSpotifyTokens()));
+    let live = true;
+    setSpotifyChecking(true);
+    // Ask the server — not this browser's storage — whether the account is
+    // linked. An old browser-only connection is offered as an explicit import
+    // because that key was never bound to a Disband account.
+    setLegacySpotifyAvailable(hasLegacySpotifyConnection());
+    void (async () => {
+      const connected = await getSpotifyConnection().catch(() => false);
+      if (!live) return;
+      setSpotifyConnected(connected);
+      setSpotifyChecking(false);
+    })();
     setLastfmSaved(false);
     setLastfmNote(null);
     // A one-click connect may have finished while the modal was closed; the
@@ -321,10 +351,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       } else {
         if (pending) clearLastfmPending();
         setLastfmUser(saved ?? "");
+        // A username already in storage is a completed connection. Without
+        // this, reopening Settings showed the value but left the card
+        // "Not connected" and kept the Connect button visible.
+        setLastfmSaved(Boolean(saved));
       }
     } else {
       setLastfmUser("");
     }
+    return () => {
+      live = false;
+    };
   }, [open, user?.id]);
 
   // The OAuth callback pages ping us when a popup finishes connecting.
@@ -335,21 +372,22 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       const data = event.data as { type?: string; username?: string } | null;
       if (data?.type === "disband:spotify-connected") {
         setSpotifyConnected(true);
+        setLegacySpotifyAvailable(false);
         setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
       } else if (data?.type === "disband:lastfm-connected") {
         const name = typeof data.username === "string" ? data.username : "";
-        if (name && user?.id) {
-          writeLastfmUsername(user.id, name);
-          clearLastfmPending();
-          setLastfmUser(name);
-          setLastfmSaved(true);
-          setLastfmNote(`Connected as ${name} — what you play on SoundCloud now shows on your profile.`);
-        }
+        if (name && user?.id) adoptLastfm(name);
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [open, user?.id]);
+  }, [open, user?.id, adoptLastfm]);
+
+  // Don't keep polling Last.fm after the settings modal closes or unmounts.
+  useEffect(() => {
+    if (!open) stopLastfmPoll();
+    return () => stopLastfmPoll();
+  }, [open, stopLastfmPoll]);
 
   function handleSpotifyConnect() {
     if (!spotifyClientId()) {
@@ -362,10 +400,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     const url = spotifyConnectUrl(user?.id ?? "disband");
     if (!url) return;
     if (isTauri()) {
-      // The desktop WebView refuses window.open, and even if it didn't, the
-      // callback page lives on www.disband.dev — a different storage origin —
-      // so the tokens could never reach the app. Open the real browser and
-      // finish with the code it hands back.
+      // The desktop WebView refuses window.open. Open the real browser and
+      // finish with the code it hands back; the exchange stores the tokens
+      // server-side against this signed-in account.
       void (async () => {
         try {
           const { invoke } = await import("@tauri-apps/api/core");
@@ -387,9 +424,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setSpotifyPasteBusy(true);
     setSpotifyPasteError(null);
     try {
-      const tokens = await exchangeSpotifyCode(code);
-      writeSpotifyTokens(tokens);
+      await exchangeSpotifyCode(code);
       setSpotifyConnected(true);
+      setLegacySpotifyAvailable(false);
       setSpotifyPasteOpen(false);
       setSpotifyPasteCode("");
       setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
@@ -403,11 +440,38 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   }
 
   async function handleSpotifyDisconnect() {
-    clearSpotifyTokens();
+    try {
+      await disconnectSpotify();
+    } catch {
+      setSpotifyNote("Couldn't disconnect Spotify. Try again in a moment.");
+      return;
+    }
     setSpotifyConnected(false);
+    setLegacySpotifyAvailable(false);
     setSpotifyNote("Disconnected — your profile no longer shows a track.");
     // Best-effort immediate clear; the poller clears it on its next tick too.
     void updateProfile({ listening: null });
+  }
+
+  async function handleImportLegacySpotify() {
+    if (legacySpotifyBusy) return;
+    setLegacySpotifyBusy(true);
+    setSpotifyNote(null);
+    try {
+      const imported = await importLegacySpotifyConnection();
+      const stillAvailable = hasLegacySpotifyConnection();
+      setLegacySpotifyAvailable(stillAvailable);
+      if (imported) {
+        setSpotifyConnected(true);
+        setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
+      } else if (stillAvailable) {
+        setSpotifyNote("Couldn't import the old connection. Try again, or connect Spotify.");
+      } else {
+        setSpotifyNote("The old connection has expired. Connect Spotify instead.");
+      }
+    } finally {
+      setLegacySpotifyBusy(false);
+    }
   }
 
   function saveLastfm() {
@@ -427,10 +491,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       return;
     }
     setLastfmNote(null);
+    stopLastfmPoll();
     try {
       const res = await apiFetch("/api/music/lastfm/token", { method: "POST" });
-      const data = (await res.json().catch(() => null)) as { authUrl?: string; error?: string } | null;
-      if (!res.ok || !data?.authUrl) {
+      const data = (await res.json().catch(() => null)) as {
+        authUrl?: string;
+        token?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.authUrl || !data.token) {
         setLastfmNote(
           res.status === 503
             ? "One-click connect isn't set up on the server yet — paste your username below instead."
@@ -439,10 +508,56 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         return;
       }
       const popup = window.open(data.authUrl, "disband-lastfm-connect", "width=520,height=760,popup=yes");
-      if (!popup) setLastfmNote("Allow pop-ups for this site, then try again.");
+      if (!popup) {
+        setLastfmNote("Allow pop-ups for this site, then try again.");
+        return;
+      }
+
+      // Some Last.fm API apps have no callback URL registered, so approving
+      // ends on Last.fm's own "you can close this window" page and our
+      // callback never runs. Poll the short-lived token here instead; when
+      // the popup closes, check once more immediately.
+      const token = data.token;
+      const deadline = Date.now() + 5 * 60_000;
+      const check = async (): Promise<boolean> => {
+        try {
+          const name = await fetchLastfmSession(token);
+          adoptLastfm(name);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      lastfmPollRef.current = window.setInterval(() => {
+        if (Date.now() > deadline) {
+          stopLastfmPoll();
+          setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+          return;
+        }
+        if (popup.closed) {
+          stopLastfmPoll();
+          void check().then((ok) => {
+            if (!ok) {
+              setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+            }
+          });
+          return;
+        }
+        void check();
+      }, 4_000);
     } catch {
       setLastfmNote("Couldn't start the Last.fm connection. Try again in a moment.");
     }
+  }
+
+  function handleLastfmDisconnect() {
+    if (!user?.id) return;
+    stopLastfmPoll();
+    writeLastfmUsername(user.id, null);
+    clearLastfmPending();
+    setLastfmUser("");
+    setLastfmSaved(false);
+    setLastfmNote("Last.fm disconnected. Your profile will stop showing its tracks.");
   }
   const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
 
@@ -514,25 +629,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       setExporting(false);
     }
   }, [profile]);
-
-  const signOutEverywhere = useCallback(async () => {
-    setSigningOutAll(true);
-    setSettingsError(null);
-    const { error: err } = await getSupabaseClient().auth.signOut({ scope: "others" });
-    if (err) setSettingsError(err.message);
-    setSigningOutAll(false);
-  }, []);
-
-  const copyUserId = useCallback(async () => {
-    if (!profile?.id) return;
-    try {
-      await navigator.clipboard.writeText(profile.id);
-      setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 1500);
-    } catch {
-      setSettingsError("Could not copy to the clipboard.");
-    }
-  }, [profile?.id]);
 
   const { mounted, exiting } = usePresence(open);
   if (!mounted) return null;
@@ -689,151 +785,85 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-        <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-        {/* A fixed-size window: the old one sized itself to each page, so the
-            whole dialog jumped every time you changed tabs. */}
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Settings"
-          className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex h-[min(820px,calc(100vh-3rem))] w-full max-w-[1080px] overflow-hidden rounded-[22px] border border-divider bg-overlay-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)]`}
-        >
-          <nav aria-label="Settings sections" className="hidden w-[256px] shrink-0 flex-col border-r border-divider bg-bg-secondary sm:flex">
-            <div className="px-3 pb-2 pt-4">
-              {profile && (
-                <button
-                  type="button"
-                  onClick={() => setTab("profile")}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-interactive-hover"
-                >
-                  <Avatar profile={profile} size="md" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-[14px] font-semibold leading-tight text-text-normal">
-                      {profile.display_name || profile.username}
-                    </span>
-                    <span className="block truncate text-[12.5px] text-text-muted">Edit profile</span>
-                  </span>
-                </button>
-              )}
-              <label className="relative mt-3 block">
-                <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  value={navQuery}
-                  onChange={(e) => setNavQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Enter jumps to the first match, so search-then-Enter works
-                    // without touching the mouse.
-                    if (e.key === "Enter" && navMatches[0]) {
-                      setTab(navMatches[0].id);
-                      setNavQuery("");
-                    }
-                  }}
-                  placeholder="Search settings"
-                  aria-label="Search settings"
-                  className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand"
-                />
-              </label>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-              {navQuery.trim() && navMatches.length === 0 && (
-                <p className="px-2 py-3 text-[13px] text-text-muted">No settings match “{navQuery.trim()}”.</p>
-              )}
-              {NAV_GROUPS.map((group) => {
-                const items = navMatches.filter((t) => t.group === group);
-                if (items.length === 0) return null;
-                return (
-                  <div key={group} className="mt-3 first:mt-1">
-                    <h2 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/80">
-                      {group}
-                    </h2>
-                    {items.map((t) => {
-                      const active = tab === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          aria-current={active ? "page" : undefined}
-                          onClick={() => {
-                            setTab(t.id);
-                            setNavQuery("");
-                          }}
-                          className={`relative mb-px flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] transition-colors duration-150 ${
-                            active
-                              ? "bg-interactive-selected font-medium text-text-normal"
-                              : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-                          }`}
-                        >
-                          {active && <span aria-hidden className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-brand" />}
-                          <span className={active ? "text-text-normal" : "text-text-muted"}>{t.icon}</span>
-                          {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="border-t border-divider p-3">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  window.location.href = "/bug-report";
+      <SettingsLayer
+        label="User Settings"
+        exiting={exiting}
+        onClose={onClose}
+        contentKey={tab}
+        mobileNav={
+          <select
+            value={tab}
+            onChange={(e) => setTab(e.target.value as SettingsTab)}
+            aria-label="Settings section"
+            className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
+          >
+            {TABS.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
+        }
+        sidebar={
+          <>
+            <label className="relative mb-3 block px-2.5">
+              <input
+                value={navQuery}
+                onChange={(e) => setNavQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && navMatches[0]) {
+                    setTab(navMatches[0].id);
+                    setNavQuery("");
+                  }
                 }}
-                className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-              >
-                <IconBug size={17} />
-                Report a bug
-              </button>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[14px] text-status-dnd transition-colors hover:bg-status-dnd/10"
-              >
-                <IconLeave size={17} />
-                Log out
-              </button>
-            </div>
-          </nav>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="flex items-start justify-between gap-4 px-8 pb-4 pt-6">
-              <div className="min-w-0">
-                <select
-                  value={tab}
-                  onChange={(e) => setTab(e.target.value as SettingsTab)}
-                  aria-label="Settings section"
-                  className="w-full rounded-[10px] border border-divider bg-bg-accent px-2 py-1.5 text-lg font-semibold outline-none focus:border-brand sm:hidden"
-                >
-                  {TABS.map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
+                placeholder="Search"
+                aria-label="Search settings"
+                className="h-7 w-full rounded-[4px] bg-bg-tertiary px-1.5 pr-7 text-[14px] text-text-normal outline-none placeholder:text-text-muted"
+              />
+              <IconSearch size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted" />
+            </label>
+            {navQuery.trim() && navMatches.length === 0 && (
+              <p className="px-2.5 py-2 text-[14px] text-text-muted">No settings match “{navQuery.trim()}”.</p>
+            )}
+            {NAV_GROUPS.map((group, gi) => {
+              const items = navMatches.filter((t) => t.group === group);
+              if (items.length === 0) return null;
+              return (
+                <div key={group}>
+                  {gi > 0 && <SettingsNavSeparator />}
+                  <SettingsNavHeader>{NAV_GROUP_LABEL[group]}</SettingsNavHeader>
+                  {items.map((t) => (
+                    <SettingsNavItem
+                      key={t.id}
+                      active={tab === t.id}
+                      onClick={() => {
+                        setTab(t.id);
+                        setNavQuery("");
+                      }}
+                    >
+                      {t.label}
+                    </SettingsNavItem>
                   ))}
-                </select>
-                <h1 className="hidden text-[22px] font-semibold tracking-[-0.02em] text-text-normal sm:block">
-                  {activeTab?.label ?? "Settings"}
-                </h1>
-                {activeTab?.description && (
-                  <p className="mt-1 hidden text-[14px] text-text-muted sm:block">{activeTab.description}</p>
-                )}
-              </div>
-              <div className="flex shrink-0 flex-col items-center gap-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Close settings"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-divider text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-                >
-                  <IconClose size={17} />
-                </button>
-                <span aria-hidden className="hidden text-[10.5px] font-medium uppercase tracking-wide text-text-muted/70 sm:block">Esc</span>
-              </div>
-            </header>
-
-            <div key={tab} className="view-enter flex-1 overflow-y-auto px-8 pb-8 pt-2">
-              <div className="max-w-[720px]">
+                </div>
+              );
+            })}
+            <SettingsNavSeparator />
+            <SettingsNavItem
+              onClick={() => {
+                onClose();
+                window.location.href = "/bug-report";
+              }}
+            >
+              Report a Bug
+            </SettingsNavItem>
+            <SettingsNavSeparator />
+            <SettingsNavItem onClick={() => void signOut()} trailing={<IconLeave size={16} />}>
+              Log Out
+            </SettingsNavItem>
+            <SettingsNavSeparator />
+            <p className="px-2.5 py-2 text-[12px] leading-4 text-text-muted">Disband {process.env.NEXT_PUBLIC_APP_VERSION ?? ""}</p>
+          </>
+        }
+      >
+        <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">{activeTab?.label ?? "Settings"}</h2>
               {tab === "profile" && (
                 <div className="pb-20">
                   {profile && (
@@ -1105,7 +1135,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           className={`flex items-center gap-3.5 border-b border-divider px-5 py-3.5 transition-opacity duration-200 last:border-b-0 ${badge.visible ? "" : "opacity-60"}`}
                         >
                           <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px]"
                             style={{ backgroundColor: `${badge.accent}24`, color: badge.accent }}
                             aria-hidden
                           >
@@ -1113,7 +1143,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </span>
                           <label htmlFor={`badge-${badge.key}`} className="min-w-0 flex-1 cursor-pointer">
                             <span className="block text-[14px] font-medium text-text-normal">{badge.name}</span>
-                            <span className="block truncate text-[12.5px] text-text-muted">
+                            <span className="block truncate text-[13px] text-text-muted">
                               {badge.visible ? badge.description : "Hidden from your profile"}
                             </span>
                           </label>
@@ -1148,7 +1178,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   {error && <p className="text-sm text-status-dnd">{error}</p>}
 
                   {(profileDirty || saving || saved) && (
-                    <div className="sticky bottom-0 -mx-8 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-overlay-panel/95 px-8 py-3 backdrop-blur">
+                    <div className="sticky bottom-0 -mx-8 mt-8 flex items-center justify-end gap-3 border-t border-divider bg-overlay-panel px-8 py-3">
                       <button
                         type="button"
                         onClick={resetProfileEdits}
@@ -1171,216 +1201,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               )}
 
               {tab === "account" && (
-                <div className="pb-20">
-                  <SettingsSection
-                    title="Account"
-                    description="Your email and user identifier on Disband."
-                  >
-                    <SettingRow label="Email" stacked>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[14px] text-text-normal">{user?.email ?? "Not available"}</p>
-                        {user?.email && (
-                          <button
-                            type="button"
-                            onClick={() => setEmailChangeOpen((v) => !v)}
-                            className="rounded-md border border-divider px-2.5 py-1 text-[12px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
-                          >
-                            Change
-                          </button>
-                        )}
-                      </div>
-                      {user?.email && emailChangeOpen && (
-                        <form
-                          className="mt-2 flex flex-col gap-2"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            setSettingsError(null);
-                            setEmailChangeSent(false);
-                            void (async () => {
-                              setEmailChangeBusy(true);
-                              const err = await requestEmailChange(newEmail);
-                              setEmailChangeBusy(false);
-                              if (err) setSettingsError(err);
-                              else setEmailChangeSent(true);
-                            })();
-                          }}
-                        >
-                          <input
-                            type="email"
-                            required
-                            value={newEmail}
-                            onChange={(e) => setNewEmail(e.target.value)}
-                            placeholder="New email address"
-                            className="w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-brand"
-                          />
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="submit"
-                              disabled={emailChangeBusy || !newEmail.trim()}
-                              className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40"
-                            >
-                              {emailChangeBusy ? "Sending…" : "Send confirmation"}
-                            </button>
-                            <p className="text-[12px] text-text-muted">
-                              Both your current and new email must confirm.
-                            </p>
-                          </div>
-                          {emailChangeSent && (
-                            <p className="text-[13px] text-status-online">
-                              Confirmation sent — check your current inbox for the first link.
-                            </p>
-                          )}
-                        </form>
-                      )}
-                    </SettingRow>
-                    <SettingRow
-                      label="User ID"
-                      description="Used for support requests. You can't change this."
-                      stacked
-                    >
-                      <div className="flex items-center gap-2">
-                        <code className="min-w-0 flex-1 truncate rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[12.5px] text-text-muted">
-                          {profile?.id}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => void copyUserId()}
-                          className="shrink-0 rounded-md border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
-                        >
-                          {copiedId ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    </SettingRow>
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title="Password & security"
-                    description="Keep your account protected."
-                  >
-                    <SettingRow
-                      label="Change password"
-                      description="Set a new password while you are logged in."
-                      stacked
-                    >
-                      <NewPasswordForm submitLabel="Update password" onSubmit={updatePassword} />
-                    </SettingRow>
-                    {user?.email && (
-                      <SettingRow
-                        label="Email reset link"
-                        description={`Prefer to reset from your inbox? We can send a link to ${user.email}.`}
-                        stacked
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSettingsError(null);
-                            setResetEmailSent(false);
-                            void (async () => {
-                              const err = await requestPasswordReset(user.email!);
-                              if (err) setSettingsError(err);
-                              else setResetEmailSent(true);
-                            })();
-                          }}
-                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover"
-                        >
-                          Send reset email
-                        </button>
-                        {resetEmailSent && (
-                          <p className="mt-2 text-[13px] text-status-online">Reset link sent. Check your inbox.</p>
-                        )}
-                      </SettingRow>
-                    )}
-                  </SettingsSection>
-
-                  <div className="mb-8">
-                    <MfaSettingsPanel />
-                  </div>
-
-                  <SettingsSection
-                    title="Delete account"
-                    description="Permanently remove your account and everything tied to it."
-                  >
-                    {isPendingDeletion ? (
-                      <div className="space-y-2">
-                        <p className="text-[13px] leading-relaxed text-text-muted">
-                          Your account is scheduled for deletion on{" "}
-                          <span className="font-medium text-text-normal">
-                            {pendingPurgeAt ? new Date(pendingPurgeAt).toLocaleString() : "—"}
-                          </span>
-                          . You can cancel until {pendingCancelUntil ? new Date(pendingCancelUntil).toLocaleString() : "—"}.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setDeletingAccount(true);
-                            setDeleteError(null);
-                            try {
-                              const res = await cancelAccountDeletion();
-                              if (res.error) setDeleteError(res.error);
-                              else setDeleteSuccess("Deletion cancelled. Welcome back.");
-                            } finally {
-                              setDeletingAccount(false);
-                            }
-                          }}
-                          disabled={deletingAccount}
-                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {deletingAccount ? "Cancelling…" : "Cancel deletion"}
-                        </button>
-                        {deleteError && (
-                          <p className="text-[12.5px] text-status-dnd">{deleteError}</p>
-                        )}
-                        {deleteSuccess && (
-                          <p className="text-[12.5px] text-status-online">{deleteSuccess}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <SettingRow
-                        label="Delete this account"
-                        description={
-                          isAnonymous
-                            ? "Instant. Your profile and all data are removed immediately."
-                            : "Scheduled for 14 days out. For the first 24 hours you can log back in to cancel. After that your profile is anonymised and the account is purged."
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => { setDeleteOpen(true); setDeleteError(null); }}
-                          className="rounded-md border border-status-dnd/40 px-3 py-1.5 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
-                        >
-                          Delete
-                        </button>
-                      </SettingRow>
-                    )}
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title="Sessions"
-                    description="Manage where your account is signed in."
-                  >
-                    <SettingRow
-                      label="Sign out everywhere"
-                      description="Ends every other session on this account. You'll stay signed in here."
-                    >
-                      <button
-                        type="button"
-                        onClick={() => void signOutEverywhere()}
-                        disabled={signingOutAll}
-                        className="rounded-md border border-status-dnd/40 px-3 py-1.5 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {signingOutAll ? "Signing out…" : "Sign out everywhere"}
-                      </button>
-                    </SettingRow>
-                  </SettingsSection>
-
+                <>
+                  <MyAccountPanel
+                    onEditProfile={() => setTab("profile")}
+                    onDeleteAccount={() => { setDeleteOpen(true); setDeleteError(null); }}
+                  />
+                  {deleteSuccess && <p className="-mt-14 mb-14 text-[14px] text-status-online">{deleteSuccess}</p>}
                   <PlatformModerationPanel />
-
                   <AccountRestrictionsPanel />
-
                   <OfficialBroadcastPanel />
-
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
-                </div>
+                </>
               )}
 
               {tab === "appearance" && (
@@ -1390,7 +1221,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
                         aria-label="Zoom out"
                       >
                         −
@@ -1408,12 +1239,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
                         aria-label="Zoom in"
                       >
                         +
                       </button>
-                      <span className="w-12 shrink-0 text-right text-[13.5px] tabular-nums text-text-muted">
+                      <span className="w-12 shrink-0 text-right text-[14px] tabular-nums text-text-muted">
                         {Math.round(zoom * 100)}%
                       </span>
                     </div>
@@ -1438,7 +1269,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               setMotion(opt.id);
                               setStoredMotion(opt.id);
                             }}
-                            className={`flex-1 rounded-[9px] px-3 py-1.5 text-[13.5px] font-medium transition-colors ${
+                            className={`flex-1 rounded-[3px] px-3 py-1.5 text-[14px] font-medium transition-colors ${
                               motion === opt.id
                                 ? "bg-interactive-selected text-text-normal shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
                                 : "text-text-muted hover:text-text-normal"
@@ -1473,7 +1304,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               setTheme(t.id);
                               void savePreference({ theme: t.id });
                             }}
-                            className={`overflow-hidden rounded-2xl border text-left transition-[border-color,box-shadow] duration-150 ${
+                            className={`overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-150 ${
                               selected
                                 ? "border-brand"
                                 : "border-divider hover:border-text-muted/40"
@@ -1494,7 +1325,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                   <span className="ml-auto text-[12px] font-medium text-brand">Active</span>
                                 ) : null}
                               </div>
-                              <p className="mt-0.5 text-[12.5px] text-text-muted">{t.description}</p>
+                              <p className="mt-0.5 text-[13px] text-text-muted">{t.description}</p>
                             </div>
                           </button>
                         );
@@ -1548,7 +1379,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         <button
                           type="button"
                           onClick={() => void enableDesktopNotifications()}
-                          className="inline-flex h-9 items-center gap-2 rounded-[10px] bg-brand px-3.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                          className="inline-flex h-9 items-center gap-2 rounded-[3px] bg-brand px-3.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
                         >
                           <IconBell size={15} />
                           Allow
@@ -1694,19 +1525,19 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
                   </p>
 
-                  <div className="rounded-lg border border-divider bg-bg-secondary p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold uppercase text-text-muted">Current Plan</p>
+                  <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Current plan</p>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-bold capitalize">{subPlan}</span>
+                          <span className="text-[16px] font-semibold capitalize text-header-primary">{subPlan}</span>
                           <SubscriptionBadge plan={subPlan} />
                         </div>
                         {subscription?.status === "active" && (
                           <div className="space-y-0.5 pt-1">
                             {subscription.current_period_end && (
-                              <p className="text-xs text-text-muted">
-                                Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", {
+                              <p className="text-[12px] text-text-muted">
+                                Renews {new Date(subscription.current_period_end).toLocaleDateString("en-GB", {
                                   year: "numeric", month: "long", day: "numeric",
                                 })}
                               </p>
@@ -1715,33 +1546,33 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </div>
                         )}
                         {subscription?.status === "past_due" && (
-                          <p className="text-xs text-status-dnd">Payment failed</p>
+                          <p className="text-[12px] text-status-dnd">Payment failed</p>
                         )}
                         {subscription?.status === "canceled" && (
-                          <p className="text-xs text-text-muted">Canceled</p>
+                          <p className="text-[12px] text-text-muted">Cancelled</p>
                         )}
                       </div>
                       <div className="flex flex-col gap-2">
                         <button
                           type="button"
                           onClick={() => setShowSubscription(true)}
-                          className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover"
+                          className="h-8 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                         >
                           {subPlan === "free" ? "Upgrade" : "Manage"}
                         </button>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                  <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-bold text-text-normal">Gift a subscription</p>
-                        <p className="text-xs text-text-muted">
+                        <p className="text-[16px] font-medium leading-6 text-header-primary">Gift a subscription</p>
+                        <p className="text-[13px] leading-5 text-text-muted">
                           Pay once for Aero or Lite. Send the link in a DM or a channel — first to claim it gets it.
                         </p>
                         {giftLink && (
                           <div className="flex items-center gap-2 pt-1">
-                            <code className="min-w-0 flex-1 truncate rounded bg-bg-tertiary px-2 py-1 text-xs text-text-normal">
+                            <code className="min-w-0 flex-1 truncate rounded-[3px] bg-bg-tertiary px-2 py-1 text-[12px] text-text-normal">
                               {giftLink}
                             </code>
                             <button
@@ -1753,7 +1584,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 );
                                 window.setTimeout(() => setGiftCopied(false), 2000);
                               }}
-                              className="shrink-0 rounded border border-divider px-2 py-1 text-xs font-semibold text-text-normal hover:bg-interactive-hover"
+                              className="shrink-0 rounded-[3px] border border-divider px-2 py-1 text-[12px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                             >
                               {giftCopied ? "Copied" : "Copy"}
                             </button>
@@ -1763,21 +1594,21 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       <button
                         type="button"
                         onClick={() => { setGiftCopied(false); setGifting(true); }}
-                        className="shrink-0 rounded bg-[#fee75c] px-3 py-1.5 text-sm font-bold text-black transition-opacity hover:opacity-90"
+                        className="h-8 shrink-0 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                       >
                         Gift
                       </button>
                     </div>
                   </div>
                   {myGifts && (myGifts.sent.length > 0 || myGifts.received.length > 0) && (
-                    <div className="rounded-lg border border-divider bg-bg-secondary p-4">
-                      <p className="text-sm font-bold text-text-normal">Your gifts</p>
-                      <p className="text-xs text-text-muted">
+                    <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
+                      <p className="text-[16px] font-medium leading-6 text-header-primary">Your gifts</p>
+                      <p className="text-[13px] leading-5 text-text-muted">
                         Everything you&apos;ve bought or claimed. The link stays here until someone uses it.
                       </p>
                       <div className="mt-3 space-y-2">
                         {myGifts.sent.map((g) => (
-                          <div key={g.code} className="flex items-center justify-between gap-3 rounded-md bg-bg-tertiary px-3 py-2">
+                          <div key={g.code} className="flex items-center justify-between gap-3 rounded-[4px] bg-bg-tertiary px-3 py-2">
                             <div className="min-w-0">
                               <p className="truncate text-[13px] font-semibold text-text-normal">
                                 {GIFT_PLAN_NAME[g.plan]} · {monthsLabel(g.months)}
@@ -1799,7 +1630,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                     2000,
                                   );
                                 }}
-                                className="shrink-0 rounded border border-divider px-2 py-1 text-xs font-semibold text-text-normal hover:bg-interactive-hover"
+                                className="shrink-0 rounded-[3px] border border-divider px-2 py-1 text-[12px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                               >
                                 {copiedGiftCode === g.code ? "Copied" : "Copy link"}
                               </button>
@@ -1807,7 +1638,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </div>
                         ))}
                         {myGifts.received.map((g) => (
-                          <div key={`r-${g.code}`} className="flex items-center justify-between gap-3 rounded-md bg-bg-tertiary px-3 py-2">
+                          <div key={`r-${g.code}`} className="flex items-center justify-between gap-3 rounded-[4px] bg-bg-tertiary px-3 py-2">
                             <div className="min-w-0">
                               <p className="truncate text-[13px] font-semibold text-text-normal">
                                 {GIFT_PLAN_NAME[g.plan]} · {monthsLabel(g.months)}
@@ -1852,7 +1683,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       type="button"
                       onClick={exportHistory}
                       disabled={exporting}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-divider bg-bg-secondary p-4 text-sm text-text-muted hover:bg-bg-accent disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-bg-secondary p-4 text-sm text-text-muted hover:bg-bg-accent disabled:opacity-50"
                     >
                       <IconDownload size={16} />
                       {exporting ? "Exporting..." : "Export Message History (JSON)"}
@@ -1867,7 +1698,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     Share your code and earn when friends join with it.
                   </p>
                   <MyReferralCard />
-                  <div className="flex flex-col gap-1.5 rounded-lg border border-divider bg-bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-1.5 rounded-lg bg-bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-[13px] font-medium text-text-normal">Live leaderboard</p>
                       <p className="mt-0.5 text-[12px] text-text-muted">
@@ -1889,41 +1720,76 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
               {tab === "connections" && (
                 <div className="pb-20">
-                  <SettingsSection
-                    title="Spotify"
-                    description="Link your Spotify account and the track you're playing shows on your profile card, live."
+                  {/* Discord's "Add accounts to your profile" strip */}
+                  <div className="mb-8 rounded-lg bg-bg-secondary p-4">
+                    <h3 className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Add accounts to your profile</h3>
+                    <p className="mt-1 text-[14px] text-header-secondary">This information won&apos;t be shared outside of Disband without your permission.</p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {[
+                        { id: "spotify", label: "Spotify", icon: <SpotifyMark />, onClick: handleSpotifyConnect, done: spotifyConnected },
+                        { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "ytmusic", label: "YouTube Music (via Last.fm)", icon: <YoutubeMusicMark />, onClick: () => document.getElementById("conn-ytmusic")?.scrollIntoView({ behavior: "smooth", block: "center" }), done: false },
+                      ].map((svc) => (
+                        <Tooltip key={svc.id} label={svc.done ? `${svc.label} · connected` : svc.label} side="top">
+                          <button
+                            type="button"
+                            onClick={svc.onClick}
+                            aria-label={`Connect ${svc.label}`}
+                            className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-tertiary transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-interactive-hover"
+                          >
+                            {svc.icon}
+                            {svc.done && (
+                              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-bg-secondary bg-status-online">
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                              </span>
+                            )}
+                          </button>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Spotify */}
+                  <ConnectionCard
+                    icon={<SpotifyMark size={32} />}
+                    name="Spotify"
+                    status={spotifyChecking ? "Checking…" : spotifyConnected ? "Connected · shows what you're playing" : "Not connected"}
+                    connected={spotifyConnected}
+                    actions={
+                      spotifyChecking ? null : spotifyConnected ? (
+                        <button type="button" onClick={() => void handleSpotifyDisconnect()} className="h-8 rounded-[3px] px-3 text-[14px] font-medium text-white hover:underline">
+                          Disconnect
+                        </button>
+                      ) : (
+                        <>
+                          {legacySpotifyAvailable && (
+                            <button
+                              type="button"
+                              disabled={legacySpotifyBusy}
+                              onClick={() => void handleImportLegacySpotify()}
+                              title="Older Disband builds kept this connection in this browser only."
+                              className="h-8 rounded-[3px] bg-button-secondary px-3 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50"
+                            >
+                              {legacySpotifyBusy ? "Importing…" : "Import old connection"}
+                            </button>
+                          )}
+                          <button type="button" onClick={handleSpotifyConnect} className="h-8 rounded-[3px] bg-[#1db954] px-4 text-[14px] font-medium text-white hover:brightness-95">
+                            Connect
+                          </button>
+                        </>
+                      )
+                    }
                   >
-                    <SettingRow
-                      label={spotifyConnected ? "Connected" : "Not connected"}
-                      description={
-                        spotifyConnected
-                          ? "Polled every 20 seconds while Disband is open — on desktop it keeps working from the tray."
-                          : "Read-only: we only see the currently-playing track. Nothing else is touched."
-                      }
-                      stacked
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        {spotifyConnected ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleSpotifyDisconnect()}
-                            className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
-                          >
-                            Disconnect
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleSpotifyConnect}
-                            className="rounded-md bg-brand px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
-                          >
-                            Connect Spotify
-                          </button>
-                        )}
-                        {spotifyNote && <p className="text-[12.5px] text-text-muted">{spotifyNote}</p>}
+                    <p className="text-[14px] text-header-secondary">
+                      {spotifyConnected
+                        ? "Checked every few seconds while Disband is open. On desktop it keeps working from the tray."
+                        : "Read-only: we only see the track you're playing. Nothing else is touched."}
+                    </p>
+                    {spotifyNote && <p className="mt-2 text-[14px] text-header-secondary">{spotifyNote}</p>}
                         {spotifyPasteOpen && !spotifyConnected && (
                           <div className="mt-2 w-full space-y-2">
-                            <p className="text-[12.5px] text-text-muted">
+                            <p className="text-[14px] text-text-muted">
                               Spotify opened in your browser. Approve access there, copy the code
                               Spotify shows, and paste it here.
                             </p>
@@ -1932,80 +1798,114 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 value={spotifyPasteCode}
                                 onChange={(e) => setSpotifyPasteCode(e.target.value)}
                                 placeholder="paste the code"
-                                className="w-64 rounded-md border border-divider bg-bg-tertiary px-3 py-2 font-mono text-[13px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-brand"
+                                className="w-64 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 font-mono text-[14px] text-text-normal placeholder:font-sans placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
                               />
                               <button
                                 type="button"
                                 disabled={spotifyPasteBusy || !spotifyPasteCode.trim()}
                                 onClick={() => void finishSpotifyPaste()}
-                                className="rounded-md bg-brand px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                                className="rounded-[3px] bg-brand px-3.5 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                               >
                                 {spotifyPasteBusy ? "Connecting…" : "Connect"}
                               </button>
                             </div>
                             {spotifyPasteError && (
-                              <p className="text-[12.5px] text-status-dnd">{spotifyPasteError}</p>
+                              <p className="text-[14px] text-status-dnd">{spotifyPasteError}</p>
                             )}
                           </div>
                         )}
-                      </div>
-                    </SettingRow>
-                  </SettingsSection>
+                  </ConnectionCard>
 
-                  <SettingsSection
-                    title="SoundCloud"
-                    description="SoundCloud doesn't let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud → Settings → Connections), then connect Last.fm here — what you play appears on your profile within a minute, even from another device."
-                  >
-                    <SettingRow label="Last.fm" stacked>
-                      <div className="flex flex-wrap items-center gap-2">
+                  {/* Last.fm (and SoundCloud through it) */}
+                  <ConnectionCard
+                    icon={<LastfmMark size={32} />}
+                    name="Last.fm"
+                    status={lastfmSaved && lastfmUser.trim() ? `Connected as ${lastfmUser.trim()}` : "Also brings in SoundCloud plays"}
+                    connected={lastfmSaved && !!lastfmUser.trim()}
+                    actions={
+                      lastfmSaved && lastfmUser.trim() ? (
+                        <button
+                          type="button"
+                          onClick={handleLastfmDisconnect}
+                          className="h-8 rounded-[3px] px-3 text-[14px] font-medium text-white hover:underline"
+                        >
+                          Disconnect
+                        </button>
+                      ) : (
                         <button
                           type="button"
                           onClick={() => void handleLastfmConnect()}
                           disabled={!lastfmConfigured()}
-                          className="rounded-md bg-brand px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40"
+                          className="h-8 rounded-[3px] bg-[#d51007] px-4 text-[14px] font-medium text-white hover:brightness-95 disabled:opacity-40"
                         >
-                          Connect Last.fm
+                          Connect
                         </button>
-                        <span className="text-[12.5px] text-text-muted">or type a username</span>
-                        <input
-                          value={lastfmUser}
-                          onChange={(e) => {
-                            setLastfmUser(e.target.value);
-                            setLastfmSaved(false);
-                          }}
-                          placeholder="your last.fm username"
-                          disabled={!lastfmConfigured()}
-                          className="w-56 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:border-brand disabled:opacity-50"
-                        />
-                        <button
-                          type="button"
-                          onClick={saveLastfm}
-                          disabled={!lastfmConfigured()}
-                          className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-40"
-                        >
-                          Save
-                        </button>
-                        {lastfmSaved && <span className="text-[12.5px] text-status-online">Saved.</span>}
-                        {!lastfmConfigured() && (
-                          <span className="text-[12.5px] text-text-muted">
-                            Not configured on this build yet.
-                          </span>
-                        )}
-                        {lastfmNote && <p className="text-[12.5px] text-text-muted">{lastfmNote}</p>}
-                      </div>
-                    </SettingRow>
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title="How it shows up"
-                    description="People see a small card on your profile — artwork, track and artist. The track name scrolls if it's too long for the card."
+                      )
+                    }
                   >
-                    <SettingRow label="Visibility" description="Your listening card is visible to everyone who can view your profile." stacked>
-                      <p className="text-[13px] text-text-muted">
-                        Disconnect either account above to hide it instantly.
+                    <p className="text-[14px] text-header-secondary">
+                      SoundCloud doesn&apos;t let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud › Settings › Connections), then connect Last.fm here. What you play appears on your profile within a minute, even from another device.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        value={lastfmUser}
+                        onChange={(e) => {
+                          setLastfmUser(e.target.value);
+                          setLastfmSaved(false);
+                        }}
+                        placeholder="Or type your Last.fm username"
+                        disabled={!lastfmConfigured()}
+                        className="h-9 w-64 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc] disabled:opacity-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveLastfm}
+                        disabled={!lastfmConfigured()}
+                        className="h-9 rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-40"
+                      >
+                        Save
+                      </button>
+                      {lastfmSaved && <span className="text-[14px] text-status-online">Saved.</span>}
+                    </div>
+                    {!lastfmConfigured() && <p className="mt-2 text-[14px] text-header-secondary">Not configured on this build yet.</p>}
+                    {lastfmNote && <p className="mt-2 text-[14px] text-header-secondary">{lastfmNote}</p>}
+                  </ConnectionCard>
+
+                  {/* YouTube Music: no public now-playing API, so it rides on Last.fm */}
+                  <div id="conn-ytmusic">
+                    <ConnectionCard
+                      icon={<YoutubeMusicMark size={32} />}
+                      name="YouTube Music"
+                      status={lastfmSaved && lastfmUser.trim() ? "Shows through your Last.fm" : "Works through Last.fm"}
+                      connected={lastfmSaved && !!lastfmUser.trim()}
+                      actions={
+                        <a
+                          href="https://web-scrobbler.com/"
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="flex h-8 items-center rounded-[3px] bg-[#ff0000] px-4 text-[14px] font-medium text-white hover:brightness-95"
+                        >
+                          Get the scrobbler
+                        </a>
+                      }
+                    >
+                      <p className="text-[14px] text-header-secondary">
+                        YouTube Music doesn&apos;t let apps see what you&apos;re playing, so it comes through Last.fm:
                       </p>
-                    </SettingRow>
-                  </SettingsSection>
+                      <ol className="mt-2 list-decimal space-y-1 pl-5 text-[14px] text-text-normal">
+                        <li>Connect Last.fm above.</li>
+                        <li>
+                          On a computer, install <span className="font-medium">Web Scrobbler</span> for your browser and sign it in to Last.fm. On Android,{" "}
+                          <span className="font-medium">Pano Scrobbler</span> does the same for the app.
+                        </li>
+                        <li>Play something on YouTube Music. It shows on your profile within a minute.</li>
+                      </ol>
+                    </ConnectionCard>
+                  </div>
+
+                  <p className="mt-6 text-[14px] text-header-secondary">
+                    Your listening card (artwork, track and artist) shows on your profile to everyone who can see it. Disconnect an account to hide it instantly.
+                  </p>
                 </div>
               )}
 
@@ -2029,11 +1929,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
                 </div>
               )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </SettingsLayer>
 
       {cropSource && (
         <AvatarCropModal
@@ -2065,51 +1961,125 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           }}
         />
       )}
-      {deleteOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <button type="button" aria-label="Close" className="absolute inset-0 bg-overlay-scrim" onClick={() => setDeleteOpen(false)} />
-          <div className="modal-pop relative z-10 w-full max-w-md rounded-2xl border border-divider bg-bg-primary p-6 shadow-2xl">
-            <h2 className="text-[18px] font-semibold text-text-normal">Delete this account?</h2>
-            <p className="mt-2 text-[13px] leading-relaxed text-text-muted">
-              {isAnonymous
-                ? "Your profile and all data are removed immediately."
-                : "Your account is put into deletion. Your username, avatar, banner and bio are anonymised. You can cancel within 24 hours by signing back in. Otherwise the account is purged in 14 days."}
-            </p>
-            {deleteError && (
-              <p className="mt-2 text-[12.5px] text-status-dnd">{deleteError}</p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setDeleteOpen(false)} className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold transition-colors hover:bg-interactive-hover">
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingAccount}
-                onClick={async () => {
-                  setDeletingAccount(true);
-                  setDeleteError(null);
-                  try {
-                    const res = await requestAccountDeletion();
-                    if (res.error) { setDeleteError(res.error); return; }
-                    setDeleteOpen(false);
-                    if (res.instant) {
-                      await signOut();
-                    } else {
-                      setDeleteSuccess("Deletion scheduled. Log in within 24 hours to cancel.");
-                    }
-                  } finally {
-                    setDeletingAccount(false);
+      <ClassicModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Delete Account"
+        centered={false}
+        footer={
+          <>
+            <button type="button" onClick={() => setDeleteOpen(false)} className={`${classicBtn.link} ${classicBtn.md}`}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deletingAccount}
+              onClick={async () => {
+                setDeletingAccount(true);
+                setDeleteError(null);
+                try {
+                  const res = await requestAccountDeletion();
+                  if (res.error) { setDeleteError(res.error); return; }
+                  setDeleteOpen(false);
+                  if (res.instant) {
+                    await signOut();
+                  } else {
+                    setDeleteSuccess("Deletion scheduled. Log in within 24 hours to cancel.");
                   }
-                }}
-                className="rounded-md bg-status-dnd px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {deletingAccount ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
+                } finally {
+                  setDeletingAccount(false);
+                }
+              }}
+              className={`${classicBtn.danger} ${classicBtn.md}`}
+            >
+              {deletingAccount ? "Deleting…" : "Delete Account"}
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-[3px] bg-[#f0b232] p-2.5 text-[14px] leading-[18px] text-white">
+          {isAnonymous
+            ? "Your profile and all data are removed immediately. This can't be undone."
+            : "Your username, avatar, banner and bio are anonymised. You can cancel within 24 hours by logging back in; after 14 days the account is purged for good."}
         </div>
-      )}
-
+        {deleteError && <p className="mt-3 text-[14px] text-status-dnd">{deleteError}</p>}
+      </ClassicModal>
     </>
+  );
+}
+
+/** One connected-service card, Discord style. */
+function ConnectionCard({
+  icon,
+  name,
+  status,
+  connected,
+  actions,
+  children,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  status: string;
+  connected: boolean;
+  actions: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className="mb-4 overflow-hidden rounded-lg bg-bg-secondary">
+      <header className="flex items-center gap-3 bg-bg-tertiary/60 px-4 py-3">
+        <span className="shrink-0">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-[16px] font-semibold text-header-primary">
+            {name}
+            {connected && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-status-online">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            )}
+          </p>
+          <p className="truncate text-[12px] text-header-secondary">{status}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      </header>
+      {children && <div className="px-4 py-3">{children}</div>}
+    </section>
+  );
+}
+
+function SpotifyMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#1db954" />
+      <path d="M6.5 9.3c3.8-1.1 8-.8 11.2 1M7 12.6c3.1-.9 6.5-.6 9.2.9M7.6 15.6c2.5-.6 5-.4 7.1.7" fill="none" stroke="#000" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LastfmMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#d51007" />
+      <text x="12" y="15.6" textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#fff" fontFamily="inherit">fm</text>
+    </svg>
+  );
+}
+
+function SoundcloudMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#ff5500" />
+      <path d="M10 15.5V9.6a3.8 3.8 0 0 1 7.2 1.4 2.3 2.3 0 0 1 .3 4.5Z" fill="#fff" />
+      <path d="M8.6 15.5v-5M7.2 15.5v-3.6M5.8 15.5V13" stroke="#fff" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function YoutubeMusicMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="11" fill="#ff0000" />
+      <circle cx="12" cy="12" r="5.6" fill="none" stroke="#fff" strokeWidth="1.3" />
+      <path d="M10.6 9.6v4.8l4-2.4Z" fill="#fff" />
+    </svg>
   );
 }

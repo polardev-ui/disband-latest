@@ -1,6 +1,6 @@
 import type { Profile } from "@/lib/supabase/types";
 
-export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio";
+export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity";
 export type MessageContext = "channel" | "dm" | "group" | "notes";
 
 export interface MessageAttachmentPayload {
@@ -42,15 +42,57 @@ export interface ReactionSummary {
   reacted: boolean;
 }
 
+/**
+ * The author fields a reply quote needs: enough for the name and the real
+ * avatar (including its crop and profile colours). Reply targets can sit
+ * outside the loaded message window, so they are fetched separately and only
+ * these columns are carried around with the quote.
+ */
+export type ReplyAuthor = Pick<
+  Profile,
+  | "id"
+  | "username"
+  | "display_name"
+  | "avatar_url"
+  | "accent_color"
+  | "accent_color_2"
+  | "avatar_crop"
+  | "equipped_ring_effect"
+>;
+
 export interface ReplyPreview {
   id: string;
   author_id: string | null;
   content: string;
   attachment_type?: AttachmentType | null;
-  author?: Pick<Profile, "id" | "username" | "display_name">;
-  // Set when the target message isn't in the loaded window (paginated away
-  // or deleted): renders as an "unavailable" fallback instead of vanishing.
+  author?: ReplyAuthor;
+  /**
+   * The target isn't in the loaded window and its preview is still being
+   * fetched. Callers render a neutral placeholder instead of claiming the
+   * message was deleted: reply_to_id is nulled by the database when a target
+   * really is deleted, so a non-null id never means "deleted".
+   */
+  pending?: boolean;
+  // Only set when a lookup finished without returning the target (for
+  // example, access was lost). Renders an unavailable fallback.
   deleted?: boolean;
+}
+
+/** Trim a full profile down to the fields a reply quote renders. */
+export function toReplyAuthor(
+  author: ReplyAuthor | Profile | null | undefined,
+): ReplyAuthor | undefined {
+  if (!author) return undefined;
+  return {
+    id: author.id,
+    username: author.username,
+    display_name: author.display_name,
+    avatar_url: author.avatar_url ?? null,
+    accent_color: author.accent_color ?? null,
+    accent_color_2: author.accent_color_2 ?? null,
+    avatar_crop: author.avatar_crop ?? null,
+    equipped_ring_effect: author.equipped_ring_effect ?? null,
+  };
 }
 
 export function summarizeReactions(

@@ -42,7 +42,7 @@ export function MyReferralCard() {
 
   if (signedIn === false) {
     return (
-      <div className="rounded-xl border border-divider bg-bg-secondary p-5 text-[14px] text-text-muted">
+      <div className="rounded-[8px] border border-divider bg-bg-secondary p-5 text-[14px] text-text-muted">
         <span className="text-text-normal">Have an account?</span> Sign in to get your referral
         code and start climbing the leaderboard.{" "}
         <Link href="/login" className="font-medium text-brand hover:underline">
@@ -55,7 +55,7 @@ export function MyReferralCard() {
   const shareUrl = code ? `${typeof window !== "undefined" ? window.location.origin : "https://disband.dev"}/referral/${code}` : null;
 
   return (
-    <div className="rounded-xl border border-divider bg-bg-secondary p-5">
+    <div className="rounded-[8px] border border-divider bg-bg-secondary p-5">
       <div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">

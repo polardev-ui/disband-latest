@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import { IconBounty, IconCrown, IconOG, IconStaff } from "@/components/icons";
+import { BadgeArt, hasBadgeArt } from "@/components/ui/BadgeArt";
 
 const BADGE_COMPONENTS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
   owner: IconCrown,
@@ -42,6 +43,9 @@ export const BADGE_GLYPHS: Record<string, ReactNode> = {
 const FALLBACK = <><circle cx="12" cy="12" r="8.6" /><path d="M12 8.4v4.4M12 16.2h.01" /></>;
 
 export function BadgeGlyph({ badgeKey, size = 13 }: { badgeKey: string; size?: number }) {
+  // Full-colour artwork wins; the line glyphs below remain as a fallback for
+  // badges added to the catalogue before they get a drawing.
+  if (hasBadgeArt(badgeKey)) return <BadgeArt badgeKey={badgeKey} size={size} />;
   const Original = BADGE_COMPONENTS[badgeKey];
   if (Original) return <Original size={size} />;
 

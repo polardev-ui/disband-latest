@@ -56,7 +56,7 @@ function ThemeSwitcher() {
       {open && (
         <>
           <button type="button" aria-label="Close" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-2 max-h-72 w-52 overflow-y-auto rounded-2xl border border-divider bg-bg-secondary p-1.5 shadow-2xl">
+          <div className="absolute right-0 z-50 mt-2 max-h-72 w-52 overflow-y-auto rounded-[4px] border border-divider bg-bg-secondary p-1.5 shadow-[var(--elevation-high)]">
             {themes.map((t) => (
               <button
                 key={t.id}
@@ -65,7 +65,7 @@ function ThemeSwitcher() {
                   setTheme(t.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-interactive-hover ${
+                className={`flex w-full items-center gap-2.5 rounded-[3px] px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-interactive-hover ${
                   theme === t.id ? "font-semibold" : ""
                 }`}
               >
@@ -158,13 +158,13 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             autoComplete="email"
-            className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-3 text-[15px] outline-none placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
+            className="min-w-0 flex-1 rounded-[4px] border border-divider bg-bg-tertiary px-4 py-3 text-[15px] outline-none placeholder:text-text-muted focus:border-brand/60 "
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => void send()}
-            className="shrink-0 rounded-2xl bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
+            className="shrink-0 rounded-[4px] bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
           >
             {busy ? "Sending…" : "Send code"}
           </button>
@@ -181,13 +181,13 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
               placeholder="6-digit code"
               inputMode="numeric"
               autoComplete="one-time-code"
-              className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.2em] outline-none placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
+              className="min-w-0 flex-1 rounded-[4px] border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.02em] outline-none placeholder:text-text-muted focus:border-brand/60 "
             />
             <button
               type="button"
               disabled={busy}
               onClick={() => void verify()}
-              className="shrink-0 rounded-2xl bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover active:scale-[0.98] disabled:opacity-50"
+              className="shrink-0 rounded-[4px] bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
             >
               {busy ? "Checking…" : "Verify & continue"}
             </button>
@@ -449,7 +449,7 @@ function SupportHome() {
   return (
     <div className="min-h-screen bg-bg-primary text-text-normal">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-divider/70 bg-bg-primary/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-divider/70 bg-bg-primary">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-3 px-4 sm:px-6">
           <Link href="/app" className="flex items-center gap-2.5">
             <Logo adaptive size={30} className="h-[30px] w-[30px]" priority />
@@ -496,7 +496,7 @@ function SupportHome() {
           {!ready ? (
             <div aria-label="Loading" className="animate-pulse rounded-[28px] border border-divider bg-bg-secondary p-6">
               <div className="h-5 w-2/3 rounded bg-bg-accent" />
-              <div className="mt-3 h-12 w-full rounded-2xl bg-bg-accent" />
+              <div className="mt-3 h-12 w-full rounded-[4px] bg-bg-accent" />
             </div>
           ) : needsVerify && !session ? (
             <VerifyEmail onVerified={() => undefined} />
@@ -506,7 +506,7 @@ function SupportHome() {
         </div>
         {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
         {noAccount && session && (
-          <p className="mx-auto mt-3 max-w-md rounded-2xl bg-bg-secondary px-4 py-2.5 text-[13px] leading-relaxed text-text-muted">
+          <p className="mx-auto mt-3 max-w-md rounded-[4px] bg-bg-secondary px-4 py-2.5 text-[13px] leading-relaxed text-text-muted">
             This email isn&apos;t attached to a Disband account yet — Tether
             can still answer general questions here.
           </p>
@@ -549,7 +549,7 @@ function SupportHome() {
               key={t.subject}
               type="button"
               onClick={() => pickTopic(t.subject)}
-              className="group rounded-[24px] border border-divider bg-bg-secondary p-5 text-left shadow-[0_10px_36px_-24px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-0.5 hover:border-brand/40"
+              className="group rounded-[24px] border border-divider bg-bg-secondary p-5 text-left shadow-[0_10px_36px_-24px_rgba(0,0,0,0.5)] transition-all hover:border-brand/40"
             >
               <span className="text-[26px]" aria-hidden>{t.icon}</span>
               <span className="mt-3 block text-[15px] font-bold text-text-normal">{t.subject}</span>
@@ -571,7 +571,7 @@ function SupportHome() {
                     key={t.id}
                     type="button"
                     onClick={() => { setOpeningDraft(""); setActive(t); }}
-                    className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
+                    className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:border-brand/40"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-bold text-text-normal">
@@ -607,7 +607,7 @@ function SupportHome() {
                     key={t.id}
                     type="button"
                     onClick={() => { setOpeningDraft(""); setActive(t); }}
-                    className="flex items-center gap-3 rounded-2xl border border-divider bg-bg-secondary/60 px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40"
+                    className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary/60 px-4 py-3.5 text-left transition-all hover:border-brand/40"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-bold text-text-normal">
@@ -640,7 +640,7 @@ function SupportHome() {
           ].map(([q, a]) => (
             <details
               key={q}
-              className="group rounded-2xl border border-divider bg-bg-secondary px-5 py-4 open:shadow-[0_10px_36px_-24px_rgba(0,0,0,0.5)]"
+              className="group rounded-[4px] border border-divider bg-bg-secondary px-5 py-4 "
             >
               <summary className="cursor-pointer list-none text-[15px] font-bold text-text-normal">
                 {q}

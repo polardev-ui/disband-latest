@@ -12,7 +12,7 @@ export function DangerSection({ server, onDeleted }: SectionProps & { onDeleted:
 
   return (
     <div className="pb-10">
-      <section className="overflow-hidden rounded-2xl border border-status-dnd/30 bg-status-dnd/[0.04]">
+      <section className="overflow-hidden rounded-lg border border-status-dnd/30 bg-status-dnd/[0.04]">
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
           <div className="min-w-0 max-w-md">
             <p className="text-[14.5px] font-semibold text-text-normal">Delete this space</p>

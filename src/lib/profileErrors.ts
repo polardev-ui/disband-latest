@@ -39,6 +39,9 @@ export function mapGroupChatError(message: string): string {
   if (lower.includes("wait 20 seconds before creating")) {
     return "Wait 20 seconds before creating another group chat.";
   }
+  if (lower.includes("at least 3 friends")) {
+    return "Select at least 3 friends to start a group DM.";
+  }
   if (lower.includes("sending messages too quickly")) {
     return "You are sending messages too quickly. Slow down.";
   }

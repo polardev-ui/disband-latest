@@ -3,10 +3,8 @@ import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-export async function getUserFromRequest(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token) return null;
+export async function getUserFromToken(token: string) {
+  if (!token || token.length > 16384) return null;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -20,6 +18,13 @@ export async function getUserFromRequest(request: NextRequest) {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return null;
   return data.user;
+}
+
+export async function getUserFromRequest(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) return null;
+  return getUserFromToken(token);
 }
 
 export async function requirePlatformOwner(userId: string): Promise<boolean> {

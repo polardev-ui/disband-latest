@@ -5,7 +5,10 @@
 // tier, unportalled context menu), so nested layers collided. New layers must
 // use these values; remaining call sites migrate in the overlay-theming patch.
 export const OVERLAY_Z = {
-  tooltip: 40,
+  // Tooltips sit above every layer: a badge in a popout or a button in
+  // settings must still show its name on hover.
+  tooltip: 150,
+  badgeDetails: 105,
   modal: 50,
   call: 60,
   modalNested: 70,

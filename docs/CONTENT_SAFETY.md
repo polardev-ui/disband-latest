@@ -13,7 +13,9 @@ Status as of the last deployment:
 | 5-hourly schedule (pg_cron → edge function) | **Live**, verified end to end |
 | Text rules over all 75,000 rows | **Backfilled**, 100% covered |
 | Media hashing | **Live** (~250 files per run) |
-| Image/video classification | **NOT ACTIVE** — needs a provider key, see §3 |
+| Bulk image/video classification | **NOT ACTIVE** — needs a provider key, see §3 |
+| Reported-image classification | **Live** — DeepSeek vision fallback, hourly with reports |
+| User-report queue (hourly) | **Live** (`0146`), verified with text and image reports |
 | Upload-time hash blocking (CDN worker) | **Written and tested, NOT deployed** — see §6 |
 | NCMEC reporting | **Manual** — see §2 |
 
@@ -92,17 +94,67 @@ newly-seen files get classified.
 | Text matching a `block` rule | Redacted to `[removed by Disband Safety]`, flag opened |
 | Text matching a `review` rule | Flag opened, nothing changed |
 
-**Text never suspends an account.** The first dry run over real data had five
-of six blocking hits turn out to be users *reporting* abuse ("they have a child
-porn channel", "sites on the dark web advertise child pornography") and one
-crude insult. Auto-banning on wording would have removed the reporters.
-Suspension requires media evidence — a hash match or a classifier verdict on an
-actual image. Those five strings are now regression tests in `rules_test.ts`.
+**The five-hour text sweep never suspends an account.** The first dry run over
+real data had five of six blocking hits turn out to be users *reporting* abuse
+("they have a child porn channel", "sites on the dark web advertise child
+pornography") and one crude insult. Auto-banning on wording would have removed
+the reporters. Suspension in the sweep requires media evidence — a hash match or
+a classifier verdict on an actual image. Those five strings are now regression
+tests in `rules_test.ts`.
 
-Suspension writes to `platform_bans`, which `is_platform_banned()` already
-enforces in RLS across the whole product.
+The separate report pass (§5) can restrict an account on a confirmed direct
+slur or threat because a member has pointed at the exact message and a person
+can appeal it. Suspension writes to `platform_bans`, which
+`is_platform_banned()` already enforces in RLS across the whole product.
 
-## 5. Running it by hand
+## 5. User reports
+
+Signed-in members can report a channel message, DM, group message or profile.
+`POST /api/reports` snapshots the reported text and trusted CDN media at that
+moment, so deleting or editing the original cannot erase the evidence. Reports
+are service-role only; a reporter can have one open report per target, with
+per-user and per-IP rate limits.
+
+`0146_message_reports.sql` adds an hourly `pg_cron` job at `:15` past the hour.
+It reviews up to 40 reports per run, leaving the five-hour full sweep at
+`0 */5 * * *` unchanged. The checks are:
+
+* text rules over the reported message and profile fields;
+* SHA-256 against `banned_media_hashes`;
+* the configured moderation provider, then DeepSeek vision as a fallback for
+  reported images.
+
+Penalties are intentionally differentiated:
+
+| Confirmed violation | Removal | Restriction |
+|---|---|---|
+| Hate speech / hard-R slur | Message or profile text redacted | 1-day messaging suspension |
+| Sexual content | Media quarantined or text redacted | 7-day messaging suspension |
+| Gore / graphic violence | Media quarantined or text redacted | 3-day messaging suspension |
+| Direct threat | Message redacted | 3-day messaging suspension |
+| Apparent illegal material | Preserved, never auto-deleted | Immediate human escalation; platform suspension |
+| Ambiguous or unscannable | Nothing changed | `needs_review` for a person |
+| Sixth confirmed violation in 365 days | — | Platform suspension |
+
+Quoted slurs and reports about abuse are demoted by the text rules, so they do
+not auto-penalise the person quoting them; they are routed to human review
+instead.
+
+**Video limitation:** the edge runtime has no frame extractor. A reported video
+can only be settled automatically by a known banned hash; every other video is
+routed to `needs_review` rather than guessed at. The report UI tells the member
+that anything needing context goes to a person.
+
+To inspect what needs a person:
+
+```sql
+select id, target_type, target_surface, reason, details, created_at, last_error
+from public.message_reports
+where status = 'needs_review'
+order by created_at asc;
+```
+
+## 6. Running it by hand
 
 The scheduled job needs no credentials from you. For manual runs use the
 operator key stored as the `SENTINEL_KEY` function secret.
@@ -134,7 +186,7 @@ values ('<sha256>', 'csam', 'takedown', 'seized space 2026-09');
 Any file matching is refused at upload (once §6 ships) and quarantined on the
 next sweep.
 
-## 6. Pending: upload-time blocking
+## 7. Pending: upload-time blocking
 
 `cloudflare/cdn-worker/src/index.js` has been changed to hash every upload as
 it streams to R2 (`tee()` + `DigestStream`, so a 500 MB video never enters
@@ -166,7 +218,7 @@ why Cloudflare blocked it. Resolve before deploying:
 The secrets it needs (`SUPABASE_SERVICE_KEY`, `ADMIN_SECRET`) are already set
 on `disband-cdn`.
 
-## 7. Where things are recorded
+## 8. Where things are recorded
 
 | Table | Holds |
 |---|---|
@@ -175,7 +227,9 @@ on `disband-cdn`.
 | `content_flags` | Findings needing a human, and the audit trail |
 | `moderation_actions` | Every removal, redaction and suspension |
 | `moderation_evidence` | Preserved material, retention hold, NCMEC report id |
-| `safety_runs` | One row per sweep with counts and status |
+| `safety_runs` | One row per sweep with content and report counts |
+| `message_reports` | User reports, snapshots, decisions and review state |
+| `user_violations` | Confirmed violations counted toward the rolling-year limit |
 
 All are service-role only: RLS on with no policies, `execute` revoked from
 `anon`/`authenticated`. Nothing here is reachable from a client session.

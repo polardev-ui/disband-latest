@@ -149,8 +149,8 @@ function useAnyLiveVideo(streams: (MediaStream | null | undefined)[]): boolean {
 function RingRipple() {
   return (
     <>
-      <span className="call-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-white/80" />
-      <span className="call-ripple-delayed pointer-events-none absolute inset-0 rounded-full border-2 border-white/80" />
+      <span className="call-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-header-primary/80" />
+      <span className="call-ripple-delayed pointer-events-none absolute inset-0 rounded-full border-2 border-header-primary/80" />
     </>
   );
 }
@@ -185,8 +185,8 @@ function MemberCircle({ member }: { member: StageMember }) {
   return (
     <div className="flex w-28 flex-col items-center gap-2">
       <MemberAvatar member={member} speaking={speaking} />
-      <span className="max-w-full truncate text-sm font-medium text-white/80">{member.label}</span>
-      {member.ringing && <span className="-mt-1.5 text-[11px] text-white/40">Ringing…</span>}
+      <span className="max-w-full truncate text-sm font-medium text-header-primary">{member.label}</span>
+      {member.ringing && <span className="-mt-1.5 text-[11px] text-header-secondary">Ringing…</span>}
     </div>
   );
 }
@@ -235,7 +235,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
           setMenu({ x: event.clientX, y: event.clientY });
         }}
         onClick={showVideo ? onFocus : undefined}
-        className={`relative h-full w-full overflow-hidden rounded-xl bg-overlay-media transition-shadow duration-150 ${
+        className={`relative h-full w-full overflow-hidden rounded-lg bg-overlay-media transition-shadow duration-150 ${
           showVideo && onFocus ? "cursor-pointer " : ""
         }${
           speaking ? "ring-[3px] ring-status-online" : "ring-1 ring-white/10"
@@ -255,7 +255,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
             <MemberAvatar member={member} speaking={false} />
           </span>
         )}
-        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
           {member.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
           <span className="truncate">{member.label}</span>
           {member.ringing && <span className="shrink-0 text-[11px] text-white/50">Ringing…</span>}
@@ -265,7 +265,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
         <>
           <div className="fixed inset-0 z-[135]" onClick={() => setMenu(null)} />
           <div
-            className="fixed z-[140] min-w-60 rounded-xl border border-divider bg-bg-secondary p-3 shadow-2xl"
+            className="fixed z-[140] min-w-60 rounded-lg bg-bg-secondary p-3 shadow-[var(--elevation-high)]"
             style={{ left: Math.min(menu.x, window.innerWidth - 260), top: Math.min(menu.y, window.innerHeight - 240) }}
           >
             <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">Participant</div>
@@ -360,7 +360,7 @@ function ScreenTile({
   return (
     <div
       ref={boxRef}
-      className={`group relative h-full w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10 ${
+      className={`group relative h-full w-full overflow-hidden rounded-lg bg-black ring-1 ring-white/10 ${
         watching && onFocus ? "cursor-pointer" : ""
       }`}
       onClick={watching ? onFocus : undefined}
@@ -389,7 +389,7 @@ function ScreenTile({
 
       {hasAudio && <audio ref={audioRef} autoPlay playsInline className="hidden" />}
 
-      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[13px] font-medium text-white backdrop-blur-sm">
+      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
         <span className="truncate">{screen.label}</span>
         <span className="shrink-0 rounded bg-status-dnd px-1 text-[10px] font-bold uppercase tracking-wide text-white">
           Live

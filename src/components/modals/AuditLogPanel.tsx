@@ -6,7 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconLeave, IconLock, IconNotes, IconTimer, IconTrash } from "@/components/icons";
+import { IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -29,6 +29,12 @@ const ACTIONS: Record<string, { label: string; icon: ComponentType<{ size?: numb
   "channel.message.delete": { label: "deleted a message", icon: IconTrash, tone: "muted" },
   "dm.message.delete": { label: "deleted a DM", icon: IconTrash, tone: "muted" },
   "group.message.delete": { label: "deleted a group message", icon: IconTrash, tone: "muted" },
+  "webhook.create": { label: "created", icon: IconLink, tone: "muted" },
+  "webhook.update": { label: "updated", icon: IconLink, tone: "muted" },
+  "webhook.token_reset": { label: "reset the URL for", icon: IconLink, tone: "muted" },
+  "webhook.delete": { label: "deleted", icon: IconLink, tone: "danger" },
+  "space.partner_set": { label: "updated the Partner badge on", icon: IconStar, tone: "muted" },
+  "space.verified_set": { label: "updated the Verified badge on", icon: IconVerified, tone: "muted" },
 };
 
 function timeAgo(iso: string): string {
@@ -100,7 +106,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
 
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <div className="overflow-hidden rounded-lg bg-bg-secondary">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="flex items-center gap-3 border-b border-divider px-4 py-3.5 last:border-b-0">
             <div className="h-8 w-8 animate-pulse rounded-full bg-bg-accent" />
@@ -113,14 +119,14 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-2xl border border-divider bg-bg-secondary">
+      <div className="rounded-lg bg-bg-secondary">
         <EmptyState icon={<IconNotes size={20} />} title="Nothing logged yet" body="Kicks, bans, timeouts and deleted messages will show up here." />
       </div>
     );
   }
 
   return (
-    <ul className="overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+    <ul className="overflow-hidden rounded-lg bg-bg-secondary">
       {rows.map((row, i) => {
         const action = ACTIONS[row.action];
         const Icon = action?.icon ?? IconNotes;
@@ -128,6 +134,14 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
         const target = row.target_id && row.target_type === "user" ? (byId.get(row.target_id) ?? extraProfiles.get(row.target_id) ?? null) : null;
         const reason = typeof row.details?.reason === "string" && row.details.reason ? row.details.reason : null;
         const seconds = typeof row.details?.seconds === "number" ? row.details.seconds : null;
+        const targetName = typeof row.details?.name === "string" && row.details.name ? row.details.name : null;
+        const webhookName = targetName ?? "a webhook";
+        const badgeLabel =
+          row.action === "space.partner_set"
+            ? `${row.details?.enabled === false ? "removed" : "granted"} the Partner badge on`
+            : row.action === "space.verified_set"
+              ? `${row.details?.enabled === false ? "removed" : "granted"} the Verified badge on`
+              : action?.label ?? row.action;
         return (
           <li key={row.id} className="view-enter flex items-start gap-3 border-b border-divider px-4 py-3 last:border-b-0" style={enterStyle(i)}>
             <div className="relative shrink-0">
@@ -141,18 +155,30 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] leading-snug text-text-muted">
+              <p className="text-[14px] leading-snug text-text-muted">
                 <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? "Someone" : "Disband"}</span>{" "}
-                {action?.label ?? row.action}
+                {badgeLabel}
                 {row.target_type === "user" && (
                   <>
                     {" "}
                     <span className="font-medium text-text-normal">{target ? displayName(target) : "a former member"}</span>
                   </>
                 )}
+                {row.target_type === "webhook" && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-text-normal">{webhookName}</span>
+                  </>
+                )}
+                {row.target_type === "space" && targetName && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-text-normal">{targetName}</span>
+                  </>
+                )}
                 {seconds !== null && <> for {formatDuration(seconds)}</>}
               </p>
-              {reason && <p className="mt-0.5 truncate text-[12.5px] text-text-muted">“{reason}”</p>}
+              {reason && <p className="mt-0.5 truncate text-[13px] text-text-muted">“{reason}”</p>}
             </div>
             <time dateTime={row.created_at} title={new Date(row.created_at).toLocaleString()} className="shrink-0 text-[12px] text-text-muted">
               {timeAgo(row.created_at)}

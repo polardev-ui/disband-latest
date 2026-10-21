@@ -5,6 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Logo } from "@/components/ui/Logo";
 import {
   factorLabel,
+  getPasskeyMfaStatus,
   listVerifiedMfaFactors,
   verifyPasskeyChallenge,
   verifyTotpChallenge,
@@ -20,6 +21,7 @@ export function MfaChallengeScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingFactors, setLoadingFactors] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [passkeyReady, setPasskeyReady] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -28,9 +30,13 @@ export function MfaChallengeScreen() {
     setLoadError(null);
     void (async () => {
       try {
-        const list = await listVerifiedMfaFactors();
+        const [list, passkeyStatus] = await Promise.all([
+          listVerifiedMfaFactors(),
+          getPasskeyMfaStatus(),
+        ]);
         if (cancelled) return;
         setFactors(list);
+        setPasskeyReady(Boolean(passkeyStatus.data?.ready));
         setSelectedFactorId(list.find((f) => f.factor_type === "totp")?.id ?? list[0]?.id ?? "");
       } catch {
         if (!cancelled) setLoadError("Couldn’t load your security methods.");
@@ -44,7 +50,6 @@ export function MfaChallengeScreen() {
   }, [attempt]);
 
   const totpFactors = factors.filter((f) => f.factor_type === "totp");
-  const passkeyFactors = factors.filter((f) => f.factor_type === "webauthn");
 
   async function submitTotp(e: React.FormEvent) {
     e.preventDefault();
@@ -60,10 +65,10 @@ export function MfaChallengeScreen() {
     await refreshMfaStatus();
   }
 
-  async function usePasskey(factorId: string) {
+  async function usePasskey() {
     setLoading(true);
     setError(null);
-    const err = await verifyPasskeyChallenge(factorId);
+    const err = await verifyPasskeyChallenge();
     setLoading(false);
     if (err) {
       setError(err);
@@ -83,7 +88,7 @@ export function MfaChallengeScreen() {
   if (loadError) {
     return (
       <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
-        <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 text-center shadow-xl">
+        <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 text-center shadow-[var(--elevation-high)]">
           <h1 className="text-xl font-bold text-text-normal">Something went wrong</h1>
           <p className="mt-2 text-sm text-text-muted">{loadError}</p>
           <button
@@ -107,14 +112,14 @@ export function MfaChallengeScreen() {
 
   return (
     <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
-      <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-xl">
+      <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-[var(--elevation-high)]">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex justify-center">
             <Logo adaptive size={56} className="h-14 w-14" priority />
           </div>
           <h1 className="text-2xl font-bold text-text-normal">Two-factor authentication</h1>
           <p className="mt-1 text-sm text-text-muted">
-            Verify it&apos;s you with your authenticator app or passkey.
+            Verify it&apos;s you with your passkey or authenticator app.
           </p>
         </div>
 
@@ -160,26 +165,26 @@ export function MfaChallengeScreen() {
           </form>
         )}
 
-        {passkeyFactors.length > 0 && (
+        {passkeyReady && (
           <div className={totpFactors.length > 0 ? "mt-4 space-y-2" : "space-y-2"}>
             {totpFactors.length > 0 && (
               <p className="text-center text-xs uppercase tracking-wide text-text-muted">or</p>
             )}
-            {passkeyFactors.map((factor) => (
-              <button
-                key={factor.id}
-                type="button"
-                disabled={loading}
-                onClick={() => void usePasskey(factor.id)}
-                className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
-              >
-                {loading ? "Verifying…" : `Use ${factorLabel(factor)}`}
-              </button>
-            ))}
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void usePasskey()}
+              className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
+            >
+              {loading ? "Verifying…" : "Use a passkey"}
+            </button>
+            <p className="text-center text-xs leading-4 text-text-muted">
+              Face ID, Touch ID, Windows Hello or a security key
+            </p>
           </div>
         )}
 
-        {factors.length === 0 && (
+        {totpFactors.length === 0 && !passkeyReady && (
           <p className="text-sm text-text-muted">
             No verified security methods were found. Sign out and contact support if this keeps happening.
           </p>

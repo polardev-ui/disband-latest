@@ -3,54 +3,103 @@
 /**
  * Music presence ("listening to") for Spotify and SoundCloud.
  *
- * Data model: the connected integration polls the provider and writes a
- * `listening` object onto the profile; ListeningCard renders it. Polling
+ * Data model: the connected integration polls Spotify through our API and
+ * writes a `listening` object onto the profile; ListeningCard renders it.
+ * Spotify tokens live server-side (public.spotify_connections), so the
+ * connection follows the account across web, desktop and devices. Polling
  * only runs while Disband itself is running — on desktop the tray keeps the
- * process alive in the background, so music keeps showing. True
- * play-even-when-quit display needs a server-side polling worker holding
- * the refresh tokens (follow-up, not this file).
+ * process alive in the background, so music keeps showing.
  */
 
-import type { Profile } from "@/lib/supabase/types";
+import type { Listening } from "@/lib/spotify";
 
 import { apiFetch } from "@/lib/api";
 
 export type ListeningSource = "spotify" | "soundcloud";
-export type Listening = NonNullable<NonNullable<Profile["listening"]>>;
+export type { Listening };
 
 /* -------------------------------------------------- Connection state */
 
-const SPOTIFY_TOKENS_KEY = "disband:spotify-tokens";
+/**
+ * Connections made by older builds live under this key. The key was never
+ * bound to a Disband account, so it must not be imported automatically: on a
+ * shared browser that could attach one person's Spotify to another account.
+ * Settings offers an explicit "Import old connection" action instead.
+ */
+const LEGACY_SPOTIFY_TOKENS_KEY = "disband:spotify-tokens";
 
-export function readSpotifyTokens(): SpotifyTokens | null {
+interface LegacySpotifyTokens {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+}
+
+function readLegacySpotifyTokens(): LegacySpotifyTokens | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(SPOTIFY_TOKENS_KEY);
+    const raw = window.localStorage.getItem(LEGACY_SPOTIFY_TOKENS_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<SpotifyTokens>;
+    const parsed = JSON.parse(raw) as Partial<LegacySpotifyTokens>;
     if (!parsed.access_token || !parsed.refresh_token || typeof parsed.expires_at !== "number") {
       return null;
     }
-    return parsed as SpotifyTokens;
+    return parsed as LegacySpotifyTokens;
   } catch {
     return null;
   }
 }
 
-export function writeSpotifyTokens(tokens: SpotifyTokens): void {
+function clearLegacySpotifyTokens(): void {
   try {
-    window.localStorage.setItem(SPOTIFY_TOKENS_KEY, JSON.stringify(tokens));
-  } catch {
-    // Private mode etc: the connection lasts this session only.
-  }
-}
-
-export function clearSpotifyTokens(): void {
-  try {
-    window.localStorage.removeItem(SPOTIFY_TOKENS_KEY);
+    window.localStorage.removeItem(LEGACY_SPOTIFY_TOKENS_KEY);
   } catch {
     // Nothing to do.
   }
+}
+
+/** Whether this browser still holds a pre-server-storage connection. */
+export function hasLegacySpotifyConnection(): boolean {
+  return readLegacySpotifyTokens() !== null;
+}
+
+/**
+ * Explicitly move an old browser-only connection onto the signed-in account.
+ * Returns false when there is nothing to import or the grant has expired; an
+ * expired grant is removed so Settings can offer Connect again.
+ */
+export async function importLegacySpotifyConnection(): Promise<boolean> {
+  const legacy = readLegacySpotifyTokens();
+  if (!legacy) return false;
+  try {
+    const res = await apiFetch("/api/music/spotify/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: legacy.refresh_token }),
+    });
+    if (res.ok) {
+      clearLegacySpotifyTokens();
+      return true;
+    }
+    if (res.status === 400) clearLegacySpotifyTokens();
+  } catch {
+    // Offline: keep the legacy tokens for another explicit attempt.
+  }
+  return false;
+}
+
+/** Whether this account has a Spotify connection stored on the server. */
+export async function getSpotifyConnection(): Promise<boolean> {
+  const res = await apiFetch("/api/music/spotify/token", { method: "GET" });
+  if (!res.ok) return false;
+  const data = (await res.json().catch(() => null)) as { connected?: boolean } | null;
+  return data?.connected === true;
+}
+
+/** Remove the server-side connection for this account. */
+export async function disconnectSpotify(): Promise<void> {
+  const res = await apiFetch("/api/music/spotify/token", { method: "DELETE" });
+  if (!res.ok) throw new Error("Could not disconnect Spotify.");
+  clearLegacySpotifyTokens();
 }
 
 /* ------------------------------------------- Last.fm (SoundCloud, etc.) */
@@ -179,8 +228,6 @@ export async function fetchLastfmNowPlaying(username: string): Promise<Listening
 /* ------------------------------------------------------------ Spotify */
 
 const SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize";
-const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
-const SPOTIFY_PLAYER_URL = "https://api.spotify.com/v1/me/player/currently-playing";
 
 export function spotifyClientId(): string | null {
   return process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID ?? null;
@@ -207,83 +254,33 @@ export function spotifyConnectUrl(state: string): string | null {
   return `${SPOTIFY_AUTH_URL}?${params.toString()}`;
 }
 
-export interface SpotifyTokens {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-}
-
-/** Exchange an auth code for tokens. The client secret lives server-side:
- *  this hits our own API route, never Spotify directly. */
-export async function exchangeSpotifyCode(code: string): Promise<SpotifyTokens> {
+/** Exchange an auth code. Tokens are stored server-side and never returned. */
+export async function exchangeSpotifyCode(code: string): Promise<void> {
   const res = await apiFetch("/api/music/spotify/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, redirect_uri: spotifyRedirectUri() }),
   });
   if (!res.ok) throw new Error("Spotify token exchange failed");
-  return (await res.json()) as SpotifyTokens;
+  // A fresh server connection supersedes any old browser-only one.
+  clearLegacySpotifyTokens();
 }
 
-async function refreshSpotifyToken(refreshToken: string): Promise<SpotifyTokens> {
-  const res = await apiFetch("/api/music/spotify/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!res.ok) throw new Error("Spotify token refresh failed");
-  return (await res.json()) as SpotifyTokens;
-}
-
-interface SpotifyPlayerResponse {
-  is_playing: boolean;
-  progress_ms?: number;
-  item?: {
-    name: string;
-    duration_ms: number;
-    external_urls?: { spotify?: string };
-    artists?: { name: string }[];
-    album?: { images?: { url: string }[] };
-  } | null;
-}
-
-/** Map one Spotify player response onto our Listening shape (or null). */
-export function spotifyToListening(data: SpotifyPlayerResponse | null): Listening | null {
-  if (!data?.is_playing || !data.item) return null;
-  const artists = (data.item.artists ?? []).map((a) => a.name).filter(Boolean).join(", ");
-  const artwork = data.item.album?.images?.[0]?.url ?? null;
-  return {
-    source: "spotify",
-    track: data.item.name,
-    artists,
-    artwork,
-    track_url: data.item.external_urls?.spotify ?? null,
-    started_at: new Date(Date.now() - (data.progress_ms ?? 0)).toISOString(),
-  };
-}
-
-/** Fetch current playback, refreshing the token once when expired. */
-export async function fetchSpotifyNowPlaying(tokens: SpotifyTokens): Promise<{ listening: Listening | null; tokens: SpotifyTokens }> {
-  let current = tokens;
-  if (Date.now() >= current.expires_at - 30_000) {
-    current = await refreshSpotifyToken(current.refresh_token);
-  }
-  let res = await fetch(SPOTIFY_PLAYER_URL, {
-    headers: { Authorization: `Bearer ${current.access_token}` },
-  });
-  // The clock isn't proof the token is good (sleep, skew, a token revoked
-  // elsewhere). On a 401, rebuild once and retry before giving up.
-  if (res.status === 401) {
-    current = await refreshSpotifyToken(current.refresh_token);
-    res = await fetch(SPOTIFY_PLAYER_URL, {
-      headers: { Authorization: `Bearer ${current.access_token}` },
-    });
-  }
-  // 204 = nothing playing.
-  if (res.status === 204) return { listening: null, tokens: current };
+/**
+ * Ask our API for the connected account's current track. The server owns the
+ * tokens and refreshes them, so this works identically on any device.
+ */
+export async function fetchSpotifyNowPlaying(): Promise<{
+  connected: boolean;
+  listening: Listening | null;
+}> {
+  const res = await apiFetch("/api/music/spotify/now-playing", { method: "POST" });
   if (!res.ok) throw new Error(`Spotify player error: ${res.status}`);
-  const data = (await res.json()) as SpotifyPlayerResponse;
-  return { listening: spotifyToListening(data), tokens: current };
+  const data = (await res.json().catch(() => null)) as {
+    connected?: boolean;
+    listening?: Listening | null;
+  } | null;
+  return { connected: data?.connected === true, listening: data?.listening ?? null };
 }
 
 /* ---------------------------------------------------------- SoundCloud */

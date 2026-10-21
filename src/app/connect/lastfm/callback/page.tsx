@@ -42,7 +42,7 @@ function CallbackInner() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg-primary px-6">
-      <div className="w-full max-w-sm rounded-2xl border border-divider bg-bg-secondary p-8 text-center">
+      <div className="w-full max-w-sm rounded-[8px] border border-divider bg-bg-secondary p-8 text-center">
         <p className="text-lg font-semibold text-text-normal">
           {state === "done" ? "Connected ✓" : state === "error" ? "Something went wrong" : "Connecting…"}
         </p>

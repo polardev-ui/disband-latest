@@ -95,7 +95,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
                   {shownCount} {shownCount === 1 ? "member" : "members"}
                 </p>
               </div>
-              <span className="ml-auto rounded-[8px] bg-status-online px-3 py-1.5 text-[12.5px] font-semibold text-white">Join</span>
+              <span className="ml-auto rounded-[3px] bg-status-online px-3 py-1.5 text-[13px] font-semibold text-white">Join</span>
             </div>
           </div>
         </div>
@@ -128,7 +128,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
 
       <SettingsSection title="Banner" description="Wide images work best, around 960 × 540. Shown on invites and in Discover.">
         <div className="space-y-3 px-5 py-4">
-          <div className={`relative aspect-[16/6] overflow-hidden rounded-[12px] border border-divider bg-bg-accent ${busy === "banner" ? "animate-pulse" : ""}`}>
+          <div className={`relative aspect-[16/6] overflow-hidden rounded-lg bg-bg-tertiary ${busy === "banner" ? "animate-pulse" : ""}`}>
             {banner ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={banner} alt="" className="view-enter h-full w-full object-cover" key={banner} />

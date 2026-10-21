@@ -1,25 +1,10 @@
 import type { SubscriptionPlan } from "@/lib/subscription";
+import { AeroIcon } from "@/components/icons/AeroIcon";
 
-interface SubscriptionBadgeProps {
-  plan: SubscriptionPlan;
-  className?: string;
-  tooltip?: boolean;
-}
-
-const AERO = {
-  label: "Aero",
-  className: "bg-super/20 text-super",
-};
-
-export function SubscriptionBadge({ plan, className = "", tooltip }: SubscriptionBadgeProps) {
+export function SubscriptionBadge({ plan, className = "", tooltip }: {
+  plan: SubscriptionPlan; className?: string; tooltip?: boolean;
+}) {
   if (plan === "free") return null;
-
-  return (
-    <span
-      title={tooltip ? `${AERO.label} subscriber` : undefined}
-      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${AERO.className} ${className}`}
-    >
-      {AERO.label}
-    </span>
-  );
+  const label = plan === "lite" ? "Lite" : "Aero";
+  return <span title={tooltip ? `${label} subscriber` : undefined} aria-label={`${label} subscriber`} className={`inline-flex shrink-0 text-super ${className}`}><AeroIcon size={16} lite={plan === "lite"} /></span>;
 }

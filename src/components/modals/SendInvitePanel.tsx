@@ -35,7 +35,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
   }
 
   if (friends.length === 0) {
-    return <p className="px-5 py-4 text-[13.5px] text-text-muted">Add some friends and you can send them invites from here.</p>;
+    return <p className="px-5 py-4 text-[14px] text-text-muted">Add some friends and you can send them invites from here.</p>;
   }
 
   return (
@@ -49,7 +49,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search friends"
               aria-label="Search friends"
-              className="h-9 w-full rounded-[10px] border border-divider bg-bg-accent pl-9 pr-3 text-[13.5px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-brand"
+              className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
             />
           </label>
         </div>
@@ -63,7 +63,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
               <Avatar profile={friend} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium text-text-normal">{displayName(friend)}</p>
-                {friend.username && <p className="truncate text-[12.5px] text-text-muted">@{friend.username}</p>}
+                {friend.username && <p className="truncate text-[13px] text-text-muted">@{friend.username}</p>}
               </div>
               <button
                 type="button"
@@ -79,7 +79,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
             </li>
           );
         })}
-        {shown.length === 0 && <li className="px-5 py-4 text-[13.5px] text-text-muted">No friends match &ldquo;{query.trim()}&rdquo;.</li>}
+        {shown.length === 0 && <li className="px-5 py-4 text-[14px] text-text-muted">No friends match &ldquo;{query.trim()}&rdquo;.</li>}
       </ul>
       {error && <p className="border-t border-divider px-5 py-3 text-[13px] text-status-dnd">{error}</p>}
     </div>

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Geist } from "next/font/google";
+import { Geist, Noto_Sans } from "next/font/google";
 import "./globals.css";
 import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
@@ -8,6 +8,9 @@ import { PUBLIC_ENV } from "@/lib/public-env";
 // Geist (Vercel) — self-hosted via next/font/google → woff2 bundled at build,
 // served from our own origin, no runtime font CDN hit (privacy-first).
 const GeistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+// The app UI uses Noto Sans — the face Discord itself falls back to when its
+// proprietary gg sans is unavailable — so the classic layout keeps its metrics.
+const NotoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-noto", weight: ["400", "500", "600", "700", "800"] });
 
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
 
@@ -101,7 +104,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning
-          className={`${GeistSans.variable}`}>
+          className={`${GeistSans.variable} ${NotoSans.variable}`}>
       <head>
         <meta name="referrer" content="no-referrer" />
         <Script id="theme-init" strategy="beforeInteractive">

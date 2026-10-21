@@ -1,6 +1,7 @@
 /**
- * Favorite GIFs (migration 0113): users see and touch only their own rows,
- * and the (user, url) pair is unique so re-starring is idempotent.
+ * Favorite GIFs (migrations 0113, 0139): users see and touch only their own
+ * rows, the (user, url) pair is unique so re-starring is idempotent, and every
+ * favourite carries a stable numeric gif_id derived from the canonical URL.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,6 +49,7 @@ test('favorite GIFs are private per user and idempotent per url', async () => {
       grant select, insert, update, delete on all tables in schema public to service_role;`);
     await db.query(`insert into public.profiles (id) values ($1), ($2)`, [ALICE, BOB]);
     await db.exec(await readFile('supabase/migrations/0113_favorite_gifs.sql', 'utf8'));
+    await db.exec(await readFile('supabase/migrations/0139_favorite_gif_ids.sql', 'utf8'));
 
     const star = (who, url) => tryAsRole(db, 'authenticated', who, () =>
       db.query(`insert into public.favorite_gifs (user_id, url, title) values ($1, $2, 'funny')`, [who, url]));
@@ -59,6 +61,25 @@ test('favorite GIFs are private per user and idempotent per url', async () => {
     assert.equal((await star(BOB, 'https://x.test/a.gif')).ok, true);
     // Overlong URLs never reach the table.
     assert.equal((await star(ALICE, 'https://x.test/' + 'a'.repeat(2000))).ok, false);
+
+    // The numeric id is derived from the canonical URL, not the row, so it is
+    // the same for both users and safe to hand to JavaScript.
+    const ids = await db.query(
+      `select user_id, gif_id from public.favorite_gifs order by user_id`,
+    );
+    assert.equal(ids.rows.length, 2);
+    assert.equal(String(ids.rows[0].gif_id), String(ids.rows[1].gif_id));
+    const gifId = BigInt(ids.rows[0].gif_id);
+    assert.ok(gifId >= 0n && gifId <= 9_007_199_254_740_991n);
+
+    const canonical = await db.query(
+      `select public.gif_favorite_id('https://www.x.test/a.gif/?utm=1#frag') as alias,
+              public.gif_favorite_id('https://x.test/a.gif') as plain`,
+    );
+    assert.equal(String(canonical.rows[0].alias), String(canonical.rows[0].plain));
+
+    // Another spelling of the same GIF is idempotent, not a second favourite.
+    assert.equal((await star(ALICE, 'https://www.x.test/a.gif/?utm=1')).ok, false);
 
     // Reads are scoped: Alice sees one row, Bob sees one, anon sees none.
     const aliceRows = await asRole(db, 'authenticated', ALICE, () =>

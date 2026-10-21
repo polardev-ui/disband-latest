@@ -3,7 +3,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { IconUpload } from "@/components/icons";
-import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
@@ -56,17 +56,26 @@ export function ProfilePreview({
   const banner = safeImageUrl(profile.banner_url);
   const pronouns = profile.pronouns?.trim();
   const note = profile.status_note?.trim();
+  const theme = getProfileCardTheme(profile);
   const bannerBg = usesCustomAccent(profile)
     ? getAccentBackground(profile)
     : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-divider bg-overlay-panel text-text-normal">
+    <div
+      className={`overflow-hidden rounded-lg border border-divider ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
+      style={theme?.style}
+    >
       <label className="group relative block cursor-pointer" title={onChangeBanner ? "Change banner" : undefined}>
-        <div className="h-[136px] w-full" style={{ background: bannerBg }}>
+        <div className="relative h-[136px] w-full overflow-hidden" style={{ background: bannerBg }}>
           {banner && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={banner} alt="" className="h-full w-full object-cover" />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              {theme && (
+                <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />
+              )}
+            </>
           )}
         </div>
         {onChangeBanner && (
@@ -89,7 +98,10 @@ export function ProfilePreview({
       </label>
 
       <div className="px-5 pb-5">
-        <div className="relative -mt-[46px] w-fit rounded-full bg-overlay-panel p-[5px]">
+        <div
+          className={`relative -mt-[46px] w-fit rounded-full p-[5px] ${theme ? "" : "bg-overlay-panel"}`}
+          style={theme ? { backgroundColor: theme.avatarRing } : undefined}
+        >
           <label className="group relative block cursor-pointer rounded-full" title={onChangeAvatar ? "Change avatar" : undefined}>
             <Avatar profile={profile} size="lg" />
             {onChangeAvatar && (
@@ -112,15 +124,16 @@ export function ProfilePreview({
             )}
           </label>
           <span
-            className={`absolute bottom-1.5 right-1.5 h-[18px] w-[18px] rounded-full border-[3px] border-overlay-panel ${STATUS_BG[status]}`}
+            className={`absolute bottom-1.5 right-1.5 h-[18px] w-[18px] rounded-full border-[3px] ${theme ? "" : "border-overlay-panel"} ${STATUS_BG[status]}`}
+            style={theme ? { borderColor: theme.avatarRing } : undefined}
             title={STATUS_LABEL[status]}
           />
         </div>
 
-        <h3 className="mt-2.5 break-words text-[21px] font-semibold leading-tight tracking-[-0.02em]">
+        <h3 className="mt-2.5 break-words text-[20px] font-semibold leading-tight">
           <DisplayName profile={{ ...profile, display_name: name }} />
         </h3>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13.5px] text-text-muted">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[14px] text-text-muted">
           {username.trim() && <span>@{username.trim()}</span>}
           {pronouns && (
             <>
@@ -142,13 +155,13 @@ export function ProfilePreview({
         {note && (
           <div className="relative mt-3.5 w-fit max-w-full">
             <span aria-hidden className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-divider bg-bg-accent" />
-            <p className="break-words rounded-2xl border border-divider bg-bg-accent px-3.5 py-2 text-[13.5px] leading-snug">{note}</p>
+            <p className="break-words rounded-lg border border-divider bg-bg-accent px-3.5 py-2 text-[14px] leading-snug">{note}</p>
           </div>
         )}
 
         <div className="mt-4 border-t border-divider pt-3.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">About me</p>
-          <p className={`mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed ${bio.trim() ? "" : "text-text-muted"}`}>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">About me</p>
+          <p className={`mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed ${bio.trim() ? "" : "text-text-muted"}`}>
             {bio.trim() || "Your bio will appear here."}
           </p>
         </div>

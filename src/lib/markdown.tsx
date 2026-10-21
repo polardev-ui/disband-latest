@@ -1,7 +1,7 @@
 "use client";
 
-import { isValidMentionToken } from "@/lib/utils";
-import { Suspense, lazy } from "react";
+import { displayName, isValidMentionToken } from "@/lib/utils";
+import { Suspense, lazy, useState } from "react";
 import type { Profile } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
 
@@ -27,7 +27,7 @@ function FencedCode({ code, language, langLabel }: { code: string; language: str
               </span>
             )}
           </div>
-          <pre className="overflow-x-auto rounded-md bg-bg-accent p-3 font-mono text-[13px] leading-relaxed">
+          <pre className="max-w-[90%] overflow-x-auto rounded-[4px] border border-bg-tertiary bg-bg-secondary p-2 font-mono text-[14px] leading-[18px]">
             <code>{code.replace(/\n$/, "")}</code>
           </pre>
         </div>
@@ -48,10 +48,45 @@ export interface ChannelLite {
 }
 
 const INLINE_RE =
-  /(@[a-zA-Z0-9_]{2,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
+  /(@[a-zA-Z0-9_]{2,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
 
 function linkFor(url: string): string {
   return url;
+}
+
+/**
+ * Discord hides the contents of a spoiler until it is clicked. Keep the
+ * original width by rendering the children invisibly instead of replacing
+ * them with placeholder text, so revealing one never reflows the message.
+ */
+function Spoiler({ children }: { children: ReactNode }) {
+  const [revealed, setRevealed] = useState(false);
+  const reveal = () => setRevealed(true);
+
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      aria-label={revealed ? "Spoiler revealed" : "Spoiler, click to reveal"}
+      title={revealed ? undefined : "Click to reveal spoiler"}
+      onClick={(e) => {
+        e.stopPropagation();
+        reveal();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          reveal();
+        }
+      }}
+      className={`cursor-pointer rounded-[3px] px-0.5 transition-colors ${
+        revealed ? "bg-bg-secondary" : "select-none bg-[#202225]"
+      }`}
+    >
+      <span className={revealed ? "" : "invisible"}>{children}</span>
+    </span>
+  );
 }
 
 function renderInlineTokens(
@@ -84,8 +119,11 @@ function renderInlineTokens(
         continue;
       }
       const user = members.find((x) => x.username?.toLowerCase() === uname.toLowerCase());
-      const label = user?.username ?? (uname.toLowerCase() === "everyone" ? "everyone" : uname);
-      const chipClass = "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
+      // Shown by display name, like Discord; the username is what pinged,
+      // and it is on hover.
+      const label = user ? displayName(user) : uname.toLowerCase() === "everyone" ? "everyone" : uname;
+      const title = user?.username ? `@${user.username}` : undefined;
+      const chipClass = "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (user && onMentionClick) {
         out.push(
@@ -93,6 +131,7 @@ function renderInlineTokens(
             key={key}
             type="button"
             className={`${chipClass} cursor-pointer`}
+            title={title}
             onClick={(e) => {
               e.stopPropagation();
               onMentionClick(user);
@@ -103,7 +142,7 @@ function renderInlineTokens(
         );
       } else {
         out.push(
-          <span key={key} className={chipClass}>
+          <span key={key} className={chipClass} title={title}>
             @{label}
           </span>,
         );
@@ -115,7 +154,7 @@ function renderInlineTokens(
       const name = token.slice(1).toLowerCase();
       const channel = channels?.find((c) => c.name.toLowerCase() === name);
       const chipClass =
-        "rounded bg-brand/20 px-0.5 font-medium text-[#dee0fc] hover:bg-brand/40";
+        "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (channel && onChannelClick) {
         out.push(
@@ -145,7 +184,7 @@ function renderInlineTokens(
       out.push(
         <code
           key={key}
-          className="rounded bg-bg-accent px-1.5 py-0.5 font-mono text-[0.875em] text-text-normal"
+          className="rounded-[3px] bg-bg-secondary px-[0.2em] py-0 font-mono text-[0.85em] leading-[1.125rem] text-text-normal"
         >
           {token.slice(1, -1)}
         </code>,
@@ -198,6 +237,15 @@ function renderInlineTokens(
       continue;
     }
 
+    if (token.startsWith("||") && token.endsWith("||") && token.length > 4) {
+      out.push(
+        <Spoiler key={key}>
+          {renderInlineTokens(token.slice(2, -2), members, k * 100, onMentionClick, channels, onChannelClick)}
+        </Spoiler>,
+      );
+      continue;
+    }
+
     if (/^https?:\/\//i.test(token)) {
       out.push(
         <a
@@ -205,7 +253,7 @@ function renderInlineTokens(
           href={linkFor(token)}
           target="_blank"
           rel="noopener noreferrer"
-          className="break-all text-brand hover:underline"
+          className="break-all text-text-link hover:underline"
         >
           {token}
         </a>,
@@ -276,7 +324,47 @@ export function renderMarkdown(
       lineBuf = [];
     };
 
-    for (const line of text.split("\n")) {
+    const quoteBlock = (lines: string[]) => {
+      if (lines.length === 0) return;
+      renderedLines.push(
+        <blockquote key={k++} className="my-1 border-l-4 border-divider pl-3 text-text-normal">
+          <span className="whitespace-pre-wrap break-words">
+            {renderInlineTokens(lines.join("\n"), members, k * 100, onMentionClick, channels, onChannelClick)}
+          </span>
+        </blockquote>,
+      );
+    };
+
+    const lines = text.split("\n");
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i]!;
+
+      // `>>>` quotes every line that follows it, including the rest of its
+      // own line. Read it before the single-line `>` rule below.
+      if (line.startsWith(">>>")) {
+        flush();
+        const first = line.slice(3).replace(/^ /, "");
+        const rest = lines.slice(i + 1);
+        quoteBlock(first ? [first, ...rest] : rest);
+        break;
+      }
+
+      if (/^>\s?/.test(line)) {
+        flush();
+        const quoteLines: string[] = [];
+        while (
+          i < lines.length
+          && !lines[i]!.startsWith(">>>")
+          && /^>\s?/.test(lines[i]!)
+        ) {
+          quoteLines.push(lines[i]!.replace(/^>\s?/, ""));
+          i += 1;
+        }
+        quoteBlock(quoteLines);
+        continue;
+      }
+
       const hl = headerLevel(line);
       if (hl > 0) {
         flush();
@@ -288,6 +376,7 @@ export function renderMarkdown(
       } else {
         lineBuf.push(line);
       }
+      i += 1;
     }
     flush();
     out.push(...renderedLines);
