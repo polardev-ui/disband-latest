@@ -127,7 +127,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
       <SettingsSection title="Slots">
         <SlotMeter used={emoji.length} limit={limit} label="Custom emoji" />
         {bonus > 0 && (
-          <p className="border-t border-divider px-5 py-3 text-[12.5px] text-text-muted">
+          <p className="border-t border-divider px-5 py-3 text-[13px] text-text-muted">
             Includes <span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS}</span> from this space&apos;s Catalyst level.
           </p>
         )}
@@ -135,14 +135,14 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
 
       {plan === "free" && limit === 0 ? (
         <SettingsSection title="Add emoji">
-          <p className="px-5 py-4 text-[13.5px] text-text-muted">Custom emoji come with a paid plan, or with Catalyst Level 1 for this space.</p>
+          <p className="px-5 py-4 text-[14px] text-text-muted">Custom emoji come with a paid plan, or with Catalyst Level 1 for this space.</p>
         </SettingsSection>
       ) : (
         !full && (
           <SettingsSection title="Add emoji" description="Square images look best. 128 × 128, up to 1 MB. GIFs animate.">
             <div className="grid gap-4 px-5 py-4 sm:grid-cols-[160px_1fr]">
               {preview ? (
-                <div className="view-enter flex flex-col items-center justify-center rounded-[12px] border border-divider bg-bg-accent p-4">
+                <div className="view-enter flex flex-col items-center justify-center rounded-lg bg-bg-tertiary p-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={preview} alt="" className="h-14 w-14 object-contain" />
                   <button type="button" onClick={() => setFile(null)} className="mt-2 text-[12px] text-text-muted hover:text-text-normal">
@@ -155,7 +155,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
               <div className="flex flex-col justify-end gap-3">
                 <div>
                   <FieldLabel htmlFor="emoji-name" aside={`${name.length}/32`}>Name</FieldLabel>
-                  <div className="flex h-10 items-center rounded-[10px] border border-divider bg-bg-accent px-3 focus-within:border-brand">
+                  <div className="flex h-10 items-center rounded-[3px] border border-transparent bg-bg-tertiary px-3 focus-within:border-brand">
                     <span className="text-text-muted">:</span>
                     <input
                       id="emoji-name"
@@ -187,7 +187,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
           Emoji <span className="font-normal text-text-muted">· {emoji.length}</span>
         </h3>
         {loaded && emoji.length === 0 ? (
-          <div className="rounded-2xl border border-divider bg-bg-secondary">
+          <div className="rounded-lg bg-bg-secondary">
             <EmptyState icon={<IconEmoji size={20} />} title="No custom emoji yet" body="Add one above and everyone here can use it." />
           </div>
         ) : (
@@ -197,12 +197,12 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
               return (
                 <li
                   key={e.id}
-                  className="view-enter group relative flex flex-col items-center rounded-[14px] border border-divider bg-bg-secondary px-3 pb-3 pt-4 transition-colors hover:border-text-muted/40"
+                  className="view-enter group relative flex flex-col items-center rounded-lg bg-bg-secondary px-3 pb-3 pt-4 transition-colors hover:border-text-muted/40"
                   style={enterStyle(i)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {src && <img src={src} alt={`:${e.name}:`} className="h-10 w-10 object-contain" loading="lazy" />}
-                  <span className="mt-2 w-full truncate text-center text-[12.5px] text-text-muted">:{e.name}:</span>
+                  <span className="mt-2 w-full truncate text-center text-[13px] text-text-muted">:{e.name}:</span>
                   <button
                     type="button"
                     onClick={() => setRemoving(e)}

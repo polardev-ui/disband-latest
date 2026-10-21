@@ -79,7 +79,10 @@ const INLINE: { re: RegExp; leaf?: boolean; render: (inner: ReactNode, marker: s
     re: /(@everyone)\b/i,
     leaf: true,
     render: (inner, _m, k) => (
-      <span key={k} className="rounded bg-brand/25 px-0.5 text-[#dee0fc]">
+      // No horizontal padding: it widens this layer past the textarea and
+      // pushes the caret behind every character after the chip. The ring
+      // fakes the padding in paint instead.
+      <span key={k} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
         {inner}
       </span>
     ),

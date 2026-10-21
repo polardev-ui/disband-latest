@@ -8,8 +8,11 @@ struct ChatContentBottomKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-struct ChatViewportKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+/// Position of the history sentinel, in scroll-view coordinates. Negative
+/// means it is above the visible area; close to zero means the reader has
+/// reached the top and the next page should be requested.
+struct ChatContentTopKey: PreferenceKey {
+    static var defaultValue: CGFloat = -.greatestFiniteMagnitude
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
@@ -29,12 +32,6 @@ struct ChatView: View {
     @State private var model: ChatViewModel
     @State private var draft = ""
     @State private var stickToBottom = true
-    @State private var contentBottom: CGFloat = 0
-    @State private var viewportHeight: CGFloat = 0
-
-    private func updateStick() {
-        stickToBottom = contentBottom - viewportHeight < 100
-    }
     @State private var showGifPicker = false
     @State private var showPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
@@ -290,100 +287,191 @@ struct ChatView: View {
     }
 
     private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                if model.loading && model.messages.isEmpty {
-                    StateView(kind: .loading).frame(height: 300)
-                } else if let error = model.loadError, model.messages.isEmpty {
-                    StateView(kind: .error, title: error, retry: { await model.load() })
-                        .frame(height: 300)
-                } else if model.messages.isEmpty {
-                    StateView(kind: .empty, title: "No messages yet.\nSay hello! 👋",
-                              systemImage: "bubble.left").frame(height: 300)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
-                            MessageRow(
-                                message: message,
-                                isOwn: message.authorId == app.currentUserId,
-                                grouped: isGrouped(at: index),
-                                reactions: model.reactions[message.id] ?? [],
-                                replyTo: model.repliedMessage(for: message),
-                                currentUserId: app.currentUserId,
-                                onTapMention: { openMention($0) },
-                                canModerate: canModerate,
-                                onTapAuthor: { openProfile = $0 },
-                                onReply: { withAnimation { replyingTo = message } },
-                                onSpeak: { Speaker.shared.speak(message.content) },
-                                onDelete: { Task { await model.deleteMessage(message) } },
-                                onToggleReaction: { emoji in
-                                    Task { await model.toggleReaction(messageId: message.id, emoji: emoji) }
-                                },
-                                onHoldReactStarted: { frame in holdReactStarted(frame, message: message) }
-                            )
-                            .id(message.id)
+        // Reply lookup used to be a linear scan per row. With history now
+        // growing past one page, build a single index for the whole list.
+        let messagesById = Dictionary(model.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        return GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if model.loading && model.messages.isEmpty {
+                        StateView(kind: .loading)
+                            .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                    } else if let error = model.loadError, model.messages.isEmpty {
+                        StateView(kind: .error, title: error, retry: { await model.load() })
+                            .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                    } else if model.messages.isEmpty {
+                        StateView(kind: .empty, title: "No messages yet.\nSay hello! 👋",
+                                  systemImage: "bubble.left")
+                            .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            if model.hasMoreHistory {
+                                olderHistoryLoader
+                            }
+
+                            ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
+                                if startsNewDay(at: index) {
+                                    ChatDayDivider(timestamp: message.createdAt)
+                                }
+
+                                MessageRow(
+                                    message: message,
+                                    isOwn: message.authorId == app.currentUserId,
+                                    grouped: isGrouped(at: index),
+                                    reactions: model.reactions[message.id] ?? [],
+                                    replyTo: message.replyToId.flatMap { messagesById[$0] },
+                                    currentUserId: app.currentUserId,
+                                    onTapMention: { openMention($0) },
+                                    canModerate: canModerate,
+                                    onTapAuthor: { openProfile = $0 },
+                                    onReply: { withAnimation { replyingTo = message } },
+                                    onSpeak: { Speaker.shared.speak(message.content) },
+                                    onDelete: { Task { await model.deleteMessage(message) } },
+                                    onToggleReaction: { emoji in
+                                        Task { await model.toggleReaction(messageId: message.id, emoji: emoji) }
+                                    },
+                                    onHoldReactStarted: { frame in holdReactStarted(frame, message: message) }
+                                )
+                                .id(message.id)
+                            }
                         }
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
+                        // A short conversation belongs against the composer,
+                        // not floating at the top of an otherwise empty
+                        // screen. Filling the viewport and aligning the stack
+                        // to its bottom makes the newest message the anchor
+                        // even before there is enough history to scroll.
+                        .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ChatContentBottomKey.self,
+                                    value: geo.frame(in: .named("chatScroll")).maxY
+                                )
+                            }
+                        )
                     }
-                    .padding(.vertical, 12)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: ChatContentBottomKey.self,
-                                value: geo.frame(in: .named("chatScroll")).maxY
-                            )
+                }
+                .coordinateSpace(name: "chatScroll")
+                .defaultScrollAnchor(.bottom)
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .overlay(alignment: .bottomTrailing) {
+                    if !stickToBottom, let last = model.messages.last {
+                        Button {
+                            stickToBottom = true
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Brand.textPrimary)
+                                .frame(width: 38, height: 38)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .overlay(Circle().strokeBorder(Brand.divider, lineWidth: 1))
+                                .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
                         }
-                    )
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 10)
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                        .accessibilityLabel("Jump to latest messages")
+                    }
                 }
-            }
-            .coordinateSpace(name: "chatScroll")
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: ChatViewportKey.self, value: geo.size.height)
+                .overlay { reactionTray }
+                .overlay { flyingReactLayer }
+                .onPreferenceChange(ChatContentBottomKey.self) { maxY in
+                    let nearBottom = maxY - viewport.size.height < 48
+                    if stickToBottom != nearBottom { stickToBottom = nearBottom }
+                    if stickToBottom, let last = model.messages.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
                 }
-            )
-            .overlay { reactionTray }
-            .overlay { flyingReactLayer }
-            .onPreferenceChange(ChatContentBottomKey.self) { maxY in
-                contentBottom = maxY
-                updateStick()
-                if stickToBottom, let last = model.messages.last {
-                    proxy.scrollTo(last.id, anchor: .bottom)
+                .onPreferenceChange(ChatContentTopKey.self) { minY in
+                    // The sentinel is measured even when the lazy stack has
+                    // only prefetched it far above the viewport. Do not pull
+                    // a page there; wait until the reader is actually near
+                    // the top (or the conversation is shorter than one
+                    // screen, where filling the view is the right move).
+                    guard minY > -140, model.hasMoreHistory, !model.loadingOlder else { return }
+                    Task { await loadOlder(using: proxy) }
                 }
-            }
-            .onPreferenceChange(ChatViewportKey.self) { height in
-                viewportHeight = height
-                updateStick()
-            }
-            .onChange(of: model.messages.count) {
-                if stickToBottom, let last = model.messages.last {
-                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+                .onChange(of: model.messages.count) {
+                    if stickToBottom, let last = model.messages.last {
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
                 }
-            }
-            /*
-             Follow the keyboard.
+                /*
+                 Follow the keyboard.
 
-             Opening the keyboard shrinks this list — the composer rides up on
-             the keyboard's safe area and takes the bottom of the screen with
-             it — but the scroll offset stays where it was, so the newest
-             messages slide up behind the composer and you type blind. Every
-             other chat app keeps the last message sitting just above the bar,
-             and that is all this does: when the keyboard's height changes,
-             re-pin to the bottom.
+                 Opening the keyboard shrinks this list — the composer rides up on
+                 the keyboard's safe area and takes the bottom of the screen with
+                 it — but the scroll offset stays where it was, so the newest
+                 messages slide up behind the composer and you type blind. Every
+                 other chat app keeps the last message sitting just above the bar,
+                 and that is all this does: when the keyboard's height changes,
+                 re-pin to the bottom.
 
-             Only when already at the bottom. Someone who has scrolled up to
-             read something older and then taps the composer to reply to it
-             should not be yanked back down, losing the thing they were
-             replying to.
-             */
-            .onChange(of: keyboardHeight) { _, height in
-                guard height > 0, stickToBottom, let last = model.messages.last else { return }
-                // After the keyboard's own animation has laid things out;
-                // scrolling into a frame that is still moving lands short.
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(last.id, anchor: .bottom)
+                 Only when already at the bottom. Someone who has scrolled up to
+                 read something older and then taps the composer to reply to it
+                 should not be yanked back down, losing the thing they were
+                 replying to.
+                 */
+                .onChange(of: keyboardHeight) { _, height in
+                    guard height > 0, stickToBottom, let last = model.messages.last else { return }
+                    // After the keyboard's own animation has laid things out;
+                    // scrolling into a frame that is still moving lands short.
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
                 }
             }
         }
+    }
+
+    /// The first-screen sentinel. It sits above the oldest row and requests
+    /// the page before it as soon as the reader reaches the top.
+    private var olderHistoryLoader: some View {
+        HStack(spacing: 8) {
+            if model.loadingOlder {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Brand.textMuted)
+                Text("Loading earlier messages")
+                    .font(.caption)
+                    .foregroundStyle(Brand.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 34)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ChatContentTopKey.self,
+                    value: geo.frame(in: .named("chatScroll")).minY
+                )
+            }
+        )
+        .accessibilityHidden(true)
+    }
+
+    /// Keep the reader's place when a page is inserted above them.
+    ///
+    /// Prepending rows changes the content height, and a plain SwiftUI
+    /// ScrollView holds the absolute offset — so the sentence being read
+    /// would be shoved down by a full page. Pin the previous first row to the
+    /// top after the new rows have laid out instead.
+    private func loadOlder(using proxy: ScrollViewProxy) async {
+        guard !model.loadingOlder, model.hasMoreHistory,
+              let anchor = model.messages.first?.id else { return }
+        let inserted = await model.loadOlder()
+        guard inserted else { return }
+        // The state change above is synchronous on the main actor; give the
+        // lazy stack one layout pass to insert the new rows before scrolling.
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(30))
+        withAnimation(nil) { proxy.scrollTo(anchor, anchor: .top) }
     }
 
     // MARK: - Hold-to-react tray
@@ -585,8 +673,17 @@ struct ChatView: View {
         }
     }
 
+    private func startsNewDay(at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        guard let previous = RelativeTime.date(from: model.messages[index - 1].createdAt),
+              let current = RelativeTime.date(from: model.messages[index].createdAt) else {
+            return false
+        }
+        return !Calendar.current.isDate(previous, inSameDayAs: current)
+    }
+
     private func isGrouped(at index: Int) -> Bool {
-        guard index > 0 else { return false }
+        guard index > 0, !startsNewDay(at: index) else { return false }
         let prev = model.messages[index - 1]
         let cur = model.messages[index]
         guard prev.authorId == cur.authorId, cur.replyToId == nil else { return false }
@@ -601,6 +698,7 @@ struct ChatView: View {
         draft = ""
         withAnimation { replyingTo = nil }
         guard let uid = app.currentUserId else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         Task { await model.send(content: content, authorId: uid, replyToId: reply) }
     }
 
@@ -650,5 +748,41 @@ struct ChatView: View {
         // usable while it uploads.
         await model.uploadAndSendAttachments(
             items: payloads, replyToId: reply, authorId: uid)
+    }
+}
+
+/// A quiet date break between days of conversation. Discord-style rows are
+/// flat on purpose, but without a day marker a long thread reads as one
+/// undifferentiated wall — and the native apps the rest of iOS trains people
+/// on always tell them when "today" starts.
+private struct ChatDayDivider: View {
+    let timestamp: String
+
+    private var label: String {
+        guard let date = RelativeTime.date(from: timestamp) else { return "Earlier" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Rectangle()
+                .fill(Brand.divider)
+                .frame(height: 0.5)
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Brand.textMuted)
+                .fixedSize()
+            Rectangle()
+                .fill(Brand.divider)
+                .frame(height: 0.5)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Messages from \(label)")
     }
 }

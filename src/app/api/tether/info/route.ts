@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const { data: profile } = await service
     .from("profiles")
-    .select("id, username, display_name, avatar_url, is_bot")
+    .select("id, username, display_name, avatar_url, is_bot, created_at")
     .eq("id", tetherUserId)
     .maybeSingle();
 
@@ -34,5 +34,6 @@ export async function GET(request: NextRequest) {
     display_name: profile.display_name,
     avatar_url: profile.avatar_url,
     is_bot: true,
+    created_at: profile.created_at,
   });
 }

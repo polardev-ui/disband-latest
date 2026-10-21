@@ -54,6 +54,8 @@ interface Options {
   failRead?: boolean;
   owner?: string;
   accountToken?: string;
+  /** Defaults to true so the pre-existing sandbox scenarios keep working. */
+  sandboxAllowed?: boolean;
 }
 
 async function scenario(
@@ -119,6 +121,13 @@ async function scenario(
       if (table === "apple_transactions") {
         return json(options.owner ? [{ user_id: options.owner }] : []);
       }
+      if (table === "apple_sandbox_testers") {
+        return json(
+          options.sandboxAllowed === false
+            ? []
+            : [{ user_id: userId, expires_at: null }],
+        );
+      }
       throw new Error(`Unexpected table read: ${table}`);
     }
     if (table === options.failTable) {
@@ -158,8 +167,8 @@ async function scenario(
   }
 }
 
-Deno.test("App Review sandbox purchase grants Aero on a Production deployment", async () => {
-  await scenario({}, async ({ verify, requests, writes }) => {
+Deno.test("allowlisted App Review sandbox purchase grants Aero on Production", async () => {
+  await scenario({ sandboxAllowed: true }, async ({ verify, requests, writes }) => {
     const response = await verify();
     assert(response.status === 200, `Expected success, got ${response.status}`);
     assert(
@@ -183,6 +192,29 @@ Deno.test("App Review sandbox purchase grants Aero on a Production deployment", 
       row.provider === "apple" && row.plan === "aero" &&
         row.status === "active",
       "Wrong subscription grant",
+    );
+  });
+});
+
+Deno.test("unlisted account cannot turn a sandbox purchase into an entitlement", async () => {
+  await scenario({ sandboxAllowed: false }, async ({ verify, writes }) => {
+    const response = await verify();
+    assert(response.status === 403, `Expected refusal, got ${response.status}`);
+    const reply = await response.json();
+    assert(reply.terminal === true, "Refusal was not marked terminal");
+    assert(
+      Object.keys(writes).length === 0,
+      "Refused sandbox purchase wrote an entitlement",
+    );
+  });
+});
+
+Deno.test("sandbox renewal for an unlisted account is acknowledged without granting", async () => {
+  await scenario({ sandboxAllowed: false }, async ({ notify, writes }) => {
+    assert((await notify()).status === 200, "Sandbox renewal was not acknowledged");
+    assert(
+      Object.keys(writes).length === 0,
+      "Unlisted sandbox renewal wrote an entitlement",
     );
   });
 });

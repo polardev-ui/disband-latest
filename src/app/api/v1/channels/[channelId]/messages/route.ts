@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
+import { normalizeEmbeds } from "@/lib/embeds";
 
 export async function GET(
   request: NextRequest,
@@ -51,7 +52,11 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as {
       content?: string;
       reply_to_id?: string | null;
+      /** Discord-shaped embeds (up to 10); see src/lib/embeds.ts. */
+      embeds?: unknown;
     };
+    const embeds = normalizeEmbeds(body.embeds);
+    if (!embeds.ok) return NextResponse.json({ error: embeds.error }, { status: 400 });
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
@@ -64,6 +69,7 @@ export async function POST(
       p_channel_id: channelId,
       p_content: body.content,
       p_reply_to_id: body.reply_to_id ?? null,
+      p_embeds: embeds.embeds.length ? embeds.embeds : null,
     });
 
     if (error) {

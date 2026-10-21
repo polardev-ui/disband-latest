@@ -19,7 +19,7 @@ export function InvitesSection({ server, isOwner, catalystCount, onBoost }: Sect
     <div className="pb-10">
       <SettingsSection title="Invite link" description="Anyone with this link can join. Paste it in chat for a preview card with a Join button.">
         <div className="px-5 py-4">
-          {inviteUrl ? <CopyField value={inviteUrl} /> : <p className="text-[13.5px] text-text-muted">This space doesn&apos;t have an invite link yet.</p>}
+          {inviteUrl ? <CopyField value={inviteUrl} /> : <p className="text-[14px] text-text-muted">This space doesn&apos;t have an invite link yet.</p>}
         </div>
       </SettingsSection>
 
@@ -47,7 +47,7 @@ function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      <div className="flex h-10 min-w-0 flex-1 items-center rounded-[10px] border border-divider bg-bg-accent px-3.5">
+      <div className="flex h-10 min-w-0 flex-1 items-center rounded-[3px] border border-transparent bg-bg-tertiary px-3.5">
         <span className="truncate font-mono text-[13px] text-text-normal">{value}</span>
       </div>
       <button
@@ -162,7 +162,7 @@ function VanityCard({
               }}
               disabled={!isOwner}
               placeholder="my-space"
-              className="h-10 min-w-0 flex-1 rounded-[10px] border border-divider bg-bg-accent px-3.5 font-mono text-[13.5px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand disabled:opacity-60"
+              className="h-10 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 font-mono text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc] disabled:opacity-60"
             />
             {isOwner && (
               <button type="button" onClick={() => void submit(clean || null)} disabled={saving || !dirty} className={`${btn.primary} h-10`}>
@@ -170,7 +170,7 @@ function VanityCard({
               </button>
             )}
           </div>
-          <p className="mt-2 truncate text-[12.5px] text-text-muted">
+          <p className="mt-2 truncate text-[13px] text-text-muted">
             {preview}
           </p>
         </div>

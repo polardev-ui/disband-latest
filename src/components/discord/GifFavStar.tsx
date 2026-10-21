@@ -13,13 +13,13 @@ export function FavStarButton({ active, onToggle }: { active: boolean; onToggle:
   return (
     <button
       type="button"
-      aria-label={active ? "Remove from favorites" : "Save to favorites"}
-      title={active ? "Remove from favorites" : "Save to favorites"}
+      aria-label={active ? "Remove from favourites" : "Save to favourites"}
+      title={active ? "Remove from favourites" : "Save to favourites"}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
       }}
-      className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-[30%] bg-black/50 text-yellow-400 backdrop-blur-sm transition-transform hover:scale-110"
+      className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-[2px] bg-black/70 text-yellow-400 transition-colors hover:bg-black/85"
     >
       <IconStar size={15} className={active ? "fill-yellow-400" : ""} />
     </button>

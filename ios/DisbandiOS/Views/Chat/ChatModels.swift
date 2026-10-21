@@ -171,8 +171,12 @@ final class ChatCache {
     func reactions(_ key: String) -> [String: [ReactionSummary]]? { reactionStore[key] }
 
     func store(_ key: String, messages: [DisplayMessage], reactions: [String: [ReactionSummary]]) {
-        // Don't cache optimistic (pending) rows.
-        messageStore[key] = messages.filter { !$0.pending }
-        reactionStore[key] = reactions
+        // Don't cache optimistic (pending) rows, and keep the cache bounded:
+        // history now grows as the reader scrolls, so an unbounded cache
+        // would pin every page of every conversation for the whole session.
+        let cached = messages.filter { !$0.pending }.suffix(600)
+        messageStore[key] = Array(cached)
+        let ids = Set(cached.map(\.id))
+        reactionStore[key] = reactions.filter { ids.contains($0.key) }
     }
 }

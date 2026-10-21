@@ -76,7 +76,8 @@ const OPACITIES = [0.13, 0.07, 0.1, 0.06, 0.12, 0.08, 0.07, 0.11, 0.09, 0.13];
 
 const NUM = COLS * ROWS; // one glyph per grid cell
 
-export function ScatteredIcons() {
+/** `tone` colours the glyphs; the classic login draws them white on blurple. */
+export function ScatteredIcons({ tone = "text-text-muted" }: { tone?: string } = {}) {
   const cells = Array.from({ length: NUM }, (_, i) => {
     const col = i % COLS;
     const row = Math.floor(i / COLS);
@@ -99,7 +100,7 @@ export function ScatteredIcons() {
       {cells.map(({ left, top, G, size, rotation, opacity }, i) => (
         <div
           key={i}
-          className="absolute text-text-muted"
+          className={`absolute ${tone}`}
           style={{
             left: `${left}%`,
             top: `${top}%`,

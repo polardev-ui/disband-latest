@@ -140,6 +140,10 @@ final class StoreService: ObservableObject {
     }
 
     private func purchase(productId: String, serverId: String?, quantity: Int = 1) async -> Bool {
+        // A double-tap can enqueue two Tasks before SwiftUI disables the
+        // button. Only one purchase may be in flight; otherwise StoreKit can
+        // present a second sheet and create a second transaction.
+        guard !busy else { return false }
         guard let product = products[productId] else {
             errorMessage = "That item is not available right now."
             return false
@@ -217,6 +221,17 @@ final class StoreService: ObservableObject {
      finished when they were bought, and finishing a subscription's
      transaction again is meaningless.
      */
+    /// What to do with the StoreKit transaction after the server answers.
+    private enum VerifyOutcome {
+        /// Entitlement written; finish the transaction.
+        case granted
+        /// Network or server problem; leave it unfinished so StoreKit retries.
+        case retry
+        /// A permanent refusal (wrong account, sandbox on a normal account).
+        /// Finish it so it does not replay forever, but grant nothing.
+        case rejected
+    }
+
     @discardableResult
     private func handle(
         _ result: VerificationResult<Transaction>,
@@ -231,18 +246,24 @@ final class StoreService: ObservableObject {
             return false
         }
 
-        let ok = await verifyWithServer(
+        let outcome = await verifyWithServer(
             transactionId: String(transaction.id),
             serverId: serverId
         )
 
-        if ok && finishing {
+        // Only an outage is worth replaying. A refusal that will never change
+        // (this transaction belongs to another account, or it is a sandbox
+        // purchase on a normal account) would otherwise prompt on every launch.
+        if finishing, outcome != .retry {
             await transaction.finish()
         }
-        return ok
+        return outcome == .granted
     }
 
-    private func verifyWithServer(transactionId: String, serverId: String?) async -> Bool {
+    private func verifyWithServer(
+        transactionId: String,
+        serverId: String?
+    ) async -> VerifyOutcome {
         struct Body: Encodable {
             let transactionId: String
             let serverId: String?
@@ -251,6 +272,7 @@ final class StoreService: ObservableObject {
             let ok: Bool?
             let granted: String?
             let error: String?
+            let terminal: Bool?
         }
 
         do {
@@ -261,9 +283,9 @@ final class StoreService: ObservableObject {
                     serverId: serverId
                 ))
             )
-            if reply.ok == true { return true }
+            if reply.ok == true { return .granted }
             errorMessage = reply.error ?? "That purchase could not be applied."
-            return false
+            return reply.terminal == true ? .rejected : .retry
         } catch let FunctionsError.httpError(code, data) {
             // A refusal, not an outage. The function answers JSON with a
             // message meant for the buyer ("already attached to a different
@@ -273,7 +295,7 @@ final class StoreService: ObservableObject {
             let reply = try? JSONDecoder().decode(Reply.self, from: data)
             errorMessage = reply?.error ?? "That purchase could not be applied (\(code))."
             print("appstore/verify refused: \(code)")
-            return false
+            return reply?.terminal == true ? .rejected : .retry
         } catch {
             // Deliberately not finished: StoreKit will hand this transaction
             // back on the next launch, and the next attempt may reach the
@@ -281,7 +303,7 @@ final class StoreService: ObservableObject {
             // dropped connection.
             errorMessage = "We couldn't confirm that purchase yet — it will finish automatically."
             print("appstore/verify failed: \(error)")
-            return false
+            return .retry
         }
     }
 

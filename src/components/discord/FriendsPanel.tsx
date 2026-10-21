@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { StatusDot } from "@/components/ui/StatusDot";
 import { displayName } from "@/lib/utils";
 import { IconFriends, IconSearch, IconClose } from "@/components/icons";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
@@ -29,12 +30,8 @@ function StatusAvatar({ profile, presence }: { profile: Profile; presence: Prese
   const live = presence.get(profile.id) ?? "offline";
   return (
     <div className="relative shrink-0">
-      <Avatar profile={profile} size="md" />
-      <span
-        className={`absolute -bottom-0.5 -right-0.5 h-[13px] w-[13px] rounded-full border-[3px] border-bg-primary ${
-          STATUS_DOT[live]
-        }`}
-      />
+      <Avatar profile={profile} size="sm" />
+      <StatusDot status={live} ring="var(--bg-primary)" className="absolute -bottom-[3px] -right-[3px] group-hover:![background:var(--interactive-hover)]" />
     </div>
   );
 }
@@ -57,7 +54,7 @@ function RowAction({
         e.stopPropagation();
         onClick(e);
       }}
-      className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-tertiary text-text-muted transition-colors hover:bg-interactive-selected hover:text-text-normal"
+      className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active group-hover:bg-bg-tertiary"
     >
       {children}
     </button>
@@ -171,13 +168,13 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4">
-        <IconFriends size={22} className="shrink-0 text-text-muted" />
-        <h1 className="shrink-0 text-[15px] font-semibold text-text-normal">Friends</h1>
+      <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
+        <IconFriends size={24} className="shrink-0 text-channels-default" />
+        <h1 className="shrink-0 text-[16px] font-semibold text-header-primary">Friends</h1>
 
-        <span className="mx-1 h-6 w-px shrink-0 bg-divider" />
+        <span className="mx-2 h-6 w-px shrink-0 bg-divider" />
 
-        <nav className="flex items-center gap-1 overflow-x-auto">
+        <nav className="flex items-center gap-4 overflow-x-auto">
           {(["online", "all", "pending", "blocked"] as const).map((t) => (
             <button
               key={t}
@@ -186,17 +183,17 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setTab(t);
                 setAddOpen(false);
               }}
-              className={`shrink-0 rounded-[10px] px-3 py-1.5 text-[13.5px] font-medium capitalize transition-colors ${
+              className={`flex shrink-0 items-center rounded-[4px] px-2 py-0.5 text-[16px] font-medium capitalize leading-5 transition-colors ${
                 tab === t && !addOpen
-                  ? "bg-interactive-selected text-text-normal"
-                  : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                  ? "bg-interactive-selected text-interactive-active"
+                  : "text-interactive-normal hover:bg-interactive-hover hover:text-text-normal"
               }`}
             >
               {t}
               {t === "pending" && pendingCount > 0 && (
                 <span
                   key={pendingCount}
-                  className="badge-pop ml-1.5 rounded-full bg-status-dnd px-1.5 text-[10px] font-bold text-white"
+                  className="badge-pop ml-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white"
                 >
                   {pendingCount > 99 ? "99+" : pendingCount}
                 </span>
@@ -211,20 +208,20 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               setAddError(null);
               setAddSuccess(null);
             }}
-            className={`ml-1 shrink-0 rounded-[10px] px-3.5 py-1.5 text-[13.5px] font-semibold transition-[background-color,opacity] ${
+            className={`shrink-0 rounded-[4px] px-2 py-0.5 text-[16px] font-medium leading-5 transition-colors ${
               addOpen
-                ? "bg-interactive-selected text-text-normal"
-                : "bg-text-normal text-bg-primary hover:opacity-90"
+                ? "bg-transparent text-[#2dc770]"
+                : "bg-button-green text-white hover:bg-button-green-hover"
             }`}
           >
-            Add friend
+            Add Friend
           </button>
         </nav>
       </header>
 
       {addOpen && (
-        <div className="shrink-0 border-b border-divider px-6 py-5">
-          <h2 className="text-[15px] font-semibold text-text-normal">Add a friend</h2>
+        <div className="shrink-0 border-b border-divider px-[30px] py-5">
+          <h2 className="text-[16px] font-semibold uppercase leading-5 text-header-primary">Add Friend</h2>
           <p className="mt-1 text-sm text-text-muted">
             You can add friends by their Disband username.
           </p>
@@ -238,12 +235,12 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setAddSuccess(null);
               }}
               placeholder="Enter a username"
-              className="min-w-0 flex-1 rounded-2xl border border-divider bg-bg-tertiary px-4 py-2.5 text-sm text-text-normal outline-none transition-all placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
+              className="min-w-0 flex-1 rounded-lg border border-bg-tertiary bg-bg-tertiary px-3 py-3 text-[16px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc] focus:ring-brand/20"
             />
             <button
               type="submit"
               disabled={!addValue.trim() || sending}
-              className="shrink-0 rounded-2xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? "Sending…" : "Send request"}
             </button>
@@ -254,7 +251,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
       )}
 
       {!addOpen && (
-        <div className="shrink-0 px-6 pb-2 pt-4">
+        <div className="shrink-0 px-[30px] pb-2 pt-4">
           <div className="relative">
             <IconSearch
               size={16}
@@ -264,7 +261,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={tab === "online" ? "Search online friends" : "Search friends"}
-              className="w-full rounded-full border border-transparent bg-bg-tertiary py-2.5 pl-10 pr-10 text-sm text-text-normal outline-none transition-all placeholder:text-text-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
+              className="w-full rounded-[4px] border border-transparent bg-bg-tertiary py-[5px] pl-9 pr-10 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:ring-0 focus:ring-brand/20"
             />
             {query && (
               <button
@@ -281,8 +278,8 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
       )}
 
       {!addOpen && (
-        <div key={tab} className="view-enter min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          <p className="sticky top-0 z-10 bg-bg-primary py-3 text-xs font-bold uppercase tracking-wide text-text-muted">
+        <div key={tab} className="view-enter min-h-0 flex-1 overflow-y-auto px-[30px] pb-6">
+          <p className="sticky top-0 z-10 bg-bg-primary pb-2 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-header-secondary">
             {heading}
           </p>
 
@@ -317,7 +314,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                   >
                     <Avatar profile={person} size="md" className="opacity-60" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-semibold text-text-normal">
+                      <p className="truncate text-[16px] font-semibold leading-5 text-header-primary">
                         {displayName(person)}
                       </p>
                       <p className="truncate text-[13px] text-text-muted">Blocked</p>
@@ -358,11 +355,11 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                       e.preventDefault();
                       onFriendContext(friend, e.clientX, e.clientY);
                     }}
-                    className="group -mx-3 flex cursor-pointer items-center gap-3 rounded-2xl border-b border-divider px-3 py-2.5 transition-all hover:border-transparent hover:bg-interactive-hover"
+                    className="group -mx-2.5 flex h-[62px] cursor-pointer items-center gap-3 rounded-lg border-t border-divider/60 px-2.5 transition-colors hover:rounded-lg hover:border-transparent hover:bg-interactive-hover [&+li]:hover:border-transparent"
                   >
                     <StatusAvatar profile={friend} presence={presenceMap} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-semibold text-text-normal">
+                      <p className="truncate text-[16px] font-semibold leading-5 text-header-primary">
                         {displayName(friend)}
                         {friend.username && (
                           <span className="ml-1.5 text-sm font-normal text-text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
@@ -543,22 +540,22 @@ export function ActiveNowPanel() {
   }, [friends, dmListEntries, presenceMap]);
 
   return (
-    <aside className="hidden w-[22rem] shrink-0 flex-col overflow-hidden border-l border-divider bg-bg-primary xl:flex">
-      <div className="flex h-12 shrink-0 items-center px-6">
-        <h2 className="text-[17px] font-semibold text-text-normal">Active Now</h2>
+    <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden border-l border-divider bg-bg-primary xl:flex">
+      <div className="flex shrink-0 items-center px-4 pb-4 pt-4">
+        <h2 className="text-[20px] font-extrabold leading-6 text-header-primary">Active Now</h2>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {active.length === 0 ? (
-          <div className="pt-2">
-            <p className="text-[15px] font-semibold text-text-normal">It&rsquo;s quiet for now</p>
+          <div className="pt-2 text-center">
+            <p className="text-[16px] font-semibold text-header-primary">It&rsquo;s quiet for now...</p>
             <p className="mt-1 text-sm leading-relaxed text-text-muted">
               When a friend starts an activity or comes online, you&rsquo;ll see them here.
             </p>
           </div>
         ) : (
-          <ul className="space-y-1 pt-1">
+          <ul className="space-y-2 pt-1">
             {active.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
+              <li key={f.id} className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 transition-colors hover:bg-interactive-hover">
                 <StatusAvatar profile={f} presence={presenceMap} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-text-normal">

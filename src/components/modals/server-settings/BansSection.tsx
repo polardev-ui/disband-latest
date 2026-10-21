@@ -30,7 +30,7 @@ export function BansSection(_props: SectionProps) {
         </div>
       )}
       <InlineError>{error}</InlineError>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-divider bg-bg-secondary">
+      <div className="mt-3 overflow-hidden rounded-lg bg-bg-secondary">
         {shown.length === 0 ? (
           <EmptyState
             icon={<IconLock size={20} />}
@@ -46,7 +46,7 @@ export function BansSection(_props: SectionProps) {
                   <Avatar profile={b.profile ?? { display_name: name }} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-text-normal">{name}</p>
-                    <p className="truncate text-[12.5px] text-text-muted">
+                    <p className="truncate text-[13px] text-text-muted">
                       {b.reason ? b.reason : "No reason given"}
                       {b.created_at ? ` · ${new Date(b.created_at).toLocaleDateString()}` : ""}
                     </p>

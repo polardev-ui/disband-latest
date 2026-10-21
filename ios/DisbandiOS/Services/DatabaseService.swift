@@ -163,14 +163,26 @@ enum DatabaseService {
 
     // MARK: - Channel messages
 
-    static func messages(channelId: String, limit: Int = 50) async throws -> [Message] {
-        let rows: [Message] = try await client
-            .from("messages")
-            .select(authorEmbed)
-            .eq("channel_id", value: channelId)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute().value
+    static func messages(channelId: String, limit: Int = 50, before: String? = nil) async throws -> [Message] {
+        let rows: [Message]
+        if let before {
+            rows = try await client
+                .from("messages")
+                .select(authorEmbed)
+                .eq("channel_id", value: channelId)
+                .lt("created_at", value: before)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute().value
+        } else {
+            rows = try await client
+                .from("messages")
+                .select(authorEmbed)
+                .eq("channel_id", value: channelId)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute().value
+        }
         return rows.reversed()
     }
 
@@ -352,14 +364,26 @@ enum DatabaseService {
         try await client.rpc("mark_group_read", params: ["p_group_id": groupId]).execute()
     }
 
-    static func dmMessages(threadId: String, limit: Int = 50) async throws -> [DmMessage] {
-        let rows: [DmMessage] = try await client
-            .from("dm_messages")
-            .select(authorEmbed)
-            .eq("thread_id", value: threadId)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute().value
+    static func dmMessages(threadId: String, limit: Int = 50, before: String? = nil) async throws -> [DmMessage] {
+        let rows: [DmMessage]
+        if let before {
+            rows = try await client
+                .from("dm_messages")
+                .select(authorEmbed)
+                .eq("thread_id", value: threadId)
+                .lt("created_at", value: before)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute().value
+        } else {
+            rows = try await client
+                .from("dm_messages")
+                .select(authorEmbed)
+                .eq("thread_id", value: threadId)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute().value
+        }
         return rows.reversed()
     }
 
@@ -415,14 +439,26 @@ enum DatabaseService {
         return groups
     }
 
-    static func groupMessages(groupId: String, limit: Int = 50) async throws -> [GroupMessage] {
-        let rows: [GroupMessage] = try await client
-            .from("group_messages")
-            .select(authorEmbed)
-            .eq("group_id", value: groupId)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute().value
+    static func groupMessages(groupId: String, limit: Int = 50, before: String? = nil) async throws -> [GroupMessage] {
+        let rows: [GroupMessage]
+        if let before {
+            rows = try await client
+                .from("group_messages")
+                .select(authorEmbed)
+                .eq("group_id", value: groupId)
+                .lt("created_at", value: before)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute().value
+        } else {
+            rows = try await client
+                .from("group_messages")
+                .select(authorEmbed)
+                .eq("group_id", value: groupId)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute().value
+        }
         return rows.reversed()
     }
 

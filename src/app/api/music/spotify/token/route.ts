@@ -1,78 +1,92 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
+import {
+  SpotifyConfigError,
+  SpotifyTokenError,
+  deleteSpotifyConnection,
+  exchangeSpotifyCode,
+  loadSpotifyConnection,
+  refreshSpotifyTokens,
+  saveSpotifyConnection,
+} from "@/lib/spotify.server";
+
+export const dynamic = "force-dynamic";
 
 /**
- * Spotify token exchange / refresh. The client secret never leaves the
- * server: the client sends its auth code (or refresh token) here and gets
- * back short-lived tokens. Requires SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET
- * in the server environment — without them music presence stays disconnected.
+ * Spotify connection state and code exchange.
+ *
+ * Tokens are stored server-side so the connection follows the account to the
+ * desktop app and every other device. This route never returns a token: the
+ * browser only learns whether the account is connected, and asks
+ * /api/music/spotify/now-playing for the current track.
+ *
+ * POST accepts either:
+ *   { code, redirect_uri }  — finish a normal OAuth connection
+ *   { refresh_token }       — import a connection from the old localStorage
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const user = await getUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+
+  const ip = getClientIp(request) || "unknown";
+  const limit = rateLimit(`spotify-token:user:${user.id}:${ip}`, 20, 60_000);
+  if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
+  const body = (await request.json().catch(() => ({}))) as {
+    code?: unknown;
+    redirect_uri?: unknown;
+    refresh_token?: unknown;
+  };
+  const code = typeof body.code === "string" ? body.code.trim() : "";
+  const redirectUri = typeof body.redirect_uri === "string" ? body.redirect_uri.trim() : "";
+  const legacyRefreshToken = typeof body.refresh_token === "string" ? body.refresh_token.trim() : "";
+
+  if (!code && !legacyRefreshToken) {
+    return NextResponse.json({ error: "Missing Spotify authorization." }, { status: 400 });
+  }
+  if (code && !/^https:\/\//i.test(redirectUri)) {
+    return NextResponse.json({ error: "Missing Spotify redirect URI." }, { status: 400 });
+  }
+
   try {
-    const user = await getUserFromRequest(request as import("next/server").NextRequest);
-    if (!user) {
-      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    const tokens = code
+      ? await exchangeSpotifyCode(code, redirectUri)
+      : await refreshSpotifyTokens(legacyRefreshToken);
+    await saveSpotifyConnection(user.id, tokens);
+    return NextResponse.json({ connected: true });
+  } catch (error) {
+    if (error instanceof SpotifyConfigError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
     }
-
-    const ip = getClientIp(request) || "unknown";
-    const limit = rateLimit(`spotify-token:user:${user.id}:${ip}`, 20, 60_000);
-    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
-
-    const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
-      return NextResponse.json(
-        { error: "Spotify is not configured on this server yet." },
-        { status: 503 },
-      );
+    if (error instanceof SpotifyTokenError) {
+      return NextResponse.json({ error: "Spotify rejected the connection." }, { status: 400 });
     }
+    return NextResponse.json({ error: "Could not save the Spotify connection." }, { status: 500 });
+  }
+}
 
-    let body: { code?: string; redirect_uri?: string; refresh_token?: string };
-    try {
-      body = (await request.json()) as typeof body;
-    } catch {
-      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-    }
+export async function GET(request: NextRequest) {
+  const user = await getUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
-    const params = new URLSearchParams({
-      client_id: clientId,
-    });
-    if (body.code && body.redirect_uri) {
-      params.set("grant_type", "authorization_code");
-      params.set("code", body.code);
-      params.set("redirect_uri", body.redirect_uri);
-    } else if (body.refresh_token) {
-      params.set("grant_type", "refresh_token");
-      params.set("refresh_token", body.refresh_token);
-    } else {
-      return NextResponse.json({ error: "Missing code or refresh_token." }, { status: 400 });
-    }
-
-    const res = await fetch("https://accounts.spotify.com/api/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      },
-      body: params.toString(),
-    });
-    if (!res.ok) {
-      return NextResponse.json({ error: "Spotify rejected the token request." }, { status: 502 });
-    }
-    const json = (await res.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in: number;
-    };
-    return NextResponse.json({
-      access_token: json.access_token,
-      // Refresh responses don't include a new refresh token; keep the old one.
-      refresh_token: json.refresh_token ?? body.refresh_token ?? null,
-      expires_at: Date.now() + json.expires_in * 1000,
-    });
+  try {
+    const connection = await loadSpotifyConnection(user.id);
+    return NextResponse.json({ connected: Boolean(connection) });
   } catch {
-    return NextResponse.json({ error: "Spotify token request failed." }, { status: 500 });
+    return NextResponse.json({ error: "Could not load the Spotify connection." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const user = await getUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+
+  try {
+    await deleteSpotifyConnection(user.id);
+    return NextResponse.json({ connected: false });
+  } catch {
+    return NextResponse.json({ error: "Could not remove the Spotify connection." }, { status: 500 });
   }
 }

@@ -1,12 +1,14 @@
 "use client";
 
+import { SettingsLayer, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
+import { ConfirmDialog } from "@/components/modals/server-settings/ui";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { IconClose, IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
+import { IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
 import type { Channel } from "@/lib/supabase/types";
 
 type ActionKey = "can_view" | "can_post" | "can_react" | "can_attach";
@@ -54,6 +56,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [section, setSection] = useState<"overview" | "permissions" | "delete">("overview");
 
   const loadRows = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
@@ -80,6 +84,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setDraft({});
     setSaved(false);
     setError(null);
+    setSection("overview");
     void loadRows(channel.id);
   }, [channel, loadRows]);
 
@@ -138,6 +143,12 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     );
   };
 
+  // Anything differing from what was loaded raises the classic save bar.
+  const dirty =
+    name.trim() !== channel.name ||
+    readOnly !== !!channel.read_only ||
+    (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key]));
+
   const save = async () => {
     if (!channel) return;
     setSaving(true);
@@ -176,36 +187,48 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="Channel settings" className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-divider bg-bg-primary shadow-2xl`}>
-        <header className="flex items-center gap-2 border-b border-divider px-5 py-4">
-          {channel.type === "text" ? (
-            readOnly ? (
-              <IconMegaphone size={20} />
-            ) : (
-              <IconHash size={20} />
-            )
-          ) : (
-            <IconSpeaker size={20} />
-          )}
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-bold text-text-normal">Channel Settings</h2>
-            <p className="truncate text-xs text-text-muted">
-              {channel.type === "text" ? (readOnly ? "Announcement channel" : "Text channel") : "Voice channel"} · #{channel.name}
-            </p>
+    <SettingsLayer
+      label="Channel settings"
+      exiting={exiting}
+      onClose={onClose}
+      contentKey={section}
+      wide={section === "permissions"}
+      mobileNav={
+        <select
+          value={section}
+          onChange={(e) => setSection(e.target.value as typeof section)}
+          aria-label="Channel settings section"
+          className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
+        >
+          <option value="overview">Overview</option>
+          <option value="permissions">Permissions</option>
+          <option value="delete">Delete Channel</option>
+        </select>
+      }
+      sidebar={
+        <>
+          <div className="flex items-center gap-1 px-2.5 pb-1.5 text-channels-default">
+            {channel.type === "text" ? (readOnly ? <IconMegaphone size={16} /> : <IconHash size={16} />) : <IconSpeaker size={16} />}
+            <h2 className="truncate text-[12px] font-bold uppercase leading-4 tracking-[0.02em]">{channel.name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-text-muted hover:text-text-normal">
-            <IconClose size={20} />
-          </button>
-        </header>
-
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <SettingsNavItem active={section === "overview"} onClick={() => setSection("overview")}>Overview</SettingsNavItem>
+          <SettingsNavItem active={section === "permissions"} onClick={() => setSection("permissions")}>Permissions</SettingsNavItem>
+          <SettingsNavSeparator />
+          <SettingsNavItem danger active={section === "delete"} onClick={() => setSection("delete")} trailing={<IconTrash size={16} />}>
+            Delete Channel
+          </SettingsNavItem>
+        </>
+      }
+    >
+      <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">
+        {section === "overview" ? "Overview" : section === "permissions" ? "Channel Permissions" : "Delete Channel"}
+      </h2>
+      {section === "overview" && (
+        <>
           <section>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-text-muted">Overview</h3>
             <div className="mt-2 space-y-3">
               <label className="block">
-                <span className="text-xs font-semibold text-text-muted">Channel name</span>
+                <span className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Channel name</span>
                 <div className="mt-1 flex items-center">
                   <span className="mr-2 text-text-muted">
                     {channel.type === "text" ? (
@@ -221,16 +244,16 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded bg-bg-accent px-3 py-2 text-sm text-text-normal outline-none focus:ring-2 focus:ring-brand"
+                    className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
                     maxLength={32}
                   />
                 </div>
               </label>
 
-              <label className="flex cursor-pointer items-center justify-between rounded bg-bg-accent px-3 py-2.5">
+              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-divider/60 py-4">
                 <span>
-                  <span className="block text-sm font-semibold text-text-normal">Announcement channel</span>
-                  <span className="block text-xs text-text-muted">
+                  <span className="block text-[16px] font-medium text-header-primary">Announcement Channel</span>
+                  <span className="mt-1 block text-[14px] text-text-muted">
                     Only people who can manage channels may post here.
                   </span>
                 </span>
@@ -239,19 +262,21 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   role="switch"
                   aria-checked={readOnly}
                   onClick={() => setReadOnly(!readOnly)}
-                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${readOnly ? "bg-brand" : "bg-bg-secondary"}`}
+                  className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${readOnly ? "bg-status-online" : "bg-[#80848e]"}`}
                 >
                   <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${readOnly ? "left-[18px]" : "left-0.5"}`}
+                    className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-all ${readOnly ? "left-[19px]" : "left-[3px]"}`}
                   />
                 </button>
               </label>
             </div>
           </section>
 
+        </>
+      )}
+      {section === "permissions" && (
           <section>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-text-muted">Role permissions</h3>
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="mb-4 text-[14px] leading-5 text-text-muted">
               Tap a cell to cycle Default → Allow → Deny. "Default" follows the role's own settings; once any
               role has an override here, channels not allowed for a role are hidden and read-only.
             </p>
@@ -311,46 +336,54 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
             </div>
           </section>
 
-          <section className="rounded border border-status-dnd/20 bg-status-dnd/10 px-3 py-3">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-status-dnd">Danger zone</h3>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="text-xs text-text-muted">
+      )}
+      {section === "delete" && (
+          <section className="rounded-lg border border-status-dnd/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[14px] text-text-normal">
                 Permanently delete <span className="font-semibold text-text-normal">#{channel.name}</span> with its
                 history and permissions. This cannot be undone.
               </p>
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Delete #${channel.name}? This cannot be undone.`)) {
-                    void app.deleteChannel(channel.id);
-                    onClose();
-                  }
-                }}
-                className="shrink-0 rounded bg-status-dnd px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                onClick={() => setConfirmDelete(true)}
+                className="h-[38px] shrink-0 rounded-[3px] bg-button-danger px-4 text-[14px] font-medium text-white hover:bg-button-danger-hover"
               >
-                <IconTrash size={12} className="mr-1 inline" />
-                Delete
+                Delete Channel
               </button>
             </div>
           </section>
-        </div>
+      )}
 
-        <footer className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3">
-          <div className="min-w-0">
-            {error && <p className="text-xs text-status-dnd">{error}</p>}
-            {!error && saved && <p className="text-xs text-status-online">Changes saved.</p>}
-            {!error && !saved && <p className="text-xs text-text-muted">Hit save to apply your edits.</p>}
-          </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete ${channel.type === "voice" ? "" : "#"}${channel.name}?`}
+        body="Every message in it is removed for good. This can't be undone."
+        confirmLabel="Delete Channel"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          const err = await app.deleteChannel(channel.id);
+          setConfirmDelete(false);
+          if (err) setError(err);
+          else onClose();
+        }}
+      />
+
+      {section !== "delete" && (error || saved || dirty) && (
+        <div className="view-enter sticky bottom-5 mt-8 flex items-center justify-between gap-3 rounded-[5px] bg-bg-floating px-4 py-2.5 shadow-[var(--elevation-high)]">
+          <p className="text-[14px] font-medium text-text-normal">
+            {error ? <span className="text-status-dnd">{error}</span> : saved && !dirty ? "Changes saved." : "Careful — you have unsaved changes!"}
+          </p>
           <button
             type="button"
             onClick={() => void save()}
             disabled={saving}
-            className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white transition-all duration-150 hover:bg-brand-hover disabled:opacity-50"
+            className="h-8 shrink-0 rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save Changes"}
           </button>
-        </footer>
-      </div>
-    </div>
+        </div>
+      )}
+    </SettingsLayer>
   );
 }

@@ -107,11 +107,11 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
         <SettingsSection title="Add a sound" description="Keep it short: a few seconds plays best. Every sound gets an emoji so it's easy to spot on the board.">
           <div className="space-y-4 px-5 py-4">
             {file ? (
-              <div className="view-enter flex items-center gap-3 rounded-[12px] border border-divider bg-bg-accent px-4 py-3">
+              <div className="view-enter flex items-center gap-3 rounded-lg bg-bg-tertiary px-4 py-3">
                 <IconMusic size={18} className="shrink-0 text-brand" />
-                <span className="min-w-0 flex-1 truncate text-[13.5px] text-text-normal">{file.name}</span>
+                <span className="min-w-0 flex-1 truncate text-[14px] text-text-normal">{file.name}</span>
                 <span className="shrink-0 text-[12px] tabular-nums text-text-muted">{(file.size / 1024).toFixed(0)} KB</span>
-                <button type="button" onClick={() => setFile(null)} className="shrink-0 text-[12.5px] text-text-muted hover:text-text-normal">
+                <button type="button" onClick={() => setFile(null)} className="shrink-0 text-[13px] text-text-muted hover:text-text-normal">
                   Change
                 </button>
               </div>
@@ -126,7 +126,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value.slice(0, 32))}
                   placeholder="Airhorn"
-                  className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent px-3.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
+                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
                 />
               </div>
               <div>
@@ -136,7 +136,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   value={emoji}
                   onChange={(e) => setEmoji(Array.from(e.target.value).slice(-4).join(""))}
                   placeholder="📣"
-                  className="h-10 w-full rounded-[10px] border border-divider bg-bg-accent px-3 text-center text-[20px] text-text-normal outline-none placeholder:opacity-50 focus:border-brand"
+                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-center text-[20px] text-text-normal outline-none placeholder:opacity-50 focus:border-[#00a8fc]"
                 />
               </div>
             </div>
@@ -154,7 +154,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
           Board <span className="font-normal text-text-muted">· {sounds.length}</span>
         </h3>
         {loaded && sounds.length === 0 ? (
-          <div className="rounded-2xl border border-divider bg-bg-secondary">
+          <div className="rounded-lg bg-bg-secondary">
             <EmptyState icon={<IconMusic size={20} />} title="No sounds yet" body="Add one above and members can play it in voice." />
           </div>
         ) : (

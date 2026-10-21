@@ -1,3 +1,5 @@
+import type { Embed, MessageWebhookInfo } from "@/lib/embeds";
+
 export type ThemePreference = "light" | "dark" | "midnight" | "sunset" | string;
 export type UserStatus = "online" | "idle" | "dnd" | "offline";
 export type FriendshipStatus = "pending" | "accepted" | "blocked";
@@ -50,6 +52,8 @@ export interface Profile {
     artists: string;
     artwork: string | null;
     track_url?: string | null;
+    album?: string | null;
+    duration_ms?: number | null;
     started_at: string;
   } | null;
   created_at: string;
@@ -81,6 +85,7 @@ export interface Server {
   vanity_code?: string | null;
   discoverable?: boolean;
   verified?: boolean;
+  partner?: boolean;
   created_at: string;
 }
 
@@ -99,6 +104,7 @@ export type ServerPermissionKey =
   | "manage_channels"
   | "manage_messages"
   | "manage_emojis"
+  | "manage_webhooks"
   | "mention_everyone"
   | "send_messages"
   | "add_reactions"
@@ -211,7 +217,7 @@ export interface DbMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -219,6 +225,10 @@ export interface DbMessage {
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
   mentions: string[];
+  /** Discord-shaped rich embeds from a webhook or bot. */
+  embeds?: Embed[] | null;
+  /** Present when the message was posted by a webhook. */
+  webhook?: MessageWebhookInfo | null;
   created_at: string;
   edited_at: string | null;
   display_id: number;
@@ -236,7 +246,7 @@ export interface DbDmMessage {
   author_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -259,7 +269,7 @@ export interface DbNote {
   user_id: string;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -307,7 +317,7 @@ export interface GroupMessage {
   author_id: string | null;
   content: string;
   attachment_url: string | null;
-  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+  attachment_type: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
   attachment_key: string | null;
   attachment_name: string | null;
   attachment_size: number | null;
@@ -498,14 +508,14 @@ export interface Database {
           author_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
           edited_at?: string | null;
@@ -525,14 +535,14 @@ export interface Database {
           author_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           mentions?: string[];
         };
@@ -544,7 +554,7 @@ export interface Database {
           user_id: string;
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
@@ -556,7 +566,7 @@ export interface Database {
         Update: {
           content?: string;
           attachment_url?: string | null;
-          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | null;
+          attachment_type?: "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | null;
           attachment_key?: string | null;
           attachment_name?: string | null;
           attachment_size?: number | null;
@@ -727,6 +737,14 @@ export interface Database {
           role: MemberRole;
           profile: Profile;
         })[];
+      };
+      resolve_server_mentions: {
+        Args: { p_server_id: string; p_usernames: string[] };
+        Returns: { user_id: string; username: string }[];
+      };
+      search_server_members: {
+        Args: { p_server_id: string; p_query: string; p_limit?: number };
+        Returns: { profile: Profile }[];
       };
       set_channel_role_permission: {
         Args: {

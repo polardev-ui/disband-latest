@@ -62,11 +62,11 @@ export function TypingIndicator({
     };
   }, []);
 
-  // The old code returned null as soon as `typers` emptied, so the tracked
-  // exit animation above never played and the composer jumped. Keep the
-  // container mounted while anyone is leaving and fade it out over EXIT_MS.
+  // Keep the row mounted even when nobody is typing: it occupies the fixed
+  // strip below the composer, so starting to type never pushes the composer
+  // upward or makes the conversation jump.
   const active = typers.length > 0;
-  if (!active && leaving.size === 0) return null;
+  const label = active ? formatTypingLabel(typers, groupContext) : null;
 
   const byId = new Map(members.map((m) => [m.id, m]));
   const shown = typers.slice(0, MAX_AVATARS);
@@ -76,53 +76,84 @@ export function TypingIndicator({
 
   return (
     <div
-      className={`flex items-center gap-2 px-4 pb-2 transition-opacity duration-300 ${
+      role="status"
+      aria-live="polite"
+      aria-atomic
+      className={`flex h-6 items-center gap-2 px-4 transition-opacity duration-300 ${
         active ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
-      aria-hidden={!active}
     >
-      {groupContext && (
-        <div className="flex shrink-0 items-center">
-          {shown.map((t, i) => {
-            const profile = byId.get(t.userId);
-            if (!profile) return null;
-            return (
-              <span
-                key={t.userId}
-                title={t.name}
-                className="avatar-pop -ml-1.5 rounded-full ring-2 ring-bg-primary first:ml-0"
-                style={{ zIndex: MAX_AVATARS - i }}
-              >
-                <Avatar profile={profile} size="sm" className="h-6 w-6" />
+      <span className="sr-only">{label ?? ""}</span>
+      <div aria-hidden className="flex min-w-0 items-center gap-1">
+        {groupContext && (
+          <div className="flex shrink-0 items-center">
+            {shown.map((t, i) => {
+              const profile = byId.get(t.userId);
+              if (!profile) return null;
+              return (
+                <span
+                  key={t.userId}
+                  title={t.name}
+                  className="avatar-pop -ml-1.5 rounded-full ring-2 ring-bg-primary first:ml-0"
+                  style={{ zIndex: MAX_AVATARS - i }}
+                >
+                  <Avatar profile={profile} size="sm" className="h-6 w-6" />
+                </span>
+              );
+            })}
+            {leavingShown.map((t) => {
+              const profile = byId.get(t.userId);
+              if (!profile) return null;
+              return (
+                <span
+                  key={`leaving-${t.userId}`}
+                  className="avatar-leave -ml-1.5 rounded-full opacity-0 ring-2 ring-bg-primary"
+                >
+                  <Avatar profile={profile} size="sm" className="h-6 w-6" />
+                </span>
+              );
+            })}
+            {typers.length > MAX_AVATARS && (
+              <span className="avatar-pop -ml-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-bg-accent px-1 text-[10px] font-bold text-text-muted ring-2 ring-bg-primary">
+                +{typers.length - MAX_AVATARS}
               </span>
-            );
-          })}
-          {leavingShown.map((t) => {
-            const profile = byId.get(t.userId);
-            if (!profile) return null;
-            return (
-              <span
-                key={`leaving-${t.userId}`}
-                className="avatar-leave -ml-1.5 rounded-full opacity-0 ring-2 ring-bg-primary"
-              >
-                <Avatar profile={profile} size="sm" className="h-6 w-6" />
-              </span>
-            );
-          })}
-          {typers.length > MAX_AVATARS && (
-            <span className="avatar-pop -ml-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-bg-accent px-1 text-[10px] font-bold text-text-muted ring-2 ring-bg-primary">
-              +{typers.length - MAX_AVATARS}
+            )}
+          </div>
+        )}
+        {active && (
+          <p className="flex min-w-0 items-center gap-1 text-[13px] leading-5 text-text-muted">
+            <span aria-hidden className="flex shrink-0 items-center gap-[3px]">
+              <span className="typing-dot h-[5px] w-[5px] rounded-full bg-text-muted" />
+              <span className="typing-dot h-[5px] w-[5px] rounded-full bg-text-muted" />
+              <span className="typing-dot h-[5px] w-[5px] rounded-full bg-text-muted" />
             </span>
-          )}
-        </div>
-      )}
-      {/* Animated dots are a phone affordance and live in the iOS and Android
-          clients only; web and desktop keep the written label. */}
-      {active && (
-        <p className="min-w-0 truncate text-[13px] leading-5 text-text-muted">
-          {formatTypingLabel(typers, groupContext)}
-        </p>
-      )}
+            <span className="min-w-0 truncate">
+              {typers.length > MAX_AVATARS ? (
+                "Several people are typing"
+              ) : (
+                <>
+                  {typers.map((t, i) => {
+                    const prefix = i === 0
+                      ? ""
+                      : i === 1 && typers.length === 2
+                        ? " and "
+                        : i === typers.length - 1
+                          ? ", and "
+                          : ", ";
+                    return (
+                      <span key={t.userId}>
+                        {prefix}
+                        <span className="font-bold text-white">{t.name}</span>
+                      </span>
+                    );
+                  })}
+                  {typers.length === 1 ? " is typing" : " are typing"}
+                </>
+              )}
+            </span>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

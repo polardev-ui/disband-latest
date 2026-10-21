@@ -6,16 +6,22 @@ import { createPortal } from "react-dom";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconAttach, IconGift, IconPoll, IconClose, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
+import { IconAttach, IconPoll, IconClose, IconGame, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
 import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
-import { applyAtomicEveryone } from "@/lib/composer-tokens";
-import { formatFileSize, type ReplyPreview } from "@/lib/messages";
+import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/composer-tokens";
+import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
+import { useMemberSearch } from "@/hooks/useMemberSearch";
+import { SlashCommandComposer } from "./SlashCommandComposer";
+import { SolidGiftIcon } from "@/components/icons/SolidIcons";
+import { formatFileSize, type MessageSendOptions, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ChannelLite } from "@/lib/markdown";
 import { GifPicker } from "./GifPicker";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
+import { ActivityPicker } from "./activities/ActivityPicker";
+import { createActivity, type ActivityKind } from "@/lib/activities";
 import { ComposerMarkdown } from "./ComposerMarkdown";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
@@ -33,12 +39,14 @@ interface ChatInputProps {
   editingMessageId?: string | null;
   editingContent?: string;
   onCancelEdit?: () => void;
-  onSend: (content: string, options?: { attachment?: { url: string; type: "gif" | "poll" }; replyToId?: string | null; pendingFile?: File; pendingFiles?: File[]; maxUploadBytes?: number }) => Promise<string | null>;
+  onSend: (content: string, options?: MessageSendOptions) => Promise<string | null>;
   onTypingActivity?: () => void;
   maxUploadBytes?: number;
   serverId?: string | null;
 
   allowPolls?: boolean;
+  activityScope?: { kind: "channel" | "dm" | "group"; id: string } | null;
+  onActivityCreated?: (activityId: string) => void;
 
   focusSignal?: number;
 
@@ -104,6 +112,14 @@ function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: 
   );
 }
 
+/** The classic autocomplete popup above the composer, and its parts. */
+const AUTOCOMPLETE =
+  "menu-pop absolute bottom-full left-4 right-4 z-20 mb-2 max-h-[490px] overflow-y-auto rounded-lg bg-bg-secondary pb-2 shadow-[var(--elevation-high)]";
+const AUTOCOMPLETE_HEADER =
+  "px-3 pb-1 pt-3 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+const AUTOCOMPLETE_ROW =
+  "mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-[4px] px-2 text-left";
+
 /** Visible lines before the composer starts scrolling, matching Discord. */
 const COMPOSER_MAX_LINES = 16;
 
@@ -122,6 +138,8 @@ export function ChatInput({
   maxUploadBytes = 50 * 1024 * 1024,
   serverId,
   allowPolls = false,
+  activityScope = null,
+  onActivityCreated,
   focusSignal,
   tetherEnabled,
   allowGifts = false,
@@ -134,23 +152,56 @@ export function ChatInput({
   const [channelIdx, setChannelIdx] = useState(0);
   const [emojiIdx, setEmojiIdx] = useState(0);
   const [cursor, setCursor] = useState(0);
+  // Members picked from the @ list: shown as "@Display Name", sent as @username.
+  const [spans, setSpans] = useState<MentionSpan[]>([]);
+  const spansRef = useRef(spans);
+  spansRef.current = spans;
+  const [slashIdx, setSlashIdx] = useState(0);
+  const [command, setCommand] = useState<{ def: SlashCommand; initial: Record<string, string> } | null>(null);
+  const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const { mounted: plusMounted, exiting: plusExiting } = usePresence(plusMenuOpen);
   const [giftOpen, setGiftOpen] = useState(false);
   const { mounted: giftMounted, exiting: giftExiting } = usePresence(giftOpen);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [pollOpen, setPollOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityBusy, setActivityBusy] = useState<ActivityKind | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const chipLayerRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
 
-  const { subscriptionPlan, tetherProfile } = useApp();
+  const { subscriptionPlan, tetherProfile, serverPermissions } = useApp();
+
+  /**
+   Every text change goes through here so picked mentions stay atomic and
+   keep their offsets; `cursor` overrides where the caret lands.
+  */
+  const applyText = useCallback((prev: string, next: string, cursorAt?: number) => {
+    const r = applyAtomicEdit(prev, next, spansRef.current);
+    setText(r.text);
+    setSpans(r.spans);
+    const pos = r.cursor ?? cursorAt;
+    if (pos != null) {
+      setCursor(pos);
+      requestAnimationFrame(() => textareaRef.current?.setSelectionRange(pos, pos));
+    }
+    return r;
+  }, []);
+
+  const clearText = useCallback(() => {
+    setText("");
+    setSpans([]);
+  }, []);
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
       setText(editingContent);
+      setSpans([]);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [editingMessageId, editingContent]);
@@ -224,6 +275,37 @@ export function ChatInput({
   const mentionCtx = getMentionQuery(text, cursor);
   const showMentions = !!mentionCtx;
 
+  // Slash commands: only offered when the composer starts with "/" and the
+  // user has the matching moderation permission.
+  const slashCtx = useMemo(() => {
+    const m = text.match(/^\/([a-zA-Z]*)$/);
+    return m && !editingMessageId ? { query: m[1].toLowerCase() } : null;
+  }, [text, editingMessageId]);
+  // Only in spaces, and only the commands this member is allowed to run.
+  const allowedCommands = useMemo(
+    () => (serverId ? SLASH_COMMANDS.filter((c) => serverPermissions?.[c.permission]) : []),
+    [serverId, serverPermissions],
+  );
+  const slashCommands = useMemo(
+    () => (slashCtx ? allowedCommands.filter((c) => c.name.startsWith(slashCtx.query)) : []),
+    [allowedCommands, slashCtx],
+  );
+  const showSlash = !!slashCtx && slashCommands.length > 0;
+
+  function enterCommand(def: SlashCommand, initial: Record<string, string> = {}) {
+    clearText();
+    setSlashIdx(0);
+    setError(null);
+    setCommandNotice(null);
+    setCommand({ def, initial });
+  }
+
+  useEffect(() => {
+    if (!commandNotice) return;
+    const t = window.setTimeout(() => setCommandNotice(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [commandNotice]);
+
   const emojiCtx = getEmojiQuery(text, cursor);
   const showEmoji = !!emojiCtx && !showMentions;
 
@@ -258,9 +340,16 @@ export function ChatInput({
   // drafting anything of length feel like typing through a letterbox.
   // Measured from the element's own line-height rather than assumed, so it
   // stays right if the font or density changes.
-  useEffect(() => {
+  const fitComposer = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
+    // Empty: one line. Measuring would count the placeholder, which wraps
+    // into a tall column if the box is laid out narrow first (phones).
+    if (!el.value) {
+      el.style.height = "";
+      el.style.overflowY = "hidden";
+      return;
+    }
     el.style.height = "auto";
     const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 21;
     const padding = el.offsetHeight - el.clientHeight
@@ -270,7 +359,28 @@ export function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
     // Only scroll once it is actually capped, so short drafts never show a bar.
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }, [text, editingMessageId]);
+  }, []);
+
+  useEffect(() => {
+    fitComposer();
+  }, [text, editingMessageId, fitComposer, command]);
+
+  // Re-fit when the box changes width (window resize, sidebars opening),
+  // since the same text wraps onto a different number of lines.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let lastWidth = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === lastWidth) return;
+      lastWidth = el.clientWidth;
+      fitComposer();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitComposer, command]);
+
+  const memberMatches = useMemberSearch(serverId, mentionCtx ? mentionCtx.query : null, members, 8);
 
   const mentionItems = useMemo((): MentionItem[] => {
     if (!mentionCtx) return [];
@@ -306,13 +416,15 @@ export function ChatInput({
             },
           ]
         : [];
-    const memberItems: MentionItem[] = members      .filter((m) => m.username && (q === "" || m.username!.toLowerCase().startsWith(q) || displayName(m).toLowerCase().includes(q)))
+    // Username and display name both match: "@tev" finds the member called
+    // Tev even when their username is something else.
+    const memberItems: MentionItem[] = memberMatches
       .map((m) => ({
         id: m.id,
         kind: "member" as const,
         label: displayName(m),
         sublabel: m.username ? `@${m.username}` : undefined,
-        insert: `@${m.username}`,
+        insert: `@${displayName(m)}`,
         profile: m,
       }));
     const roleItems: MentionItem[] = roles
@@ -326,7 +438,7 @@ export function ChatInput({
         color: r.color,
       }));
     return [...tetherItems, ...everyoneItems, ...memberItems, ...roleItems].slice(0, 8);
-  }, [mentionCtx, members, roles, tetherEnabled, tetherProfile, serverId]);
+  }, [mentionCtx, memberMatches, roles, tetherEnabled, tetherProfile, serverId]);
 
   // Validate at pick time so an oversize file never looks stageable only to
   // fail at send (uploadMedia enforces the same limit as a backstop).
@@ -405,13 +517,16 @@ export function ChatInput({
     const before = text.slice(0, mentionCtx.start);
     const after = text.slice(textareaRef.current.selectionStart);
     const next = `${before}${item.insert} ${after}`;
-    setText(next);
+    const pos = before.length + item.insert.length + 1;
+    const r = applyText(text, next, pos);
+    // A picked member becomes a token: "@Tev" on screen, "@5e" when sent.
+    if (item.kind === "member" && item.profile?.username && item.id !== "everyone" && item.insert !== "@tether") {
+      const start = before.length;
+      const span: MentionSpan = { start, end: start + item.insert.length, label: item.insert, username: item.profile.username };
+      if (r.text.slice(span.start, span.end) === span.label) setSpans([...r.spans, span]);
+    }
     setMentionIdx(0);
-    requestAnimationFrame(() => {
-      const pos = before.length + item.insert.length + 1;
-      textareaRef.current?.setSelectionRange(pos, pos);
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function insertChannel(item: ChannelLite) {
@@ -419,13 +534,9 @@ export function ChatInput({
     const before = text.slice(0, channelCtx.start);
     const after = text.slice(textareaRef.current.selectionStart);
     const next = `${before}#${item.name} ${after}`;
-    setText(next);
+    applyText(text, next, before.length + item.name.length + 2);
     setChannelIdx(0);
-    requestAnimationFrame(() => {
-      const pos = before.length + item.name.length + 2;
-      textareaRef.current?.setSelectionRange(pos, pos);
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function insertEmojiFromPicker(item: EmojiMatch) {
@@ -434,13 +545,9 @@ export function ChatInput({
     const after = text.slice(textareaRef.current.selectionStart);
     const spacer = after && !after.startsWith(" ") ? " " : "";
     const next = `${before}${item.emoji}${spacer}${after}`;
-    setText(next);
+    applyText(text, next, before.length + item.emoji.length + spacer.length);
     setEmojiIdx(0);
-    requestAnimationFrame(() => {
-      const pos = before.length + item.emoji.length + spacer.length;
-      textareaRef.current?.setSelectionRange(pos, pos);
-      textareaRef.current?.focus();
-    });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function insertEmoji(emoji: string) {
@@ -452,10 +559,8 @@ export function ChatInput({
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     const next = text.slice(0, start) + emoji + text.slice(end);
-    setText(next);
+    applyText(text, next, start + emoji.length);
     requestAnimationFrame(() => {
-      const pos = start + emoji.length;
-      ta.setSelectionRange(pos, pos);
       ta.focus();
       onTypingActivity?.();
     });
@@ -463,8 +568,9 @@ export function ChatInput({
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
+    const outgoing = resolveMentionSpans(text, spans);
     if (editingMessageId) {
-      const content = normalizeMessageContent(text);
+      const content = normalizeMessageContent(outgoing);
       if (!content) return;
       setError(null);
       const err = await onSend(content, { replyToId: undefined });
@@ -475,13 +581,32 @@ export function ChatInput({
       // Exit edit mode AND clear the composer: without this the edited text
       // stays in the box after Enter even though the edit already saved
       // (the parent clears its editing state, but this local draft is ours).
-      setText("");
+      clearText();
       onCancelEdit?.();
       return;
     }
 
-    const content = normalizeMessageContent(text);
+    const content = normalizeMessageContent(outgoing);
     if (!content && entries.length === 0) return;
+
+    // "/ban polar spamming" typed or pasted in one go opens as the command,
+    // prefilled, so it is checked before anything runs.
+    const typedCmd = entries.length === 0 ? content.match(/^\/([a-z]+)(?:\s+([\s\S]*))?$/i) : null;
+    const typedDef = typedCmd ? allowedCommands.find((c) => c.name === typedCmd[1].toLowerCase()) : undefined;
+    if (typedCmd && typedDef) {
+      const rest = (typedCmd[2] ?? "").trim();
+      const [userTok = "", ...more] = rest ? rest.split(/\s+/) : [];
+      const initial: Record<string, string> = {};
+      if (userTok) initial.user = userTok;
+      if (typedDef.name === "timeout") {
+        if (more[0]) initial.duration = more[0];
+        if (more.length > 1) initial.reason = more.slice(1).join(" ");
+      } else if (more.length) {
+        initial.reason = more.join(" ");
+      }
+      enterCommand(typedDef, initial);
+      return;
+    }
 
     setError(null);
     const replyToId = replyTo?.id;
@@ -490,7 +615,7 @@ export function ChatInput({
     // Clear the composer optimistically, but keep the reply chip until the
     // first message lands: the parent owns reply state, so clearing it early
     // would make it unrecoverable on failure.
-    setText("");
+    clearText();
     clear();
 
     // One message carries the caption and every file. This used to loop and
@@ -506,7 +631,8 @@ export function ChatInput({
         // Nothing landed — it is one insert now, so there is no partial
         // state to reconcile. Restore the draft exactly as it was. (clear()
         // revoked the preview URLs, so add() re-creates them.)
-        setText(content);
+        setText(text);
+        setSpans(spans);
         for (const f of pendingFiles) add(f);
         setError(err);
         return;
@@ -518,12 +644,37 @@ export function ChatInput({
     if (pendingFiles.length === 0 && content) {
       const err = await onSend(content, { replyToId });
       if (err) {
-        setText(content);
+        setText(text);
+        setSpans(spans);
         setError(err);
         return;
       }
     }
     onClearReply?.();
+  }
+
+  async function startActivity(kind: ActivityKind) {
+    if (!activityScope || activityBusy || editingMessageId) return;
+    setActivityBusy(kind);
+    setActivityError(null);
+    try {
+      const activity = await createActivity(kind, activityScope.kind, activityScope.id);
+      const err = await onSend("", {
+        attachment: { url: activity.id, type: "activity" },
+        replyToId: replyTo?.id,
+      });
+      if (err) {
+        setActivityError(err);
+        return;
+      }
+      setActivityOpen(false);
+      onClearReply?.();
+      onActivityCreated?.(activity.id);
+    } catch (err) {
+      setActivityError(err instanceof Error ? err.message : "Couldn't start that activity.");
+    } finally {
+      setActivityBusy(null);
+    }
   }
 
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -550,7 +701,20 @@ export function ChatInput({
       if (editingMessageId) {
         e.preventDefault();
         onCancelEdit?.();
-        setText("");
+        clearText();
+        return;
+      }
+    }
+    if (showSlash) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const n = slashCommands.length;
+        setSlashIdx((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + n) % n);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        enterCommand(slashCommands[slashIdx] ?? slashCommands[0]);
         return;
       }
     }
@@ -612,11 +776,11 @@ export function ChatInput({
   }
 
   return (
-    <div className="relative shrink-0 px-1 pb-2">
+    <div className="relative shrink-0 px-4">
       {windowDrag
         && createPortal(
-          <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8 backdrop-blur-sm">
-            <div className="modal-pop flex w-full max-w-lg flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand/70 bg-bg-secondary/95 px-10 py-12 text-center">
+          <div className="overlay-fade pointer-events-none fixed inset-0 z-[150] flex items-center justify-center bg-overlay-scrim p-8">
+            <div className="modal-pop flex w-full max-w-lg flex-col items-center gap-3 rounded-lg border-2 border-dashed border-brand/70 bg-bg-secondary/95 px-10 py-12 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/15 text-brand">
                 <IconPlus size={30} />
               </span>
@@ -629,51 +793,101 @@ export function ChatInput({
           document.body,
         )}
 
+      {commandNotice && !command && (
+        <div role="status" className="view-enter mb-2 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">
+          <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-online text-[10px] font-bold text-white">✓</span>
+          <span className="min-w-0 flex-1">{commandNotice}</span>
+          <span className="shrink-0 text-[12px] text-text-muted">Only you can see this</span>
+        </div>
+      )}
+
+      {showSlash && (
+        <div role="listbox" aria-label="Commands" className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>Commands</p>
+          {slashCommands.map((c, i) => (
+            <button
+              key={c.name}
+              type="button"
+              role="option"
+              aria-selected={slashIdx === i}
+              onMouseEnter={() => setSlashIdx(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                enterCommand(c);
+              }}
+              className={`${AUTOCOMPLETE_ROW} h-auto py-2 ${slashIdx === i ? "bg-interactive-hover" : ""}`}
+            >
+              <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M15.5 3 8.5 21" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[16px] leading-5">
+                  <span className="font-semibold text-header-primary">/{c.name}</span>
+                  {c.options.map((o) => (
+                    <span key={o.name} className="ml-2 text-[14px] text-header-secondary">{o.name}</span>
+                  ))}
+                </span>
+                <span className="block truncate text-[14px] leading-[18px] text-header-secondary">{c.description}</span>
+              </span>
+              <span className="shrink-0 text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">Disband</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {showMentions && mentionItems.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
+        <div role="listbox" aria-label="Mentions" className={AUTOCOMPLETE}>
           {(() => {
             let idx = 0;
             const membersList = mentionItems.filter((m) => m.kind === "member");
             const rolesList = mentionItems.filter((m) => m.kind === "role");
             return (
               <>
-                {membersList.length > 0 && (
-                  <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Members</p>
-                )}
+                {membersList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>Members</p>}
                 {membersList.map((item) => {
                   const myIdx = idx++;
                   return (
                     <button
                       key={`m-${item.id}`}
                       type="button"
+                      role="option"
+                      aria-selected={mentionIdx === myIdx}
+                      onMouseEnter={() => setMentionIdx(myIdx)}
                       onMouseDown={(e) => { e.preventDefault(); insertMention(item); }}
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                        mentionIdx === myIdx ? "bg-interactive-selected" : ""
-                      }`}
+                      className={`${AUTOCOMPLETE_ROW} ${mentionIdx === myIdx ? "bg-interactive-hover" : ""}`}
                     >
-                      {item.profile && <Avatar profile={item.profile} size="sm" />}
-                      <span className="truncate font-medium">{item.label}</span>
-                      {item.sublabel && <span className="ml-auto truncate text-xs text-text-muted">{item.sublabel}</span>}
+                      {item.profile ? (
+                        <Avatar profile={item.profile} size="sm" className="!h-6 !w-6 !text-[10px]" />
+                      ) : (
+                        <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center text-[18px] font-medium text-header-secondary">@</span>
+                      )}
+                      <span className="min-w-0 truncate text-[16px] font-medium text-header-primary">{item.id === "everyone" ? "@everyone" : item.label}</span>
+                      {item.sublabel && (
+                        <span className="ml-auto shrink-0 truncate pl-3 text-[14px] text-header-secondary">
+                          {item.sublabel.startsWith("@") ? item.sublabel.slice(1) : item.sublabel}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
-                {rolesList.length > 0 && (
-                  <p className="mt-1 px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Roles</p>
-                )}
+                {rolesList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>Roles</p>}
                 {rolesList.map((item) => {
                   const myIdx = idx++;
                   return (
                     <button
                       key={`r-${item.id}`}
                       type="button"
+                      role="option"
+                      aria-selected={mentionIdx === myIdx}
+                      onMouseEnter={() => setMentionIdx(myIdx)}
                       onMouseDown={(e) => { e.preventDefault(); insertMention(item); }}
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                        mentionIdx === myIdx ? "bg-interactive-selected" : ""
-                      }`}
+                      className={`${AUTOCOMPLETE_ROW} ${mentionIdx === myIdx ? "bg-interactive-hover" : ""}`}
                     >
-                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color ?? "#949ba4" }} />
-                      <span className="truncate font-medium" style={{ color: item.color ?? undefined }}>{item.label}</span>
-                      <span className="ml-auto text-xs text-text-muted">{item.sublabel}</span>
+                      <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center text-[18px] font-medium" style={{ color: item.color ?? "#949ba4" }}>@</span>
+                      <span className="truncate text-[16px] font-medium" style={{ color: item.color ?? undefined }}>{item.label}</span>
+                      <span className="ml-auto shrink-0 text-[14px] text-header-secondary">{item.sublabel}</span>
                     </button>
                   );
                 })}
@@ -684,67 +898,98 @@ export function ChatInput({
       )}
 
       {showChannels && channelItems.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
-          <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Channels</p>
+        <div role="listbox" aria-label="Channels" className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>Text Channels</p>
           {channelItems.map((c, i) => (
             <button
               key={c.id}
               type="button"
+              role="option"
+              aria-selected={channelIdx === i}
+              onMouseEnter={() => setChannelIdx(i)}
               onMouseDown={(e) => { e.preventDefault(); insertChannel(c); }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                channelIdx === i ? "bg-interactive-selected" : ""
-              }`}
+              className={`${AUTOCOMPLETE_ROW} ${channelIdx === i ? "bg-interactive-hover" : ""}`}
             >
               {c.read_only ? (
-                <IconMegaphone size={15} className="shrink-0 text-text-muted" />
+                <IconMegaphone size={20} className="shrink-0 text-channels-default" />
               ) : (
-                <IconHash size={15} className="shrink-0 text-text-muted" />
+                <IconHash size={20} className="shrink-0 text-channels-default" />
               )}
-              <span className="truncate font-medium">#{c.name}</span>
+              <span className="truncate text-[16px] font-medium text-header-primary">{c.name}</span>
             </button>
           ))}
         </div>
       )}
 
       {showEmoji && emojiItems.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-divider bg-bg-secondary py-1 shadow-xl">
-          <p className="px-3 py-1 text-[11px] font-bold uppercase text-text-muted">Emoji</p>
+        <div role="listbox" aria-label="Emoji" className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>Emoji matching :{emojiCtx?.query}</p>
           {emojiItems.map((item, i) => (
             <button
               key={`e-${item.shortcode}`}
               type="button"
+              role="option"
+              aria-selected={emojiIdx === i}
+              onMouseEnter={() => setEmojiIdx(i)}
               onMouseDown={(e) => { e.preventDefault(); insertEmojiFromPicker(item); }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-interactive-hover ${
-                emojiIdx === i ? "bg-interactive-selected" : ""
-              }`}
+              className={`${AUTOCOMPLETE_ROW} ${emojiIdx === i ? "bg-interactive-hover" : ""}`}
             >
               <EmojiImg emoji={item.emoji} />
-              <span className="truncate font-medium">:{item.shortcode}:</span>
-              <span className="ml-auto shrink-0 text-xs text-text-muted">{item.emoji}</span>
+              <span className="truncate text-[16px] font-medium text-header-primary">:{item.shortcode}:</span>
             </button>
           ))}
         </div>
       )}
 
+      {command ? (
+        <SlashCommandComposer
+          key={command.def.name}
+          command={command.def}
+          initial={command.initial}
+          members={members}
+          serverId={serverId}
+          onExit={(restore) => {
+            setCommand(null);
+            setText(restore);
+            setSpans([]);
+            requestAnimationFrame(() => {
+              const el = textareaRef.current;
+              if (!el) return;
+              el.focus();
+              el.setSelectionRange(restore.length, restore.length);
+            });
+          }}
+          onDone={(message) => {
+            setCommand(null);
+            setCommandNotice(message);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
+        />
+      ) : (
+      <>
       {(replyTo || editingMessageId) && (
-        <div className="flex items-center gap-2 rounded-t-[14px] border border-b-0 border-divider bg-bg-secondary px-3 py-2 text-sm">
-          <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
-            <p className="text-xs font-semibold text-brand">
-              {editingMessageId ? "Editing message" : `Replying to ${replyTo?.author ? displayName(replyTo.author as Profile) : "message"}`}
-            </p>
-            {!editingMessageId && replyTo && (
-              <p className="truncate text-xs text-text-muted">
-                {normalizeMessageContent(replyTo.content) || replyTo.attachment_type || "Attachment"}
-              </p>
+        <div className="flex h-[34px] items-center gap-2 rounded-t-lg bg-bg-secondary pl-4 pr-2 text-[14px]">
+          <p className="min-w-0 flex-1 truncate text-header-secondary">
+            {editingMessageId ? (
+              "Editing message — escape to cancel"
+            ) : (
+              <>
+                Replying to{" "}
+                <span className="font-semibold text-header-primary">
+                  {replyTo?.author ? displayName(replyTo.author as Profile) : "message"}
+                </span>
+              </>
             )}
-          </div>
+          </p>
           <button
             type="button"
-            onClick={() => { onClearReply?.(); onCancelEdit?.(); setText(""); }}
-            className="shrink-0 text-text-muted hover:text-text-normal"
+            onClick={() => { onClearReply?.(); onCancelEdit?.(); clearText(); }}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-interactive-normal hover:text-interactive-active"
             aria-label="Cancel"
           >
-            <IconClose size={16} />
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-interactive-normal text-bg-secondary hover:bg-interactive-active">
+              <IconClose size={11} strokeWidth={3} />
+            </span>
           </button>
         </div>
       )}
@@ -758,7 +1003,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-[14px] border border-divider bg-bg-accent transition-[border-color,box-shadow] duration-150 focus-within:border-brand ${dragOver ? "border-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-lg bg-bg-composer ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -768,7 +1013,7 @@ export function ChatInput({
           </div>
         )}
 
-        <div className="flex items-end gap-1 px-2 py-[10px]">
+        <div className="flex items-start gap-0 pl-4 pr-2.5">
           <div ref={plusMenuRef} className="relative shrink-0">
             <button
               type="button"
@@ -782,11 +1027,13 @@ export function ChatInput({
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
               }}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
-                plusMenuOpen ? "bg-interactive-hover text-text-normal" : "text-text-muted"
-              }`}
+              className="group/plus -ml-4 flex h-[44px] w-[56px] shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <IconPlus size={20} />
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-bg-composer transition-colors ${
+                plusMenuOpen ? "bg-interactive-active" : "bg-interactive-normal group-hover/plus:bg-interactive-active"
+              }`}>
+                <IconPlus size={16} strokeWidth={3} />
+              </span>
             </button>
             {allowPolls && plusMounted && (
               <div
@@ -805,7 +1052,7 @@ export function ChatInput({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`modal-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[260px] rounded-[14px] border border-divider bg-overlay-surface p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]`}
+                className={`menu-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-[4px] bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]`}
               >
                 {[
                   {
@@ -832,14 +1079,13 @@ export function ChatInput({
                     autoFocus={i === 0}
                     disabled={item.disabled}
                     onClick={() => { setPlusMenuOpen(false); item.onSelect(); }}
-                    className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left outline-none transition-colors hover:bg-interactive-hover focus-visible:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-40"
+                    className="group/item flex w-full items-center gap-2 rounded-[2px] px-2 py-1.5 text-left text-interactive-normal outline-none hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-divider bg-bg-accent text-text-normal">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                       {item.icon}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[14px] font-medium leading-tight text-text-normal">{item.label}</span>
-                      <span className="mt-0.5 block truncate text-[12.5px] leading-tight text-text-muted">{item.hint}</span>
+                      <span className="block text-[14px] font-medium leading-[18px]">{item.label}</span>
                     </span>
                   </button>
                 ))}
@@ -859,57 +1105,52 @@ export function ChatInput({
               layer (absolute, inset-0) has to share or the caret drifts. The
               textarea used to be inline-block, so its wrapper also reserved
               descender space beneath it and the text sat ~3px high. */}
-          <div className="flex min-h-8 min-w-0 flex-1 items-center px-1">
+          <div className="flex min-h-[44px] min-w-0 flex-1 items-center py-[11px]">
           <div className="relative w-full">
             {/* The styled layer. aria-hidden: the textarea is the real input,
                 and a screen reader must not read the text twice. */}
             <div
               ref={highlightRef}
               aria-hidden
-              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[15px] leading-[22px] text-text-normal [@media(pointer:coarse)]:text-base"
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[16px] leading-[22px] text-text-normal"
             >
               <ComposerMarkdown text={text} />
             </div>
+            {/* Picked mentions, painted over the same glyphs as chips. Paint
+                only (background, colour), so the caret never drifts. */}
+            {spans.length > 0 && (
+              <div
+                ref={chipLayerRef}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-px text-[16px] leading-[22px] text-transparent"
+              >
+                {renderMentionChips(text, spans)}
+              </div>
+            )}
           <textarea
             ref={textareaRef}
             value={text}
             onChange={(e) => {
               const next = e.target.value;
               const selStart = e.target.selectionStart;
-              const placeCursor = (pos: number) => {
-                setCursor(pos);
-                requestAnimationFrame(() => {
-                  textareaRef.current?.setSelectionRange(pos, pos);
-                });
-              };
-              const token = getCompletedEmojiToken(next, selStart);
-              if (token) {
-                const emoji = lookupShortcode(token.code);
-                if (emoji) {
-                  const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
-                  const atomic = applyAtomicEveryone(text, replaced);
-                  const pos = atomic ? atomic.cursor : token.start + emoji.length;
-                  setText(atomic ? atomic.text : replaced);
-                  setCursor(pos);
-                  setMentionIdx(0);
-                  setEmojiIdx(0);
-                  requestAnimationFrame(() => {
-                    textareaRef.current?.setSelectionRange(pos, pos);
-                  });
-                  onTypingActivity?.();
-                  return;
-                }
+              // Typing a full command name and a space switches to the chips.
+              const typed = next.match(/^\/([a-z]+) $/i);
+              const def = typed ? allowedCommands.find((c) => c.name === typed[1].toLowerCase()) : undefined;
+              if (def) {
+                enterCommand(def);
+                return;
               }
-              const atomic = applyAtomicEveryone(text, next);
-              if (atomic) {
-                setText(atomic.text);
-                placeCursor(atomic.cursor);
+              const token = getCompletedEmojiToken(next, selStart);
+              const emoji = token ? lookupShortcode(token.code) : null;
+              if (token && emoji) {
+                const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
+                applyText(text, replaced, token.start + emoji.length);
               } else {
-                setText(next);
-                setCursor(selStart);
+                if (applyText(text, next).cursor == null) setCursor(selStart);
               }
               setMentionIdx(0);
               setEmojiIdx(0);
+              setSlashIdx(0);
               onTypingActivity?.();
             }}
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
@@ -919,12 +1160,15 @@ export function ChatInput({
             placeholder={editingMessageId ? "Edit your message…" : placeholder}
             rows={1}
             enterKeyHint="send"
-            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[15px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted/80 focus:outline-none [@media(pointer:coarse)]:text-base"
+            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal placeholder:text-[#6d6f78] focus:outline-none"
             onScroll={(e) => {
               // Keep the styled layer pinned to the textarea once the text is
               // long enough to scroll, or the two drift apart.
               if (highlightRef.current) {
                 highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+              }
+              if (chipLayerRef.current) {
+                chipLayerRef.current.scrollTop = e.currentTarget.scrollTop;
               }
             }}
           />
@@ -937,14 +1181,13 @@ export function ChatInput({
               title={editingMessageId ? "Finish editing before sending a gift" : "Send a gift"}
               disabled={!!editingMessageId}
               onClick={() => setGiftOpen(true)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal disabled:cursor-not-allowed disabled:opacity-40 ${
-                giftOpen ? "bg-interactive-hover text-text-normal" : "text-text-muted"
+              className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
+                giftOpen ? "text-interactive-active" : "text-interactive-normal"
               }`}
             >
-              <IconGift size={20} />
+              <SolidGiftIcon size={24} />
             </button>
           )}
-          <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           <GifPicker
             disabled={!!editingMessageId}
             onSelect={(url) => {
@@ -955,12 +1198,53 @@ export function ChatInput({
               onClearReply?.();
             }}
           />
+          <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
+          {activityScope && !editingMessageId && (
+            <button
+              type="button"
+              aria-label="Start an activity"
+              aria-expanded={activityOpen}
+              aria-haspopup="dialog"
+              title="Start an activity"
+              onClick={() => {
+                setActivityError(null);
+                setActivityOpen((value) => !value);
+              }}
+              className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active ${
+                activityOpen || activityBusy ? "text-interactive-active" : "text-interactive-normal"
+              }`}
+            >
+              <svg aria-hidden viewBox="0 0 512 512" className="h-5 w-5 fill-current">
+                <path d="M377.408,213.333H277.333v-128c0-11.755,9.579-21.333,21.333-21.333C310.421,64,320,73.579,320,85.333v21.333
+			c0,35.285,28.715,64,64,64c35.285,0,64-28.715,64-64V21.333C448,9.557,438.443,0,426.667,0s-21.333,9.557-21.333,21.333v85.333
+			c0,11.755-9.579,21.333-21.333,21.333c-11.755,0-21.333-9.579-21.333-21.333V85.333c0-35.285-28.715-64-64-64
+			c-35.285,0-64,28.715-64,64v128h-98.283C61.184,213.333,0,280.32,0,362.667C0,433.941,48.064,510.976,119.637,512h2.069
+			c18.795,0,49.323-3.413,81.152-13.12c33.365-10.197,74.773-10.197,108.053-0.021c34.133,10.453,70.677,12.992,83.328,13.141
+			C466.987,510.613,512,433.408,512,362.667C512,280.32,451.627,213.333,377.408,213.333z M192,384h-21.333v21.333
+			c0,11.776-9.557,21.333-21.333,21.333S128,417.109,128,405.333V384h-21.333c-11.776,0-21.333-9.557-21.333-21.333
+			s9.557-21.333,21.333-21.333H128V320c0-11.776,9.557-21.333,21.333-21.333s21.333,9.557,21.333,21.333v21.333H192
+			c11.776,0,21.333,9.557,21.333,21.333S203.776,384,192,384z M362.667,298.667c11.776,0,21.333,9.557,21.333,21.333
+			s-9.557,21.333-21.333,21.333s-21.333-9.557-21.333-21.333S350.891,298.667,362.667,298.667z M320,384
+			c-11.776,0-21.333-9.557-21.333-21.333s9.557-21.333,21.333-21.333s21.333,9.557,21.333,21.333S331.776,384,320,384z
+			 M362.667,426.667c-11.776,0-21.333-9.557-21.333-21.333S350.891,384,362.667,384S384,393.557,384,405.333
+			S374.443,426.667,362.667,426.667z M405.333,384C393.557,384,384,374.443,384,362.667s9.557-21.333,21.333-21.333
+			s21.333,9.557,21.333,21.333S417.109,384,405.333,384z"/>
+              </svg>
+            </button>
+          )}
+          <ActivityPicker
+            open={activityOpen}
+            busyKind={activityBusy}
+            error={activityError}
+            onClose={() => setActivityOpen(false)}
+            onPick={(kind) => void startActivity(kind)}
+          />
           {(text.trim() || entries.length > 0) && (
             <button
               type="submit"
               aria-label={editingMessageId ? "Save edit" : "Send message"}
               title={editingMessageId ? "Save edit" : "Send message"}
-              className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors duration-150 hover:bg-brand-hover active:scale-95"
+              className="ml-1 mt-[6px] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover [@media(pointer:coarse)]:flex"
             >
               <IconSend size={16} />
             </button>
@@ -973,6 +1257,8 @@ export function ChatInput({
           </p>
         )}
       </form>
+      </>
+      )}
 
       {giftMounted && (
         <GiftModal
@@ -1002,4 +1288,23 @@ export function ChatInput({
       />
     </div>
   );
+}
+
+/** The composer text with each picked mention wrapped as a chip. */
+function renderMentionChips(text: string, spans: MentionSpan[]) {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of [...spans].sort((a, b) => a.start - b.start)) {
+    out.push(text.slice(last, m.start));
+    out.push(
+      <span key={m.start} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
+        {text.slice(m.start, m.end)}
+      </span>,
+    );
+    last = m.end;
+  }
+  out.push(text.slice(last));
+  // A trailing newline needs a character after it to take up its line.
+  out.push("\u200b");
+  return out;
 }

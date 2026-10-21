@@ -38,8 +38,14 @@
 //   APPSTORE_ISSUER_ID     Issuer id (Users and Access → Integrations → Keys)
 //   APPSTORE_PRIVATE_KEY   Contents of the .p8, BEGIN/END lines included
 //   APPSTORE_BUNDLE_ID     com.wsgpolar.disband
-//   APPSTORE_ENVIRONMENT   Ledger fallback only; Apple determines API routing
+//   APPSTORE_ENVIRONMENT   Ledger fallback / Sandbox opt-in for dev projects
+//   APPSTORE_ALLOW_SANDBOX Optional "true" only on non-production backends
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+//
+// Production needs `public.apple_sandbox_testers` entries for App Review or
+// developer accounts that have to make sandbox purchases. Sandbox receipts
+// are free, so accepting them for every account would grant real Aero and
+// Catalysts without payment.
 
 import {
   createClient,
@@ -277,6 +283,36 @@ function service(): SupabaseClient {
 const iso = (ms?: number) => (ms ? new Date(ms).toISOString() : null);
 
 /**
+ * Whether a Sandbox transaction may become a real entitlement.
+ *
+ * A development deployment can opt in wholesale. In production the account
+ * has to be listed in `apple_sandbox_testers`, which is service-role only.
+ * App Review's account is added there for the review window; the owner's
+ * test account can be added the same way.
+ */
+async function sandboxPurchaseAllowed(
+  db: SupabaseClient,
+  userId: string,
+  expectedEnv: string,
+): Promise<boolean> {
+  if (expectedEnv === "Sandbox") return true;
+  if ((Deno.env.get("APPSTORE_ALLOW_SANDBOX") ?? "").toLowerCase() === "true") {
+    return true;
+  }
+
+  const { data, error } = await db
+    .from("apple_sandbox_testers")
+    .select("user_id,expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  // Fail closed. If the allowlist cannot be read, a sandbox receipt must not
+  // be allowed to grant anything.
+  if (error) throw new Error(`sandbox allowlist unavailable: ${error.message}`);
+  if (!data) return false;
+  return !data.expires_at || new Date(data.expires_at).getTime() > Date.now();
+}
+
+/**
  * Record the transaction, then grant what it bought.
  *
  * The ledger insert comes first and is the idempotency boundary: Apple
@@ -291,13 +327,28 @@ async function applyTransaction(
   userId: string,
   serverId: string | null,
 ): Promise<{ granted: string | null; error?: string }> {
-  // NOTE: no environment gate here. Sandbox receipts can only be minted by
-  // sandbox tester accounts, so granting from one cannot charge real money
-  // by construction — and rejecting them broke every App Review (2.1(b)).
-  // The environment is recorded on the ledger row for forensics.
   const expectedEnv = Deno.env.get("APPSTORE_ENVIRONMENT") ?? "Production";
   if (tx.bundleId && tx.bundleId !== Deno.env.get("APPSTORE_BUNDLE_ID")) {
     return { granted: null, error: "bundle" };
+  }
+
+  // Sandbox transactions do not move money. They have to work on the live
+  // backend during App Review, but accepting every sandbox receipt lets a
+  // sandbox Apple ID mint permanent Catalysts and Aero for free on a normal
+  // account. Only explicitly approved test accounts (or a development
+  // deployment with APPSTORE_ALLOW_SANDBOX=true) may turn one into an
+  // entitlement. The ledger still distinguishes the environment for audit.
+  const isSandbox = (tx.environment ?? expectedEnv) === "Sandbox";
+  if (isSandbox) {
+    const allowed = await sandboxPurchaseAllowed(db, userId, expectedEnv);
+    if (!allowed) {
+      console.log("appstore: sandbox purchase rejected", {
+        userId,
+        transactionId: tx.transactionId,
+        productId: tx.productId,
+      });
+      return { granted: null, error: "sandbox_not_allowed" };
+    }
   }
 
   const { data: product } = await db
@@ -545,6 +596,7 @@ async function routeRequest(req: Request): Promise<Response> {
         {
           error:
             "That purchase is already attached to a different Disband account.",
+          terminal: true,
         },
         409,
         headers,
@@ -557,6 +609,17 @@ async function routeRequest(req: Request): Promise<Response> {
       user.id,
       body.serverId ?? null,
     );
+    if (result.error === "sandbox_not_allowed") {
+      return json(
+        {
+          error:
+            "Sandbox purchases can only be applied to an approved test account.",
+          terminal: true,
+        },
+        403,
+        headers,
+      );
+    }
     if (result.error === "server_id_required") {
       return json(
         { error: "Choose a space for these Catalysts." },

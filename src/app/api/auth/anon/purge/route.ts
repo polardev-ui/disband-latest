@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { requireTurnstile } from "@/lib/turnstile";
 import { isValidAccountNumber, normalizeAccountNumber } from "@/lib/anon-accounts";
 import { findAnonByNumber, purgeAnonymousAccount } from "@/lib/anon-accounts.server";
 
@@ -27,12 +27,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  if (process.env.TURNSTILE_SECRET_KEY && (!body.turnstileToken || !(await verifyTurnstileToken(body.turnstileToken)))) {
-    return NextResponse.json(
-      { error: "Please complete the verification challenge.", code: "TURNSTILE_REQUIRED" },
-      { status: 403 },
-    );
-  }
+  // Fail closed: no token, a bad token, a token from another form, or a
+  // server without the secret all stop here (see requireTurnstile).
+  const blocked = await requireTurnstile(body.turnstileToken, { action: "anon-purge" });
+  if (blocked) return blocked;
 
   if (!body.number || !isValidAccountNumber(body.number)) {
     return NextResponse.json({ error: "Enter your 16-digit account number." }, { status: 400 });

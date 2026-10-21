@@ -97,7 +97,7 @@ export function MaintenanceNotice() {
         </svg>
       </span>
 
-      <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-text-normal">
+      <span className="min-w-0 flex-1 text-[14px] leading-snug text-text-normal">
         <strong className="font-semibold">{notice.title}</strong>
         {" — "}
         {notice.message}
@@ -114,7 +114,7 @@ export function MaintenanceNotice() {
         onClick={dismiss}
         disabled={locked}
         aria-live="polite"
-        className={`shrink-0 rounded-md px-3 py-1 text-[12.5px] font-semibold transition-colors ${
+        className={`shrink-0 rounded-[3px] px-3 py-1 text-[13px] font-medium transition-colors ${
           locked
             ? "cursor-not-allowed bg-text-normal/5 text-text-muted"
             : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20"

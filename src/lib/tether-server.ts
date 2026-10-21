@@ -17,7 +17,7 @@ export const TETHER_EMAIL = "tether@disband.dev";
 export const TETHER_USERNAME = "tether";
 export const TETHER_FALLBACK_USERNAME = "tether_ai";
 export const TETHER_DISPLAY_NAME = "Tether";
-export const TETHER_AVATAR_URL = "https://www.disband.dev/logo-app.png";
+export const TETHER_AVATAR_URL = "https://api.joshclark.xyz/v1/images/tether.png";
 
 // Cached per instance so provisioning happens once; harmless if another
 // instance provisions first (all lookups are idempotent).

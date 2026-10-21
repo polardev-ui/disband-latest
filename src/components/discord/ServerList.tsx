@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
-import { IconVerified, IconHome, IconPlus, IconCompass, IconChevron } from "@/components/icons";
+import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
+import { IconPlus, IconCompass } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useLiveOnlineCount } from "@/hooks/useLiveOnlineCount";
 import type { Profile, Server, ServerFolder, ServerListState, ViewMode } from "@/lib/supabase/types";
 
 export interface DmRailUnread {
@@ -108,6 +110,7 @@ export function resolveFolderDrop(folders: ServerFolder[], dragId: string, targe
 
 interface ServerListProps {
   servers: Server[];
+  catalystCounts?: Record<string, number>;
   activeServerId: string | null;
   viewMode: ViewMode;
   dmUnreads: DmRailUnread[];
@@ -130,7 +133,7 @@ function UnreadCountBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   const label = count > 99 ? "99+" : String(count);
   return (
-    <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-status-dnd px-1 text-[10px] font-bold leading-none text-white ring-2 ring-bg-tertiary">
+    <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border-4 border-bg-tertiary bg-status-dnd px-1 text-[12px] font-bold leading-none text-white">
       {label}
     </span>
   );
@@ -159,6 +162,7 @@ const serverCountCache = new Map<string, ServerCounts>();
 
 function ServerButton({
   server,
+  catalystCount,
   active,
   hasUnread,
   draggable,
@@ -172,6 +176,7 @@ function ServerButton({
   onDragEnd,
 }: {
   server: Server;
+  catalystCount?: number;
   active: boolean;
   hasUnread: boolean;
   draggable: boolean;
@@ -190,6 +195,10 @@ function ServerButton({
     const cached = serverCountCache.get(server.id);
     return cached && cached !== PENDING_COUNTS ? cached : null;
   });
+  // Online comes from live presence, not the stored status the counts RPC
+  // reads (that lags badly). It starts on first hover and then stays live.
+  const [hovered, setHovered] = useState(false);
+  const liveOnline = useLiveOnlineCount(server.id, hovered);
   const ensureCounts = () => {
     if (serverCountCache.has(server.id)) {
       const cached = serverCountCache.get(server.id);
@@ -217,24 +226,42 @@ function ServerButton({
         },
       );
   };
+  const icon = safeImageUrl(server.icon_url);
+  const badgeKind = serverBadgeFor({ verified: server.verified, partner: server.partner, catalystCount });
   return (
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onMouseEnter={ensureCounts}
-      className="relative flex w-full justify-center rounded-lg"
+      onMouseEnter={() => {
+        ensureCounts();
+        setHovered(true);
+      }}
+      className="rail-item group relative flex w-full justify-center"
     >
+      <RailPill state={active ? "active" : hasUnread ? "unread" : "none"} />
       {dropBefore && <DropIndicator edge="before" />}
       {dropAfter && <DropIndicator edge="after" />}
       <Tooltip
+        side="right"
         label={
           <span className="flex flex-col items-start gap-0.5">
-            <span>{server.name}</span>
+            <span className="flex items-center gap-1">
+              {badgeKind && (
+                <span title={SERVER_BADGE_LABEL[badgeKind]} className="inline-flex">
+                  <ServerBadge kind={badgeKind} size={14} />
+                </span>
+              )}
+              <span>{server.name}</span>
+            </span>
             {counts && (
               <span className="text-xs font-medium">
-                <span className="text-text-muted">{counts.total} member{counts.total === 1 ? "" : "s"}</span>
-                <span className="text-text-muted"> · </span>
-                <span className="text-status-online">{counts.online} online</span>
+                <span className="text-text-muted">{counts.total.toLocaleString()} member{counts.total === 1 ? "" : "s"}</span>
+                {liveOnline !== null && (
+                  <>
+                    <span className="text-text-muted"> · </span>
+                    <span className="text-status-online">{liveOnline.toLocaleString()} online</span>
+                  </>
+                )}
               </span>
             )}
           </span>
@@ -252,51 +279,46 @@ function ServerButton({
           draggable={draggable}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          className="group relative flex h-12 w-12 cursor-grab items-center justify-center active:cursor-grabbing"
+          className="relative flex h-12 w-12 items-center justify-center"
         >
-          {/* Unread marker. Active is shown by the ring on the icon itself. */}
-          <span
-            aria-hidden
-            className={`absolute -left-[9px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-text-normal transition-opacity duration-150 ${
-              !active && hasUnread ? "opacity-100" : "opacity-0"
-            }`}
-          />
-          <div className="relative">
-            {safeImageUrl(server.icon_url) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={safeImageUrl(server.icon_url)!}
-                alt=""
-                draggable={false}
-                className={`h-12 w-12 rounded-[14px] object-cover ${
-                  active ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
-                }`}
-              />
-            ) : (
-              <span
-                className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-[15px] font-semibold text-white ${
-                  active ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
-                }`}
-              >
-                {serverInitials(server.name)}
-              </span>
-            )}
-            {server.verified && (
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-bg-tertiary">
-                <Tooltip label="This space is officially verified by Disband">
-                  <IconVerified size={12} className="shrink-0 text-sky-400" />
-                </Tooltip>
-              </span>
-            )}
-          </div>
+          {icon ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={icon} alt="" draggable={false} data-active={active || undefined} className="rail-icon h-12 w-12 object-cover" />
+          ) : (
+            <span data-active={active || undefined} className="rail-icon rail-icon-fill h-12 w-12 text-[15px] font-medium">
+              {serverInitials(server.name)}
+            </span>
+          )}
+          {badgeKind && (
+            <span
+              title={SERVER_BADGE_LABEL[badgeKind]}
+              className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-bg-tertiary"
+            >
+              <ServerBadge kind={badgeKind} size={14} />
+            </span>
+          )}
         </button>
       </Tooltip>
     </div>
   );
 }
 
+/**
+ * The white pill on the rail's left edge: a dot for unread, a short bar on
+ * hover, a tall bar for the space you're in. Height is driven from CSS so it
+ * animates between states (see `.rail-pill` in globals.css).
+ */
+function RailPill({ state }: { state: "none" | "unread" | "active" }) {
+  return <span aria-hidden className="rail-pill" data-state={state} />;
+}
+
+function RailSeparator() {
+  return <div aria-hidden className="mx-auto h-0.5 w-8 shrink-0 rounded-[1px] bg-[#35363c]" />;
+}
+
 export function ServerList({
   servers,
+  catalystCounts,
   activeServerId,
   viewMode,
   dmUnreads,
@@ -391,6 +413,7 @@ export function ServerList({
       <ServerButton
         key={server.id}
         server={server}
+        catalystCount={catalystCounts?.[server.id] ?? 0}
         active={active}
         hasUnread={hasUnread}
         draggable
@@ -409,71 +432,60 @@ export function ServerList({
   return (
     <nav
       aria-label="Spaces"
-      // Top-aligned on purpose. Centring the stack (whether with `m-auto` or
-      // `justify-content: center`) leaves a gap above the home button whenever
-      // the rail is shorter than the window, and pushes the first servers out
-      // of reach above the scroll origin once it is taller.
-      className="flex w-[72px] shrink-0 flex-col items-center overflow-y-auto border-r border-divider bg-bg-tertiary py-3"
+      // Top-aligned on purpose. Centring the stack leaves a gap above the home
+      // button whenever the rail is shorter than the window.
+      className="rail-scroll flex w-[72px] shrink-0 flex-col items-center overflow-y-auto bg-bg-tertiary pb-3 pt-3"
     >
       <div className="flex w-full flex-col items-center gap-2">
-      <Tooltip label="Direct Messages">
-        <button
-          type="button"
-          aria-label="Direct Messages"
-          aria-current={homeActive ? "true" : undefined}
-          onClick={onSelectHome}
-          className="group relative flex h-12 w-12 items-center justify-center"
-        >
-          <span
-            className={`flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand text-white ${
-              homeActive ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
-            }`}
+      <div className="rail-item group relative flex w-full justify-center">
+        <RailPill state={homeActive ? "active" : "none"} />
+        <Tooltip label="Direct Messages" side="right">
+          <button
+            type="button"
+            aria-label="Direct Messages"
+            aria-current={homeActive ? "true" : undefined}
+            onClick={onSelectHome}
+            className="relative flex h-12 w-12 items-center justify-center"
           >
-            <IconHome size={22} />
-          </span>
-        </button>
-      </Tooltip>
+            <span data-active={homeActive || undefined} className="rail-icon rail-icon-fill h-12 w-12">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="" draggable={false} className="h-8 w-8 object-contain brightness-0 invert" />
+            </span>
+          </button>
+        </Tooltip>
+      </div>
 
-      {visibleDmUnreads.length > 0 && (
-        <div className="flex w-full flex-col items-center gap-2 transition-all duration-300 ease-out">
-          {visibleDmUnreads.map((entry) => {
-            const active = viewMode === "dm" && activeDmThreadId === entry.threadId;
-            return (
-              <Tooltip key={entry.threadId} label={`${displayName(entry.friend)} — ${entry.count} new`}>
-                <button
-                  type="button"
-                  aria-label={`${entry.count} unread messages from ${displayName(entry.friend)}`}
-                  onClick={() => onSelectDmThread(entry.threadId)}
-                  className="group relative flex h-12 w-12 animate-in fade-in slide-in-from-top-2 items-center justify-center duration-300"
-                >
-                  <div className="relative">
-                    <Avatar
-                      profile={entry.friend}
-                      size="md"
-                      className={`h-12 w-12 rounded-full ${
-                        active ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
-                      }`}
-                    />
-                    <UnreadCountBadge count={entry.count} />
-                  </div>
-                </button>
-              </Tooltip>
-            );
-          })}
-        </div>
-      )}
+      {visibleDmUnreads.map((entry) => {
+        const active = viewMode === "dm" && activeDmThreadId === entry.threadId;
+        return (
+          <div key={entry.threadId} className="rail-item rail-enter group relative flex w-full justify-center">
+            <RailPill state={active ? "active" : "unread"} />
+            <Tooltip label={displayName(entry.friend)} side="right">
+              <button
+                type="button"
+                aria-label={`${entry.count} unread messages from ${displayName(entry.friend)}`}
+                onClick={() => onSelectDmThread(entry.threadId)}
+                className="relative flex h-12 w-12 items-center justify-center"
+              >
+                <span className="rail-icon h-12 w-12 overflow-hidden">
+                  <Avatar profile={entry.friend} size="md" className="h-12 w-12" />
+                </span>
+                <UnreadCountBadge count={entry.count} />
+              </button>
+            </Tooltip>
+          </div>
+        );
+      })}
 
-      <div className="h-px w-8 bg-divider transition-all duration-300" />
+      <RailSeparator />
 
       <div
         className="flex w-full flex-col items-center gap-2"
         onDragOver={(e) => {
           if (!dragRef.current) return;
           e.preventDefault();
-          // Only events from the list's own padding and the gaps between rows
-          // reach here, since each row stops its own. Claim "drop at the end"
-          // just for the area past the last row — otherwise crossing an 8px
-          // gap would flick the line down to the bottom of the rail.
+          // Only events from the gaps between rows reach here, since each row
+          // stops its own. Claim "drop at the end" only past the last row.
           const last = e.currentTarget.lastElementChild;
           const below = !last || e.clientY > last.getBoundingClientRect().bottom;
           if (below) setDropTarget({ kind: "top-end" });
@@ -494,6 +506,12 @@ export function ServerList({
           const hasActive = members.some((s) => s.id === activeServerId && viewMode === "space");
           const hasUnread = members.some((s) => serverUnreadSet.has(s.id) && !(s.id === activeServerId && viewMode === "space"));
           const isDrop = dropTarget?.kind === "folder" && dropTarget.id === folder.id;
+          const toggle = () => setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(folder.id)) next.delete(folder.id);
+            else next.add(folder.id);
+            return next;
+          });
           return (
             <div
               key={folder.id}
@@ -504,54 +522,58 @@ export function ServerList({
                 setDropTarget({ kind: "folder", id: folder.id });
               }}
               onDrop={(e) => dropOnFolder(e, folder.id, false)}
-              className={`flex w-full flex-col items-center gap-2 rounded-lg py-1 transition-colors ${isDrop ? "bg-white/10 ring-1 ring-white" : ""}`}
+              className="relative flex w-full flex-col items-center"
             >
-              <Tooltip label={folder.name}>
-                <button
-                  type="button"
-                  aria-label={`Folder ${folder.name}`}
-                  onClick={() => setExpanded((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(folder.id)) next.delete(folder.id);
-                    else next.add(folder.id);
-                    return next;
-                  })}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onFolderContext(folder, e.clientX, e.clientY);
-                  }}
-                  draggable
-                  onDragStart={(e) => startFolderDrag(e, folder.id)}
-                  onDragEnd={endDrag}
-                  className="group relative flex h-12 w-12 cursor-grab items-center justify-center active:cursor-grabbing"
-                >
-                  <span
-                    aria-hidden
-                    className={`absolute -left-[9px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-text-normal transition-opacity duration-150 ${
-                      !hasActive && hasUnread ? "opacity-100" : "opacity-0"
-                    }`}
-                  />
-                  <span
-                    className={`flex h-12 w-12 flex-col items-center justify-center rounded-[14px] text-white ${
-                      hasActive ? "ring-2 ring-text-normal/75 ring-offset-2 ring-offset-bg-tertiary" : ""
-                    }`}
-                    style={{ backgroundColor: `${folder.color}55` }}
-                  >
-                    <span className="text-[15px] font-bold leading-none" style={{ color: folder.color }}>
-                      {folder.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-0.5 text-[10px] font-semibold text-text-muted">
-                      {members.length}
-                      <IconChevron size={10} className={`transition-transform ${isOpen ? "" : "-rotate-90"}`} />
-                    </span>
-                  </span>
-                </button>
-              </Tooltip>
+              {/* An open folder sits on a tinted column, the classic way. */}
               {isOpen && (
-                <div className="flex w-full flex-col items-center gap-2 border-l-2 pl-1" style={{ borderColor: `${folder.color}88` }}>
+                <span aria-hidden className="absolute bottom-0 left-1/2 top-0 w-12 -translate-x-1/2 rounded-2xl" style={{ backgroundColor: `${folder.color}33` }} />
+              )}
+              <div className="rail-item group relative flex w-full justify-center">
+                <RailPill state={!isOpen && hasActive ? "active" : !isOpen && hasUnread ? "unread" : "none"} />
+                <Tooltip label={folder.name} side="right">
+                  <button
+                    type="button"
+                    aria-label={`Folder ${folder.name}`}
+                    aria-expanded={isOpen}
+                    onClick={toggle}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onFolderContext(folder, e.clientX, e.clientY);
+                    }}
+                    draggable
+                    onDragStart={(e) => startFolderDrag(e, folder.id)}
+                    onDragEnd={endDrag}
+                    className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-shadow ${isDrop ? "ring-2 ring-white/70" : ""}`}
+                  >
+                    {isOpen ? (
+                      <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ color: folder.color }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                          <path d="M20 7H12L10.553 5.106C10.214 4.428 9.521 4 8.764 4H3C2.447 4 2 4.447 2 5V19C2 20.104 2.895 21 4 21H20C21.104 21 22 20.104 22 19V9C22 7.896 21.104 7 20 7Z" />
+                        </svg>
+                      </span>
+                    ) : (
+                      <span className="grid h-12 w-12 grid-cols-2 gap-[3px] rounded-2xl p-[7px]" style={{ backgroundColor: `${folder.color}55` }}>
+                        {members.slice(0, 4).map((m) => {
+                          const mi = safeImageUrl(m.icon_url);
+                          return mi ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={m.id} src={mi} alt="" className="h-[15px] w-[15px] rounded-full object-cover" />
+                          ) : (
+                            <span key={m.id} className="flex h-[15px] w-[15px] items-center justify-center rounded-full bg-bg-primary text-[7px] font-semibold text-text-normal">
+                              {serverInitials(m.name).slice(0, 1)}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    )}
+                  </button>
+                </Tooltip>
+              </div>
+              {isOpen && (
+                <div className="relative flex w-full flex-col items-center gap-2 pb-2 pt-2">
                   {members.map((server) => renderServerButton(server))}
                   {members.length === 0 && (
-                    <p className="px-1 text-center text-[10px] leading-tight text-text-muted">Drop spaces here</p>
+                    <p className="px-2 text-center text-[10px] leading-tight text-text-muted">Drop spaces here</p>
                   )}
                 </div>
               )}
@@ -560,27 +582,27 @@ export function ServerList({
         })}
       </div>
 
-      <Tooltip label="Add a Space">
-        <button
-          type="button"
-          aria-label="Create space"
-          onClick={onCreateServer}
-          className="group flex h-12 w-12 items-center justify-center rounded-[14px] border border-dashed border-divider text-text-muted transition-colors duration-150 hover:border-text-muted/50 hover:bg-interactive-hover hover:text-text-normal"
-        >
-          <IconPlus size={22} />
-        </button>
-      </Tooltip>
+      <div className="rail-item group relative flex w-full justify-center">
+        <RailPill state="none" />
+        <Tooltip label="Add a Space" side="right">
+          <button type="button" aria-label="Add a Space" onClick={onCreateServer} className="relative flex h-12 w-12 items-center justify-center">
+            <span className="rail-icon rail-icon-action h-12 w-12">
+              <IconPlus size={24} />
+            </span>
+          </button>
+        </Tooltip>
+      </div>
 
-      <Tooltip label="Discover">
-        <button
-          type="button"
-          aria-label="Discover spaces"
-          onClick={onDiscover}
-          className="group flex h-12 w-12 items-center justify-center rounded-[14px] border border-divider text-text-muted transition-colors duration-150 hover:bg-interactive-hover hover:text-text-normal"
-        >
-          <IconCompass size={22} />
-        </button>
-      </Tooltip>
+      <div className="rail-item group relative flex w-full justify-center">
+        <RailPill state={viewMode === "discover" ? "active" : "none"} />
+        <Tooltip label="Explore Discoverable Spaces" side="right">
+          <button type="button" aria-label="Explore discoverable spaces" onClick={onDiscover} className="relative flex h-12 w-12 items-center justify-center">
+            <span data-active={viewMode === "discover" || undefined} className="rail-icon rail-icon-action h-12 w-12">
+              <IconCompass size={24} />
+            </span>
+          </button>
+        </Tooltip>
+      </div>
       <div
         aria-hidden
         className={`h-[3px] w-12 rounded-full bg-white transition-opacity ${dropTarget?.kind === "top-end" ? "opacity-100" : "opacity-0"}`}

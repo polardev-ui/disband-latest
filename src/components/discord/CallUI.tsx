@@ -19,6 +19,7 @@ import type { Profile } from "@/lib/supabase/types";
 import { useEffect, useRef, useState } from "react";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
 import { CallStage } from "./CallStage";
+import { Tooltip } from "./Tooltip";
 
 interface CallControlsProps {
   micMuted: boolean;
@@ -26,7 +27,8 @@ interface CallControlsProps {
   cameraEnabled?: boolean;
   screenShareEnabled?: boolean;
   onToggleMic: () => void;
-  onToggleDeafen: () => void;
+  /** Omitted where deafening isn't wired (group calls). */
+  onToggleDeafen?: () => void;
   onToggleCamera?: () => void;
   onToggleScreenShare?: () => void;
   onEnd: () => void;
@@ -38,75 +40,107 @@ export function CallControls({
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd,
 }: CallControlsProps) {
-  const items = [
-    { onClick: onToggleMic, title: micMuted ? "Unmute" : "Mute", active: micMuted, on: IconMic, off: IconMicOff },
-    // Deafen gets the brand treatment (not the mic's red): at a glance,
-    // red ring = muted mic, blue ring = deafened.
-    { onClick: onToggleDeafen, title: deafened ? "Undeafen" : "Deafen", active: deafened, on: IconHeadphones, off: IconHeadphonesOff, brand: true },
-    ...(onToggleCamera ? [{ onClick: onToggleCamera, title: cameraEnabled ? "Stop video" : "Start video", active: !!cameraEnabled, on: IconVideo, off: IconVideoOff }] : []),
-    ...(onToggleScreenShare ? [{ onClick: onToggleScreenShare, title: screenShareEnabled ? "Stop sharing" : "Share screen", active: !!screenShareEnabled, on: IconScreenShare, off: IconScreenShareOff }] : []),
-    { onClick: onEnd, title: "End call", active: false, on: IconPhoneOff, off: IconPhoneOff, danger: true },
-  ];
-
   return (
-    <div className="flex items-center gap-2">
-      {items.map((item) => {
-        const Icon = item.active && item.off ? item.off : item.on;
-        return (
-          <button
-            key={item.title}
-            type="button"
-            onClick={item.onClick}
-            title={item.title}
-            className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
-              "danger" in item && item.danger
-                ? "bg-status-dnd text-white shadow-lg shadow-status-dnd/30 hover:scale-105 hover:brightness-110"
-                  : item.active
-                    ? "brand" in item && item.brand
-                      ? "bg-brand/25 text-brand ring-2 ring-brand/40"
-                      : "bg-status-dnd/25 text-status-dnd ring-2 ring-status-dnd/40"
-                    // Inactive controls use the theme text color at low alpha
-                    // (not white): this component renders on black call
-                    // panels and on the themed voice lobby alike.
-                    : "bg-text-normal/10 text-text-normal hover:bg-text-normal/20 hover:scale-105"
-            }`}
-          >
-            <Icon size={16} />
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-4">
+      {onToggleCamera && (
+        <CallButton label={cameraEnabled ? "Turn Off Camera" : "Turn On Camera"} on={!!cameraEnabled} onClick={onToggleCamera}>
+          {cameraEnabled ? <IconVideo size={24} /> : <IconVideoOff size={24} />}
+        </CallButton>
+      )}
+      {onToggleScreenShare && (
+        <CallButton label={screenShareEnabled ? "Stop Streaming" : "Share Your Screen"} on={!!screenShareEnabled} onClick={onToggleScreenShare}>
+          {screenShareEnabled ? <IconScreenShareOff size={24} /> : <IconScreenShare size={24} />}
+        </CallButton>
+      )}
       <Soundboard compact />
+      <CallButton label={micMuted ? "Unmute" : "Mute"} warn={micMuted} onClick={onToggleMic}>
+        {micMuted ? <IconMicOff size={24} /> : <IconMic size={24} />}
+      </CallButton>
+      {onToggleDeafen && (
+        <CallButton label={deafened ? "Undeafen" : "Deafen"} warn={deafened} onClick={onToggleDeafen}>
+          {deafened ? <IconHeadphonesOff size={24} /> : <IconHeadphones size={24} />}
+        </CallButton>
+      )}
+      <CallButton label="Disconnect" danger onClick={onEnd}>
+        <IconPhoneOff size={24} />
+      </CallButton>
     </div>
+  );
+}
+
+/**
+ * The classic 56px call button: dark at rest, white when a feature is on,
+ * white with a red glyph when you're muted or deafened, red to hang up.
+ */
+function CallButton({
+  label,
+  on,
+  warn,
+  danger,
+  onClick,
+  children,
+}: {
+  label: string;
+  on?: boolean;
+  warn?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip label={label} side="top">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        aria-pressed={on || warn || undefined}
+        className={`flex h-14 w-14 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 active:scale-95 ${
+          danger
+            ? "bg-status-dnd text-white hover:bg-button-danger-hover"
+            : warn
+              ? "bg-white text-status-dnd hover:bg-[#e3e5e8]"
+              : on
+                ? "bg-white text-[#313338] hover:bg-[#e3e5e8]"
+                : "bg-[#2b2d31] text-white hover:bg-[#404249]"
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
 export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }: {
   callerName: string; profile?: Profile; onAccept: () => void; onReject: () => void;
 }) {
+  // The classic incoming-call card: a small dark panel with the caller's
+  // avatar ringing, and accept/decline buttons underneath.
   return (
-    <div className="overlay-fade fixed inset-0 z-[100] flex items-center justify-center bg-overlay-scrim-strong backdrop-blur-md">
-      <div className="call-enter flex flex-col items-center px-8 text-center">
-        <p className="mb-6 text-sm font-medium uppercase tracking-widest text-text-muted">Incoming voice call</p>
-        <div className="relative mb-6">
-          <div className="absolute inset-0 animate-ping rounded-full bg-brand/20" />
-          <div className="call-ring absolute -inset-3 rounded-full" />
+    <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="call-enter pointer-events-auto flex w-[250px] flex-col items-center rounded-lg bg-bg-floating px-4 pb-6 pt-8 text-center shadow-[var(--elevation-high)]">
+        <div className="relative mb-4">
+          <div className="call-ring absolute -inset-2 rounded-full" />
           {profile ? (
-            <Avatar profile={profile} size="lg" className="relative h-28 w-28 text-4xl ring-4 ring-brand/50" />
+            <Avatar profile={profile} size="lg" className="relative !h-20 !w-20 !text-3xl" />
           ) : (
-            <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-brand text-4xl font-bold text-white ring-4 ring-brand/50">
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-brand text-3xl font-bold text-white">
               {callerName.charAt(0).toUpperCase()}
             </div>
           )}
         </div>
-        <h2 className="text-2xl font-bold text-text-normal">{callerName}</h2>
-        <p className="mt-2 text-text-muted">is calling you...</p>
-        <div className="mt-10 flex gap-6">
-          <button type="button" onClick={onReject} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white shadow-lg transition-transform hover:scale-105" aria-label="Decline">
-            <IconPhoneOff size={24} />
-          </button>
-          <button type="button" onClick={onAccept} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white shadow-lg transition-transform hover:scale-105" aria-label="Accept">
-            <IconPhone size={24} />
-          </button>
+        <h2 className="max-w-full truncate text-[20px] font-semibold leading-6 text-header-primary">{callerName}</h2>
+        <p className="mt-1 text-[14px] text-header-secondary">Incoming Call…</p>
+        <div className="mt-8 flex gap-12">
+          <Tooltip label="Decline" side="top">
+            <button type="button" onClick={onReject} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white transition-colors hover:bg-button-danger-hover" aria-label="Decline">
+              <IconPhoneOff size={24} />
+            </button>
+          </Tooltip>
+          <Tooltip label="Accept" side="top">
+            <button type="button" onClick={onAccept} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white transition-colors hover:bg-button-green" aria-label="Accept">
+              <IconPhone size={24} />
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>
@@ -117,15 +151,58 @@ export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
   groupName: string; onJoin: () => void; onDismiss: () => void;
 }) {
   return (
-    <div className="call-enter fixed bottom-4 left-4 right-4 z-[100] rounded-xl border border-status-online/40 bg-bg-secondary p-4 shadow-2xl sm:left-auto sm:w-80">
-      <p className="text-xs font-bold uppercase text-status-online">Group call</p>
-      <p className="mt-1 font-semibold text-text-normal">{groupName}</p>
-      <p className="text-sm text-text-muted">Someone started a call in this group</p>
+    <div className="call-enter fixed bottom-4 left-4 right-4 z-[100] rounded-lg bg-bg-floating p-4 shadow-[var(--elevation-high)] sm:left-auto sm:w-80">
+      <p className="text-[12px] font-bold uppercase leading-4 text-status-online">Incoming Group Call</p>
+      <p className="mt-1 text-[16px] font-semibold text-header-primary">{groupName}</p>
+      <p className="text-[14px] text-header-secondary">Someone started a call in this group</p>
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onJoin} className="flex-1 rounded bg-status-online py-2 text-sm font-semibold text-white">Join</button>
-        <button type="button" onClick={onDismiss} className="rounded bg-interactive-hover px-4 py-2 text-sm">Dismiss</button>
+        <button type="button" onClick={onJoin} className="h-[38px] flex-1 rounded-[3px] bg-button-green text-[14px] font-medium text-white hover:bg-button-green-hover">Join Call</button>
+        <button type="button" onClick={onDismiss} className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">Ignore</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The small connection line used by every voice surface. `connected` must
+ * come from the peer connection, not from `joined`: joining only means the
+ * microphone is live, and on a slow ICE path the first words arrive seconds
+ * later. Until then this says "Connecting…" rather than "Voice Connected".
+ */
+export function VoiceStatus({
+  connected,
+  elapsed = null,
+  label = "Voice Connected",
+  className = "",
+}: {
+  connected: boolean;
+  elapsed?: number | null;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={`inline-flex items-center gap-1.5 text-[12px] font-medium leading-4 ${
+        connected ? "text-status-online" : "text-header-secondary"
+      } ${className}`}
+    >
+      <span
+        aria-hidden
+        className={`h-2 w-2 shrink-0 rounded-full ${
+          connected ? "bg-status-online" : "bg-status-idle animate-pulse"
+        }`}
+      />
+      {connected ? (
+        <span className="truncate">
+          {label}
+          {elapsed !== null && elapsed >= 0 ? ` · ${formatElapsed(elapsed)}` : ""}
+        </span>
+      ) : (
+        <span className="truncate">Connecting…</span>
+      )}
+    </span>
   );
 }
 
@@ -142,6 +219,7 @@ interface CallPanelProps {
   title: string;
   subtitle: string;
   phase: "outgoing" | "active";
+  connected?: boolean;
   peer?: Profile;
   selfProfile?: Profile | null;
   localStream?: MediaStream | null;
@@ -164,7 +242,7 @@ interface CallPanelProps {
 }
 
 export function CallPanel({
-  title, subtitle, phase, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen, remoteScreenAudio,
+  title, subtitle, phase, connected = false, peer, selfProfile, localStream, remoteStream, localScreen, remoteScreen, remoteScreenAudio,
   connectedAt, micMuted, deafened, cameraEnabled, screenShareEnabled,
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd, onOpenSettings,
@@ -186,12 +264,19 @@ export function CallPanel({
 
   if (calling) {
     return (
-      <div className="call-enter flex shrink-0 flex-col items-center justify-center bg-black py-10">
-        <p className="mb-6 text-xs font-bold uppercase tracking-widest text-white/30">Calling</p>
+      <div className="call-enter flex shrink-0 flex-col bg-bg-primary">
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-divider px-4">
+          <span className="truncate text-[14px] font-semibold text-header-primary">{title}</span>
+          <span className="ml-auto flex items-center gap-1.5 text-[12px] font-medium leading-4 text-header-secondary">
+            <span aria-hidden className="h-2 w-2 rounded-full bg-status-idle animate-pulse" />
+            Calling…
+          </span>
+        </div>
+
         {/* Was h-44 (176px) for two 16:9 tiles side by side, which is the
             squashed strip in the screenshot. Sized to the viewport now. */}
         <div
-          className="flex w-full max-w-4xl shrink-0 flex-col px-6 py-3"
+          className="mx-auto flex w-full max-w-4xl shrink-0 flex-col px-6 py-3"
           style={{ height: "min(42vh, 380px)" }}
         >
           <CallStage
@@ -203,60 +288,61 @@ export function CallPanel({
             ]}
           />
         </div>
-        <p className="mb-6 text-lg font-semibold text-white">{title}</p>
-        <p className="mb-8 text-sm text-white/40">{subtitle || "Ringing..."}</p>
-        <CallControls
-          micMuted={micMuted} deafened={deafened}
-          cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
-          onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
-          onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
-          onEnd={onEnd} onOpenSettings={onOpenSettings}
-        />
+        <p className="mb-8 text-center text-[14px] text-header-secondary">{subtitle || "Ringing…"}</p>
+        <div className="flex justify-center pb-6">
+          <CallControls
+            micMuted={micMuted} deafened={deafened}
+            cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+            onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+            onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+            onEnd={onEnd} onOpenSettings={onOpenSettings}
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className="call-enter flex shrink-0 flex-col overflow-hidden bg-black"
+      className="call-enter flex shrink-0 flex-col overflow-hidden bg-bg-primary"
       style={{ height: focused ? Math.max(callHeight, Math.round(window.innerHeight * 0.8)) : callHeight }}
     >
-     <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
-      <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/30">
-        Voice Connected
-      </p>
-      <p className="text-sm text-white/50">
-        {elapsed > 0 ? formatElapsed(elapsed) : subtitle}
-      </p>
-
-      {}
-      <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-3xl"} flex-1 flex-col py-3`}>
-        <CallStage
-          deafened={deafened}
-          onFocusChange={setFocused}
-          screens={[
-            ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
-            ...(remoteScreen && peer
-              ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
-              : []),
-          ]}
-          members={[
-            ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
-            ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
-          ]}
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-divider px-4">
+        <span className="truncate text-[14px] font-semibold text-header-primary">{title}</span>
+        <VoiceStatus
+          className="ml-auto"
+          connected={connected}
+          elapsed={connected ? elapsed : null}
         />
       </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-3">
+        <div className={`flex min-h-0 w-full ${focused ? "max-w-none" : "max-w-3xl"} flex-1 flex-col py-3`}>
+          <CallStage
+            deafened={deafened}
+            onFocusChange={setFocused}
+            screens={[
+              ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
+              ...(remoteScreen && peer
+                ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
+                : []),
+            ]}
+            members={[
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
+            ]}
+          />
+        </div>
 
-      <div className="shrink-0 pb-3 pt-1">
-        <CallControls
-          micMuted={micMuted} deafened={deafened}
-          cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
-          onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
-          onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
-          onEnd={onEnd} onOpenSettings={onOpenSettings}
-        />
+        <div className="shrink-0 pb-6 pt-2">
+          <CallControls
+            micMuted={micMuted} deafened={deafened}
+            cameraEnabled={cameraEnabled} screenShareEnabled={screenShareEnabled}
+            onToggleMic={onToggleMic} onToggleDeafen={onToggleDeafen}
+            onToggleCamera={onToggleCamera} onToggleScreenShare={onToggleScreenShare}
+            onEnd={onEnd} onOpenSettings={onOpenSettings}
+          />
+        </div>
       </div>
-     </div>
       <CallResizeHandle height={callHeight} onResize={setCallHeight} />
     </div>
   );

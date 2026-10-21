@@ -43,7 +43,7 @@ export function UnderlineTabs<T extends string>({
   };
 
   return (
-    <div role="tablist" className={`flex items-end gap-6 border-b border-divider ${className}`}>
+    <div role="tablist" className={`flex items-end gap-4 overflow-x-auto border-b border-bg-secondary sm:gap-6 ${className}`}>
       {tabs.map((t, i) => {
         const active = t.id === value;
         return (
@@ -70,7 +70,7 @@ export function UnderlineTabs<T extends string>({
             }}
             className={`relative -mb-px whitespace-nowrap border-b-2 pb-2.5 pt-1 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               active
-                ? "border-text-normal text-text-normal"
+                ? "border-brand text-header-primary"
                 : "border-transparent text-text-muted hover:text-text-normal"
             }`}
           >

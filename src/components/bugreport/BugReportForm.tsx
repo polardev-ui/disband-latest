@@ -121,7 +121,7 @@ export function BugReportForm() {
 
   if (done) {
     return (
-      <div className="mx-auto max-w-2xl rounded-2xl border border-[#23a55a]/30 bg-[#2b2d31] p-8 text-center">
+      <div className="mx-auto max-w-2xl rounded-[8px] border border-[#23a55a]/30 bg-[#2b2d31] p-8 text-center">
         <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#23a55a]/15 text-[#23a55a]">
           <IconBounty size={32} />
         </span>
@@ -129,7 +129,7 @@ export function BugReportForm() {
         <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#b5bac1]">
           Thanks for helping make Disband better. Our team has been emailed the details.
           If we fix your bug, your account gets the{" "}
-          <span className="font-semibold text-[#43b581]">Bug Bounty Hunter</span> badge.
+          <span className="font-semibold text-[#23a55a]">Bug Bounty Hunter</span> badge.
         </p>
         <button
           type="button"
@@ -155,12 +155,12 @@ export function BugReportForm() {
 
   return (
     <form onSubmit={(e) => void submit(e)} className="mx-auto max-w-2xl space-y-5">
-      <div className="flex items-start gap-3 rounded-2xl border border-[#43b581]/25 bg-[#43b581]/[0.07] p-4">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#43b581]/15 text-[#43b581]">
+      <div className="flex items-start gap-3 rounded-[8px] border border-[#23a55a]/25 bg-[#23a55a]/[0.07] p-4">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#23a55a]/15 text-[#23a55a]">
           <IconBounty size={20} />
         </span>
         <div>
-          <p className="text-[14px] font-semibold text-[#43b581]">Bug Bounty</p>
+          <p className="text-[14px] font-semibold text-[#23a55a]">Bug Bounty</p>
           <p className="mt-0.5 text-[13px] leading-relaxed text-[#b5bac1]">
             Find a bug, tell us how to reproduce it, and if we fix it you&apos;ll earn the
             Bug Bounty Hunter badge on your profile. Reports go straight to{" "}
@@ -245,7 +245,7 @@ export function BugReportForm() {
                 {a.error ? (
                   <span className="shrink-0 text-[12px] text-[#f23f43]">{a.error}</span>
                 ) : a.url ? (
-                  <span className="shrink-0 text-[12px] text-[#43b581]">Uploaded ✓</span>
+                  <span className="shrink-0 text-[12px] text-[#23a55a]">Uploaded ✓</span>
                 ) : (
                   <span className="shrink-0 text-[12px] text-[#949ba4]">Uploading…</span>
                 )}

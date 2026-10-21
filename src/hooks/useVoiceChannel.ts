@@ -42,6 +42,11 @@ export function useVoiceChannel(
   const [participants, setParticipants] = useState<(VoicePresence & { profile?: Profile })[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  // Peers whose ICE/DTLS handshake has finished. `joined` only means our mic
+  // is live and presence is written; audio cannot flow until at least one of
+  // these exists. The call UI uses this to show "Connecting…" honestly.
+  const [connectedPeerIds, setConnectedPeerIds] = useState<Set<string>>(new Set());
+  const connectedSoundRef = useRef(false);
 
   const [remoteScreens, setRemoteScreens] = useState<Map<string, MediaStream>>(new Map());
   // Screen-share sound per sharer, apart from their mic so it can be muted alone.
@@ -104,7 +109,7 @@ export function useVoiceChannel(
   }, [participants, joined, userId]);
 
   const loadPresence = useCallback(async () => {
-    if (!channelId) return;
+    if (!channelId) return [];
     const supabase = getSupabaseClient();
     const { data: rows } = await supabase
       .from("voice_presence_live")
@@ -112,10 +117,12 @@ export function useVoiceChannel(
       .eq("channel_id", channelId);
     if (!rows?.length) {
       setParticipants([]);
-      return;
+      return [];
     }
     const map = await fetchProfilesByIds(supabase, rows.map((r) => r.user_id));
-    setParticipants(rows.map((r) => ({ ...r, profile: map.get(r.user_id) })));
+    const loaded = rows.map((r) => ({ ...r, profile: map.get(r.user_id) }));
+    setParticipants(loaded);
+    return loaded;
   }, [channelId]);
 
   const createPeer = useCallback(
@@ -189,6 +196,28 @@ export function useVoiceChannel(
               to: remoteId,
               candidate: ev.candidate.toJSON(),
             } satisfies SignalPayload,
+          });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          setConnectedPeerIds((prev) => {
+            if (prev.has(remoteId)) return prev;
+            const next = new Set(prev);
+            next.add(remoteId);
+            return next;
+          });
+          if (!connectedSoundRef.current) {
+            connectedSoundRef.current = true;
+            playCallConnected();
+          }
+        } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+          setConnectedPeerIds((prev) => {
+            if (!prev.has(remoteId)) return prev;
+            const next = new Set(prev);
+            next.delete(remoteId);
+            return next;
           });
         }
       };
@@ -286,6 +315,12 @@ export function useVoiceChannel(
         setRemoteStreams(drop);
         setRemoteScreens(drop);
         setRemoteScreenAudio(drop);
+        setConnectedPeerIds((prev) => {
+          if (!prev.has(payload.from)) return prev;
+          const next = new Set(prev);
+          next.delete(payload.from);
+          return next;
+        });
       }
     },
     [createPeer, userId],
@@ -300,6 +335,8 @@ export function useVoiceChannel(
     setRemoteStreams(new Map());
     setRemoteScreens(new Map());
     setRemoteScreenAudio(new Map());
+    setConnectedPeerIds(new Set());
+    connectedSoundRef.current = false;
     audioRefsRef.current.clear();
 
     if (signalRef.current) {
@@ -356,11 +393,14 @@ export function useVoiceChannel(
       }).subscribe();
 
       signalRef.current = ch;
+      const loaded = await loadPresence();
       setJoined(true);
-      playCallConnected();
-      await loadPresence();
 
-      const others = participants.filter((p) => p.user_id !== userId);
+      const others = loaded.filter((p) => p.user_id !== userId);
+      if (others.length === 0) {
+        connectedSoundRef.current = true;
+        playCallConnected();
+      }
       for (const p of others) {
         await createPeer(p.user_id, userId < p.user_id);
       }
@@ -368,7 +408,7 @@ export function useVoiceChannel(
       setError((e as Error).message || "Could not access microphone");
       await cleanup();
     }
-  }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, participants, micMuted, deafened]);
+  }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, micMuted, deafened]);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraTrackRef.current;
@@ -482,6 +522,7 @@ export function useVoiceChannel(
   return {
     joined,
     participants,
+    connectedPeerIds,
     remoteStreams,
     // No sharingIds filter: entries only exist from real LANE_SCREEN ontrack
     // events, so the map is already accurate (see useGroupCallManager).

@@ -5,7 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { apiFetch } from "@/lib/api";
 import { getInviteUrl } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
-import { IconVerified } from "@/components/icons";
+import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { Tooltip } from "./Tooltip";
 
 interface ServerInviteCardProps {
@@ -23,6 +23,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     banner_url: string | null;
     member_count: number;
     verified?: boolean;
+    partner?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -46,6 +47,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           banner_url?: string | null;
           member_count?: number | string;
           verified?: boolean;
+          partner?: boolean;
         };
         if (!cancelled && !res.ok) setError(json?.error ?? "Could not load invite.");
         if (!cancelled && res.ok && json?.id) {
@@ -57,6 +59,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
             banner_url: json.banner_url ?? null,
             member_count: Number(json.member_count ?? 0),
             verified: json.verified ?? false,
+            partner: json.partner ?? false,
           });
         }
       } catch {
@@ -107,12 +110,15 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           <p className="text-xs font-bold uppercase text-text-muted">Space Invite</p>
           {}
           <div className="flex min-w-0 items-center gap-1 font-semibold">
+            {(() => {
+              const kind = serverBadgeFor({ verified: info.verified, partner: info.partner });
+              return kind ? (
+                <Tooltip as="span" label={SERVER_BADGE_LABEL[kind]} side="top">
+                  <ServerBadge kind={kind} size={14} />
+                </Tooltip>
+              ) : null;
+            })()}
             <span className="truncate">{info.name}</span>
-            {info.verified && (
-              <Tooltip as="span" label="This space is officially verified by Disband">
-                <IconVerified size={14} className="shrink-0 text-sky-400" />
-              </Tooltip>
-            )}
           </div>
           {info.description && <p className="truncate text-xs text-text-muted">{info.description}</p>}
           <p className="text-xs text-text-muted">{info.member_count} members</p>

@@ -196,7 +196,7 @@ export function BotsPanel() {
             <button
               type="button"
               onClick={() => setCreatedToken(null)}
-              className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
+              className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
             >
               New bot
             </button>
@@ -205,7 +205,7 @@ export function BotsPanel() {
       >
         {isAnonymous && (
           <div className="border-b border-divider px-4 py-4">
-            <p className="text-[13.5px] leading-relaxed text-text-muted">
+            <p className="text-[14px] leading-relaxed text-text-muted">
               Anonymous accounts can&apos;t create bots. Bots you were invited to can still be managed
               here.
             </p>
@@ -216,26 +216,31 @@ export function BotsPanel() {
             <p className="text-[14px] font-medium text-text-normal">
               {createdToken.name} created — this is your token:
             </p>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-status-dnd">
+            <p className="mt-1 text-[13px] leading-relaxed text-status-dnd">
               Copy it now. It's only shown once and can't be retrieved later.
             </p>
             <div className="mt-3 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[12.5px] text-text-normal">
+              <code className="min-w-0 flex-1 truncate rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal">
                 {createdToken.token}
               </code>
               <button
                 type="button"
                 onClick={() => void copyText(createdToken.token, setTokenCopied)}
-                className="shrink-0 rounded-md border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                className="shrink-0 rounded-[3px] border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
               >
                 {tokenCopied ? "Copied" : "Copy"}
               </button>
             </div>
-            <p className="mt-3 text-[12.5px] leading-relaxed text-text-muted">
+            <p className="mt-3 text-[13px] leading-relaxed text-text-muted">
               Use it to connect the client:{" "}
               <code className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[11.5px]">new Client(&#123; token: "…" &#125;)</code>.
               See the{" "}
-              <a href="/docs/bots" className="text-brand hover:underline">
+              <a
+                href="https://docs.disband.dev/docs/bots/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand hover:underline"
+              >
                 bot docs
               </a>{" "}
               for setup.
@@ -259,14 +264,14 @@ export function BotsPanel() {
                   type="button"
                   onClick={() => void createBot()}
                   disabled={creating}
-                  className="shrink-0 rounded-md bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                  className="shrink-0 rounded-[3px] bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                 >
                   {creating ? "Creating…" : "Create"}
                 </button>
               </div>
             </SettingRow>
             <div className="mt-1">
-              <div className="mb-1.5 text-[12.5px] text-text-muted">Scopes</div>
+              <div className="mb-1.5 text-[13px] text-text-muted">Scopes</div>
               <div className="flex flex-wrap gap-2">
                 {ALL_SCOPES.map((scope) => (
                   <button
@@ -274,7 +279,7 @@ export function BotsPanel() {
                     type="button"
                     aria-pressed={newScopes.includes(scope)}
                     onClick={() => toggleNewScope(scope)}
-                    className="rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+                    className="rounded-[3px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
                     style={
                       newScopes.includes(scope)
                         ? { borderColor: "var(--brand, #5865f2)", color: "var(--brand, #5865f2)" }
@@ -312,20 +317,20 @@ export function BotsPanel() {
                     <button
                       type="button"
                       onClick={() => openInvite(bot)}
-                      className="rounded-md border border-divider px-2.5 py-1 text-[12.5px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                      className="rounded-[3px] border border-divider px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
                       Invite
                     </button>
                     <button
                       type="button"
                       onClick={() => void revokeBot(bot)}
-                      className="rounded-md border border-status-dnd/40 px-2.5 py-1 text-[12.5px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
+                      className="rounded-[3px] border border-status-dnd/40 px-2.5 py-1 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
                     >
                       Revoke
                     </button>
                   </div>
                 </div>
-                <p className="mt-1 text-[12.5px] text-text-muted">
+                <p className="mt-1 text-[13px] text-text-muted">
                   {bot.scopes.length > 0 ? bot.scopes.join(" · ") : "No scopes"} · created {fmtDate(bot.created_at)}
                 </p>
               </div>
@@ -349,7 +354,7 @@ export function BotsPanel() {
       </SettingsSection>
 
       {profile?.is_bot && (
-        <p className="text-[12.5px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
           You're signed in as a bot account, so bot management is disabled here.
         </p>
       )}
@@ -362,13 +367,13 @@ export function BotsPanel() {
             className={`absolute inset-0 bg-overlay-scrim overlay-fade${inviteExiting ? " overlay-fade-out" : ""}`}
             onClick={() => setInvitingBot(null)}
           />
-          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-xl bg-bg-primary p-5 shadow-2xl`}>
+          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-lg bg-bg-primary p-5 shadow-[var(--elevation-high)]`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[16px] font-semibold text-text-normal">
                   Invite {shownInvitingBot.name}
                 </h3>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
+                <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
                   Generate a link and send it to the space's owner. They decide whether the bot
                   joins.
                 </p>
@@ -385,7 +390,7 @@ export function BotsPanel() {
 
             <div className="mt-4 space-y-4">
               <div>
-                <label className="mb-1.5 block text-[12.5px] font-medium text-text-normal" htmlFor="bot-invite-space">
+                <label className="mb-1.5 block text-[13px] font-medium text-text-normal" htmlFor="bot-invite-space">
                   Space
                 </label>
                 <select
@@ -402,7 +407,7 @@ export function BotsPanel() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[12.5px] font-medium text-text-normal">
+                <label className="mb-1.5 block text-[13px] font-medium text-text-normal">
                   Scopes the owner will be asked to grant
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -416,7 +421,7 @@ export function BotsPanel() {
                           prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
                         )
                       }
-                      className="rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+                      className="rounded-[3px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
                       style={
                         inviteScopes.includes(scope)
                           ? { borderColor: "var(--brand, #5865f2)", color: "var(--brand, #5865f2)" }
@@ -436,17 +441,17 @@ export function BotsPanel() {
 
               {inviteUrl && (
                 <div>
-                  <label className="mb-1.5 block text-[12.5px] font-medium text-text-normal">
+                  <label className="mb-1.5 block text-[13px] font-medium text-text-normal">
                     Invite link
                   </label>
                   <div className="flex items-center gap-2">
-                    <code className="min-w-0 flex-1 truncate rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-[12px] text-text-normal">
+                    <code className="min-w-0 flex-1 truncate rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-[12px] text-text-normal">
                       {inviteUrl}
                     </code>
                     <button
                       type="button"
                       onClick={() => void copyText(inviteUrl, setInviteCopied)}
-                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-divider px-3 py-2 text-[12.5px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                      className="flex shrink-0 items-center gap-1.5 rounded-[3px] border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
                       <IconCopy size={14} />
                       {inviteCopied ? "Copied" : "Copy"}
@@ -458,13 +463,13 @@ export function BotsPanel() {
                 </div>
               )}
 
-              {inviteError && <p className="text-[12.5px] text-status-dnd">{inviteError}</p>}
+              {inviteError && <p className="text-[13px] text-status-dnd">{inviteError}</p>}
 
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setInvitingBot(null)}
-                  className="rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                  className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                 >
                   Close
                 </button>
@@ -473,7 +478,7 @@ export function BotsPanel() {
                     type="button"
                     onClick={() => void generateInvite()}
                     disabled={inviteLoading}
-                    className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                    className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                   >
                     {inviteLoading ? "Generating…" : "Generate invite link"}
                   </button>

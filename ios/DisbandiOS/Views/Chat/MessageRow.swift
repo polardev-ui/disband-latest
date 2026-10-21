@@ -87,7 +87,7 @@ struct MessageRow: View {
                  the press fails, so a scroll or a reply swipe can never raise
                  it.
                  */
-                .onLongPressGesture(minimumDuration: 2.3, maximumDistance: 10) {
+                .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10) {
                     onHoldReactStarted(selfFrame)
                 }
                 .background(

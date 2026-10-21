@@ -103,7 +103,7 @@ function ReactionHoverCard({
       <button
         type="button"
         onClick={onOpenList}
-        className="flex w-full items-center gap-2.5 rounded-lg bg-overlay-surface px-3 py-2 text-left shadow-xl ring-1 ring-divider transition-colors hover:bg-interactive-hover"
+        className="flex w-full items-center gap-2.5 rounded-lg bg-bg-floating px-3 py-2 text-left shadow-[var(--elevation-high)] ring-1 ring-divider transition-colors hover:bg-interactive-hover"
       >
         <EmojiImg emoji={summary.emoji} size="1.75em" />
         <span className="min-w-0">
@@ -149,7 +149,7 @@ function ReactionListDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Reactions"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-xl bg-bg-secondary shadow-2xl ring-1 ring-divider`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
       >
         {}
         <div className="flex w-[104px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-divider p-2">
@@ -165,7 +165,7 @@ function ReactionListDialog({
               }`}
             >
               <EmojiImg emoji={r.emoji} size="1.35em" />
-              <span className="font-semibold tabular-nums">{r.count}</span>
+              <span className="min-w-[9px] text-center font-semibold tabular-nums">{r.count}</span>
             </button>
           ))}
         </div>
@@ -244,7 +244,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
   if (reactions.length === 0 && !onOpenPicker) return null;
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1">
+    <div className="mt-0.5 flex flex-wrap items-center gap-1 pt-0.5">
       {reactions.map((r) => (
         <button
           key={r.emoji}
@@ -255,10 +255,10 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
             setHovered({ emoji: r.emoji, el: e.currentTarget });
           }}
           onMouseLeave={scheduleClose}
-          className={`inline-flex h-[26px] items-center gap-1.5 rounded-lg border px-2 text-[13px] transition-all active:scale-95 ${
+          className={`reaction-pill inline-flex h-6 items-center gap-1.5 rounded-[8px] border px-1.5 text-[14px] transition-colors ${
             r.reacted
-              ? "border-brand/50 bg-brand/20 text-text-normal"
-              : "border-divider bg-bg-secondary text-text-muted hover:border-brand/30 hover:bg-interactive-hover"
+              ? "border-brand bg-brand/15 text-[#c9cdfb]"
+              : "border-transparent bg-bg-secondary text-interactive-normal hover:border-[#4e5058]"
           }`}
         >
           <EmojiImg emoji={r.emoji} />
@@ -269,7 +269,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
         <button
           type="button"
           onClick={onOpenPicker}
-          className="inline-flex h-[26px] w-[30px] items-center justify-center rounded-lg border border-divider bg-bg-secondary text-base text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+          className="inline-flex h-6 w-8 items-center justify-center rounded-[8px] border border-transparent bg-bg-secondary text-base text-interactive-normal opacity-0 transition-opacity hover:border-[#4e5058] group-hover:opacity-100"
           aria-label="Add reaction"
         >
           +
@@ -326,7 +326,7 @@ export function ReactionPicker({
     <>
       <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
 
-      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-2xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl`}>
+      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-[var(--elevation-high)] sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg`}>
         <div className="border-b border-divider px-4 py-3">
           <input
             type="text"

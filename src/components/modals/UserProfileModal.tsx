@@ -3,7 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconMessage, IconMore, IconPhone, IconSettings } from "@/components/icons";
@@ -12,11 +12,12 @@ import { RoleIcon } from "@/components/ui/RoleIcon";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { getAccentBackground, roleIsGradientAnimated, sanitizeHex, usesCustomAccent } from "@/lib/profileColor";
+import { getAccentBackground, getProfileCardTheme, roleIsGradientAnimated, usesCustomAccent } from "@/lib/profileColor";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor, activeStatusNote, statusExpiryLabel, listeningFor } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { StatusDot } from "@/components/ui/StatusDot";
 import { ListeningCard } from "@/components/ui/ListeningCard";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { USER_NOTE_MAX, useUserNote } from "@/hooks/useUserNote";
@@ -26,13 +27,12 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 /*
  The profile card.
 
- It used to be painted edge to edge in the user's accent colour (a flat grey
- for anyone who hadn't picked one) with the text colour flipped to match —
- Discord's profile-theme look, and the reason every card read as a different
- app. The card is now always the app's own dark (or light) surface, so type,
- tabs and fields behave the same on every profile. The accent still belongs to
- the person: it fills the banner when there's no image, tints the top of the
- card, and edges the border.
+ A profile with its own colours is painted in a Discord-style theme: the two
+ accents are mixed into a dark base and blended through a soft diagonal
+ gradient, so the banner and body read as one surface without losing white
+ text. Profiles that haven't picked colours keep the app's ordinary card
+ surface. The accent also fills the banner when there's no image and colours
+ the primary "Edit profile" action.
 */
 
 type ProfileTab = "about" | "spaces" | "friends";
@@ -47,6 +47,7 @@ interface UserProfileModalProps {
   onDeclineFriend?: () => void;
   onVoiceCall?: () => void;
   onOpenSettings?: () => void;
+  onReport?: () => void;
   onRemoveFriend?: () => void;
   onBlock?: () => void;
   onUnblock?: () => void;
@@ -64,17 +65,17 @@ interface UserProfileModalProps {
   onSetRoles?: (roleIds: string[]) => void;
 }
 
+// Classic profile buttons: green "Send Message", blurple, grey; 3px corners.
 const BTN_BASE =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] px-3.5 text-[13.5px] font-semibold transition-[background-color,opacity,transform] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
-/** High-contrast neutral: near-white on dark themes, near-black on light ones. */
-const BTN_SOLID = `${BTN_BASE} bg-text-normal text-bg-primary hover:opacity-90`;
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-[3px] px-4 text-[14px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+const BTN_SOLID = `${BTN_BASE} bg-button-green text-white hover:bg-button-green-hover`;
 const BTN_BRAND = `${BTN_BASE} bg-brand text-white hover:bg-brand-hover`;
-const BTN_QUIET = `${BTN_BASE} border border-divider bg-bg-accent text-text-normal hover:bg-interactive-hover`;
+const BTN_QUIET = `${BTN_BASE} bg-button-secondary text-white hover:bg-button-secondary-hover`;
 const BTN_ICON =
-  "inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-divider bg-bg-accent text-text-normal transition-colors hover:bg-interactive-hover";
+  "inline-flex h-8 w-8 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover";
 
-function relativeAge(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+function relativeAge(timestamp: number): string {
+  const days = Math.floor((Date.now() - timestamp) / 86_400_000);
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
   if (days < 1) return rtf.format(0, "day");
   if (days < 30) return rtf.format(-days, "day");
@@ -82,10 +83,29 @@ function relativeAge(iso: string): string {
   return rtf.format(-Math.floor(days / 365), "year");
 }
 
+/**
+ * Profiles can arrive from partial sources (the Tether info endpoint, cached
+ * payloads, older rows) without a usable created_at. Treat those as unknown
+ * rather than passing NaN to Intl.RelativeTimeFormat, which throws.
+ */
+function memberSince(iso: string | null | undefined): { date: string; age: string } | null {
+  if (!iso) return null;
+  const timestamp = new Date(iso).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return {
+    date: new Date(timestamp).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    age: relativeAge(timestamp),
+  };
+}
+
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="mt-5 first:mt-0">
-      <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">{label}</h3>
+      <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{label}</h3>
       {children}
     </section>
   );
@@ -95,16 +115,22 @@ function ProfileBanner({ profile }: { profile: Profile }) {
   const [failed, setFailed] = useState(false);
   const url = safeImageUrl(profile.banner_url);
   const show = url && !failed;
+  const theme = getProfileCardTheme(profile);
   // No image and no accent of their own: a quiet brand wash instead of the
   // old flat grey, so an unconfigured profile still looks finished.
   const background = usesCustomAccent(profile)
     ? getAccentBackground(profile)
-    : "linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 52%, var(--color-bg-tertiary)) 0%, color-mix(in srgb, var(--color-brand) 14%, var(--color-bg-tertiary)) 100%)";
+    : profile.accent_color ?? "var(--brand)";
   return (
-    <div className="h-[128px] w-full overflow-hidden" style={{ background }}>
+    <div className="relative h-[180px] w-full overflow-hidden" style={{ background }}>
       {show && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url!} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url!} alt="" className="absolute inset-0 h-full w-full object-cover" onError={() => setFailed(true)} />
+          {theme && (
+            <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />
+          )}
+        </>
       )}
     </div>
   );
@@ -137,7 +163,7 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-xl border border-divider bg-overlay-surface p-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-[4px] bg-bg-floating p-1 shadow-[var(--elevation-high)]"
         >
           {items.map((item) => (
             <button
@@ -148,7 +174,7 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
                 setOpen(false);
                 item.onClick();
               }}
-              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-[13.5px] font-medium transition-colors ${
+              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-[14px] font-medium transition-colors ${
                 item.danger
                   ? "text-status-dnd hover:bg-status-dnd/10"
                   : "text-text-normal hover:bg-interactive-hover"
@@ -177,6 +203,7 @@ export function UserProfileModal({
   onDeclineFriend,
   onVoiceCall,
   onOpenSettings,
+  onReport,
   onRemoveFriend,
   onBlock,
   onUnblock,
@@ -223,11 +250,13 @@ export function UserProfileModal({
       return;
     }
     let live = true;
+    setMutualServerIds([]);
+    setMutualFriendIds([]);
     void loadMutuals(profile.id).then((m) => {
       if (!live) return;
       setMutualServerIds(m.serverIds);
       setMutualFriendIds(m.friendIds);
-    });
+    }).catch(() => undefined);
     return () => {
       live = false;
     };
@@ -239,7 +268,8 @@ export function UserProfileModal({
   const title = profile.display_name?.trim() || displayName(profile);
   const live = presenceStatusFor(profile, presenceMap);
   const statusNote = activeStatusNote(profile);
-  const listening = listeningFor(profile, listeningMap);
+  const listening = live === "offline" ? null : listeningFor(profile, listeningMap);
+  const joined = memberSince(profile.created_at);
 
   // Replying to a status sends a DM quoting it, then jumps there so the
   // reply lands in front of both people. Same open-then-send beat as
@@ -263,6 +293,7 @@ export function UserProfileModal({
     }
   }
   const isBot = !!profile.is_bot;
+  const theme = getProfileCardTheme(profile);
 
   const mutualServers = mutualServerIds
     .map((id) => servers.find((s) => s.id === id))
@@ -286,19 +317,15 @@ export function UserProfileModal({
     onSetRoles(next.filter((id) => !defaultIds.has(id)));
   };
 
-  // The person's accent tints the top of the card and its edge.
-  const accent = usesCustomAccent(profile) ? sanitizeHex(profile.accent_color) : null;
-  const cardStyle: CSSProperties = accent
-    ? {
-        background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, var(--color-overlay-panel)) 0px, var(--color-overlay-panel) 300px)`,
-        borderColor: `color-mix(in srgb, ${accent} 30%, var(--color-divider))`,
-      }
-    : {};
-
   const overflow: { label: string; onClick: () => void; danger?: boolean }[] = [];
-  if (!isSelf && !isBot && !isBlocked) {
-    if (friend && onRemoveFriend) overflow.push({ label: "Remove friend", onClick: onRemoveFriend });
-    if (onBlock) overflow.push({ label: "Block", onClick: onBlock, danger: true });
+  if (!isSelf && !isBot) {
+    if (!isBlocked) {
+      if (friend && onRemoveFriend) overflow.push({ label: "Remove friend", onClick: onRemoveFriend });
+      if (onBlock) overflow.push({ label: "Block", onClick: onBlock, danger: true });
+    }
+    // Blocking someone is not a substitute for reporting them. Keep the
+    // report action available after a block, when the evidence matters most.
+    if (onReport) overflow.push({ label: "Report profile", onClick: onReport, danger: true });
   }
 
   let actions: ReactNode = null;
@@ -310,7 +337,8 @@ export function UserProfileModal({
           onClose();
           onOpenSettings();
         }}
-        className={BTN_QUIET}
+        className={`${BTN_BASE} ${theme ? "transition-[filter] hover:brightness-110" : "bg-button-secondary text-white hover:bg-button-secondary-hover"}`}
+        style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
       >
         <IconSettings size={15} /> Edit profile
       </button>
@@ -326,7 +354,7 @@ export function UserProfileModal({
       <>
         {friend && onMessage && (
           <button type="button" onClick={onMessage} className={BTN_SOLID}>
-            <IconMessage size={15} /> Message
+            <IconMessage size={15} /> Send Message
           </button>
         )}
         {friend && onVoiceCall && (
@@ -360,22 +388,22 @@ export function UserProfileModal({
   }
 
   const tabs = isSelf
-    ? [{ id: "about" as const, label: "About" }]
+    ? [{ id: "about" as const, label: "User Info" }]
     : [
-        { id: "about" as const, label: "About" },
-        { id: "spaces" as const, label: "Mutual Spaces", count: mutualServers.length },
+        { id: "about" as const, label: "User Info" },
+        { id: "spaces" as const, label: "Mutual Servers", count: mutualServers.length },
         { id: "friends" as const, label: "Mutual Friends", count: mutualFriends.length },
       ];
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-      <button type="button" className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label="Close" />
+      <button type="button" className={`absolute inset-0 bg-overlay-scrim-strong overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label="Close" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} relative max-h-[calc(100vh-3rem)] w-full max-w-[440px] overflow-y-auto rounded-[22px] border border-divider bg-overlay-panel text-text-normal shadow-[0_32px_80px_-24px_rgba(0,0,0,0.8)]`}
-        style={cardStyle}
+        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100vh-3rem)] w-full max-w-[600px] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[var(--elevation-high)]`}
+        style={theme?.style}
       >
         {/* Artwork sits above the banner and below the readable profile content. */}
         <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
@@ -384,7 +412,7 @@ export function UserProfileModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-[3px] bg-black/60 text-white transition-colors hover:bg-black/75"
           aria-label="Close profile"
         >
           <IconClose size={16} />
@@ -392,18 +420,24 @@ export function UserProfileModal({
 
         <div className="relative z-10 px-6 pb-6">
           {/* Avatar overlaps the banner; actions sit level with its lower half. */}
-          <div className="flex items-end justify-between gap-3">
-            <div className="relative -mt-[52px] shrink-0 rounded-full bg-overlay-panel p-[5px]" style={accent ? { background: "inherit" } : undefined}>
-              <Avatar profile={profile} size="xl" />
-              <span className="absolute bottom-1 right-1 rounded-full bg-overlay-panel p-[3px]">
-                <StatusIndicator status={live} size="md" />
-              </span>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div
+              className={`relative -mt-[68px] shrink-0 rounded-full p-[7px] ${theme ? "" : "bg-bg-secondary-alt"}`}
+              style={theme ? { backgroundColor: theme.avatarRing } : undefined}
+            >
+              <Avatar profile={profile} size="xl" className="!h-[120px] !w-[120px] !text-4xl" />
+              <StatusDot
+                status={live}
+                size={22}
+                ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
+                className="absolute bottom-1.5 right-1.5"
+              />
             </div>
             {actions && <div className="flex flex-wrap items-center justify-end gap-2 pb-1">{actions}</div>}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            <h2 className="min-w-0 break-words text-[24px] font-semibold leading-tight tracking-[-0.02em]">
+            <h2 className="min-w-0 break-words text-[24px] font-semibold leading-[30px] text-header-primary">
               <DisplayName profile={{ ...profile, display_name: title }} />
             </h2>
             <UserBadges userId={profile.id} plan={plan ?? "free"} size={18} variant="full" />
@@ -434,9 +468,9 @@ export function UserProfileModal({
             <div className="group/status relative mt-3.5 w-fit max-w-full">
               <span
                 aria-hidden
-                className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-divider bg-bg-accent"
+                className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 bg-bg-floating"
               />
-              <div className="rounded-2xl border border-divider bg-bg-accent px-3.5 py-2">
+              <div className="rounded-lg bg-bg-floating px-3.5 py-2">
                 {!isSelf && (
                   <button
                     type="button"
@@ -525,16 +559,14 @@ export function UserProfileModal({
                   </Section>
                 )}
 
-                <Section label="Disband member since">
-                  <p className="text-[14px]">
-                    {new Date(profile.created_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                    <span className="text-text-muted"> · {relativeAge(profile.created_at)}</span>
-                  </p>
-                </Section>
+                {joined && (
+                  <Section label="Disband member since">
+                    <p className="text-[14px]">
+                      {joined.date}
+                      <span className="text-text-muted"> · {joined.age}</span>
+                    </p>
+                  </Section>
+                )}
 
                 {isServerMember && (
                   <Section label="Roles">
@@ -545,7 +577,7 @@ export function UserProfileModal({
                         {memberRoles.map((role) => (
                           <span
                             key={role.id}
-                            className={`inline-flex items-center gap-1.5 rounded-md border border-divider px-2 py-0.5 text-[12.5px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                            className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && !isSelf && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
                             style={
                               role.gradient_to?.trim()
                                 ? {
@@ -558,9 +590,22 @@ export function UserProfileModal({
                             {role.icon && <RoleIcon icon={role.icon} name={role.name} size={14} />}
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
                             {role.name}
+                            {canManageRoles && !isSelf && onSetRoles && (
+                              <button
+                                type="button"
+                                onClick={() => toggleRole(role.id)}
+                                aria-label={`Remove the ${role.name} role`}
+                                title={`Remove ${role.name}`}
+                                className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                  <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
                           </span>
                         ))}
-                        {memberRoles.length === 0 && (!canManageRoles || isSelf) && (
+                        {memberRoles.length === 0 && (
                           <p className="text-[13px] text-text-muted">No roles assigned.</p>
                         )}
                         {canManageRoles && !isSelf && onSetRoles && (
@@ -582,7 +627,7 @@ export function UserProfileModal({
                       maxLength={USER_NOTE_MAX}
                       placeholder="Click to add a note"
                       aria-label={`Private note about ${title}`}
-                      className="block w-full resize-none rounded-xl border border-divider bg-bg-accent px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
+                      className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
                     />
                   </Section>
                 )}
@@ -597,12 +642,12 @@ export function UserProfileModal({
                   {mutualServers.map((s) => {
                     const icon = safeImageUrl(s.icon_url);
                     return (
-                      <li key={s.id} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                      <li key={s.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
                         {icon ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-xl object-cover" />
+                          <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-[4px] object-cover" />
                         ) : (
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg-accent text-[12px] font-semibold">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-bg-accent text-[12px] font-semibold">
                             {serverInitials(s.name)}
                           </span>
                         )}
@@ -619,11 +664,11 @@ export function UserProfileModal({
               ) : (
                 <ul className="-mx-2 space-y-0.5">
                   {mutualFriends.map((f) => (
-                    <li key={f.id} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                    <li key={f.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
                       <Avatar profile={f} size="sm" className="h-9 w-9" />
                       <span className="min-w-0">
                         <span className="block truncate text-[14px] font-medium">{displayName(f)}</span>
-                        {f.username && <span className="block truncate text-[12.5px] text-text-muted">@{f.username}</span>}
+                        {f.username && <span className="block truncate text-[12px] text-text-muted">@{f.username}</span>}
                       </span>
                     </li>
                   ))}

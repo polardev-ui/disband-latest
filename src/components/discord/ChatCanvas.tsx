@@ -14,12 +14,14 @@ import {
 import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
 import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
+import { ActivityModal } from "./activities/ActivityModal";
 import { ReactionPicker } from "./MessageReactions";
 import { IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
 import { TypingIndicator } from "./TypingIndicator";
 import { useApp } from "@/contexts/AppContext";
-import type { MessageSendOptions, MessageContext, MessageReaction, ReplyPreview } from "@/lib/messages";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { toReplyAuthor, type MessageSendOptions, type MessageContext, type MessageReaction, type ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
 import {
   findNewMessagesDividerId,
@@ -37,17 +39,163 @@ import type { Profile, ServerRole } from "@/lib/supabase/types";
 function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
   return (
     <div
-      className={`${animate ? "divider-in " : ""}relative my-3 flex items-center px-4`}
+      className={`${animate ? "divider-in " : ""}relative mx-4 mb-2 mt-6 flex h-0 items-center border-t border-status-dnd`}
       role="separator"
       aria-label="New messages"
     >
-      <div className="h-px flex-1 bg-brand/60" />
-      <span className="mx-3 shrink-0 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand">
-        New messages
+      <span className="absolute -top-[9px] right-0 rounded-[8px] rounded-l-none bg-status-dnd py-px pl-1 pr-1.5 text-[10px] font-bold uppercase leading-[13px] text-white before:absolute before:-left-[5px] before:top-0 before:h-full before:w-[6px] before:bg-status-dnd before:[clip-path:polygon(100%_0,100%_100%,0_50%)]">
+        New
       </span>
-      <div className="h-px flex-1 bg-brand/60" />
     </div>
   );
+}
+
+/** The "@" that heads a direct message. */
+function AtIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10c1.466 0 2.888-.322 4.229-.957l-.858-1.807A7.9 7.9 0 0 1 12 20c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8v1c0 .692-.313 2-1.5 2-1.396 0-1.494-1.819-1.5-2V8h-2v.025A4.954 4.954 0 0 0 12 7c-2.757 0-5 2.243-5 5s2.243 5 5 5c1.45 0 2.748-.631 3.662-1.621.588.796 1.501 1.621 2.838 1.621 2.273 0 3.5-2.061 3.5-4v-1c0-5.514-4.486-10-10-10Zm0 13c-1.654 0-3-1.346-3-3s1.346-3 3-3 3 1.346 3 3-1.346 3-3 3Z" />
+    </svg>
+  );
+}
+
+/** The date rule between days, centred text on a hairline. */
+function DayDivider({ label }: { label: string }) {
+  return (
+    <div role="separator" aria-label={label} className="relative mx-4 mb-0.5 mt-6 flex h-0 items-center justify-center border-t border-divider">
+      <span className="bg-bg-primary px-1 text-[12px] font-semibold leading-[13px] text-text-muted">{label}</span>
+    </div>
+  );
+}
+
+function dayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+}
+
+const REPLY_AUTHOR_COLUMNS = "id, username, display_name, avatar_url, accent_color, accent_color_2, avatar_crop, equipped_ring_effect";
+const REPLY_TARGET_COLUMNS = `id, author_id, content, attachment_type, author:profiles(${REPLY_AUTHOR_COLUMNS})`;
+
+interface ReplyTargetRow {
+  id: string;
+  author_id: string | null;
+  content: string;
+  attachment_type: ReplyPreview["attachment_type"];
+  author?: Profile | Profile[] | null;
+}
+
+interface NoteReplyTargetRow {
+  id: string;
+  user_id: string;
+  content: string;
+  attachment_type: ReplyPreview["attachment_type"];
+}
+
+function replyTable(context: MessageContext): string {
+  switch (context) {
+    case "channel": return "messages";
+    case "dm": return "dm_messages";
+    case "group": return "group_messages";
+    case "notes": return "notes";
+  }
+}
+
+/**
+ * Loads reply targets that aren't in the rendered message window. Replies used
+ * to point at paginated-away history and render as "deleted"; reply_to_id is
+ * only non-null while the target exists, so those quotes were simply missing
+ * their data. Fetch a compact preview (content plus the author's avatar
+ * fields) and let buildReplyPreviews merge it in.
+ */
+async function fetchReplyPreviews(
+  context: MessageContext,
+  ids: string[],
+  noteAuthor: Profile | null | undefined,
+): Promise<Map<string, ReplyPreview> | null> {
+  if (ids.length === 0) return new Map();
+  const supabase = getSupabaseClient();
+  try {
+    if (context === "notes") {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("id, user_id, content, attachment_type")
+        .in("id", ids);
+      if (error) return null;
+      const out = new Map<string, ReplyPreview>();
+      for (const row of (data ?? []) as NoteReplyTargetRow[]) {
+        out.set(row.id, {
+          id: row.id,
+          author_id: row.user_id,
+          content: row.content,
+          attachment_type: row.attachment_type,
+          author: toReplyAuthor(noteAuthor),
+        });
+      }
+      return out;
+    }
+
+    const { data, error } = await supabase
+      .from(replyTable(context))
+      .select(REPLY_TARGET_COLUMNS)
+      .in("id", ids);
+    if (error) return null;
+    const out = new Map<string, ReplyPreview>();
+    for (const row of (data ?? []) as ReplyTargetRow[]) {
+      const author = Array.isArray(row.author) ? row.author[0] : row.author;
+      out.set(row.id, {
+        id: row.id,
+        author_id: row.author_id,
+        content: row.content,
+        attachment_type: row.attachment_type,
+        author: toReplyAuthor(author),
+      });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function useReplyPreviews(
+  messages: ChatMessageData[],
+  messageContext: MessageContext,
+  noteAuthor: Profile | null | undefined,
+): ReadonlyMap<string, ReplyPreview> {
+  const [previews, setPreviews] = useState<Map<string, ReplyPreview>>(() => new Map());
+  const requestedRef = useRef<Set<string>>(new Set());
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const loaded = new Set(messages.map((m) => m.id));
+    const ids: string[] = [];
+    for (const m of messages) {
+      const id = m.reply_to_id;
+      if (!id || loaded.has(id) || previews.has(id) || requestedRef.current.has(id)) continue;
+      requestedRef.current.add(id);
+      ids.push(id);
+    }
+    if (ids.length === 0) return;
+
+    void fetchReplyPreviews(messageContext, ids, noteAuthor).then((found) => {
+      if (!aliveRef.current) return;
+      if (!found) {
+        for (const id of ids) requestedRef.current.delete(id);
+        return;
+      }
+      if (found.size === 0) return;
+      setPreviews((prev) => {
+        const next = new Map(prev);
+        for (const [id, preview] of found) next.set(id, preview);
+        return next;
+      });
+    });
+  }, [messages, messageContext, noteAuthor, previews]);
+
+  return previews;
 }
 
 export interface ChatCanvasHandle {
@@ -64,6 +212,8 @@ const EMPTY_REACTIONS: MessageReaction[] = [];
 interface MessageRowProps {
   message: ChatMessageData;
   grouped: boolean;
+  /** Set on the first message of a new calendar day. */
+  dayBreak?: string | null;
   showDivider: boolean;
   dividerAnimate: boolean;
   highlight: boolean;
@@ -86,6 +236,7 @@ interface MessageRowProps {
   onForward: (message: ChatMessageData) => void;
   onReply: (reply: ReplyPreview) => void;
   onEdit: (edit: { id: string; content: string } | null) => void;
+  onOpenActivity: (activityId: string) => void;
   onOpenReactionPicker: (messageId: string) => void;
   onJumpToReply: (messageId: string) => void;
   onContentResize: () => void;
@@ -102,6 +253,7 @@ interface MessageRowProps {
 const MessageRow = memo(function MessageRow({
   message,
   grouped,
+  dayBreak,
   showDivider,
   dividerAnimate,
   highlight,
@@ -124,6 +276,7 @@ const MessageRow = memo(function MessageRow({
   onForward,
   onReply,
   onEdit,
+  onOpenActivity,
   onOpenReactionPicker,
   onJumpToReply,
   onContentResize,
@@ -196,13 +349,13 @@ const MessageRow = memo(function MessageRow({
         onForward={canForward ? () => onForward(message) : undefined}
         onEdit={currentUserId === message.author_id ? () => {
           onEdit({ id: message.id, content: message.content });
-          onReply({ id: message.id, author_id: message.author_id, content: message.content, attachment_type: message.attachment_type, author: message.author ? { id: message.author.id, username: message.author.username, display_name: message.author.display_name } : undefined } as any);
+          onReply({ id: message.id, author_id: message.author_id, content: message.content, attachment_type: message.attachment_type, author: toReplyAuthor(message.author) });
           setTimeout(() => {
             const composer = document.querySelector('textarea[placeholder*="Message"], textarea[placeholder*="Note"]') as HTMLTextAreaElement | null;
             composer?.focus();
           }, 10);
         } : undefined}
-        onDoubleClick={canReact ? () => onToggleReaction(message.id, "👍") : undefined}
+        onOpenActivity={onOpenActivity}
         onContentResize={onContentResize}
       />
     </div>
@@ -225,6 +378,8 @@ interface ChatCanvasProps {
   getAuthorIconRole?: (authorId: string) => { icon?: string | null; name: string } | null | undefined;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
+  /** Before the channel icon; the phone layout puts its menu button here. */
+  headerLeading?: React.ReactNode;
   callPanel?: React.ReactNode;
   channelIcon?: React.ReactNode;
 
@@ -271,6 +426,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     getAuthorIconRole,
     headerExtra,
     headerTrailing,
+    headerLeading,
     callPanel,
     channelIcon,
     introText,
@@ -315,6 +471,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   // if they were reading slightly scrolled up (where the follow gate below
   // would otherwise hold their position).
   const followOnceRef = useRef(false);
+  const sentSuppressUntilRef = useRef(0);
   const tickingRef = useRef(false);
   const prevFirstIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
@@ -330,11 +487,16 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
   }, [highlightMessageId]);
   const [picker, setPicker] = useState<{ messageId: string; x: number; y: number } | null>(null);
+  const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
+  const openActivity = useCallback((activityId: string) => setActiveActivityId(activityId), []);
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
   const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  // Lags one render behind messagesRef so a scope change can still save the
+  // previous conversation's read cursor before its messages are replaced.
+  const prevMessagesRef = useRef(messages);
 
   // Latest-parent-handler ref. DiscordApp passes several inline arrows
   // (`onToggleReaction={(id, emoji) => ...}`), which get a new identity on every
@@ -366,7 +528,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     notifyTyping();
   }, [notifyTyping]);
 
-  const { tetherProfile } = useApp();
+  const {
+    tetherProfile,
+    profile: currentProfile,
+    loadChannelContextWindow,
+    loadDmContextWindow,
+    loadGroupContextWindow,
+  } = useApp();
+  const replyPreviews = useReplyPreviews(messages, messageContext, currentProfile);
   // Tether is a mentionable entity but never a real server member: append its
   // profile to the render list so "@tether" tokenizes as a blue mention chip
   // in message bodies. Notes aren't a Tether surface, so leave those alone.
@@ -385,7 +554,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     highlightMessage: (messageId) => setHighlightId(messageId),
   }));
 
-  const enriched = useMemo(() => buildReplyPreviews(messages), [messages]);
+  const enriched = useMemo(() => buildReplyPreviews(messages, replyPreviews), [messages, replyPreviews]);
 
   // Grouping decides whether a row shows its author header. It depends only on
   // the enriched list and the viewer, but it used to run per row on every
@@ -399,6 +568,18 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     }
     return flags;
   }, [enriched, currentUserId, currentUserName]);
+
+  // A date rule above the first message of each calendar day.
+  const dayBreaks = useMemo(() => {
+    const out = new Array<string | null>(enriched.length);
+    let prev = "";
+    for (let i = 0; i < enriched.length; i += 1) {
+      const d = new Date(enriched[i].created_at).toDateString();
+      out[i] = d !== prev ? dayLabel(enriched[i].created_at) : null;
+      prev = d;
+    }
+    return out;
+  }, [enriched]);
 
   // Per-message reaction lookup. The old code ran `reactions.filter(...)`
   // per row (O(rows × reactions)) on every render; one grouped pass is O(n).
@@ -487,6 +668,30 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     setTimeout(() => setHighlightId(null), 2000);
   }, []);
 
+  // A reply target can live outside the loaded page. Load a window around it
+  // before scrolling, instead of leaving the newly-resolved quote unclickable.
+  const handleJumpToReply = useCallback(async (messageId: string) => {
+    if (document.getElementById(`msg-${messageId}`)) {
+      jumpToMessage(messageId);
+      return;
+    }
+    let loaded = false;
+    if (messageContext === "channel") {
+      loaded = await loadChannelContextWindow(messageId);
+    } else if (messageContext === "dm") {
+      loaded = await loadDmContextWindow(messageId);
+    } else if (messageContext === "group") {
+      loaded = await loadGroupContextWindow(messageId);
+    }
+    if (loaded) setTimeout(() => jumpToMessage(messageId), 200);
+  }, [
+    jumpToMessage,
+    loadChannelContextWindow,
+    loadDmContextWindow,
+    loadGroupContextWindow,
+    messageContext,
+  ]);
+
   const requestLoadMore = useCallback(async () => {
     if (!hasMore || !onLoadMore || loadingMoreRef.current) return;
     const el = scrollRef.current;
@@ -518,14 +723,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     if (
       prevScope
       && (!nextScope || prevScope.kind !== nextScope.kind || prevScope.id !== nextScope.id)
-      && messagesRef.current.length > 0
+      && prevMessagesRef.current.length > 0
     ) {
-      setReadCursor(prevScope, messagesRef.current);
+      setReadCursor(prevScope, prevMessagesRef.current);
     }
 
     readScopeRef.current = nextScope;
     setNewMessagesDividerId(null);
   }, [readCursorScope?.kind, readCursorScope?.id]);
+
+  // Keep prevMessagesRef one render behind messagesRef.
+  useEffect(() => {
+    prevMessagesRef.current = messages;
+  });
 
   // Recomputed on every message change with no once-per-scope lock: the
   // stored read cursor can advance while the scope is active (e.g. new
@@ -534,6 +744,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   // divider is keyed by message id.
   useEffect(() => {
     if (!readCursorScope || messages.length === 0) return;
+    // After the user sends, suppress the divider for a short window so the
+    // optimistic row and its server echo cannot reintroduce a "NEW" line
+    // between the user's own consecutive messages.
+    if (Date.now() < sentSuppressUntilRef.current) {
+      setNewMessagesDividerId(null);
+      return;
+    }
     setNewMessagesDividerId(findNewMessagesDividerId(messages, readCursorScope));
   }, [messages, readCursorScope]);
 
@@ -653,7 +870,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       // way down. Unforced, scrollToBottom gives up once the content has
       // grown more than NEAR_BOTTOM_PX, which is why a channel with images
       // used to land just short of the end.
-      scrollToBottom("auto", pinToBottomRef.current);
+      scrollToBottom("auto", pinToBottomRef.current || stickToBottomRef.current);
     });
     ro.observe(target);
     return () => ro.disconnect();
@@ -729,26 +946,31 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     // messages: only clear once the send actually lands.
     const err = await onSend(content, options);
     if (!err) {
+      sentSuppressUntilRef.current = Date.now() + 60000;
       setNewMessagesDividerId(null);
-      if (readCursorScope) markChatReadNow(readCursorScope);
+      if (readCursorScope) {
+        setReadCursor(readCursorScope, messagesRef.current);
+        markChatReadNow(readCursorScope);
+      }
     }
     return err;
   }
 
   return (
     <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-divider px-4">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
-          {channelIcon ?? <IconHash size={18} className="text-brand" />}
+      <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
+        {headerLeading}
+        <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
+          {channelIcon ?? (messageContext === "dm" ? <AtIcon /> : <IconHash size={24} />)}
         </span>
-        <h1 className="min-w-0 flex-1 truncate text-[15px] font-bold">{channelName}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-5 text-header-primary">{channelName}</h1>
         {headerExtra}
         {headerTrailing}
       </header>
 
       {callPanel && <div className="shrink-0">{callPanel}</div>}
 
-      <div ref={scrollRef} data-selectable className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] py-4">
+      <div ref={scrollRef} data-selectable className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pb-6 pt-4">
         <div ref={contentRef}>
           {loading && messages.length === 0 ? (
             <MessageSkeleton />
@@ -766,16 +988,23 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                 </div>
               )}
 
-              {/* Welcome banner only at true history start: while older
-                  messages can still load, this sits mid-history. */}
+              {/* The channel intro, only at the true start of history. */}
               {!hasMore && (
-              <div className="mb-4 flex items-center px-4">
-                <div className="h-px flex-1 bg-divider" />
-                <span className="mx-4 text-xs font-semibold text-text-muted">
-                  {introText ?? `Welcome to #${channelName}`}
-                </span>
-                <div className="h-px flex-1 bg-divider" />
-              </div>
+                <div className="mx-4 mb-2 mt-4 flex flex-col items-start">
+                  <span className="mb-2 flex h-[68px] w-[68px] items-center justify-center rounded-full bg-button-secondary text-white [&_svg]:h-10 [&_svg]:w-10">
+                    {messageContext === "channel" ? <IconHash size={42} /> : (channelIcon ?? <IconHash size={42} />)}
+                  </span>
+                  <h3 className="my-2 text-[32px] font-bold leading-10 text-header-primary">
+                    {messageContext === "channel" ? `Welcome to #${channelName}!` : channelName}
+                  </h3>
+                  <p className="text-[16px] leading-5 text-header-secondary">
+                    {introText ?? (messageContext === "channel"
+                      ? `This is the start of the #${channelName} channel.`
+                      : messageContext === "dm"
+                        ? `This is the beginning of your direct message history with ${channelName}.`
+                        : `Welcome to the beginning of ${channelName}.`)}
+                  </p>
+                </div>
               )}
 
               {enriched.map((msg, i) => {
@@ -785,7 +1014,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   <MessageRow
                     key={msg.id}
                     message={msg}
-                    grouped={grouped}
+                    grouped={grouped && !dayBreaks[i]}
+                    dayBreak={dayBreaks[i]}
                     showDivider={newMessagesDividerId === msg.id}
                     dividerAnimate={!(currentUserId && msg.author_id === currentUserId)}
                     highlight={highlightId === msg.id}
@@ -808,8 +1038,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     onForward={handleForward}
                     onReply={handleReply}
                     onEdit={setEditing}
+                    onOpenActivity={openActivity}
                     onOpenReactionPicker={handleOpenReactionPicker}
-                    onJumpToReply={jumpToMessage}
+                    onJumpToReply={handleJumpToReply}
                     onContentResize={handleContentResize}
                   />
                 );
@@ -826,19 +1057,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       />
 
       <div className="shrink-0">
-        <TypingIndicator
-          typers={typers}
-          members={renderMembers}
-          groupContext={messageContext === "channel" || messageContext === "group"}
-        />
         {composerLockedReason ? (
-          <div className="mx-1 mb-2 flex min-h-[54px] items-center gap-2 rounded-[14px] border border-divider bg-bg-accent px-4 py-2">
+          <div className="mx-4 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
             <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
           </div>
         ) : (
         <ChatInput
-          placeholder={placeholder ?? `Message #${channelName}`}
+          placeholder={placeholder ?? (messageContext === "dm" ? `Message @${channelName}` : messageContext === "channel" ? `Message #${channelName}` : `Message ${channelName}`)}
           members={members}
           roles={roles}
           channels={channels}
@@ -852,12 +1078,20 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           maxUploadBytes={maxUploadBytes}
           serverId={typingScope?.serverId}
           allowPolls={messageContext === "channel" || messageContext === "group"}
+          activityScope={typingScope}
+          onActivityCreated={openActivity}
           focusSignal={composerFocus}
           tetherEnabled={messageContext !== "notes"}
           allowGifts={messageContext !== "notes"}
         />
         )}
+        <TypingIndicator
+          typers={typers}
+          members={renderMembers}
+          groupContext={messageContext === "channel" || messageContext === "group"}
+        />
       </div>
+      <ActivityModal activityId={activeActivityId} onClose={() => setActiveActivityId(null)} />
     </main>
   );
 });
