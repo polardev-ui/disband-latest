@@ -3709,13 +3709,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (typeof payload.status === "string") {
       void trackPresence(payload.status);
     }
-    const { error } = await getSupabaseClient().from("profiles").update(payload).eq("id", userId);
-    if (error) {
+    try {
+      const { error } = await getSupabaseClient().from("profiles").update(payload).eq("id", userId);
+      if (error) {
+        await loadProfile(userId);
+        return mapProfileError(error.message, error.code);
+      }
       await loadProfile(userId);
-      return mapProfileError(error.message, error.code);
+      return null;
+    } catch (err) {
+      await loadProfile(userId);
+      return err instanceof Error ? err.message : "Couldn't save your profile.";
     }
-    await loadProfile(userId);
-    return null;
   }, [userId, profile, patchProfileInState, loadProfile, trackPresence]);
 
   const persistActiveServerChannel = useCallback(() => {
