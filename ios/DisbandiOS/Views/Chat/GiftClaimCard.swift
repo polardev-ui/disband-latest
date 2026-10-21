@@ -137,16 +137,16 @@ struct GiftClaimCard: View {
     }
 
     private func load() async {
-        let rows: [GiftRow] = (try? await SupabaseManager.client
-            .from("gifts")
-            .select("code, plan, months, status, buyer_id, claimed_by")
-            .eq("code", value: code)
-            .limit(1)
-            .execute().value) ?? []
-        gift = rows.first
+        // Gift codes are bearer secrets. The RPC returns exactly one row for
+        // the code the caller already has; the table itself is no longer
+        // listable by authenticated users.
+        let row: GiftRow? = try? await SupabaseManager.client
+            .rpc("get_gift", params: ["p_code": code])
+            .execute().value
+        gift = row
         loading = false
 
-        if let buyer = rows.first?.buyerId,
+        if let buyer = row?.buyerId,
            let profile = try? await DatabaseService.profile(id: buyer) {
             buyerName = profile.displayName ?? profile.username ?? "Someone"
         }

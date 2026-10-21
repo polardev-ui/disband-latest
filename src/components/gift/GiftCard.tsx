@@ -44,12 +44,8 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   async function load() {
     const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("gifts")
-      .select("code, plan, months, status, buyer_id, claimed_by, expires_at")
-      .eq("code", code)
-      .maybeSingle();
-    return (data as GiftRow) ?? null;
+    const { data } = await supabase.rpc("get_gift", { p_code: code });
+    return (data as GiftRow | null) ?? null;
   }
 
   useEffect(() => {
@@ -127,9 +123,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
         setError(res.error ?? rpcError?.message ?? "Could not claim this gift.");
 
         const { data: fresh } = await getSupabaseClient()
-          .from("gifts")
-          .select("code, plan, months, status, buyer_id, claimed_by, expires_at")
-          .eq("code", code).maybeSingle();
+          .rpc("get_gift", { p_code: code });
         if (fresh) setGift(fresh as GiftRow);
         return;
       }
