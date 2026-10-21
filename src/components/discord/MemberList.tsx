@@ -55,7 +55,11 @@ function topRole(member: ServerMember, roles: ServerRole[]): ServerRole | null {
   let best: ServerRole | null = null;
   for (const id of memberRoleIds(member)) {
     const r = roles.find((x) => x.id === id);
-    if (r && (!best || r.position > best.position)) best = r;
+    // @everyone is implicit for every member; never treat it as a distinct
+    // grouping/display role, otherwise members split into "@everyone" vs their
+    // real role and @everyone pings look like they skip people.
+    if (!r || r.is_default) continue;
+    if (!best || r.position > best.position) best = r;
   }
   return best;
 }
