@@ -43,7 +43,7 @@ interface ChannelListProps {
   verified?: boolean;
   partner?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
-  onMoveCategory?: (categoryId: string, index: number) => void;
+  onMoveCategory?: (categoryId: string, index: number) => void | Promise<string | null>;
   onCreateChannel?: (name: string, type: ChannelType, categoryId: string | null) => Promise<string | null>;
   onCreateCategory?: (name: string) => Promise<string | null>;
 
@@ -227,7 +227,7 @@ export function ChannelList({
     hitTest(e.clientX, e.clientY);
   };
 
-  const releaseDrag = (e: React.PointerEvent<HTMLElement>) => {
+  const releaseDrag = async (e: React.PointerEvent<HTMLElement>) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     dragRef.current = null;
@@ -259,8 +259,26 @@ export function ChannelList({
     } else if (d.kind === "category") {
       const dragged = categories.find((c) => c.id === d.id);
       const over = overCategoryIdForDrop();
-      if (dragged && over && over !== "uncategorized" && over !== d.id) {
-        onMoveCategory?.(d.id, overCategoryPosition(over));
+      // Dropping on empty space (or the uncategorized bucket) still has a
+      // sensible destination: the end of the list. Without this, a category
+      // dragged into a gap silently did nothing, which read as "can't move".
+      let targetIndex: number | null = null;
+      if (dragged && over && over !== d.id) {
+        if (over === "uncategorized") {
+          targetIndex = categories.length;
+        } else {
+          targetIndex = overCategoryPosition(over);
+        }
+      } else if (dragged && (over === null || over === "uncategorized")) {
+        targetIndex = categories.length;
+      }
+      if (dragged && targetIndex !== null) {
+        try {
+          const result = await onMoveCategory?.(d.id, targetIndex);
+          if (result) window.alert(result);
+        } catch (err) {
+          window.alert(err instanceof Error ? err.message : "Couldn't move that category.");
+        }
       }
       clearDragState();
     } else {
