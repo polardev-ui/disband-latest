@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         -> UNNotificationPresentationOptions {
         let source = notification.request.content.userInfo["source"] as? String
         if ActiveChat.shared.isShowing(source) { return [] }
+        if PushManager.shared.doNotDisturb { return [] }
         return [.banner, .sound, .badge]
     }
 
@@ -72,6 +73,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 @MainActor
 final class PushManager {
     static let shared = PushManager()
+    /// Mirrored from the signed-in profile so the notification delegate (which
+    /// is not MainActor-isolated) can suppress banners and sound while the
+    /// user is in Do Not Disturb.
+    nonisolated(unsafe) var doNotDisturb = false
     private var pendingToken: String?
 
     private var client: SupabaseClient { SupabaseManager.client }

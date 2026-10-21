@@ -165,6 +165,17 @@ Deno.serve(async (req) => {
   const registered = (iosTokens?.length ?? 0) + (androidTokens?.length ?? 0);
   if (!registered) return new Response(JSON.stringify({ sent: 0, registered: 0 }), { status: 200 });
 
+  // Do Not Disturb is a user-level mute, not a per-device one: a DND user
+  // must not be woken by a sound (or a banner) on any phone. The badge is
+  // still maintained by the client on its next open, so nothing is lost.
+  const { data: recipient } = await supabase
+    .from("profiles").select("status, preferred_status").eq("id", user_id).maybeSingle();
+  if (recipient?.status === "dnd" || recipient?.preferred_status === "dnd") {
+    return new Response(JSON.stringify({ sent: 0, registered, suppressed: "dnd" }), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    });
+  }
+
   let sent = 0;
 
   // The number for the app icon. Computed here rather than incremented,

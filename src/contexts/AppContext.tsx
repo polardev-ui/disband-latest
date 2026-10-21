@@ -17,7 +17,7 @@ import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveS
 import { memberIconRole } from "@/lib/role-icons";
 import { getSavedRefreshToken, saveSwitchRefreshToken, clearSavedRefreshToken } from "@/lib/switch-refresh-tokens";
 import { isTauri } from "@/lib/platform";
-import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground } from "@/lib/notifications";
+import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground, setCurrentUserStatus } from "@/lib/notifications";
 import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
@@ -410,6 +410,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => { setCurrentUserStatus(profile?.status ?? (profile as { preferred_status?: UserStatus } | null)?.preferred_status); }, [profile]);
   const [tetherProfile, setTetherProfile] = useState<Profile | null>(null);
   const [officialProfile, setOfficialProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
@@ -2672,7 +2673,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${activeChannelId}` },
+        { event: "DELETE", schema: "public", table: "messages" },
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -2787,7 +2788,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "dm_messages", filter: `thread_id=eq.${activeDmThreadId}` },
+        { event: "DELETE", schema: "public", table: "dm_messages" },
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setDmMessages((prev) => prev.filter((m) => m.id !== id));
@@ -2879,7 +2880,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "group_messages", filter: `group_id=eq.${activeGroupChatId}` },
+        { event: "DELETE", schema: "public", table: "group_messages" },
         (payload) => {
           const id = (payload.old as { id?: string }).id;
           if (id) setGroupMessages((prev) => prev.filter((m) => m.id !== id));
