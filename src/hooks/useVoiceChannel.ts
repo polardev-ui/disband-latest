@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buildScreenConstraints } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import {
-  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
+  attachRemoteTrack, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack,
+  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
 import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
@@ -67,6 +68,7 @@ export function useVoiceChannel(
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const signalRef = useRef<RealtimeChannel | null>(null);
   const audioRefsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const presenceLoadRef = useRef(0);
 
   useEffect(() => {
     localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
@@ -110,18 +112,37 @@ export function useVoiceChannel(
 
   const loadPresence = useCallback(async () => {
     if (!channelId) return [];
+    const generation = ++presenceLoadRef.current;
     const supabase = getSupabaseClient();
     const { data: rows } = await supabase
       .from("voice_presence_live")
       .select("*")
       .eq("channel_id", channelId);
     if (!rows?.length) {
-      setParticipants([]);
+      if (presenceLoadRef.current === generation) setParticipants([]);
       return [];
     }
-    const map = await fetchProfilesByIds(supabase, rows.map((r) => r.user_id));
-    const loaded = rows.map((r) => ({ ...r, profile: map.get(r.user_id) }));
-    setParticipants(loaded);
+
+    // Presence IDs are all the peer setup needs. Resolve profiles after they
+    // are on screen so a slow profile fetch cannot hold up audio/video for
+    // everyone already in the channel.
+    const loaded = rows.map((r) => ({ ...r }));
+    if (presenceLoadRef.current !== generation) return loaded;
+    setParticipants((prev) => {
+      const profiles = new Map(prev.map((p) => [p.user_id, p.profile]));
+      return loaded.map((p) => ({ ...p, profile: profiles.get(p.user_id) }));
+    });
+
+    void fetchProfilesByIds(supabase, rows.map((r) => r.user_id)).then((map) => {
+      if (presenceLoadRef.current !== generation) return;
+      setParticipants((prev) => prev.map((p) => ({
+        ...p,
+        profile: p.profile ?? map.get(p.user_id),
+      })));
+    }).catch(() => {
+      // Names and avatars are decoration; the call is already connected.
+    });
+
     return loaded;
   }, [channelId]);
 
@@ -176,8 +197,11 @@ export function useVoiceChannel(
             });
             return;
           }
-          const stream = ev.streams[0];
-          if (stream) setRemoteStreams((prev) => new Map(prev).set(remoteId, stream));
+          // `replaceTrack` adds no MSID to the SDP, so `ev.streams` is empty
+          // for mic/camera. Merge the track into the peer's stream by kind;
+          // without this, remote audio never reached the <audio> element and
+          // camera video never reached the tile.
+          setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, ev.streams[0]));
         };
         track.addEventListener("ended", sync);
         track.addEventListener("mute", sync);
@@ -366,6 +390,10 @@ export function useVoiceChannel(
     if (!channelId || !userId) return;
     setError(null);
     try {
+      // Start minting TURN credentials while the mic and audio graph spin up.
+      // The first `/api/turn` call can take seconds; peers must not wait for
+      // it serially after presence says we've joined.
+      void fetchIceServers();
       const raw = await getDisbandUserMedia({ audio: true, video: false });
       const rawMic = raw.getAudioTracks()[0] ?? null;
       const mixer = new VoiceMixer(rawMic, {
@@ -393,6 +421,9 @@ export function useVoiceChannel(
       }).subscribe();
 
       signalRef.current = ch;
+      // loadPresence returns the presence rows before it resolves names and
+      // avatars, so flipping joined here starts peer negotiation immediately
+      // instead of waiting on a profile fetch.
       const loaded = await loadPresence();
       setJoined(true);
 
@@ -401,14 +432,11 @@ export function useVoiceChannel(
         connectedSoundRef.current = true;
         playCallConnected();
       }
-      for (const p of others) {
-        await createPeer(p.user_id, userId < p.user_id);
-      }
     } catch (e) {
       setError((e as Error).message || "Could not access microphone");
       await cleanup();
     }
-  }, [channelId, userId, cleanup, createPeer, handleSignal, loadPresence, micMuted, deafened]);
+  }, [channelId, userId, cleanup, handleSignal, loadPresence, micMuted, deafened]);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraTrackRef.current;
