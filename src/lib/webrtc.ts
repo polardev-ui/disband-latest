@@ -103,6 +103,12 @@ export function attachRemoteTrack(
 ): Map<string, MediaStream> {
   const next = new Map(prev);
   const existing = next.get(remoteId);
+  // A track that is already in the stream only changed mute state. Returning
+  // the previous map keeps the <audio>/<video> srcObject stable instead of
+  // restarting playback every time the remote speaks or mutes.
+  if (track.readyState === "live" && existing?.getTracks().includes(track)) {
+    return prev;
+  }
   if (track.readyState === "ended") {
     if (track.kind === "video") {
       const stripped = stripVideoTracks(existing ?? null);
