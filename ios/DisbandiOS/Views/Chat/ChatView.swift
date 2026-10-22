@@ -397,7 +397,17 @@ struct ChatView: View {
                 .overlay { flyingReactLayer }
                 .onPreferenceChange(ChatContentBottomKey.self) { maxY in
                     let nearBottom = maxY - viewport.size.height < 48
-                    if stickToBottom != nearBottom { stickToBottom = nearBottom }
+                    // Before the first page has settled the lazy stack can
+                    // measure the content at y=0 even though the default
+                    // anchor is about to scroll to the newest message. Keep
+                    // the "follow the bottom" state on until that happens;
+                    // otherwise the top sentinel sees `!stickToBottom` and
+                    // starts paging history on open.
+                    if initialScrollSettled {
+                        if stickToBottom != nearBottom { stickToBottom = nearBottom }
+                    } else if nearBottom {
+                        stickToBottom = true
+                    }
                     if stickToBottom, let last = model.messages.last {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
