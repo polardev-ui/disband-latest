@@ -502,13 +502,28 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setLastfmSaved(true);
   }
 
+  function scrollToLastfm() {
+    window.requestAnimationFrame(() => {
+      document.getElementById("conn-lastfm")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }
+
+  function handleSoundCloudConnect() {
+    setLastfmNote(
+      lastfmSaved && lastfmUser.trim()
+        ? `Connected as ${lastfmUser.trim()} — SoundCloud plays appear through Last.fm.`
+        : "SoundCloud plays through Last.fm. Link SoundCloud to Last.fm in SoundCloud settings, then connect Last.fm here.",
+    );
+    scrollToLastfm();
+  }
+
   async function handleLastfmConnect() {
     if (!lastfmConfigured()) {
       setLastfmNote("Last.fm isn't configured on this build yet — add NEXT_PUBLIC_LASTFM_API_KEY first.");
-      return;
-    }
-    if (isTauri()) {
-      setLastfmNote("On desktop, type your Last.fm username below — the one-click connect needs a browser.");
+      scrollToLastfm();
       return;
     }
     setLastfmNote(null);
@@ -523,23 +538,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       if (!res.ok || !data?.authUrl || !data.token) {
         setLastfmNote(
           res.status === 503
-            ? "One-click connect isn't set up on the server yet — paste your username below instead."
+            ? "One-click connect isn't set up on the server yet — type your Last.fm username below instead."
             : data?.error ?? "Couldn't start the Last.fm connection.",
         );
-        return;
-      }
-      const popup = window.open(data.authUrl, "disband-lastfm-connect", "width=520,height=760,popup=yes");
-      if (!popup) {
-        setLastfmNote("Allow pop-ups for this site, then try again.");
+        scrollToLastfm();
         return;
       }
 
-      // Some Last.fm API apps have no callback URL registered, so approving
-      // ends on Last.fm's own "you can close this window" page and our
-      // callback never runs. Poll the short-lived token here instead; when
-      // the popup closes, check once more immediately.
       const token = data.token;
-      const deadline = Date.now() + 5 * 60_000;
       const check = async (): Promise<boolean> => {
         try {
           const name = await fetchLastfmSession(token);
@@ -549,25 +555,57 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           return false;
         }
       };
-      lastfmPollRef.current = window.setInterval(() => {
-        if (Date.now() > deadline) {
-          stopLastfmPoll();
-          setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+
+      // Last.fm's auth page does not need to redirect back to us: approving
+      // the token is enough. Poll the short-lived token so the connect works
+      // on the web with a popup and on desktop with the system browser.
+      const startPolling = (popup: Window | null) => {
+        const deadline = Date.now() + 5 * 60_000;
+        lastfmPollRef.current = window.setInterval(() => {
+          if (Date.now() > deadline) {
+            stopLastfmPoll();
+            setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+            return;
+          }
+          if (popup?.closed) {
+            stopLastfmPoll();
+            void check().then((ok) => {
+              if (!ok) {
+                setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
+              }
+            });
+            return;
+          }
+          void check();
+        }, 4_000);
+      };
+
+      if (isTauri()) {
+        // The desktop WebView refuses window.open. Open the real browser;
+        // the token poll still finishes the connection in the app.
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          await invoke("plugin:opener|open_url", { url: data.authUrl });
+        } catch {
+          setLastfmNote("Couldn't open your browser for Last.fm — type your Last.fm username below.");
+          scrollToLastfm();
           return;
         }
-        if (popup.closed) {
-          stopLastfmPoll();
-          void check().then((ok) => {
-            if (!ok) {
-              setLastfmNote("Last.fm didn't confirm the connection. Type your username below instead.");
-            }
-          });
-          return;
-        }
-        void check();
-      }, 4_000);
+        setLastfmNote("Approve Last.fm access in your browser — this updates here automatically when it's done.");
+        startPolling(null);
+        return;
+      }
+
+      const popup = window.open(data.authUrl, "disband-lastfm-connect", "width=520,height=760,popup=yes");
+      if (!popup) {
+        setLastfmNote("Allow pop-ups for this site, then try again.");
+        scrollToLastfm();
+        return;
+      }
+      startPolling(popup);
     } catch {
       setLastfmNote("Couldn't start the Last.fm connection. Try again in a moment.");
+      scrollToLastfm();
     }
   }
 
@@ -1843,8 +1881,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     <div className="mt-4 flex flex-wrap gap-3">
                       {[
                         { id: "spotify", label: "Spotify", icon: <SpotifyMark />, onClick: handleSpotifyConnect, done: spotifyConnected },
-                        { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
-                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: () => void handleLastfmConnect(), done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => { scrollToLastfm(); void handleLastfmConnect(); }, done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: handleSoundCloudConnect, done: !!lastfmUser.trim() && lastfmSaved },
                         { id: "ytmusic", label: "YouTube Music (via Last.fm)", icon: <YoutubeMusicMark />, onClick: () => document.getElementById("conn-ytmusic")?.scrollIntoView({ behavior: "smooth", block: "center" }), done: false },
                       ].map((svc) => (
                         <Tooltip key={svc.id} label={svc.done ? `${svc.label} · connected` : svc.label} side="top">
@@ -1934,6 +1972,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
                   {/* Last.fm (and SoundCloud through it) */}
                   <ConnectionCard
+                    id="conn-lastfm"
                     icon={<LastfmMark size={32} />}
                     name="Last.fm"
                     status={lastfmSaved && lastfmUser.trim() ? `Connected as ${lastfmUser.trim()}` : "Also brings in SoundCloud plays"}
@@ -2164,6 +2203,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
 /** One connected-service card, Discord style. */
 function ConnectionCard({
+  id,
   icon,
   name,
   status,
@@ -2171,6 +2211,7 @@ function ConnectionCard({
   actions,
   children,
 }: {
+  id?: string;
   icon: React.ReactNode;
   name: string;
   status: string;
@@ -2179,7 +2220,7 @@ function ConnectionCard({
   children?: React.ReactNode;
 }) {
   return (
-    <section className="mb-4 overflow-hidden rounded-lg bg-bg-secondary">
+    <section id={id} className="mb-4 scroll-mt-6 overflow-hidden rounded-lg bg-bg-secondary">
       <header className="flex items-center gap-3 bg-bg-tertiary/60 px-4 py-3">
         <span className="shrink-0">{icon}</span>
         <div className="min-w-0 flex-1">
