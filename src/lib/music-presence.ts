@@ -169,7 +169,10 @@ export function clearLastfmPending(): void {
 /** Finish the one-click connect: swap last.fm's approved token for the
  *  username. The API secret stays server-side. */
 export async function fetchLastfmSession(token: string): Promise<string> {
-  const res = await fetch("/api/music/lastfm/session", {
+  // Use apiFetch so the desktop WebView talks to the deployed API origin and
+  // carries the signed-in user's bearer token. A relative fetch under
+  // `tauri://localhost` cannot reach the Next.js route at all.
+  const res = await apiFetch("/api/music/lastfm/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
