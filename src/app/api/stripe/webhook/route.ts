@@ -22,6 +22,7 @@ function extractSubscriptionPeriods(sub: Stripe.Subscription) {
   return {
     periodStart: toISOStringSafe(startTimestamp) ?? new Date().toISOString(),
     periodEnd: toISOStringSafe(endTimestamp) ?? new Date().toISOString(),
+    cancelAtPeriodEnd: sub.cancel_at_period_end === true,
     canceledAt: toISOStringSafe(canceledAtTimestamp),
   };
 }
@@ -34,6 +35,7 @@ async function upsertSubscription(
   customerId: string,
   periodStartISO: string,
   periodEndISO: string,
+  cancelAtPeriodEnd: boolean,
   canceledAtISO: string | null,
 ) {
   const supabase = getServiceSupabase();
@@ -43,10 +45,12 @@ async function upsertSubscription(
       user_id: userId,
       plan,
       status,
+      provider: "stripe",
       stripe_subscription_id: subscriptionId,
       stripe_customer_id: customerId,
       current_period_start: periodStartISO,
       current_period_end: periodEndISO,
+      cancel_at_period_end: cancelAtPeriodEnd,
       canceled_at: canceledAtISO,
       updated_at: new Date().toISOString(),
     },
@@ -75,7 +79,12 @@ async function cancelSubscription(subscriptionId: string) {
   if (!supabase) throw new Error("Database unavailable");
   const { error: updateError } = await supabase
     .from("subscriptions")
-    .update({ plan: "free", status: "canceled", updated_at: new Date().toISOString() })
+    .update({
+      plan: "free",
+      status: "canceled",
+      cancel_at_period_end: false,
+      updated_at: new Date().toISOString(),
+    })
     .eq("stripe_subscription_id", subscriptionId);
   if (updateError) throw new Error(updateError.message);
 }
@@ -200,6 +209,7 @@ export async function POST(req: Request) {
             customerId,
             periods.periodStart,
             periods.periodEnd,
+            periods.cancelAtPeriodEnd,
             periods.canceledAt,
           );
           if (plan === "aero") {
@@ -282,6 +292,7 @@ export async function POST(req: Request) {
               sub.customer as string,
               periods.periodStart,
               periods.periodEnd,
+              periods.cancelAtPeriodEnd,
               periods.canceledAt,
             );
             await accrueTenure(userId, invoice.id);
@@ -332,6 +343,7 @@ export async function POST(req: Request) {
             updatedSub.customer as string,
             periods.periodStart,
             periods.periodEnd,
+            periods.cancelAtPeriodEnd,
             periods.canceledAt,
           );
           if (plan2 === "aero" && userId2) {

@@ -190,6 +190,28 @@ export function useSubscription(userId: string | undefined) {
     return json.error ?? null;
   }, []);
 
+  /**
+   * Stops (or resumes) renewal at the end of the current paid period.
+   * There is no refund: the plan stays active until `current_period_end`.
+   */
+  const cancelSubscription = useCallback(async (resume = false): Promise<string | null> => {
+    try {
+      const res = await apiFetch("/api/stripe/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (json.ok) {
+        await load();
+        return null;
+      }
+      return json.error ?? "Could not update your subscription.";
+    } catch {
+      return "Couldn't reach billing. Check your connection and try again.";
+    }
+  }, [load]);
+
   return {
     subscription,
     plan,
@@ -197,6 +219,7 @@ export function useSubscription(userId: string | undefined) {
     loading,
     startCheckout,
     openPortal,
+    cancelSubscription,
     reload: load,
     syncFromStripe,
     activate,

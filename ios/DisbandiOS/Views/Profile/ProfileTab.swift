@@ -72,8 +72,8 @@ struct ProfileTab: View {
                         }
                         SettingsDivider()
                         NavigationLink { SettingsView().hidesDock() } label: {
-                            SettingsRowLabel(symbol: "bell.badge.fill", tint: Color(hex: 0xF0B232),
-                                             title: "Notifications & chat")
+                            SettingsRowLabel(symbol: "gearshape.fill", tint: Color(hex: 0x4E5058),
+                                             title: "Settings")
                         }
                     }
                     .buttonStyle(.plain)
