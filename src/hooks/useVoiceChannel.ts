@@ -28,6 +28,35 @@ interface SignalPayload {
   candidate?: RTCIceCandidateInit;
 }
 
+/**
+ * Supabase's broadcast channel is not ready when `subscribe()` returns. A
+ * presence row written before SUBSCRIBED makes the other side send its offer
+ * into a channel that is not listening yet, and the offer is gone forever.
+ */
+function waitForSubscribed(channel: RealtimeChannel): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Voice connection timed out"));
+    }, 8_000);
+
+    channel.subscribe((status) => {
+      if (settled) return;
+      if (status === "SUBSCRIBED") {
+        settled = true;
+        window.clearTimeout(timer);
+        resolve();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        settled = true;
+        window.clearTimeout(timer);
+        reject(new Error("Voice connection failed"));
+      }
+    });
+  });
+}
+
 export function useVoiceChannel(
   channelId: string | null,
   userId: string | null,
@@ -59,13 +88,20 @@ export function useVoiceChannel(
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
   const screenAudioTrackRef = useRef<MediaStreamTrack | null>(null);
 
-  const [sharingIds, setSharingIds] = useState<Set<string>>(new Set());
   const pendingLocalRef = useRef<Map<string, MediaStreamTrack | null>>(new Map());
   const planRef = useRef<SubscriptionPlan>(plan);
   useEffect(() => { planRef.current = plan; }, [plan]);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  // A TURN fetch can take seconds. Without a promise guard, two presence
+  // updates (or an offer racing the presence effect) both pass the empty
+  // `peersRef` check and build two peer connections for one person.
+  const peerPromisesRef = useRef<Map<string, Promise<RTCPeerConnection | null>>>(new Map());
+  const peerGenerationRef = useRef<Map<string, number>>(new Map());
+  const pendingIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  const offerRetryTimersRef = useRef<Map<string, number>>(new Map());
+  const reconnectTimersRef = useRef<Map<string, number>>(new Map());
   const signalRef = useRef<RealtimeChannel | null>(null);
   const audioRefsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const presenceLoadRef = useRef(0);
@@ -110,14 +146,22 @@ export function useVoiceChannel(
     prevPresenceRef.current = ids;
   }, [participants, joined, userId]);
 
-  const loadPresence = useCallback(async () => {
+  const loadPresence = useCallback(async (strict = false) => {
     if (!channelId) return [];
     const generation = ++presenceLoadRef.current;
     const supabase = getSupabaseClient();
-    const { data: rows } = await supabase
+    const { data: rows, error } = await supabase
       .from("voice_presence_live")
       .select("*")
       .eq("channel_id", channelId);
+    if (error) {
+      // A failed poll must not erase the participant allowlist: doing so
+      // makes the signal handler reject every incoming offer until the next
+      // successful poll. Only a successful empty result means the room is
+      // actually empty.
+      if (strict) throw new Error("Could not load voice channel");
+      return [];
+    }
     if (!rows?.length) {
       if (presenceLoadRef.current === generation) setParticipants([]);
       return [];
@@ -146,122 +190,254 @@ export function useVoiceChannel(
     return loaded;
   }, [channelId]);
 
+  const dropPeer = useCallback((remoteId: string) => {
+    const pc = peersRef.current.get(remoteId);
+    peersRef.current.delete(remoteId);
+    pc?.close();
+    // Invalidates a createPeer() that is still waiting on TURN credentials.
+    peerGenerationRef.current.set(remoteId, (peerGenerationRef.current.get(remoteId) ?? 0) + 1);
+
+    pendingIceRef.current.delete(remoteId);
+    const offerTimer = offerRetryTimersRef.current.get(remoteId);
+    if (offerTimer) window.clearTimeout(offerTimer);
+    offerRetryTimersRef.current.delete(remoteId);
+    const reconnectTimer = reconnectTimersRef.current.get(remoteId);
+    if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    reconnectTimersRef.current.delete(remoteId);
+
+    const drop = (prev: Map<string, MediaStream>) => {
+      if (!prev.has(remoteId)) return prev;
+      const next = new Map(prev);
+      next.delete(remoteId);
+      return next;
+    };
+    setRemoteStreams(drop);
+    setRemoteScreens(drop);
+    setRemoteScreenAudio(drop);
+    setConnectedPeerIds((prev) => {
+      if (!prev.has(remoteId)) return prev;
+      const next = new Set(prev);
+      next.delete(remoteId);
+      return next;
+    });
+  }, []);
+
+  const flushQueuedIce = useCallback(async (pc: RTCPeerConnection, remoteId: string) => {
+    const queued = pendingIceRef.current.get(remoteId);
+    if (!queued?.length) return;
+    pendingIceRef.current.delete(remoteId);
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch {
+        // A candidate for an m-line the answer dropped is harmless.
+      }
+    }
+  }, []);
+
   const createPeer = useCallback(
-    async (remoteId: string, initiator: boolean) => {
-      if (!userId || !channelId || remoteId === userId) return;
-      if (peersRef.current.has(remoteId)) return;
+    (remoteId: string, initiator: boolean): Promise<RTCPeerConnection | null> => {
+      if (!userId || !channelId || remoteId === userId) return Promise.resolve(null);
+      const existing = peersRef.current.get(remoteId);
+      if (existing && existing.signalingState !== "closed") return Promise.resolve(existing);
+      if (existing) peersRef.current.delete(remoteId);
+      const pending = peerPromisesRef.current.get(remoteId);
+      if (pending) return pending;
 
-      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
-      peersRef.current.set(remoteId, pc);
+      const generation = (peerGenerationRef.current.get(remoteId) ?? 0) + 1;
+      peerGenerationRef.current.set(remoteId, generation);
 
-      // Lanes must exist on BOTH sides. The initiator always used to get them,
-      // but a responder with zero transceivers had to hope createAnswer()
-      // auto-created matching ones — browser-dependent, i.e. "sometimes works".
-      ensureLanes(pc);
-
-      const local = localStreamRef.current;
-      if (local) {
-        const mic = local.getAudioTracks()[0] ?? null;
-        if (initiator) {
-          await setLaneTrack(pc, LANE_AUDIO, mic);
-          await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
-          await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
-          await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
-        } else {
-
-          pendingLocalRef.current.set(remoteId, mic);
+      const promise: Promise<RTCPeerConnection | null> = (async () => {
+        let pc: RTCPeerConnection;
+        try {
+          pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+        } catch {
+          pc = new RTCPeerConnection();
         }
-      }
 
-      pc.ontrack = (ev) => {
-        const track = ev.track;
-        const lane = laneOfTransceiver(pc, ev.transceiver);
-        const sync = () => {
-          if (lane === LANE_SCREEN_AUDIO) {
-            setRemoteScreenAudio((prev) => {
-              const next = new Map(prev);
-              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
-              else next.delete(remoteId);
-              return next;
-            });
-            return;
+        // The request may have been cancelled (left, failed, or a newer
+        // createPeer won) while TURN credentials were loading.
+        if (peerGenerationRef.current.get(remoteId) !== generation ||
+            !participantIdsRef.current.has(remoteId)) {
+          pc.close();
+          return null;
+        }
+        const raced = peersRef.current.get(remoteId);
+        if (raced && raced.signalingState !== "closed") {
+          pc.close();
+          return raced;
+        }
+        peersRef.current.set(remoteId, pc);
+
+        // Lanes must exist on BOTH sides. The initiator always used to get them,
+        // but a responder with zero transceivers had to hope createAnswer()
+        // auto-created matching ones — browser-dependent, i.e. "sometimes works".
+        ensureLanes(pc);
+
+        const local = localStreamRef.current;
+        if (local) {
+          const mic = local.getAudioTracks()[0] ?? null;
+          if (initiator) {
+            await setLaneTrack(pc, LANE_AUDIO, mic);
+            await setLaneTrack(pc, LANE_CAMERA, cameraTrackRef.current);
+            await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
+            await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
+          } else {
+            pendingLocalRef.current.set(remoteId, mic);
           }
-          if (lane === LANE_SCREEN) {
-            // Drop the entry once the track ends so a stopped share removes
-            // the tile instead of leaving a dead video element.
-            setRemoteScreens((prev) => {
-              const next = new Map(prev);
-              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
-              else next.delete(remoteId);
-              return next;
-            });
-            return;
-          }
-          // `replaceTrack` adds no MSID to the SDP, so `ev.streams` is empty
-          // for mic/camera. Merge the track into the peer's stream by kind;
-          // without this, remote audio never reached the <audio> element and
-          // camera video never reached the tile.
-          setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, ev.streams[0]));
+        }
+
+        pc.ontrack = (ev) => {
+          const track = ev.track;
+          const lane = laneOfTransceiver(pc, ev.transceiver);
+          const sync = () => {
+            if (lane === LANE_SCREEN_AUDIO) {
+              setRemoteScreenAudio((prev) => {
+                const next = new Map(prev);
+                if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+                else next.delete(remoteId);
+                return next;
+              });
+              return;
+            }
+            if (lane === LANE_SCREEN) {
+              // A sendrecv m-line with no sender track still exposes a
+              // receiver track. It is live but muted, and used to draw a
+              // phantom "sharing" tile before the person ever shared. Only
+              // show it while media is actually flowing; unmute re-adds it.
+              const carrying = track.readyState === "live" && !track.muted;
+              setRemoteScreens((prev) => {
+                if (carrying) {
+                  const next = new Map(prev);
+                  next.set(remoteId, new MediaStream([track]));
+                  return next;
+                }
+                if (!prev.has(remoteId)) return prev;
+                const next = new Map(prev);
+                next.delete(remoteId);
+                return next;
+              });
+              return;
+            }
+            // `replaceTrack` adds no MSID to the SDP, so `ev.streams` is empty
+            // for mic/camera. Merge the track into the peer's stream by kind;
+            // without this, remote audio never reached the <audio> element and
+            // camera video never reached the tile.
+            setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, ev.streams[0]));
+          };
+          track.addEventListener("ended", sync);
+          track.addEventListener("mute", sync);
+          track.addEventListener("unmute", sync);
+          sync();
         };
-        track.addEventListener("ended", sync);
-        track.addEventListener("mute", sync);
-        track.addEventListener("unmute", sync);
-        sync();
-      };
 
-      pc.onicecandidate = (ev) => {
-        if (ev.candidate && signalRef.current) {
-          void signalRef.current.send({
-            type: "broadcast",
-            event: "signal",
-            payload: {
-              type: "ice",
-              from: userId,
-              to: remoteId,
-              candidate: ev.candidate.toJSON(),
-            } satisfies SignalPayload,
-          });
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "connected") {
-          setConnectedPeerIds((prev) => {
-            if (prev.has(remoteId)) return prev;
-            const next = new Set(prev);
-            next.add(remoteId);
-            return next;
-          });
-          if (!connectedSoundRef.current) {
-            connectedSoundRef.current = true;
-            playCallConnected();
+        pc.onicecandidate = (ev) => {
+          if (ev.candidate && signalRef.current) {
+            void signalRef.current.send({
+              type: "broadcast",
+              event: "signal",
+              payload: {
+                type: "ice",
+                from: userId,
+                to: remoteId,
+                candidate: ev.candidate.toJSON(),
+              } satisfies SignalPayload,
+            });
           }
-        } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-          setConnectedPeerIds((prev) => {
-            if (!prev.has(remoteId)) return prev;
-            const next = new Set(prev);
-            next.delete(remoteId);
-            return next;
-          });
-        }
-      };
+        };
 
-      if (initiator) {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        signalRef.current?.send({
-          type: "broadcast",
-          event: "signal",
-          payload: {
-            type: "offer",
-            from: userId,
-            to: remoteId,
-            sdp: offer,
-          } satisfies SignalPayload,
+        const reconnectLater = (delay: number) => {
+          if (reconnectTimersRef.current.has(remoteId)) return;
+          const timer = window.setTimeout(() => {
+            reconnectTimersRef.current.delete(remoteId);
+            if (participantIdsRef.current.has(remoteId) && !peersRef.current.has(remoteId)) {
+              void createPeer(remoteId, userId < remoteId);
+            }
+          }, delay);
+          reconnectTimersRef.current.set(remoteId, timer);
+        };
+
+        pc.onconnectionstatechange = () => {
+          // dropPeer() closes the connection, which fires "closed" again.
+          if (peersRef.current.get(remoteId) !== pc) return;
+          if (pc.connectionState === "connected") {
+            const timer = reconnectTimersRef.current.get(remoteId);
+            if (timer) window.clearTimeout(timer);
+            reconnectTimersRef.current.delete(remoteId);
+            setConnectedPeerIds((prev) => {
+              if (prev.has(remoteId)) return prev;
+              const next = new Set(prev);
+              next.add(remoteId);
+              return next;
+            });
+            if (!connectedSoundRef.current) {
+              connectedSoundRef.current = true;
+              playCallConnected();
+            }
+          } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+            dropPeer(remoteId);
+            reconnectLater(1_200);
+          } else if (pc.connectionState === "disconnected") {
+            // ICE can recover from a transient blip. Give it a few seconds
+            // before tearing down, then rebuild the peer from scratch.
+            const timer = window.setTimeout(() => {
+              if (peersRef.current.get(remoteId) !== pc) return;
+              if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+                dropPeer(remoteId);
+                reconnectLater(1_200);
+              }
+            }, 5_000);
+            const previous = reconnectTimersRef.current.get(remoteId);
+            if (previous) window.clearTimeout(previous);
+            reconnectTimersRef.current.set(remoteId, timer);
+          }
+        };
+
+        if (initiator) {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          const sendOffer = (attempt: number) => {
+            if (peersRef.current.get(remoteId) !== pc || pc.signalingState !== "have-local-offer") return;
+            const description = pc.localDescription;
+            if (!description || !signalRef.current) return;
+            void signalRef.current.send({
+              type: "broadcast",
+              event: "signal",
+              payload: {
+                type: "offer",
+                from: userId,
+                to: remoteId,
+                sdp: { type: description.type, sdp: description.sdp },
+              } satisfies SignalPayload,
+            });
+            if (attempt >= 2) return;
+            const previous = offerRetryTimersRef.current.get(remoteId);
+            if (previous) window.clearTimeout(previous);
+            const timer = window.setTimeout(() => {
+              offerRetryTimersRef.current.delete(remoteId);
+              sendOffer(attempt + 1);
+            }, 1_200 * (attempt + 1));
+            offerRetryTimersRef.current.set(remoteId, timer);
+          };
+          sendOffer(0);
+        }
+
+        return pc;
+      })()
+        .catch(() => {
+          dropPeer(remoteId);
+          return null;
+        })
+        .finally(() => {
+          if (peerPromisesRef.current.get(remoteId) === promise) {
+            peerPromisesRef.current.delete(remoteId);
+          }
         });
-      }
+
+      peerPromisesRef.current.set(remoteId, promise);
+      return promise;
     },
-    [channelId, userId],
+    [channelId, userId, dropPeer],
   );
 
   const handleSignal = useCallback(
@@ -274,27 +450,39 @@ export function useVoiceChannel(
       // bootstrap through the presence-driven initiator path below.
       if (!participantIdsRef.current.has(payload.from) && !peersRef.current.has(payload.from)) return;
 
-      // Screen-share state must update even without a peer connection (the
-      // sharer may have started while nobody else was in the channel).
-      if (payload.type === "screen") {
-        setSharingIds((prev) => {
-          const next = new Set(prev);
-          if (payload.sharing) next.add(payload.from);
-          else next.delete(payload.from);
+      // A stop signal can arrive before the track's ended event (or instead
+      // of it when the sharer's tab was closed). Clear the tile immediately.
+      if (payload.type === "screen" && !payload.sharing) {
+        const drop = (prev: Map<string, MediaStream>) => {
+          if (!prev.has(payload.from)) return prev;
+          const next = new Map(prev);
+          next.delete(payload.from);
           return next;
-        });
+        };
+        setRemoteScreens(drop);
+        setRemoteScreenAudio(drop);
       }
 
       let pc = peersRef.current.get(payload.from);
       if (!pc && (payload.type === "offer" || payload.type === "answer")) {
-        await createPeer(payload.from, false);
-        pc = peersRef.current.get(payload.from);
+        pc = await createPeer(payload.from, false) ?? peersRef.current.get(payload.from);
       }
       if (!pc) return;
 
       if (payload.type === "offer" && payload.sdp) {
+        // A retry can deliver the same offer twice. Re-answering a second
+        // copy after the first answer already stabilised the connection puts
+        // the initiator into the wrong signaling state, so ignore it.
+        if (pc.signalingState === "stable" && pc.remoteDescription?.sdp === payload.sdp.sdp) return;
+        // A duplicate that lands while the first copy is still being answered
+        // would be an illegal second remote offer.
+        if (pc.signalingState === "have-remote-offer" || pc.signalingState === "closed") return;
+
         // Glare guard: roll back our own pending offer before accepting theirs.
         if (pc.signalingState === "have-local-offer") {
+          const retry = offerRetryTimersRef.current.get(payload.from);
+          if (retry) window.clearTimeout(retry);
+          offerRetryTimersRef.current.delete(payload.from);
           try {
             await pc.setLocalDescription({ type: "rollback" });
           } catch {
@@ -302,6 +490,7 @@ export function useVoiceChannel(
           }
         }
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        await flushQueuedIce(pc, payload.from);
 
         openLanesForSending(pc);
         if (pendingLocalRef.current.has(payload.from)) {
@@ -325,34 +514,47 @@ export function useVoiceChannel(
           } satisfies SignalPayload,
         });
       } else if (payload.type === "answer" && payload.sdp) {
+        // Ignore a duplicate answer. It arrives after our first one put the
+        // connection into "stable", where setRemoteDescription(answer) throws.
+        if (pc.signalingState !== "have-local-offer") return;
+        const retry = offerRetryTimersRef.current.get(payload.from);
+        if (retry) window.clearTimeout(retry);
+        offerRetryTimersRef.current.delete(payload.from);
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        await flushQueuedIce(pc, payload.from);
       } else if (payload.type === "ice" && payload.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+        // Candidates routinely beat the offer/answer through the broadcast
+        // channel. addIceCandidate before the remote description is set
+        // throws, and the candidate used to be lost forever.
+        if (!pc.remoteDescription) {
+          const queued = pendingIceRef.current.get(payload.from) ?? [];
+          queued.push(payload.candidate);
+          pendingIceRef.current.set(payload.from, queued);
+        } else {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch {
+            // A late candidate for a dropped m-line is harmless.
+          }
+        }
       } else if (payload.type === "leave") {
-        pc.close();
-        peersRef.current.delete(payload.from);
-        const drop = (prev: Map<string, MediaStream>) => {
-          const next = new Map(prev);
-          next.delete(payload.from);
-          return next;
-        };
-        setRemoteStreams(drop);
-        setRemoteScreens(drop);
-        setRemoteScreenAudio(drop);
-        setConnectedPeerIds((prev) => {
-          if (!prev.has(payload.from)) return prev;
-          const next = new Set(prev);
-          next.delete(payload.from);
-          return next;
-        });
+        dropPeer(payload.from);
       }
     },
-    [createPeer, userId],
+    [createPeer, dropPeer, flushQueuedIce, userId],
   );
 
   const cleanup = useCallback(async () => {
-    peersRef.current.forEach((pc) => pc.close());
-    peersRef.current.clear();
+    [...peersRef.current.keys()].forEach(dropPeer);
+    // Also cancel peers that are still waiting on TURN credentials.
+    [...peerPromisesRef.current.keys()].forEach(dropPeer);
+    peerPromisesRef.current.clear();
+    pendingLocalRef.current.clear();
+    pendingIceRef.current.clear();
+    offerRetryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    offerRetryTimersRef.current.clear();
+    reconnectTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    reconnectTimersRef.current.clear();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     setActiveVoiceMixer(null);
@@ -364,7 +566,11 @@ export function useVoiceChannel(
     audioRefsRef.current.clear();
 
     if (signalRef.current) {
-      await signalRef.current.unsubscribe();
+      try {
+        await signalRef.current.unsubscribe();
+      } catch {
+        // The socket may already be gone; presence cleanup still has to run.
+      }
       signalRef.current = null;
     }
 
@@ -373,7 +579,7 @@ export function useVoiceChannel(
       await supabase.from("voice_presence").delete().eq("channel_id", channelId).eq("user_id", userId);
     }
     setJoined(false);
-  }, [channelId, userId]);
+  }, [channelId, userId, dropPeer]);
 
   useEffect(() => {
     if (!joined || !channelId || !userId) return;
@@ -405,6 +611,20 @@ export function useVoiceChannel(
       setActiveVoiceMixer(mixer);
 
       const supabase = getSupabaseClient();
+      const ch = supabase.channel(`voice:${channelId}`, {
+        config: { broadcast: { self: false } },
+      });
+
+      ch.on("broadcast", { event: "signal" }, ({ payload }) => {
+        void handleSignal(payload as SignalPayload);
+      });
+      signalRef.current = ch;
+
+      // Subscribe before writing presence. The old order let the room see us
+      // and send an offer before this socket was listening, which is why the
+      // first join often sat in "Connecting…" with no media.
+      await waitForSubscribed(ch);
+
       await supabase.from("voice_presence").upsert({
         channel_id: channelId,
         user_id: userId,
@@ -412,19 +632,10 @@ export function useVoiceChannel(
         deafened,
       });
 
-      const ch = supabase.channel(`voice:${channelId}`, {
-        config: { broadcast: { self: false } },
-      });
-
-      ch.on("broadcast", { event: "signal" }, ({ payload }) => {
-        void handleSignal(payload as SignalPayload);
-      }).subscribe();
-
-      signalRef.current = ch;
       // loadPresence returns the presence rows before it resolves names and
       // avatars, so flipping joined here starts peer negotiation immediately
       // instead of waiting on a profile fetch.
-      const loaded = await loadPresence();
+      const loaded = await loadPresence(true);
       setJoined(true);
 
       const others = loaded.filter((p) => p.user_id !== userId);
@@ -505,11 +716,15 @@ export function useVoiceChannel(
 
   const leave = useCallback(async () => {
     if (userId && signalRef.current) {
-      await signalRef.current.send({
-        type: "broadcast",
-        event: "signal",
-        payload: { type: "leave", from: userId } satisfies SignalPayload,
-      });
+      try {
+        await signalRef.current.send({
+          type: "broadcast",
+          event: "signal",
+          payload: { type: "leave", from: userId } satisfies SignalPayload,
+        });
+      } catch {
+        // A dead socket must not trap us in the channel with a stale row.
+      }
     }
     await cleanup();
     await loadPresence();
@@ -534,12 +749,37 @@ export function useVoiceChannel(
 
   useEffect(() => {
     if (!joined || !userId) return;
-    participants.forEach((p) => {
-      if (p.user_id !== userId && !peersRef.current.has(p.user_id)) {
-        void createPeer(p.user_id, userId < p.user_id);
+    const active = new Set(participants.map((p) => p.user_id));
+    active.delete(userId);
+
+    // Presence is the source of truth for who is still in the room. Close
+    // peers for people who vanished without their `leave` broadcast, and
+    // leave transient empty snapshots alone so a bad fetch does not tear
+    // down a working call.
+    if (participants.length > 0) {
+      for (const id of [...peersRef.current.keys()]) {
+        if (!active.has(id)) dropPeer(id);
       }
-    });
-  }, [participants, joined, userId, createPeer]);
+      for (const id of [...peerPromisesRef.current.keys()]) {
+        if (!active.has(id)) dropPeer(id);
+      }
+    }
+
+    for (const id of active) {
+      if (!peersRef.current.has(id) && !peerPromisesRef.current.has(id)) {
+        void createPeer(id, userId < id);
+      }
+    }
+  }, [participants, joined, userId, createPeer, dropPeer]);
+
+  // Realtime presence can silently stop delivering on a sleeping laptop or a
+  // dropped websocket. Poll while joined so a dead peer is eventually
+  // reconciled even when no postgres_changes event arrives.
+  useEffect(() => {
+    if (!joined || !channelId) return;
+    const timer = window.setInterval(() => void loadPresence(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [joined, channelId, loadPresence]);
 
   useEffect(() => {
     return () => {
@@ -552,8 +792,6 @@ export function useVoiceChannel(
     participants,
     connectedPeerIds,
     remoteStreams,
-    // No sharingIds filter: entries only exist from real LANE_SCREEN ontrack
-    // events, so the map is already accurate (see useGroupCallManager).
     remoteScreens,
     remoteScreenAudio,
     localScreen,

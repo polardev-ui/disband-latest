@@ -18,6 +18,8 @@ interface VoiceSession {
 
   remoteStreams: Map<string, MediaStream>;
   remoteScreens: Map<string, MediaStream>;
+  /** A sharer's screen sound, kept on its own lane from their mic. */
+  remoteScreenAudio: Map<string, MediaStream>;
   localScreen: MediaStream | null;
   localStream: MediaStream | null;
   cameraEnabled: boolean;
@@ -111,6 +113,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     error: voice.error,
     remoteStreams: voice.remoteStreams,
     remoteScreens: voice.remoteScreens,
+    remoteScreenAudio: voice.remoteScreenAudio,
     localScreen: voice.localScreen,
     localStream: voice.localStream,
     cameraEnabled: voice.cameraEnabled,
@@ -122,8 +125,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     peek,
   }), [connectedChannelId, connectedChannelName, voice.joined, voice.participants,
        voice.connectedPeerIds,
-       voice.error, voice.remoteStreams, voice.remoteScreens, voice.localScreen,
-       voice.localStream, voice.cameraEnabled, voice.screenEnabled,
+       voice.error, voice.remoteStreams, voice.remoteScreens, voice.remoteScreenAudio,
+       voice.localScreen, voice.localStream, voice.cameraEnabled, voice.screenEnabled,
        voice.toggleCamera, voice.toggleScreenShare,
        connectAndJoin, disconnect, peek]);
 
