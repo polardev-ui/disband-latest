@@ -98,6 +98,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         ? "Your screen"
         : p.profile ? `${displayName(p.profile)}'s screen` : "Screen",
       stream,
+      audio: isSelf ? null : session.remoteScreenAudio.get(p.user_id) ?? null,
       local: isSelf,
     }];
   });
@@ -139,7 +140,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
           </div>
         ) : (
           <div className="flex min-h-0 w-full max-w-5xl flex-1 flex-col py-4">
-            <CallStage members={stageMembers} screens={stageScreens} />
+            <CallStage members={stageMembers} screens={stageScreens} deafened={deafened} />
           </div>
         )}
 
