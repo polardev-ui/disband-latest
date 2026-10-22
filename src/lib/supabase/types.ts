@@ -127,6 +127,8 @@ export interface ServerRole {
   permissions: ServerPermissions;
   position: number;
   is_default: boolean;
+  /** Members may add or remove this role from their own profile. */
+  self_assignable?: boolean;
   created_at: string;
 }
 

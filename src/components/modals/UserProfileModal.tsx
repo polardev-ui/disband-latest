@@ -63,6 +63,9 @@ interface UserProfileModalProps {
   memberRoleIds?: string[];
   memberIsOwner?: boolean;
   onSetRoles?: (roleIds: string[]) => void;
+  /** Roles staff have marked safe for members to choose themselves. */
+  selfAssignableRoles?: ServerRole[];
+  onSetSelfRoles?: (roleIds: string[]) => void;
 }
 
 // Classic profile buttons: green "Send Message", blurple, grey; 3px corners.
@@ -219,6 +222,8 @@ export function UserProfileModal({
   memberRoleIds = [],
   memberIsOwner,
   onSetRoles,
+  selfAssignableRoles,
+  onSetSelfRoles,
 }: UserProfileModalProps) {
   // Keep the last profile around while the card animates out: the parent
   // clears its `profileTarget` the instant it closes, which would otherwise
@@ -304,6 +309,8 @@ export function UserProfileModal({
 
   const memberRoles = (serverRoles ?? []).filter((r) => memberRoleIds.includes(r.id));
   const assignableRoles = (serverRoles ?? []).filter((r) => !r.is_default);
+  const selfAssignable = (selfAssignableRoles ?? []).filter((r) => !r.is_default);
+  const selfSelected = memberRoleIds.filter((id) => selfAssignable.some((r) => r.id === id));
 
   const toggleRole = (roleId: string) => {
     if (!onSetRoles) return;
@@ -316,6 +323,23 @@ export function UserProfileModal({
     const defaultIds = new Set((serverRoles ?? []).filter((r) => r.is_default).map((r) => r.id));
     onSetRoles(next.filter((id) => !defaultIds.has(id)));
   };
+
+  const toggleSelfRole = (roleId: string) => {
+    if (!onSetSelfRoles) return;
+    const next = selfSelected.includes(roleId)
+      ? selfSelected.filter((id) => id !== roleId)
+      : [...selfSelected, roleId];
+    onSetSelfRoles(next);
+  };
+
+  const selfRolePicker = isSelf && !canManageRoles && onSetSelfRoles && selfAssignable.length > 0 ? (
+    <div className="mt-2">
+      <p className="mb-1.5 text-[12px] text-text-muted">
+        Roles you can give yourself
+      </p>
+      <RolePicker roles={selfAssignable} selected={selfSelected} onToggle={toggleSelfRole} compact />
+    </div>
+  ) : null;
 
   const overflow: { label: string; onClick: () => void; danger?: boolean }[] = [];
   if (!isSelf && !isBot) {
@@ -571,13 +595,17 @@ export function UserProfileModal({
                 {isServerMember && (
                   <Section label="Roles">
                     {memberIsOwner ? (
-                      <p className="text-[14px] font-medium">Space owner</p>
+                      <>
+                        <p className="text-[14px] font-medium">Space owner</p>
+                        {selfRolePicker}
+                      </>
                     ) : (
+                      <>
                       <div className="flex flex-wrap items-center gap-1.5">
                         {memberRoles.map((role) => (
                           <span
                             key={role.id}
-                            className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && !isSelf && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                            className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
                             style={
                               role.gradient_to?.trim()
                                 ? {
@@ -590,7 +618,7 @@ export function UserProfileModal({
                             {role.icon && <RoleIcon icon={role.icon} name={role.name} size={14} />}
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
                             {role.name}
-                            {canManageRoles && !isSelf && onSetRoles && (
+                            {canManageRoles && onSetRoles && (
                               <button
                                 type="button"
                                 onClick={() => toggleRole(role.id)}
@@ -608,10 +636,12 @@ export function UserProfileModal({
                         {memberRoles.length === 0 && (
                           <p className="text-[13px] text-text-muted">No roles assigned.</p>
                         )}
-                        {canManageRoles && !isSelf && onSetRoles && (
+                        {canManageRoles && onSetRoles && (
                           <RolePicker roles={assignableRoles} selected={memberRoleIds} onToggle={toggleRole} compact />
                         )}
                       </div>
+                      {selfRolePicker}
+                      </>
                     )}
                   </Section>
                 )}

@@ -43,6 +43,9 @@ export interface UserProfilePopoutProps {
   memberRoleIds?: string[];
   canManageRoles?: boolean;
   onSetRoles?: (roleIds: string[]) => void;
+  /** Roles staff have marked safe for members to choose themselves. */
+  selfAssignableRoles?: ServerRole[];
+  onSetSelfRoles?: (roleIds: string[]) => void;
 }
 
 function formatDate(iso: string): string {
@@ -69,6 +72,8 @@ export function UserProfilePopout({
   memberRoleIds = [],
   canManageRoles,
   onSetRoles,
+  selfAssignableRoles = [],
+  onSetSelfRoles,
 }: UserProfilePopoutProps) {
   const { presenceMap, listeningMap, user, openDmWithFriend, sendDmMessage } = useApp();
   const open = !!profile && !!anchor;
@@ -124,6 +129,9 @@ export function UserProfilePopout({
   const bannerBg = usesCustomAccent(p) ? getAccentBackground(p) : p.accent_color ?? "#5865f2";
   const theme = getProfileCardTheme(p);
   const roles = serverRoles.filter((r) => !r.is_default && memberRoleIds.includes(r.id)).sort((a, b) => b.position - a.position);
+  const selfRoles = selfAssignableRoles.filter((r) => !r.is_default);
+  const selfRoleIds = memberRoleIds.filter((id) => selfRoles.some((r) => r.id === id));
+  const canPickSelfRoles = isSelf && !canManageRoles && !!onSetSelfRoles && selfRoles.length > 0;
 
   async function sendQuickMessage() {
     const text = message.trim();
@@ -235,7 +243,7 @@ export function UserProfilePopout({
 
           {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
-          {isServerMember && (roles.length > 0 || canManageRoles) && (
+          {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
             <Section title={roles.length === 1 ? "Role" : "Roles"}>
               <div className="flex flex-wrap gap-1">
                 {roles.map((r) => (
@@ -263,6 +271,20 @@ export function UserProfilePopout({
                     selected={memberRoleIds}
                     onToggle={(id) =>
                       onSetRoles(memberRoleIds.includes(id) ? memberRoleIds.filter((x) => x !== id) : [...memberRoleIds, id])
+                    }
+                    compact
+                  />
+                )}
+                {canPickSelfRoles && onSetSelfRoles && (
+                  <RolePicker
+                    roles={selfRoles}
+                    selected={selfRoleIds}
+                    onToggle={(id) =>
+                      onSetSelfRoles(
+                        selfRoleIds.includes(id)
+                          ? selfRoleIds.filter((x) => x !== id)
+                          : [...selfRoleIds, id],
+                      )
                     }
                     compact
                   />

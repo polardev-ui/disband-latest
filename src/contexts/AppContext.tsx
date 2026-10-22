@@ -240,6 +240,8 @@ interface AppContextValue {
   reorderServers: (slots: { server_id: string; position: number; folder_id: string | null }[]) => Promise<string | null>;
   createRole: (data: { name: string; color: string; permissions?: ServerRole["permissions"] }) => Promise<string | null>;
   setMemberRoles: (userId: string, roleIds: string[]) => Promise<string | null>;
+  /** Replace only the caller's self-assignable roles. */
+  setSelfRoles: (roleIds: string[]) => Promise<string | null>;
   getMemberColor: (member: ServerMember) => string | null;
   /** The member's highest role that has an icon (Catalyst Level 2 role icons). */
   getMemberIconRole: (member: ServerMember) => ServerRole | null;
@@ -342,7 +344,7 @@ interface AppContextValue {
   channelEffects: Record<string, ChannelEffects>;
   updateRole: (
     roleId: string,
-    patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated">>,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated" | "self_assignable">>,
   ) => Promise<string | null>;
   platformBanUser: (opts: { username?: string; userId?: string; password: string; reason?: string }) => Promise<string | null>;
   platformUnbanUser: (opts: { userId: string; password: string }) => Promise<string | null>;
@@ -4475,7 +4477,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateRole = useCallback(async (
     roleId: string,
-    patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated">>,
+    patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated" | "self_assignable">>,
   ) => {
     if (!activeServerId) return "No space selected";
     const update: Record<string, unknown> = {};
@@ -4485,6 +4487,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (patch.gradient_to !== undefined) update.gradient_to = patch.gradient_to;
     if (patch.gradient_animated !== undefined) update.gradient_animated = patch.gradient_animated;
     if (patch.permissions !== undefined) update.permissions = patch.permissions;
+    if (patch.self_assignable !== undefined) update.self_assignable = patch.self_assignable;
     const { error } = await getSupabaseClient()
       .from("server_roles")
       .update(update)
@@ -4525,6 +4528,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     writeMembersCache(activeServerId);
     return null;
   }, [activeServerId, serverRoles, writeMembersCache]);
+
+  const setSelfRoles = useCallback(async (roleIds: string[]) => {
+    if (!activeServerId) return "No space selected";
+    if (!userId) return "Sign in first";
+    const { error } = await getSupabaseClient().rpc("set_self_member_roles", {
+      p_server_id: activeServerId,
+      p_role_ids: roleIds,
+    });
+    if (error) return error.message;
+
+    // The RPC only touches self-assignable roles. Keep every staff-granted
+    // role in the local member row so the UI doesn't flicker one off.
+    const selfIds = new Set(
+      serverRoles.filter((role) => !role.is_default && role.self_assignable).map((role) => role.id),
+    );
+    const current = memberRoleIdsRef.current.get(userId) ?? [];
+    const chosen = [...new Set(roleIds)].filter((id) => selfIds.has(id));
+    const nextRoleIds = [...current.filter((id) => !selfIds.has(id)), ...chosen];
+    const highestRoleId = nextRoleIds
+      .map((id) => serverRoles.find((role) => role.id === id))
+      .filter((role): role is ServerRole => !!role)
+      .sort((a, b) => b.position - a.position)[0]?.id ?? null;
+    memberRoleIdsRef.current.set(userId, nextRoleIds);
+    const patch = (member: ServerMember & { profile: Profile }) =>
+      member.user_id === userId
+        ? { ...member, role_ids: nextRoleIds, role_id: highestRoleId }
+        : member;
+    fullMembersRef.current = fullMembersRef.current.map(patch);
+    setMembers((current) => current.map(patch));
+    writeMembersCache(activeServerId);
+    return null;
+  }, [activeServerId, userId, serverRoles, writeMembersCache]);
 
   const hasServerPermission = useCallback(
     (permission: ServerPermissionKey) => serverPermissions[permission],
@@ -5772,6 +5807,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createRole,
     updateRole,
     setMemberRoles,
+    setSelfRoles,
     getMemberColor,
     getMemberIconRole,
     createChannel,

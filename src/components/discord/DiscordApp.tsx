@@ -2284,6 +2284,17 @@ export function DiscordApp() {
               }
             : undefined
         }
+        selfAssignableRoles={app.serverRoles.filter((role) => !role.is_default && role.self_assignable)}
+        onSetSelfRoles={
+          profileTarget?.id === app.user?.id
+            ? (roleIds) => {
+                void app.setSelfRoles(roleIds).then((err) => {
+                  if (err) alert(err);
+                  else setProfileMemberRefresh((n) => n + 1);
+                });
+              }
+            : undefined
+        }
       />
       <UserProfileModal
         profile={profileTarget}
@@ -2385,6 +2396,17 @@ export function DiscordApp() {
           profileTarget && profileCanManageRoles
             ? (roleIds) => {
                 void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
+                  if (err) alert(err);
+                  else setProfileMemberRefresh((n) => n + 1);
+                });
+              }
+            : undefined
+        }
+        selfAssignableRoles={app.serverRoles.filter((role) => !role.is_default && role.self_assignable)}
+        onSetSelfRoles={
+          profileTarget?.id === app.user?.id
+            ? (roleIds) => {
+                void app.setSelfRoles(roleIds).then((err) => {
                   if (err) alert(err);
                   else setProfileMemberRefresh((n) => n + 1);
                 });
