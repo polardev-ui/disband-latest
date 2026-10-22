@@ -393,33 +393,55 @@ export function useVoiceChannel(
           }
         };
 
-        if (initiator) {
+        const sendOffer = (attempt: number) => {
+          if (peersRef.current.get(remoteId) !== pc || pc.signalingState !== "have-local-offer") return;
+          const description = pc.localDescription;
+          if (!description || !signalRef.current) return;
+          void signalRef.current.send({
+            type: "broadcast",
+            event: "signal",
+            payload: {
+              type: "offer",
+              from: userId,
+              to: remoteId,
+              sdp: { type: description.type, sdp: description.sdp },
+            } satisfies SignalPayload,
+          });
+          if (attempt >= 2) return;
+          const previous = offerRetryTimersRef.current.get(remoteId);
+          if (previous) window.clearTimeout(previous);
+          const timer = window.setTimeout(() => {
+            offerRetryTimersRef.current.delete(remoteId);
+            sendOffer(attempt + 1);
+          }, 1_200 * (attempt + 1));
+          offerRetryTimersRef.current.set(remoteId, timer);
+        };
+
+        const startOffer = async () => {
+          if (peersRef.current.get(remoteId) !== pc) return;
+          if (pc.signalingState !== "stable" || pc.remoteDescription) return;
           const offer = await pc.createOffer();
+          if (pc.signalingState !== "stable") return;
           await pc.setLocalDescription(offer);
-          const sendOffer = (attempt: number) => {
-            if (peersRef.current.get(remoteId) !== pc || pc.signalingState !== "have-local-offer") return;
-            const description = pc.localDescription;
-            if (!description || !signalRef.current) return;
-            void signalRef.current.send({
-              type: "broadcast",
-              event: "signal",
-              payload: {
-                type: "offer",
-                from: userId,
-                to: remoteId,
-                sdp: { type: description.type, sdp: description.sdp },
-              } satisfies SignalPayload,
-            });
-            if (attempt >= 2) return;
-            const previous = offerRetryTimersRef.current.get(remoteId);
-            if (previous) window.clearTimeout(previous);
-            const timer = window.setTimeout(() => {
-              offerRetryTimersRef.current.delete(remoteId);
-              sendOffer(attempt + 1);
-            }, 1_200 * (attempt + 1));
-            offerRetryTimersRef.current.set(remoteId, timer);
-          };
           sendOffer(0);
+        };
+
+        if (initiator) {
+          await startOffer();
+        } else {
+          // The lower-ID peer normally offers. If it was slow to load our
+          // presence and its retries ran out, this peer would sit in
+          // "stable" forever with no remote description. Take over after a
+          // short grace period; the glare guard handles a crossed offer.
+          window.setTimeout(() => {
+            if (peersRef.current.get(remoteId) !== pc) return;
+            if (pc.signalingState === "stable" && !pc.remoteDescription) {
+              void startOffer().catch(() => {
+                dropPeer(remoteId);
+                reconnectLater(1_200);
+              });
+            }
+          }, 2_500);
         }
 
         return pc;
