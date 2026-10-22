@@ -95,6 +95,7 @@ export async function POST(req: Request) {
         user_id: user.id,
         plan: granting ? plan : "free",
         status: best.status,
+        provider: "stripe",
         stripe_subscription_id: best.id,
         stripe_customer_id: typeof best.customer === "string" ? best.customer : best.customer?.id,
         current_period_start: fields.current_period_start
@@ -103,6 +104,7 @@ export async function POST(req: Request) {
         current_period_end: fields.current_period_end
           ? new Date(fields.current_period_end * 1000).toISOString()
           : null,
+        cancel_at_period_end: best.cancel_at_period_end === true,
         canceled_at: fields.canceled_at ? new Date(fields.canceled_at * 1000).toISOString() : null,
         updated_at: new Date().toISOString(),
       },

@@ -85,6 +85,7 @@ import {
 } from "@/lib/presence";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
 import { SubscriptionModal } from "@/components/subscription/SubscriptionModal";
+import { ConfirmDialog } from "@/components/modals/server-settings/ui";
 import { PLANS } from "@/lib/subscription";
 import { useSubscription } from "@/hooks/useSubscription";
 import { ThemesPanel } from "@/components/discord/settings/ThemesPanel";
@@ -278,7 +279,24 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     };
   }, []);
   const [showSubscription, setShowSubscription] = useState(false);
-  const { subscription, plan: subPlan, entitlements, reload: reloadSubscription } = useSubscription(profile?.id);
+  const {
+    subscription,
+    plan: subPlan,
+    entitlements,
+    reload: reloadSubscription,
+    cancelSubscription,
+  } = useSubscription(profile?.id);
+  const [billingDialog, setBillingDialog] = useState<"cancel" | "resume" | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const cancellationScheduled = subscription?.cancel_at_period_end === true;
+  const stripeManageable = !!subscription?.stripe_subscription_id && subscription.provider !== "apple";
+  const canCancelStripe = stripeManageable && !!subscription
+    && ["active", "trialing", "past_due"].includes(subscription.status);
+  const billingPeriodEndLabel = subscription?.current_period_end
+    ? new Date(subscription.current_period_end).toLocaleDateString("en-GB", {
+        year: "numeric", month: "long", day: "numeric",
+      })
+    : "the end of the current billing period";
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [desktopNotifications, setDesktopNotifications] = useState(true);
   const [linkPreviews, setLinkPreviews] = useState(true);
@@ -1584,16 +1602,16 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           <span className="text-[16px] font-semibold capitalize text-header-primary">{subPlan}</span>
                           <SubscriptionBadge plan={subPlan} />
                         </div>
-                        {subscription?.status === "active" && (
+                        {(subscription?.status === "active" || subscription?.status === "trialing") && (
                           <div className="space-y-0.5 pt-1">
                             {subscription.current_period_end && (
                               <p className="text-[12px] text-text-muted">
-                                Renews {new Date(subscription.current_period_end).toLocaleDateString("en-GB", {
-                                  year: "numeric", month: "long", day: "numeric",
-                                })}
+                                {cancellationScheduled ? "Cancels" : "Renews"} {billingPeriodEndLabel}
                               </p>
                             )}
-                            <Hint tone="online">Active</Hint>
+                            <Hint tone={cancellationScheduled ? "super" : "online"}>
+                              {cancellationScheduled ? "Cancellation scheduled" : "Active"}
+                            </Hint>
                           </div>
                         )}
                         {subscription?.status === "past_due" && (
@@ -1614,6 +1632,53 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       </div>
                     </div>
                   </div>
+
+                  {canCancelStripe && (
+                    <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-[16px] font-medium leading-6 text-header-primary">Billing</p>
+                          <p className="text-[13px] leading-5 text-text-muted">
+                            {cancellationScheduled
+                              ? `Cancellation scheduled. Your plan stays active until ${billingPeriodEndLabel}. No refund is issued for the current period.`
+                              : `Cancel future renewals. You'll keep your plan until ${billingPeriodEndLabel}; payments already made are non-refundable.`}
+                          </p>
+                          {billingError && <p className="text-[13px] text-status-dnd">{billingError}</p>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBillingError(null);
+                            setBillingDialog(cancellationScheduled ? "resume" : "cancel");
+                          }}
+                          className={cancellationScheduled
+                            ? "h-8 shrink-0 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
+                            : "h-8 shrink-0 rounded-[3px] border border-status-dnd/40 px-3 text-[14px] font-medium text-status-dnd transition-colors hover:bg-status-dnd/10"}
+                        >
+                          {cancellationScheduled ? "Resume" : "Cancel subscription"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {subscription?.provider === "apple" && (
+                    <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
+                      <p className="text-[16px] font-medium leading-6 text-header-primary">App Store billing</p>
+                      <p className="mt-1 text-[13px] leading-5 text-text-muted">
+                        This subscription is managed by Apple. Cancel or change it in your Apple Account
+                        settings; Apple handles any refund requests.
+                      </p>
+                      <a
+                        href="https://apps.apple.com/account/subscriptions"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-block text-[13px] font-medium text-brand hover:underline"
+                      >
+                        Manage Apple subscription
+                      </a>
+                    </div>
+                  )}
+
                   <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 space-y-1">
@@ -2005,6 +2070,38 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         open={showSubscription}
         onClose={() => setShowSubscription(false)}
         userId={profile?.id}
+      />
+
+      <ConfirmDialog
+        open={billingDialog !== null}
+        title={billingDialog === "resume" ? "Resume subscription?" : "Cancel subscription?"}
+        tone={billingDialog === "resume" ? "primary" : "danger"}
+        confirmLabel={billingDialog === "resume" ? "Resume" : "Cancel subscription"}
+        body={
+          <div className="space-y-2">
+            <p>
+              {billingDialog === "resume"
+                ? `Renewal will restart. Your plan will continue after ${billingPeriodEndLabel}.`
+                : `You'll keep your plan until ${billingPeriodEndLabel}. Renewal stops after that, and payments already made are non-refundable.`}
+            </p>
+            {billingError && <p className="text-status-dnd">{billingError}</p>}
+          </div>
+        }
+        onConfirm={async () => {
+          const action = billingDialog;
+          if (!action) return;
+          setBillingError(null);
+          const err = await cancelSubscription(action === "resume");
+          if (err) {
+            setBillingError(err);
+            return;
+          }
+          setBillingDialog(null);
+        }}
+        onCancel={() => {
+          setBillingError(null);
+          setBillingDialog(null);
+        }}
       />
 
       {giftMounted && (

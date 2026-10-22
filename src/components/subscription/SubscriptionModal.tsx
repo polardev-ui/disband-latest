@@ -319,7 +319,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               <p className="mt-0.5 text-sm text-text-muted">
                 <span className="font-semibold text-text-normal capitalize">{plan}</span>
                 {subscription?.current_period_end && (
-                  <> &middot; renews {new Date(subscription.current_period_end).toLocaleDateString()}</>
+                  <> &middot; {subscription.cancel_at_period_end ? "cancels" : "renews"} {new Date(subscription.current_period_end).toLocaleDateString()}</>
                 )}
               </p>
             )}
@@ -360,13 +360,13 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               <div className="rounded-[4px] border border-transparent bg-bg-secondary p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold">Disband Aero</h3>
-                  <span className="rounded-full bg-status-online/15 px-2.5 py-0.5 text-[11px] font-semibold text-status-online">
-                    Active
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${subscription?.cancel_at_period_end ? "bg-super/20 text-super" : "bg-status-online/15 text-status-online"}`}>
+                    {subscription?.cancel_at_period_end ? "Cancelling" : "Active"}
                   </span>
                 </div>
                 {subscription?.current_period_end && (
                   <p className="mt-1 text-sm text-text-muted">
-                    Renews {new Date(subscription.current_period_end).toLocaleDateString()}
+                    {subscription.cancel_at_period_end ? "Cancels" : "Renews"} {new Date(subscription.current_period_end).toLocaleDateString()}
                   </p>
                 )}
                 <div className="mt-3 flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5">

@@ -194,7 +194,7 @@ struct AeroPaywallSheet: View {
             Text("Aero is active on this account.")
                 .font(.headline)
                 .foregroundStyle(Brand.textPrimary)
-            Text("Manage or cancel it any time in Settings → your name → Subscriptions.")
+            Text("Manage or cancel it any time in Settings → Subscription.")
                 .font(.footnote)
                 .foregroundStyle(Brand.textMuted)
                 .multilineTextAlignment(.center)

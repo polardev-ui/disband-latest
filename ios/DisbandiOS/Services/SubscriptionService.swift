@@ -45,19 +45,25 @@ struct Subscription: Codable, Sendable {
     let plan: String
     let status: String
     let currentPeriodEnd: String?
+    /// True when Stripe renewal is stopped but the paid period has not ended.
+    let cancelAtPeriodEnd: Bool?
     /// "stripe" or "apple". Null on rows written before migration 0045, which
     /// all predate the App Store path and are therefore Stripe.
     let provider: String?
 
+    var isCancellationScheduled: Bool { cancelAtPeriodEnd == true }
+
     /// Billed through the App Store, so only Apple can change the card,
     /// cancel it, or refund it — every "manage your subscription" affordance
-    /// has to point at iOS Settings instead of the web billing page.
+    /// has to point at Apple's manage-subscriptions sheet instead of the web
+    /// billing page.
     var isApple: Bool { provider == "apple" }
 
     enum CodingKeys: String, CodingKey {
         case plan, status, provider
         case userId = "user_id"
         case currentPeriodEnd = "current_period_end"
+        case cancelAtPeriodEnd = "cancel_at_period_end"
     }
 }
 
@@ -152,6 +158,37 @@ final class SubscriptionService {
         } catch {
             // Leave the last known plan in place rather than silently
             // downgrading a paying user because one request failed.
+        }
+    }
+
+    /// Stops or resumes Stripe renewal at the end of the paid period.
+    /// App Store rows never reach this route; the settings screen sends those
+    /// to Apple's own manage-subscriptions sheet.
+    func setCancellation(resume: Bool) async -> String? {
+        guard let token = try? await client.auth.session.accessToken else {
+            return "Please sign in again."
+        }
+        var request = URLRequest(url: AppConfig.webAppURL.appendingPathComponent("api/stripe/cancel"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["resume": resume])
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return "Billing did not respond."
+            }
+            struct Reply: Decodable { let ok: Bool?; let error: String? }
+            let reply = try? JSONDecoder().decode(Reply.self, from: data)
+            if http.statusCode == 200, reply?.ok == true {
+                await reload()
+                return nil
+            }
+            return reply?.error ?? "Could not update your subscription."
+        } catch {
+            return "Couldn't reach billing. Check your connection and try again."
         }
     }
 
