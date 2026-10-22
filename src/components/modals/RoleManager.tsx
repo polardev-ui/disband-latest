@@ -456,6 +456,27 @@ function DisplayTab({
           </>
         )}
       </SettingsSection>
+
+      {!role.is_default && (
+        <SettingsSection title="Self-assignment" description="Let members choose this role for themselves from their profile.">
+          <SettingRow
+            label="Members can assign this role"
+            htmlFor={`self-role-${role.id}`}
+            description={
+              Object.values(role.permissions ?? {}).some(Boolean)
+                ? "This role grants permissions. Anyone who selects it gets them, so only enable this for roles you trust every member with."
+                : "Members can add or remove it without asking a moderator."
+            }
+          >
+            <Toggle
+              id={`self-role-${role.id}`}
+              label="Members can assign this role"
+              checked={!!role.self_assignable}
+              onChange={(on) => void run(() => update(role.id, { self_assignable: on }))}
+            />
+          </SettingRow>
+        </SettingsSection>
+      )}
     </div>
   );
 }

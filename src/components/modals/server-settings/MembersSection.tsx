@@ -118,7 +118,7 @@ export function MembersSection({ isOwner }: SectionProps) {
                       )}
                     </div>
                   </div>
-                  {!isSelf && !isOwnerRow && (
+                  {!isOwnerRow && (
                     <div className="flex shrink-0 items-center gap-1">
                       <RolePicker
                         roles={assignable}
