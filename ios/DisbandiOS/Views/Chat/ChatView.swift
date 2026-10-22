@@ -32,6 +32,10 @@ struct ChatView: View {
     @State private var model: ChatViewModel
     @State private var draft = ""
     @State private var stickToBottom = true
+    /// The first page has painted and the initial scroll-to-bottom has had a
+    /// chance to land. Until then the lazy stack can report the history
+    /// sentinel at the top of the viewport, which must not trigger paging.
+    @State private var initialScrollSettled = false
     @State private var showGifPicker = false
     @State private var showPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
@@ -221,6 +225,15 @@ struct ChatView: View {
             guard !items.isEmpty else { return }
             Task { await uploadAndSend(items) }
         }
+        .onChange(of: model.loading) { _, loading in
+            guard !loading, !initialScrollSettled else { return }
+            // Let `.defaultScrollAnchor(.bottom)` and the first layout pass
+            // finish before the top sentinel is allowed to page history.
+            Task {
+                try? await Task.sleep(for: .milliseconds(250))
+                initialScrollSettled = true
+            }
+        }
     }
 
     private func lockedComposer(_ reason: String) -> some View {
@@ -395,7 +408,15 @@ struct ChatView: View {
                     // a page there; wait until the reader is actually near
                     // the top (or the conversation is shorter than one
                     // screen, where filling the view is the right move).
-                    guard minY > -140, model.hasMoreHistory, !model.loadingOlder else { return }
+                    //
+                    // Also require that the reader has scrolled away from the
+                    // bottom. On a large channel the first layout pass can
+                    // report the sentinel at y=0 before the initial
+                    // scroll-to-bottom lands; without this gate a busy
+                    // #general would pull page after page of history and
+                    // appear to load forever.
+                    guard initialScrollSettled, !stickToBottom, minY > -140,
+                          model.hasMoreHistory, !model.loadingOlder else { return }
                     Task { await loadOlder(using: proxy) }
                 }
                 .onChange(of: model.messages.count) {
