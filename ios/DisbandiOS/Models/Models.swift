@@ -71,6 +71,8 @@ struct Profile: Codable, Identifiable, Hashable {
     var desktopNotificationsEnabled: Bool?
     var linkPreviewsEnabled: Bool?
     var createdAt: String?
+    /// Bots and webhooks; shown with an APP tag beside their name.
+    var isBot: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio, status, theme, pronouns
@@ -90,6 +92,7 @@ struct Profile: Codable, Identifiable, Hashable {
         case desktopNotificationsEnabled = "desktop_notifications_enabled"
         case linkPreviewsEnabled = "link_previews_enabled"
         case createdAt = "created_at"
+        case isBot = "is_bot"
     }
 
     /// Display name, else username. A name made only of invisible
@@ -232,9 +235,13 @@ struct Message: Codable, Identifiable, Hashable {
     let createdAt: String
     var editedAt: String?
     var author: Profile?
+    /// Rich embeds from webhooks and bots.
+    var embeds: [MessageEmbed]?
+    /// Set when a webhook posted this; carries the name and picture to show.
+    var webhook: MessageWebhook?
 
     enum CodingKeys: String, CodingKey {
-        case id, content, mentions, author
+        case id, content, mentions, author, embeds, webhook
         case channelId = "channel_id"
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"

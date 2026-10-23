@@ -718,6 +718,9 @@ struct ChatView: View {
         let prev = model.messages[index - 1]
         let cur = model.messages[index]
         guard prev.authorId == cur.authorId, cur.replyToId == nil else { return false }
+        // One webhook can post as several names; each name is its own speaker.
+        guard prev.webhook?.name == cur.webhook?.name,
+              prev.webhook?.avatarUrl == cur.webhook?.avatarUrl else { return false }
         guard let a = RelativeTime.date(from: prev.createdAt),
               let b = RelativeTime.date(from: cur.createdAt) else { return false }
         return b.timeIntervalSince(a) < 300

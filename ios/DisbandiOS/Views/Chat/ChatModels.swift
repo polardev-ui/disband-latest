@@ -27,6 +27,10 @@ struct DisplayMessage: Identifiable, Hashable {
     var uploadProgress: Double? = nil
     /// User ids @mentioned here. Only channel messages carry these.
     var mentions: [String]? = nil
+    /// Rich embeds from webhooks and bots (channel messages only).
+    var embeds: [MessageEmbed] = []
+    /// Set when a webhook posted this message.
+    var webhook: MessageWebhook? = nil
 
     init(id: String, authorId: String, author: Profile?, content: String,
          attachmentUrl: String?, attachmentType: AttachmentType?,
@@ -62,6 +66,8 @@ struct DisplayMessage: Identifiable, Hashable {
                                                   size: m.attachmentSize),
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt,
                   mentions: m.mentions)
+        self.embeds = m.embeds ?? []
+        self.webhook = m.webhook
     }
     init(_ m: DmMessage) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
@@ -96,9 +102,11 @@ struct RawMessageRow: Decodable, Sendable {
     /// User ids @mentioned in this message; nil on tables that have no such
     /// column (DMs and group chats, where a mention is meaningless).
     let mentions: [String]?
+    let embeds: [MessageEmbed]?
+    let webhook: MessageWebhook?
 
     enum CodingKeys: String, CodingKey {
-        case id, content, mentions
+        case id, content, mentions, embeds, webhook
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
