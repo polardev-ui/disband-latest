@@ -1719,6 +1719,7 @@ export function DiscordApp() {
                 dmUnreads={app.dmUnreads}
                 activeDmThreadId={app.activeDmThreadId}
                 serverUnreadIds={app.serverUnreadIds}
+                serverMentionCounts={app.serverMentionCounts}
                 folders={app.serverFolders}
                 listState={app.serverListState}
                 onSelectHome={app.setViewHome}
@@ -1806,6 +1807,7 @@ export function DiscordApp() {
                 dmUnreads={app.dmUnreads}
                 activeDmThreadId={app.activeDmThreadId}
                 serverUnreadIds={app.serverUnreadIds}
+                serverMentionCounts={app.serverMentionCounts}
                 folders={app.serverFolders}
                 listState={app.serverListState}
                 onSelectHome={app.setViewHome}

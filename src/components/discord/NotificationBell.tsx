@@ -17,19 +17,8 @@ import {
 import type { IconProps } from "@/components/icons";
 import { usePresence } from "@/hooks/usePresence";
 import type { AppNotification } from "@/lib/supabase/types";
-
-function timeAgo(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms) || ms < 0) return "now";
-  const mins = Math.floor(ms / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+import { useI18n } from "@/contexts/I18nContext";
+import { formatNotificationTime } from "@/lib/i18n";
 
 type Bucket = "Today" | "Yesterday" | "Earlier";
 const BUCKET_ORDER: Bucket[] = ["Today", "Yesterday", "Earlier"];
@@ -72,6 +61,7 @@ function NotificationRow({
   onSelect: (n: AppNotification) => void;
 }) {
   const { Icon, accent } = visualFor(notification.type);
+  const { language, t } = useI18n();
   const unread = !notification.read;
   return (
     <li>
@@ -97,10 +87,10 @@ function NotificationRow({
             </span>
           )}
           <span className="mt-1 block text-[12px] text-text-muted">
-            {timeAgo(notification.created_at)}
+            {formatNotificationTime(language, notification.created_at)}
           </span>
         </span>
-        {unread && <span aria-label="Unread" className="mt-2 h-2 w-2 shrink-0 rounded-full bg-status-dnd" />}
+        {unread && <span aria-label={t("Unread")} className="mt-2 h-2 w-2 shrink-0 rounded-full bg-status-dnd" />}
       </button>
     </li>
   );
@@ -139,18 +129,19 @@ function FilterTab({
 }
 
 function EmptyState({ unreadOnly }: { unreadOnly: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
       <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-bg-tertiary text-interactive-normal">
         <IconInbox size={30} />
       </span>
       <p className="text-[16px] font-semibold text-header-primary">
-        {unreadOnly ? "You’re all caught up" : "No notifications yet"}
+        {unreadOnly ? t("You're all caught up") : t("No notifications yet")}
       </p>
       <p className="mt-1 max-w-[17rem] text-[14px] leading-[18px] text-header-secondary">
         {unreadOnly
-          ? "Nothing unread right now."
-          : "Mentions, replies, and messages will show up here."}
+          ? t("Nothing unread right now.")
+          : t("Mentions, replies, and messages will show up here.")}
       </p>
     </div>
   );
@@ -169,6 +160,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
     markNotificationsRead,
     routeToNotification,
   } = useApp();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [navError, setNavError] = useState<string | null>(null);
@@ -269,31 +261,32 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
           <div
             ref={panelRef}
             role="dialog"
-            aria-label="Notifications"
+            aria-label={t("Notifications")}
             style={pos}
             className={`notif-pop${exiting ? " notif-pop-out" : ""} fixed z-[120] flex w-[480px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}
           >
             <header className="shrink-0 bg-bg-tertiary px-4 pb-3 pt-4">
               <div className="flex items-center gap-2">
                 <IconInbox size={24} className="text-interactive-normal" />
-                <h2 className="flex-1 text-[20px] font-bold leading-6 text-header-primary">Inbox</h2>
+                <h2 className="flex-1 text-[20px] font-bold leading-6 text-header-primary">{t("Inbox")}</h2>
                 <button
                   type="button"
                   onClick={() => void markNotificationsRead()}
                   disabled={unread === 0}
-                  title="Mark all as read"
-                  aria-label="Mark all as read"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-default disabled:opacity-40"
+                  title={t("Mark all as read")}
+                  aria-label={t("Mark all as read")}
+                  className="flex h-8 items-center gap-1.5 rounded-full bg-bg-secondary px-2.5 text-[13px] font-semibold text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-default disabled:opacity-40"
                 >
-                  <IconCheckAll size={18} />
+                  <IconCheckAll size={16} />
+                  {t("Read all")}
                 </button>
               </div>
               <div className="mt-3 flex gap-2">
                 <FilterTab active={filter === "all"} count={0} onClick={() => setFilter("all")}>
-                  All
+                  {t("All")}
                 </FilterTab>
                 <FilterTab active={filter === "unread"} count={unread} onClick={() => setFilter("unread")}>
-                  Unreads
+                  {t("Unreads")}
                 </FilterTab>
               </div>
             </header>
@@ -310,7 +303,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
                 groups.map((group) => (
                   <section key={group.label}>
                     <p className="sticky top-0 z-[1] bg-bg-secondary px-4 pb-1 pt-4 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
-                      {group.label}
+                      {t(group.label)}
                     </p>
                     <ul>
                       {group.items.map((n) => (
@@ -332,8 +325,8 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
         ref={btnRef}
         type="button"
         onClick={toggle}
-        title="Notifications"
-        aria-label={unseen > 0 ? `${unseen} unread notifications` : "Notifications"}
+        title={t("Notifications")}
+        aria-label={unseen > 0 ? `${unseen} ${t("Notifications")}` : t("Notifications")}
         aria-expanded={open}
         className={`relative flex shrink-0 items-center justify-center rounded-full transition-all hover:bg-interactive-hover ${
           compact ? "h-7 w-7" : "h-8 w-8"

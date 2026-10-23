@@ -4,6 +4,7 @@ import { Geist, Noto_Sans } from "next/font/google";
 import "./globals.css";
 import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { I18nProvider } from "@/contexts/I18nContext";
 
 // Geist (Vercel) — self-hosted via next/font/google → woff2 bundled at build,
 // served from our own origin, no runtime font CDN hit (privacy-first).
@@ -125,6 +126,10 @@ export default function RootLayout({
     }
   } catch (e) {}
   try {
+    var language = localStorage.getItem('disband:language');
+    if (language) document.documentElement.lang = language;
+  } catch (e) {}
+  try {
     // Desktop (Tauri) detection, set before first paint so the shell never
     // flashes a selectable, browser-shaped page before the app styles land.
     var proto = window.location.protocol;
@@ -147,7 +152,7 @@ export default function RootLayout({
         </Script>
       </head>
       <body>
-        {children}
+        <I18nProvider>{children}</I18nProvider>
         {}
       </body>
     </html>

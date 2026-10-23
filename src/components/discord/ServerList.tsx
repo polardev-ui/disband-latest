@@ -116,6 +116,7 @@ interface ServerListProps {
   dmUnreads: DmRailUnread[];
   activeDmThreadId: string | null;
   serverUnreadIds: string[];
+  serverMentionCounts?: Map<string, number>;
   folders: ServerFolder[];
   listState: ServerListState[];
   onSelectHome: () => void;
@@ -165,6 +166,7 @@ function ServerButton({
   catalystCount,
   active,
   hasUnread,
+  mentionCount,
   draggable,
   dropBefore,
   dropAfter,
@@ -179,6 +181,7 @@ function ServerButton({
   catalystCount?: number;
   active: boolean;
   hasUnread: boolean;
+  mentionCount: number;
   draggable: boolean;
   dropBefore: boolean;
   dropAfter: boolean;
@@ -289,6 +292,15 @@ function ServerButton({
               {serverInitials(server.name)}
             </span>
           )}
+          {mentionCount > 0 && (
+            <span
+              aria-label={`${mentionCount} unread ${mentionCount === 1 ? "mention" : "mentions"}`}
+              title={`${mentionCount} unread ${mentionCount === 1 ? "mention" : "mentions"}`}
+              className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-bg-tertiary bg-status-dnd px-1 text-[11px] font-bold leading-none text-white"
+            >
+              {mentionCount > 99 ? "99+" : mentionCount}
+            </span>
+          )}
           {badgeKind && (
             <span
               title={SERVER_BADGE_LABEL[badgeKind]}
@@ -324,6 +336,7 @@ export function ServerList({
   dmUnreads,
   activeDmThreadId,
   serverUnreadIds,
+  serverMentionCounts,
   folders,
   listState,
   onSelectHome,
@@ -416,6 +429,7 @@ export function ServerList({
         catalystCount={catalystCounts?.[server.id] ?? 0}
         active={active}
         hasUnread={hasUnread}
+        mentionCount={serverMentionCounts?.get(server.id) ?? 0}
         draggable
         dropBefore={dt?.kind === "space" && dt.id === server.id && dt.before}
         dropAfter={dt?.kind === "space" && dt.id === server.id && !dt.before}

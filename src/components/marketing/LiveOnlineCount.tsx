@@ -5,56 +5,90 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { PRESENCE_CHANNEL, flattenPresenceState } from "@/lib/presence";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
-const POLL_MS = 60_000;
-const CONNECT_TIMEOUT_MS = 4_000;
+const RETRY_MS = 60_000;
+const INITIAL_SYNC_TIMEOUT_MS = 4_000;
 
-export function LiveOnlineCount() {
+export function LiveOnlineCount({ compact = false }: { compact?: boolean }) {
   const [count, setCount] = useState<number | null>(null);
   const disposedRef = useRef(false);
 
   useEffect(() => {
     disposedRef.current = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let syncTimer: ReturnType<typeof setTimeout> | undefined;
+    let channel: RealtimeChannel | null = null;
+    let gotSync = false;
 
-    const poll = async () => {
-      let channel: RealtimeChannel | null = null;
-      try {
-        channel = getSupabaseClient().channel(PRESENCE_CHANNEL);
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, CONNECT_TIMEOUT_MS);
-          channel!
-            .on("presence", { event: "sync" }, () => {
-              if (disposedRef.current || !channel) return;
-              const state = channel.presenceState() as Parameters<typeof flattenPresenceState>[0];
-
-              setCount(new Set(flattenPresenceState(state).keys()).size);
-            })
-            .subscribe((status) => {
-              if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-                clearTimeout(timeout);
-                resolve();
-              }
-            });
-        });
-      } catch {
-
-      } finally {
-        if (!disposedRef.current) {
-          timer = setTimeout(() => {
-            void poll();
-          }, POLL_MS);
-        }
-        await channel?.unsubscribe().catch(() => {});
+    const readCount = (connected: RealtimeChannel) => {
+      if (disposedRef.current) return;
+      gotSync = true;
+      if (syncTimer) clearTimeout(syncTimer);
+      const state = connected.presenceState() as Parameters<typeof flattenPresenceState>[0];
+      const visibleUsers = new Set<string>();
+      for (const [userId, status] of flattenPresenceState(state)) {
+        if (status !== "offline") visibleUsers.add(userId);
       }
+      setCount(visibleUsers.size);
     };
 
-    void poll();
+    const connect = () => {
+      if (disposedRef.current) return;
+      let connected: RealtimeChannel;
+      try {
+        connected = getSupabaseClient().channel(PRESENCE_CHANNEL);
+      } catch {
+        setCount(0);
+        retryTimer = setTimeout(connect, RETRY_MS);
+        return;
+      }
+      channel = connected;
+      gotSync = false;
+
+      // Start the fallback before the socket reports SUBSCRIBED. A failed or
+      // stalled handshake should show zero, not "Checking…", and a later
+      // presence sync still replaces the zero with the real count.
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        if (!gotSync && !disposedRef.current && channel === connected) readCount(connected);
+      }, INITIAL_SYNC_TIMEOUT_MS);
+
+      connected
+        .on("presence", { event: "sync" }, () => readCount(connected))
+        .subscribe((status) => {
+          if (disposedRef.current || channel !== connected) return;
+
+          if (status === "SUBSCRIBED") return;
+
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            channel = null;
+            if (syncTimer) clearTimeout(syncTimer);
+            void connected.unsubscribe().catch(() => {});
+            retryTimer = setTimeout(connect, RETRY_MS);
+          }
+        });
+    };
+
+    connect();
 
     return () => {
       disposedRef.current = true;
-      if (timer) clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+      if (syncTimer) clearTimeout(syncTimer);
+      const active = channel;
+      channel = null;
+      if (active) void active.unsubscribe().catch(() => {});
     };
   }, []);
 
-  return <span>Online — {count === null ? "…" : count}</span>;
+  if (compact) {
+    return <span>Online — {count === null ? "…" : count.toLocaleString()}</span>;
+  }
+
+  return (
+    <span aria-live="polite">
+      {count === null
+        ? "Checking who's online…"
+        : `${count.toLocaleString()} ${count === 1 ? "person" : "people"} online now`}
+    </span>
+  );
 }
