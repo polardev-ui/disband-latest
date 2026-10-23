@@ -156,11 +156,6 @@ enum DatabaseService {
         try await client.from("servers").update(patch).eq("id", value: serverId).execute()
     }
 
-    static func kickMember(serverId: String, userId: String) async throws {
-        try await client.rpc("kick_server_member",
-                             params: ["p_server_id": serverId, "p_user_id": userId]).execute()
-    }
-
     // MARK: - Channel messages
 
     static func messages(channelId: String, limit: Int = 50, before: String? = nil) async throws -> [Message] {
