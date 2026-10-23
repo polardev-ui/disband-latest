@@ -101,7 +101,7 @@ struct MessageRow: View {
                 )
         }
         .fullScreenCover(item: $viewingMedia) { media in
-            MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName)
+            MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName, isGif: media.kind == .gif || media.url.pathExtension.lowercased() == "gif")
         }
         .sheet(item: $showingReactorsFor) { picked in
             ReactionDetailSheet(reactions: reactions, selected: picked.id)
@@ -257,7 +257,7 @@ struct MessageRow: View {
         } else if let urlString = message.attachmentUrl, let url = URL(string: urlString) {
             switch message.attachmentType {
             case .image, .gif:
-                Button { viewingMedia = ViewedMedia(url: url, kind: .image) } label: {
+                Button { viewingMedia = ViewedMedia(url: url, kind: message.attachmentType == .gif ? .gif : .image) } label: {
                     RemoteImage(url: urlString, contentMode: .fit) {
                         RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
                             .frame(height: 160)
@@ -313,12 +313,12 @@ struct MessageRow: View {
             if tiles.count > 1 {
                 AttachmentMosaic(attachments: tiles) { picked in
                     if let url = URL(string: picked.url) {
-                        viewingMedia = ViewedMedia(url: url, kind: .image)
+                        viewingMedia = ViewedMedia(url: url, kind: picked.type == .gif ? .gif : .image)
                     }
                 }
                 .frame(maxWidth: 280)
             } else if let only = tiles.first, let url = URL(string: only.url) {
-                Button { viewingMedia = ViewedMedia(url: url, kind: .image) } label: {
+                Button { viewingMedia = ViewedMedia(url: url, kind: only.type == .gif ? .gif : .image) } label: {
                     RemoteImage(url: only.url, contentMode: .fit) {
                         RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
                             .frame(height: 160)

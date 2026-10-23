@@ -33,6 +33,13 @@ struct RemoteImage<Placeholder: View>: View {
                         image: image,
                         contentMode: contentMode == .fill ? .scaleAspectFill : .scaleAspectFit
                     )
+                    // The UIKit view reports no size of its own, so without
+                    // this it filled whatever box it was offered and a GIF sat
+                    // letterboxed in empty space. Give it the image's shape.
+                    .aspectRatio(
+                        image.size.width / max(image.size.height, 1),
+                        contentMode: contentMode
+                    )
                 } else {
                     Image(uiImage: image)
                         .resizable()
