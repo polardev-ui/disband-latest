@@ -167,8 +167,9 @@ final class ChatViewModel {
         let now = Date()
         guard now.timeIntervalSince(lastTypingSentAt) >= 1.5 else { return }
         lastTypingSentAt = now
+        let watch = typingChannel
         Task {
-            await TypingService.send(topic: topic, userId: me, name: displayName)
+            await TypingService.send(topic: topic, userId: me, name: displayName, via: watch)
         }
     }
 

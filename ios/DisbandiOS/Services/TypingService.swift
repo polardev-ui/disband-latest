@@ -42,10 +42,19 @@ enum TypingService {
         return (channel, stream)
     }
 
-    static func send(topic: String, userId: String, name: String) async {
+    /// `via` is the conversation's own watch channel. `channel(topic)` hands
+    /// back the registered channel for a topic, so opening this topic again
+    /// returned the watcher, and unsubscribing it afterwards ended the watch:
+    /// after typing once, you stopped seeing anyone else type.
+    static func send(topic: String, userId: String, name: String, via: RealtimeChannelV2? = nil) async {
+        let payload = Payload(userId: userId, name: name)
+        if let via, via.status == .subscribed {
+            try? await via.broadcast(event: "typing", message: payload)
+            return
+        }
         let channel = SupabaseManager.client.channel(topic)
         await channel.subscribe()
-        try? await channel.broadcast(event: "typing", message: Payload(userId: userId, name: name))
-        await channel.unsubscribe()
+        try? await channel.broadcast(event: "typing", message: payload)
+        await SupabaseManager.client.removeChannel(channel)
     }
 }
