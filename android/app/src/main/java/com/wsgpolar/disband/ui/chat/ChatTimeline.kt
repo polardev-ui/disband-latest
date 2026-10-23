@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.ui.chat
 
+import com.wsgpolar.disband.core.leave
 import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -160,7 +161,7 @@ fun <T> rememberChatTimeline(
                                     } finally { collector.cancel() }
                                 }
                             } } finally {
-                                withContext(NonCancellable) { runCatching { live.channel.unsubscribe() } }
+                                withContext(NonCancellable) { runCatching { live.channel.leave() } }
                             }
                         } catch (e: CancellationException) {
                             throw e

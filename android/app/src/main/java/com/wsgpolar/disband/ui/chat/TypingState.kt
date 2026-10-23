@@ -1,10 +1,12 @@
 package com.wsgpolar.disband.ui.chat
 
+import com.wsgpolar.disband.core.leave
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.TypingService
+import io.github.jan.supabase.realtime.RealtimeChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +47,8 @@ class TypingState(
     private var lastSentAt = 0L
     private var watchJob: Job? = null
     private var sweepJob: Job? = null
+    /** The joined watch channel, which pings go out on too. */
+    private var watchChannel: RealtimeChannel? = null
 
     fun start(currentUserId: String, profileFor: suspend (String) -> Profile?) {
         if (watchJob != null) return
@@ -53,6 +57,7 @@ class TypingState(
         watchJob = scope.launch {
             val (channel, flow) = runCatching { TypingService.watch(topic) }.getOrNull()
                 ?: return@launch
+            watchChannel = channel
             try {
                 flow.collect { payload ->
                     // Your own keystrokes come back on the same topic.
@@ -62,7 +67,8 @@ class TypingState(
                     refresh(profileFor)
                 }
             } finally {
-                runCatching { channel.unsubscribe() }
+                watchChannel = null
+                runCatching { channel.leave() }
             }
         }
 
@@ -93,7 +99,7 @@ class TypingState(
         if (now - lastSentAt < SEND_EVERY_MS) return
         lastSentAt = now
         scope.launch {
-            TypingService.send(TypingService.topic(kind, parentId), currentUserId, displayName)
+            TypingService.send(TypingService.topic(kind, parentId), currentUserId, displayName, via = watchChannel)
         }
     }
 
