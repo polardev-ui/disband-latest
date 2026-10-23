@@ -38,7 +38,19 @@ struct MessageRow: View {
     /// The reaction whose reactor list is open, if any.
     @State private var showingReactorsFor: ReactedEmoji?
 
-    private var authorName: String { message.author?.name ?? "Unknown" }
+    /// A webhook message shows the webhook's name and picture (or the
+    /// per-message override), not the identity behind it.
+    private var authorName: String { message.webhook?.name ?? message.author?.name ?? "Unknown" }
+    private var authorAvatar: String? { message.webhook?.avatarUrl ?? message.author?.avatarUrl }
+    /// Webhooks and bots get Discord's APP tag.
+    private var isApp: Bool { message.webhook != nil || message.author?.isBot == true }
+
+    /// Opens the author's profile, except for webhooks, which have none
+    /// worth showing.
+    private func tapAuthor() {
+        guard message.webhook == nil, let a = message.author else { return }
+        onTapAuthor(a)
+    }
 
     /// The stored filename, or the last path component when one was never
     /// recorded — anything but a bare "Attachment".
@@ -115,8 +127,8 @@ struct MessageRow: View {
             if grouped {
                 Color.clear.frame(width: 40)
             } else {
-                Button { if let a = message.author { onTapAuthor(a) } } label: {
-                    AvatarView(url: message.author?.avatarUrl, name: authorName, size: 40)
+                Button { tapAuthor() } label: {
+                    AvatarView(url: authorAvatar, name: authorName, size: 40)
                 }
                 .buttonStyle(.plain)
             }
@@ -129,7 +141,9 @@ struct MessageRow: View {
                         Text(authorName)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
-                            .onTapGesture { if let a = message.author { onTapAuthor(a) } }
+                            .lineLimit(1)
+                            .onTapGesture { tapAuthor() }
+                        if isApp { AppTag() }
                         Text(RelativeTime.short(message.createdAt))
                             .font(.caption2).foregroundStyle(Brand.textMuted)
                     }
@@ -159,6 +173,11 @@ struct MessageRow: View {
                 // from the message instead of read out as raw text.
                 if !message.content.isEmpty {
                     MessageEmbeds(text: message.content)
+                }
+
+                // Rich embeds from webhooks and bots.
+                ForEach(Array(message.embeds.enumerated()), id: \.offset) { _, embed in
+                    RichEmbedView(embed: embed, onTapMention: onTapMention)
                 }
 
                 attachment
@@ -366,4 +385,17 @@ struct ViewedMedia: Identifiable {
 /// A mutable frame SwiftUI does not observe. See `MessageRow.frameBox`.
 final class FrameBox {
     var frame: CGRect = .zero
+}
+
+/// The small blurple tag Discord shows beside bots and webhooks.
+struct AppTag: View {
+    var body: some View {
+        Text("APP")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color(hex: 0x5865F2), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .accessibilityLabel("App")
+    }
 }

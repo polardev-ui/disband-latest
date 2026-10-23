@@ -787,13 +787,15 @@ final class ChatViewModel {
         }
 
         let author = await resolveProfile(row.authorId)
-        let message = DisplayMessage(
+        var message = DisplayMessage(
             id: row.id, authorId: row.authorId, author: author,
             content: row.content ?? "", attachmentUrl: row.attachmentUrl,
             attachmentType: row.attachmentType, replyToId: row.replyToId,
             createdAt: row.createdAt, editedAt: row.editedAt,
             mentions: row.mentions
         )
+        message.embeds = row.embeds ?? []
+        message.webhook = row.webhook
         // Already here under its real id — the send promoted it before the
         // echo arrived, which is the normal order. Refresh it rather than
         // appending a duplicate.
