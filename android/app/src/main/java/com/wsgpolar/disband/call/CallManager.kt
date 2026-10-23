@@ -86,6 +86,15 @@ class CallManager(
     private val _connectedAt = MutableStateFlow<Long?>(null)
     val connectedAt: StateFlow<Long?> = _connectedAt.asStateFlow()
 
+    private val _answerRequested = MutableStateFlow(false)
+
+    /**
+     * Answer was tapped on the ring notification. The call screen picks this
+     * up and answers through the microphone-permission check, so a call is
+     * never picked up with no way to be heard.
+     */
+    val answerRequested: StateFlow<Boolean> = _answerRequested.asStateFlow()
+
     /** Display name used on `ring`/`reject`; set when the profile loads. */
     var myName: String = "User"
 
@@ -213,10 +222,19 @@ class CallManager(
         scope.launch { runCatching { endCall() } }
     }
 
-    /** "Answer" on an incoming-call notification. */
-    fun answerFromNotification() {
+    /** "Decline" on the ring notification: a reject, as the call screen sends. */
+    fun declineFromNotification() {
         val call = _incoming.value ?: return
-        scope.launch { runCatching { acceptCall(call) } }
+        scope.launch { runCatching { rejectCall(call) } }
+    }
+
+    /** "Answer" on the ring notification, which opens the app to answer. */
+    fun requestAnswer() {
+        if (_phase.value == CallPhase.Incoming) _answerRequested.value = true
+    }
+
+    fun consumeAnswerRequest() {
+        _answerRequested.value = false
     }
 
     suspend fun endCall() {
@@ -514,6 +532,7 @@ class CallManager(
         sendChannel = null
         _phase.value = CallPhase.Idle
         _incoming.value = null
+        _answerRequested.value = false
         _activePeer.value = null
         activeCallId = null
         activePeerId = null
