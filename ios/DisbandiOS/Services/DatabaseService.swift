@@ -51,11 +51,35 @@ enum DatabaseService {
     /// worked, but the prior "fetch ids then profiles(ids:)" fallback built a
     /// `profiles?select=*&id=in.(...)` URL past the proxy limit on big servers
     /// and 400'd, so this path never fetches profiles by id at all.
-    static func members(serverId: String) async throws -> [ServerMember] {
-        let rows: [ServerMember] = try await client
-            .rpc("get_server_members", params: ["p_server_id": serverId])
-            .execute().value
-        return rows
+    ///
+    /// Page through the RPC. A single call is capped at 1,000 rows, which made
+    /// every member past the first thousand invisible on large spaces.
+    static func members(serverId: String, pageSize: Int = 500) async throws -> [ServerMember] {
+        struct Params: Encodable {
+            let p_server_id: String
+            let p_page: Int
+            let p_page_size: Int
+        }
+        var all: [ServerMember] = []
+        var seen = Set<String>()
+        var page = 1
+        // 30 * 500 = 15,000 members; enough headroom to avoid an accidental
+        // infinite loop if the server ever ignores the offset.
+        while page <= 30 {
+            let rows: [ServerMember] = try await client
+                .rpc("get_server_members", params: Params(
+                    p_server_id: serverId,
+                    p_page: page,
+                    p_page_size: pageSize,
+                ))
+                .execute().value
+            for row in rows where seen.insert(row.userId).inserted {
+                all.append(row)
+            }
+            if rows.count < pageSize { break }
+            page += 1
+        }
+        return all
     }
 
     @discardableResult

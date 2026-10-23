@@ -25,10 +25,17 @@ final class PresenceService {
     /// Live status per user id, sourced from the presence channel.
     private(set) var statuses: [String: UserStatus] = [:]
 
+    /// Every live client entry, keyed by the server's presence reference.
+    /// A person can be signed in on more than one device or tab; keeping the
+    /// refs separately means one session leaving (or being invisible) cannot
+    /// erase another session that is still online.
+    private var presenceRefs: [String: PresencePayload] = [:]
+
     private var client: SupabaseClient { SupabaseManager.client }
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
     private var ownUserId: String?
+    private var ownStatus: UserStatus?
 
     /// Join the shared channel and publish our own status. Call on sign-in with the
     /// current user id and their existing (or default) status.
@@ -36,6 +43,8 @@ final class PresenceService {
         stop()
         guard let userId else { return }
         ownUserId = userId
+        ownStatus = status
+        statuses[userId] = status
 
         let channel = client.channel("presence:global")
         self.channel = channel
@@ -56,6 +65,7 @@ final class PresenceService {
     /// own UI reflects the change immediately.
     func update(_ status: UserStatus) async {
         guard let ownUserId else { return }
+        ownStatus = status
         statuses[ownUserId] = status
         try? await channel?.track(PresencePayload(userId: ownUserId, status: status))
     }
@@ -70,20 +80,42 @@ final class PresenceService {
 
     private func apply(_ action: any PresenceAction) async {
         let decoder = JSONDecoder()
-        if let joins = try? action.decodeJoins(as: PresencePayload.self, decoder: decoder) {
-            for entry in joins {
-                statuses[entry.userId] = entry.status
+        var changed = false
+
+        for entry in action.joins.values {
+            guard let payload = try? entry.decodeState(as: PresencePayload.self, decoder: decoder) else {
+                continue
+            }
+            presenceRefs[entry.ref] = payload
+            changed = true
+        }
+
+        // A leave is for one presence ref, not necessarily the person's only
+        // session. Remove just that ref and rebuild from what remains.
+        for entry in action.leaves.values {
+            if presenceRefs.removeValue(forKey: entry.ref) != nil {
+                changed = true
             }
         }
-        // When a client's presence is dropped (app closed / offline), remove it so a
-        // friend's live status reads as offline rather than a stale cached one.
-        if let leaves = try? action.decodeLeaves(as: PresencePayload.self, decoder: decoder) {
-            for entry in leaves {
-                if entry.userId != ownUserId {
-                    statuses.removeValue(forKey: entry.userId)
-                }
+
+        if changed { rebuildStatuses() }
+    }
+
+    private func rebuildStatuses() {
+        var next: [String: UserStatus] = [:]
+        for payload in presenceRefs.values {
+            let current = next[payload.userId]
+            // Invisible/offline must never mask another live session.
+            if current == nil || current == .offline || payload.status != .offline {
+                next[payload.userId] = payload.status
             }
         }
+        // Our own entry can arrive without a decodable state payload, so keep
+        // the status this client knows it published.
+        if let ownUserId, let ownStatus {
+            next[ownUserId] = ownStatus
+        }
+        statuses = next
     }
 
     func stop() {
@@ -95,6 +127,8 @@ final class PresenceService {
             await channel?.untrack()
             await channel?.unsubscribe()
         }
+        presenceRefs = [:]
+        ownStatus = nil
         statuses = [:]
     }
 }

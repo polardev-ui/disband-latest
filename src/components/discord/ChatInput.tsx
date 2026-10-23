@@ -7,7 +7,7 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconAttach, IconPoll, IconClose, IconGame, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
-import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent } from "@/lib/utils";
+import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent, roleMentionSlug } from "@/lib/utils";
 import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/composer-tokens";
 import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
 import { useMemberSearch } from "@/hooks/useMemberSearch";
@@ -427,18 +427,25 @@ export function ChatInput({
         insert: `@${displayName(m)}`,
         profile: m,
       }));
-    const roleItems: MentionItem[] = roles
-      .filter((r) => q === "" || r.name.toLowerCase().includes(q))
-      .map((r) => ({
-        id: r.id,
-        kind: "role" as const,
-        label: r.name,
-        sublabel: "Role",
-        insert: `@${r.name.replace(/\s+/g, "-").toLowerCase()}`,
-        color: r.color,
-      }));
+    // Roles live in their own @& namespace. Without that marker a role named
+    // "Staff" and a member named "staff" resolve to the same token, and the
+    // member wins — exactly the wrong person gets pinged.
+    const canMentionRoles = !!serverId && !!serverPermissions?.mention_everyone;
+    const roleItems: MentionItem[] = canMentionRoles
+      ? roles
+          .filter((r) => !r.is_default && (q === "" || r.name.toLowerCase().includes(q)))
+          .map((r) => ({
+            id: r.id,
+            kind: "role" as const,
+            label: r.name,
+            sublabel: "Role",
+            insert: `@&${roleMentionSlug(r.name)}`,
+            color: r.color,
+          }))
+          .filter((item) => item.insert.length > 2)
+      : [];
     return [...tetherItems, ...everyoneItems, ...memberItems, ...roleItems].slice(0, 8);
-  }, [mentionCtx, memberMatches, roles, tetherEnabled, tetherProfile, serverId]);
+  }, [mentionCtx, memberMatches, roles, tetherEnabled, tetherProfile, serverId, serverPermissions]);
 
   // Validate at pick time so an oversize file never looks stageable only to
   // fail at send (uploadMedia enforces the same limit as a backstop).

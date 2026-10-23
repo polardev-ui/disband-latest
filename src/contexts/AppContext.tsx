@@ -36,7 +36,7 @@ import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getLastChannelId, setLastChannelId } from "@/lib/server-last-channel";
 import { getCached, setCache } from "@/lib/app-cache";
 import { refreshOwnBadges } from "@/lib/badge-store";
-import { parseMentions, parseMentionTokens, normalizeMessageContent, displayName } from "@/lib/utils";
+import { parseMentions, parseMentionTokens, parseRoleMentionTokens, roleMentionSlug, normalizeMessageContent, displayName } from "@/lib/utils";
 import {
   AWAY_AFTER_MS,
   flattenPresenceListening,
@@ -53,6 +53,7 @@ import {
   type Listening,
 } from "@/lib/music-presence";
 import {
+  appendLiveMessage,
   fallbackAuthor,
   matchesOptimisticRow,
   mergeFetchedRows,
@@ -516,6 +517,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const maxBioLengthRef = useRef(190);
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
   const mentionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Author rows for live messages, shared by the per-conversation feed and the
+  // always-on notification feed so a message is looked up once even when both
+  // subscriptions receive it.
+  const liveAuthorCacheRef = useRef<Map<string, { profile: Profile; at: number }>>(new Map());
+  const liveAuthorInflightRef = useRef<Map<string, Promise<Profile | undefined>>>(new Map());
+  // Newest rendered row per conversation. The fast catch-up poll reads these
+  // instead of closing over state, so every message does not tear down and
+  // restart its timer.
+  const messagesRef = useRef(messages);
+  const dmMessagesRef = useRef(dmMessages);
+  const groupMessagesRef = useRef(groupMessages);
+  // Set when the open conversation's realtime channel reports an error. The
+  // safety-net poll then runs at 100 ms until it reconnects.
+  const liveFeedDownRef = useRef(false);
   // Mirrors the runner's latest Spotify poll so presence re-tracks (status
   // changes, channel resubscribes) carry the current track without needing
   // the poll loop to be re-run.
@@ -578,6 +593,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setAddingAccount(false);
   }, [session?.user?.id]);
+
+  // Private Broadcast channels authorize the websocket with the current
+  // access token. supabase-js only forwards SIGNED_IN/TOKEN_REFRESHED events;
+  // a session restored from storage emits INITIAL_SESSION, so set it here as
+  // well or a restored tab cannot join a private channel.
+  useEffect(() => {
+    if (!configured) return;
+    const supabase = getSupabaseClient();
+    void supabase.realtime.setAuth(session?.access_token ?? null);
+  }, [configured, session?.access_token]);
   channelsRef.current = channels;
   serversRef.current = servers;
   dmThreadsRef.current = dmThreads;
@@ -1022,22 +1047,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    liveAuthorCacheRef.current.clear();
+    liveAuthorInflightRef.current.clear();
+  }, [userId]);
+
+  const resolveLiveAuthor = useCallback((authorId: string): Promise<Profile | undefined> => {
+    const self = profileRef.current;
+    if (!authorId || authorId === userId) return Promise.resolve(self ?? undefined);
+
+    const cached = liveAuthorCacheRef.current.get(authorId);
+    if (cached && Date.now() - cached.at < 60_000) return Promise.resolve(cached.profile);
+
+    const inflight = liveAuthorInflightRef.current.get(authorId);
+    if (inflight) return inflight;
+
+    const run = (async () => {
+      const { data } = await getSupabaseClient()
+        .from("profiles")
+        .select("*")
+        .eq("id", authorId)
+        .maybeSingle();
+      const profile = (data as Profile | null) ?? undefined;
+      if (profile) {
+        if (liveAuthorCacheRef.current.size > 250) liveAuthorCacheRef.current.clear();
+        liveAuthorCacheRef.current.set(authorId, { profile, at: Date.now() });
+      }
+      return profile;
+    })().finally(() => {
+      liveAuthorInflightRef.current.delete(authorId);
+    });
+    liveAuthorInflightRef.current.set(authorId, run);
+    return run;
+  }, [userId]);
+
+  const setLocalPresence = useCallback((status: UserStatus) => {
+    if (!userId) return;
+    setPresenceMap((prev) => {
+      if (prev.get(userId) === status) return prev;
+      const next = new Map(prev);
+      next.set(userId, status);
+      return next;
+    });
+  }, [userId]);
+
   const setLiveStatus = useCallback(async (status: UserStatus) => {
     if (!userId) return;
     const current = profileRef.current;
     if (current) {
       patchProfileInState({ ...current, status, updated_at: new Date().toISOString() });
     }
+    setLocalPresence(status);
     await getSupabaseClient().from("profiles").update({ status }).eq("id", userId);
     const payload: PresencePayload = { userId, status, listening: listeningRef.current };
     void presenceChannelRef.current?.track(payload).then();
-  }, [userId, patchProfileInState]);
+  }, [userId, patchProfileInState, setLocalPresence]);
 
   const trackPresence = useCallback(async (status: UserStatus) => {
     if (!userId) return;
+    setLocalPresence(status);
     const payload: PresencePayload = { userId, status, listening: listeningRef.current };
     void presenceChannelRef.current?.track(payload).then();
-  }, [userId]);
+  }, [userId, setLocalPresence]);
 
   const markActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -1094,7 +1165,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         presenceChannelRef.current = channel;
         const preferred = profileRef.current?.preferred_status ?? "online";
         const live = profileRef.current?.status ?? "online";
-        await channel.track({ userId, status: live === "offline" && preferred !== "offline" ? preferred : live, listening: listeningRef.current } satisfies PresencePayload);
+        const effective = live === "offline" && preferred !== "offline" ? preferred : live;
+        // Paint our own row immediately. Waiting for the next presence sync
+        // made the signed-in member look offline in the roster for a moment.
+        setLocalPresence(effective);
+        await channel.track({ userId, status: effective, listening: listeningRef.current } satisfies PresencePayload);
       }
     });
     return () => {
@@ -2149,25 +2224,137 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchGroupMessages]);
 
-  // Safety net for dropped realtime events: poll the open conversation so a
-  // message that the live subscription missed still appears without having
-  // to leave and come back. Also catch up whenever the tab regains focus.
+  // Keep the poll's view of the newest row current without making the poll
+  // effect depend on the message arrays (which would restart its timer on
+  // every insert).
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+  useEffect(() => {
+    dmMessagesRef.current = dmMessages;
+  }, [dmMessages]);
+  useEffect(() => {
+    groupMessagesRef.current = groupMessages;
+  }, [groupMessages]);
+
+  // Realtime Postgres Changes is pushed on the Realtime server's CDC poll
+  // (about a second), so a healthy live channel can still show a message a
+  // second late. Poll a single indexed row every 100 ms while a conversation
+  // is open, and only reload the page of messages when the newest id actually
+  // changed. The full refresh still runs once a second for edits, deletes and
+  // history; a channel error drops straight back to 100 ms full reloads.
   useEffect(() => {
     if (!configured || !userId) return;
-    const tick = () => {
-      if (activeDmThreadId) void loadDmMessages(activeDmThreadId);
-      if (activeGroupChatId) void loadGroupMessages(activeGroupChatId);
+    let stopped = false;
+    let timer: number | undefined;
+    let fullTicks = 0;
+    let checking = false;
+
+    const reloadActive = () => {
+      if (viewModeRef.current === "space" && activeChannelId) void loadMessages(activeChannelId);
+      if (viewModeRef.current === "dm" && activeDmThreadId) void loadDmMessages(activeDmThreadId);
+      if (viewModeRef.current === "group" && activeGroupChatId) void loadGroupMessages(activeGroupChatId);
     };
-    const id = window.setInterval(tick, 1000);
+
+    const newestLoadedId = (rows: { id: string }[]): string | null => {
+      for (let i = rows.length - 1; i >= 0; i -= 1) {
+        if (!rows[i].id.startsWith("opt-")) return rows[i].id;
+      }
+      return null;
+    };
+
+    const checkLatest = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const supabase = getSupabaseClient();
+        const mode = viewModeRef.current;
+        if (mode === "space" && activeChannelId) {
+          const { data } = await supabase
+            .from("messages")
+            .select("*, author:profiles(*)")
+            .eq("channel_id", activeChannelId)
+            // A changing bound keeps the browser from serving the previous
+            // poll out of its HTTP cache. Every stored message is in the past.
+            .lte("created_at", new Date(Date.now() + 3_600_000).toISOString())
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (activeChannelRef.current !== activeChannelId) return;
+          const row = data as (Message & { author?: Profile | null }) | null;
+          if (!row || row.id === newestLoadedId(messagesRef.current)) return;
+          setMessages((prev) => appendLiveMessage(prev, row, row.author ?? null));
+          return;
+        }
+        if (mode === "dm" && activeDmThreadId) {
+          const { data } = await supabase
+            .from("dm_messages")
+            .select("*, author:profiles(*)")
+            .eq("thread_id", activeDmThreadId)
+            .lte("created_at", new Date(Date.now() + 3_600_000).toISOString())
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (activeDmRef.current !== activeDmThreadId) return;
+          const row = data as (DmMessage & { author?: Profile | null }) | null;
+          if (!row || row.id === newestLoadedId(dmMessagesRef.current)) return;
+          setDmMessages((prev) => appendLiveMessage(prev, row, row.author ?? null));
+          bumpDmThreadActivity(row.thread_id, row.created_at);
+          return;
+        }
+        if (mode === "group" && activeGroupChatId) {
+          const { data } = await supabase
+            .from("group_messages")
+            .select("*, author:profiles(*)")
+            .eq("group_id", activeGroupChatId)
+            .lte("created_at", new Date(Date.now() + 3_600_000).toISOString())
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (activeGroupRef.current !== activeGroupChatId) return;
+          const row = data as (GroupMessage & { author?: Profile | null }) | null;
+          if (!row || row.id === newestLoadedId(groupMessagesRef.current)) return;
+          setGroupMessages((prev) => appendLiveMessage(prev, row, row.author ?? null));
+        }
+      } catch {
+        // Offline or a transient REST failure: the next tick retries, and the
+        // realtime feed remains the primary path.
+      } finally {
+        checking = false;
+      }
+    };
+
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      fullTicks += 1;
+      if (liveFeedDownRef.current || fullTicks % 10 === 0) {
+        reloadActive();
+      } else {
+        void checkLatest();
+      }
+    };
+    const interval = activeChannelId || activeDmThreadId || activeGroupChatId ? 100 : 1000;
+    const schedule = () => {
+      if (stopped) return;
+      timer = window.setTimeout(() => {
+        tick();
+        schedule();
+      }, interval);
+    };
+    schedule();
     const onVisible = () => {
-      if (document.visibilityState === "visible") tick();
+      if (document.visibilityState === "visible") {
+        fullTicks = 0;
+        reloadActive();
+      }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.clearInterval(id);
+      stopped = true;
+      if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [configured, userId, activeDmThreadId, activeGroupChatId, loadDmMessages, loadGroupMessages]);
+  }, [configured, userId, activeChannelId, activeDmThreadId, activeGroupChatId, loadMessages, loadDmMessages, loadGroupMessages, bumpDmThreadActivity]);
 
   const loadMoreGroupMessages = useCallback(async () => {
     if (!activeGroupChatId || !groupHasMore || groupMessages.length === 0) return;
@@ -2733,6 +2920,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!activeChannelId || !configured || !userId) return;
+    liveFeedDownRef.current = false;
     void loadMessages(activeChannelId);
     const supabase = getSupabaseClient();
     // Self-healing live feed. Each subscription gets its own topic: reusing
@@ -2754,12 +2942,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const msg = payload.new as Message;
 
           if (activeChannelRef.current !== activeChannelId) return;
-          void (async () => {
-            let author: Profile | undefined = profileRef.current ?? undefined;
-            if (msg.author_id !== userId) {
-              const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
-              author = data as Profile | undefined;
-            }
+          void resolveLiveAuthor(msg.author_id).then((author) => {
+            if (activeChannelRef.current !== activeChannelId) return;
             setMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) return prev;
               const withoutDupes = prev.filter(
@@ -2770,7 +2954,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               // author fills in on the next reload.
               return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
             });
-          })();
+          });
         },
       )
       .on(
@@ -2796,12 +2980,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe((status) => {
         if (disposed) return;
         if (status === "SUBSCRIBED") {
+          liveFeedDownRef.current = false;
           // Rejoined after a drop: fetch whatever arrived while we were gone.
           if (attempt > 0) void loadMessages(activeChannelId);
           attempt = 0;
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          liveFeedDownRef.current = true;
           void supabase.removeChannel(sub);
           retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
         }
@@ -2813,10 +2999,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearTimeout(retry);
       void supabase.removeChannel(sub);
     };
-  }, [activeChannelId, configured, userId, loadMessages]);
+  }, [activeChannelId, configured, userId, loadMessages, resolveLiveAuthor]);
 
   useEffect(() => {
     if (!activeDmThreadId || !configured || !userId) return;
+    liveFeedDownRef.current = false;
     void loadDmMessages(activeDmThreadId);
     const supabase = getSupabaseClient();
     // Self-healing live feed. Each subscription gets its own topic: reusing
@@ -2838,12 +3025,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const msg = payload.new as DmMessage;
 
           if (msg.thread_id !== activeDmRef.current) return;
-          void (async () => {
-            let author: Profile | undefined = profileRef.current ?? undefined;
-            if (msg.author_id !== userId) {
-              const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
-              author = data as Profile | undefined;
-            }
+          void resolveLiveAuthor(msg.author_id).then((author) => {
+            if (msg.thread_id !== activeDmRef.current) return;
             setDmMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) return prev;
               const withoutDupes = prev.filter(
@@ -2885,7 +3068,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 msg.thread_id,
               );
             }
-          })();
+          });
         },
       )
       .on(
@@ -2909,12 +3092,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe((status) => {
         if (disposed) return;
         if (status === "SUBSCRIBED") {
+          liveFeedDownRef.current = false;
           // Rejoined after a drop: fetch whatever arrived while we were gone.
           if (attempt > 0) void loadDmMessages(activeDmThreadId);
           attempt = 0;
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          liveFeedDownRef.current = true;
           void supabase.removeChannel(sub);
           retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
         }
@@ -2926,10 +3111,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearTimeout(retry);
       void supabase.removeChannel(sub);
     };
-  }, [activeDmThreadId, configured, userId, loadDmMessages, bumpDmThreadActivity]);
+  }, [activeDmThreadId, configured, userId, loadDmMessages, bumpDmThreadActivity, resolveLiveAuthor]);
 
   useEffect(() => {
     if (!activeGroupChatId || !configured || !userId) return;
+    liveFeedDownRef.current = false;
     void loadGroupMessages(activeGroupChatId);
     const supabase = getSupabaseClient();
     // Self-healing live feed. Each subscription gets its own topic: reusing
@@ -2955,18 +3141,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             clearGroupUnread(msg.group_id);
             void markGroupReadNow(msg.group_id);
           }
-          void (async () => {
-            if (msg.author_id == null) {
-              setGroupMessages((prev) =>
-                prev.some((m) => m.id === msg.id) ? prev : [...prev, { ...msg }],
-              );
-              return;
-            }
-            let author: Profile | undefined = profileRef.current ?? undefined;
-            if (msg.author_id !== userId) {
-              const { data } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
-              author = data as Profile | undefined;
-            }
+          if (msg.author_id == null) {
+            setGroupMessages((prev) =>
+              prev.some((m) => m.id === msg.id) ? prev : [...prev, { ...msg }],
+            );
+            return;
+          }
+          void resolveLiveAuthor(msg.author_id).then((author) => {
+            if (msg.group_id !== activeGroupRef.current) return;
             setGroupMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) return prev;
               const withoutDupes = prev.filter(
@@ -2977,7 +3159,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               // author fills in on the next reload.
               return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
             });
-          })();
+          });
         },
       )
       .on(
@@ -3001,12 +3183,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .subscribe((status) => {
         if (disposed) return;
         if (status === "SUBSCRIBED") {
+          liveFeedDownRef.current = false;
           // Rejoined after a drop: fetch whatever arrived while we were gone.
           if (attempt > 0) void loadGroupMessages(activeGroupChatId);
           attempt = 0;
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          liveFeedDownRef.current = true;
           void supabase.removeChannel(sub);
           retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
         }
@@ -3018,7 +3202,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearTimeout(retry);
       void supabase.removeChannel(sub);
     };
-  }, [activeGroupChatId, configured, userId, loadGroupMessages]);
+  }, [activeGroupChatId, configured, userId, loadGroupMessages, resolveLiveAuthor]);
+
+  // Postgres Changes is delivered on the Realtime server's CDC poll (about a
+  // second), so the live feed alone still feels late. A database trigger also
+  // broadcasts each insert on a private per-conversation topic; that arrives
+  // over the already-open websocket immediately. CDC and the 100 ms poll stay
+  // as fallbacks, and every path dedupes by message id.
+  useEffect(() => {
+    if (!configured || !userId) return;
+    let topic: string | null = null;
+    let kind: "channel" | "dm" | "group" | null = null;
+    if (viewMode === "space" && activeChannelId) {
+      topic = `messages:ch:${activeChannelId}`;
+      kind = "channel";
+    } else if (viewMode === "dm" && activeDmThreadId) {
+      topic = `messages:dm:${activeDmThreadId}`;
+      kind = "dm";
+    } else if (viewMode === "group" && activeGroupChatId) {
+      topic = `messages:group:${activeGroupChatId}`;
+      kind = "group";
+    }
+    if (!topic || !kind) return;
+
+    const channelTopic = topic;
+    const supabase = getSupabaseClient();
+    let disposed = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let sub: RealtimeChannel;
+    const connect = () => {
+      if (disposed) return;
+      const channel = supabase.channel(channelTopic, {
+        config: { private: true, broadcast: { self: false } },
+      });
+      sub = channel;
+      channel.on("broadcast", { event: "INSERT" }, ({ payload }) => {
+        const data = payload as { record?: Record<string, unknown>; author?: Profile | null };
+        const record = data.record;
+        if (!record || typeof record.id !== "string") return;
+        const author = data.author ?? null;
+        if (kind === "channel") {
+          if (activeChannelRef.current !== activeChannelId) return;
+          const row = record as unknown as Message;
+          if (row.channel_id !== activeChannelId) return;
+          setMessages((prev) => appendLiveMessage(prev, row, author));
+          return;
+        }
+        if (kind === "dm") {
+          if (activeDmRef.current !== activeDmThreadId) return;
+          const row = record as unknown as DmMessage;
+          if (row.thread_id !== activeDmThreadId) return;
+          setDmMessages((prev) => appendLiveMessage(prev, row, author));
+          return;
+        }
+        if (activeGroupRef.current !== activeGroupChatId) return;
+        const row = record as unknown as GroupMessage;
+        if (row.group_id !== activeGroupChatId) return;
+        setGroupMessages((prev) => appendLiveMessage(prev, row, author));
+      });
+      channel.subscribe((status) => {
+        if (disposed || sub !== channel) return;
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void supabase.removeChannel(channel);
+          retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
+        }
+      });
+    };
+    connect();
+    return () => {
+      disposed = true;
+      clearTimeout(retry);
+      void supabase.removeChannel(sub);
+    };
+  }, [configured, userId, viewMode, activeChannelId, activeDmThreadId, activeGroupChatId]);
 
   useEffect(() => {
     if (!userId || !configured || groupChats.length === 0) return;
@@ -3225,13 +3486,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "dm_messages" },
         (payload) => {
           const msg = payload.new as DmMessage;
-          if (msg.author_id === userId) return;
           const inActiveDmChat =
             viewModeRef.current === "dm" && activeDmRef.current === msg.thread_id;
+
+          // The always-on feed also paints the open thread. This is the path
+          // that still delivers instantly while a conversation's own channel
+          // is being torn down and re-subscribed during a switch.
+          if (inActiveDmChat) {
+            void resolveLiveAuthor(msg.author_id).then((author) => {
+              if (viewModeRef.current !== "dm" || activeDmRef.current !== msg.thread_id) return;
+              setDmMessages((prev) => {
+                if (prev.some((m) => m.id === msg.id)) return prev;
+                const withoutDupes = prev.filter(
+                  (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
+                );
+                return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
+              });
+              bumpDmThreadActivity(msg.thread_id, msg.created_at);
+            });
+          }
+
+          if (msg.author_id === userId) return;
           if (inActiveDmChat) return;
 
           void (async () => {
-            const { data: author } = await supabase.from("profiles").select("*").eq("id", msg.author_id).maybeSingle();
+            const author = await resolveLiveAuthor(msg.author_id);
             if (!author) return;
             // A new message from them brings a closed DM row back, with history.
             setClosedDmFriendIds((prev) => {
@@ -3248,7 +3527,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const next = new Map(prev);
               const cur = next.get(msg.thread_id);
               next.set(msg.thread_id, {
-                friend: author as Profile,
+                friend: author,
                 count: (cur?.count ?? 0) + 1,
                 latestAt: msg.created_at,
               });
@@ -3260,7 +3539,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               void loadDmThreads(userId);
             }
             alertIncomingDm(
-              displayName(author as Profile),
+              displayName(author),
               msg.content.slice(0, 120) || undefined,
               profileRef.current,
               msg.thread_id,
@@ -3270,7 +3549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
-  }, [userId, configured, bumpDmThreadActivity, loadDmThreads]);
+  }, [userId, configured, bumpDmThreadActivity, loadDmThreads, resolveLiveAuthor]);
 
   useEffect(() => {
     if (!userId || !configured) return;
@@ -3318,10 +3597,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const msg = payload.new as Message;
-          if (msg.author_id === userId) return;
           const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
           const viewingChannel =
             viewModeRef.current === "space" && activeChannelRef.current === msg.channel_id;
+
+          // Always-on second delivery path for the open channel. The
+          // per-channel feed handles the same insert; the message id makes
+          // that idempotent, and this path survives a channel switch.
+          if (viewingChannel) {
+            void resolveLiveAuthor(msg.author_id).then((author) => {
+              if (viewModeRef.current !== "space" || activeChannelRef.current !== msg.channel_id) return;
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === msg.id)) return prev;
+                const withoutDupes = prev.filter(
+                  (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
+                );
+                return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
+              });
+            });
+          }
+
+          if (msg.author_id === userId) return;
           if (channel && !viewingChannel) {
             setChannelUnreadMap((prev) => {
               const next = new Map(prev);
@@ -3332,24 +3628,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           if (msg.mentions?.includes(userId)) return;
           if (!channel) return;
-          void (async () => {
-            const { data: author } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", msg.author_id)
-              .maybeSingle();
+          void resolveLiveAuthor(msg.author_id).then((author) => {
             if (!author) return;
             notifyUser(
               `#${channel.name}`,
-              `${displayName(author as Profile)}: ${msg.content.slice(0, 120)}`,
+              `${displayName(author)}: ${msg.content.slice(0, 120)}`,
               { kind: "channel", channelId: msg.channel_id },
             );
-          })();
+          });
         },
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
-  }, [userId, configured]);
+  }, [userId, configured, resolveLiveAuthor]);
 
   useEffect(() => {
     if (!userId || !configured || servers.length === 0) return;
@@ -3386,13 +3677,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "INSERT", schema: "public", table: "group_messages" },
         (payload) => {
           const msg = payload.new as GroupMessage;
-          if (msg.author_id === userId) return;
+          const activeGroup =
+            viewModeRef.current === "group" && activeGroupRef.current === msg.group_id;
 
+          // Always-on second delivery path for the open group. The group's own
+          // channel handles the same insert; the message id makes it
+          // idempotent, and this path survives a channel switch.
+          if (activeGroup) {
+            if (msg.author_id == null) {
+              setGroupMessages((prev) =>
+                prev.some((m) => m.id === msg.id) ? prev : [...prev, { ...msg }],
+              );
+            } else {
+              void resolveLiveAuthor(msg.author_id).then((author) => {
+                if (viewModeRef.current !== "group" || activeGroupRef.current !== msg.group_id) return;
+                setGroupMessages((prev) => {
+                  if (prev.some((m) => m.id === msg.id)) return prev;
+                  const withoutDupes = prev.filter(
+                    (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, msg)),
+                  );
+                  return [...withoutDupes, { ...msg, author: author ?? fallbackAuthor(msg.author_id) }];
+                });
+              });
+            }
+          }
+
+          if (msg.author_id === userId) return;
           if (msg.mentions?.includes(userId)) return;
           const group = groupChatsRef.current.find((g) => g.id === msg.group_id);
           if (!group) return;
 
-          if (viewModeRef.current === "group" && activeGroupRef.current === msg.group_id && document.visibilityState === "visible") {
+          if (activeGroup && document.visibilityState === "visible") {
             clearGroupUnread(msg.group_id);
             void markGroupReadNow(msg.group_id);
           } else {
@@ -3406,7 +3721,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
-  }, [userId, configured]);
+  }, [userId, configured, resolveLiveAuthor]);
 
   const signIn = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {
     // Pre-gate: per-IP/email rate limit + VPN/proxy check (login only —
@@ -4892,6 +5207,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return [...ids];
   }, [members, activeServerId]);
 
+  /**
+   * Resolve @&role tokens to the role's current members. The role list is
+   * small and already loaded; the membership query is authoritative because
+   * the composer only holds a page of a large space's roster. Returning null
+   * means the lookup failed, so the caller can refuse to silently send a
+   * message that would not ping the people the author asked for.
+   */
+  const resolveRoleMentionIds = useCallback(async (content: string): Promise<string[] | null> => {
+    if (!activeServerId) return [];
+    const slugs = parseRoleMentionTokens(content);
+    if (!slugs.length) return [];
+    const roleIds = [...new Set(
+      slugs
+        .map((slug) => serverRoles.find(
+          (role) => !role.is_default && roleMentionSlug(role.name).toLowerCase() === slug,
+        )?.id)
+        .filter((id): id is string => !!id),
+    )];
+    if (!roleIds.length) return [];
+    const { data, error } = await getSupabaseClient()
+      .from("member_roles")
+      .select("user_id")
+      .eq("server_id", activeServerId)
+      .in("role_id", roleIds);
+    if (error) return null;
+    return [...new Set(
+      ((data ?? []) as { user_id: string }[])
+        .map((row) => row.user_id)
+        .filter((id) => id !== userId),
+    )];
+  }, [activeServerId, serverRoles, userId]);
+
   const sendChannelMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeChannelId || !profile) return "No channel selected";
     if (hasRestriction("send_messages")) return "Your account is restricted from sending messages.";
@@ -4901,7 +5248,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!normalized && !attachment && !pendingFile && !pendingFiles?.length) return "Empty message";
     const wordErr = messageCharLimitError(normalized, maxMessageCharsRef.current);
     if (wordErr) return wordErr;
-    const mentionIds = await resolveServerMentionIds(normalized);
+    const [resolvedMentionIds, roleMemberIds] = await Promise.all([
+      resolveServerMentionIds(normalized),
+      resolveRoleMentionIds(normalized),
+    ]);
+    if (roleMemberIds === null) return "Could not resolve that role mention. Try again.";
+    if (roleMemberIds.length > 0 && !serverPermissions.mention_everyone) {
+      return "You do not have permission to mention roles.";
+    }
+    const mentionIds = [...new Set([...resolvedMentionIds, ...roleMemberIds])];
+    if (mentionIds.length > 10) {
+      return roleMemberIds.length > 0
+        ? "That role has too many members to mention (max 10)."
+        : "Too many mentions in one message (max 10).";
+    }
     if (userId) {
       const pingErr = checkMentionSend(userId, mentionIds, normalized);
       if (pingErr) return pingErr;
@@ -5038,7 +5398,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     fireTetherAsk(saved.id, "server", normalized);
     return null;
-  }, [userId, activeChannelId, profile, resolveServerMentionIds, markActivity, fireTetherAsk]);
+  }, [userId, activeChannelId, profile, resolveServerMentionIds, resolveRoleMentionIds, serverPermissions, markActivity, fireTetherAsk]);
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
