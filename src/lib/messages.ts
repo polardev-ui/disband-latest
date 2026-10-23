@@ -163,6 +163,29 @@ function byTime(a: MergeableMessageRow, b: MergeableMessageRow): number {
 }
 
 /**
+ * Add a live message to a rendered conversation without losing an in-flight
+ * optimistic row. Used by both the fast catch-up poll and the Realtime
+ * Broadcast path; they race with each other and with Postgres Changes, so
+ * the id check makes every path idempotent.
+ */
+export function appendLiveMessage<
+  Row extends MergeableMessageRow & {
+    author_id: string | null;
+    content: string;
+    attachment_url?: string | null;
+    reply_to_id?: string | null;
+  },
+  State extends Row & { author?: Profile | null },
+>(prev: State[], row: Row, author: Profile | null): State[] {
+  if (prev.some((m) => m.id === row.id)) return prev;
+  const withoutDupes = prev.filter(
+    (m) => !(m.id.startsWith("opt-") && matchesOptimisticRow(m, row)),
+  );
+  const next = { ...row, author: author ?? fallbackAuthor(row.author_id) } as State;
+  return [...withoutDupes, next].sort(byTime);
+}
+
+/**
  * Placeholder author for a live message whose profile lookup failed.
  *
  * The alternative is dropping the message outright — which is what blanked

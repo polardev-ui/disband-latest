@@ -28,6 +28,34 @@ export function parseMentionTokens(content: string): string[] {
   return [...tokens];
 }
 
+/**
+ * The stable part of a role mention: "@&Staff" and "@&Server-Moderator".
+ *
+ * Roles and users can share a name, so a role pick must never emit the same
+ * token as the member mention. The ampersand keeps the two namespaces apart;
+ * the slug lets the token survive spaces and punctuation without quoting.
+ */
+export function roleMentionSlug(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Role slugs named by @&mentions, in first-seen order, without duplicates. */
+export function parseRoleMentionTokens(content: string): string[] {
+  const tokens = new Set<string>();
+  const re = /@&([a-zA-Z0-9_-]{1,64})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    if (m[1]) tokens.add(m[1].toLowerCase());
+    if (tokens.size >= 20) break;
+  }
+  return [...tokens];
+}
+
 export function parseMentions(
   content: string,
   members: { id: string; username: string | null }[],
