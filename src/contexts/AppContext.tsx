@@ -2237,12 +2237,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     groupMessagesRef.current = groupMessages;
   }, [groupMessages]);
 
-  // Realtime Postgres Changes is pushed on the Realtime server's CDC poll
-  // (about a second), so a healthy live channel can still show a message a
-  // second late. Poll a single indexed row every 100 ms while a conversation
-  // is open, and only reload the page of messages when the newest id actually
-  // changed. The full refresh still runs once a second for edits, deletes and
-  // history; a channel error drops straight back to 100 ms full reloads.
+  // Catch-up poll for messages the live feed missed. New messages normally
+  // arrive instantly on the per-conversation broadcast channel; while a
+  // conversation is open this checks its single newest row once a second and
+  // reloads the page every 10 s for edits, deletes and history. If the live
+  // channel errors, it reloads the page once a second until it reconnects.
+  //
+  // This ran every 100 ms, with 100 ms full reloads whenever the channel
+  // errored. That was about thirty times the database load of before, and
+  // because a struggling database makes channels error, every open browser
+  // escalated at once. On 23 October it took the database down for over an
+  // hour. Keep these intervals at a second or more.
   useEffect(() => {
     if (!configured || !userId) return;
     let stopped = false;
@@ -2324,22 +2329,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const POLL_MS = 1_000;
+    const FULL_EVERY_TICKS = 10; // a full reload every 10 s
     const tick = () => {
       if (document.visibilityState !== "visible") return;
       fullTicks += 1;
-      if (liveFeedDownRef.current || fullTicks % 10 === 0) {
+      if (liveFeedDownRef.current || fullTicks % FULL_EVERY_TICKS === 0) {
         reloadActive();
       } else {
         void checkLatest();
       }
     };
-    const interval = activeChannelId || activeDmThreadId || activeGroupChatId ? 100 : 1000;
     const schedule = () => {
       if (stopped) return;
       timer = window.setTimeout(() => {
         tick();
         schedule();
-      }, interval);
+      }, POLL_MS);
     };
     schedule();
     const onVisible = () => {
