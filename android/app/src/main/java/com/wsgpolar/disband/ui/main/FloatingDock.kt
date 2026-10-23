@@ -1,5 +1,19 @@
 package com.wsgpolar.disband.ui.main
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +55,7 @@ import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
 
 private val DOCK_HEIGHT = 64.dp
-private val DOCK_ITEM = 46.dp
+private val DOCK_ITEM = 48.dp
 
 /**
  * The floating glass capsule dock, mirroring iOS FloatingDock. It is not
@@ -74,9 +88,9 @@ fun FloatingDock(
                     spotColor = Color.Black.copy(alpha = 0.40f),
                 )
                 .clip(CircleShape)
-                .background(palette.surface.copy(alpha = 0.55f))
+                .background(palette.surface.copy(alpha = 0.97f))
                 .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 6.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -115,58 +129,40 @@ private fun DockItem(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
 
+    val haptic = LocalHapticFeedback.current
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f,
+        animationSpec = spring(stiffness = 550f), label = "dockPress")
+    val fill by animateColorAsState(if (isSelected) palette.accent else Color.Transparent,
+        animationSpec = tween(180), label = "dockSelection")
+
     Box {
-        if (isSelected) {
-            // Active item: an accent-gradient capsule carrying icon + label.
-            Row(
-                modifier = Modifier
-                    .height(DOCK_ITEM)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.horizontalGradient(listOf(palette.accent, palette.accentSoft)),
-                    )
-                    .clickable(
-                        interactionSource = interaction,
-                        indication = null,
-                        onClickLabel = label,
-                        onClick = onSelected,
-                    )
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
+        Row(
+            modifier = Modifier
+                .height(DOCK_ITEM)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(CircleShape)
+                .background(fill)
+                .selectable(
+                    selected = isSelected, role = Role.Tab,
+                    interactionSource = interaction, indication = null,
+                    onClick = {
+                        if (!isSelected) {
+                            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            onSelected()
+                        }
+                    },
+                )
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = label, tint = iconColor, modifier = Modifier.size(20.dp))
+            AnimatedVisibility(
+                visible = isSelected,
+                enter = expandHorizontally(spring(stiffness = 500f), expandFrom = Alignment.Start) + fadeIn(tween(160)),
+                exit = shrinkHorizontally(spring(stiffness = 500f), shrinkTowards = Alignment.Start) + fadeOut(tween(100)),
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = iconColor,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    label,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(DOCK_ITEM)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = interaction,
-                        indication = null,
-                        onClickLabel = label,
-                        onClick = onSelected,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = iconColor,
-                    modifier = Modifier.size(22.dp),
-                )
+                Text(label, modifier = Modifier.padding(start = 7.dp), color = Color.White,
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
 

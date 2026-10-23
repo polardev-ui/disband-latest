@@ -84,5 +84,14 @@ fun Modifier.hidesDock(state: ShellChromeState): Modifier {
 
 @Composable
 fun rememberShellChrome(): ShellChromeState {
-    return remember { ShellChromeState() }
+    return androidx.compose.runtime.saveable.rememberSaveable(
+        saver = androidx.compose.runtime.saveable.listSaver(
+            save = { listOf(it.currentDestination.name, it.selectedServerId.orEmpty(), it.selectedChannelId.orEmpty()) },
+            restore = { saved -> ShellChromeState().apply {
+                currentDestination = Destination.valueOf(saved[0])
+                selectedServerId = saved[1].ifEmpty { null }
+                selectedChannelId = saved[2].ifEmpty { null }
+            } },
+        ),
+    ) { ShellChromeState() }
 }

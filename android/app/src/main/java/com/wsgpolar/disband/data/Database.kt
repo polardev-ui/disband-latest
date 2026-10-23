@@ -173,9 +173,9 @@ object Database {
         content: String,
         attachments: List<StoredAttachment>,
         replyToId: String? = null,
-    ) {
+    ): String? {
         val first = attachments.firstOrNull()
-        when (context) {
+        val response = when (context) {
             "channel" -> client.from("messages").insert(
                 NewMessage(
                     channelId = parentId, authorId = authorId, content = content,
@@ -184,7 +184,7 @@ object Database {
                     attachmentSize = first?.size, attachments = attachments,
                     replyToId = replyToId,
                 )
-            )
+            ) { select() }
             "dm" -> client.from("dm_messages").insert(
                 NewDmMessage(
                     threadId = parentId, authorId = authorId, content = content,
@@ -193,7 +193,7 @@ object Database {
                     attachmentSize = first?.size, attachments = attachments,
                     replyToId = replyToId,
                 )
-            )
+            ) { select() }
             else -> client.from("group_messages").insert(
                 NewGroupMessage(
                     groupId = parentId, authorId = authorId, content = content,
@@ -202,8 +202,9 @@ object Database {
                     attachmentSize = first?.size, attachments = attachments,
                     replyToId = replyToId,
                 )
-            )
+            ) { select() }
         }
+        return response.decodeSingleOrNull<InsertedId>()?.id
     }
 
     suspend fun messageById(id: String): Message {
@@ -725,6 +726,21 @@ object Database {
                 limit(50)
             }
             .decodeList()
+    }
+
+    suspend fun markNotificationRead(id: String, currentUserId: String) {
+        client.from("notifications").update({ set("read", true) }) {
+            filter {
+                eq("id", id)
+                eq("user_id", currentUserId)
+            }
+        }
+    }
+
+    suspend fun markAllNotificationsRead(currentUserId: String) {
+        client.from("notifications").update({ set("read", true) }) {
+            filter { eq("user_id", currentUserId) }
+        }
     }
 
     // MARK: - Notes

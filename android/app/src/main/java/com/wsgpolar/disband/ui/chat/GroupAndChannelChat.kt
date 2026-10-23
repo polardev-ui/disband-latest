@@ -27,6 +27,10 @@ import com.wsgpolar.disband.data.Message
 import com.wsgpolar.disband.data.RealtimeService
 import com.wsgpolar.disband.state.AppState
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
@@ -36,30 +40,25 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
-    var rows by remember(group.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
-    var loading by remember(group.id) { mutableStateOf(true) }
-    var loadError by remember(group.id) { mutableStateOf<String?>(null) }
+    val timeline = rememberChatTimeline(
+        key = "group:${group.id}", table = "group_messages", filter = "group_id=eq.${group.id}",
+        serializer = GroupMessage.serializer(), toRow = { it.toRow(uid) },
+        fetch = { before -> Database.groupMessages(group.id, before = before).map { it.toRow(uid) } },
+        onIncoming = { row -> if (row.authorId != uid) runCatching { Database.markGroupRead(group.id) } },
+    )
+    val rows = timeline.rows
+
     var sendError by remember(group.id) { mutableStateOf<String?>(null) }
     var replyTo by remember(group.id) { mutableStateOf<ChatRow?>(null) }
     var editingRow by remember(group.id) { mutableStateOf<ChatRow?>(null) }
-    var actionRow by remember { mutableStateOf<ChatRow?>(null) }
-    var deleteRow by remember { mutableStateOf<ChatRow?>(null) }
+    var actionRow by remember(group.id) { mutableStateOf<ChatRow?>(null) }
+    var deleteRow by remember(group.id) { mutableStateOf<ChatRow?>(null) }
     val reactions = remember(group.id) { ReactionState("group") }
     val ctx = LocalContext.current
     val typing = remember(group.id) { TypingState("group", group.id, scope) }
     val attach = remember(group.id) { AttachmentSender("group", group.id) }
 
-    suspend fun load() {
-        loading = true
-        loadError = null
-        try {
-            rows = Database.groupMessages(group.id).map { it.toRow(uid) }
-        } catch (e: Exception) {
-            loadError = e.message ?: e.toString()
-        }
-        loading = false
-        reactions.load(rows.map { it.id }, uid)
-    }
+    LaunchedEffect(rows.map { it.id }) { reactions.load(rows.map { it.id }, uid) }
 
     fun openAttachment(url: String) {
         runCatching {
@@ -67,36 +66,20 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(group.id) {
-        dmUnread.markGroupActive(group.id)
-        ActiveChat.show(group.id)
-        runCatching { Database.markGroupRead(group.id) }
-
-        load()
-        typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
-
-        val live = runCatching {
-            RealtimeService.observeInserts("group_messages", "group_id=eq.${group.id}", GroupMessage.serializer())
-        }.getOrNull()
-        if (live != null) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(group.id, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
-                live.flow.collect { msg ->
-                    if (msg.authorId != uid) {
-                        dmUnread.incrementGroup(msg.groupId, msg.authorId, uid)
-                        runCatching { Database.markGroupRead(group.id) }
-                    }
-                    rows = rows.filterNot { it.id == msg.id } + msg.toRow(uid)
-                }
+                dmUnread.markGroupActive(group.id)
+                launch { runCatching { Database.markGroupRead(group.id) } }
+                ActiveChat.show(group.id)
+                typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
+                awaitCancellation()
             } finally {
-                runCatching { live.channel.unsubscribe() }
+                typing.stop()
+                if (dmUnread.activeGroupId == group.id) dmUnread.clearGroupActive()
+                if (ActiveChat.isShowing(group.id)) ActiveChat.clear()
             }
-        }
-    }
-
-    DisposableEffect(group.id) {
-        onDispose {
-            dmUnread.clearGroupActive()
-            ActiveChat.clear()
         }
     }
 
@@ -107,9 +90,13 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         avatarName = group.name,
         ownUserId = uid,
         rows = reactions.applyTo(rows),
-        loading = loading,
-        loadError = loadError,
-        onRetryLoad = { scope.launch { load() } },
+        loading = timeline.loading,
+        loadError = timeline.error,
+        onRetryLoad = { scope.launch { timeline.refresh() } },
+        hasOlder = timeline.hasOlder,
+        loadingOlder = timeline.loadingOlder,
+        onLoadOlder = { scope.launch { timeline.older() } },
+        conversationKey = "group:${group.id}",
         emptyText = "No messages yet",
         sendHint = sendError,
         sendPlaceholder = if (editingRow != null) "Edit message" else "Message ${group.name}",
@@ -117,43 +104,56 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         onReplyDismiss = { replyTo = null },
         editingRow = editingRow,
         onEditDismiss = { editingRow = null },
-        onSend = { text ->
+        onSend = send@{ text ->
             sendError = null
-            scope.launch {
-                val target = editingRow
-                if (target != null) {
-                    val ok = runCatching { Database.editGroupMessage(target.id, text) }.isSuccess
-                    if (ok) {
-                        rows = rows.map {
-                            if (it.id == target.id) it.copy(content = text, editedAt = "now") else it
-                        }
-                        editingRow = null
-                    } else {
-                        sendError = "Couldn't save your edit. Try again."
-                    }
-                    return@launch
+            val target = editingRow
+            if (target != null) {
+                try {
+                    Database.editGroupMessage(target.id, text)
+                    timeline.upsert(target.copy(content = text, editedAt = java.time.Instant.now().toString()))
+                    editingRow = null
+                    return@send true
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) {
+                    sendError = "Couldn't save your edit. Your text is still here."
+                    return@send false
                 }
-                val messageId = runCatching {
-                    Database.sendGroupMessage(group.id, uid, text, replyToId = replyTo?.id)
-                }.getOrNull()
-                if (messageId == null) {
-                    sendError = "Couldn't send. Check your connection and try again."
-                } else {
-                    replyTo = null
-                    TetherService.fireAskIfNeeded(
-                        messageId = messageId, content = text, surface = "group",
-                        threadId = null, userId = uid,
-                        isAero = app.subscriptions.plan.isPaid,
-                    )
-                }
-                dmUnread.markGroupActive(group.id)
+            }
+            val replyId = replyTo?.id
+            val sentAt = java.time.Instant.now().toString()
+            val messageId = try { Database.sendGroupMessage(group.id, uid, text, replyToId = replyId) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+            if (messageId == null) {
+                sendError = "Couldn't send. Your draft is saved — try again."
+                false
+            } else {
+                // A successful HTTP response is enough to show our message. The
+                // socket may be late or reconnecting; its echo shares this id.
+                if (timeline.rows.none { it.id == messageId }) timeline.upsert(ChatRow(
+                    id = messageId, author = app.profile.value, authorId = uid,
+                    content = text, attachmentType = null, createdAt = sentAt, replyToId = replyId,
+                ))
+                replyTo = null
+                scope.launch { TetherService.fireAskIfNeeded(
+                    messageId = messageId, content = text, surface = "group",
+                    threadId = null, userId = uid, isAero = app.subscriptions.plan.isPaid,
+                ) }
+                true
             }
         },
         typingUsers = typing.typers,
         onTyping = { typing.noteTyping(uid, app.profile.value?.name ?: "Someone") },
         attachments = attach,
         onSendAttachments = { caption ->
-            scope.launch { attach.send(ctx, uid, caption) }
+            val sent = attach.send(ctx, uid, caption, replyToId = replyTo?.id)
+            if (sent) {
+                attach.sentRow?.let { row ->
+                    if (timeline.rows.none { it.id == row.id }) timeline.upsert(row.copy(author = app.profile.value))
+                }
+                replyTo = null
+            }
+            sent
         },
         onToggleReaction = { messageId, emoji ->
             scope.launch { reactions.toggle(messageId, emoji, uid) }
@@ -187,8 +187,11 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
                     deleteRow = null
                     actionRow = null
                     scope.launch {
-                        runCatching { Database.deleteGroupMessage(id) }
-                        rows = rows.filterNot { it.id == id }
+                        try {
+                            Database.deleteGroupMessage(id)
+                            timeline.remove(id)
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { sendError = "Couldn't delete that message. Try again." }
                     }
                 }) { Text("Delete", color = Brand.dnd) }
             },
@@ -206,7 +209,13 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
-    var rows by remember(channel.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
+    val timeline = rememberChatTimeline(
+        key = "channel:${channel.id}", table = "messages", filter = "channel_id=eq.${channel.id}",
+        serializer = Message.serializer(), toRow = { it.toRow(uid) },
+        fetch = { before -> Database.messages(channel.id, before = before).map { it.toRow(uid) } },
+    )
+    val rows = timeline.rows
+
     // Keyed by channel: the old unkeyed remember leaked one channel's
     // reactions into the next channel opened.
     val reactions = remember(channel.id) { ReactionState("channel") }
@@ -215,25 +224,13 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     // else listens on, silently dropping typing indicators cross-platform.
     val typing = remember(channel.id) { TypingState("ch", channel.id, scope) }
     val attach = remember(channel.id) { AttachmentSender("channel", channel.id) }
-    var loading by remember(channel.id) { mutableStateOf(true) }
-    var loadError by remember(channel.id) { mutableStateOf<String?>(null) }
     var sendError by remember(channel.id) { mutableStateOf<String?>(null) }
     var replyTo by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
     var editingRow by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
-    var actionRow by remember { mutableStateOf<ChatRow?>(null) }
-    var deleteRow by remember { mutableStateOf<ChatRow?>(null) }
+    var actionRow by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
+    var deleteRow by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
 
-    suspend fun load() {
-        loading = true
-        loadError = null
-        try {
-            rows = Database.messages(channel.id).map { it.toRow(uid) }
-        } catch (e: Exception) {
-            loadError = e.message ?: e.toString()
-        }
-        loading = false
-        reactions.load(rows.map { it.id }, uid)
-    }
+    LaunchedEffect(rows.map { it.id }) { reactions.load(rows.map { it.id }, uid) }
 
     fun openAttachment(url: String) {
         runCatching {
@@ -241,27 +238,18 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         }
     }
 
-    LaunchedEffect(channel.id) {
-        ActiveChat.show(channel.id)
-        load()
-        typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
-
-        val live = runCatching {
-            RealtimeService.observeInserts("messages", "channel_id=eq.${channel.id}", Message.serializer())
-        }.getOrNull()
-        if (live != null) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(channel.id, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
-                live.flow.collect { msg ->
-                    rows = rows.filterNot { it.id == msg.id } + msg.toRow(uid)
-                }
+                ActiveChat.show(channel.id)
+                typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
+                awaitCancellation()
             } finally {
-                runCatching { live.channel.unsubscribe() }
+                typing.stop()
+                if (ActiveChat.isShowing(channel.id)) ActiveChat.clear()
             }
         }
-    }
-
-    DisposableEffect(channel.id) {
-        onDispose { ActiveChat.clear() }
     }
 
     val readOnly = channel.readOnly == true
@@ -272,9 +260,13 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         avatarName = "#" + channel.name,
         ownUserId = uid,
         rows = reactions.applyTo(rows),
-        loading = loading,
-        loadError = loadError,
-        onRetryLoad = { scope.launch { load() } },
+        loading = timeline.loading,
+        loadError = timeline.error,
+        onRetryLoad = { scope.launch { timeline.refresh() } },
+        hasOlder = timeline.hasOlder,
+        loadingOlder = timeline.loadingOlder,
+        onLoadOlder = { scope.launch { timeline.older() } },
+        conversationKey = "channel:${channel.id}",
         emptyText = "No messages yet",
         sendEnabled = !readOnly,
         sendPlaceholder = when {
@@ -287,42 +279,56 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         onReplyDismiss = { replyTo = null },
         editingRow = editingRow,
         onEditDismiss = { editingRow = null },
-        onSend = { text ->
+        onSend = send@{ text ->
             sendError = null
-            scope.launch {
-                val target = editingRow
-                if (target != null) {
-                    val ok = runCatching { Database.editChannelMessage(target.id, text) }.isSuccess
-                    if (ok) {
-                        rows = rows.map {
-                            if (it.id == target.id) it.copy(content = text, editedAt = "now") else it
-                        }
-                        editingRow = null
-                    } else {
-                        sendError = "Couldn't save your edit. Try again."
-                    }
-                    return@launch
+            val target = editingRow
+            if (target != null) {
+                try {
+                    Database.editChannelMessage(target.id, text)
+                    timeline.upsert(target.copy(content = text, editedAt = java.time.Instant.now().toString()))
+                    editingRow = null
+                    return@send true
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) {
+                    sendError = "Couldn't save your edit. Your text is still here."
+                    return@send false
                 }
-                val messageId = runCatching {
-                    Database.sendMessage(channel.id, uid, text, replyToId = replyTo?.id)
-                }.getOrNull()
-                if (messageId == null) {
-                    sendError = "Couldn't send. Check your connection and try again."
-                } else {
-                    replyTo = null
-                    TetherService.fireAskIfNeeded(
-                        messageId = messageId, content = text, surface = "channel",
-                        threadId = null, userId = uid,
-                        isAero = app.subscriptions.plan.isPaid,
-                    )
-                }
+            }
+            val replyId = replyTo?.id
+            val sentAt = java.time.Instant.now().toString()
+            val messageId = try { Database.sendMessage(channel.id, uid, text, replyToId = replyId) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+            if (messageId == null) {
+                sendError = "Couldn't send. Your draft is saved — try again."
+                false
+            } else {
+                // A successful HTTP response is enough to show our message. The
+                // socket may be late or reconnecting; its echo shares this id.
+                if (timeline.rows.none { it.id == messageId }) timeline.upsert(ChatRow(
+                    id = messageId, author = app.profile.value, authorId = uid,
+                    content = text, attachmentType = null, createdAt = sentAt, replyToId = replyId,
+                ))
+                replyTo = null
+                scope.launch { TetherService.fireAskIfNeeded(
+                    messageId = messageId, content = text, surface = "channel",
+                    threadId = null, userId = uid, isAero = app.subscriptions.plan.isPaid,
+                ) }
+                true
             }
         },
         typingUsers = typing.typers,
         onTyping = { typing.noteTyping(uid, app.profile.value?.name ?: "Someone") },
         attachments = attach,
         onSendAttachments = { caption ->
-            scope.launch { attach.send(ctx, uid, caption) }
+            val sent = attach.send(ctx, uid, caption, replyToId = replyTo?.id)
+            if (sent) {
+                attach.sentRow?.let { row ->
+                    if (timeline.rows.none { it.id == row.id }) timeline.upsert(row.copy(author = app.profile.value))
+                }
+                replyTo = null
+            }
+            sent
         },
         onToggleReaction = { messageId, emoji ->
             scope.launch { reactions.toggle(messageId, emoji, uid) }
@@ -356,8 +362,11 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
                     deleteRow = null
                     actionRow = null
                     scope.launch {
-                        runCatching { Database.deleteChannelMessage(id) }
-                        rows = rows.filterNot { it.id == id }
+                        try {
+                            Database.deleteChannelMessage(id)
+                            timeline.remove(id)
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { sendError = "Couldn't delete that message. Try again." }
                     }
                 }) { Text("Delete", color = Brand.dnd) }
             },

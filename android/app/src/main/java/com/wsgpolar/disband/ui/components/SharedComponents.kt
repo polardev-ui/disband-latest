@@ -223,6 +223,15 @@ fun CapsuleSearchField(
             }
         },
         singleLine = true,
+        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = palette.elevated,
+            unfocusedContainerColor = palette.elevated,
+            focusedBorderColor = palette.accent.copy(alpha = 0.5f),
+            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+            focusedTextColor = palette.textPrimary,
+            unfocusedTextColor = palette.textPrimary,
+            cursorColor = palette.accent,
+        ),
         shape = CircleShape,
     )
 }
