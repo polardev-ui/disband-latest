@@ -14,6 +14,7 @@ import {
   IconSettings,
 } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { displayName } from "@/lib/utils";
 import { statusLabel, activeStatusNote } from "@/lib/presence";
 import { UserPanelPopup } from "./UserPanelPopup";
@@ -79,8 +80,9 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
           />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             <p className="truncate text-[14px] font-semibold leading-[18px] text-header-primary">{name}</p>
+            <GuildTag userId={profile?.id} size="sm" />
             <SubscriptionBadge plan={plan} tooltip />
           </div>
           <p className="truncate text-[12px] leading-[13px] text-header-secondary">

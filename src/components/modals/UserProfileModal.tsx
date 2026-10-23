@@ -8,6 +8,7 @@ import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconMessage, IconMore, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { DisplayName } from "@/components/ui/DisplayName";
 import { RolePicker } from "@/components/ui/RolePicker";
@@ -59,6 +60,8 @@ interface UserProfileModalProps {
   plan?: SubscriptionPlan;
   isServerMember?: boolean;
   serverRoles?: ServerRole[];
+  /** Roles the signed-in member is allowed to hand out (already rank-filtered). */
+  assignableRoles?: ServerRole[];
   canManageRoles?: boolean;
   memberRoleIds?: string[];
   memberIsOwner?: boolean;
@@ -218,6 +221,7 @@ export function UserProfileModal({
   plan,
   isServerMember,
   serverRoles,
+  assignableRoles: assignableRolesProp,
   canManageRoles,
   memberRoleIds = [],
   memberIsOwner,
@@ -308,7 +312,7 @@ export function UserProfileModal({
     .filter((f): f is Profile => !!f);
 
   const memberRoles = (serverRoles ?? []).filter((r) => memberRoleIds.includes(r.id));
-  const assignableRoles = (serverRoles ?? []).filter((r) => !r.is_default);
+  const assignableRoles = (assignableRolesProp ?? serverRoles ?? []).filter((r) => !r.is_default);
   const selfAssignable = (selfAssignableRoles ?? []).filter((r) => !r.is_default);
   const selfSelected = memberRoleIds.filter((id) => selfAssignable.some((r) => r.id === id));
 
@@ -464,6 +468,7 @@ export function UserProfileModal({
             <h2 className="min-w-0 break-words text-[24px] font-semibold leading-[30px] text-header-primary">
               <DisplayName profile={{ ...profile, display_name: title }} />
             </h2>
+            <GuildTag userId={profile.id} size="md" />
             <UserBadges userId={profile.id} plan={plan ?? "free"} size={18} variant="full" />
           </div>
 

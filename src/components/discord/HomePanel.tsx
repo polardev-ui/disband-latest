@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { displayName } from "@/lib/utils";
 import { listeningFor } from "@/lib/presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
@@ -382,7 +383,10 @@ export function HomePanel({
                     const listening = live === "offline" ? null : listeningFor(entry.friend, listeningMap);
                     return (
                       <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-[16px] font-medium leading-5">{displayName(entry.friend)}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-[16px] font-medium leading-5">{displayName(entry.friend)}</span>
+                          <GuildTag userId={entry.friend.id} size="sm" />
+                        </span>
                         {listening && <ListeningLine listening={listening} />}
                       </span>
                     );

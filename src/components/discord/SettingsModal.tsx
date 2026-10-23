@@ -11,6 +11,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { LANGUAGES, languageFor } from "@/lib/i18n";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AccentPresetGrid, ProfilePreview } from "./settings/ProfilePreview";
+import { GuildTagPicker } from "./settings/GuildTagPicker";
 import {
   SettingsSection,
   SettingRow,
@@ -1219,6 +1220,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       </div>
                     </SettingRow>
                   </SettingsSection>
+
+                  {profile && <GuildTagPicker userId={profile.id} />}
 
                   <SettingsSection
                     title="Status"

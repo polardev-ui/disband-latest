@@ -26,6 +26,7 @@ import { useProfiles } from "@/lib/profile-store";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconVerified } from "@/components/icons";
 import { BotTag } from "@/components/ui/BotTag";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
 import { GiftCard } from "@/components/gift/GiftCard";
@@ -750,6 +751,7 @@ function ChatMessageImpl({
             {displayName(shownAuthor ?? {})}
           </span>
         )}
+        {author && !webhook && <GuildTag userId={author.id} size="sm" />}
         {authorRoleIcon && (
           <RoleIcon icon={authorRoleIcon} name={authorRoleName ?? undefined} size={20} className="ml-0.5" />
         )}

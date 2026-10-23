@@ -15,7 +15,7 @@ import type { SectionProps } from "./types";
 type Pending = { kind: "kick" | "ban"; userId: string; name: string } | null;
 
 export function MembersSection({ isOwner }: SectionProps) {
-  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, loadAllMembers, user } = useApp();
+  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, loadAllMembers, user, myTopRolePosition, canModerateMember } = useApp();
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +29,13 @@ export function MembersSection({ isOwner }: SectionProps) {
 
   const canKick = isOwner || serverPermissions.kick;
   const canBan = isOwner || serverPermissions.ban;
-  const assignable = useMemo(() => serverRoles.filter((r) => !r.is_default), [serverRoles]);
+  const canEditRoles = isOwner || (serverPermissions.manage_roles && serverPermissions.manage_server);
+  const assignable = useMemo(
+    () => serverRoles.filter((r) => !r.is_default && (isOwner || r.position < myTopRolePosition)),
+    [serverRoles, isOwner, myTopRolePosition],
+  );
   const roleById = useMemo(() => new Map(serverRoles.map((r) => [r.id, r])), [serverRoles]);
+  const canModerateTarget = (userId: string) => isOwner || canModerateMember(userId);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -118,16 +123,18 @@ export function MembersSection({ isOwner }: SectionProps) {
                       )}
                     </div>
                   </div>
-                  {!isOwnerRow && (
+                  {!isOwnerRow && canModerateTarget(m.user_id) && (
                     <div className="flex shrink-0 items-center gap-1">
-                      <RolePicker
-                        roles={assignable}
-                        selected={ids}
-                        onToggle={(roleId) => void toggleRole(m.user_id, roleId)}
-                        disabled={busyId === m.user_id}
-                        align="right"
-                        compact
-                      />
+                      {canEditRoles && assignable.length > 0 && (
+                        <RolePicker
+                          roles={assignable}
+                          selected={ids}
+                          onToggle={(roleId) => void toggleRole(m.user_id, roleId)}
+                          disabled={busyId === m.user_id}
+                          align="right"
+                          compact
+                        />
+                      )}
                       {canKick && (
                         <button
                           type="button"
