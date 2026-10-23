@@ -24,7 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +53,7 @@ import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.data.MemberRole
 import com.wsgpolar.disband.data.Server
+import com.wsgpolar.disband.data.ServerAdmin
 import com.wsgpolar.disband.data.ServerMember
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.AvatarImage
@@ -306,6 +308,7 @@ fun ServerOverflowSheet(
     server: Server,
     onDismiss: () -> Unit,
     onLeft: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val palette = LocalPalette.current
     val context = LocalContext.current
@@ -314,6 +317,9 @@ fun ServerOverflowSheet(
     var confirmLeave by remember { mutableStateOf(false) }
     val uid = app.currentUserId
     val isOwner = server.ownerId == uid
+    var permissions by remember(server.id) { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    LaunchedEffect(server.id) { permissions = ServerAdmin.permissions(server.id) }
+    val canOpenSettings = isOwner || RolePermissionCatalogue.settingsKeys.any { permissions[it] == true }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -328,6 +334,13 @@ fun ServerOverflowSheet(
             )
             Spacer(Modifier.height(14.dp))
 
+            if (canOpenSettings) {
+                OverflowRow("Space Settings", Icons.Filled.Settings, palette) {
+                    onDismiss()
+                    onOpenSettings()
+                }
+            }
+
             server.inviteCode?.let { code ->
                 OverflowRow("Copy invite link", Icons.Filled.ContentCopy, palette) {
                     copyToClipboard(context, "https://www.disband.dev/server/$code")
@@ -341,7 +354,7 @@ fun ServerOverflowSheet(
             if (!isOwner && uid != null) {
                 OverflowRow(
                     if (leaving) "Leaving…" else "Leave space",
-                    Icons.Filled.Logout,
+                    Icons.AutoMirrored.Filled.Logout,
                     palette,
                     tint = Brand.danger,
                 ) {
