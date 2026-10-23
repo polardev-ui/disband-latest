@@ -157,15 +157,16 @@ struct Server: Codable, Identifiable, Hashable {
     /// Official "This server is verified by Disband" mark. Optional so older
     /// payloads that omit it still decode.
     var verified: Bool?
+    /// "Disband Partner"; shown only when the space isn't verified.
+    var partner: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description
+        case id, name, description, verified, partner
         case iconUrl = "icon_url"
         case bannerUrl = "banner_url"
         case ownerId = "owner_id"
         case inviteCode = "invite_code"
         case createdAt = "created_at"
-        case verified
     }
 }
 
