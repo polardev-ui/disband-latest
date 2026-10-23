@@ -9,6 +9,8 @@ struct MessageComposer: View {
     var onSend: () -> Void
     var onGif: () -> Void = {}
     var onPhoto: () -> Void = {}
+    /// "Message #general", "Message @name": says where this will go.
+    var placeholder: String = "Message"
 
     @FocusState private var focused: Bool
 
@@ -20,7 +22,7 @@ struct MessageComposer: View {
         HStack(alignment: .bottom, spacing: 4) {
             attachButton
 
-            TextField("Message", text: $text, axis: .vertical)
+            TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(1...6)
                 .font(.body)
                 .foregroundStyle(Brand.textPrimary)
@@ -34,10 +36,23 @@ struct MessageComposer: View {
             if canSend {
                 sendButton
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
+            } else {
+                // While the box is empty, GIFs are one tap away on the right
+                // (as in Discord), not tucked inside the attach menu.
+                Button(action: onGif) {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Brand.textMuted)
+                        .frame(width: 40, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Send a GIF")
+                .transition(.opacity)
             }
         }
         .padding(.leading, 4)
-        .padding(.trailing, canSend ? 4 : 14)
+        .padding(.trailing, 4)
         .padding(.vertical, 3)
         .background {
             RoundedRectangle(cornerRadius: 26, style: .continuous)

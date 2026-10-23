@@ -29,7 +29,12 @@ struct ChatView: View {
     @Environment(DmUnreadStore.self) private var unreadStore
     @Environment(VoiceSession.self) private var voice
     @Environment(DirectMessagesViewModel.self) private var directMessages
+    @Environment(PresenceService.self) private var presence
     @State private var model: ChatViewModel
+    /// The channel's space and how many of its members are online, for the
+    /// line under the title. Nil until known.
+    @State private var channelServerId: String?
+    @State private var onlineCount: Int?
     @State private var draft = ""
     @State private var stickToBottom = true
     /// The first page has painted and the initial scroll-to-bottom has had a
@@ -104,7 +109,8 @@ struct ChatView: View {
                 // Progress shows on the message itself, so the composer stays usable.
                 MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
                                 onGif: { showGifPicker = true },
-                                onPhoto: { showPhotoPicker = true })
+                                onPhoto: { showPhotoPicker = true },
+                                placeholder: composerPlaceholder)
                                 .onChange(of: draft) {
                                     if let name = app.profile?.name, !draft.isEmpty {
                                         model.notifyTyping(displayName: name)
@@ -128,6 +134,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .solidNavigationBar()
         .toolbar {
+            ToolbarItem(placement: .principal) { headerTitle }
             if case .group(let groupId, let name) = model.source {
                 ToolbarItem(placement: .topBarTrailing) {
                     groupCallButton(groupId: groupId, name: name)
@@ -225,6 +232,8 @@ struct ChatView: View {
             guard !items.isEmpty else { return }
             Task { await uploadAndSend(items) }
         }
+        // Re-counted whenever someone comes online or drops off.
+        .task(id: presence.statuses.count) { await refreshOnlineCount() }
         .onChange(of: model.loading) { _, loading in
             guard !loading, !initialScrollSettled else { return }
             // Let `.defaultScrollAnchor(.bottom)` and the first layout pass
@@ -234,6 +243,82 @@ struct ChatView: View {
                 initialScrollSettled = true
             }
         }
+    }
+
+    // MARK: - Header
+
+    private var composerPlaceholder: String {
+        switch model.source {
+        case .channel(_, let name): return "Message #\(name)"
+        case .dm(_, let title): return "Message @\(title)"
+        case .group(_, let name): return "Message \(name)"
+        }
+    }
+
+    /// Title and a status line, centred the way iOS conversation screens are:
+    /// "#general / ● 16 Online", "Riley / Online", "Weekend plans / 4 members".
+    private var headerTitle: some View {
+        Button {
+            if case .dm = model.source, let peer = callPeer { openProfile = peer }
+        } label: {
+            VStack(spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(model.source.title)
+                        .font(.headline)
+                        .foregroundStyle(Brand.textPrimary)
+                        .lineLimit(1)
+                    if case .dm = model.source, callPeer != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Brand.textMuted)
+                    }
+                }
+                if let subtitle = headerSubtitle {
+                    HStack(spacing: 4) {
+                        if let dot = subtitle.dot {
+                            Circle().fill(dot).frame(width: 7, height: 7)
+                        }
+                        Text(subtitle.text)
+                            .font(.caption)
+                            .foregroundStyle(Brand.textMuted)
+                            .contentTransition(.numericText())
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .animation(.snappy, value: onlineCount)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var headerSubtitle: (text: String, dot: Color?)? {
+        switch model.source {
+        case .channel:
+            guard let onlineCount else { return nil }
+            return ("\(onlineCount) Online", Brand.online)
+        case .dm:
+            guard let peer = callPeer else { return nil }
+            let status = presence.status(for: peer.id)
+            let color: Color = switch status {
+            case .online: Brand.online
+            case .idle: Brand.idle
+            case .dnd: Brand.dnd
+            case .offline: Brand.textMuted
+            }
+            return (status == .offline ? "Offline" : status.label, color)
+        case .group(let id, _):
+            guard let count = directMessages.groups.first(where: { $0.id == id })?.members?.count else { return nil }
+            return ("\(count) member\(count == 1 ? "" : "s")", nil)
+        }
+    }
+
+    private func refreshOnlineCount() async {
+        guard case .channel(let id, _) = model.source else { return }
+        if channelServerId == nil { channelServerId = await ServerOnlineCount.serverId(forChannel: id) }
+        guard let serverId = channelServerId else { return }
+        let online = presence.statuses.filter { $0.value != .offline }.map(\.key)
+        onlineCount = await ServerOnlineCount.count(serverId: serverId, online: online)
     }
 
     private func lockedComposer(_ reason: String) -> some View {
