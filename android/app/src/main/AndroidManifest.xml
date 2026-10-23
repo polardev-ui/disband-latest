@@ -59,11 +59,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Keeps a call running and visible while the app is backgrounded. -->
+        <!-- Keeps a call running and visible while the app is backgrounded.
+             shortService is only a fallback, so a start Android refuses the
+             microphone for still reaches the foreground instead of crashing. -->
         <service
             android:name=".call.CallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|shortService" />
 
         <service
             android:name=".data.MessagingService"

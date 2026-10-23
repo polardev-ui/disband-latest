@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.wsgpolar.disband.call.CallForegroundService
 import com.wsgpolar.disband.core.AppConfig
 import com.wsgpolar.disband.ui.AppRoot
 import com.wsgpolar.disband.ui.main.PendingNav
@@ -44,6 +45,13 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        // Answer on the ring notification opens the app; the call screen
+        // then answers once the microphone is allowed.
+        if (intent.getStringExtra(CallForegroundService.EXTRA_CALL_ACTION) == CallForegroundService.CALL_ACTION_ANSWER) {
+            intent.removeExtra(CallForegroundService.EXTRA_CALL_ACTION)
+            (application as DisbandApp).container.calls.requestAnswer()
+            return
+        }
         // 1) Deep link URI (https://www.disband.dev/server/CODE or disband://invite/CODE)
         intent.dataString?.let { uri ->
             AppConfig.INVITE_REGEX.find(uri)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { _ ->

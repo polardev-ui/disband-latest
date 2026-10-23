@@ -10,15 +10,16 @@ import androidx.compose.ui.platform.LocalContext
 
 /**
  * Returns a trigger that ensures RECORD_AUDIO is granted before running
- * [onGranted]. Re-requests if the user denied mid-session.
+ * [onGranted], or runs [onDenied] if it's refused. Re-requests if the user
+ * denied mid-session.
  */
 @Composable
-fun rememberAudioPermissionTrigger(onGranted: () -> Unit): () -> Unit {
+fun rememberAudioPermissionTrigger(onDenied: () -> Unit = {}, onGranted: () -> Unit): () -> Unit {
     val context = LocalContext.current.applicationContext
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) onGranted()
+        if (granted) onGranted() else onDenied()
     }
     return {
         val granted = ContextCompat.checkSelfPermission(
