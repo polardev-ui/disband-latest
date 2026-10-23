@@ -36,7 +36,7 @@ import { AttachmentUploadCard } from "./AttachmentUploadCard";
 import { MessageReactions } from "./MessageReactions";
 import { MessageActionBar } from "./MessageActionBar";
 import { Twemoji } from "@/components/ui/Twemoji";
-import type { Profile } from "@/lib/supabase/types";
+import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { MessageReaction, ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
 
@@ -90,6 +90,7 @@ interface ChatMessageProps {
   onContentResize?: () => void;
   channels?: ChannelLite[];
   onChannelClick?: (channelId: string) => void;
+  roles?: ServerRole[];
 
   customEmoji?: Record<string, string>;
 }
@@ -101,10 +102,11 @@ function renderCustomEmojiMarkdown(
   channels: ChannelLite[] | undefined,
   onChannelClick: ((channelId: string) => void) | undefined,
   customEmoji: Record<string, string> | undefined,
+  roles: ServerRole[] | undefined,
 ): ReactNode[] {
   const segs = splitCustomEmojiSegments(text, customEmoji);
   if (segs.length <= 1 || !segs.some((s) => s.kind === "emoji")) {
-    return renderMarkdown(text, members, onMentionClick, channels, onChannelClick);
+    return renderMarkdown(text, members, onMentionClick, channels, onChannelClick, roles);
   }
   const out: ReactNode[] = [];
   segs.forEach((s, i) => {
@@ -113,7 +115,7 @@ function renderCustomEmojiMarkdown(
     } else {
       out.push(
         <Fragment key={`t-${i}`}>
-          {renderMarkdown(s.text, members, onMentionClick, channels, onChannelClick)}
+          {renderMarkdown(s.text, members, onMentionClick, channels, onChannelClick, roles)}
         </Fragment>,
       );
     }
@@ -128,6 +130,7 @@ function EmbedCard({
   channels,
   onChannelClick,
   onContentResize,
+  roles,
 }: {
   embed: Embed;
   members: Profile[];
@@ -135,6 +138,7 @@ function EmbedCard({
   channels?: ChannelLite[];
   onChannelClick?: (channelId: string) => void;
   onContentResize?: () => void;
+  roles?: ServerRole[];
 }) {
   const authorIcon = safeImageUrl(embed.author?.icon_url);
   const thumbnail = safeImageUrl(embed.thumbnail?.url);
@@ -145,7 +149,7 @@ function EmbedCard({
       ? new Date(embed.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
       : null;
   const fieldMarkdown = (text: string) =>
-    renderMarkdown(text, members, onMentionClick, channels, onChannelClick);
+    renderMarkdown(text, members, onMentionClick, channels, onChannelClick, roles);
 
   return (
     <div
@@ -259,6 +263,7 @@ function MessageEmbeds({
   channels,
   onChannelClick,
   onContentResize,
+  roles,
 }: {
   embeds?: Embed[] | null;
   members: Profile[];
@@ -266,6 +271,7 @@ function MessageEmbeds({
   channels?: ChannelLite[];
   onChannelClick?: (channelId: string) => void;
   onContentResize?: () => void;
+  roles?: ServerRole[];
 }) {
   if (!embeds?.length) return null;
   return (
@@ -279,6 +285,7 @@ function MessageEmbeds({
           channels={channels}
           onChannelClick={onChannelClick}
           onContentResize={onContentResize}
+          roles={roles}
         />
       ))}
     </div>
@@ -294,6 +301,7 @@ function MessageBody({  content,
   channels,
   onChannelClick,
   customEmoji,
+  roles,
 }: {
   content: string;
   members: Profile[];
@@ -304,6 +312,7 @@ function MessageBody({  content,
   channels?: ChannelLite[];
   onChannelClick?: (channelId: string) => void;
   customEmoji?: Record<string, string>;
+  roles?: ServerRole[];
 }) {
   const codes = extractInviteCodes(content);
   const giftCodes = extractGiftCodes(content);
@@ -338,7 +347,7 @@ function MessageBody({  content,
           ) : emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
-            <Twemoji>{renderCustomEmojiMarkdown(textOnly, members, onMentionClick, channels, onChannelClick, customEmoji)}</Twemoji>
+            <Twemoji>{renderCustomEmojiMarkdown(textOnly, members, onMentionClick, channels, onChannelClick, customEmoji, roles)}</Twemoji>
           )}
         </div>
       )}
@@ -452,6 +461,7 @@ function ChatMessageImpl({
   channels,
   onChannelClick,
   customEmoji,
+  roles,
 }: ChatMessageProps & { members?: Profile[] }) {
   const author = message.author;
   const webhook = message.webhook ?? null;
@@ -558,6 +568,7 @@ function ChatMessageImpl({
       channels={channels}
       onChannelClick={onChannelClick}
       onContentResize={onContentResize}
+      roles={roles}
     />
   );
 
@@ -644,7 +655,7 @@ function ChatMessageImpl({
             )}
             {embedBody && (
               <div className={embedTitle ? "mt-1" : ""}>
-                <MessageBody content={embedBody} members={renderMembers} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+                <MessageBody content={embedBody} members={renderMembers} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} roles={roles} />
               </div>
             )}
           </div>
@@ -679,7 +690,7 @@ function ChatMessageImpl({
         {replyBlock}
         {body && (
           <div className="min-w-0 text-[16px] leading-[22px] text-text-normal">
-            <MessageBody content={body} members={renderMembers} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+            <MessageBody content={body} members={renderMembers} compact onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} roles={roles} />
             {editedTag}
           </div>
         )}
@@ -750,7 +761,7 @@ function ChatMessageImpl({
       </h3>
       {body && (
         <div className="min-w-0 text-[16px] leading-[22px] text-text-normal">
-          <MessageBody content={body} members={renderMembers} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} />
+          <MessageBody content={body} members={renderMembers} onContentResize={onContentResize} sending={message.sending} onMentionClick={onAuthorClick} channels={channels} onChannelClick={onChannelClick} customEmoji={customEmoji} roles={roles} />
           {editedTag}
         </div>
       )}

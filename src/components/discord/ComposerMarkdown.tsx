@@ -69,12 +69,23 @@ const HEADING_STYLE: CSSProperties = { WebkitTextStroke: "0.35px currentColor" }
 
 /** Inline rules, applied in order — longest markers first so ** beats *. */
 const INLINE: { re: RegExp; leaf?: boolean; render: (inner: ReactNode, marker: string, key: string) => ReactNode }[] = [
-  // @everyone renders as a blue chip while composing, mirroring the sent
-  // message. Paint-only (background + colour): no weight or size change, so
-  // the caret never drifts — see THE RULE above. Needs its own capture group:
-  // the framework slices the marker off via m[1]. `leaf` because the capture
-  // IS the whole match: recursing into it re-matches forever (stack
-  // overflow the moment @everyone is typed).
+  // @everyone and role picks render as blue chips while composing, mirroring
+  // the sent message. Paint-only (background + colour): no weight or size
+  // change, so the caret never drifts — see THE RULE above. Needs its own
+  // capture group: the framework slices the marker off via m[1]. `leaf`
+  // because the capture IS the whole match: recursing into it re-matches
+  // forever (stack overflow the moment @everyone is typed).
+  {
+    re: /(@&[a-zA-Z0-9_-]{1,64})/,
+    leaf: true,
+    render: (inner, _m, k) => (
+      // The ampersand stays visible here because the overlay must have the
+      // same advance widths as the textarea; the sent message drops it.
+      <span key={k} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
+        {inner}
+      </span>
+    ),
+  },
   {
     re: /(@everyone)\b/i,
     leaf: true,

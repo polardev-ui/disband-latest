@@ -1,8 +1,8 @@
 "use client";
 
-import { displayName, isValidMentionToken } from "@/lib/utils";
+import { displayName, isValidMentionToken, roleMentionSlug } from "@/lib/utils";
 import { Suspense, lazy, useState } from "react";
-import type { Profile } from "@/lib/supabase/types";
+import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
 
 /**
@@ -48,7 +48,10 @@ export interface ChannelLite {
 }
 
 const INLINE_RE =
-  /(@[a-zA-Z0-9_]{1,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
+  /(@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
+
+const MENTION_CHIP_CLASS =
+  "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
 function linkFor(url: string): string {
   return url;
@@ -96,6 +99,7 @@ function renderInlineTokens(
   onMentionClick?: (profile: Profile) => void,
   channels?: ChannelLite[],
   onChannelClick?: (channelId: string) => void,
+  roles?: ServerRole[],
 ): ReactNode[] {
   const out: ReactNode[] = [];
   let rest = text;
@@ -112,6 +116,25 @@ function renderInlineTokens(
     rest = rest.slice(m.index + token.length);
     const key = k++;
 
+    // Roles use their own @& namespace so a role named "Staff" can never
+    // resolve to the member named "staff".
+    if (token.startsWith("@&")) {
+      const slug = token.slice(2);
+      const role = roles?.find(
+        (r) => roleMentionSlug(r.name).toLowerCase() === slug.toLowerCase(),
+      );
+      if (!role) {
+        out.push(token);
+        continue;
+      }
+      out.push(
+        <span key={key} className={MENTION_CHIP_CLASS} title={`Role: ${role.name}`}>
+          @{role.name}
+        </span>,
+      );
+      continue;
+    }
+
     if (token.startsWith("@")) {
       const uname = token.slice(1);
       if (!isValidMentionToken(uname, members)) {
@@ -123,14 +146,13 @@ function renderInlineTokens(
       // and it is on hover.
       const label = user ? displayName(user) : uname.toLowerCase() === "everyone" ? "everyone" : uname;
       const title = user?.username ? `@${user.username}` : undefined;
-      const chipClass = "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (user && onMentionClick) {
         out.push(
           <button
             key={key}
             type="button"
-            className={`${chipClass} cursor-pointer`}
+            className={`${MENTION_CHIP_CLASS} cursor-pointer`}
             title={title}
             onClick={(e) => {
               e.stopPropagation();
@@ -142,7 +164,7 @@ function renderInlineTokens(
         );
       } else {
         out.push(
-          <span key={key} className={chipClass} title={title}>
+          <span key={key} className={MENTION_CHIP_CLASS} title={title}>
             @{label}
           </span>,
         );
@@ -153,15 +175,13 @@ function renderInlineTokens(
     if (token.startsWith("#")) {
       const name = token.slice(1).toLowerCase();
       const channel = channels?.find((c) => c.name.toLowerCase() === name);
-      const chipClass =
-        "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
 
       if (channel && onChannelClick) {
         out.push(
           <button
             key={key}
             type="button"
-            className={`${chipClass} cursor-pointer`}
+            className={`${MENTION_CHIP_CLASS} cursor-pointer`}
             onClick={(e) => {
               e.stopPropagation();
               onChannelClick(channel.id);
@@ -172,7 +192,7 @@ function renderInlineTokens(
         );
       } else {
         out.push(
-          <span key={key} className={channel ? chipClass : undefined}>
+          <span key={key} className={channel ? MENTION_CHIP_CLASS : undefined}>
             #{token.slice(1)}
           </span>,
         );
@@ -240,7 +260,7 @@ function renderInlineTokens(
     if (token.startsWith("||") && token.endsWith("||") && token.length > 4) {
       out.push(
         <Spoiler key={key}>
-          {renderInlineTokens(token.slice(2, -2), members, k * 100, onMentionClick, channels, onChannelClick)}
+          {renderInlineTokens(token.slice(2, -2), members, k * 100, onMentionClick, channels, onChannelClick, roles)}
         </Spoiler>,
       );
       continue;
@@ -285,6 +305,7 @@ export function renderMarkdown(
   onMentionClick?: (profile: Profile) => void,
   channels?: ChannelLite[],
   onChannelClick?: (channelId: string) => void,
+  roles?: ServerRole[],
 ): ReactNode[] {
   const out: ReactNode[] = [];
   let k = 0;
@@ -318,7 +339,7 @@ export function renderMarkdown(
       if (lineBuf.length === 0) return;
       renderedLines.push(
         <span key={k++} className="whitespace-pre-wrap break-words">
-          {renderInlineTokens(lineBuf.join("\n"), members, k * 100, onMentionClick, channels, onChannelClick)}
+          {renderInlineTokens(lineBuf.join("\n"), members, k * 100, onMentionClick, channels, onChannelClick, roles)}
         </span>,
       );
       lineBuf = [];
@@ -329,7 +350,7 @@ export function renderMarkdown(
       renderedLines.push(
         <blockquote key={k++} className="my-1 border-l-4 border-divider pl-3 text-text-normal">
           <span className="whitespace-pre-wrap break-words">
-            {renderInlineTokens(lines.join("\n"), members, k * 100, onMentionClick, channels, onChannelClick)}
+            {renderInlineTokens(lines.join("\n"), members, k * 100, onMentionClick, channels, onChannelClick, roles)}
           </span>
         </blockquote>,
       );
@@ -370,7 +391,7 @@ export function renderMarkdown(
         flush();
         renderedLines.push(
           <span key={k++} className={HEADING_CLASS[hl] ?? HEADING_CLASS[3]}>
-            {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100, onMentionClick, channels, onChannelClick)}
+            {renderInlineTokens(line.slice(hl + 1).trimStart(), members, k * 100, onMentionClick, channels, onChannelClick, roles)}
           </span>,
         );
       } else {

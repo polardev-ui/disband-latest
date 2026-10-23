@@ -65,8 +65,13 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   const [total, setTotal] = useState<number | null>(null);
   const [mode, setMode] = useState<"window" | "local">("window");
   const [onlineById, setOnlineById] = useState<Map<string, WindowMember>>(new Map());
+  const [resolvedOnlineIds, setResolvedOnlineIds] = useState<Set<string>>(new Set());
+  const [onlineReady, setOnlineReady] = useState(false);
+  const [onlineRetry, setOnlineRetry] = useState(0);
   const [pages, setPages] = useState<Map<number, WindowMember[]>>(new Map());
   const inflight = useRef<Set<number>>(new Set());
+  const attemptedOnlineIds = useRef<Set<string>>(new Set());
+  const onlineRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped when the space changes: drops every in-flight response.
   const generation = useRef(0);
   // Bumped when the offline pages are invalidated (who's online changed).
@@ -91,14 +96,25 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlineKey]);
 
+  useEffect(() => () => {
+    if (onlineRetryTimer.current) clearTimeout(onlineRetryTimer.current);
+  }, []);
+
   // New space: start over.
   useEffect(() => {
     generation.current += 1;
     setTotal(null);
     setMode("window");
     setOnlineById(new Map());
+    setResolvedOnlineIds(new Set());
+    setOnlineReady(false);
     setPages(new Map());
     inflight.current.clear();
+    attemptedOnlineIds.current.clear();
+    if (onlineRetryTimer.current) {
+      clearTimeout(onlineRetryTimer.current);
+      onlineRetryTimer.current = null;
+    }
     if (!serverId) return;
     const gen = generation.current;
     void rpc("get_server_member_counts", { p_server_id: serverId })
@@ -113,30 +129,69 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
       });
   }, [serverId]);
 
-  // Resolve the online ids to members of this space.
+  // Resolve the online ids to members of this space. Chunked instead of
+  // slicing at 1,000: the old cap silently dropped the rest of a busy roster
+  // and those people fell through to the offline section.
   useEffect(() => {
     if (!serverId || mode !== "window") return;
     const gen = generation.current;
-    const missing = settledOnline.filter((id) => !onlineById.has(id));
-    if (missing.length === 0) return;
-    void rpc("get_server_members_by_ids", { p_server_id: serverId, p_user_ids: missing.slice(0, 1000) })
-      .then(({ data, error }) => {
-        if (gen !== generation.current) return;
-        if (error) {
-          setMode("local");
-          return;
+    const missing = settledOnline.filter(
+      (id) => !onlineById.has(id) && !attemptedOnlineIds.current.has(id),
+    );
+    if (missing.length === 0) {
+      setOnlineReady(true);
+      return;
+    }
+    for (const id of missing) attemptedOnlineIds.current.add(id);
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < missing.length; i += 500) chunks.push(missing.slice(i, i + 500));
+
+    void Promise.all(
+      chunks.map(async (ids) => ({
+        ids,
+        result: await rpc("get_server_members_by_ids", { p_server_id: serverId, p_user_ids: ids }),
+      })),
+    ).then((results) => {
+      if (gen !== generation.current) return;
+      const rows: Row[] = [];
+      let failed = false;
+      for (const { ids, result } of results) {
+        if (result.error) {
+          failed = true;
+          for (const id of ids) attemptedOnlineIds.current.delete(id);
+          continue;
         }
+        rows.push(...((result.data ?? []) as Row[]));
+      }
+
+      if (rows.length > 0) {
         setOnlineById((prev) => {
           const next = new Map(prev);
-          for (const r of (data ?? []) as Row[]) {
+          for (const r of rows) {
             const m = toMember(r);
             if (m) next.set(m.user_id, m);
           }
           return next;
         });
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverId, mode, settledOnline]);
+        setResolvedOnlineIds((prev) => {
+          const next = new Set(prev);
+          for (const r of rows) next.add(r.user_id);
+          return next;
+        });
+      }
+      setOnlineReady(true);
+
+      // A transient failure must not downgrade a 5,000-person roster to the
+      // first local page. Retry those ids shortly instead.
+      if (failed && !onlineRetryTimer.current) {
+        onlineRetryTimer.current = setTimeout(() => {
+          onlineRetryTimer.current = null;
+          setOnlineRetry((n) => n + 1);
+        }, 2000);
+      }
+    });
+  }, [serverId, mode, settledOnline, onlineById, onlineRetry]);
 
   // Members of this space who are online right now (non-members drop out
   // because the RPC only returns people in the space).
@@ -149,16 +204,27 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     return out;
   }, [settledOnline, onlineById]);
 
+  // Members, not just renderable rows: a row with a missing profile still
+  // occupies a member slot and must not be counted under Offline.
+  const onlineMemberIds = useMemo(() => {
+    const settled = new Set(settledOnline);
+    return [...resolvedOnlineIds].filter((id) => settled.has(id)).sort();
+  }, [resolvedOnlineIds, settledOnline]);
+
   // The offline pages exclude the online ids, so a change in who's online
   // shifts every offset: drop the cached pages and let the list ask again.
-  const excludeKey = online.map((m) => m.user_id).join(",");
+  const excludeKey = onlineMemberIds.join(",");
   useEffect(() => {
     pageGeneration.current += 1;
     setPages(new Map());
     inflight.current.clear();
   }, [excludeKey]);
 
-  const offlineCount = total === null ? null : Math.max(0, total - online.length);
+  // Don't paint an Offline header until we know which presence ids are
+  // actually members. Otherwise an online person can flash in Offline and
+  // then jump into Online, which is what made the order look unstable.
+  const offlineCount =
+    total === null || !onlineReady ? null : Math.max(0, total - onlineMemberIds.length);
 
   /**
    * Ask for the offline rows [from, to) to be loaded; drop pages far away.
@@ -171,7 +237,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
       const lastPage = Math.max(firstPage, Math.floor(Math.max(from, to - 1) / MEMBER_WINDOW_PAGE));
       const gen = generation.current;
       const pageGen = pageGeneration.current;
-      const exclude = online.map((m) => m.user_id);
+      const exclude = onlineMemberIds;
 
       // Release pages well outside the window.
       setPages((prev) => {
@@ -213,7 +279,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
           });
       }
     },
-    [serverId, mode, offlineCount, online],
+    [serverId, mode, offlineCount, onlineMemberIds],
   );
 
   const offlineAt = useCallback(

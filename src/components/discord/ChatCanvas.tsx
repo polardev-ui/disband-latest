@@ -225,6 +225,7 @@ interface MessageRowProps {
   reactions: MessageReaction[];
   members: Profile[];
   channels?: ChannelLite[];
+  roles?: ServerRole[];
   customEmoji?: Record<string, string>;
   canReact: boolean;
   canForward: boolean;
@@ -265,6 +266,7 @@ const MessageRow = memo(function MessageRow({
   reactions,
   members,
   channels,
+  roles,
   customEmoji,
   canReact,
   canForward,
@@ -335,6 +337,7 @@ const MessageRow = memo(function MessageRow({
         onAuthorContextMenu={onAuthorContextMenu}
         members={members}
         channels={channels}
+        roles={roles}
         customEmoji={customEmoji}
         onChannelClick={onChannelClick}
         highlight={highlight}
@@ -1027,6 +1030,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     reactions={msgReactions}
                     members={renderMembers}
                     channels={channels}
+                    roles={roles}
                     customEmoji={customEmoji}
                     canReact={canReact}
                     canForward={!!onForward}
