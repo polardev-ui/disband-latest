@@ -45,11 +45,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Invite links only: claiming every disband.dev URL opened the
+                 app on pages it has nothing to show for, like /terms. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="www.disband.dev" />
+                <data android:scheme="https" />
+                <data android:host="www.disband.dev" />
+                <data android:host="disband.dev" />
+                <data android:pathPrefix="/server/" />
+                <data android:pathPrefix="/invite/" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

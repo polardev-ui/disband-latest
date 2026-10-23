@@ -35,9 +35,11 @@ data class PendingNav(
      * comes back.
      */
     val source: String? = null,
+    /** An invite code from a /server/CODE link, shown as a join card. */
+    val inviteCode: String? = null,
 ) {
     val isBlank: Boolean
-        get() = serverId == null && channelId == null && threadId == null && source == null
+        get() = serverId == null && channelId == null && threadId == null && source == null && inviteCode == null
 }
 
 class ShellChromeState {

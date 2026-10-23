@@ -1,6 +1,14 @@
 package com.wsgpolar.disband.ui.main
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -80,6 +88,10 @@ fun MainScreen(
     var inviteFor by remember { mutableStateOf<Server?>(null) }
     var membersFor by remember { mutableStateOf<Server?>(null) }
     var overflowFor by remember { mutableStateOf<Server?>(null) }
+    var showAddSpace by remember { mutableStateOf(false) }
+    var showDiscover by remember { mutableStateOf(false) }
+    var inviteToJoin by remember { mutableStateOf<String?>(null) }
+    AskForNotificationsOnce()
     val shellChrome = rememberShellChrome()
     val currentUserId = app.currentUserId
     // `app.servers.value` read the flow ONCE at composition and never
@@ -144,6 +156,12 @@ fun MainScreen(
     // --- Notification deep link: route once, then tell the caller it's done. ---
     LaunchedEffect(pendingNav) {
         if (pendingNav == null || pendingNav.isBlank) return@LaunchedEffect
+
+        pendingNav.inviteCode?.let { code ->
+            inviteToJoin = code
+            onPendingNavConsumed()
+            return@LaunchedEffect
+        }
 
         // A raw push source has to be identified before it can be opened:
         // it is a bare uuid, and a channel, a DM thread and a group all look
@@ -301,6 +319,8 @@ fun MainScreen(
                             onInvite = { inviteFor = it },
                             onMembers = { membersFor = it },
                             onOverflow = { overflowFor = it },
+                            onAddServer = { showAddSpace = true },
+                            onExplore = { showDiscover = true },
                             // Still unwired, but deliberately left as the
                             // panel's own defaults rather than dead params
                             // here: server unread counts and live voice
@@ -391,6 +411,23 @@ fun MainScreen(
         CallOverlay(app, shellChrome = shellChrome)
     }
 
+    // The rail's + and Explore, and an invite link that opened the app.
+    val openSpace: (String) -> Unit = { id -> shellChrome.navigateTo(Destination.Home, id) }
+    if (showAddSpace) {
+        AddSpaceSheet(
+            app = app,
+            onDismiss = { showAddSpace = false },
+            onOpenSpace = openSpace,
+            onExplore = { showDiscover = true },
+        )
+    }
+    if (showDiscover) {
+        DiscoverSheet(app = app, onDismiss = { showDiscover = false }, onOpenSpace = openSpace)
+    }
+    inviteToJoin?.let { code ->
+        InviteJoinSheet(app = app, code = code, onDismiss = { inviteToJoin = null }, onOpenSpace = openSpace)
+    }
+
     // The three sheets the space header opens.
     inviteFor?.let { server ->
         InviteSheet(server = server, onDismiss = { inviteFor = null })
@@ -417,3 +454,26 @@ private data class OpenConversation(
     val group: GroupChat?,
     val serverName: String,
 )
+
+/**
+ * Android 13+ shows nothing until the app is allowed to post notifications,
+ * and the only place that asked was a row deep in You — so most people never
+ * got a message or call notification at all. Ask once after sign-in, as iOS
+ * does; after that the row in You is the way back.
+ */
+@Composable
+private fun AskForNotificationsOnce() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        val prefs = context.getSharedPreferences("disband_prefs", Context.MODE_PRIVATE)
+        if (granted || prefs.getBoolean(NOTIFICATIONS_ASKED, false)) return@LaunchedEffect
+        prefs.edit().putBoolean(NOTIFICATIONS_ASKED, true).apply()
+        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}
+
+private const val NOTIFICATIONS_ASKED = "notifications_asked_v1"
