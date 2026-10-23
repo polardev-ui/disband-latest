@@ -6,11 +6,55 @@ import PhotosUI
 struct ServerMembersView: View {
     let server: Server
     @Environment(AppState.self) private var app
+    @Environment(PresenceService.self) private var presence
     @State private var members: [ServerMember] = []
     @State private var loading = true
     @State private var openProfile: Profile?
 
     private var isOwner: Bool { server.ownerId == app.currentUserId }
+
+    /// Live status, not the stale `profiles.status` column. The signed-in
+    /// member falls back to their profile while the presence channel is still
+    /// connecting, so opening this screen immediately never hides yourself.
+    private func liveStatus(for member: ServerMember) -> UserStatus {
+        let live = presence.status(for: member.userId)
+        if live == .offline && member.userId == app.currentUserId {
+            return member.profile?.status ?? .offline
+        }
+        return live
+    }
+
+    private func roleRank(_ role: MemberRole) -> Int {
+        switch role {
+        case .owner: return 4
+        case .admin: return 3
+        case .moderator: return 2
+        case .member: return 1
+        }
+    }
+
+    /// Highest base role first; inside a role, name order. User id is the
+    /// final tiebreaker so equal names cannot swap places between refreshes.
+    private func ordered(_ list: [ServerMember]) -> [ServerMember] {
+        list.sorted { a, b in
+            if roleRank(a.role) != roleRank(b.role) {
+                return roleRank(a.role) > roleRank(b.role)
+            }
+            let an = a.profile?.name ?? ""
+            let bn = b.profile?.name ?? ""
+            let comparison = an.localizedCaseInsensitiveCompare(bn)
+            if comparison != .orderedSame { return comparison == .orderedAscending }
+            return a.userId < b.userId
+        }
+    }
+
+    private var onlineMembers: [ServerMember] {
+        ordered(members.filter { liveStatus(for: $0) != .offline })
+    }
+
+    private var offlineMembers: [ServerMember] {
+        ordered(members.filter { liveStatus(for: $0) == .offline })
+    }
 
     var body: some View {
         Group {
@@ -18,28 +62,20 @@ struct ServerMembersView: View {
                 StateView(kind: .loading)
             } else {
                 List {
-                    Section("Members — \(members.count)") {
-                        ForEach(members) { member in
-                            Button { openProfile = member.profile } label: {
-                                HStack {
-                                    FriendRow(profile: member.profile)
-                                    Spacer()
-                                    roleBadge(member.role)
-                                }
-                            }
-                            .listRowBackground(Brand.surface)
-                            .swipeActions {
-                                if isOwner && member.userId != app.currentUserId {
-                                    Button(role: .destructive) { kick(member.userId) } label: {
-                                        Label("Kick", systemImage: "person.fill.xmark")
-                                    }
-                                }
-                            }
+                    if !onlineMembers.isEmpty {
+                        Section("Online — \(onlineMembers.count)") {
+                            ForEach(onlineMembers) { memberRow($0) }
+                        }
+                    }
+                    if !offlineMembers.isEmpty {
+                        Section("Offline — \(offlineMembers.count)") {
+                            ForEach(offlineMembers) { memberRow($0) }
                         }
                     }
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
+                .refreshable { await load() }
             }
         }
         .background(Brand.background)
@@ -47,6 +83,24 @@ struct ServerMembersView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $openProfile) { ProfileDetailView(profile: $0) }
         .task { await load() }
+    }
+
+    @ViewBuilder private func memberRow(_ member: ServerMember) -> some View {
+        Button { openProfile = member.profile } label: {
+            HStack {
+                FriendRow(profile: member.profile, status: liveStatus(for: member))
+                Spacer()
+                roleBadge(member.role)
+            }
+        }
+        .listRowBackground(Brand.surface)
+        .swipeActions {
+            if isOwner && member.userId != app.currentUserId {
+                Button(role: .destructive) { kick(member.userId) } label: {
+                    Label("Kick", systemImage: "person.fill.xmark")
+                }
+            }
+        }
     }
 
     @ViewBuilder private func roleBadge(_ role: MemberRole) -> some View {
@@ -61,7 +115,9 @@ struct ServerMembersView: View {
     }
 
     private func load() async {
-        members = (try? await DatabaseService.members(serverId: server.id)) ?? []
+        if members.isEmpty { loading = true }
+        let loaded = try? await DatabaseService.members(serverId: server.id)
+        if let loaded { members = loaded }
         loading = false
     }
 

@@ -123,10 +123,14 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
         ?.reduce((max: number, m) => Math.max(max, topRole(m, roles)?.position ?? -1), -1);
       return best ?? -1;
     };
-    const byName = (a: Member, b: Member) => displayName(a.profile).localeCompare(displayName(b.profile));
+    const byName = (a: Member, b: Member) =>
+      displayName(a.profile).localeCompare(displayName(b.profile)) ||
+      a.user_id.localeCompare(b.user_id);
 
     const out: Item[] = [];
-    for (const label of [...grouped.keys()].sort((a, b) => groupPriority(b) - groupPriority(a))) {
+    for (const label of [...grouped.keys()].sort(
+      (a, b) => groupPriority(b) - groupPriority(a) || a.localeCompare(b),
+    )) {
       const list = grouped.get(label)!.sort(byName);
       out.push({ kind: "header", key: `h:${label}`, label, count: list.length });
       for (const m of list) out.push({ kind: "member", key: m.user_id, member: m });
@@ -150,6 +154,16 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
   const [viewport, setViewport] = useState(700);
   const [rowH, setRowH] = useState(ROW_H);
   const [headerH, setHeaderH] = useState(HEADER_H);
+
+  // Switching spaces must start at the top. The DOM keeps its scroll offset
+  // when the roster is replaced, which used to land the reader in the middle
+  // of the new server's offline list (and made online members look missing).
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    setScrollTop(0);
+  }, [serverId]);
 
   const { offsets, total } = useMemo(() => {
     const offs = new Array<number>(items.length + 1);
