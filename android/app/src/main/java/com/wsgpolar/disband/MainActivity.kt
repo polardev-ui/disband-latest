@@ -54,11 +54,11 @@ class MainActivity : ComponentActivity() {
         }
         // 1) Deep link URI (https://www.disband.dev/server/CODE or disband://invite/CODE)
         intent.dataString?.let { uri ->
-            AppConfig.INVITE_REGEX.find(uri)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { _ ->
-                // Invite resolution needs a server fetch; MainScreen will show the sheet
-                // via the thread/channel routing — stash the raw code as threadId prefix.
-                // The sheet observes pendingNav and fetches the preview.
-                postPending(PendingNav(threadId = "invite:$uri"))
+            AppConfig.INVITE_LINK_REGEX.find(uri)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { code ->
+                // MainScreen shows a join card for it. This used to be posted
+                // as a thread id, which matched no conversation, so an invite
+                // link opened the app and did nothing.
+                postPending(PendingNav(inviteCode = code))
                 return
             }
             // Generic source navigation from push data that arrived as a VIEW intent
