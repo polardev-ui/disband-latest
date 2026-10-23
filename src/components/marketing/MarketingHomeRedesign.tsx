@@ -106,6 +106,14 @@ export function MarketingHomeRedesign() {
                 </span>
               </div>
 
+              <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-1.5 text-xs text-[#b5bac1]">
+                <span className="relative flex h-2 w-2" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                <LiveOnlineCount />
+              </div>
+
               <dl className="mt-12 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-white/[0.06] py-6 sm:grid-cols-4">
                 {platformRows.map((row) => (
                   <div key={row.label}>

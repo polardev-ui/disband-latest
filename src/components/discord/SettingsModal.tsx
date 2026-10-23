@@ -7,6 +7,8 @@ import { usePresence } from "@/hooks/usePresence";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
+import { LANGUAGES, languageFor } from "@/lib/i18n";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { AccentPresetGrid, ProfilePreview } from "./settings/ProfilePreview";
 import {
@@ -45,7 +47,7 @@ import { GIFT_PLAN_NAME, giftUrl, monthsLabel, type GiftPlan } from "@/lib/gifts
 import { apiFetch } from "@/lib/api";
 import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic } from "@/components/icons";
+import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic, IconLanguage, IconCheck, IconExternalLink } from "@/components/icons";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { OfficialBroadcastPanel } from "@/components/discord/OfficialBroadcastPanel";
@@ -119,6 +121,9 @@ const TABS = [
   { id: "appearance" as const, label: "Appearance", group: "App", icon: <IconPalette size={17} />,
     description: "Zoom, motion and theme mode.",
     keywords: "zoom scale size motion animation reduced dark light mode" },
+  { id: "language" as const, label: "Language", group: "App", icon: <IconLanguage size={17} />,
+    description: "Interface language and translations.",
+    keywords: "language locale translation english spanish french german portuguese japanese korean chinese" },
   { id: "themes" as const, label: "Themes", group: "App", icon: <IconImage size={17} />,
     description: "Colour themes and skins.",
     keywords: "colour color palette skin theme dark midnight amoled" },
@@ -201,6 +206,7 @@ function giftStatusLine(g: GiftRowSummary, received = false): string {
 
 export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
   const { theme, themes, setTheme } = useTheme();
+  const { t, language, setLanguage } = useI18n();
   const { profile, user, updateProfile, signOut, requestAccountDeletion } = useApp();
   const isAnonymous = profile?.account_type === "anonymous";
 
@@ -884,16 +890,20 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
   }
 
-  const activeTab = TABS.find((t) => t.id === tab);
+  const activeTab = TABS.find((item) => item.id === tab);
   const navQ = navQuery.trim().toLowerCase();
   const navMatches = navQ
-    ? TABS.filter((t) => `${t.label} ${t.keywords}`.toLowerCase().includes(navQ))
+    ? TABS.filter((item) => `${t(item.label)} ${item.keywords} ${item.label}`.toLowerCase().includes(navQ))
     : TABS;
+  const selectedLanguage = languageFor(language);
+  const docsHref = selectedLanguage.docsPath
+    ? `https://docs.disband.dev/${selectedLanguage.docsPath}/`
+    : "https://docs.disband.dev/";
 
   return (
     <>
       <SettingsLayer
-        label="User Settings"
+        label={t("User Settings")}
         exiting={exiting}
         onClose={onClose}
         contentKey={tab}
@@ -901,11 +911,11 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           <select
             value={tab}
             onChange={(e) => setTab(e.target.value as SettingsTab)}
-            aria-label="Settings section"
+            aria-label={t("Settings section")}
             className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
           >
-            {TABS.map((t) => (
-              <option key={t.id} value={t.id}>{t.label}</option>
+            {TABS.map((item) => (
+              <option key={item.id} value={item.id}>{t(item.label)}</option>
             ))}
           </select>
         }
@@ -921,32 +931,34 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     setNavQuery("");
                   }
                 }}
-                placeholder="Search"
-                aria-label="Search settings"
+                placeholder={t("Search")}
+                aria-label={t("Search settings")}
                 className="h-7 w-full rounded-[4px] bg-bg-tertiary px-1.5 pr-7 text-[14px] text-text-normal outline-none placeholder:text-text-muted"
               />
               <IconSearch size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted" />
             </label>
             {navQuery.trim() && navMatches.length === 0 && (
-              <p className="px-2.5 py-2 text-[14px] text-text-muted">No settings match “{navQuery.trim()}”.</p>
+              <p className="px-2.5 py-2 text-[14px] text-text-muted">
+                {t("No settings match “{query}”.", { query: navQuery.trim() })}
+              </p>
             )}
             {NAV_GROUPS.map((group, gi) => {
-              const items = navMatches.filter((t) => t.group === group);
+              const items = navMatches.filter((item) => item.group === group);
               if (items.length === 0) return null;
               return (
                 <div key={group}>
                   {gi > 0 && <SettingsNavSeparator />}
-                  <SettingsNavHeader>{NAV_GROUP_LABEL[group]}</SettingsNavHeader>
-                  {items.map((t) => (
+                  <SettingsNavHeader>{t(NAV_GROUP_LABEL[group])}</SettingsNavHeader>
+                  {items.map((item) => (
                     <SettingsNavItem
-                      key={t.id}
-                      active={tab === t.id}
+                      key={item.id}
+                      active={tab === item.id}
                       onClick={() => {
-                        setTab(t.id);
+                        setTab(item.id);
                         setNavQuery("");
                       }}
                     >
-                      {t.label}
+                      {t(item.label)}
                     </SettingsNavItem>
                   ))}
                 </div>
@@ -959,18 +971,20 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 window.location.href = "/bug-report";
               }}
             >
-              Report a Bug
+              {t("Report a Bug")}
             </SettingsNavItem>
             <SettingsNavSeparator />
             <SettingsNavItem onClick={() => void signOut()} trailing={<IconLeave size={16} />}>
-              Log Out
+              {t("Log Out")}
             </SettingsNavItem>
             <SettingsNavSeparator />
             <p className="px-2.5 py-2 text-[12px] leading-4 text-text-muted">Disband {process.env.NEXT_PUBLIC_APP_VERSION ?? ""}</p>
           </>
         }
       >
-        <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">{activeTab?.label ?? "Settings"}</h2>
+        <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">
+          {activeTab ? t(activeTab.label) : t("Settings")}
+        </h2>
               {tab === "profile" && (
                 <div className="pb-20">
                   {profile && (
@@ -1439,6 +1453,63 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       })}
                     </div>
                   </section>
+                </div>
+              )}
+
+              {tab === "language" && (
+                <div>
+                  <SettingsSection
+                    title={t("Language")}
+                    description={t("Choose the language for the Disband interface on this device.")}
+                  >
+                    <div className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-2">
+                      {LANGUAGES.map((option) => {
+                        const selected = option.code === language;
+                        return (
+                          <button
+                            key={option.code}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => setLanguage(option.code)}
+                            className={`flex items-center gap-3 rounded-[6px] border px-3 py-2.5 text-left transition-colors ${
+                              selected
+                                ? "border-brand bg-brand/[0.08]"
+                                : "border-divider hover:border-text-muted/50 hover:bg-interactive-hover"
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[14px] font-medium text-text-normal">{option.nativeName}</span>
+                              {option.code !== "en" && (
+                                <span className="block text-[12px] text-text-muted">{option.englishName}</span>
+                              )}
+                            </span>
+                            {selected && <IconCheck size={17} className="shrink-0 text-brand" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title={t("Documentation")}
+                    description={t("Read the docs in your language.")}
+                  >
+                    <div className="px-5 py-4">
+                      <a
+                        href={docsHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-[4px] bg-brand px-3 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
+                      >
+                        {t("Open translated docs")}
+                        <IconExternalLink size={15} />
+                      </a>
+                    </div>
+                  </SettingsSection>
+
+                  <p className="px-1 text-[13px] leading-relaxed text-text-muted">
+                    {t("Translations cover settings and core app navigation. More of the app is translated over time.")}
+                  </p>
                 </div>
               )}
 

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
-import { IconBell, IconBellOff, IconPin, IconSearch, IconFriends, IconInbox } from "@/components/icons";
+import { IconBell, IconBellOff, IconCheckAll, IconPin, IconSearch, IconFriends, IconInbox } from "@/components/icons";
 import { Tooltip } from "./Tooltip";
 
 type MuteLevel = "all" | "mentions" | "nothing";
@@ -43,6 +44,7 @@ export function HeaderToolbar({
   className,
 }: HeaderToolbarProps) {
   const app = useApp();
+  const { t } = useI18n();
   const [muteLevel, setMuteLevel] = useState<MuteLevel>("all");
   const [muteOpen, setMuteOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -94,10 +96,10 @@ export function HeaderToolbar({
     <div className={`flex items-center gap-3 md:gap-4 ${className ?? ""}`}>
       {canMute && (
         <div className="relative">
-          <Tooltip label="Notification Settings" side="bottom">
+          <Tooltip label={t("Notification Settings")} side="bottom">
             <button
               type="button"
-              aria-label="Notification Settings"
+              aria-label={t("Notification Settings")}
               onClick={() => setMuteOpen((v) => !v)}
               className={iconBtn(muteOpen)}
             >
@@ -113,7 +115,7 @@ export function HeaderToolbar({
                   onClick={() => { void setLevel(l); setMuteOpen(false); }}
                   className="group/opt flex w-full items-center justify-between rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white"
                 >
-                  {l === "all" ? "All Messages" : l === "mentions" ? "Only @mentions" : "Nothing"}
+                  {l === "all" ? t("All Messages") : l === "mentions" ? t("Only @mentions") : t("Nothing")}
                   <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 ${muteLevel === l ? "border-brand group-hover/opt:border-white" : "border-current"}`}>
                     {muteLevel === l && <span className="h-2 w-2 rounded-full bg-brand group-hover/opt:bg-white" />}
                   </span>
@@ -125,18 +127,18 @@ export function HeaderToolbar({
       )}
 
       {showPins && onTogglePins && (
-        <Tooltip label="Pinned Messages" side="bottom">
-          <button type="button" aria-label="Pinned Messages" aria-pressed={!!pinnedOpen} onClick={onTogglePins} className={iconBtn(!!pinnedOpen)}>
+        <Tooltip label={t("Pinned Messages")} side="bottom">
+          <button type="button" aria-label={t("Pinned Messages")} aria-pressed={!!pinnedOpen} onClick={onTogglePins} className={iconBtn(!!pinnedOpen)}>
             <IconPin size={24} />
           </button>
         </Tooltip>
       )}
 
       {showMembersToggle && onToggleMembers && (
-        <Tooltip label={membersVisible ? "Hide Member List" : "Show Member List"} side="bottom">
+        <Tooltip label={membersVisible ? t("Hide Member List") : t("Show Member List")} side="bottom">
           <button
             type="button"
-            aria-label={membersVisible ? "Hide Member List" : "Show Member List"}
+            aria-label={membersVisible ? t("Hide Member List") : t("Show Member List")}
             aria-pressed={membersVisible}
             onClick={onToggleMembers}
             className={iconBtn(!!membersVisible)}
@@ -147,8 +149,8 @@ export function HeaderToolbar({
       )}
 
       {showSearch && (
-        <Tooltip label="Search" side="bottom">
-          <button type="button" aria-label="Search" onClick={() => onOpenSearch()} className={`lg:hidden ${iconBtn(!!searchOpen)}`}>
+        <Tooltip label={t("Search")} side="bottom">
+          <button type="button" aria-label={t("Search")} onClick={() => onOpenSearch()} className={`lg:hidden ${iconBtn(!!searchOpen)}`}>
             <IconSearch size={22} />
           </button>
         </Tooltip>
@@ -159,12 +161,12 @@ export function HeaderToolbar({
             type="text"
             readOnly
             onFocus={() => onOpenSearch()}
-            placeholder="Search"
-            aria-label="Search"
+            placeholder={t("Search")}
+            aria-label={t("Search")}
             className="h-6 w-36 rounded-[4px] bg-bg-tertiary pl-1.5 pr-7 text-[14px] text-text-normal outline-none transition-[width] duration-200 ease-out placeholder:text-text-muted focus:w-60"
           />
           {searchOpen && onCloseSearch ? (
-            <button type="button" aria-label="Clear search" onClick={onCloseSearch} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-interactive-normal hover:text-interactive-active">×</button>
+            <button type="button" aria-label={t("Clear search")} onClick={onCloseSearch} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-interactive-normal hover:text-interactive-active">×</button>
           ) : (
             <IconSearch size={16} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted" />
           )}
@@ -172,8 +174,8 @@ export function HeaderToolbar({
       )}
 
       <div className="relative">
-        <Tooltip label="Inbox" side="bottom">
-          <button type="button" aria-label="Inbox" onClick={() => setInboxOpen((v) => !v)} className={`relative ${iconBtn(inboxOpen)}`}>
+        <Tooltip label={t("Inbox")} side="bottom">
+          <button type="button" aria-label={t("Inbox")} onClick={() => setInboxOpen((v) => !v)} className={`relative ${iconBtn(inboxOpen)}`}>
             <IconInbox size={24} />
             {inboxCount > 0 && (
               <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-[3px] border-bg-primary bg-status-dnd px-0.5 text-[10px] font-bold text-white">
@@ -184,13 +186,18 @@ export function HeaderToolbar({
         </Tooltip>
         {inboxOpen && (
           <div className="menu-pop absolute right-0 top-9 z-50 w-[480px] origin-top-right overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]">
-            <InboxPopover mentions={mentions} unreads={unreads} onClose={() => setInboxOpen(false)} />
+            <InboxPopover
+              mentions={mentions}
+              unreads={unreads}
+              onReadAll={() => void app.markNotificationsRead()}
+              onClose={() => setInboxOpen(false)}
+            />
           </div>
         )}
       </div>
 
-      <Tooltip label="Help" side="bottom">
-        <a href="/support" target="_blank" rel="noreferrer" aria-label="Help" className={iconBtn(false)}>
+      <Tooltip label={t("Help")} side="bottom">
+        <a href="/support" target="_blank" rel="noreferrer" aria-label={t("Help")} className={iconBtn(false)}>
           <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
             <path fill="currentColor" d="M12 2C6.486 2 2 6.487 2 12c0 5.515 4.486 10 10 10s10-4.485 10-10c0-5.513-4.486-10-10-10Zm0 16.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm1-4.375V15h-2v-2h1c1.104 0 2-.897 2-2 0-1.104-.896-2-2-2s-2 .896-2 2H8c0-2.205 1.795-4 4-4s4 1.795 4 4a4.01 4.01 0 0 1-3 3.875Z" />
           </svg>
@@ -200,7 +207,18 @@ export function HeaderToolbar({
   );
 }
 
-function InboxPopover({ mentions, unreads, onClose }: { mentions: any[]; unreads: any[]; onClose: () => void }) {
+function InboxPopover({
+  mentions,
+  unreads,
+  onReadAll,
+  onClose,
+}: {
+  mentions: any[];
+  unreads: any[];
+  onReadAll: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"mentions" | "unreads">("mentions");
   const list = tab === "mentions" ? mentions : unreads;
   useOverlayDismiss(onClose, true);
@@ -209,17 +227,27 @@ function InboxPopover({ mentions, unreads, onClose }: { mentions: any[]; unreads
       <div className="bg-bg-tertiary px-4 pt-4">
         <div className="flex items-center gap-2">
           <IconInbox size={24} className="text-header-primary" />
-          <h3 className="text-[20px] font-semibold leading-6 text-header-primary">Inbox</h3>
+          <h3 className="flex-1 text-[20px] font-semibold leading-6 text-header-primary">{t("Inbox")}</h3>
+          <button
+            type="button"
+            onClick={onReadAll}
+            disabled={unreads.length === 0}
+            title={t("Mark all as read")}
+            className="flex h-7 items-center gap-1 rounded-[4px] bg-bg-secondary px-2 text-[12px] font-semibold text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-default disabled:opacity-40"
+          >
+            <IconCheckAll size={14} />
+            {t("Read all")}
+          </button>
         </div>
         <div className="mt-3 flex gap-4 text-[14px] font-medium">
-          {(["mentions", "unreads"] as const).map((t) => (
+          {(["mentions", "unreads"] as const).map((kind) => (
             <button
-              key={t}
+              key={kind}
               type="button"
-              onClick={() => setTab(t)}
-              className={`border-b-2 pb-2.5 transition-colors ${tab === t ? "border-brand text-header-primary" : "border-transparent text-interactive-normal hover:text-interactive-active"}`}
+              onClick={() => setTab(kind)}
+              className={`border-b-2 pb-2.5 transition-colors ${tab === kind ? "border-brand text-header-primary" : "border-transparent text-interactive-normal hover:text-interactive-active"}`}
             >
-              {t === "mentions" ? `Mentions (${mentions.length})` : `Unreads (${unreads.length})`}
+              {kind === "mentions" ? `${t("Mentions")} (${mentions.length})` : `${t("Unreads")} (${unreads.length})`}
             </button>
           ))}
         </div>
@@ -227,8 +255,8 @@ function InboxPopover({ mentions, unreads, onClose }: { mentions: any[]; unreads
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {list.length === 0 ? (
           <div className="flex flex-col items-center px-3 py-10 text-center">
-            <p className="text-[16px] font-semibold text-header-primary">You&apos;re all caught up!</p>
-            <p className="mt-1 text-[14px] text-text-muted">Come back for notifications, mentions and unreads.</p>
+            <p className="text-[16px] font-semibold text-header-primary">{t("You're all caught up")}</p>
+            <p className="mt-1 text-[14px] text-text-muted">{t("Mentions, replies, and messages will show up here.")}</p>
           </div>
         ) : (
           list.slice(0, 50).map((n) => (

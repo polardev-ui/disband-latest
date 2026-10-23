@@ -832,6 +832,18 @@ export interface Database {
         Args: { p_group_id: string };
         Returns: undefined;
       };
+      get_channel_mention_unread: {
+        Args: Record<string, never>;
+        Returns: {
+          channel_id: string;
+          server_id: string;
+          mention_count: number;
+        }[];
+      };
+      mark_channel_mentions_read: {
+        Args: { p_channel_id: string };
+        Returns: number;
+      };
     };
     Enums: {
       [_ in never]: never;

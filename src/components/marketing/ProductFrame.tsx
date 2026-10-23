@@ -160,7 +160,7 @@ export function ProductFrame() {
 
           <div className="hidden w-[148px] shrink-0 bg-[#1a1b1f] px-2.5 py-3 lg:block">
             <p className="px-1.5 pb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#6e727a]">
-              <LiveOnlineCount />
+              <LiveOnlineCount compact />
             </p>
             {members.map((m) => (
               <div key={m.name} className="mb-1 flex items-center gap-2 rounded px-1.5 py-1">

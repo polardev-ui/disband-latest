@@ -78,6 +78,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Trophy,
+  Languages,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -154,6 +155,7 @@ export function IconGame({ size = 20, className }: IconProps) {
   </svg>;
 }
 export const IconTrophy = icon(Trophy);
+export const IconLanguage = icon(Languages);
 export const IconCheck = icon(Check);
 export const IconChevronRight = icon(ChevronRight);
 export const IconChevronLeft = icon(ChevronLeft);

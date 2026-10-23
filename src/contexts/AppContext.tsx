@@ -318,6 +318,8 @@ interface AppContextValue {
   channelUnreadMap: Map<string, number>;
   getChannelUnreadCount: (channelId: string) => number;
   getChannelMentionCount: (channelId: string) => number;
+  serverMentionCounts: Map<string, number>;
+  getServerMentionCount: (serverId: string) => number;
   groupUnreadMap: Map<string, number>;
   getGroupUnreadCount: (groupId: string) => number;
   clearGroupUnread: (groupId: string) => void;
@@ -491,6 +493,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [channelUnreadMap, setChannelUnreadMap] = useState<Map<string, number>>(new Map());
 
   const [channelMentionMap, setChannelMentionMap] = useState<Map<string, number>>(new Map());
+  const [serverMentionCounts, setServerMentionCounts] = useState<Map<string, number>>(new Map());
   const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
   const [listeningMap, setListeningMap] = useState<ListeningMap>(new Map());
@@ -512,6 +515,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const maxMessageCharsRef = useRef(2000);
   const maxBioLengthRef = useRef(190);
   const presenceChannelRef = useRef<RealtimeChannel | null>(null);
+  const mentionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors the runner's latest Spotify poll so presence re-tracks (status
   // changes, channel resubscribes) carry the current track without needing
   // the poll loop to be re-run.
@@ -736,7 +740,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds]);
 
-  const serverUnreadIds = useMemo(() => [...serverIndicators], [serverIndicators]);
+  const serverUnreadIds = useMemo(() => {
+    const ids = new Set(serverIndicators);
+    for (const [serverId, count] of serverMentionCounts) {
+      if (count > 0) ids.add(serverId);
+    }
+    return [...ids];
+  }, [serverIndicators, serverMentionCounts]);
 
   const clearServerIndicator = useCallback((serverId: string) => {
     setServerIndicators((prev) => {
@@ -885,6 +895,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
+  }, []);
+
+  const refreshMentionUnread = useCallback(async () => {
+    if (!userId) return;
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("get_channel_mention_unread");
+    if (error || sessionRef.current?.user.id !== userId) return;
+
+    const activeChannel =
+      viewModeRef.current === "space" && document.visibilityState === "visible"
+        ? activeChannelRef.current
+        : null;
+    const channelCounts = new Map<string, number>();
+    const serverCounts = new Map<string, number>();
+    const acknowledged = new Set<string>();
+
+    for (const row of data ?? []) {
+      const count = Number(row.mention_count ?? 0);
+      if (count <= 0) continue;
+      // If the mention is in the channel currently on screen, the user has
+      // already seen it. Clear the durable notification instead of painting a
+      // badge for a message sitting in front of them.
+      if (activeChannel && row.channel_id === activeChannel) {
+        acknowledged.add(row.channel_id);
+        continue;
+      }
+      channelCounts.set(row.channel_id, count);
+      serverCounts.set(row.server_id, (serverCounts.get(row.server_id) ?? 0) + count);
+    }
+
+    setChannelMentionMap(channelCounts);
+    setServerMentionCounts(serverCounts);
+
+    if (acknowledged.size === 0) return;
+    await Promise.all(
+      [...acknowledged].map((channelId) =>
+        supabase.rpc("mark_channel_mentions_read", { p_channel_id: channelId }),
+      ),
+    );
+    setNotifications((prev) =>
+      prev.map((n) => {
+        if (n.read || n.type !== "mention" || !n.link?.startsWith("channel:")) return n;
+        return acknowledged.has(n.link.slice("channel:".length)) ? { ...n, read: true } : n;
+      }),
+    );
+  }, [userId]);
+
+  const markChannelMentionsRead = useCallback(async (channelId: string) => {
+    setChannelMentionMap((prev) => {
+      if (!prev.has(channelId)) return prev;
+      const next = new Map(prev);
+      next.delete(channelId);
+      return next;
+    });
+    setNotifications((prev) =>
+      prev.map((n) =>
+        !n.read && n.type === "mention" && n.link === `channel:${channelId}`
+          ? { ...n, read: true }
+          : n,
+      ),
+    );
+    if (!userId) return;
+    const { error } = await getSupabaseClient().rpc("mark_channel_mentions_read", {
+      p_channel_id: channelId,
+    });
+    if (!error) await refreshMentionUnread();
+  }, [userId, refreshMentionUnread]);
+
+  const scheduleMentionRefresh = useCallback(() => {
+    if (mentionRefreshTimerRef.current) return;
+    mentionRefreshTimerRef.current = setTimeout(() => {
+      mentionRefreshTimerRef.current = null;
+      void refreshMentionUnread();
+    }, 200);
+  }, [refreshMentionUnread]);
+
+  useEffect(() => () => {
+    if (mentionRefreshTimerRef.current) {
+      clearTimeout(mentionRefreshTimerRef.current);
+      mentionRefreshTimerRef.current = null;
+    }
   }, []);
 
   const patchProfileInState = useCallback((updated: Profile) => {
@@ -2180,6 +2271,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ]);
   }, [userId, activeServerId, activeChannelId, activeDmThreadId, activeGroupChatId, loadProfile, loadServers, loadFriendships, loadDmThreads, loadGroupChats, loadNotifications, loadServerOrganization, loadServerDetails, loadMessages, loadDmMessages, loadGroupMessages, seedUnread]);
 
+  // Rebuild mention badges from durable notifications once the shell is ready,
+  // and whenever the open channel changes. This is what makes a ping that
+  // arrived while the app was closed still show on the space and channel.
+  useEffect(() => {
+    if (!userId || !dataLoaded) return;
+    void refreshMentionUnread();
+  }, [userId, dataLoaded, activeChannelId, viewMode, refreshMentionUnread]);
+
   useEffect(() => {
     if (!configured) {
       setReady(true);
@@ -2547,6 +2646,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (channel) {
             setServerIndicators((prev) => new Set(prev).add(channel.server_id));
           }
+          scheduleMentionRefresh();
         }
         if (n.type === "mention" && target) {
           alertMention(n.title, n.body ?? undefined, target);
@@ -2588,7 +2688,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void friendSub.unsubscribe();
       void notesSub.unsubscribe();
     };
-  }, [userId, configured, loadFriendships]);
+  }, [userId, configured, loadFriendships, scheduleMentionRefresh]);
 
   // Catalyst counts follow only this user's servers plus their own grants.
   // This used to be one unfiltered server_catalysts subscription, and that
@@ -3228,13 +3328,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               next.set(msg.channel_id, (next.get(msg.channel_id) ?? 0) + 1);
               return next;
             });
-            if (msg.mentions?.includes(userId)) {
-              setChannelMentionMap((prev) => {
-                const next = new Map(prev);
-                next.set(msg.channel_id, (next.get(msg.channel_id) ?? 0) + 1);
-                return next;
-              });
-            }
             setServerIndicators((prev) => new Set(prev).add(channel.server_id));
           }
           if (msg.mentions?.includes(userId)) return;
@@ -3832,7 +3925,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       next.delete(channelId);
       return next;
     });
-  }, [viewMode, clearServerIndicator, markActivity]);
+    // Opening the channel is the acknowledgement. Persist it so a restart does
+    // not repaint the mention we just read.
+    void markChannelMentionsRead(channelId);
+  }, [viewMode, clearServerIndicator, markActivity, markChannelMentionsRead]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
     markActivity();
@@ -5590,6 +5686,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markNotificationsRead = useCallback(async () => {
     if (!userId) return;
     await getSupabaseClient().from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+    setChannelMentionMap(new Map());
+    setServerMentionCounts(new Map());
     await loadNotifications(userId);
   }, [userId, loadNotifications]);
 
@@ -5636,6 +5734,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getChannelMentionCount = useCallback(
     (channelId: string) => channelMentionMap.get(channelId) ?? 0,
     [channelMentionMap],
+  );
+
+  const getServerMentionCount = useCallback(
+    (serverId: string) => serverMentionCounts.get(serverId) ?? 0,
+    [serverMentionCounts],
   );
 
   const getChannelUnreadCount = useCallback(
@@ -5865,6 +5968,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     channelUnreadMap,
     getChannelUnreadCount,
     getChannelMentionCount,
+    serverMentionCounts,
+    getServerMentionCount,
     groupUnreadMap,
     getGroupUnreadCount,
     clearGroupUnread,
