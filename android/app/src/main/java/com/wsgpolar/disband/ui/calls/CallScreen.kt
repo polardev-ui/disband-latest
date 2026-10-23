@@ -103,7 +103,8 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
 
     LaunchedEffect(phase, connectedAt) {
         while (phase == CallPhase.Active && connectedAt != null) {
-            elapsed = (System.currentTimeMillis() - connectedAt!!) / 1000
+            val since = connectedAt ?: break
+            elapsed = (System.currentTimeMillis() - since) / 1000
             delay(1_000)
         }
     }

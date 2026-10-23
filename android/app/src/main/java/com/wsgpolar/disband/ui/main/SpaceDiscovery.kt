@@ -244,7 +244,7 @@ fun AddSpaceSheet(
 private enum class AddMode(val label: String) { Create("Create"), Join("Join") }
 
 /** The code from a pasted link, or the text itself when it's already a code. */
-private fun inviteCode(raw: String): String {
+internal fun inviteCode(raw: String): String {
     val trimmed = raw.trim()
     return AppConfig.INVITE_LINK_REGEX.find(trimmed)?.groupValues?.getOrNull(1) ?: trimmed.trimEnd('/')
 }

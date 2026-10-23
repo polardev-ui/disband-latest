@@ -13,6 +13,7 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.realtime
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.Dispatchers
@@ -115,3 +116,18 @@ class PrefsSessionManager(context: Context) : SessionManager {
 }
 
 val MainDispatcher = Dispatchers.Default
+
+/**
+ * Unsubscribe and forget the channel.
+ *
+ * `unsubscribe()` alone leaves the channel registered with the client, and
+ * `channel(topic)` hands back a registered channel instead of building a new
+ * one. So a later join of the same topic got the dead instance, and anything
+ * that briefly opened a topic the app was already listening on — a call's
+ * "handled" to your own devices, a typing ping — was given the listener and
+ * then shut it. Calls stopped ringing after the first one you answered, and
+ * typing stopped showing after you typed.
+ */
+suspend fun RealtimeChannel.leave() {
+    DisbandSupabase.realtime.removeChannel(this)
+}

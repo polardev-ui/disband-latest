@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.data
 
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.core.DisbandSupabase
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.broadcast
@@ -60,7 +61,14 @@ object TypingService {
      * Best-effort throughout: nobody should see an error because a typing
      * ping failed.
      */
-    suspend fun send(topic: String, userId: String, name: String) {
+    suspend fun send(topic: String, userId: String, name: String, via: RealtimeChannel? = null) {
+        // The conversation on screen is already joined to this topic for
+        // watching. Send on that channel: opening the topic again returns the
+        // very same instance, and tearing it down afterwards ended the watch.
+        if (via != null && via.status.value == RealtimeChannel.Status.SUBSCRIBED) {
+            runCatching { via.broadcast("typing", Payload(userId = userId, name = name)) }
+            return
+        }
         runCatching {
             val channel = client.channel(topic) { broadcast { acknowledgeBroadcasts = false } }
             withTimeoutOrNull(4_000) { channel.subscribe(blockUntilSubscribed = true) }
@@ -70,8 +78,7 @@ object TypingService {
                 // down; unsubscribing immediately can cut it short.
                 kotlinx.coroutines.delay(80)
             } finally {
-                runCatching { channel.unsubscribe() }
-                runCatching { client.realtime.removeChannel(channel) }
+                runCatching { channel.leave() }
             }
         }
     }

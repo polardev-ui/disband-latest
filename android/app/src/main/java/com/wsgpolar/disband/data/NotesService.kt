@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.data
 
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.core.TimeFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -53,8 +54,8 @@ class NotesService(private val scope: CoroutineScope) {
         // Channels are owned by the jobs' LiveChannels — unsubscribing here
         // prevents a leak when stop() is called before the jobs assigned.
         scope.launch {
-            runCatching { watchChannel?.unsubscribe() }
-            runCatching { changeChannel?.unsubscribe() }
+            runCatching { watchChannel?.leave() }
+            runCatching { changeChannel?.leave() }
             watchChannel = null
             changeChannel = null
         }
