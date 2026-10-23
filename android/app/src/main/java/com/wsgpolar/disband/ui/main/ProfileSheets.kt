@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,6 +35,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -59,6 +63,8 @@ import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.ThemeId
 import com.wsgpolar.disband.core.Themes
+import com.wsgpolar.disband.core.TimeFormat
+import com.wsgpolar.disband.data.AppNotification
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.data.MediaService
 import com.wsgpolar.disband.data.ProfilePatch
@@ -599,6 +605,153 @@ fun AppearanceSheet(app: AppState, onDismiss: () -> Unit) {
                     }
                     if (id == active) {
                         Icon(Icons.Filled.Check, contentDescription = "Selected ${definition.label}", tint = palette.accent)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotificationInboxSheet(
+    app: AppState,
+    onOpenSource: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    val scope = rememberCoroutineScope()
+    val uid = app.currentUserId
+
+    var items by remember { mutableStateOf<List<AppNotification>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var clearing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uid) {
+        if (uid == null) {
+            loading = false
+            return@LaunchedEffect
+        }
+        items = runCatching { Database.notifications(uid) }.getOrDefault(emptyList())
+        loading = false
+    }
+
+    fun markRead(item: AppNotification) {
+        if (item.read || uid == null) return
+        items = items.map { if (it.id == item.id) it.copy(read = true) else it }
+        scope.launch { runCatching { Database.markNotificationRead(item.id, uid) } }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = palette.surface,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp)
+                .navigationBarsPadding(),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Notifications",
+                    color = palette.textPrimary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (!loading && items.any { !it.read }) {
+                    TextButton(
+                        onClick = {
+                            clearing = true
+                            items = items.map { it.copy(read = true) }
+                            scope.launch {
+                                if (uid != null) {
+                                    runCatching { Database.markAllNotificationsRead(uid) }
+                                }
+                                clearing = false
+                            }
+                        },
+                        enabled = !clearing,
+                    ) {
+                        Text(if (clearing) "Clearing…" else "Clear", color = palette.accent, fontSize = 13.sp)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Close", color = palette.textMuted, fontSize = 13.sp)
+                }
+            }
+
+            when {
+                loading -> Box(
+                    Modifier.fillMaxWidth().heightIn(min = 180.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = palette.accent, modifier = Modifier.size(22.dp))
+                }
+                items.isEmpty() -> Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 36.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("Nothing new.", color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Mentions and requests land here.",
+                        color = palette.textMuted,
+                        fontSize = 13.sp,
+                    )
+                }
+                else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
+                    items(items, key = { it.id }) { item ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(role = Role.Button) {
+                                    markRead(item)
+                                    val link = item.link?.takeIf { it.isNotBlank() }
+                                    if (link != null) {
+                                        onOpenSource(link)
+                                        onDismiss()
+                                    }
+                                }
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Box(
+                                Modifier
+                                    .padding(top = 6.dp)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (item.read) Color.Transparent else palette.accent),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    item.title,
+                                    color = palette.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (item.read) FontWeight.Normal else FontWeight.SemiBold,
+                                )
+                                item.body?.takeIf { it.isNotBlank() }?.let {
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(
+                                        it,
+                                        color = palette.textSecondary,
+                                        fontSize = 13.sp,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                item.createdAt?.let {
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(TimeFormat.compact(it), color = palette.textMuted, fontSize = 11.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -60,8 +60,8 @@ fun ConversationRow(
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(Radii.pressLarge))
             .background(if (selected) palette.accent.copy(alpha = 0.10f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -75,7 +75,7 @@ fun ConversationRow(
         AvatarImage(
             url = iconUrl,
             name = name,
-            size = 44.dp,
+            size = 46.dp,
             presence = status?.color(palette),
         )
 
@@ -85,7 +85,7 @@ fun ConversationRow(
                     name,
                     color = if (isUnread) palette.textPrimary else palette.textSecondary,
                     fontSize = 15.sp,
-                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),

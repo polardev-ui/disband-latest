@@ -8,6 +8,7 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.merge
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -44,6 +45,28 @@ object RealtimeService {
         return LiveChannel(channel, flow)
     }
 
+    /** Deletes only carry their primary key under RLS; discard unknown ids in the timeline. */
+    suspend fun <T> observeMessages(
+        table: String,
+        filter: String,
+        serializer: KSerializer<T>,
+    ): LiveChannel<MessageChange<T>> {
+        val channel = client.channel("chat:$table:${UUID.randomUUID()}") { }
+        val inserts = channel.postgresChangeFlow<PostgresAction.Insert>("public") {
+            this.table = table
+            this.filter = filter
+        }.map { MessageChange.Upsert(json.decodeFromJsonElement(serializer, it.record)) }
+        val updates = channel.postgresChangeFlow<PostgresAction.Update>("public") {
+            this.table = table
+            this.filter = filter
+        }.map { MessageChange.Upsert(json.decodeFromJsonElement(serializer, it.record)) }
+        val deletes = channel.postgresChangeFlow<PostgresAction.Delete>("public") {
+            this.table = table
+        }.map { MessageChange.Removed(it.oldRecord["id"]?.jsonPrimitive?.content.orEmpty()) }
+        channel.subscribe(blockUntilSubscribed = true)
+        return LiveChannel(channel, merge(inserts, updates, deletes))
+    }
+
     /**
      * Observe any change (insert/update/delete) on [table], emitting a tick per
      * change. Use when the reaction is "go re-read the row".
@@ -73,3 +96,7 @@ class LiveChannel<T>(
     val channel: RealtimeChannel,
     val flow: Flow<T>,
 )
+sealed interface MessageChange<out T> {
+    data class Upsert<T>(val message: T) : MessageChange<T>
+    data class Removed(val id: String) : MessageChange<Nothing>
+}

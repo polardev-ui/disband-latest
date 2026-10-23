@@ -1,5 +1,8 @@
 package com.wsgpolar.disband.ui.chat
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -39,17 +42,25 @@ class AttachmentSender(
     var staged by mutableStateOf<List<Uri>>(emptyList())
         private set
 
+    var sentRow: ChatRow? = null
+        private set
+    private val uploadedCache = mutableMapOf<Uri, StoredAttachment>()
+
     fun stage(uris: List<Uri>) {
+        if (progress != null) return
         // The picker is capped too, but a share-sheet hand-off is not.
         staged = (staged + uris).distinct().take(MAX_ATTACHMENTS)
     }
 
     fun unstage(uri: Uri) {
+        if (progress != null) return
         staged = staged - uri
+        uploadedCache.remove(uri)
     }
 
     fun clear() {
         staged = emptyList()
+        uploadedCache.clear()
     }
 
     /**
@@ -67,29 +78,42 @@ class AttachmentSender(
         replyToId: String? = null,
     ): Boolean {
         val uris = staged
-        if (uris.isEmpty()) return false
+        if (uris.isEmpty() || progress != null) return false
 
         progress = 0f
         error = null
+        sentRow = null
+        try {
         val uploaded = mutableListOf<StoredAttachment>()
+        val uploadedUris = mutableListOf<Uri>()
         var failure: String? = null
 
         for ((index, uri) in uris.withIndex()) {
-            val bytes = runCatching {
-                androidContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }.getOrNull()
+            val cached = uploadedCache[uri]
+            if (cached != null) {
+                uploaded += cached
+                uploadedUris += uri
+                progress = (index + 1f) / uris.size
+                continue
+            }
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching { androidContext.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+            }
             if (bytes == null) {
                 failure = "Couldn't read one of those images."
                 continue
             }
-            val name = displayName(androidContext, uri) ?: "image-${index + 1}.jpg"
+            val name = withContext(Dispatchers.IO) { displayName(androidContext, uri) } ?: "image-${index + 1}.jpg"
             val mime = androidContext.contentResolver.getType(uri) ?: "image/jpeg"
 
-            val result = runCatching { MediaService.uploadImage(bytes, name, mime) }.getOrNull()
+            val result = try { MediaService.uploadImage(bytes, name, mime) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { null }
             if (result == null) {
                 failure = "Couldn't upload one of those images."
                 break
             }
+            uploadedUris += uri
             uploaded += StoredAttachment(
                 url = result.url,
                 key = result.key,
@@ -97,18 +121,18 @@ class AttachmentSender(
                 name = name,
                 size = bytes.size,
             )
+            uploadedCache[uri] = uploaded.last()
             // Across the set, not this one file.
             progress = (index + 1f) / uris.size
         }
-
-        progress = null
 
         if (uploaded.isEmpty()) {
             error = failure ?: "Couldn't send those images."
             return false
         }
 
-        val sent = runCatching {
+        val sentAt = java.time.Instant.now().toString()
+        val id = try {
             Database.sendWithAttachments(
                 context = context,
                 parentId = parentId,
@@ -117,18 +141,23 @@ class AttachmentSender(
                 attachments = uploaded,
                 replyToId = replyToId,
             )
-        }.isSuccess
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
 
-        if (!sent) {
+        if (id == null) {
             error = "Couldn't send that message."
             return false
         }
 
-        staged = emptyList()
+        sentRow = ChatRow(id = id, author = null, authorId = authorId, content = caption.trim(),
+            attachmentType = null, attachments = uploaded.toList(), createdAt = sentAt, replyToId = replyToId)
+        staged = staged - uploadedUris.toSet()
+        uploadedUris.forEach { uploadedCache.remove(it) }
         if (failure != null) {
             error = "Sent ${uploaded.size} of ${uris.size} — the rest didn't upload."
         }
         return true
+        } finally { progress = null }
     }
 
     /** The original filename, so a set does not arrive as ten files all called "image.jpg". */

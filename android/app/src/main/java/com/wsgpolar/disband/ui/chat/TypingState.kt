@@ -40,6 +40,7 @@ class TypingState(
         private set
 
     private val lastSeen = mutableMapOf<String, Long>()
+    private val profiles = mutableMapOf<String, Profile>()
     private val names = mutableMapOf<String, String>()
     private var lastSentAt = 0L
     private var watchJob: Job? = null
@@ -82,7 +83,7 @@ class TypingState(
     private suspend fun refresh(profileFor: suspend (String) -> Profile?) {
         val ids = lastSeen.entries.sortedByDescending { it.value }.map { it.key }.take(MAX_SHOWN)
         typers = ids.mapNotNull { id ->
-            profileFor(id) ?: names[id]?.let { Profile(id = id, username = it, displayName = it) }
+            profiles[id] ?: profileFor(id)?.also { profiles[id] = it } ?: names[id]?.let { Profile(id = id, username = it, displayName = it) }
         }
     }
 
@@ -104,5 +105,6 @@ class TypingState(
         typers = emptyList()
         lastSeen.clear()
         names.clear()
+        profiles.clear()
     }
 }
