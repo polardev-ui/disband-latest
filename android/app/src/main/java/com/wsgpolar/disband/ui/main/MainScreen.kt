@@ -88,6 +88,7 @@ fun MainScreen(
     var inviteFor by remember { mutableStateOf<Server?>(null) }
     var membersFor by remember { mutableStateOf<Server?>(null) }
     var overflowFor by remember { mutableStateOf<Server?>(null) }
+    var settingsFor by remember { mutableStateOf<Server?>(null) }
     var showAddSpace by remember { mutableStateOf(false) }
     var showDiscover by remember { mutableStateOf(false) }
     var inviteToJoin by remember { mutableStateOf<String?>(null) }
@@ -443,6 +444,19 @@ fun MainScreen(
             // Leaving a space you are looking at has to put you somewhere
             // else, or the panel renders a server you are no longer in.
             onLeft = { shellChrome.selectedServerId = null },
+            onOpenSettings = { settingsFor = server },
+        )
+    }
+    settingsFor?.let { server ->
+        SpaceSettingsScreen(
+            app = app,
+            server = servers.firstOrNull { it.id == server.id } ?: server,
+            onDismiss = { settingsFor = null },
+            onDeleted = { shellChrome.selectedServerId = null },
+            onChannelsChanged = {
+                loadedSpaces.remove(server.id)
+                retryVersion++
+            },
         )
     }
 }

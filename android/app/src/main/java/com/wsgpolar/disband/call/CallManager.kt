@@ -623,5 +623,4 @@ private fun SessionDescription.Type.wire(): String = when (this) {
     SessionDescription.Type.ANSWER -> "answer"
     SessionDescription.Type.PRANSWER -> "pranswer"
     SessionDescription.Type.ROLLBACK -> "rollback"
-    else -> "offer"
 }

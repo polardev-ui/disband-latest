@@ -19,8 +19,8 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -219,7 +219,7 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                                 color = if (deafened) palette.accent else Color.White.copy(alpha = 0.2f),
                                 icon = {
                                     Icon(
-                                        if (deafened) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+                                        if (deafened) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                                         contentDescription = null,
                                         tint = Color.White,
                                     )
@@ -230,7 +230,7 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                                 color = if (speakerOn) palette.accent else Color.White.copy(alpha = 0.2f),
                                 icon = {
                                     Icon(
-                                        if (speakerOn) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                                        if (speakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                         contentDescription = null,
                                         tint = Color.White,
                                     )
