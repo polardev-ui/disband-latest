@@ -25,9 +25,14 @@ struct MessageRow: View {
     var onHoldReactStarted: (CGRect) -> Void = { _ in }
 
     @State private var dragOffset: CGFloat = 0
-    /// The row's frame in `chatScroll` space, measured continuously so the
-    /// hold-to-react tray has a live anchor when the gesture begins.
-    @State private var selfFrame: CGRect = .zero
+    /// The row's frame in `chatScroll` space, so the hold-to-react tray has
+    /// a live anchor when the gesture begins.
+    ///
+    /// Kept in a reference box rather than `@State`: the frame changes on
+    /// every scroll frame, and writing it to state re-rendered every visible
+    /// row continuously while scrolling, which was the main source of jank in
+    /// long conversations. Nothing draws from it; it is only read on a hold.
+    @State private var frameBox = FrameBox()
     /// The image or video opened full-screen from this row, if any.
     @State private var viewingMedia: ViewedMedia?
     /// The reaction whose reactor list is open, if any.
@@ -88,17 +93,13 @@ struct MessageRow: View {
                  it.
                  */
                 .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10) {
-                    onHoldReactStarted(selfFrame)
+                    onHoldReactStarted(frameBox.frame)
                 }
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { selfFrame = geo.frame(in: .named("chatScroll")) }
-                            .onChange(of: geo.frame(in: .named("chatScroll"))) { _, frame in
-                                selfFrame = frame
-                            }
-                    }
-                )
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .named("chatScroll"))
+                } action: { frame in
+                    frameBox.frame = frame
+                }
         }
         .fullScreenCover(item: $viewingMedia) { media in
             MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName, isGif: media.kind == .gif || media.url.pathExtension.lowercased() == "gif")
@@ -360,4 +361,9 @@ struct ViewedMedia: Identifiable {
     let url: URL
     let kind: AttachmentType
     var id: String { "\(kind.rawValue):\(url.absoluteString)" }
+}
+
+/// A mutable frame SwiftUI does not observe. See `MessageRow.frameBox`.
+final class FrameBox {
+    var frame: CGRect = .zero
 }
