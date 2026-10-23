@@ -131,6 +131,8 @@ struct ChannelPanel: View {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundStyle(Brand.verified)
                             .accessibilityLabel("Verified space")
+                    } else if server.partner == true {
+                        PartnerBadge()
                     }
                     Spacer(minLength: 8)
                     menu

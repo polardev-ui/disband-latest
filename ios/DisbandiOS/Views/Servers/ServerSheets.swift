@@ -108,21 +108,42 @@ struct DiscoverServersSheet: View {
     @State private var joiningId: String?
     @State private var newlyJoined: Set<String> = []
     @State private var query = ""
+    @State private var sort: Sort = .popular
+
+    /// The web's two Discover tabs: most members, or most recently created.
+    enum Sort: String, CaseIterable, Identifiable {
+        case popular, new
+        var id: String { rawValue }
+        var label: String { self == .popular ? "Popular" : "New" }
+    }
 
     private func isMember(_ id: String) -> Bool { joinedIds.contains(id) || newlyJoined.contains(id) }
 
-    /// Verified first, then biggest; search matches name or description.
+    /// Search matches name, description or owner, as on the web.
     private var visible: [DatabaseService.DiscoverableServer] {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return items
-            .filter { needle.isEmpty
-                || $0.name.lowercased().contains(needle)
-                || ($0.description ?? "").lowercased().contains(needle) }
-            .sorted { lhs, rhs in
-                let lv = lhs.verified == true, rv = rhs.verified == true
-                if lv != rv { return lv }
-                return lhs.memberCount > rhs.memberCount
+        let matches = items.filter { needle.isEmpty
+            || $0.name.lowercased().contains(needle)
+            || ($0.description ?? "").lowercased().contains(needle)
+            || ($0.ownerName ?? "").lowercased().contains(needle) }
+        switch sort {
+        case .popular:
+            return matches.sorted { lhs, rhs in
+                if lhs.memberCount != rhs.memberCount { return lhs.memberCount > rhs.memberCount }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
+        case .new:
+            // ISO timestamps from Postgres sort correctly as strings.
+            return matches.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+        }
+    }
+
+    private var heading: String {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        if !q.isEmpty {
+            return "\(visible.count) \(visible.count == 1 ? "result" : "results") for \u{201C}\(q)\u{201D}"
+        }
+        return sort == .popular ? "Popular spaces" : "New spaces"
     }
 
     var body: some View {
@@ -139,6 +160,20 @@ struct DiscoverServersSheet: View {
                     .padding(.horizontal, 20)
 
                     CapsuleSearchField(prompt: "Search spaces", text: $query)
+
+                    Picker("Sort", selection: $sort.animation(.snappy)) {
+                        ForEach(Sort.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 20)
+
+                    if !loading && error == nil && !visible.isEmpty {
+                        Text(heading)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Brand.textMuted)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 2)
+                    }
 
                     content
                 }
@@ -216,6 +251,8 @@ struct DiscoverServersSheet: View {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundStyle(Brand.verified)
                             .accessibilityLabel("Verified space")
+                    } else if server.partner == true {
+                        PartnerBadge()
                     }
                 }
                 if let desc = server.description, !desc.isEmpty {
@@ -226,9 +263,14 @@ struct DiscoverServersSheet: View {
                 }
                 HStack(spacing: 5) {
                     Circle().fill(Brand.online).frame(width: 7, height: 7)
-                    Text("\(server.memberCount) member\(server.memberCount == 1 ? "" : "s")")
+                    Text("\(server.memberCount.formatted()) member\(server.memberCount == 1 ? "" : "s")")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(Brand.textMuted)
+                    if sort == .new, let created = RelativeTime.date(from: server.createdAt) {
+                        Text("· Created \(created.formatted(.relative(presentation: .named)))")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Brand.textMuted)
+                    }
                 }
             }
             .padding(14)
@@ -294,5 +336,22 @@ struct DiscoverServersSheet: View {
             }
             joiningId = nil
         }
+    }
+}
+
+/// The web's "Disband Partner" mark: a blurple seal with a link through it.
+struct PartnerBadge: View {
+    var size: CGFloat = 17
+
+    var body: some View {
+        Image(systemName: "seal.fill")
+            .font(.system(size: size))
+            .foregroundStyle(Color(hex: 0x5865F2))
+            .overlay {
+                Image(systemName: "link")
+                    .font(.system(size: size * 0.45, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .accessibilityLabel("Disband Partner")
     }
 }
