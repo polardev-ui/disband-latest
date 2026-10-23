@@ -35,6 +35,11 @@ struct ChannelPanel: View {
     private var canManageChannels: Bool { isOwner || permissions["manage_channels"] == true }
     /// Remove other people's messages: owner, or a role with manage_messages.
     private var canModerate: Bool { isOwner || permissions["manage_messages"] == true }
+    /// Anyone with a permission one of the settings pages needs.
+    private var canOpenSettings: Bool {
+        isOwner || ["manage_server", "manage_channels", "manage_roles", "kick", "ban",
+                    "timeout_members", "view_audit_log"].contains { permissions[$0] == true }
+    }
 
     /// The web's `my_channel_effects` row: what you may do in one channel.
     struct ChannelEffect: Decodable {
@@ -98,7 +103,9 @@ struct ChannelPanel: View {
             CatalystSheet(serverId: server.id, serverName: server.name)
         }
         .sheet(isPresented: $showInvite) { InviteSheet(server: server) }
-        .sheet(isPresented: $showSettings) { ServerSettingsSheet(server: server) { await onChanged() } }
+        .sheet(isPresented: $showSettings) {
+            SpaceSettingsView(server: server, onChanged: { await onChanged(); await load() }, onDeleted: onLeft)
+        }
         .confirmationDialog("Leave \(server.name)?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave Space", role: .destructive) { leave() }
         }
@@ -155,9 +162,10 @@ struct ChannelPanel: View {
             // Open to every member, not just owners: anyone can Catalyst a
             // space they are in, which is the whole point of the feature.
             Button { showCatalysts = true } label: { Label("Catalysts", systemImage: "bolt.fill") }
-            if isOwner {
+            if canOpenSettings {
                 Button { showSettings = true } label: { Label("Space Settings", systemImage: "gearshape") }
-            } else {
+            }
+            if !isOwner {
                 Divider()
                 Button(role: .destructive) { confirmLeave = true } label: {
                     Label("Leave Space", systemImage: "rectangle.portrait.and.arrow.right")
