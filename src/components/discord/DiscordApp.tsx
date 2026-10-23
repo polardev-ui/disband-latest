@@ -16,6 +16,7 @@ import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMen
 import { setCallIndicatorState } from "@/lib/call-status";
 import { ServerList } from "./ServerList";
 import { TimeoutModal } from "@/components/modals/TimeoutModal";
+import { GuildTagSpaceModal } from "./GuildTagSpaceModal";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
 import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPanel";
@@ -497,9 +498,19 @@ export function DiscordApp() {
   const profileServerMember = fetchedProfileMember ?? loadedProfileMember;
   const profileCanManageRoles =
     app.viewMode === "space" &&
-    (isServerOwner || (app.serverPermissions.manage_roles && app.serverPermissions.manage_server))
+    !!profileTarget &&
+    (
+      isServerOwner ||
+      (app.serverPermissions.manage_roles &&
+        app.serverPermissions.manage_server &&
+        app.canModerateMember(profileTarget.id))
+    )
     // The server refuses role edits on the owner, so don't offer them.
-    && profileTarget?.id !== app.activeServer?.owner_id;
+    && profileTarget.id !== app.activeServer?.owner_id;
+  const assignableServerRoles = useMemo(
+    () => app.serverRoles.filter((role) => !role.is_default && (isServerOwner || role.position < app.myTopRolePosition)),
+    [app.serverRoles, app.myTopRolePosition, isServerOwner],
+  );
 
   const getAuthorColor = useCallback(
     (authorId: string) => {
@@ -564,7 +575,6 @@ export function DiscordApp() {
   const handleServerContext = useCallback(
     (server: Server, x: number, y: number) => {
       const isOwner = server.owner_id === app.user?.id;
-      const canInvite = isOwner || !!app.serverPermissions.create_invites;
       const inFolder = app.serverFolders.find((f) =>
         app.serverListState.some((s) => s.server_id === server.id && s.folder_id === f.id),
       );
@@ -598,16 +608,14 @@ export function DiscordApp() {
           onClick: () => void navigator.clipboard.writeText(server.id),
         },
           ...(server.invite_code || server.vanity_code
-            ? canInvite
-              ? [
-                  {
-                    id: "invite",
-                    label: "Copy Invite Link",
-                    icon: <IconCopy size={16} />,
-                    onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.vanity_code || server.invite_code!)),
-                  },
-                ]
-              : []
+            ? [
+                {
+                  id: "invite",
+                  label: "Copy Invite Link",
+                  icon: <IconCopy size={16} />,
+                  onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.vanity_code || server.invite_code!)),
+                },
+              ]
             : []),
           ...[
             {
@@ -1172,6 +1180,7 @@ export function DiscordApp() {
   const handleMemberContext = useCallback(
     (member: (typeof app.members)[0], x: number, y: number) => {
       const isOwnerMember = member.role === "owner";
+      const canModerateTarget = !isOwnerMember && member.user_id !== app.user?.id && app.canModerateMember(member.user_id);
       const items: ContextMenuItem[] = [
         {
           id: "profile",
@@ -1193,7 +1202,7 @@ export function DiscordApp() {
         },
       ];
 
-      if (!isOwnerMember && member.user_id !== app.user?.id) {
+      if (canModerateTarget) {
         if (canKick) {
           items.push({
             id: "kick",
@@ -1254,14 +1263,15 @@ export function DiscordApp() {
         }
       }
 
-      if (canManageRoles && app.serverRoles.length > 0) {
+      const assignableRoles = app.serverRoles.filter((r) => !r.is_default && (isServerOwner || r.position < app.myTopRolePosition));
+      if (canManageRoles && assignableRoles.length > 0) {
         const memberRoleIds =
           member.role_ids && member.role_ids.length > 0
             ? member.role_ids
             : member.role_id
               ? [member.role_id]
               : [];
-        app.serverRoles.filter((r) => !r.is_default).forEach((role) => {
+        assignableRoles.forEach((role) => {
           const isCurrent = memberRoleIds.includes(role.id);
           items.push({
             id: `role-${role.id}`,
@@ -1292,7 +1302,7 @@ export function DiscordApp() {
 
       openMenu(x, y, items);
     },
-    [app, canKick, canBan, canManageRoles, openMenu, openProfile],
+    [app, canKick, canBan, canManageRoles, isServerOwner, openMenu, openProfile],
   );
 
   // Right-clicking a message author. When they are a member of the server we
@@ -2268,6 +2278,7 @@ export function DiscordApp() {
         serverName={app.activeServer?.name ?? null}
         serverIcon={app.activeServer?.icon_url ?? null}
         serverRoles={app.serverRoles}
+        assignableRoles={assignableServerRoles}
         canManageRoles={profileCanManageRoles}
         memberRoleIds={
           profileServerMember?.role_ids && profileServerMember.role_ids.length > 0
@@ -2385,6 +2396,7 @@ export function DiscordApp() {
         }
         isServerMember={!!profileServerMember}
         serverRoles={app.serverRoles}
+        assignableRoles={assignableServerRoles}
         canManageRoles={profileCanManageRoles}
         memberRoleIds={
           profileServerMember?.role_ids && profileServerMember.role_ids.length > 0
@@ -2416,6 +2428,8 @@ export function DiscordApp() {
             : undefined
         }
       />
+
+      <GuildTagSpaceModal />
 
       <SettingsModal
         open={settingsOpen}

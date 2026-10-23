@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { displayName } from "@/lib/utils";
 import { IconFriends, IconSearch, IconClose } from "@/components/icons";
@@ -359,10 +360,11 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                   >
                     <StatusAvatar profile={friend} presence={presenceMap} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[16px] font-semibold leading-5 text-header-primary">
-                        {displayName(friend)}
+                      <p className="flex min-w-0 items-center gap-1.5 text-[16px] font-semibold leading-5 text-header-primary">
+                        <span className="truncate">{displayName(friend)}</span>
+                        <GuildTag userId={friend.id} size="sm" />
                         {friend.username && (
-                          <span className="ml-1.5 text-sm font-normal text-text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                          <span className="truncate text-sm font-normal text-text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                             @{friend.username}
                           </span>
                         )}

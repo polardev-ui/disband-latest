@@ -7,6 +7,7 @@ import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { ListeningCard } from "@/components/ui/ListeningCard";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
@@ -40,6 +41,8 @@ export interface UserProfilePopoutProps {
   serverName?: string | null;
   serverIcon?: string | null;
   serverRoles?: ServerRole[];
+  /** Roles the signed-in member is allowed to hand out (already rank-filtered). */
+  assignableRoles?: ServerRole[];
   memberRoleIds?: string[];
   canManageRoles?: boolean;
   onSetRoles?: (roleIds: string[]) => void;
@@ -69,6 +72,7 @@ export function UserProfilePopout({
   serverName,
   serverIcon,
   serverRoles = [],
+  assignableRoles,
   memberRoleIds = [],
   canManageRoles,
   onSetRoles,
@@ -200,6 +204,7 @@ export function UserProfilePopout({
         <div className={`mx-4 mb-4 mt-7 rounded-lg p-3 ${theme ? "bg-black/10" : "bg-bg-floating"}`}>
           <div className="flex items-center gap-1">
             <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">{displayName(p)}</h2>
+            <GuildTag userId={p.id} size="sm" />
             <BotTag profile={p} size="sm" />
           </div>
           <p className="text-[14px] leading-[18px] text-header-primary">
@@ -267,7 +272,7 @@ export function UserProfilePopout({
                 ))}
                 {canManageRoles && onSetRoles && (
                   <RolePicker
-                    roles={serverRoles.filter((r) => !r.is_default)}
+                    roles={(assignableRoles ?? serverRoles).filter((r) => !r.is_default)}
                     selected={memberRoleIds}
                     onToggle={(id) =>
                       onSetRoles(memberRoleIds.includes(id) ? memberRoleIds.filter((x) => x !== id) : [...memberRoleIds, id])

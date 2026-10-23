@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BotTag } from "@/components/ui/BotTag";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
 import { roleGradientTextStyle, roleIsGradientAnimated } from "@/lib/profileColor";
@@ -409,6 +410,7 @@ function Row({
         style={color ? { color } : undefined}
       >
         <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""}`} style={gradStyle ?? undefined}>{displayName(p)}</span>
+        <GuildTag userId={p.id} size="sm" />
         {iconRole && <RoleIcon icon={iconRole.icon} name={iconRole.name} size={15} />}
         <BotTag profile={p} size="sm" />
         <PlatformBadge userId={p.id} />

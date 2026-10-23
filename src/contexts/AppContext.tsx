@@ -243,6 +243,10 @@ interface AppContextValue {
   setMemberRoles: (userId: string, roleIds: string[]) => Promise<string | null>;
   /** Replace only the caller's self-assignable roles. */
   setSelfRoles: (roleIds: string[]) => Promise<string | null>;
+  /** Highest role position the signed-in member holds in the active space. */
+  myTopRolePosition: number;
+  /** Whether the signed-in member is strictly above a target member in the space's role hierarchy. */
+  canModerateMember: (targetUserId: string) => boolean;
   getMemberColor: (member: ServerMember) => string | null;
   /** The member's highest role that has an icon (Catalyst Level 2 role icons). */
   getMemberIconRole: (member: ServerMember) => ServerRole | null;
@@ -4674,6 +4678,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
 
+  // Kick and ban happen in another window, but the rail must move now, not on
+  // the next manual refresh. The database mirrors membership changes and new
+  // DMs (including moderation notices) onto this private per-user topic; CDC
+  // and full reloads remain the durable fallbacks.
+  useEffect(() => {
+    if (!userId || !configured) return;
+    const supabase = getSupabaseClient();
+    let disposed = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let sub: RealtimeChannel;
+
+    const connect = () => {
+      if (disposed) return;
+      const channel = supabase.channel(`user-events:${userId}`, {
+        config: { private: true },
+      });
+      sub = channel;
+      channel
+        .on("broadcast", { event: "MEMBERSHIP_REMOVE" }, ({ payload }) => {
+          const record = payload as { server_id?: string } | null;
+          const serverId = typeof record?.server_id === "string" ? record.server_id : null;
+          if (!serverId) return;
+
+          const next = serversRef.current.filter((server) => server.id !== serverId);
+          serversRef.current = next;
+          setServers(next);
+          setCache(`servers:${userId}`, next);
+          if (activeServerRef.current === serverId) {
+            setViewHome();
+          }
+          void loadServers(userId);
+        })
+        .on("broadcast", { event: "MEMBERSHIP_ADD" }, () => {
+          void loadServers(userId);
+        })
+        .on("broadcast", { event: "DM" }, ({ payload }) => {
+          const data = payload as { record?: Record<string, unknown> } | null;
+          const record = data?.record;
+          const threadId = typeof record?.thread_id === "string" ? record.thread_id : null;
+          if (!threadId) return;
+          bumpDmThreadActivity(
+            threadId,
+            typeof record?.created_at === "string" ? record.created_at : undefined,
+          );
+          if (!dmThreadsRef.current.some((thread) => thread.id === threadId)) {
+            void loadDmThreads(userId);
+          }
+        });
+
+      channel.subscribe((status) => {
+        if (disposed || sub !== channel) return;
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void supabase.removeChannel(channel);
+          retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
+        }
+      });
+    };
+
+    connect();
+    return () => {
+      disposed = true;
+      clearTimeout(retry);
+      if (sub) void supabase.removeChannel(sub);
+    };
+  }, [configured, userId, loadServers, loadDmThreads, bumpDmThreadActivity, setViewHome]);
+
   const kickMember = useCallback(async (targetUserId: string) => {
     if (!activeServerId) return "No space selected";
     const { error } = await getSupabaseClient().rpc("kick_server_member", {
@@ -4977,6 +5052,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     writeMembersCache(activeServerId);
     return null;
   }, [activeServerId, userId, serverRoles, writeMembersCache]);
+
+  const topRolePositionFor = useCallback((targetUserId: string) => {
+    const member = members.find((entry) => entry.user_id === targetUserId);
+    const roleIds = memberRoleIdsRef.current.get(targetUserId)
+      ?? (member?.role_ids && member.role_ids.length > 0
+        ? member.role_ids
+        : member?.role_id
+          ? [member.role_id]
+          : []);
+    let top = 0;
+    for (const roleId of roleIds) {
+      const role = serverRoles.find((entry) => entry.id === roleId);
+      if (role) top = Math.max(top, role.position);
+    }
+    return top;
+  }, [members, serverRoles]);
+
+  const myTopRolePosition = useMemo(() => {
+    if (!activeServerId || !userId) return 0;
+    if (activeServer?.owner_id === userId) return Number.MAX_SAFE_INTEGER;
+    return topRolePositionFor(userId);
+  }, [activeServerId, activeServer?.owner_id, userId, topRolePositionFor]);
+
+  const canModerateMember = useCallback((targetUserId: string) => {
+    if (!activeServerId || !userId || targetUserId === userId) return false;
+    if (activeServer?.owner_id === targetUserId) return false;
+    if (activeServer?.owner_id === userId) return true;
+    return myTopRolePosition > topRolePositionFor(targetUserId);
+  }, [activeServerId, activeServer?.owner_id, userId, myTopRolePosition, topRolePositionFor]);
 
   const hasServerPermission = useCallback(
     (permission: ServerPermissionKey) => serverPermissions[permission],
@@ -6277,6 +6381,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateRole,
     setMemberRoles,
     setSelfRoles,
+    myTopRolePosition,
+    canModerateMember,
     getMemberColor,
     getMemberIconRole,
     createChannel,

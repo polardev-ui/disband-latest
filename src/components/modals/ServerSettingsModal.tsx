@@ -19,6 +19,7 @@ import {
   IconShield,
   IconSparkle,
   IconSpeaker,
+  IconTag,
   IconTrash,
 } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
@@ -36,6 +37,7 @@ import { MembersSection } from "./server-settings/MembersSection";
 import { BansSection } from "./server-settings/BansSection";
 import { EmojiSection } from "./server-settings/EmojiSection";
 import { SoundboardSection } from "./server-settings/SoundboardSection";
+import { GuildTagSection } from "./server-settings/GuildTagSection";
 import { DangerSection } from "./server-settings/DangerSection";
 
 interface ServerSettingsModalProps {
@@ -49,6 +51,7 @@ interface ServerSettingsModalProps {
 type Section =
   | "overview"
   | "appearance"
+  | "guild"
   | "invite"
   | "integrations"
   | "catalysts"
@@ -76,6 +79,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { id: "overview", label: "Overview", group: "Space", icon: IconSettings, description: "Your space's name, description and whether people can find it." },
   { id: "appearance", label: "Icon & banner", group: "Space", icon: IconImage, ownerOnly: true, description: "The pictures people see in the sidebar, on invites and in Discover." },
+  { id: "guild", label: "Guild tag", group: "Space", icon: IconTag, permission: "manage_server", description: "A short tag and pixel icon members can wear next to their name." },
   { id: "invite", label: "Invites", group: "Space", icon: IconLink, description: "Share a link, claim a custom one, or send invites to friends." },
   { id: "integrations", label: "Integrations", group: "Space", icon: IconLink, permission: "manage_webhooks", description: "Webhooks that post into this space from other services." },
   { id: "catalysts", label: "Catalysts", group: "Space", icon: IconSparkle, description: "Perks unlocked by members boosting this space." },
@@ -205,6 +209,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
       <p className="mb-5 mt-1 text-[14px] leading-5 text-text-muted">{current.description}</p>
       {current.id === "overview" && <OverviewSection {...shared} />}
       {current.id === "appearance" && <AppearanceSection {...shared} />}
+      {current.id === "guild" && <GuildTagSection {...shared} />}
       {current.id === "invite" && <InvitesSection {...shared} />}
       {current.id === "integrations" && <WebhooksSection {...shared} />}
       {current.id === "catalysts" && <CatalystSection {...shared} />}

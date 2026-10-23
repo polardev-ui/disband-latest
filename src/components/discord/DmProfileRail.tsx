@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
 import { ListeningCard } from "@/components/ui/ListeningCard";
@@ -108,6 +109,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
       <div className={`mx-4 mb-4 mt-7 rounded-lg p-3 ${theme ? "bg-black/10" : "bg-bg-floating"}`}>
         <div className="flex items-center gap-1">
           <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">{displayName(friend)}</h2>
+          <GuildTag userId={friend.id} size="sm" />
           <BotTag profile={friend} size="sm" />
         </div>
         <p className="text-[14px] leading-[18px] text-header-primary">

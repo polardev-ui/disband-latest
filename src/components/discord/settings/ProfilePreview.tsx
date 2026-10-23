@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { GuildTag } from "@/components/ui/GuildTag";
 import { UserBadges } from "@/components/ui/UserBadges";
 import { IconUpload } from "@/components/icons";
 import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
@@ -130,8 +131,9 @@ export function ProfilePreview({
           />
         </div>
 
-        <h3 className="mt-2.5 break-words text-[20px] font-semibold leading-tight">
+        <h3 className="mt-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 break-words text-[20px] font-semibold leading-tight">
           <DisplayName profile={{ ...profile, display_name: name }} />
+          <GuildTag userId={profile.id} size="md" />
         </h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[14px] text-text-muted">
           {username.trim() && <span>@{username.trim()}</span>}

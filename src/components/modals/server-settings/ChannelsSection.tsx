@@ -12,8 +12,10 @@ type ChannelLite = { id: string; name: string; type: string; category_id?: strin
 export function ChannelsSection({ onEditChannel }: SectionProps & {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
 }) {
-  const { channels, categories, createChannel, renameChannel, deleteChannel } = useApp();
+  const { channels, categories, createChannel, renameChannel, deleteChannel, createCategory } = useApp();
   const [name, setName] = useState("");
+  const [categoryName, setCategoryName] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [type, setType] = useState<ChannelType>("text");
   const [categoryId, setCategoryId] = useState<string>("");
   const [creating, setCreating] = useState(false);
@@ -34,6 +36,17 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
     setCreating(false);
     if (err) setError(err);
     else setName("");
+  }
+
+  async function createCategoryNow() {
+    const clean = categoryName.trim().slice(0, 100);
+    if (!clean) return;
+    setCreatingCategory(true);
+    setError(null);
+    const err = await createCategory(clean);
+    setCreatingCategory(false);
+    if (err) setError(err);
+    else setCategoryName("");
   }
 
   async function commitRename(channel: ChannelLite) {
@@ -98,6 +111,38 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
           <button type="button" onClick={() => void create()} disabled={creating || !name.trim()} className={`${btn.primary} h-10`}>
             <IconPlus size={15} /> {creating ? "Creating…" : "Create"}
           </button>
+        </div>
+      </section>
+
+      <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
+        <div className="px-5 py-4">
+          <h3 className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Categories</h3>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value.slice(0, 100))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void createCategoryNow();
+              }}
+              placeholder="New category"
+              aria-label="New category name"
+              className="h-10 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+            />
+            <button
+              type="button"
+              onClick={() => void createCategoryNow()}
+              disabled={creatingCategory || !categoryName.trim()}
+              className={`${btn.primary} h-10`}
+            >
+              <IconPlus size={15} /> {creatingCategory ? "Creating…" : "Create"}
+            </button>
+          </div>
+          {categories.length > 0 && (
+            <p className="mt-3 text-[12px] leading-4 text-text-muted">
+              {categories.length} {categories.length === 1 ? "category" : "categories"}:{" "}
+              {categories.map((category) => category.name).join(" · ")}
+            </p>
+          )}
         </div>
       </section>
 
