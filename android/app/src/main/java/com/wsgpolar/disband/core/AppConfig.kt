@@ -32,4 +32,14 @@ object AppConfig {
 
     /** 7-character invite codes on /server/CODE and /invite/CODE links. */
     val INVITE_REGEX = Regex("(?:https?://[^\\s]+)?(?:/server/|/invite/)([a-zA-Z0-9]{7})\\b")
+
+    /**
+     * The code in a link that opened the app. Looser than [INVITE_REGEX],
+     * which finds invites inside message text: a link to /server/CODE is
+     * unambiguous, and codes come in more shapes than seven characters —
+     * 14, 15 and 32-character generated ones, and vanity codes of up to 24
+     * letters, digits and hyphens. The seven-only pattern turned all of
+     * those into links that opened the app and did nothing.
+     */
+    val INVITE_LINK_REGEX = Regex("/(?:server|invite)/([A-Za-z0-9-]{2,64})", RegexOption.IGNORE_CASE)
 }

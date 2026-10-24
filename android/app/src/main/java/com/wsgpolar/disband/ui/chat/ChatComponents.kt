@@ -1,5 +1,25 @@
 package com.wsgpolar.disband.ui.chat
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -40,6 +60,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -156,8 +177,12 @@ fun ChatScaffold(
     rows: List<ChatRow>,
     loading: Boolean,
     emptyText: String,
+    conversationKey: String = title,
+    hasOlder: Boolean = false,
+    loadingOlder: Boolean = false,
+    onLoadOlder: () -> Unit = {},
     callAction: (@Composable () -> Unit)? = null,
-    onSend: (String) -> Unit,
+    onSend: suspend (String) -> Boolean,
     sendEnabled: Boolean = true,
     sendPlaceholder: String = "Message",
     sendHint: String? = null,
@@ -176,34 +201,46 @@ fun ChatScaffold(
     onEditDismiss: (() -> Unit)? = null,
     /** Staged images, and the caption-and-send that flushes them. */
     attachments: AttachmentSender? = null,
-    onSendAttachments: ((String) -> Unit)? = null,
+    onSendAttachments: (suspend (String) -> Boolean)? = null,
     /** Fired on every keystroke; the caller throttles the broadcast. */
     onTyping: () -> Unit = {},
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
 
-    // Smart auto-scroll: only jump to the bottom when already near it.
-    // The old code scrolled on every size change, yanking readers out of
-    // history whenever a new message arrived.
-    var userScrolledUp by remember { mutableStateOf(false) }
-    LaunchedEffect(rows.size) {
-        if (rows.isNotEmpty() && !userScrolledUp) listState.scrollToItem(rows.lastIndex)
+    val scope = rememberCoroutineScope()
+    BackHandler(onBack = onBack)
+    var followLatest by rememberSaveable(conversationKey) { mutableStateOf(true) }
+    var previousLastId by rememberSaveable(conversationKey) { mutableStateOf<String?>(null) }
+    val showJumpToBottom by remember { derivedStateOf {
+        listState.canScrollForward && !followLatest
+    } }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress to listState.canScrollForward }
+            .collect { (scrolling, canScroll) ->
+                if (scrolling) followLatest = !canScroll
+            }
     }
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val total = listState.layoutInfo.totalItemsCount
-            userScrolledUp = last < total - 3
+    LaunchedEffect(rows.lastOrNull()?.id) {
+        val last = rows.lastOrNull() ?: return@LaunchedEffect
+        val firstLoad = previousLastId == null
+        if (firstLoad || followLatest || (last.id != previousLastId && last.authorId == ownUserId)) {
+            if (firstLoad) listState.scrollToItem(rows.lastIndex + 1)
+            else listState.animateScrollToItem(rows.lastIndex + 1)
+            followLatest = true
         }
+        previousLastId = last.id
     }
-    val showJumpToBottom = userScrolledUp && rows.isNotEmpty()
+
+    val keyboardBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+    LaunchedEffect(keyboardBottom) {
+        if (followLatest && rows.isNotEmpty()) listState.scrollToItem(rows.size)
+    }
 
     Column(
         Modifier
             .fillMaxSize()
             .background(palette.background)
-            .then(shellChrome?.let { Modifier.hidesDock(it) } ?: Modifier)
             .imePadding(),
     ) {
         ChatTopBar(
@@ -214,7 +251,6 @@ fun ChatScaffold(
             callAction = callAction,
             onBack = onBack,
         )
-        HorizontalDivider(color = palette.divider)
         if (replyTo != null) {
             ReplyBanner(row = replyTo, onDismiss = onReplyDismiss ?: {})
         }
@@ -235,6 +271,10 @@ fun ChatScaffold(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(horizontal = 32.dp),
                     ) {
+                        AvatarImage(url = avatarUrl, name = avatarName, size = 64.dp)
+                        Spacer(Modifier.height(18.dp))
+                        Text(title, color = palette.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
                         Text(emptyText, color = palette.textMuted, fontSize = 15.sp)
                         sendHint?.let {
                             Spacer(Modifier.height(6.dp))
@@ -247,6 +287,9 @@ fun ChatScaffold(
                     onToggleReaction = onToggleReaction,
                     onOpenAttachment = onOpenAttachment,
                     onLongPress = onMessageLongPress,
+                    hasOlder = hasOlder,
+                    loadingOlder = loadingOlder,
+                    onLoadOlder = onLoadOlder,
                 )
             }
             // Floating, not stacked: as a row it pushed the composer and the
@@ -268,7 +311,8 @@ fun ChatScaffold(
             ) {
                 androidx.compose.material3.FloatingActionButton(
                     onClick = {
-                        userScrolledUp = false
+                        followLatest = true
+                        scope.launch { listState.animateScrollToItem(rows.size) }
                     },
                     modifier = Modifier.size(44.dp),
                     shape = CircleShape,
@@ -283,20 +327,25 @@ fun ChatScaffold(
                 }
             }
         }
-        if (!sendEnabled && sendHint != null) {
+        val notice = sendHint ?: loadError?.takeIf { rows.isNotEmpty() }
+        if (notice != null) {
             Text(
-                sendHint,
-                color = palette.textMuted,
+                notice,
+                color = if (sendEnabled) Brand.dnd else palette.textMuted,
                 fontSize = 12.sp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(palette.surfaceRaised)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (sendEnabled) Brand.dnd.copy(alpha = 0.10f) else palette.surfaceRaised)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
             )
         }
         Composer(
             palette = palette,
             onSend = onSend,
+            conversationKey = conversationKey,
+            editingRow = editingRow,
             enabled = sendEnabled,
             placeholder = sendPlaceholder,
             attachments = attachments,
@@ -342,17 +391,20 @@ private fun ChatTopBar(
                 modifier = Modifier.size(20.dp),
             )
         }
-        Spacer(Modifier.width(8.dp))
-        AvatarImage(url = avatarUrl, name = avatarName, size = 40.dp)
-        Column(Modifier.padding(start = 10.dp).weight(1f)) {
-            Text(title, color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotBlank()) {
-                Text(subtitle, color = palette.textMuted, fontSize = 12.sp, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
+        Row(
+            Modifier.weight(1f).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            AvatarImage(url = avatarUrl, name = avatarName, size = 34.dp)
+            Column(Modifier.padding(start = 9.dp).weight(1f, fill = false)) {
+                Text(title, color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subtitle.isNotBlank()) Text(subtitle, color = palette.textMuted, fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        callAction?.invoke()
+        if (callAction != null) callAction() else Spacer(Modifier.size(48.dp))
     }
 }
 
@@ -364,12 +416,16 @@ private fun MessageList(
     onToggleReaction: (String, String) -> Unit = { _, _ -> },
     onOpenAttachment: (StoredAttachment) -> Unit = {},
     onLongPress: (ChatRow) -> Unit = {},
+    hasOlder: Boolean,
+    loadingOlder: Boolean,
+    onLoadOlder: () -> Unit,
 ) {
     val palette = LocalPalette.current
     // Looked up once per list rather than per row: a reply preview needs the
     // message it points at, and scanning the whole list for each row is
     // quadratic on a long channel.
     val byId = remember(rows) { rows.associateBy { it.id } }
+    val days = remember(rows) { rows.map { TimeFormat.parse(it.createdAt)?.atZone(java.time.ZoneId.systemDefault())?.toLocalDate() } }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -377,24 +433,47 @@ private fun MessageList(
         // No gap: a run of messages from one person should read as one block,
         // and the row adds its own spacing when a run breaks.
         verticalArrangement = Arrangement.spacedBy(0.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->
+        item(key = "history", contentType = "history") {
+            Box(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+                if (loadingOlder) CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
+                else if (hasOlder) androidx.compose.material3.TextButton(onClick = onLoadOlder) {
+                    Text("Load earlier messages", color = palette.accent, fontSize = 13.sp)
+                }
+            }
+        }
+        itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "message" }) { index, row ->
+            Column(Modifier.animateItem()) {
+            val day = days[index]
+            if (day != null && day != days.getOrNull(index - 1)) {
+                val today = java.time.LocalDate.now()
+                val label = when (day) {
+                    today -> "Today"
+                    today.minusDays(1) -> "Yesterday"
+                    else -> day.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                }
+                Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                    Text(label, color = palette.textMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clip(CircleShape).background(palette.surface).padding(horizontal = 12.dp, vertical = 5.dp))
+                }
+            }
             MessageRow(
                 // A message arriving pops into place with no transition,
                 // which reads as a jump when the list is already at the
                 // bottom. Keyed items let Compose tween the insertion, and
                 // the same animation covers a message being deleted.
-                modifier = Modifier.animateItem(),
+                modifier = Modifier,
                 row = row,
                 palette = palette,
-                grouped = row.groupsWith(rows.getOrNull(index - 1)),
+                grouped = day == days.getOrNull(index - 1) && row.groupsWith(rows.getOrNull(index - 1)),
                 repliedTo = row.replyToId?.let { byId[it] },
                 onToggleReaction = { emoji -> onToggleReaction(row.id, emoji) },
                 onOpenAttachment = onOpenAttachment,
                 onLongPress = { onLongPress(row) },
             )
+            }
         }
-        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
@@ -593,135 +672,118 @@ private fun TypingDots(palette: Palette) {
 @Composable
 private fun Composer(
     palette: Palette,
-    onSend: (String) -> Unit,
+    onSend: suspend (String) -> Boolean,
     enabled: Boolean,
+    conversationKey: String,
+    editingRow: ChatRow?,
     placeholder: String = "Message",
     attachments: AttachmentSender? = null,
-    onSendAttachments: ((String) -> Unit)? = null,
+    onSendAttachments: (suspend (String) -> Boolean)? = null,
     onTyping: () -> Unit = {},
 ) {
-    var text by remember { mutableStateOf("") }
+    var draft by rememberSaveable(conversationKey) { mutableStateOf("") }
+    var editText by rememberSaveable(conversationKey, editingRow?.id) { mutableStateOf(editingRow?.content.orEmpty()) }
+    val text = if (editingRow != null) editText else draft
+    var sending by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    var unexpectedError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val hasStaged = attachments?.staged?.isNotEmpty() == true && editingRow == null
+    val canSend = enabled && !sending && (text.isNotBlank() || hasStaged)
     val picker = attachments?.let {
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.PickMultipleVisualMedia(MAX_ATTACHMENTS)
-        ) { uris -> if (uris.isNotEmpty()) it.stage(uris) }
+        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_ATTACHMENTS)) { uris ->
+            if (uris.isNotEmpty()) it.stage(uris)
+        }
     }
+    val border by androidx.compose.animation.animateColorAsState(
+        if (focused) palette.accent.copy(alpha = 0.55f) else palette.divider, label = "composerFocus",
+    )
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(palette.surface)
-            .navigationBarsPadding(),
-    ) {
-        // What is about to be sent, with a way to take any of it back out.
-        if (attachments != null && attachments.staged.isNotEmpty()) {
-            StagedStrip(attachments, palette)
+    Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+        if (hasStaged && attachments != null) StagedStrip(attachments, palette)
+        attachments?.progress?.let { progress ->
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = palette.accent, trackColor = palette.elevated)
         }
-        attachments?.progress?.let { fraction ->
-            LinearProgressIndicator(
-                progress = { fraction },
-                modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = palette.accent,
-                trackColor = palette.elevated,
-            )
+        (unexpectedError ?: attachments?.error)?.let {
+            Text(it, color = Brand.dnd, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp))
         }
-        attachments?.error?.let { message ->
-            Text(
-                message,
-                color = Brand.dnd,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
-            )
-        }
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        if (picker != null) {
-            // Circular + button mirroring iOS composer.
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(palette.elevated)
-                    .clickable(
-                        enabled = enabled,
-                        role = androidx.compose.ui.semantics.Role.Button,
-                        onClickLabel = "Add attachment",
-                        onClick = {
-                            picker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                            )
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .animateContentSize(spring(stiffness = 500f))
+                .clip(RoundedCornerShape(28.dp))
+                .background(palette.elevated)
+                .border(1.dp, border, RoundedCornerShape(28.dp))
+                .padding(4.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            if (picker != null) IconButton(
+                onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                enabled = enabled && !sending && editingRow == null,
+                modifier = Modifier.size(48.dp),
             ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = null,
-                    tint = if (enabled) palette.textPrimary else palette.textMuted,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-        }
-        OutlinedTextField(
-            value = text,
-            onValueChange = {
-                val wasEmpty = text.isEmpty()
-                text = it
-                // Only while actually writing something. Clearing the field
-                // is not typing, and neither is the deletion that empties it.
-                if (it.isNotEmpty() && !(wasEmpty && it.isEmpty())) onTyping()
-            },
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(placeholder, color = palette.textMuted) },
-            maxLines = 4,
-            shape = CircleShape,
-            enabled = enabled,
-        )
-        Spacer(Modifier.width(8.dp))
-        val hasStaged = attachments?.staged?.isNotEmpty() == true
-        val canSend = enabled && (text.isNotBlank() || hasStaged)
-        Box(
-            Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(
-                    if (canSend) palette.accent
-                    else palette.elevated
-                )
-                .clickable(
-                    enabled = canSend,
-                    role = androidx.compose.ui.semantics.Role.Button,
-                    onClickLabel = "Send",
+                Box(Modifier.size(34.dp).clip(CircleShape).background(palette.surface), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, "Add attachment", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
+                }
+            } else Spacer(Modifier.width(12.dp))
+            BasicTextField(
+                value = text,
+                onValueChange = {
+                    if (editingRow != null) editText = it else draft = it
+                    if (it.isNotEmpty()) onTyping()
+                },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).onFocusChanged { focused = it.isFocused }
+                    .padding(vertical = 13.dp, horizontal = 4.dp)
+                    .semantics { contentDescription = if (editingRow != null) "Edit message" else "Message" },
+                textStyle = TextStyle(color = palette.textPrimary, fontSize = 16.sp, lineHeight = 22.sp),
+                cursorBrush = SolidColor(palette.accent),
+                maxLines = 6,
+                enabled = enabled && !sending,
+                decorationBox = { field ->
+                    Box {
+                        if (text.isEmpty()) Text(placeholder, color = palette.textMuted, fontSize = 16.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                        field()
+                    }
+                },
+            )
+            AnimatedVisibility(visible = text.isNotBlank() || hasStaged || sending,
+                enter = fadeIn(tween(160)) + scaleIn(initialScale = 0.7f),
+                exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.7f)) {
+                IconButton(
                     onClick = {
-                        val trimmed = text.trim()
-                        when {
-                            hasStaged && onSendAttachments != null -> {
-                                onSendAttachments(trimmed)
-                                text = ""
-                            }
-                            trimmed.isNotEmpty() -> {
-                                onSend(trimmed)
-                                text = ""
-                            }
+                        if (!canSend || sending) return@IconButton
+                        sending = true
+                        unexpectedError = null
+                        val submitted = text.trim()
+                        val wasEditing = editingRow != null
+                        scope.launch {
+                            try {
+                                val success = if (hasStaged && onSendAttachments != null) onSendAttachments(submitted)
+                                    else onSend(submitted)
+                                if (success) {
+                                    if (wasEditing) editText = "" else draft = ""
+                                    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                                }
+                            } catch (e: CancellationException) { throw e }
+                            catch (_: Exception) { unexpectedError = "Couldn't send. Your draft is still here." }
+                            finally { sending = false }
                         }
                     },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.Send,
-                contentDescription = null,
-                tint = if (canSend) Color.White else palette.textMuted,
-                modifier = Modifier.size(20.dp),
-            )
+                    enabled = canSend,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).background(palette.accent), contentAlignment = Alignment.Center) {
+                        if (sending) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                        else Icon(Icons.Filled.Send, if (editingRow != null) "Save edit" else "Send message",
+                            tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            if (text.isBlank() && !hasStaged) Spacer(Modifier.width(8.dp))
         }
-    }
     }
 }
 

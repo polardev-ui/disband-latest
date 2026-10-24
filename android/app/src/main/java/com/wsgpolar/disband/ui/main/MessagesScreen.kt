@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.ui.main
 
+import com.wsgpolar.disband.core.leave
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -93,8 +94,8 @@ fun MessagesScreen(app: AppState) {
                 groups = runCatching { Database.myGroups(uid) }.getOrDefault(groups)
             }
         } finally {
-            runCatching { dmLive?.channel?.unsubscribe() }
-            runCatching { groupLive?.channel?.unsubscribe() }
+            runCatching { dmLive?.channel?.leave() }
+            runCatching { groupLive?.channel?.leave() }
         }
     }
 

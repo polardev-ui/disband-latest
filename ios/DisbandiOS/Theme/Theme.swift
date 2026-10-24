@@ -99,9 +99,23 @@ enum RelativeTime {
     }()
     private static let isoPlain = ISO8601DateFormatter()
 
+    /// Parsed timestamps, keyed by their string. The chat list asks for the
+    /// same few hundred timestamps on every render (day dividers, grouping,
+    /// the time beside each name), and ISO 8601 parsing is slow enough that
+    /// re-parsing them all showed up as scroll jank.
+    private static let parsed: NSCache<NSString, NSDate> = {
+        let cache = NSCache<NSString, NSDate>()
+        cache.countLimit = 5000
+        return cache
+    }()
+
     static func date(from string: String?) -> Date? {
         guard let string else { return nil }
-        return iso.date(from: string) ?? isoPlain.date(from: string)
+        let key = string as NSString
+        if let hit = parsed.object(forKey: key) { return hit as Date }
+        guard let date = iso.date(from: string) ?? isoPlain.date(from: string) else { return nil }
+        parsed.setObject(date as NSDate, forKey: key)
+        return date
     }
 
     static func short(_ string: String?) -> String {

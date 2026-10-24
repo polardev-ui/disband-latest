@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.data
 
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.core.DisbandSupabase
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
@@ -109,7 +110,7 @@ class PresenceService(private val scope: CoroutineScope) {
         scope.launch {
             try {
                 ch?.untrack()
-                ch?.unsubscribe()
+                ch?.leave()
             } catch (_: Exception) {
             }
         }

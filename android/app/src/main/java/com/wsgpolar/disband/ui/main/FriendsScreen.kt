@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
+import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.core.color
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.data.Friendship
@@ -150,10 +151,21 @@ fun FriendsScreen(
     }
     val onlineFriends = accepted.filter(::isOnline)
 
-    fun sortList(list: List<Friendship>): List<Friendship> = when (sort) {
-        FriendSort.Name -> list.sortedBy { (peerOf(it)?.name ?: "").lowercase() }
-        FriendSort.Recent -> list.sortedByDescending { it.createdAt ?: "" }
-        FriendSort.Oldest -> list.sortedBy { it.createdAt ?: "" }
+    fun sortList(list: List<Friendship>): List<Friendship> {
+        val sorted = when (sort) {
+            FriendSort.Name -> list.sortedBy { (peerOf(it)?.name ?: "").lowercase() }
+            FriendSort.Recent -> list.sortedByDescending { it.createdAt ?: "" }
+            FriendSort.Oldest -> list.sortedBy { it.createdAt ?: "" }
+        }
+        // A–Z keeps friends added in the last day at the top, like iOS — a
+        // friend you just added should not be buried in the middle of the list.
+        if (sort != FriendSort.Name) return sorted
+        val cutoff = java.time.Instant.now().minusSeconds(24 * 60 * 60)
+        val fresh = sorted.filter { TimeFormat.parse(it.createdAt)?.isAfter(cutoff) == true }
+        if (fresh.isEmpty()) return sorted
+        val freshIds = fresh.map { it.id }.toSet()
+        return fresh.sortedByDescending { TimeFormat.parse(it.createdAt) ?: java.time.Instant.MIN } +
+            sorted.filter { it.id !in freshIds }
     }
 
     // Searching looks across all friends, not just the visible tab — searching
@@ -302,8 +314,8 @@ fun FriendsScreen(
             }
 
             else -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                // Active-now strip only on the unfiltered Online view, as on iOS.
-                if (query.isBlank() && filter == FriendFilter.Online && onlineFriends.isNotEmpty()) {
+                // Active-now strip only on the All view, as on iOS.
+                if (query.isBlank() && filter == FriendFilter.All && onlineFriends.isNotEmpty()) {
                     ActiveNowStrip(
                         profiles = onlineFriends.mapNotNull { peerOf(it) },
                         statusOf = { presenceMap[it.id] ?: UserStatus.Offline },

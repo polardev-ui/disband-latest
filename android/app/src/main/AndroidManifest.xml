@@ -45,11 +45,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Invite links only: claiming every disband.dev URL opened the
+                 app on pages it has nothing to show for, like /terms. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="www.disband.dev" />
+                <data android:scheme="https" />
+                <data android:host="www.disband.dev" />
+                <data android:host="disband.dev" />
+                <data android:pathPrefix="/server/" />
+                <data android:pathPrefix="/invite/" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -59,11 +65,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Keeps a call running and visible while the app is backgrounded. -->
+        <!-- Keeps a call running and visible while the app is backgrounded.
+             shortService is only a fallback, so a start Android refuses the
+             microphone for still reaches the foreground instead of crashing. -->
         <service
             android:name=".call.CallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|shortService" />
 
         <service
             android:name=".data.MessagingService"

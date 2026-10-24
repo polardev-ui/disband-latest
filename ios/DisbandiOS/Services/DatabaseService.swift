@@ -18,9 +18,11 @@ enum DatabaseService {
             .execute().value
         let ids = Array(Set(memberships.map(\.serverId)))
         guard !ids.isEmpty else { return [] }
+        // Named columns, not `*`: the row also holds the space's webhook key,
+        // which the app has no use for and shouldn't be carrying around.
         return try await client
             .from("servers")
-            .select("*")
+            .select("id, name, icon_url, banner_url, description, owner_id, invite_code, created_at, verified, partner")
             .in("id", values: ids)
             .order("created_at")
             .execute().value
@@ -136,16 +138,17 @@ enum DatabaseService {
         let memberCount: Int
         let createdAt: String?
         var verified: Bool?
+        /// "Disband Partner", shown when a space isn't verified.
+        var partner: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, description
+            case id, name, description, verified, partner
             case iconUrl = "icon_url"
             case bannerUrl = "banner_url"
             case ownerId = "owner_id"
             case ownerName = "owner_name"
             case memberCount = "member_count"
             case createdAt = "created_at"
-            case verified
         }
     }
 
@@ -178,11 +181,6 @@ enum DatabaseService {
         if let bannerUrl { patch["banner_url"] = bannerUrl }
         guard !patch.isEmpty else { return }
         try await client.from("servers").update(patch).eq("id", value: serverId).execute()
-    }
-
-    static func kickMember(serverId: String, userId: String) async throws {
-        try await client.rpc("kick_server_member",
-                             params: ["p_server_id": serverId, "p_user_id": userId]).execute()
     }
 
     // MARK: - Channel messages

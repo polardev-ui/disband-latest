@@ -25,6 +25,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.wsgpolar.disband.ui.components.CapsuleSearchField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,9 +81,13 @@ fun InboxPanel(
     unreadForThread: (String) -> Int = { 0 },
     unreadForGroup: (String) -> Int = { 0 },
     onCompose: () -> Unit = {},
+    loading: Boolean = false,
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
+    var query by rememberSaveable { mutableStateOf("") }
     // Bottom clearance: fixed dock margin + the gesture/navigation bar inset,
     // so the last row clears the floating dock on every device.
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -87,15 +99,22 @@ fun InboxPanel(
         }
         groupChats.forEach { add(InboxItem.Group(it)) }
     }.let { list ->
+        val matching = list.filter {
+            when (it) {
+                is InboxItem.Dm -> listOf(it.thread.friend?.name, it.thread.friend?.handle,
+                    it.thread.lastMessagePreview).any { value -> value?.contains(query.trim(), ignoreCase = true) == true }
+                is InboxItem.Group -> it.group.name.contains(query.trim(), ignoreCase = true)
+            } || query.isBlank()
+        }
         val filtered = if (filter == InboxFilter.Unread) {
-            list.filter {
+            matching.filter {
                 when (it) {
                     is InboxItem.Dm -> unreadForThread(it.thread.id) > 0
                     is InboxItem.Group -> unreadForGroup(it.group.id) > 0
                 }
             }
         } else {
-            list
+            matching
         }
         filtered.sortedWith(
             compareByDescending<InboxItem> {
@@ -148,6 +167,10 @@ fun InboxPanel(
             }
         }
 
+        item(key = "search") {
+            CapsuleSearchField(query, { query = it }, prompt = "Search messages",
+                modifier = Modifier.padding(bottom = 14.dp))
+        }
         item(key = "filters") {
             Row(
                 Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, bottom = 10.dp),
@@ -155,12 +178,13 @@ fun InboxPanel(
             ) {
                 InboxFilter.entries.forEach { option ->
                     val selected = option == filter
+                    val fill by animateColorAsState(if (selected) palette.accent else palette.elevated, label = "inboxFilter")
                     Box(
                         Modifier
                             .heightIn(min = 36.dp)
                             .clip(CircleShape)
-                            .background(if (selected) palette.accent else palette.elevated)
-                            .clickable(
+                            .background(fill)
+                            .selectable(selected = selected,
                                 role = androidx.compose.ui.semantics.Role.Tab,
                                 onClick = { onFilterChanged(option) },
                             )
@@ -178,7 +202,21 @@ fun InboxPanel(
             }
         }
 
-        if (items.isEmpty()) {
+        if (loading && items.isEmpty() && query.isBlank()) {
+            item(key = "loading") {
+                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator(color = palette.accent)
+                }
+            }
+        } else if (loadError != null && query.isBlank()) {
+            item(key = "error") {
+                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                    Text(loadError, color = palette.textMuted, fontSize = 13.sp)
+                    androidx.compose.material3.TextButton(onClick = onRetry) { Text("Try again", color = palette.accent) }
+                }
+            }
+        }
+        if (items.isEmpty() && !loading && loadError == null) {
             item(key = "empty") {
                 Column(
                     Modifier.fillMaxWidth().padding(top = 70.dp, start = 32.dp, end = 32.dp),
@@ -186,12 +224,14 @@ fun InboxPanel(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        if (filter == InboxFilter.Unread) "You're all caught up." else "No conversations yet.",
+                        if (query.isNotBlank()) "No matches" else if (filter == InboxFilter.Unread) "You're all caught up." else "No conversations yet.",
                         color = palette.textPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    if (filter != InboxFilter.Unread) {
+                    if (query.isNotBlank()) {
+                        Text("Try another name or message.", color = palette.textMuted, fontSize = 14.sp)
+                    } else if (filter != InboxFilter.Unread) {
                         Text("Start one from Friends.", color = palette.textMuted, fontSize = 14.sp)
                         Spacer(Modifier.height(4.dp))
                         Box(
@@ -217,11 +257,12 @@ fun InboxPanel(
             }
         }
 
-        items(items, key = { it.key }) { item ->
+        items(items, key = { it.key }, contentType = { "conversation" }) { item ->
             when (item) {
                 is InboxItem.Dm -> {
                     val friend = item.thread.friend
                     ConversationRow(
+                        modifier = Modifier.animateItem(),
                         iconUrl = friend?.avatarUrl,
                         name = friend?.name ?: "Unknown",
                         status = friend?.let { statusOf(it.id) },
@@ -234,6 +275,7 @@ fun InboxPanel(
                 }
 
                 is InboxItem.Group -> ConversationRow(
+                    modifier = Modifier.animateItem(),
                     iconUrl = item.group.iconUrl,
                     name = item.group.name,
                     subtitle = "${item.group.members?.size ?: 0} members",

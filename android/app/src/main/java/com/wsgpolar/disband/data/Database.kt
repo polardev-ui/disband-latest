@@ -10,8 +10,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 /**
  * Thin suspend wrapper around the Supabase REST (PostgREST) API, mirroring the
@@ -33,8 +31,10 @@ object Database {
             .map { it.serverId }
             .distinct()
         if (ids.isEmpty()) return emptyList()
+        // Named columns, not `*`: the row also holds the space's webhook key,
+        // which the app has no use for and shouldn't be carrying around.
         return client.from("servers")
-            .select(Columns.ALL) {
+            .select(columns("id, name, icon_url, banner_url, description, owner_id, invite_code, created_at, verified, partner")) {
                 filter { isIn("id", ids) }
                 order("created_at", Order.ASCENDING)
             }
@@ -68,8 +68,9 @@ object Database {
             .decodeList<ServerMember>()
     }
 
+    /** The new space's id. `.data` was the raw body, a uuid still wrapped in JSON quotes. */
     suspend fun createServer(name: String): String {
-        return postgrest.rpc("create_server", buildJsonObject { put("p_name", name) }).data
+        return postgrest.rpc("create_server", buildJsonObject { put("p_name", name) }).decodeAs<String>()
     }
 
     @Serializable
@@ -89,8 +90,37 @@ object Database {
             .firstOrNull()
     }
 
-    suspend fun joinServer(invite: String) {
-        postgrest.rpc("join_server_by_invite", buildJsonObject { put("p_code", invite) })
+    /** Joins through an invite code and returns the space's id. */
+    suspend fun joinServer(invite: String): String {
+        return postgrest.rpc("join_server_by_invite", buildJsonObject { put("p_code", invite) })
+            .decodeAs<String>()
+    }
+
+    // MARK: - Discovery
+
+    /** A public space from `list_discoverable_servers`, the shape the web and iOS read. */
+    @Serializable
+    data class DiscoverableServer(
+        val id: String,
+        val name: String,
+        @SerialName("icon_url") val iconUrl: String? = null,
+        @SerialName("banner_url") val bannerUrl: String? = null,
+        val description: String? = null,
+        @SerialName("owner_id") val ownerId: String,
+        @SerialName("owner_name") val ownerName: String? = null,
+        @SerialName("member_count") val memberCount: Int = 0,
+        @SerialName("created_at") val createdAt: String? = null,
+        val verified: Boolean? = null,
+        val partner: Boolean? = null,
+    )
+
+    suspend fun discoverableServers(): List<DiscoverableServer> {
+        return postgrest.rpc("list_discoverable_servers").decodeList()
+    }
+
+    /** Join a discoverable space directly; the RPC refuses any other kind. */
+    suspend fun joinServerById(serverId: String) {
+        postgrest.rpc("join_server_by_id", buildJsonObject { put("p_server_id", serverId) })
     }
 
     suspend fun leaveServer(serverId: String, userId: String) {
@@ -173,9 +203,9 @@ object Database {
         content: String,
         attachments: List<StoredAttachment>,
         replyToId: String? = null,
-    ) {
+    ): String? {
         val first = attachments.firstOrNull()
-        when (context) {
+        val response = when (context) {
             "channel" -> client.from("messages").insert(
                 NewMessage(
                     channelId = parentId, authorId = authorId, content = content,
@@ -184,7 +214,7 @@ object Database {
                     attachmentSize = first?.size, attachments = attachments,
                     replyToId = replyToId,
                 )
-            )
+            ) { select() }
             "dm" -> client.from("dm_messages").insert(
                 NewDmMessage(
                     threadId = parentId, authorId = authorId, content = content,
@@ -193,7 +223,7 @@ object Database {
                     attachmentSize = first?.size, attachments = attachments,
                     replyToId = replyToId,
                 )
-            )
+            ) { select() }
             else -> client.from("group_messages").insert(
                 NewGroupMessage(
                     groupId = parentId, authorId = authorId, content = content,
@@ -202,8 +232,9 @@ object Database {
                     attachmentSize = first?.size, attachments = attachments,
                     replyToId = replyToId,
                 )
-            )
+            ) { select() }
         }
+        return response.decodeSingleOrNull<InsertedId>()?.id
     }
 
     suspend fun messageById(id: String): Message {
@@ -725,6 +756,21 @@ object Database {
                 limit(50)
             }
             .decodeList()
+    }
+
+    suspend fun markNotificationRead(id: String, currentUserId: String) {
+        client.from("notifications").update({ set("read", true) }) {
+            filter {
+                eq("id", id)
+                eq("user_id", currentUserId)
+            }
+        }
+    }
+
+    suspend fun markAllNotificationsRead(currentUserId: String) {
+        client.from("notifications").update({ set("read", true) }) {
+            filter { eq("user_id", currentUserId) }
+        }
     }
 
     // MARK: - Notes

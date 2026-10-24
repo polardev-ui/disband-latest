@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,6 +80,7 @@ import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.Palette
 import com.wsgpolar.disband.core.Radii
+import com.wsgpolar.disband.core.Themes
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.core.color
 import com.wsgpolar.disband.data.AwardedBadge
@@ -98,10 +100,13 @@ import com.wsgpolar.disband.ui.components.SectionCaption
 import kotlinx.coroutines.launch
 
 @Composable
-fun YouScreen(app: AppState) {
+fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     val palette = LocalPalette.current
     val profile by app.profile.collectAsStateValue()
     val profileError by app.profileError.collectAsStateValue()
+    val presence by app.presence.statuses.collectAsStateValue()
+    val ownStatus = profile?.let { presence[it.id] ?: it.status }
+    val themeId by app.themeManager.themeId.collectAsStateValue()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -118,8 +123,8 @@ fun YouScreen(app: AppState) {
     var showStatus by remember { mutableStateOf(false) }
     var showReferrals by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
-    var showNotifications by remember { mutableStateOf(false) }
-    var showAbout by remember { mutableStateOf(false) }
+    var showNotificationInbox by remember { mutableStateOf(false) }
+    var showNotificationSettings by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
 
     Column(
@@ -132,6 +137,17 @@ fun YouScreen(app: AppState) {
         ScreenHeader(
             title = "You",
             actions = {
+                IconButton(
+                    onClick = { showNotificationInbox = true },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Notifications,
+                        contentDescription = "Notifications",
+                        tint = palette.textPrimary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 IconButton(
                     onClick = { showAccount = true },
                     modifier = Modifier.size(48.dp),
@@ -148,20 +164,6 @@ fun YouScreen(app: AppState) {
         HorizontalDivider(color = palette.divider)
 
         Spacer(Modifier.height(16.dp))
-
-        PlanCard(app, palette)
-        Spacer(Modifier.height(12.dp))
-
-        profile?.let { p ->
-            ProfileHeroCard(
-                profile = p,
-                app = app,
-                onEditAvatar = { showAccount = true },
-                onEditBanner = { showAccount = true },
-                onStatusTap = { showStatus = true },
-            )
-            Spacer(Modifier.height(12.dp))
-        }
 
         if (profile == null) {
             Box(
@@ -189,23 +191,36 @@ fun YouScreen(app: AppState) {
             Spacer(Modifier.height(12.dp))
         }
 
+        profile?.let { p ->
+            ProfileHeroCard(
+                profile = p,
+                app = app,
+                onEditAvatar = { showAccount = true },
+                onEditBanner = { showAccount = true },
+                onStatusTap = { showStatus = true },
+            )
+            Spacer(Modifier.height(12.dp))
+            PlanCard(app, palette)
+            Spacer(Modifier.height(12.dp))
+        }
+
         // Account group — mirrors iOS: Edit profile / Status / Referrals.
         SectionCaption("Account", modifier = Modifier.padding(start = 8.dp))
         SettingsGroupCard(
             rows = listOf(
                 SettingsRow(
                     Icons.Filled.AccountCircle, "Edit profile",
-                    detail = profile?.let { "@${it.handle}" },
+                    detail = profile?.pronouns,
                     tint = palette.accent, palette = palette,
                 ) { showAccount = true },
                 SettingsRow(
                     Icons.Filled.Mood, "Status",
-                    detail = profile?.activeStatusNote ?: "Set a status",
+                    detail = profile?.activeStatusNote ?: ownStatus?.label,
                     tint = Color(0xFFFAA61A), palette = palette,
                 ) { showStatus = true },
                 SettingsRow(
                     Icons.Filled.CardGiftcard, "Referrals",
-                    detail = "Invite friends, earn entries",
+                    detail = "Win $100",
                     tint = Color(0xFF1ABC9C), palette = palette,
                 ) { showReferrals = true },
             ),
@@ -217,14 +232,21 @@ fun YouScreen(app: AppState) {
         SectionCaption("App", modifier = Modifier.padding(start = 8.dp))
         SettingsGroupCard(
             rows = listOf(
-                SettingsRow(Icons.Filled.Brush, "Appearance", tint = Color(0xFF9B59B6), palette = palette) {
-                    showAppearance = true
-                },
+                SettingsRow(
+                    Icons.Filled.Brush, "Appearance",
+                    detail = Themes.definition(themeId).label,
+                    tint = Color(0xFF9B59B6), palette = palette,
+                ) { showAppearance = true },
                 SettingsRow(
                     Icons.Filled.Notifications, "Notifications & chat",
                     tint = Color(0xFFF0B232), palette = palette,
                     trailing = if (!notifGranted) "Enable" else null,
-                ) { showNotifications = true },
+                ) {
+                    if (!notifGranted) {
+                        requestNotifs.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    showNotificationSettings = true
+                },
             ),
             palette = palette,
         )
@@ -235,10 +257,10 @@ fun YouScreen(app: AppState) {
         SettingsGroupCard(
             rows = listOf(
                 SettingsRow(
-                    Icons.Filled.Info, "About",
+                    Icons.Filled.Info, "Version",
                     tint = Color(0xFF4E5058), palette = palette,
-                    trailing = BuildConfig.VERSION_NAME,
-                ) { showAbout = true },
+                    trailing = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                ),
                 SettingsRow(Icons.Filled.Language, "disband.dev", tint = Color(0xFF1ABC9C), palette = palette) {
                     context.startActivity(
                         android.content.Intent(
@@ -246,6 +268,20 @@ fun YouScreen(app: AppState) {
                             android.net.Uri.parse("https://www.disband.dev"),
                         )
                     )
+                },
+                SettingsRow(Icons.Filled.Star, "Rate Disband", tint = Color(0xFFF0B232), palette = palette) {
+                    val market = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("market://details?id=${context.packageName}"),
+                    )
+                    runCatching { context.startActivity(market) }.onFailure {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"),
+                            )
+                        )
+                    }
                 },
             ),
             palette = palette,
@@ -268,9 +304,15 @@ fun YouScreen(app: AppState) {
     if (showStatus) StatusSheet(app) { showStatus = false }
     if (showReferrals) ReferralsSheet(app) { showReferrals = false }
     if (showAppearance) AppearanceSheet(app) { showAppearance = false }
-    if (showNotifications) NotificationsSheet(app) { showNotifications = false }
-    if (showAbout) {
-        AboutSheet(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE) { showAbout = false }
+    if (showNotificationInbox) {
+        NotificationInboxSheet(
+            app = app,
+            onOpenSource = onOpenNotification,
+            onDismiss = { showNotificationInbox = false },
+        )
+    }
+    if (showNotificationSettings) {
+        NotificationsSheet(app) { showNotificationSettings = false }
     }
     if (confirmSignOut) {
         AlertDialog(

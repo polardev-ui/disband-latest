@@ -1,8 +1,9 @@
 import SwiftUI
-import PhotosUI
 
 // MARK: - Members
 
+/// Everyone in a space, split into Online and Offline from live presence the
+/// way Discord lists a server, owner and staff first within each.
 struct ServerMembersView: View {
     let server: Server
     @Environment(AppState.self) private var app
@@ -10,6 +11,7 @@ struct ServerMembersView: View {
     @State private var members: [ServerMember] = []
     @State private var loading = true
     @State private var openProfile: Profile?
+    @State private var query = ""
 
     private var isOwner: Bool { server.ownerId == app.currentUserId }
 
@@ -48,12 +50,21 @@ struct ServerMembersView: View {
         }
     }
 
+    private var filtered: [ServerMember] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return members }
+        return members.filter {
+            ($0.profile?.name.lowercased().contains(q) ?? false)
+                || ($0.profile?.username?.lowercased().contains(q) ?? false)
+        }
+    }
+
     private var onlineMembers: [ServerMember] {
-        ordered(members.filter { liveStatus(for: $0) != .offline })
+        ordered(filtered.filter { liveStatus(for: $0) != .offline })
     }
 
     private var offlineMembers: [ServerMember] {
-        ordered(members.filter { liveStatus(for: $0) == .offline })
+        ordered(filtered.filter { liveStatus(for: $0) == .offline })
     }
 
     var body: some View {
@@ -69,12 +80,13 @@ struct ServerMembersView: View {
                     }
                     if !offlineMembers.isEmpty {
                         Section("Offline — \(offlineMembers.count)") {
-                            ForEach(offlineMembers) { memberRow($0) }
+                            ForEach(offlineMembers) { memberRow($0).opacity(0.6) }
                         }
                     }
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
+                .searchable(text: $query, prompt: "Search members")
                 .refreshable { await load() }
             }
         }
@@ -122,7 +134,7 @@ struct ServerMembersView: View {
     }
 
     private func kick(_ userId: String) {
-        Task { try? await DatabaseService.kickMember(serverId: server.id, userId: userId); await load() }
+        Task { try? await ServerAdmin.kick(serverId: server.id, userId: userId); await load() }
     }
 }
 
@@ -192,179 +204,20 @@ struct InviteSheet: View {
 
 // MARK: - Owner settings
 
+/// The owner's identity editor on its own, for the older Servers tab. The
+/// spaces shell opens the full `SpaceSettingsView` instead.
 struct ServerSettingsSheet: View {
     let server: Server
     var onSaved: () async -> Void
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name = ""
-    @State private var description = ""
-    @State private var iconItem: PhotosPickerItem?
-    @State private var bannerItem: PhotosPickerItem?
-    @State private var newIconUrl: String?
-    @State private var newBannerUrl: String?
-    @State private var uploadingIcon = false
-    @State private var uploadingBanner = false
-    @State private var busy = false
-    @State private var error: String?
-
-    private var iconUrl: String? { newIconUrl ?? server.iconUrl }
-    private var bannerUrl: String? { newBannerUrl ?? server.bannerUrl }
-    private var shownName: String { name.isEmpty ? server.name : name }
-
-    private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    identityCard
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                } footer: {
-                    Text("Tap the banner or icon to change them.")
+            SpaceOverviewView(server: server, editable: true, onSaved: onSaved)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 }
-
-                Section("Server name") {
-                    TextField("Server name", text: $name)
-                }
-                Section {
-                    TextField("What's this server about?", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
-                } header: {
-                    Text("Description")
-                } footer: {
-                    Text("Shown to people who find this space through discovery.")
-                }
-
-                if let error {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote)
-                            .foregroundStyle(Brand.dnd)
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(Brand.background)
-            .navigationTitle("Space Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).disabled(busy || !canSave)
-                }
-            }
-            .onAppear { name = server.name; description = server.description ?? "" }
-            .onChange(of: iconItem) { _, item in
-                if let item { Task { await upload(item, banner: false) } }
-            }
-            .onChange(of: bannerItem) { _, item in
-                if let item { Task { await upload(item, banner: true) } }
-            }
         }
         .presentationDetents([.large])
-    }
-
-    /// Banner with the icon overlapping its lower edge, so the server is
-    /// edited as it will actually appear rather than as a list of fields.
-    private var identityCard: some View {
-        VStack(spacing: 0) {
-            PhotosPicker(selection: $bannerItem, matching: .images) {
-                ZStack {
-                    BannerImage(url: bannerUrl, height: 112) {
-                        LinearGradient(
-                            colors: [Color(seed: server.id), Color(seed: server.id + "2")],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    }
-
-                    if uploadingBanner {
-                        Color.black.opacity(0.35)
-                        ProgressView().tint(.white)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    pip(systemImage: "photo").padding(10)
-                }
-            }
-            .buttonStyle(.plain)
-
-            HStack(alignment: .bottom, spacing: 12) {
-                PhotosPicker(selection: $iconItem, matching: .images) {
-                    AvatarView(url: iconUrl, name: shownName, size: 72)
-                        .background(Circle().fill(Brand.surface).padding(-4))
-                        .overlay(alignment: .bottomTrailing) {
-                            if uploadingIcon {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                pip(systemImage: "camera.fill")
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(shownName)
-                        .font(.headline)
-                        .foregroundStyle(Brand.textPrimary)
-                        .lineLimit(1)
-                    Text(description.isEmpty ? "No description yet" : description)
-                        .font(.caption)
-                        .foregroundStyle(Brand.textMuted)
-                        .lineLimit(2)
-                }
-                .padding(.bottom, 4)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, -30)
-            .padding(.bottom, 14)
-        }
-        .background(Brand.surface)
-        .clipShape(.rect(cornerRadius: 16))
-        .padding(.vertical, 8)
-    }
-
-    private func pip(systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.caption2)
-            .padding(6)
-            .background(Brand.accent, in: .circle)
-            .foregroundStyle(.white)
-    }
-
-    private func upload(_ item: PhotosPickerItem, banner: Bool) async {
-        if banner { uploadingBanner = true } else { uploadingIcon = true }
-        defer {
-            if banner { uploadingBanner = false } else { uploadingIcon = false }
-        }
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let result = try? await MediaService.uploadImage(data) else {
-            error = "That image couldn't be uploaded. Try another."
-            return
-        }
-        error = nil
-        if banner { newBannerUrl = result.url } else { newIconUrl = result.url }
-    }
-
-    private func save() {
-        busy = true
-        Task {
-            do {
-                try await DatabaseService.updateServer(
-                    serverId: server.id,
-                    name: name.trimmingCharacters(in: .whitespaces),
-                    description: description.trimmingCharacters(in: .whitespaces),
-                    iconUrl: newIconUrl,
-                    bannerUrl: newBannerUrl)
-                await onSaved()
-                dismiss()
-            } catch { self.error = error.localizedDescription }
-            busy = false
-        }
     }
 }

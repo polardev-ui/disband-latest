@@ -42,6 +42,10 @@ import com.wsgpolar.disband.data.RealtimeService
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.calls.rememberAudioPermissionTrigger
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /** The round green "start a 1:1 voice call" button, mirroring iOS. */
 @Composable
@@ -79,36 +83,27 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
-    var rows by remember(thread.id) { mutableStateOf<List<ChatRow>>(emptyList()) }
+    val timeline = rememberChatTimeline(
+        key = "dm:${thread.id}", table = "dm_messages", filter = "thread_id=eq.${thread.id}",
+        serializer = DmMessage.serializer(), toRow = { it.toRow(uid) },
+        fetch = { before -> Database.dmMessages(thread.id, before = before).map { it.toRow(uid) } },
+        onIncoming = { row -> if (row.authorId != uid) runCatching { Database.markDmRead(thread.id) } },
+    )
+    val rows = timeline.rows
+
     // Keyed by thread: switching conversations used to leak the previous
     // thread's reactions, staged images and typing state into the new one.
     val reactions = remember(thread.id) { ReactionState("dm") }
     val ctx = LocalContext.current
     val typing = remember(thread.id) { TypingState("dm", thread.id, scope) }
     val attach = remember(thread.id) { AttachmentSender("dm", thread.id) }
-    var loading by remember(thread.id) { mutableStateOf(true) }
-    var loadError by remember(thread.id) { mutableStateOf<String?>(null) }
     var sendError by remember(thread.id) { mutableStateOf<String?>(null) }
     var replyTo by remember(thread.id) { mutableStateOf<ChatRow?>(null) }
     var editingRow by remember(thread.id) { mutableStateOf<ChatRow?>(null) }
-    var actionRow by remember { mutableStateOf<ChatRow?>(null) }
-    var deleteRow by remember { mutableStateOf<ChatRow?>(null) }
-    // Composer text lives here when editing so the scaffold's internal field
-    // doesn't fight it — the scaffold clears its own box on send.
-    var editText by remember { mutableStateOf("") }
+    var actionRow by remember(thread.id) { mutableStateOf<ChatRow?>(null) }
+    var deleteRow by remember(thread.id) { mutableStateOf<ChatRow?>(null) }
 
-    suspend fun load() {
-        loading = true
-        loadError = null
-        try {
-            val loaded = Database.dmMessages(thread.id)
-            rows = loaded.map { it.toRow(uid) }
-        } catch (e: Exception) {
-            loadError = e.message ?: e.toString()
-        }
-        loading = false
-        reactions.load(rows.map { it.id }, uid)
-    }
+    LaunchedEffect(rows.map { it.id }) { reactions.load(rows.map { it.id }, uid) }
 
     fun openAttachment(url: String) {
         runCatching {
@@ -116,42 +111,21 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(thread.id) {
-        dmUnread.markActive(thread.id)
-        // Opening the chat always brings its row back, even if it was closed
-        // from the list earlier.
-        app.closedDms.unhide(thread.friend?.id)
-        ActiveChat.show(thread.id)
-        runCatching { Database.markDmRead(thread.id) }
-
-        load()
-        typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
-
-        val live = runCatching {
-            RealtimeService.observeInserts("dm_messages", "thread_id=eq.${thread.id}", DmMessage.serializer())
-        }.getOrNull()
-        if (live != null) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(thread.id, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
-                live.flow.collect { msg ->
-                    if (msg.authorId != uid) {
-                        dmUnread.increment(msg.threadId, msg.authorId, uid)
-                        // Read state was only advanced when the screen opened,
-                        // so anything arriving while you sat reading came back
-                        // as unread on the next launch.
-                        runCatching { Database.markDmRead(thread.id) }
-                    }
-                    rows = rows.filterNot { it.id == msg.id } + msg.toRow(uid)
-                }
+                dmUnread.markActive(thread.id)
+                app.closedDms.unhide(thread.friend?.id)
+                launch { runCatching { Database.markDmRead(thread.id) } }
+                ActiveChat.show(thread.id)
+                typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
+                awaitCancellation()
             } finally {
-                runCatching { live.channel.unsubscribe() }
+                typing.stop()
+                if (dmUnread.activeThreadId == thread.id) dmUnread.clearActive()
+                if (ActiveChat.isShowing(thread.id)) ActiveChat.clear()
             }
-        }
-    }
-
-    DisposableEffect(thread.id) {
-        onDispose {
-            dmUnread.clearActive()
-            ActiveChat.clear()
         }
     }
 
@@ -162,9 +136,13 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         avatarName = friend?.name ?: "?",
         ownUserId = uid,
         rows = reactions.applyTo(rows),
-        loading = loading,
-        loadError = loadError,
-        onRetryLoad = { scope.launch { load() } },
+        loading = timeline.loading,
+        loadError = timeline.error,
+        onRetryLoad = { scope.launch { timeline.refresh() } },
+        hasOlder = timeline.hasOlder,
+        loadingOlder = timeline.loadingOlder,
+        onLoadOlder = { scope.launch { timeline.older() } },
+        conversationKey = "dm:${thread.id}",
         emptyText = "Say hi!",
         sendHint = sendError,
         sendPlaceholder = when {
@@ -177,46 +155,56 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
         editingRow = editingRow,
         onEditDismiss = { editingRow = null },
         callAction = friend?.let { { CallActionButton(app, it) } },
-        onSend = { text ->
+        onSend = send@{ text ->
             sendError = null
-            scope.launch {
-                // Editing saves over the row; sending creates a new one.
-                val target = editingRow
-                if (target != null) {
-                    val ok = runCatching { Database.editDmMessage(target.id, text) }.isSuccess
-                    if (ok) {
-                        rows = rows.map {
-                            if (it.id == target.id) it.copy(content = text, editedAt = "now") else it
-                        }
-                        editingRow = null
-                    } else {
-                        sendError = "Couldn't save your edit. Try again."
-                    }
-                    return@launch
+            val target = editingRow
+            if (target != null) {
+                try {
+                    Database.editDmMessage(target.id, text)
+                    timeline.upsert(target.copy(content = text, editedAt = java.time.Instant.now().toString()))
+                    editingRow = null
+                    return@send true
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) {
+                    sendError = "Couldn't save your edit. Your text is still here."
+                    return@send false
                 }
-                val messageId = runCatching {
-                    Database.sendDmMessage(thread.id, uid, text, replyToId = replyTo?.id)
-                }.getOrNull()
-                if (messageId == null) {
-                    sendError = "Couldn't send. Check your connection and try again."
-                } else {
-                    replyTo = null
-                    dmUnread.markActive(thread.id)
-                    // Detached from the send on purpose: whatever Tether does or
-                    // fails to do, the message has landed and stays landed.
-                    TetherService.fireAskIfNeeded(
-                        messageId = messageId, content = text, surface = "dm",
-                        threadId = thread.id, userId = uid,
-                        isAero = app.subscriptions.plan.isPaid,
-                    )
-                }
+            }
+            val replyId = replyTo?.id
+            val sentAt = java.time.Instant.now().toString()
+            val messageId = try { Database.sendDmMessage(thread.id, uid, text, replyToId = replyId) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+            if (messageId == null) {
+                sendError = "Couldn't send. Your draft is saved — try again."
+                false
+            } else {
+                // A successful HTTP response is enough to show our message. The
+                // socket may be late or reconnecting; its echo shares this id.
+                if (timeline.rows.none { it.id == messageId }) timeline.upsert(ChatRow(
+                    id = messageId, author = app.profile.value, authorId = uid,
+                    content = text, attachmentType = null, createdAt = sentAt, replyToId = replyId,
+                ))
+                replyTo = null
+                scope.launch { TetherService.fireAskIfNeeded(
+                    messageId = messageId, content = text, surface = "dm",
+                    threadId = thread.id, userId = uid, isAero = app.subscriptions.plan.isPaid,
+                ) }
+                true
             }
         },
         typingUsers = typing.typers,
         onTyping = { typing.noteTyping(uid, app.profile.value?.name ?: "Someone") },
         attachments = attach,
         onSendAttachments = { caption ->
-            scope.launch { attach.send(ctx, uid, caption) }
+            val sent = attach.send(ctx, uid, caption, replyToId = replyTo?.id)
+            if (sent) {
+                attach.sentRow?.let { row ->
+                    if (timeline.rows.none { it.id == row.id }) timeline.upsert(row.copy(author = app.profile.value))
+                }
+                replyTo = null
+            }
+            sent
         },
         onToggleReaction = { messageId, emoji ->
             scope.launch { reactions.toggle(messageId, emoji, uid) }
@@ -234,7 +222,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
             onDismiss = { actionRow = null },
             onCopy = { clipboard.setText(AnnotatedString(row.content)) },
             onReply = { replyTo = row },
-            onEdit = { editingRow = row; editText = row.content },
+            onEdit = { editingRow = row },
             onDelete = { deleteRow = row },
             onReact = { emoji -> scope.launch { reactions.toggle(row.id, emoji, uid) } },
         )
@@ -250,8 +238,11 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit) {
                     deleteRow = null
                     actionRow = null
                     scope.launch {
-                        runCatching { Database.deleteDmMessage(id) }
-                        rows = rows.filterNot { it.id == id }
+                        try {
+                            Database.deleteDmMessage(id)
+                            timeline.remove(id)
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { sendError = "Couldn't delete that message. Try again." }
                     }
                 }) { Text("Delete", color = Brand.dnd) }
             },

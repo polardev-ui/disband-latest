@@ -25,15 +25,32 @@ struct MessageRow: View {
     var onHoldReactStarted: (CGRect) -> Void = { _ in }
 
     @State private var dragOffset: CGFloat = 0
-    /// The row's frame in `chatScroll` space, measured continuously so the
-    /// hold-to-react tray has a live anchor when the gesture begins.
-    @State private var selfFrame: CGRect = .zero
+    /// The row's frame in `chatScroll` space, so the hold-to-react tray has
+    /// a live anchor when the gesture begins.
+    ///
+    /// Kept in a reference box rather than `@State`: the frame changes on
+    /// every scroll frame, and writing it to state re-rendered every visible
+    /// row continuously while scrolling, which was the main source of jank in
+    /// long conversations. Nothing draws from it; it is only read on a hold.
+    @State private var frameBox = FrameBox()
     /// The image or video opened full-screen from this row, if any.
     @State private var viewingMedia: ViewedMedia?
     /// The reaction whose reactor list is open, if any.
     @State private var showingReactorsFor: ReactedEmoji?
 
-    private var authorName: String { message.author?.name ?? "Unknown" }
+    /// A webhook message shows the webhook's name and picture (or the
+    /// per-message override), not the identity behind it.
+    private var authorName: String { message.webhook?.name ?? message.author?.name ?? "Unknown" }
+    private var authorAvatar: String? { message.webhook?.avatarUrl ?? message.author?.avatarUrl }
+    /// Webhooks and bots get Discord's APP tag.
+    private var isApp: Bool { message.webhook != nil || message.author?.isBot == true }
+
+    /// Opens the author's profile, except for webhooks, which have none
+    /// worth showing.
+    private func tapAuthor() {
+        guard message.webhook == nil, let a = message.author else { return }
+        onTapAuthor(a)
+    }
 
     /// The stored filename, or the last path component when one was never
     /// recorded — anything but a bare "Attachment".
@@ -88,20 +105,16 @@ struct MessageRow: View {
                  it.
                  */
                 .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10) {
-                    onHoldReactStarted(selfFrame)
+                    onHoldReactStarted(frameBox.frame)
                 }
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { selfFrame = geo.frame(in: .named("chatScroll")) }
-                            .onChange(of: geo.frame(in: .named("chatScroll"))) { _, frame in
-                                selfFrame = frame
-                            }
-                    }
-                )
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .named("chatScroll"))
+                } action: { frame in
+                    frameBox.frame = frame
+                }
         }
         .fullScreenCover(item: $viewingMedia) { media in
-            MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName)
+            MediaViewer(url: media.url, kind: media.kind, fileName: message.attachmentName, isGif: media.kind == .gif || media.url.pathExtension.lowercased() == "gif")
         }
         .sheet(item: $showingReactorsFor) { picked in
             ReactionDetailSheet(reactions: reactions, selected: picked.id)
@@ -114,8 +127,8 @@ struct MessageRow: View {
             if grouped {
                 Color.clear.frame(width: 40)
             } else {
-                Button { if let a = message.author { onTapAuthor(a) } } label: {
-                    AvatarView(url: message.author?.avatarUrl, name: authorName, size: 40)
+                Button { tapAuthor() } label: {
+                    AvatarView(url: authorAvatar, name: authorName, size: 40)
                 }
                 .buttonStyle(.plain)
             }
@@ -128,7 +141,9 @@ struct MessageRow: View {
                         Text(authorName)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
-                            .onTapGesture { if let a = message.author { onTapAuthor(a) } }
+                            .lineLimit(1)
+                            .onTapGesture { tapAuthor() }
+                        if isApp { AppTag() }
                         Text(RelativeTime.short(message.createdAt))
                             .font(.caption2).foregroundStyle(Brand.textMuted)
                     }
@@ -158,6 +173,11 @@ struct MessageRow: View {
                 // from the message instead of read out as raw text.
                 if !message.content.isEmpty {
                     MessageEmbeds(text: message.content)
+                }
+
+                // Rich embeds from webhooks and bots.
+                ForEach(Array(message.embeds.enumerated()), id: \.offset) { _, embed in
+                    RichEmbedView(embed: embed, onTapMention: onTapMention)
                 }
 
                 attachment
@@ -257,7 +277,7 @@ struct MessageRow: View {
         } else if let urlString = message.attachmentUrl, let url = URL(string: urlString) {
             switch message.attachmentType {
             case .image, .gif:
-                Button { viewingMedia = ViewedMedia(url: url, kind: .image) } label: {
+                Button { viewingMedia = ViewedMedia(url: url, kind: message.attachmentType == .gif ? .gif : .image) } label: {
                     RemoteImage(url: urlString, contentMode: .fit) {
                         RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
                             .frame(height: 160)
@@ -313,12 +333,12 @@ struct MessageRow: View {
             if tiles.count > 1 {
                 AttachmentMosaic(attachments: tiles) { picked in
                     if let url = URL(string: picked.url) {
-                        viewingMedia = ViewedMedia(url: url, kind: .image)
+                        viewingMedia = ViewedMedia(url: url, kind: picked.type == .gif ? .gif : .image)
                     }
                 }
                 .frame(maxWidth: 280)
             } else if let only = tiles.first, let url = URL(string: only.url) {
-                Button { viewingMedia = ViewedMedia(url: url, kind: .image) } label: {
+                Button { viewingMedia = ViewedMedia(url: url, kind: only.type == .gif ? .gif : .image) } label: {
                     RemoteImage(url: only.url, contentMode: .fit) {
                         RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
                             .frame(height: 160)
@@ -360,4 +380,22 @@ struct ViewedMedia: Identifiable {
     let url: URL
     let kind: AttachmentType
     var id: String { "\(kind.rawValue):\(url.absoluteString)" }
+}
+
+/// A mutable frame SwiftUI does not observe. See `MessageRow.frameBox`.
+final class FrameBox {
+    var frame: CGRect = .zero
+}
+
+/// The small blurple tag Discord shows beside bots and webhooks.
+struct AppTag: View {
+    var body: some View {
+        Text("APP")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color(hex: 0x5865F2), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .accessibilityLabel("App")
+    }
 }
