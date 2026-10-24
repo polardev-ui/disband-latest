@@ -1055,7 +1055,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupChats((prev) =>
       prev.map((g) => ({
         ...g,
-        members: g.members.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+        members: (g.members ?? []).map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
       })),
     );
     setMembers((prev) =>
