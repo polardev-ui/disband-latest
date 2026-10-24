@@ -191,13 +191,19 @@ data class Server(
     var description: String? = null,
     @SerialName("owner_id") val ownerId: String,
     @SerialName("invite_code") var inviteCode: String? = null,
+    /** Custom invite code; preferred over [inviteCode] in links when set. */
+    @SerialName("vanity_code") var vanityCode: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     /// Official "verified by Disband" mark. Nullable so a row without the
     /// column still decodes, matching iOS.
     var verified: Boolean? = null,
     /// "Disband Partner"; shown only when the space isn't verified.
     var partner: Boolean? = null,
-)
+) {
+    /** The link to share: disband.dev/server/<custom or generated code>. */
+    val inviteUrl: String?
+        get() = (vanityCode?.takeIf { it.isNotBlank() } ?: inviteCode)?.let { "${com.wsgpolar.disband.core.AppConfig.INVITE_BASE_URL}/server/$it" }
+}
 
 @Serializable
 data class ChannelCategory(

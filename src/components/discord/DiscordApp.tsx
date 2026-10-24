@@ -37,6 +37,7 @@ import {
 import { GroupCallStage } from "./GroupCallStage";
 import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
+import { InviteSpaceModal } from "./InviteSpaceModal";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
 import { ReleaseModal } from "@/components/modals/ReleaseModal";
@@ -46,6 +47,8 @@ import { UserProfileModal } from "@/components/modals/UserProfileModal";
 import { ReportModal, type ReportTarget } from "@/components/modals/ReportModal";
 import {
   IconCopy,
+  IconLink,
+  IconUserPlus,
   IconClose,
   IconLeave,
   IconSettings,
@@ -139,6 +142,7 @@ export function DiscordApp() {
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, []);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
+  const [inviteSpace, setInviteSpace] = useState<Server | null>(null);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
@@ -578,7 +582,25 @@ export function DiscordApp() {
       const inFolder = app.serverFolders.find((f) =>
         app.serverListState.some((s) => s.server_id === server.id && s.folder_id === f.id),
       );
+      const inviteCode = server.vanity_code || server.invite_code;
       const items: ContextMenuItem[] = [
+        // Inviting comes first, as it does on Discord: the short link, never the raw space ID.
+        ...(inviteCode
+          ? [
+              {
+                id: "invite-people",
+                label: "Invite People",
+                icon: <IconUserPlus size={16} />,
+                onClick: () => setInviteSpace(server),
+              } as ContextMenuItem,
+              {
+                id: "invite",
+                label: "Copy Invite Link",
+                icon: <IconLink size={16} />,
+                onClick: () => void navigator.clipboard.writeText(getInviteUrl(inviteCode)),
+              } as ContextMenuItem,
+            ]
+          : []),
         ...(app.profile?.show_owner_badge
           ? [
               {
@@ -601,22 +623,6 @@ export function DiscordApp() {
           icon: <IconSettings size={16} />,
           onClick: () => setServerSettingsOpen(true),
         },
-        {
-          id: "copy-id",
-          label: "Copy Space ID",
-          icon: <IconCopy size={16} />,
-          onClick: () => void navigator.clipboard.writeText(server.id),
-        },
-          ...(server.invite_code || server.vanity_code
-            ? [
-                {
-                  id: "invite",
-                  label: "Copy Invite Link",
-                  icon: <IconCopy size={16} />,
-                  onClick: () => void navigator.clipboard.writeText(getInviteUrl(server.vanity_code || server.invite_code!)),
-                },
-              ]
-            : []),
           ...[
             {
               id: "boost",
@@ -625,6 +631,12 @@ export function DiscordApp() {
               onClick: () => void boostServer(server.id),
             } as ContextMenuItem,
           ],
+        {
+          id: "copy-id",
+          label: "Copy Space ID",
+          icon: <IconCopy size={16} />,
+          onClick: () => void navigator.clipboard.writeText(server.id),
+        },
         {
           id: "leave",
           label: "Leave Space",
@@ -2524,6 +2536,7 @@ export function DiscordApp() {
         channel={channelSettingsChannel}
         onClose={() => setChannelSettingsChannel(null)}
       />
+      <InviteSpaceModal server={inviteSpace} onClose={() => setInviteSpace(null)} />
       <InviteGroupModal
         open={inviteGroupOpen && !!inviteGroupId}
         groupId={inviteGroupId}

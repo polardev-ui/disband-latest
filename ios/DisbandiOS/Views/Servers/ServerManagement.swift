@@ -149,7 +149,7 @@ struct InviteSheet: View {
         // /server/<code>, not /invite/<code>: the latter has no route and
         // 404s, so every invite shared from the phone was a dead link that
         // neither client recognised as an invite either.
-        "\(AppConfig.webAppURL.absoluteString)/server/\(server.inviteCode ?? "")"
+        server.inviteURL ?? ""
     }
 
     var body: some View {

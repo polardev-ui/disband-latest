@@ -846,9 +846,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
   function saveAvatarCrop(crop: AvatarCrop) {
     if (!cropSourceFile) return;
+    // Hold the file for Save Changes. Without it the save uploaded nothing,
+    // the preview never cleared, and the button stayed on "Save Changes".
+    setPendingAvatarFile(cropSourceFile);
     setPendingAvatarCrop(crop);
     setCropOpen(false);
-    if (cropSource) URL.revokeObjectURL(cropSource);
+    // cropSource is also the live preview (previewUrlsRef owns it), so it is
+    // revoked when the preview clears, not here.
     setCropSource(null);
     setCropSourceFile(null);
   }

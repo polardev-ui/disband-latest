@@ -43,7 +43,7 @@ export function InvitesSection({ server, isOwner, catalystCount, onBoost }: Sect
   );
 }
 
-function CopyField({ value }: { value: string }) {
+export function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">

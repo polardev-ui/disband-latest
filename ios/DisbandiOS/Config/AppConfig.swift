@@ -24,6 +24,8 @@ enum AppConfig {
 
     /// Public web origin for shareable links / invites.
     static let webAppURL = URL(string: "https://www.disband.dev")!
+    /// Invites read disband.dev/server/<code>, matching the web; the bare host redirects to www.
+    static let inviteBaseURL = URL(string: "https://disband.dev")!
 
     /// Where confirmation and recovery emails land. A real page, so a user who
     /// taps the link in their mail app sees that it worked instead of a blank
