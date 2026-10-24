@@ -33,11 +33,19 @@ function validParams(p: Params) {
 async function loadHook(p: Params) {
   const service = getServiceSupabase();
   if (!service) return { service: null, hook: null };
+  // The server key lives in server_webhook_keys (service role only), not on
+  // the servers row every member can read.
+  const { data: keyRow } = await service
+    .from("server_webhook_keys")
+    .select("server_id")
+    .eq("webhook_key", p.serverKey)
+    .maybeSingle();
+  if (!keyRow) return { service, hook: null };
   const { data } = await service
     .from("webhooks")
-    .select("id, server_id, channel_id, name, avatar_url, author_id, servers!inner(webhook_key)")
+    .select("id, server_id, channel_id, name, avatar_url, author_id")
     .eq("token", p.token)
-    .eq("servers.webhook_key", p.serverKey)
+    .eq("server_id", (keyRow as { server_id: string }).server_id)
     .is("deleted_at", null)
     .maybeSingle();
   return { service, hook: data as null | { id: string; server_id: string; channel_id: string; name: string; avatar_url: string | null; author_id: string } };
