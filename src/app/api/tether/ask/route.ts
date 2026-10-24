@@ -70,19 +70,38 @@ function mimeForUrl(url: string): string {
   return "image/jpeg";
 }
 
+/*
+ attachment_url is whatever the sender's client wrote, so fetching it as-is
+ let anyone point this server at an internal address and have the response
+ handed to the model. Only our CDN and the GIF providers the picker uses are
+ fetched, over HTTPS, without following redirects, and only images come back.
+*/
+const ATTACHMENT_HOSTS = [/^cdn\.disband\.dev$/, /^static\.klipy\.com$/, /^media\d*\.giphy\.com$/, /^media\.discordapp\.net$/];
+
+function isTrustedAttachment(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && !url.port && ATTACHMENT_HOSTS.some((host) => host.test(url.hostname));
+  } catch {
+    return false;
+  }
+}
+
 /** Fetch an uploaded image/gif and return it as a base64 data URL for DeepSeek. */
 async function attachmentAsDataUrl(url: string): Promise<string | null> {
+  if (!isTrustedAttachment(url)) return null;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
     try {
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await fetch(url, { signal: controller.signal, redirect: "error" });
       if (!res.ok) return null;
       const length = Number(res.headers.get("content-length") ?? 0);
       if (length > MAX_IMAGE_BYTES) return null;
+      const mime = res.headers.get("content-type")?.split(";")[0]?.trim() || mimeForUrl(url);
+      if (!mime.startsWith("image/")) return null;
       const buffer = Buffer.from(await res.arrayBuffer());
       if (buffer.byteLength > MAX_IMAGE_BYTES) return null;
-      const mime = res.headers.get("content-type")?.split(";")[0] ?? mimeForUrl(url);
       return `data:${mime};base64,${buffer.toString("base64")}`;
     } finally {
       clearTimeout(timeout);
