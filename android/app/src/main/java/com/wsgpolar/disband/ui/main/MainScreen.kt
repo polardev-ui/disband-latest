@@ -128,7 +128,10 @@ fun MainScreen(
                 inboxError = null
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { inboxError = "Couldn't refresh conversations. Try again." }
+        catch (e: Exception) {
+            android.util.Log.e("Disband", "refreshInbox failed", e)
+            inboxError = "Couldn't refresh conversations. Try again."
+        }
         finally { inboxLoading = false }
     }
 
