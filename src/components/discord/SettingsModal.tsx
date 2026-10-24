@@ -791,6 +791,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const profileDirty = !!profile && (
     avatarPreview !== null ||
     bannerPreview !== null ||
+    pendingAvatarFile !== null ||
+    pendingBannerFile !== null ||
     displayName !== (profile.display_name ?? "") ||
     username !== (profile.username ?? "") ||
     bio !== (profile.bio ?? "") ||
