@@ -24,6 +24,8 @@ interface MemberListProps {
   serverId?: string | null;
   members: (ServerMember & { profile: Profile })[];
   roles: ServerRole[];
+  /** The space's owner. Wins over member rows, a few of which carry a stale role. */
+  ownerId?: string | null;
   loading?: boolean;
   /** Another page of members exists beyond what is loaded. */
   hasMore?: boolean;
@@ -34,6 +36,14 @@ interface MemberListProps {
 }
 
 type Member = ServerMember & { profile: Profile };
+
+/** The member with `role` agreeing with the space's actual owner. */
+function withOwner(m: Member, ownerId: string | null | undefined): Member {
+  if (!ownerId) return m;
+  const isOwner = m.user_id === ownerId;
+  if (isOwner === (m.role === "owner")) return m;
+  return { ...m, role: isOwner ? "owner" : "member" };
+}
 
 const STATUS_BG: Record<UserStatus, string> = {
   online: "bg-status-online",
@@ -80,7 +90,7 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
-export function MemberList({ serverId = null, members, roles, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
+export function MemberList({ serverId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
   const { presenceMap, listeningMap, serverTimeouts } = useApp();
   const windowed = useMemberWindow(serverId, presenceMap);
   const useWindow = !!serverId && windowed.mode === "window" && windowed.total !== null;
@@ -101,9 +111,10 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
     const online: Member[] = [];
     const offline: Member[] = [];
     if (useWindow) {
-      online.push(...windowed.online);
+      online.push(...windowed.online.map((m) => withOwner(m, ownerId)));
     } else {
-      for (const m of members) {
+      for (const raw of members) {
+        const m = withOwner(raw, ownerId);
         (liveStatus(m.profile) === "offline" ? offline : online).push(m);
       }
     }
@@ -148,7 +159,7 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
       for (const m of offline.sort(byName)) out.push({ kind: "member", key: m.user_id, member: m });
     }
     return out;
-  }, [members, roles, liveStatus, useWindow, windowed.online, windowed.offlineCount]);
+  }, [members, roles, ownerId, liveStatus, useWindow, windowed.online, windowed.offlineCount]);
 
   const scrollerRef = useRef<HTMLElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -300,7 +311,8 @@ export function MemberList({ serverId = null, members, roles, loading, hasMore, 
             </h2>
           ) : item.kind === "slot" ? (
             (() => {
-              const m = windowed.offlineAt(item.index);
+              const slot = windowed.offlineAt(item.index);
+              const m = slot ? withOwner(slot, ownerId) : null;
               return m ? (
                 <Row
                   key={item.key}

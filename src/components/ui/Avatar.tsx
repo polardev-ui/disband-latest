@@ -44,9 +44,23 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
   // broken-image glyph. Falling back to the initial keeps the avatar looking
   // intentional; reset when the source changes so a new avatar can load.
   const [imgFailed, setImgFailed] = useState(false);
+  // A failure used to stick for the session, so one dropped request (a busy
+  // member list asks for dozens at once) left that person as an initial.
+  // Now a bad cached copy falls back to the original, and the original gets
+  // two more tries a few seconds apart.
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!imgFailed || attempt >= 2) return;
+    const t = window.setTimeout(() => {
+      setAttempt((n) => n + 1);
+      setImgFailed(false);
+    }, 2500 * (attempt + 1));
+    return () => window.clearTimeout(t);
+  }, [imgFailed, attempt]);
   useEffect(() => {
     setCachedSrc(null);
     setImgFailed(false);
+    setAttempt(0);
     if (!remote) return;
     let live = true;
     void getCachedAvatarUrl(remote).then((hit) => {
@@ -90,11 +104,15 @@ export function Avatar({ profile, size = "md", className = "" }: AvatarProps) {
       {remote && !imgFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={attempt}
           src={cachedSrc ?? remote}
           alt=""
           className="h-full w-full"
           style={style}
-          onError={() => setImgFailed(true)}
+          onError={() => {
+            if (cachedSrc) setCachedSrc(null);
+            else setImgFailed(true);
+          }}
         />
       ) : (
         name.charAt(0).toUpperCase()
