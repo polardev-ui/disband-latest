@@ -45,32 +45,48 @@ class PresenceService(private val scope: CoroutineScope) {
     private var ownUserId: String? = null
     private var trackJob: kotlinx.coroutines.Job? = null
 
+    /** Live clients by presence ref. One person can have several (web + phone). */
+    private val sessions = mutableMapOf<String, Pair<String, UserStatus>>()
+    private var ownStatus: UserStatus? = null
+
+    /** Same leniency as the web's flattenPresenceState: a missing status means online. */
+    private fun entryOf(state: kotlinx.serialization.json.JsonObject): Pair<String, UserStatus>? {
+        val userId = (state["userId"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return null
+        val raw = (state["status"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val status = UserStatus.entries.firstOrNull { it.raw == raw } ?: UserStatus.Online
+        return userId to status
+    }
+
+    /** An offline entry never masks another of the same person's sessions that is online. */
+    private fun publish() {
+        val map = mutableMapOf<String, UserStatus>()
+        for ((userId, status) in sessions.values) {
+            val current = map[userId]
+            if (current == null || current == UserStatus.Offline || status != UserStatus.Offline) map[userId] = status
+        }
+        val own = ownUserId
+        val mine = ownStatus
+        if (own != null && mine != null) map[own] = mine
+        _statuses.value = map
+    }
+
     fun start(userId: String?, status: UserStatus) {
         stop()
         if (userId == null) return
         ownUserId = userId
+        ownStatus = status
         val channel = client.channel("presence:global") { presence { } }
         this.channel = channel
 
         trackJob = scope.launch {
-            val actionFlow = channel.presenceChangeFlow()
-            actionFlow.collect { action ->
+            channel.presenceChangeFlow().collect { action ->
+                // One bad entry used to throw out of collect and freeze the
+                // roster, so every friend read as offline from then on.
+                for (presence in action.leaves.values) sessions.remove(presence.presenceRef)
                 for (presence in action.joins.values) {
-                    val payload = DisbandSupabase.sessionJson
-                        .decodeFromJsonElement(PresencePayload.serializer(), presence.state)
-                    val current = _statuses.value.toMutableMap()
-                    current[payload.userId] = payload.status
-                    _statuses.value = current
+                    entryOf(presence.state)?.let { sessions[presence.presenceRef] = it }
                 }
-                for (presence in action.leaves.values) {
-                    val payload = DisbandSupabase.sessionJson
-                        .decodeFromJsonElement(PresencePayload.serializer(), presence.state)
-                    if (payload.userId != ownUserId) {
-                        val current = _statuses.value.toMutableMap()
-                        current.remove(payload.userId)
-                        _statuses.value = current
-                    }
-                }
+                publish()
             }
         }
 
@@ -88,9 +104,8 @@ class PresenceService(private val scope: CoroutineScope) {
 
     fun update(status: UserStatus) {
         val uid = ownUserId ?: return
-        val current = _statuses.value.toMutableMap()
-        current[uid] = status
-        _statuses.value = current
+        ownStatus = status
+        publish()
         scope.launch {
             try {
                 channel?.track(PresencePayload(userId = uid, status = status))
@@ -114,6 +129,8 @@ class PresenceService(private val scope: CoroutineScope) {
             } catch (_: Exception) {
             }
         }
+        sessions.clear()
+        ownStatus = null
         _statuses.value = emptyMap()
     }
 }

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Badge art is looked up by key at runtime, which resource shrinking can't see. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/badge_*" />

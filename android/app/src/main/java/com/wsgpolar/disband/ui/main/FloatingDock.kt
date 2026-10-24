@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -170,18 +171,21 @@ private fun DockItem(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-2).dp)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .border(2.dp, palette.surface, CircleShape)
+                    .padding(2.dp)
                     .clip(CircleShape)
                     .background(Brand.danger)
-                    .border(2.dp, palette.surface.copy(alpha = 0.55f), CircleShape)
-                    .padding(horizontal = 4.dp)
-                    .height(13.dp),
+                    // Sized from the text so large font settings can't clip the count.
+                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                    .padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     if (badge > 99) "99+" else "$badge",
                     color = Color.White,
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
