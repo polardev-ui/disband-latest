@@ -24,14 +24,17 @@ object AppConfig {
     /** Public web origin for shareable links / invites. */
     const val WEB_APP_URL = "https://www.disband.dev"
 
+    /** Invites read disband.dev/server/<code>, matching the web; the bare host redirects to www. */
+    const val INVITE_BASE_URL = "https://disband.dev"
+
     /** STUN only. The relay is fetched per session by TurnService. */
     val baseIceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
     )
 
-    /** 7-character invite codes on /server/CODE and /invite/CODE links. */
-    val INVITE_REGEX = Regex("(?:https?://[^\\s]+)?(?:/server/|/invite/)([a-zA-Z0-9]{7})\\b")
+    /** Invite codes in message text: 7-character generated, 3–24 character custom, 32-character older ones. */
+    val INVITE_REGEX = Regex("(?:https?://(?:www\\.)?disband\\.dev|(?<![\\w/.:-]))/(?:server|invite)/([a-zA-Z0-9-]{3,32})(?![\\w-])")
 
     /**
      * The code in a link that opened the app. Looser than [INVITE_REGEX],

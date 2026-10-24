@@ -153,6 +153,8 @@ struct Server: Codable, Identifiable, Hashable {
     var description: String?
     let ownerId: String
     var inviteCode: String?
+    /// Custom invite code; preferred over `inviteCode` in links when set.
+    var vanityCode: String?
     let createdAt: String?
     /// Official "This server is verified by Disband" mark. Optional so older
     /// payloads that omit it still decode.
@@ -166,7 +168,14 @@ struct Server: Codable, Identifiable, Hashable {
         case bannerUrl = "banner_url"
         case ownerId = "owner_id"
         case inviteCode = "invite_code"
+        case vanityCode = "vanity_code"
         case createdAt = "created_at"
+    }
+
+    /// The link to share: disband.dev/server/<custom or generated code>.
+    var inviteURL: String? {
+        guard let code = (vanityCode?.isEmpty == false ? vanityCode : inviteCode), !code.isEmpty else { return nil }
+        return "\(AppConfig.inviteBaseURL.absoluteString)/server/\(code)"
     }
 }
 

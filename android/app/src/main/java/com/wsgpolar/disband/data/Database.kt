@@ -34,7 +34,7 @@ object Database {
         // Named columns, not `*`: the row also holds the space's webhook key,
         // which the app has no use for and shouldn't be carrying around.
         return client.from("servers")
-            .select(columns("id, name, icon_url, banner_url, description, owner_id, invite_code, created_at, verified, partner")) {
+            .select(columns("id, name, icon_url, banner_url, description, owner_id, invite_code, vanity_code, created_at, verified, partner")) {
                 filter { isIn("id", ids) }
                 order("created_at", Order.ASCENDING)
             }

@@ -173,12 +173,11 @@ function shareableAppOrigin(): string {
   // The desktop shell runs on tauri.localhost, which is not a shareable
   // address — an invite copied there would point at the user's own machine.
   if (host === "tauri.localhost") return web;
-  // Canonicalise to the host that actually serves the app. Both disband.dev
-  // and www.disband.dev historically appear in links, but only the canonical
-  // host's redirect + middleware chain is reliable for /server/... invites.
+  // Invites read disband.dev/server/<code>. The bare host 308s to www with
+  // the path intact, so the short form lands in the same place.
   try {
     const url = new URL(web);
-    if (url.hostname === "disband.dev") url.hostname = "www.disband.dev";
+    if (url.hostname === "www.disband.dev") url.hostname = "disband.dev";
     return url.origin;
   } catch {
     return web;
@@ -189,7 +188,11 @@ export function getInviteUrl(code: string): string {
   return `${shareableAppOrigin()}/server/${code}`;
 }
 
-const INVITE_RE = /(?:https?:\/\/[^\s]+)?\/(?:server|invite)\/([a-zA-Z0-9]{7})\b/gi;
+// Generated codes are 7 characters; custom (vanity) ones are 3–24 of a-z, 0-9
+// and hyphens; links shared before October carry 32-character codes.
+// Only Disband's own hosts (or a bare /server/ path) count, so a /server/
+// path on some other site never turns into a join card.
+const INVITE_RE = /(?:https?:\/\/(?:www\.)?disband\.dev|(?<![\w/.:-]))\/(?:server|invite)\/([a-zA-Z0-9-]{3,32})(?![\w-])/gi;
 export const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
 
 export function extractInviteCodes(text: string): string[] {

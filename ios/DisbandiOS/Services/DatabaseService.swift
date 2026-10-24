@@ -22,7 +22,7 @@ enum DatabaseService {
         // which the app has no use for and shouldn't be carrying around.
         return try await client
             .from("servers")
-            .select("id, name, icon_url, banner_url, description, owner_id, invite_code, created_at, verified, partner")
+            .select("id, name, icon_url, banner_url, description, owner_id, invite_code, vanity_code, created_at, verified, partner")
             .in("id", values: ids)
             .order("created_at")
             .execute().value

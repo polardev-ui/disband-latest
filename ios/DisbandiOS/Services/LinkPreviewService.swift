@@ -91,7 +91,7 @@ enum MessageLinks {
     // insensitive throughout: keyboards capitalise "Https://" at the start of
     // a message, and a capital H stopped every URL from being recognised.
     private static let inviteRegex = try! NSRegularExpression(
-        pattern: #"(?:https?://[^\s]+)?/(?:server|invite)/([a-zA-Z0-9]{7})\b"#,
+        pattern: #"(?:https?://(?:www\.)?disband\.dev|(?<![\w/.:-]))/(?:server|invite)/([a-zA-Z0-9-]{3,32})(?![\w-])"#,
         options: [.caseInsensitive]
     )
     // A gift renders as its own claim card, so it must not also be fetched

@@ -75,8 +75,7 @@ import kotlinx.coroutines.launch
 fun InviteSheet(server: Server, onDismiss: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
-    val code = server.inviteCode
-    val link = code?.let { "https://www.disband.dev/server/$it" }
+    val link = server.inviteUrl
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -341,9 +340,9 @@ fun ServerOverflowSheet(
                 }
             }
 
-            server.inviteCode?.let { code ->
+            server.inviteUrl?.let { link ->
                 OverflowRow("Copy invite link", Icons.Filled.ContentCopy, palette) {
-                    copyToClipboard(context, "https://www.disband.dev/server/$code")
+                    copyToClipboard(context, link)
                     onDismiss()
                 }
             }
