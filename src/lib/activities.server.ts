@@ -946,9 +946,14 @@ async function commitMove(
   });
   if (error)
     throw new ActivityError(
-      error.code === "40001"
-        ? "The game changed. Refresh and try your move again."
-        : "Couldn't save your move. Try again.",
+      // P0001 carries a message written for players ("The game changed…",
+      // "That activity has ended."). The stale-move check used to raise 40001,
+      // which PostgREST retried in a loop until it timed out.
+      error.code === "P0001"
+        ? error.message
+        : error.code === "40001"
+          ? "The game changed. Refresh and try your move again."
+          : "Couldn't save your move. Try again.",
       error.code === "40001" || error.code === "P0001" ? 409 : 500,
     );
 }
