@@ -81,6 +81,7 @@ class ChatTimeline(private val fetch: suspend (String?) -> List<ChatRow>) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            android.util.Log.e("Disband", "timeline refresh failed", e)
             error = "Couldn't load messages. Check your connection and retry."
         } finally {
             loading = false

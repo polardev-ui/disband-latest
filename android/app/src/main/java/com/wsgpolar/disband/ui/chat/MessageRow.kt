@@ -77,6 +77,8 @@ fun MessageRow(
     onOpenAttachment: (StoredAttachment) -> Unit = {},
     onLongPress: () -> Unit = {},
     onToggleReaction: (String) -> Unit = {},
+    /** Tapping the avatar or name opens that person's profile. */
+    onAuthorClick: () -> Unit = {},
 ) {
     val attachments = remember(row.id, row.attachments) { row.resolvedAttachments() }
 
@@ -103,6 +105,8 @@ fun MessageRow(
                     url = row.author?.avatarUrl,
                     name = row.author?.name ?: "?",
                     size = 40.dp,
+                    modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -117,7 +121,8 @@ fun MessageRow(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
+                            modifier = Modifier.weight(1f, fill = false)
+                                .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(

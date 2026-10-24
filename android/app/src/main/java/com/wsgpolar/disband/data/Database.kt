@@ -283,13 +283,13 @@ object Database {
 
     suspend fun myDmThreads(currentUserId: String): List<DmThread> {
         val a = client.from("dm_threads")
-            .select(columns("user_a,user_b,id,created_at")) {
+            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview")) {
                 filter { eq("user_a", currentUserId) }
                 order("created_at", Order.ASCENDING)
             }
             .decodeList<DmThread>()
         val b = client.from("dm_threads")
-            .select(columns("user_a,user_b,id,created_at")) {
+            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview")) {
                 filter { eq("user_b", currentUserId) }
                 order("created_at", Order.ASCENDING)
             }
@@ -300,15 +300,14 @@ object Database {
             if (it.userA == currentUserId) it.userB else it.userA
         }
         val profiles: Map<String, Profile> = profiles(ids = friendIds)
-        val latest: Map<String, DmMessage> = latestDmMessages(threadIds = threads.map { it.id })
 
+        // The newest message per thread is kept on dm_threads by a trigger.
+        // Fetching it by listing every thread id in one URL passed the 8,000
+        // character limit for accounts with ~200 DMs, and the whole inbox
+        // failed to load with "Couldn't refresh conversations".
         return threads.map { thread ->
             val friendId = if (thread.userA == currentUserId) thread.userB else thread.userA
-            thread.copy(
-                friend = profiles[friendId],
-                lastMessageAt = latest[thread.id]?.createdAt,
-                lastMessagePreview = latest[thread.id]?.let { previewText(it) },
-            )
+            thread.copy(friend = profiles[friendId])
         }
             // Most recent conversation first. The queries above order by when
             // the *thread* was created, which put the oldest friendship at the
@@ -324,22 +323,6 @@ object Database {
             AttachmentType.Video -> "Video"
             else -> "Attachment"
         }
-    }
-
-    suspend fun latestDmMessages(threadIds: List<String>): Map<String, DmMessage> {
-        if (threadIds.isEmpty()) return emptyMap()
-        val rows = client.from("dm_messages")
-            .select(columns("id,thread_id,author_id,content,attachment_url,attachment_type,created_at")) {
-                filter { isIn("thread_id", threadIds) }
-                order("created_at", Order.DESCENDING)
-                limit(400L)
-            }
-            .decodeList<DmMessage>()
-        val newest = linkedMapOf<String, DmMessage>()
-        for (row in rows) {
-            if (newest[row.threadId] == null) newest[row.threadId] = row
-        }
-        return newest
     }
 
     suspend fun getOrCreateDmThread(friendId: String): String {
@@ -652,6 +635,10 @@ object Database {
             buildJsonObject {
                 put("p_token", token)
                 put("p_platform", platform)
+                // Two overloads exist (with and without p_app_version); sending
+                // only the shared two arguments made PostgREST refuse with 300
+                // and no Android device registered for push.
+                put("p_app_version", com.wsgpolar.disband.BuildConfig.VERSION_NAME)
             },
         )
     }
