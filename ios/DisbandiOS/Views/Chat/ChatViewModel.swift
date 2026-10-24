@@ -86,13 +86,24 @@ final class ChatViewModel {
             reactions = ChatCache.shared.reactions(source.cacheKey) ?? [:]
             loading = false
         }
+        // Subscribe while the first page loads. The five realtime channels
+        // and the page don't depend on each other, and doing them one after
+        // another was most of the time a conversation took to settle.
+        // Subscribing first also closes the gap where a message sent during
+        // the load was never delivered.
+        async let live: Void = subscribeAll()
         await load()
         await loadReactions()
-        await subscribe()
-        await subscribeDeletes()
-        await subscribeReactions()
-        await detectSelfDm()
-        await subscribeTyping()
+        await live
+    }
+
+    private func subscribeAll() async {
+        async let inserts: Void = subscribe()
+        async let deletes: Void = subscribeDeletes()
+        async let reacts: Void = subscribeReactions()
+        async let selfDm: Void = detectSelfDm()
+        async let typing: Void = subscribeTyping()
+        _ = await (inserts, deletes, reacts, selfDm, typing)
     }
 
     private var typingTopic: String? {
@@ -156,8 +167,9 @@ final class ChatViewModel {
         let now = Date()
         guard now.timeIntervalSince(lastTypingSentAt) >= 1.5 else { return }
         lastTypingSentAt = now
+        let watch = typingChannel
         Task {
-            await TypingService.send(topic: topic, userId: me, name: displayName)
+            await TypingService.send(topic: topic, userId: me, name: displayName, via: watch)
         }
     }
 
@@ -606,34 +618,39 @@ final class ChatViewModel {
         await loadReactions(for: messages.map(\.id), replacing: true)
     }
 
-    /// Fetch reactions for a page without refetching the entire history.
+    /// Fetch reactions for some messages without refetching the whole history.
     /// Long conversations can contain thousands of ids; PostgREST puts an
-    /// `in(...)` filter in the URL, so send them in chunks.
+    /// `in(...)` filter in the URL, so they go in chunks, fetched together.
+    ///
+    /// `replacing` swaps the whole map (a full refresh). Otherwise only the
+    /// ids asked about change — including clearing one whose last reaction was
+    /// removed, which a plain merge would have left showing.
     private func loadReactions(for ids: [String], replacing: Bool) async {
         guard !ids.isEmpty else {
             if replacing { reactions = [:] }
             return
         }
-        var all: [MessageReaction] = []
+        let context = source.contextType
         let chunkSize = 100
-        for start in stride(from: 0, to: ids.count, by: chunkSize) {
-            let end = min(start + chunkSize, ids.count)
-            let chunk = Array(ids[start..<end])
-            if let rows = try? await DatabaseService.reactions(
-                context: source.contextType, messageIds: chunk
-            ) {
-                all.append(contentsOf: rows)
+        let chunks = stride(from: 0, to: ids.count, by: chunkSize).map {
+            Array(ids[$0..<min($0 + chunkSize, ids.count)])
+        }
+        let all: [MessageReaction] = await withTaskGroup(of: [MessageReaction].self) { group in
+            for chunk in chunks {
+                group.addTask {
+                    (try? await DatabaseService.reactions(context: context, messageIds: chunk)) ?? []
+                }
             }
+            var rows: [MessageReaction] = []
+            for await part in group { rows.append(contentsOf: part) }
+            return rows
         }
-        var grouped: [String: [ReactionSummary]] = [:]
-        for id in ids {
-            let s = summarize(all, messageId: id)
-            if !s.isEmpty { grouped[id] = s }
-        }
+
+        let grouped = summarizeAll(all)
         if replacing {
             reactions = grouped
         } else {
-            reactions.merge(grouped) { _, new in new }
+            for id in ids { reactions[id] = grouped[id] }
         }
         cacheNow()
     }
@@ -653,28 +670,54 @@ final class ChatViewModel {
         }
     }
 
+    /// Flips the chip at once, then confirms with the server and re-reads
+    /// just this message. It used to wait for the round trip and then reload
+    /// the reactions of every message in memory.
     func toggleReaction(messageId: String, emoji: String) async {
         guard let uid = currentUserId else { return }
-        let reacted = reactions[messageId]?.first { $0.emoji == emoji }?.reacted ?? false
+        var list = reactions[messageId] ?? []
+        let reacted = list.first { $0.emoji == emoji }?.reacted ?? false
+
+        if let i = list.firstIndex(where: { $0.emoji == emoji }) {
+            if reacted {
+                list[i].count -= 1
+                list[i].reacted = false
+                list[i].userIds.removeAll { $0 == uid }
+                if list[i].count <= 0 { list.remove(at: i) }
+            } else {
+                list[i].count += 1
+                list[i].reacted = true
+                list[i].userIds.append(uid)
+            }
+        } else if !reacted {
+            list.append(ReactionSummary(emoji: emoji, count: 1, reacted: true, userIds: [uid]))
+        }
+        reactions[messageId] = list.isEmpty ? nil : list
+
         try? await DatabaseService.toggleReaction(context: source.contextType, messageId: messageId,
                                                   userId: uid, emoji: emoji, currentlyReacted: reacted)
-        await loadReactions()
+        await loadReactions(for: [messageId], replacing: false)
     }
 
-    private func summarize(_ all: [MessageReaction], messageId: String) -> [ReactionSummary] {
-        var map: [String: (count: Int, reacted: Bool, userIds: [String])] = [:]
-        for r in all where r.messageId == messageId {
-            var e = map[r.emoji] ?? (0, false, [])
+    /// Every message's chips in one pass over the rows (this used to scan
+    /// all rows once per message).
+    private func summarizeAll(_ all: [MessageReaction]) -> [String: [ReactionSummary]] {
+        var byMessage: [String: [String: (count: Int, reacted: Bool, userIds: [String])]] = [:]
+        for r in all {
+            var e = byMessage[r.messageId, default: [:]][r.emoji] ?? (0, false, [])
             e.count += 1
             e.userIds.append(r.userId)
             if r.userId == currentUserId { e.reacted = true }
-            map[r.emoji] = e
+            byMessage[r.messageId, default: [:]][r.emoji] = e
         }
-        return map.map {
-            ReactionSummary(emoji: $0.key, count: $0.value.count,
-                            reacted: $0.value.reacted, userIds: $0.value.userIds)
+        return byMessage.mapValues { map in
+            map.map {
+                ReactionSummary(emoji: $0.key, count: $0.value.count,
+                                reacted: $0.value.reacted, userIds: $0.value.userIds)
+            }
+            // Ties broken by emoji so chips don't swap places on a refresh.
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.emoji < $1.emoji }
         }
-        .sorted { $0.count > $1.count }
     }
 
     private func subscribeDeletes() async {
@@ -708,8 +751,9 @@ final class ChatViewModel {
         reactionTask = Task { [weak self] in
             for await r in stream {
                 guard let self else { continue }
+                // Only the message that changed.
                 if self.messages.contains(where: { $0.id == r.messageId }) {
-                    await self.loadReactions()
+                    await self.loadReactions(for: [r.messageId], replacing: false)
                 }
             }
         }
@@ -744,13 +788,15 @@ final class ChatViewModel {
         }
 
         let author = await resolveProfile(row.authorId)
-        let message = DisplayMessage(
+        var message = DisplayMessage(
             id: row.id, authorId: row.authorId, author: author,
             content: row.content ?? "", attachmentUrl: row.attachmentUrl,
             attachmentType: row.attachmentType, replyToId: row.replyToId,
             createdAt: row.createdAt, editedAt: row.editedAt,
             mentions: row.mentions
         )
+        message.embeds = row.embeds ?? []
+        message.webhook = row.webhook
         // Already here under its real id — the send promoted it before the
         // echo arrived, which is the normal order. Refresh it rather than
         // appending a duplicate.

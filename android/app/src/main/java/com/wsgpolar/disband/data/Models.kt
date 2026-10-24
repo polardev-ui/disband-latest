@@ -195,6 +195,8 @@ data class Server(
     /// Official "verified by Disband" mark. Nullable so a row without the
     /// column still decodes, matching iOS.
     var verified: Boolean? = null,
+    /// "Disband Partner"; shown only when the space isn't verified.
+    var partner: Boolean? = null,
 )
 
 @Serializable

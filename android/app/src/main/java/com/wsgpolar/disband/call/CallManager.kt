@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.call
 
+import com.wsgpolar.disband.core.leave
 import android.content.Context
 import com.wsgpolar.disband.core.ApiHttp
 import com.wsgpolar.disband.core.AppConfig
@@ -86,6 +87,15 @@ class CallManager(
     private val _connectedAt = MutableStateFlow<Long?>(null)
     val connectedAt: StateFlow<Long?> = _connectedAt.asStateFlow()
 
+    private val _answerRequested = MutableStateFlow(false)
+
+    /**
+     * Answer was tapped on the ring notification. The call screen picks this
+     * up and answers through the microphone-permission check, so a call is
+     * never picked up with no way to be heard.
+     */
+    val answerRequested: StateFlow<Boolean> = _answerRequested.asStateFlow()
+
     /** Display name used on `ring`/`reject`; set when the profile loads. */
     var myName: String = "User"
 
@@ -94,10 +104,14 @@ class CallManager(
     private var activePeerId: String? = null
 
     private var listenJob: Job? = null
+    /** This account's own ring channel, joined while listening. */
+    private var listenChannel: RealtimeChannel? = null
     private var signalJob: Job? = null
     private var ringWatchdog: Job? = null
     private var engine: WebRTCEngine? = null
     private var sendChannel: RealtimeChannel? = null
+    /** The last call's channel leaving; the next call waits for it. */
+    private var pendingUnsubscribe: Job? = null
     private var ongoingNotificationId: Int? = null
 
     private val turnService = TurnService()
@@ -133,13 +147,15 @@ class CallManager(
                     val signals = ch.broadcastFlow<CallSignal>("call")
                     val pump = launch { signals.collect { handleSignal(it) } }
                     ch.subscribe(blockUntilSubscribed = true)
+                    listenChannel = ch
                     backoff = 1_000L
                     pump.join()
                 } catch (_: Exception) {
                     delay(backoff)
                     backoff = (backoff * 2).coerceAtMost(10_000L)
                 } finally {
-                    runCatching { channel?.unsubscribe() }
+                    if (listenChannel === channel) listenChannel = null
+                    runCatching { channel?.leave() }
                 }
             }
         }
@@ -213,10 +229,19 @@ class CallManager(
         scope.launch { runCatching { endCall() } }
     }
 
-    /** "Answer" on an incoming-call notification. */
-    fun answerFromNotification() {
+    /** "Decline" on the ring notification: a reject, as the call screen sends. */
+    fun declineFromNotification() {
         val call = _incoming.value ?: return
-        scope.launch { runCatching { acceptCall(call) } }
+        scope.launch { runCatching { rejectCall(call) } }
+    }
+
+    /** "Answer" on the ring notification, which opens the app to answer. */
+    fun requestAnswer() {
+        if (_phase.value == CallPhase.Incoming) _answerRequested.value = true
+    }
+
+    fun consumeAnswerRequest() {
+        _answerRequested.value = false
     }
 
     suspend fun endCall() {
@@ -338,6 +363,16 @@ class CallManager(
 
     private suspend fun send(targetId: String, signal: CallSignal) {
         val uid = userId ?: return
+        // To this account's other devices: our own ring channel is already
+        // joined on that topic. Opening it again returned the same instance,
+        // and unsubscribing it afterwards stopped this phone hearing rings.
+        if (targetId == uid) {
+            val own = listenChannel
+            if (own != null && own.status.value == RealtimeChannel.Status.SUBSCRIBED) {
+                runCatching { own.broadcast("call", signal) }
+                return
+            }
+        }
         var lastError: Exception? = null
         repeat(2) { attempt ->
             try {
@@ -358,7 +393,7 @@ class CallManager(
                     // down; unsubscribing immediately can cut it short.
                     kotlinx.coroutines.delay(120)
                 } finally {
-                    runCatching { channel.unsubscribe() }
+                    runCatching { channel.leave() }
                 }
                 return
             } catch (e: Exception) {
@@ -412,6 +447,10 @@ class CallManager(
         }
 
         try {
+            pendingUnsubscribe?.let { leaving ->
+                kotlinx.coroutines.withTimeoutOrNull(2_000) { leaving.join() }
+                pendingUnsubscribe = null
+            }
             val signalChannel = client.channel("call:$callId") { broadcast { acknowledgeBroadcasts = false } }
             // Wait for the JOIN, rather than hoping a timeout covers it: the
             // offer/answer and every ICE candidate ride this channel.
@@ -507,13 +546,16 @@ class CallManager(
         signalJob = null
         // Reusing a deterministic callId (alice:bob) immediately after hangup
         // raced the async unsubscribe, so the second call's offer was sent on a
-        // stale channel. Best-effort synchronous unsubscribe with fallback.
-        try { kotlinx.coroutines.runBlocking { sendChannel?.unsubscribe() } } catch (_: Exception) {
-            sendChannel?.let { ch -> scope.launch { runCatching { ch.unsubscribe() } } }
+        // stale channel. setupRtc waits for this job before joining again.
+        // It used to be runBlocking on the main thread, which froze the UI for
+        // as long as the socket took — or for good, on a dead connection.
+        sendChannel?.let { ch ->
+            pendingUnsubscribe = scope.launch { runCatching { ch.leave() } }
         }
         sendChannel = null
         _phase.value = CallPhase.Idle
         _incoming.value = null
+        _answerRequested.value = false
         _activePeer.value = null
         activeCallId = null
         activePeerId = null
@@ -581,5 +623,4 @@ private fun SessionDescription.Type.wire(): String = when (this) {
     SessionDescription.Type.ANSWER -> "answer"
     SessionDescription.Type.PRANSWER -> "pranswer"
     SessionDescription.Type.ROLLBACK -> "rollback"
-    else -> "offer"
 }

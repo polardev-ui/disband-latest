@@ -19,8 +19,8 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,10 +85,26 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
     val scope = rememberCoroutineScope()
     var elapsed by remember { mutableLongStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
+    var micRefused by remember { mutableStateOf(false) }
+
+    // Answering asks for the microphone first, as placing a call does:
+    // without it the call connected and the other side heard nothing.
+    val answer = rememberAudioPermissionTrigger(onDenied = { micRefused = true }) {
+        micRefused = false
+        app.calls.incoming.value?.let { call -> scope.launch { app.calls.acceptCall(call) } }
+    }
+    val answerRequested by app.calls.answerRequested.collectAsStateValue()
+    LaunchedEffect(answerRequested, phase) {
+        if (answerRequested && phase == CallPhase.Incoming) {
+            app.calls.consumeAnswerRequest()
+            answer()
+        }
+    }
 
     LaunchedEffect(phase, connectedAt) {
         while (phase == CallPhase.Active && connectedAt != null) {
-            elapsed = (System.currentTimeMillis() - connectedAt!!) / 1000
+            val since = connectedAt ?: break
+            elapsed = (System.currentTimeMillis() - since) / 1000
             delay(1_000)
         }
     }
@@ -156,6 +172,15 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                 Spacer(Modifier.size(12.dp))
                 Text(it, color = Color.White.copy(alpha = 0.9f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
             }
+            if (micRefused && phase == CallPhase.Incoming) {
+                Spacer(Modifier.size(12.dp))
+                Text(
+                    "Allow the microphone in Settings to answer calls.",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
             error?.let {
                 Spacer(Modifier.size(12.dp))
                 Text(it, color = Brand.danger, fontSize = 14.sp)
@@ -172,7 +197,7 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                             Spacer(Modifier.width(48.dp))
                             RoundControl(label = "Accept", color = Brand.online,
                                 icon = { Icon(Icons.Filled.Call, contentDescription = null, tint = Color.White) },
-                                onClick = { scope.launch { app.calls.acceptCall(call) } })
+                                onClick = answer)
                         }
                     }
                 }
@@ -194,7 +219,7 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                                 color = if (deafened) palette.accent else Color.White.copy(alpha = 0.2f),
                                 icon = {
                                     Icon(
-                                        if (deafened) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+                                        if (deafened) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                                         contentDescription = null,
                                         tint = Color.White,
                                     )
@@ -205,7 +230,7 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                                 color = if (speakerOn) palette.accent else Color.White.copy(alpha = 0.2f),
                                 icon = {
                                     Icon(
-                                        if (speakerOn) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                                        if (speakerOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                         contentDescription = null,
                                         tint = Color.White,
                                     )

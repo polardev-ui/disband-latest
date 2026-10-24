@@ -73,11 +73,11 @@ object TimeFormat {
          unnoticed until something forward-looking used it.
         */
         if (seconds < 0) {
-            val thatDay = LocalDate.ofInstant(date, ZoneId.systemDefault())
-            val today = LocalDate.ofInstant(now, ZoneId.systemDefault())
+            val thatDay = date.atZone(ZoneId.systemDefault()).toLocalDate()
+            val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
             if (thatDay == today) return "today"
             if (thatDay == today.plusDays(1)) return "tomorrow"
-            val year = LocalDate.ofInstant(now, ZoneId.systemDefault()).year
+            val year = now.atZone(ZoneId.systemDefault()).toLocalDate().year
             return thatDay.format(
                 DateTimeFormatter.ofPattern(if (thatDay.year == year) "MMM d" else "MMM d, yyyy")
             )
@@ -85,8 +85,8 @@ object TimeFormat {
         if (seconds < 60) return "now"
         if (seconds < 3600) return "${seconds / 60}m"
         val hour = ChronoUnit.HOURS.between(date, now)
-        val day = LocalDate.ofInstant(now, ZoneId.systemDefault())
-        val thatDay = LocalDate.ofInstant(date, ZoneId.systemDefault())
+        val day = now.atZone(ZoneId.systemDefault()).toLocalDate()
+        val thatDay = date.atZone(ZoneId.systemDefault()).toLocalDate()
         if (thatDay == day) return "${hour}h"
         if (thatDay == day.minusDays(1)) return "Yesterday"
         val days = ChronoUnit.DAYS.between(thatDay, day)

@@ -46,6 +46,9 @@ fun SpacesView(
     onThreadSelected: (String) -> Unit,
     onGroupSelected: (GroupChat) -> Unit,
     modifier: Modifier = Modifier,
+    loading: Boolean = false,
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
     onInvite: (Server) -> Unit = {},
     onMembers: (Server) -> Unit = {},
     onOverflow: (Server) -> Unit = {},
@@ -89,7 +92,13 @@ fun SpacesView(
                 label = "panelContent",
             ) { serverId ->
                 if (serverId != null) {
-                    ChannelPanel(
+                    if (loading && channels.none { it.serverId == serverId }) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                            androidx.compose.material3.CircularProgressIndicator(color = palette.accent)
+                        }
+                    } else if (loadError != null && channels.none { it.serverId == serverId }) {
+                        com.wsgpolar.disband.ui.components.ErrorState(message = loadError, onRetry = onRetry)
+                    } else ChannelPanel(
                         server = servers.firstOrNull { it.id == serverId },
                         categories = categories.filter { it.serverId == serverId },
                         channels = channels.filter { it.serverId == serverId },
@@ -122,6 +131,9 @@ fun SpacesView(
                         unreadForThread = { unread[it] ?: 0 },
                         unreadForGroup = { groupUnread[it] ?: 0 },
                         onCompose = { state.navigateTo(Destination.Friends) },
+                        loading = loading,
+                        loadError = loadError,
+                        onRetry = onRetry,
                     )
                 }
             }

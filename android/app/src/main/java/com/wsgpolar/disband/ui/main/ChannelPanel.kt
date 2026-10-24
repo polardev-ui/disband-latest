@@ -227,14 +227,7 @@ private fun ServerHeader(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (server.verified == true) {
-                    Icon(
-                        Icons.Filled.VerifiedUser,
-                        contentDescription = "Verified space",
-                        tint = Brand.verified,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+                SpaceBadge(verified = server.verified, partner = server.partner)
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier

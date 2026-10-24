@@ -15,6 +15,10 @@ struct MediaViewer: View {
     let url: URL
     let kind: AttachmentType
     var fileName: String?
+    /// GIFs get a star in the top-right to save them to favourites.
+    var isGif: Bool = false
+
+    @ObservedObject private var gifFavorites = GifFavoritesService.shared
 
     @Environment(\.dismiss) private var dismiss
 
@@ -50,6 +54,7 @@ struct MediaViewer: View {
         // otherwise panning a zoomed photo would dismiss the viewer instead.
         .gesture(scale <= 1.01 && !isVideo ? dismissDrag : nil)
         .sheet(isPresented: $showShare) { ShareSheet(items: [url]) }
+        .task { if isGif && !gifFavorites.loaded { await gifFavorites.refresh() } }
     }
 
     private var zoomableImage: some View {
@@ -110,6 +115,22 @@ struct MediaViewer: View {
                 }
 
                 Spacer()
+
+                if isGif {
+                    let starred = gifFavorites.isFavorite(url.absoluteString)
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        Task { await gifFavorites.toggle(url.absoluteString) }
+                    } label: {
+                        Image(systemName: starred ? "star.fill" : "star")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(starred ? Color.yellow : .white)
+                            .padding(10)
+                            .background(.black.opacity(0.45), in: .circle)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .accessibilityLabel(starred ? "Remove from favourite GIFs" : "Add to favourite GIFs")
+                }
 
                 Button { showShare = true } label: {
                     Image(systemName: "square.and.arrow.up")

@@ -15,7 +15,29 @@ enum ChatMarkdown {
 
     /// `mentionColor` is passed in rather than read from `Brand`, whose
     /// properties are main-actor isolated while this renderer is not.
+    /// Rendered messages, so a row re-drawn while scrolling or typing does
+    /// not re-parse its markdown (and recompile the fence regex) every time.
+    private final class Rendered { let value: AttributedString; init(_ v: AttributedString) { value = v } }
+    private static let cache: NSCache<NSString, Rendered> = {
+        let c = NSCache<NSString, Rendered>()
+        c.countLimit = 1500
+        return c
+    }()
+
     static func render(
+        _ raw: String,
+        baseFont: UIFont,
+        baseColor: UIColor,
+        mentionColor: UIColor
+    ) -> AttributedString {
+        let key = "\(baseFont.pointSize)|\(baseColor.hashValue)|\(mentionColor.hashValue)|\(raw)" as NSString
+        if let hit = cache.object(forKey: key) { return hit.value }
+        let result = renderUncached(raw, baseFont: baseFont, baseColor: baseColor, mentionColor: mentionColor)
+        cache.setObject(Rendered(result), forKey: key)
+        return result
+    }
+
+    private static func renderUncached(
         _ raw: String,
         baseFont: UIFont,
         baseColor: UIColor,
