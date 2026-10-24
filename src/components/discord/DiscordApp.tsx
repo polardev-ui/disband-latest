@@ -2269,6 +2269,7 @@ export function DiscordApp() {
           serverId={app.activeServerId}
           members={app.members}
           roles={app.serverRoles}
+          ownerId={app.activeServer?.owner_id ?? null}
           loading={app.membersLoading}
           hasMore={app.membersHasMore}
           onLoadMore={() => void app.loadMoreMembers()}

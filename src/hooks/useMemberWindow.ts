@@ -33,6 +33,13 @@ interface Row {
   profile: Profile | null;
 }
 
+/**
+ * Each space's count and resolved online members, kept for the session so a
+ * revisit paints its list at once. Every revisit still re-reads them.
+ */
+const spaceCache = new Map<string, { total: number | null; onlineById: Map<string, WindowMember> }>();
+const SPACE_CACHE_LIMIT = 12;
+
 function toMember(r: Row): WindowMember | null {
   if (!r.profile) return null;
   return {
@@ -67,10 +74,17 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   const [onlineById, setOnlineById] = useState<Map<string, WindowMember>>(new Map());
   const [resolvedOnlineIds, setResolvedOnlineIds] = useState<Set<string>>(new Set());
   const [onlineReady, setOnlineReady] = useState(false);
+  // The space the state above belongs to. It trails `serverId` by a render
+  // on a switch, and the cache must not file one space's members under another.
+  const [stateServerId, setStateServerId] = useState<string | null>(null);
   const [onlineRetry, setOnlineRetry] = useState(0);
   const [pages, setPages] = useState<Map<number, WindowMember[]>>(new Map());
   const inflight = useRef<Set<number>>(new Set());
   const attemptedOnlineIds = useRef<Set<string>>(new Set());
+  // Set when a space is restored from the cache: the next resolve pass
+  // re-reads every online member, not only the ones it hasn't seen, so a
+  // changed role, name or avatar doesn't stick around.
+  const refreshCached = useRef(false);
   const onlineRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped when the space changes: drops every in-flight response.
   const generation = useRef(0);
@@ -100,14 +114,17 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     if (onlineRetryTimer.current) clearTimeout(onlineRetryTimer.current);
   }, []);
 
-  // New space: start over.
+  // New space: start over, from the cache when this space was seen before.
   useEffect(() => {
     generation.current += 1;
-    setTotal(null);
+    const cached = serverId ? spaceCache.get(serverId) : undefined;
+    setTotal(cached?.total ?? null);
     setMode("window");
-    setOnlineById(new Map());
-    setResolvedOnlineIds(new Set());
-    setOnlineReady(false);
+    setOnlineById(cached ? new Map(cached.onlineById) : new Map());
+    setResolvedOnlineIds(cached ? new Set(cached.onlineById.keys()) : new Set());
+    setOnlineReady(!!cached);
+    refreshCached.current = !!cached;
+    setStateServerId(serverId);
     setPages(new Map());
     inflight.current.clear();
     attemptedOnlineIds.current.clear();
@@ -135,8 +152,10 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   useEffect(() => {
     if (!serverId || mode !== "window") return;
     const gen = generation.current;
+    const refreshAll = refreshCached.current;
+    refreshCached.current = false;
     const missing = settledOnline.filter(
-      (id) => !onlineById.has(id) && !attemptedOnlineIds.current.has(id),
+      (id) => (refreshAll || !onlineById.has(id)) && !attemptedOnlineIds.current.has(id),
     );
     if (missing.length === 0) {
       setOnlineReady(true);
@@ -192,6 +211,18 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
       }
     });
   }, [serverId, mode, settledOnline, onlineById, onlineRetry]);
+
+  // Keep the cache current for the next visit.
+  useEffect(() => {
+    if (!serverId || mode !== "window" || stateServerId !== serverId) return;
+    spaceCache.delete(serverId);
+    spaceCache.set(serverId, { total, onlineById });
+    while (spaceCache.size > SPACE_CACHE_LIMIT) {
+      const oldest = spaceCache.keys().next().value;
+      if (oldest === undefined) break;
+      spaceCache.delete(oldest);
+    }
+  }, [serverId, stateServerId, mode, total, onlineById]);
 
   // Members of this space who are online right now (non-members drop out
   // because the RPC only returns people in the space).

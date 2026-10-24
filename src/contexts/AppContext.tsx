@@ -373,6 +373,41 @@ const CLOSED_DMS_PREFIX = "disband:closed-dms:";
 // beside the channel open rather than blocking it.
 const MEMBER_PAGE_SIZE = 500;
 
+// Spaces and channels you have been in stay in memory, as Discord keeps
+// them: going back paints at once from the snapshot and refreshes behind it.
+const SPACE_CACHE_LIMIT = 12;
+const CHANNEL_CACHE_LIMIT = 40;
+const CHANNEL_SNAPSHOT_ROWS = 100;
+
+interface SpaceSnapshot {
+  categories: ChannelCategory[];
+  channels: Channel[];
+  members: (ServerMember & { profile: Profile })[];
+  membersHasMore: boolean;
+  roles: ServerRole[];
+  permissions: Record<ServerPermissionKey, boolean> | null;
+  channelEffects: Record<string, ChannelEffects>;
+  timeouts: ServerTimeout[];
+  bans: ServerBan[];
+}
+
+interface ChannelSnapshot {
+  messages: (Message & { author: Profile })[];
+  hasMore: boolean;
+  reactions: MessageReaction[];
+}
+
+/** Insert as most recent, dropping the least recently used past `limit`. */
+function rememberRecent<V>(map: Map<string, V>, key: string, value: V, limit: number) {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > limit) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
 function readClosedDms(uid: string): string[] {
   try {
     const raw = window.localStorage.getItem(CLOSED_DMS_PREFIX + uid);
@@ -555,6 +590,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const memberRoleIdsRef = useRef<Map<string, string[]>>(new Map());
   const assignableRoleIdsRef = useRef<Set<string>>(new Set());
   const serverDetailsCacheRef = useRef<{ categories: ChannelCategory[]; channels: Channel[]; roles: ServerRole[] } | null>(null);
+  const spaceSnapshotsRef = useRef<Map<string, SpaceSnapshot>>(new Map());
+  const channelSnapshotsRef = useRef<Map<string, ChannelSnapshot>>(new Map());
+  // Which space the permission flags in state belong to; they linger from the
+  // previous space until the new space's answer lands.
+  const permissionsServerRef = useRef<string | null>(null);
   // A conversation switch can trigger the same load twice (the direct call in
   // the select handler and the chat effect); share the first in-flight fetch
   // instead of paying for the same request twice.
@@ -1504,15 +1544,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           roles: ServerRole[];
           membersHasMore?: boolean;
         }>(cacheKey);
-    if (cached) {
-      setCategories(cached.categories);
-      setChannels(cached.channels);
-      if (cached.members.length > 0) setMembers(cached.members);
-      setServerRoles(cached.roles);
+    // Past the cache's five minutes, the in-memory snapshot still paints the
+    // roster while page 1 is fetched again, instead of skeletons.
+    const snapshot = opts?.refreshMembers ? undefined : spaceSnapshotsRef.current.get(serverId);
+    const shown = cached ?? (snapshot
+      ? { categories: snapshot.categories, channels: snapshot.channels, members: snapshot.members, roles: snapshot.roles }
+      : null);
+    if (shown) {
+      setCategories(shown.categories);
+      setChannels(shown.channels);
+      if (shown.members.length > 0) setMembers(shown.members);
+      setServerRoles(shown.roles);
     }
-    // No cache (or one without members yet): the member list shows skeletons,
-    // not "0".
-    if (!cached || cached.members.length === 0) setMembersLoading(true);
+    // Nothing to show yet: the member list shows skeletons, not "0".
+    if (!shown || shown.members.length === 0) setMembersLoading(true);
     const supabase = getSupabaseClient();
 
     // Fast path — only what the channel rail needs. Members, roles and
@@ -1532,7 +1577,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     serverDetailsCacheRef.current = {
       categories: (cats as ChannelCategory[]) ?? [],
       channels: channelRows,
-      roles: cached?.roles ?? [],
+      roles: shown?.roles ?? [],
     };
 
     void (async () => {
@@ -1577,6 +1622,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (permsRes.data && typeof permsRes.data === "object") {
           const p = permsRes.data as Record<string, unknown>;
+          permissionsServerRef.current = serverId;
           setServerPermissions({
             kick: !!p.kick,
             ban: !!p.ban,
@@ -4143,6 +4189,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, profile, patchProfileInState, loadProfile, trackPresence]);
 
+  // Record the space on screen as it stands, once its own rows are in (the
+  // previous space's channels and roster linger until the new ones land).
+  useEffect(() => {
+    const serverId = activeServerId;
+    if (!serverId || viewMode !== "space") return;
+    if (channels.length === 0 || channels.some((c) => c.server_id !== serverId)) return;
+    const prev = spaceSnapshotsRef.current.get(serverId);
+    const ownMembers = members.length > 0 && members.every((m) => m.server_id === serverId);
+    const ownRoles = serverRoles.length > 0 && serverRoles.every((r) => r.server_id === serverId);
+    const channelIds = new Set(channels.map((c) => c.id));
+    const effects: Record<string, ChannelEffects> = {};
+    for (const [id, e] of Object.entries(channelEffects)) if (channelIds.has(id)) effects[id] = e;
+    rememberRecent(spaceSnapshotsRef.current, serverId, {
+      categories,
+      channels,
+      members: ownMembers ? members : prev?.members ?? [],
+      membersHasMore: ownMembers ? membersHasMore : prev?.membersHasMore ?? false,
+      roles: ownRoles ? serverRoles : prev?.roles ?? [],
+      permissions: permissionsServerRef.current === serverId ? serverPermissions : prev?.permissions ?? null,
+      channelEffects: Object.keys(effects).length > 0 ? effects : prev?.channelEffects ?? {},
+      timeouts: serverTimeouts.filter((t) => t.server_id === serverId),
+      bans: serverBans.filter((b) => b.server_id === serverId),
+    }, SPACE_CACHE_LIMIT);
+  }, [activeServerId, viewMode, categories, channels, members, membersHasMore, serverRoles, serverPermissions, channelEffects, serverTimeouts, serverBans]);
+
+  // Record the channel on screen: its newest rows and their reactions.
+  useEffect(() => {
+    const channelId = activeChannelId;
+    if (!channelId || viewMode !== "space" || messagesLoading) return;
+    if (messages.length === 0 || messages.some((m) => m.channel_id !== channelId)) return;
+    const settled = messages.filter((m) => !m.id.startsWith("opt-"));
+    const rows = settled.slice(-CHANNEL_SNAPSHOT_ROWS);
+    const ids = new Set(rows.map((m) => m.id));
+    rememberRecent(channelSnapshotsRef.current, channelId, {
+      messages: rows,
+      hasMore: channelHasMore || rows.length < settled.length,
+      reactions: messageReactions.filter((r) => r.context_type === "channel" && ids.has(r.message_id)),
+    }, CHANNEL_CACHE_LIMIT);
+  }, [activeChannelId, viewMode, messagesLoading, messages, channelHasMore, messageReactions]);
+
+  /** Paint a channel from its snapshot. False when there is none. */
+  const restoreChannelSnapshot = useCallback((channelId: string) => {
+    const snap = channelSnapshotsRef.current.get(channelId);
+    if (!snap) return false;
+    setMessages(snap.messages);
+    setChannelHasMore(snap.hasMore);
+    setMessageReactions((prev) => replaceReactionsForContext(prev, "channel", snap.reactions));
+    setMessagesLoading(false);
+    return true;
+  }, []);
+
+  /**
+   * Paint a space from its snapshot, or clear the last space's roster and
+   * roles so they never show under this one. True when a snapshot was used.
+   */
+  const restoreSpaceSnapshot = useCallback((serverId: string) => {
+    const snap = spaceSnapshotsRef.current.get(serverId);
+    if (!snap) {
+      fullMembersRef.current = [];
+      setMembers([]);
+      setServerRoles([]);
+      setChannelEffects({});
+      setServerTimeouts([]);
+      setServerBans([]);
+      return false;
+    }
+    setCategories(snap.categories);
+    setChannels(snap.channels);
+    setMembers(snap.members);
+    fullMembersRef.current = snap.members;
+    membersHasMoreRef.current = snap.membersHasMore;
+    memberPageRef.current = Math.max(1, Math.ceil(snap.members.length / MEMBER_PAGE_SIZE));
+    setMembersHasMore(snap.membersHasMore);
+    setMembersLoading(snap.members.length === 0);
+    setServerRoles(snap.roles);
+    if (snap.permissions) {
+      permissionsServerRef.current = serverId;
+      setServerPermissions(snap.permissions);
+    }
+    setChannelEffects(snap.channelEffects);
+    setServerTimeouts(snap.timeouts);
+    setServerBans(snap.bans);
+    serverDetailsCacheRef.current = { categories: snap.categories, channels: snap.channels, roles: snap.roles };
+    return true;
+  }, []);
+
   const persistActiveServerChannel = useCallback(() => {
     const serverId = activeServerRef.current;
     const channelId = activeChannelRef.current;
@@ -4190,13 +4322,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeGroupRef.current = null;
     setViewMode("space");
     setActiveServerId(serverId);
-    setActiveChannelId(null);
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
-    setMessages([]);
-    setMessagesLoading(true);
-    setChannelHasMore(false);
     clearServerIndicator(serverId);
+    // A space you've been in comes back as you left it: its channel rail,
+    // roster and last channel's messages paint now, and refresh behind.
+    let painted = false;
+    if (restoreSpaceSnapshot(serverId)) {
+      const snap = spaceSnapshotsRef.current.get(serverId)!;
+      const savedId = getLastChannelId(serverId);
+      const target = snap.channels.find((c) => c.id === savedId)
+        ?? snap.channels.find((c) => c.type === "text") ?? snap.channels[0];
+      if (target) {
+        activeChannelRef.current = target.id;
+        setActiveChannelId(target.id);
+        painted = restoreChannelSnapshot(target.id);
+      }
+    }
+    if (!painted) {
+      if (!activeChannelRef.current) setActiveChannelId(null);
+      setMessages([]);
+      setMessagesLoading(true);
+      setChannelHasMore(false);
+    }
     const channelRows = await loadServerDetails(serverId).catch(() => []);
     // A slow response from a previous navigation must not select a channel.
     if (activeServerRef.current !== serverId || viewModeRef.current !== "space") return;
@@ -4217,7 +4365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       setMessagesLoading(false);
     }
-  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity]);
+  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity, restoreSpaceSnapshot, restoreChannelSnapshot]);
 
   const selectChannel = useCallback((channelId: string) => {
     markActivity();
@@ -4228,9 +4376,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveDmThreadId(null);
     setActiveGroupChatId(null);
 
-    setMessages([]);
-    setMessagesLoading(true);
-    setChannelHasMore(false);
+    if (!restoreChannelSnapshot(channelId)) {
+      setMessages([]);
+      setMessagesLoading(true);
+      setChannelHasMore(false);
+    }
     if (viewMode !== "space") setViewMode("space");
     const channel = channelsRef.current.find((c) => c.id === channelId);
     if (channel) {
@@ -4253,7 +4403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Opening the channel is the acknowledgement. Persist it so a restart does
     // not repaint the mention we just read.
     void markChannelMentionsRead(channelId);
-  }, [viewMode, clearServerIndicator, markActivity, markChannelMentionsRead]);
+  }, [viewMode, clearServerIndicator, markActivity, markChannelMentionsRead, restoreChannelSnapshot]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
     markActivity();
