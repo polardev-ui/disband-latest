@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.seeded
 
 /** Round avatar with a stable seeded fallback colour, mirroring the iOS AvatarView. */
@@ -28,6 +29,10 @@ fun AvatarImage(
     size: Dp = 40.dp,
     modifier: Modifier = Modifier,
     presence: Color? = null,
+    /** Cut-out around the presence dot; match whatever the avatar sits on. */
+    ring: Color = LocalPalette.current.background,
+    /** Offline reads as a hollow ring rather than a solid grey dot. */
+    hollow: Boolean = false,
 ) {
     Box(modifier) {
         if (url.isNullOrBlank()) {
@@ -54,17 +59,27 @@ fun AvatarImage(
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .size((size.value * 0.32f).dp)
+                    .size((size.value * 0.34f).dp)
                     .clip(CircleShape)
-                    .background(Color.White)
-                    .padding(2.dp),
+                    .background(ring)
+                    .padding((size.value * 0.06f).coerceAtLeast(2f).dp),
             ) {
                 Box(
                     Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
                         .background(presence),
-                )
+                ) {
+                    if (hollow) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding((size.value * 0.055f).coerceAtLeast(2f).dp)
+                                .clip(CircleShape)
+                                .background(ring),
+                        )
+                    }
+                }
             }
         }
     }

@@ -83,6 +83,7 @@ import com.wsgpolar.disband.core.Radii
 import com.wsgpolar.disband.core.Themes
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.core.color
+import com.wsgpolar.disband.data.BadgeDef
 import com.wsgpolar.disband.data.AwardedBadge
 import com.wsgpolar.disband.data.BadgeService
 import com.wsgpolar.disband.data.Database
@@ -127,13 +128,7 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     var showNotificationSettings by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(palette.background)
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 132.dp),
-    ) {
+    Column(Modifier.fillMaxSize().background(palette.background)) {
         ScreenHeader(
             title = "You",
             actions = {
@@ -162,142 +157,149 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
             },
         )
         HorizontalDivider(color = palette.divider)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 132.dp),
+        ) {
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-        if (profile == null) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Radii.card))
-                    .background(palette.surface)
-                    .padding(16.dp),
-            ) {
-                Column {
-                    Text(
-                        "Couldn't load your profile", color = palette.textPrimary,
-                        fontSize = 16.sp, fontWeight = FontWeight.SemiBold
-                    )
-                    profileError?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(it, color = palette.textMuted, fontSize = 13.sp)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = { scope.launch { app.loadProfile() } }) {
-                        Text("Retry", color = palette.textPrimary)
+            if (profile == null) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Radii.card))
+                        .background(palette.surface)
+                        .padding(16.dp),
+                ) {
+                    Column {
+                        Text(
+                            "Couldn't load your profile", color = palette.textPrimary,
+                            fontSize = 16.sp, fontWeight = FontWeight.SemiBold
+                        )
+                        profileError?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text(it, color = palette.textMuted, fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(onClick = { scope.launch { app.loadProfile() } }) {
+                            Text("Retry", color = palette.textPrimary)
+                        }
                     }
                 }
+                Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(12.dp))
-        }
 
-        profile?.let { p ->
-            ProfileHeroCard(
-                profile = p,
-                app = app,
-                onEditAvatar = { showAccount = true },
-                onEditBanner = { showAccount = true },
-                onStatusTap = { showStatus = true },
+            profile?.let { p ->
+                ProfileHeroCard(
+                    profile = p,
+                    app = app,
+                    onEditAvatar = { showAccount = true },
+                    onEditBanner = { showAccount = true },
+                    onStatusTap = { showStatus = true },
+                )
+                Spacer(Modifier.height(12.dp))
+                PlanCard(app, palette)
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Account group — mirrors iOS: Edit profile / Status / Referrals.
+            SectionCaption("Account", modifier = Modifier.padding(start = 8.dp))
+            SettingsGroupCard(
+                rows = listOf(
+                    SettingsRow(
+                        Icons.Filled.AccountCircle, "Edit profile",
+                        detail = profile?.pronouns,
+                        tint = palette.accent, palette = palette,
+                    ) { showAccount = true },
+                    SettingsRow(
+                        Icons.Filled.Mood, "Status",
+                        detail = profile?.activeStatusNote ?: ownStatus?.label,
+                        tint = Color(0xFFFAA61A), palette = palette,
+                    ) { showStatus = true },
+                    SettingsRow(
+                        Icons.Filled.CardGiftcard, "Referrals",
+                        detail = "Win $100",
+                        tint = Color(0xFF1ABC9C), palette = palette,
+                    ) { showReferrals = true },
+                ),
+                palette = palette,
             )
             Spacer(Modifier.height(12.dp))
-            PlanCard(app, palette)
-            Spacer(Modifier.height(12.dp))
-        }
 
-        // Account group — mirrors iOS: Edit profile / Status / Referrals.
-        SectionCaption("Account", modifier = Modifier.padding(start = 8.dp))
-        SettingsGroupCard(
-            rows = listOf(
-                SettingsRow(
-                    Icons.Filled.AccountCircle, "Edit profile",
-                    detail = profile?.pronouns,
-                    tint = palette.accent, palette = palette,
-                ) { showAccount = true },
-                SettingsRow(
-                    Icons.Filled.Mood, "Status",
-                    detail = profile?.activeStatusNote ?: ownStatus?.label,
-                    tint = Color(0xFFFAA61A), palette = palette,
-                ) { showStatus = true },
-                SettingsRow(
-                    Icons.Filled.CardGiftcard, "Referrals",
-                    detail = "Win $100",
-                    tint = Color(0xFF1ABC9C), palette = palette,
-                ) { showReferrals = true },
-            ),
-            palette = palette,
-        )
-        Spacer(Modifier.height(12.dp))
-
-        // App group — Appearance / Notifications & chat.
-        SectionCaption("App", modifier = Modifier.padding(start = 8.dp))
-        SettingsGroupCard(
-            rows = listOf(
-                SettingsRow(
-                    Icons.Filled.Brush, "Appearance",
-                    detail = Themes.definition(themeId).label,
-                    tint = Color(0xFF9B59B6), palette = palette,
-                ) { showAppearance = true },
-                SettingsRow(
-                    Icons.Filled.Notifications, "Notifications & chat",
-                    tint = Color(0xFFF0B232), palette = palette,
-                    trailing = if (!notifGranted) "Enable" else null,
-                ) {
-                    if (!notifGranted) {
-                        requestNotifs.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                    showNotificationSettings = true
-                },
-            ),
-            palette = palette,
-        )
-        Spacer(Modifier.height(12.dp))
-
-        // About group.
-        SectionCaption("About", modifier = Modifier.padding(start = 8.dp))
-        SettingsGroupCard(
-            rows = listOf(
-                SettingsRow(
-                    Icons.Filled.Info, "Version",
-                    tint = Color(0xFF4E5058), palette = palette,
-                    trailing = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            // App group — Appearance / Notifications & chat.
+            SectionCaption("App", modifier = Modifier.padding(start = 8.dp))
+            SettingsGroupCard(
+                rows = listOf(
+                    SettingsRow(
+                        Icons.Filled.Brush, "Appearance",
+                        detail = Themes.definition(themeId).label,
+                        tint = Color(0xFF9B59B6), palette = palette,
+                    ) { showAppearance = true },
+                    SettingsRow(
+                        Icons.Filled.Notifications, "Notifications & chat",
+                        tint = Color(0xFFF0B232), palette = palette,
+                        trailing = if (!notifGranted) "Enable" else null,
+                    ) {
+                        if (!notifGranted) {
+                            requestNotifs.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        showNotificationSettings = true
+                    },
                 ),
-                SettingsRow(Icons.Filled.Language, "disband.dev", tint = Color(0xFF1ABC9C), palette = palette) {
-                    context.startActivity(
-                        android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://www.disband.dev"),
-                        )
-                    )
-                },
-                SettingsRow(Icons.Filled.Star, "Rate Disband", tint = Color(0xFFF0B232), palette = palette) {
-                    val market = android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("market://details?id=${context.packageName}"),
-                    )
-                    runCatching { context.startActivity(market) }.onFailure {
+                palette = palette,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // About group.
+            SectionCaption("About", modifier = Modifier.padding(start = 8.dp))
+            SettingsGroupCard(
+                rows = listOf(
+                    SettingsRow(
+                        Icons.Filled.Info, "Version",
+                        tint = Color(0xFF4E5058), palette = palette,
+                        trailing = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    ),
+                    SettingsRow(Icons.Filled.Language, "disband.dev", tint = Color(0xFF1ABC9C), palette = palette) {
                         context.startActivity(
                             android.content.Intent(
                                 android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"),
+                                android.net.Uri.parse("https://www.disband.dev"),
                             )
                         )
-                    }
-                },
-            ),
-            palette = palette,
-        )
-        Spacer(Modifier.height(12.dp))
+                    },
+                    SettingsRow(Icons.Filled.Star, "Rate Disband", tint = Color(0xFFF0B232), palette = palette) {
+                        val market = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("market://details?id=${context.packageName}"),
+                        )
+                        runCatching { context.startActivity(market) }.onFailure {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"),
+                                )
+                            )
+                        }
+                    },
+                ),
+                palette = palette,
+            )
+            Spacer(Modifier.height(12.dp))
 
-        // Sign out — destructive, with confirm.
-        SettingsGroupCard(
-            rows = listOf(
-                SettingsRow(Icons.Filled.Logout, "Sign out", tint = Brand.dnd, palette = palette, textColor = Brand.dnd) {
-                    confirmSignOut = true
-                },
-            ),
-            palette = palette,
-        )
-        Spacer(Modifier.height(16.dp))
+            // Sign out — destructive, with confirm.
+            SettingsGroupCard(
+                rows = listOf(
+                    SettingsRow(Icons.Filled.Logout, "Sign out", tint = Brand.dnd, palette = palette, textColor = Brand.dnd) {
+                        confirmSignOut = true
+                    },
+                ),
+                palette = palette,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
     }
 
     if (showAccount) AccountSheet(app) { showAccount = false }
@@ -436,31 +438,49 @@ private fun ProfileHeroCard(
                         Text(" · $it", color = palette.textMuted, fontSize = 13.sp)
                     }
                 }
-                // Badges — catalogue first, legacy flags as fallback.
+                // Badges: the web's own emblems (see BadgeIcon), catalogue
+                // first, the legacy profile flags as a fallback.
                 val legacyBadges = buildList {
-                    if (profile.showOwnerBadge == true) add("Owner" to Color(0xFFFEE75C))
-                    if (profile.showStaffBadge == true) add("Staff" to Color(0xFF5865F2))
-                    if (profile.showOgBadge == true) add("OG" to Color(0xFFEB459E))
-                    if (profile.showBountyBadge == true) add("Hunter" to Color(0xFFF23F43))
+                    if (profile.showOwnerBadge == true) add(BadgeDef(key = "owner", name = "Disband Owner"))
+                    if (profile.showStaffBadge == true) add(BadgeDef(key = "staff", name = "Disband Staff"))
+                    if (profile.showOgBadge == true) add(BadgeDef(key = "og", name = "OG"))
+                    if (profile.showBountyBadge == true) add(BadgeDef(key = "bounty", name = "Bug Bounty Hunter"))
                 }
-                if (badges.isNotEmpty() || legacyBadges.isNotEmpty()) {
+                val shownBadges = if (badges.isNotEmpty()) badges.map { it.def } else legacyBadges
+                var showBadgeList by remember { mutableStateOf(false) }
+                if (shownBadges.isNotEmpty()) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.offset(y = (-16).dp).padding(top = 6.dp)
-                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.offset(y = (-16).dp).padding(top = 8.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(palette.elevated)
+                            .clickable(role = Role.Button, onClickLabel = "Show badges") { showBadgeList = true }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                     ) {
-                        badges.forEach { b ->
-                            BadgePill(
-                                label = b.def.name,
-                                tint = runCatching {
-                                    Color(android.graphics.Color.parseColor(b.def.accent))
-                                }.getOrDefault(palette.accent),
-                            )
-                        }
-                        if (badges.isEmpty()) {
-                            legacyBadges.forEach { (label, tint) -> BadgePill(label, tint) }
-                        }
+                        shownBadges.forEach { def -> com.wsgpolar.disband.ui.components.BadgeIcon(def.key, 22.dp, def.name) }
                     }
+                }
+                if (showBadgeList) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showBadgeList = false },
+                        confirmButton = { androidx.compose.material3.TextButton(onClick = { showBadgeList = false }) { Text("Done") } },
+                        title = { Text("Badges") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                shownBadges.forEach { def ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        com.wsgpolar.disband.ui.components.BadgeIcon(def.key, 28.dp)
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text(def.name, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                            if (def.description.isNotBlank()) Text(def.description, color = palette.textMuted, fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    )
                 }
                 // Status bubble — capsule with presence dot + note, tap to edit.
                 val statusNote = profile.activeStatusNote
@@ -468,7 +488,7 @@ private fun ProfileHeroCard(
                 val selfStatus = presence[profile.id] ?: profile.status
                 Box(
                     Modifier
-                        .offset(y = if (badges.isNotEmpty() || legacyBadges.isNotEmpty()) (-8).dp else (-16).dp)
+                        .offset(y = if (shownBadges.isNotEmpty()) (-8).dp else (-16).dp)
                         .padding(top = 8.dp)
                         .clip(CircleShape)
                         .background(palette.elevated)
@@ -505,19 +525,6 @@ private fun ProfileHeroCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun BadgePill(label: String, tint: Color) {
-    Box(
-        Modifier
-            .clip(CircleShape)
-            .background(tint.copy(alpha = 0.18f))
-            .border(1.dp, tint.copy(alpha = 0.45f), CircleShape)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    ) {
-        Text(label, color = tint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -31,9 +31,7 @@ struct UserBadgesView: View {
             }
 
             ForEach(badges) { badge in
-                Image(systemName: BadgeService.symbol(for: badge.def.key))
-                    .font(.system(size: size))
-                    .foregroundStyle(badge.def.color)
+                BadgeIcon(key: badge.def.key, color: badge.def.color, size: size + 5)
                     .accessibilityLabel(badge.def.name)
             }
         }
@@ -64,10 +62,7 @@ struct UserBadgeList: View {
                         .foregroundStyle(Brand.textMuted)
                     ForEach(badges) { badge in
                         HStack(spacing: 10) {
-                            Image(systemName: BadgeService.symbol(for: badge.def.key))
-                                .font(.system(size: 15))
-                                .foregroundStyle(badge.def.color)
-                                .frame(width: 22)
+                            BadgeIcon(key: badge.def.key, color: badge.def.color, size: 22)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(badge.def.name)
                                     .font(.subheadline)
@@ -83,6 +78,32 @@ struct UserBadgeList: View {
         }
         .task(id: profile.id) {
             badges = await BadgeService.shared.badges(for: profile.id)
+        }
+    }
+}
+
+/**
+ One badge emblem: the same artwork the web and desktop draw, generated
+ from src/components/ui/BadgeArt.tsx by scripts/generate-badge-art.mjs into
+ the Badges asset folder. A badge newer than this build falls back to a
+ symbol in the badge's colour.
+ */
+struct BadgeIcon: View {
+    let key: String
+    var color: Color = Brand.textMuted
+    var size: CGFloat = 18
+
+    var body: some View {
+        if UIImage(named: "badge_\(key)") != nil {
+            Image("badge_\(key)")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: BadgeService.symbol(for: key))
+                .font(.system(size: size * 0.8))
+                .foregroundStyle(color)
+                .frame(width: size, height: size)
         }
     }
 }

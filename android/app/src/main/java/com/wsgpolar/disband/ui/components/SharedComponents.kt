@@ -312,6 +312,8 @@ fun FriendRow(
             name = profile?.name ?: "?",
             size = 44.dp,
             presence = status?.color(palette),
+            ring = palette.surface,
+            hollow = status == UserStatus.Offline,
         )
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

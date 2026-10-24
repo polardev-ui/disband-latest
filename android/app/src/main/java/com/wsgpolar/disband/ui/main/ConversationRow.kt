@@ -50,6 +50,7 @@ fun ConversationRow(
     selected: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    ringColor: Color = LocalPalette.current.surface,
 ) {
     val palette = LocalPalette.current
     val isUnread = unread > 0
@@ -77,10 +78,12 @@ fun ConversationRow(
             name = name,
             size = 46.dp,
             presence = status?.color(palette),
+            ring = ringColor,
+            hollow = status == UserStatus.Offline,
         )
 
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     name,
                     color = if (isUnread) palette.textPrimary else palette.textSecondary,
@@ -88,10 +91,9 @@ fun ConversationRow(
                     fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(6.dp))
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
                 if (!time.isNullOrEmpty()) {
                     Text(
                         time,
