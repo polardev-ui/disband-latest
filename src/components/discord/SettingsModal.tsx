@@ -92,6 +92,7 @@ import { PLANS } from "@/lib/subscription";
 import { useSubscription } from "@/hooks/useSubscription";
 import { ThemesPanel } from "@/components/discord/settings/ThemesPanel";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { alertDialog } from "@/lib/dialogs";
 
 interface SettingsModalProps {
   open: boolean;
@@ -711,7 +712,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   async function saveProfile() {
     setError(null);
     if (!useDefaultAccent && (!accent1.trim() || !accent2.trim())) {
-      setError("Pick both profile colors, or use the default style.");
+      setError("Pick both profile colours, or use the default style.");
       return;
     }
     const sanitizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -732,7 +733,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         if (!res) {
           console.error("[saveProfile] avatar upload returned null");
           setError("Couldn't upload your profile picture. Please try again.");
-          if (typeof window !== "undefined") window.alert("Couldn't upload your profile picture. Please try again.");
+          void alertDialog("Couldn't upload your profile picture. Please try again.");
           return;
         }
         avatarUrl = res.url;
@@ -743,7 +744,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         if (!res) {
           console.error("[saveProfile] banner upload returned null");
           setError("Couldn't upload your banner. Please try again.");
-          if (typeof window !== "undefined") window.alert("Couldn't upload your banner. Please try again.");
+          void alertDialog("Couldn't upload your banner. Please try again.");
           return;
         }
         bannerUrl = res.url;
@@ -804,7 +805,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       }
       if (err) {
         setError(err);
-        if (typeof window !== "undefined") window.alert(err);
+        void alertDialog(err, "Couldn't save your profile");
       } else {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);

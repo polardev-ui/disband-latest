@@ -13,6 +13,7 @@ import {
   type IncidentStatus,
   type StatusIncident,
 } from "@/lib/status";
+import { confirmDialog } from "@/lib/dialogs";
 
 interface Monitor {
   id: string;
@@ -97,7 +98,7 @@ function MonitorItem({
   }
 
   async function remove() {
-    if (!window.confirm(`Delete the monitor “${monitor.name}”? Its check history is removed too.`)) return;
+    if (!(await confirmDialog({ title: `Delete “${monitor.name}”`, body: "Its check history is removed too.", confirmLabel: "Delete Monitor" }))) return;
     setSaving(true);
     onError("");
     try {
@@ -258,7 +259,7 @@ function IncidentItem({
   }
 
   async function remove() {
-    if (!window.confirm(`Delete “${incident.title}”? The timeline goes with it.`)) return;
+    if (!(await confirmDialog({ title: `Delete “${incident.title}”`, body: "The timeline goes with it.", confirmLabel: "Delete Incident" }))) return;
     setBusy(true);
     onError("");
     try {

@@ -56,8 +56,8 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
 
         <h1 className="mt-2 text-3xl font-bold leading-tight text-white">{incident.title}</h1>
         <p className="mt-2 text-[13px] text-text-muted">
-          Opened {formatDateTime(incident.created_at)}
-          {incident.resolved_at ? ` · Resolved ${formatDateTime(incident.resolved_at)}` : ""}
+          Opened {formatDateTime(incident.created_at, { utc: true })}
+          {incident.resolved_at ? ` · Resolved ${formatDateTime(incident.resolved_at, { utc: true })}` : ""}
         </p>
 
         <div className="mt-6 rounded-lg bg-[#2b2d31] p-4">
@@ -75,8 +75,8 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
           </div>
           {incident.scheduled_for && (
             <p className="mt-3 text-[13px] text-text-muted">
-              Scheduled for {formatDateTime(incident.scheduled_for)}
-              {incident.scheduled_until ? ` – ${formatDateTime(incident.scheduled_until)}` : ""}
+              Scheduled for {formatDateTime(incident.scheduled_for, { utc: true })}
+              {incident.scheduled_until ? ` – ${formatDateTime(incident.scheduled_until, { utc: true })}` : ""}
             </p>
           )}
         </div>
@@ -98,7 +98,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-header-primary">
                       {INCIDENT_STATUS_LABEL[update.status]}
-                      <span className="ml-2 font-normal text-text-muted">{formatDateTime(update.created_at)}</span>
+                      <span className="ml-2 font-normal text-text-muted">{formatDateTime(update.created_at, { utc: true })}</span>
                     </p>
                     <p className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-5 text-text-normal">
                       {update.body}

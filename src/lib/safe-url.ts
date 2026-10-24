@@ -1,4 +1,5 @@
 import { cdnImage } from "@/lib/media/cdn";
+import { isTauri } from "@/lib/platform";
 
 const HTTPS_RE = /^https:\/\//i;
 
@@ -20,6 +21,14 @@ export function safeDownload(url: string, fileName: string): void {
 
 export function safeWindowOpen(url: string): void {
   if (!isSafeUrl(url)) return;
+  // The desktop WebView ignores window.open (no new-window handler), so
+  // "Open original" did nothing there. Hand https links to the system browser.
+  if (isTauri() && url.startsWith("https:")) {
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("plugin:opener|open_url", { url }))
+      .catch(() => undefined);
+    return;
+  }
   window.open(url, "_blank", "noopener,noreferrer");
 }
 

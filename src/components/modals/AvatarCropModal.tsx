@@ -3,6 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { IconClose } from "@/components/icons";
 import type { AvatarCrop } from "@/lib/utils";
 
@@ -20,7 +21,10 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
 
   useOverlayDismiss(onClose, open);
 
-  if (!open) return null;
+  // Portalled above Settings: rendered in place they sat inside the app layer
+  // Settings hides (opacity 0, no clicks), so the cropper opened invisibly
+  // and a new profile picture could never be confirmed.
+  if (!open || typeof document === "undefined") return null;
 
   const previewStyle = {
     objectFit: "cover" as const,
@@ -29,7 +33,7 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
     transformOrigin: `${50 + posX}% ${50 + posY}%`,
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-overlay-scrim-strong overlay-fade" onClick={onClose} aria-label="Close" />
       <div role="dialog" aria-modal="true" aria-label="Adjust profile picture" className="modal-pop relative w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
@@ -60,6 +64,7 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
           Save
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -285,6 +285,18 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
               left: Math.min(shownMenu.x, window.innerWidth - 200),
               top: Math.min(shownMenu.y, window.innerHeight - shownMenu.items.length * 36 - 16),
             }}
+            // Clamp to the menu's real size before it paints. The style above
+            // guesses 200px wide and 36px a row, so a wider menu (up to 320px)
+            // ran off the right edge and a long one in a short window started
+            // above the top. offsetWidth/Height ignore the pop-in scale.
+            ref={(el) => {
+              if (!el) return;
+              const pad = 8;
+              const left = Math.max(pad, Math.min(shownMenu.x, window.innerWidth - el.offsetWidth - pad));
+              const top = Math.max(pad, Math.min(shownMenu.y, window.innerHeight - el.offsetHeight - pad));
+              el.style.left = `${left}px`;
+              el.style.top = `${top}px`;
+            }}
           >
             <span id={menuId} className="sr-only">
               Context menu

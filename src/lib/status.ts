@@ -194,10 +194,13 @@ export function dayTone(day: StatusDay): string {
   return "bg-[#f23f43]";
 }
 
+// Fixed locale: these render on the server and again in the browser, and a
+// default locale that differs between the two was a hydration mismatch
+// (React #418) on every status page load.
 export function formatDay(day: string, long = false): string {
   const date = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return day;
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: long ? "numeric" : undefined,
@@ -219,15 +222,22 @@ export function formatRelative(iso: string | null): string {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-export function formatDateTime(iso: string | null): string {
+/**
+ * `utc` renders in UTC and says so. Server-rendered text must use it: the
+ * server's clock is UTC, the reader's usually isn't, and the two renders of
+ * a local time disagree.
+ */
+export function formatDateTime(iso: string | null, opts?: { utc?: boolean }): string {
   if (!iso) return "Not scheduled";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "Unknown";
-  return date.toLocaleString(undefined, {
+  const text = date.toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    ...(opts?.utc ? { timeZone: "UTC" } : {}),
   });
+  return opts?.utc ? `${text} UTC` : text;
 }

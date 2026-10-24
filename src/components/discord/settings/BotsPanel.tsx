@@ -9,6 +9,7 @@ import { IconClose, IconCopy } from "@/components/icons";
 import { BOT_SCOPE_LABELS, BOT_SCOPE_ORDER } from "@/lib/bot-scopes";
 import type { BotScope } from "@/lib/bot-auth";
 import { apiFetch } from "@/lib/api";
+import { confirmDialog } from "@/lib/dialogs";
 
 interface ManagedBot {
   id: string;
@@ -126,7 +127,11 @@ export function BotsPanel() {
   }
 
   async function revokeBot(bot: ManagedBot) {
-    if (!confirm(`Revoke "${bot.name}"? Its token stops working immediately and can't be recovered.`)) return;
+    if (!(await confirmDialog({
+      title: `Revoke ${bot.name}`,
+      body: "Its token stops working immediately and can't be recovered.",
+      confirmLabel: "Revoke Bot",
+    }))) return;
     setError(null);
     try {
       const { ok, data } = await postJson("/api/bot/revoke", { botId: bot.id });

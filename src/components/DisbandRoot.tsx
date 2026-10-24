@@ -18,6 +18,7 @@ import { AgePrompt } from "@/components/AgePrompt";
 import { CookieConsent } from "@/components/CookieConsent";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
+import { alertDialog } from "@/lib/dialogs";
 
 function InviteBootstrap() {
   const { ready, session, joinServerByInvite, joinServerById } = useApp();
@@ -25,27 +26,29 @@ function InviteBootstrap() {
 
   useEffect(() => {
     if (!ready || !session || handled.current) return;
-    const m = window.location.pathname.match(/\/server\/([a-zA-Z0-9-]{7,36})\/?$/);
+    const m = window.location.pathname.match(/\/server\/([a-zA-Z0-9-]{3,36})\/?$/);
     if (!m) return;
     handled.current = true;
     const code = m[1];
     window.history.replaceState({}, "", "/app");
-    if (/^[a-zA-Z0-9]{7}$/.test(code)) {
-      void joinServerByInvite(code).then((err) => {
-        if (err) window.alert(`Couldn't join space: ${err}`);
-      });
-      return;
-    }
-    // A pasted Space ID (32 hex chars, optionally hyphenated as a UUID) is
-    // not an invite code, but we can still join when the space is discoverable.
-    const compact = code.replace(/-/g, "");
-    if (/^[a-fA-F0-9]{32}$/.test(compact)) {
-      const id = `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
-      void joinServerById(id).then((err) => {
-        if (err) window.alert(`Couldn't join space: ${err}`);
-      });
-    }
-  }, [ready, session, joinServerByInvite]);
+    // Invites come as 7-character codes, custom codes (3–24 letters, digits
+    // and hyphens) and the 32-character codes handed out in October, so any
+    // code is tried as an invite first. Only seven-character ones used to be,
+    // and every other link opened the app and did nothing. A pasted Space ID
+    // (32 hex characters, or a UUID) is tried after that, and only joins a
+    // space that is discoverable.
+    void (async () => {
+      const inviteErr = await joinServerByInvite(code);
+      if (!inviteErr) return;
+      const compact = code.replace(/-/g, "");
+      if (/^[a-fA-F0-9]{32}$/.test(compact)) {
+        const id = `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
+        const idErr = await joinServerById(id);
+        if (!idErr) return;
+      }
+      void alertDialog(inviteErr, "Couldn't join that space");
+    })();
+  }, [ready, session, joinServerByInvite, joinServerById]);
 
   return null;
 }

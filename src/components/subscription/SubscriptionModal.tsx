@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useApp } from "@/contexts/AppContext";
@@ -301,10 +302,12 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   useOverlayDismiss(onClose, open);
   const { mounted, exiting } = usePresence(open);
 
-  if (!mounted) return null;
+  // Portalled above Settings, which opens this and hides the app layer it
+  // would otherwise render inside.
+  if (!mounted || typeof document === "undefined") return null;
 
-  return (
-    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-50 flex items-center justify-center bg-black/85`} onClick={onClose}>
+  return createPortal(
+    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-[80] flex items-center justify-center bg-black/85`} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -429,6 +432,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
         )}
         {!checkoutClientSecret && !activation && <div className="flex justify-end bg-bg-secondary p-4"><button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] text-header-primary hover:underline">Cancel</button></div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

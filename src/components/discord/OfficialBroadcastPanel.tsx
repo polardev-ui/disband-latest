@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
+import { confirmDialog } from "@/lib/dialogs";
 
 /**
  * Compose and send a message from the official @disband account.
@@ -150,10 +151,12 @@ export function OfficialBroadcastPanel() {
       setError("Find the account you want to write to first.");
       return;
     }
-    if (audience === "everyone" && !window.confirm(
-      `Send this to every one of the ${audienceCount.toLocaleString()} accounts on Disband?` +
-      (sendEmail ? "\n\nIt will also send an email to every one of them." : ""),
-    )) {
+    if (audience === "everyone" && !(await confirmDialog({
+      title: `Send to all ${audienceCount.toLocaleString("en-GB")} accounts?`,
+      body: sendEmail ? "It will also send an email to every one of them." : "Everyone on Disband gets this.",
+      confirmLabel: "Send to Everyone",
+      tone: "primary",
+    }))) {
       return;
     }
 

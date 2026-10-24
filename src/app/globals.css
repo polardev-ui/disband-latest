@@ -898,8 +898,14 @@ img.twemoji {
   }
 }
 
+/* `backwards`, not `forwards`: the end state is the default anyway, and a
+   held transform made every container that ever entered (the chat column,
+   each settings page) the frame for its `position: fixed` children, so a
+   fallback fullscreen video filled only the chat and a modal on a settings
+   page scrolled with it. Backwards fill also holds the start state through
+   an animation-delay, so staggered rows no longer flash before they fade. */
 .view-enter {
-  animation: view-enter 0.18s ease-out forwards;
+  animation: view-enter 0.18s ease-out backwards;
 }
 
 /* Fresh chat message: own optimistic sends only (message.sending), so
@@ -916,7 +922,7 @@ img.twemoji {
 }
 
 .msg-enter {
-  animation: msg-enter 0.2s ease-out forwards;
+  animation: msg-enter 0.2s ease-out backwards;
 }
 
 /* New-messages divider draws itself in. */

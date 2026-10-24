@@ -23,6 +23,7 @@ import {
   setCategoryCollapsed,
   UNCATEGORIZED_KEY,
 } from "@/lib/collapsed-categories";
+import { alertDialog } from "@/lib/dialogs";
 
 interface ChannelListProps {
   title: string;
@@ -275,9 +276,9 @@ export function ChannelList({
       if (dragged && targetIndex !== null) {
         try {
           const result = await onMoveCategory?.(d.id, targetIndex);
-          if (result) window.alert(result);
+          if (result) void alertDialog(result);
         } catch (err) {
-          window.alert(err instanceof Error ? err.message : "Couldn't move that category.");
+          void alertDialog(err instanceof Error ? err.message : "Couldn't move that category.");
         }
       }
       clearDragState();

@@ -4,12 +4,15 @@ export function formatMessageTime(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  // The reader's locale, as the date dividers use: a fixed en-US date put
+  // 03/04 for the 3rd of April in front of readers who read it as 3 April
+  // beside a divider that said 3 April.
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   if (isToday) return `Today at ${time}`;
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`;
-  return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) + ` ${time}`;
+  return d.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "numeric" }) + ` ${time}`;
 }
 
 /** Usernames named by @mentions, in first-seen order, without duplicates. */

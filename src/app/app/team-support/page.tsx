@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { isSupportStaffFromProfile } from "@/lib/support/staff";
 import { AccountViewerModal } from "@/components/modals/AccountViewerModal";
 import { ClassicModal } from "@/components/ui/ClassicModal";
+import { confirmDialog } from "@/lib/dialogs";
 
 interface TeamTicket {
   id: string;
@@ -296,7 +297,12 @@ export default function TeamSupportPage() {
 
   const resolveTicket = async () => {
     if (!selectedId || replying) return;
-    const answer = window.confirm("Mark this request as resolved and close the thread?");
+    const answer = await confirmDialog({
+      title: "Resolve this request?",
+      body: "The thread is marked resolved and closed.",
+      confirmLabel: "Resolve",
+      tone: "primary",
+    });
     if (!answer) return;
     setReplying(true);
     setReplyStatus(null);
