@@ -4523,7 +4523,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadGroupChats(userId);
     await selectGroupChat(id as string);
     return null;
-  }, [userId, loadGroupChats, selectGroupChat]);
+  }, [userId, loadGroupChats, selectGroupChat, hasRestriction]);
 
   const leaveGroupChat = useCallback(async (groupId: string) => {
     if (!userId) return "Not signed in";
@@ -4717,7 +4717,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     await loadFriendships(userId);
     return null;
-  }, [userId, loadFriendships]);
+  }, [userId, loadFriendships, hasRestriction]);
 
   const respondFriendRequest = useCallback(async (id: string, accept: boolean) => {
     if (!userId) return;
@@ -4783,7 +4783,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadServers(userId);
     await selectServer(id as string);
     return null;
-  }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
+  }, [userId, user?.email, ensureProfile, loadServers, selectServer, hasRestriction]);
 
   const updateServer = useCallback(async (serverId: string, patch: Partial<Server>) => {
     const { error } = await getSupabaseClient().from("servers").update(patch).eq("id", serverId);
@@ -4823,7 +4823,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadServers(userId);
     await selectServer(id as string);
     return null;
-  }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
+  }, [userId, user?.email, ensureProfile, loadServers, selectServer, hasRestriction]);
 
   const joinServerById = useCallback(async (serverId: string) => {
     if (!userId) return "Not signed in";
@@ -4834,7 +4834,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadServers(userId);
     await selectServer(serverId);
     return null;
-  }, [userId, user?.email, ensureProfile, loadServers, selectServer]);
+  }, [userId, user?.email, ensureProfile, loadServers, selectServer, hasRestriction]);
 
   // Kick and ban happen in another window, but the rail must move now, not on
   // the next manual refresh. The database mirrors membership changes and new
@@ -5030,7 +5030,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setFolderColor = useCallback(async (folderId: string, color: string) => {
-    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return "Invalid color";
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return "Invalid colour";
     const { error } = await getSupabaseClient().from("server_folders")
       .update({ color }).eq("id", folderId);
     if (error) return error.message;
@@ -5699,7 +5699,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     fireTetherAsk(saved.id, "server", normalized);
     return null;
-  }, [userId, activeChannelId, profile, resolveServerMentionIds, resolveRoleMentionIds, serverPermissions, markActivity, fireTetherAsk]);
+  }, [userId, activeChannelId, profile, resolveServerMentionIds, resolveRoleMentionIds, serverPermissions, markActivity, fireTetherAsk, hasRestriction]);
 
   const sendDmMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeDmThreadId || !profile) return "No conversation selected";
@@ -5852,7 +5852,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isTetherThread = !!tetherProfile?.id && thread?.friend?.id === tetherProfile.id;
     fireTetherAsk(saved.id, "dm", normalized, isTetherThread ? { force: true } : undefined);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile, hasRestriction]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
@@ -6000,7 +6000,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     fireTetherAsk(saved.id, "group", normalized);
     return null;
-  }, [userId, activeGroupChatId, profile, groupChats, markActivity, fireTetherAsk]);
+  }, [userId, activeGroupChatId, profile, groupChats, markActivity, fireTetherAsk, hasRestriction]);
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== messageId));

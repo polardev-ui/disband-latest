@@ -119,7 +119,19 @@ function UptimeBar({
   );
 }
 
+/**
+ * False on the server and the first browser render, true after. Times
+ * relative to now, or in the reader's timezone, wait for it so the first
+ * render matches the server's HTML.
+ */
+function useHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  return hydrated;
+}
+
 function MonitorRow({ monitor, incidents }: { monitor: StatusMonitor; incidents: StatusIncident[] }) {
+  const hydrated = useHydrated();
   const tone = monitorTone(monitor);
   const uptime = monitor.uptime_90;
   return (
@@ -130,7 +142,7 @@ function MonitorRow({ monitor, incidents }: { monitor: StatusMonitor; incidents:
           <p className="truncate text-[15px] font-medium text-header-primary">{monitor.name}</p>
           <p className={`mt-0.5 text-[12px] ${TONE_TEXT[tone]}`}>
             {tone === "operational" ? "Operational" : tone === "outage" ? "Not responding" : "No data yet"}
-            <span className="text-text-muted/80"> · {formatRelative(monitor.last_checked_at)}</span>
+            {hydrated && <span className="text-text-muted/80"> · {formatRelative(monitor.last_checked_at)}</span>}
           </p>
         </div>
       </div>
@@ -158,6 +170,7 @@ function MonitorRow({ monitor, incidents }: { monitor: StatusMonitor; incidents:
 }
 
 function IncidentRow({ incident, past = false }: { incident: StatusIncident; past?: boolean }) {
+  const hydrated = useHydrated();
   const latest = incident.updates[incident.updates.length - 1];
   return (
     <Link
@@ -171,12 +184,12 @@ function IncidentRow({ incident, past = false }: { incident: StatusIncident; pas
         <span className="text-[11px] uppercase tracking-[0.03em] text-text-muted">
           {INCIDENT_KIND_LABEL[incident.kind]}
         </span>
-        <span className="ml-auto text-[12px] text-text-muted">{formatDateTime(incident.created_at)}</span>
+        <span className="ml-auto text-[12px] text-text-muted">{formatDateTime(incident.created_at, { utc: !hydrated })}</span>
       </div>
       <p className={`mt-1.5 text-[15px] font-medium ${past ? "text-text-normal" : "text-header-primary"}`}>{incident.title}</p>
       {latest && <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-text-muted">{latest.body}</p>}
       {past && incident.resolved_at && (
-        <p className="mt-1 text-[12px] text-[#6bdc96]">Resolved {formatDateTime(incident.resolved_at)}</p>
+        <p className="mt-1 text-[12px] text-[#6bdc96]">Resolved {formatDateTime(incident.resolved_at, { utc: !hydrated })}</p>
       )}
     </Link>
   );
@@ -187,6 +200,7 @@ function EmptyPanel({ children }: { children: React.ReactNode }) {
 }
 
 export function StatusView({ initial }: { initial: StatusSnapshot }) {
+  const hydrated = useHydrated();
   const [snapshot, setSnapshot] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -249,7 +263,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[12px] text-text-muted">Updated {formatRelative(snapshot.generated_at)}</span>
+          {hydrated && <span className="text-[12px] text-text-muted">Updated {formatRelative(snapshot.generated_at)}</span>}
           <button
             type="button"
             onClick={() => void refresh()}

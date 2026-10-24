@@ -5,6 +5,7 @@ import "./globals.css";
 import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { I18nProvider } from "@/contexts/I18nContext";
+import { DialogHost } from "@/components/ui/DialogHost";
 
 // Geist (Vercel) — self-hosted via next/font/google → woff2 bundled at build,
 // served from our own origin, no runtime font CDN hit (privacy-first).
@@ -154,7 +155,7 @@ export default function RootLayout({
       </head>
       <body>
         <I18nProvider>{children}</I18nProvider>
-        {}
+        <DialogHost />
       </body>
     </html>
   );

@@ -3,17 +3,17 @@ import Link from "next/link";
 import { MarketingNav, MarketingFooter } from "@/components/marketing/MarketingLayout";
 import { Logo } from "@/components/ui/Logo";
 
-const PLAY_TESTING_URL = "https://play.google.com/apps/testing/com.wsgpolar.disband";
+const PLAY_URL = "https://play.google.com/store/apps/details?id=com.wsgpolar.disband";
 
 export const metadata: Metadata = {
-  title: "Disband for Android (Beta)",
+  title: "Disband for Android",
   description:
-    "The Disband Android beta is live on Google Play — chat, voice calls, and notifications on your phone. Join the open test.",
+    "Disband is on Google Play — chat, voice calls, and notifications on your Android phone.",
   alternates: { canonical: "/android" },
   openGraph: {
-    title: "Disband for Android — beta is live",
+    title: "Disband for Android — on Google Play",
     description:
-      "Chat, voice calls, and notifications on Android. Join the open beta on Google Play.",
+      "Chat, voice calls, and notifications on Android. Get Disband on Google Play.",
     url: "/android",
     type: "website",
   },
@@ -22,13 +22,13 @@ export const metadata: Metadata = {
 const steps = [
   {
     n: "1",
-    title: "Join the beta",
-    body: "Open the Play testing link on your phone and tap “Become a tester”. It takes about ten seconds.",
+    title: "Open Google Play",
+    body: "Tap “Get it on Google Play” on your phone, or search for Disband in the Play Store.",
   },
   {
     n: "2",
     title: "Install Disband",
-    body: "Google Play installs the beta like any other app, and updates arrive automatically as new builds ship.",
+    body: "Tap Install. Updates arrive automatically through Google Play as new versions ship.",
   },
   {
     n: "3",
@@ -77,24 +77,24 @@ export default function AndroidPage() {
             </div>
             <p className="inline-flex items-center gap-2 rounded-full border border-[#fee75c]/40 bg-[#fee75c]/10 px-4 py-1.5 text-xs font-bold tracking-[0.14em] text-[#fee75c] uppercase">
               <span className="h-1.5 w-1.5 rounded-full bg-[#fee75c]" />
-              Android beta is live
+              Now on Google Play
             </p>
             <h1 className="mt-5 text-4xl font-bold tracking-[-0.02em] text-white sm:text-5xl">
               Disband is on Android
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-[#b5bac1]">
-              The beta is out now on Google Play. Same account, same people, same
-              conversations — now in your pocket. Come try it and tell us what breaks.
+              Disband is out now on Google Play. Same account, same people, same
+              conversations — now in your pocket.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <a
-                href={PLAY_TESTING_URL}
+                href={PLAY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl bg-brand px-7 py-4 text-[16px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90 sm:w-auto"
               >
                 <PlayTriangle />
-                Join the Android beta
+                Get it on Google Play
               </a>
               <Link
                 href="/app"
@@ -104,7 +104,7 @@ export default function AndroidPage() {
               </Link>
             </div>
             <p className="mt-4 text-[13px] text-[#6e727a]">
-              Free, open testing — no invite code needed. Requires Android 8.0 or later.
+              Free. Requires Android 8.0 or later.
             </p>
           </div>
         </section>
@@ -136,7 +136,7 @@ export default function AndroidPage() {
         <section className="border-t border-white/[0.06] px-6 py-16 sm:py-20">
           <div className="mx-auto max-w-6xl">
             <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-[2rem]">
-              What&apos;s in the beta
+              What&apos;s in the app
             </h2>
             <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
               It is the real app, not a demo — built to match the iPhone release feature for
@@ -159,26 +159,25 @@ export default function AndroidPage() {
           </div>
         </section>
 
-        {/* Beta honesty + bug report */}
+        {/* Bug report */}
         <section className="border-t border-white/[0.06] px-6 py-16 sm:py-20">
           <div className="mx-auto max-w-3xl rounded-2xl border border-[#fee75c]/25 bg-[#fee75c]/[0.04] p-6 text-center sm:p-10">
             <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white">
-              It&apos;s a beta — your reports shape it
+              Something not right? Tell us
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
-              Builds ship fast and rough edges are expected. If something looks wrong,
-              crashes, or just feels off next to the iPhone app, send a bug report and
-              we&apos;ll fix it in the next build.
+              If something looks wrong, crashes, or just feels off next to the iPhone
+              app, send a bug report and we&apos;ll fix it in the next update.
             </p>
             <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <a
-                href={PLAY_TESTING_URL}
+                href={PLAY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl bg-brand px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 sm:w-auto"
               >
                 <PlayTriangle />
-                Get the beta
+                Get it on Google Play
               </a>
               <Link
                 href="/bug-report"

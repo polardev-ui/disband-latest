@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MarketingNav, MarketingFooter } from "@/components/marketing/MarketingLayout";
 
 export const metadata: Metadata = {
-  title: "Legal — Disband",
+  title: "Legal",
   description:
     "Legal information for Disband: ownership, intellectual property, privacy, security, and third-party providers.",
   alternates: { canonical: "/legal" },

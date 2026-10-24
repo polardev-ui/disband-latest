@@ -20,7 +20,7 @@ function CallbackInner() {
     }
     if (!code) {
       setState("error");
-      setMessage("No authorization code from Spotify.");
+      setMessage("No authorisation code from Spotify.");
       return;
     }
     // No opener means this landed in the system browser — the desktop app's

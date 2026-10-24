@@ -38,6 +38,7 @@ import { GroupCallStage } from "./GroupCallStage";
 import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
 import { InviteSpaceModal } from "./InviteSpaceModal";
+import { alertDialog, confirmDialog, promptDialog } from "@/lib/dialogs";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
 import { ReleaseModal } from "@/components/modals/ReleaseModal";
@@ -104,6 +105,9 @@ export function DiscordApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        // Settings hides the app layer the switcher lives in, so opening it
+        // there gave an invisible box that took the keyboard from the page.
+        if (document.body.classList.contains("layer-open")) return;
         e.preventDefault();
         setQuickSwitcherOpen((v) => !v);
       }
@@ -565,12 +569,12 @@ export function DiscordApp() {
         });
         if (!res.ok) {
           const json = (await res.json().catch(() => null)) as { error?: string } | null;
-          window.alert(json?.error ?? "Could not update the space badge.");
+          void alertDialog(json?.error ?? "Could not update the space badge.");
           return;
         }
         await app.refreshAll();
       } catch {
-        window.alert("Could not reach the server. Try again.");
+        void alertDialog("Could not reach the server. Try again.");
       }
     },
     [app],
@@ -684,7 +688,11 @@ export function DiscordApp() {
                 icon: <IconTrash size={16} />,
                 danger: true,
                 onClick: () => {
-                  if (confirm(`Delete "${server.name}"?`)) void app.deleteServer(server.id);
+                  void confirmDialog({
+                    title: `Delete ${server.name}`,
+                    body: "This deletes the space, its channels and messages for everyone. It can't be undone.",
+                    confirmLabel: "Delete Space",
+                  }).then((ok) => { if (ok) void app.deleteServer(server.id); });
                 },
               },
             ]
@@ -713,9 +721,11 @@ export function DiscordApp() {
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm(`Delete folder "${folder.name}"? Spaces stay where they are.`)) {
-              void app.deleteFolder(folder.id);
-            }
+            void confirmDialog({
+              title: `Delete ${folder.name}`,
+              body: "The folder goes; the spaces in it stay where they are.",
+              confirmLabel: "Delete Folder",
+            }).then((ok) => { if (ok) void app.deleteFolder(folder.id); });
           },
         },
       ]);
@@ -772,9 +782,11 @@ export function DiscordApp() {
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
-              if (confirm(`Delete #${channel.name}? This cannot be undone.`)) {
-                void app.deleteChannel(channel.id);
-              }
+              void confirmDialog({
+                title: `Delete #${channel.name}`,
+                body: "Its messages go with it. This can't be undone.",
+                confirmLabel: "Delete Channel",
+              }).then((ok) => { if (ok) void app.deleteChannel(channel.id); });
             },
           },
         );
@@ -807,8 +819,15 @@ export function DiscordApp() {
             label: "Create Channel",
             icon: <IconPlus size={16} />,
             onClick: () => {
-              const name = prompt(`Channel name in ${category.name}`, "");
-              if (name && name.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
+              void promptDialog({
+                title: "Create Channel",
+                body: `In ${category.name}`,
+                label: "Channel name",
+                placeholder: "new-channel",
+                confirmLabel: "Create Channel",
+              }).then((name) => {
+                if (name?.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
+              });
             },
           },
           {
@@ -816,8 +835,13 @@ export function DiscordApp() {
             label: "Rename Category",
             icon: <IconEdit size={16} />,
             onClick: () => {
-              const name = prompt("Rename category", category.name);
-              if (name && name.trim()) void app.renameCategory(category.id, name.trim());
+              void promptDialog({
+                title: "Rename Category",
+                label: "Category name",
+                defaultValue: category.name,
+              }).then((name) => {
+                if (name?.trim()) void app.renameCategory(category.id, name.trim());
+              });
             },
           },
           {
@@ -826,9 +850,11 @@ export function DiscordApp() {
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
-              if (confirm(`Delete category ${category.name}? Channels inside will be moved out.`)) {
-                void app.deleteCategory(category.id);
-              }
+              void confirmDialog({
+                title: `Delete ${category.name}`,
+                body: "The channels inside are kept and moved out of the category.",
+                confirmLabel: "Delete Category",
+              }).then((ok) => { if (ok) void app.deleteCategory(category.id); });
             },
           },
         );
@@ -921,7 +947,11 @@ export function DiscordApp() {
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm("Delete this note? This cannot be undone.")) void app.deleteNote(message.id);
+            void confirmDialog({
+              title: "Delete Note",
+              body: "This can't be undone.",
+              confirmLabel: "Delete",
+            }).then((ok) => { if (ok) void app.deleteNote(message.id); });
           },
         },
       ]);
@@ -1097,12 +1127,17 @@ export function DiscordApp() {
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm(`Remove ${displayName(member)} from "${activeGroup.name}"?`)) {
+            void confirmDialog({
+              title: `Remove ${displayName(member)}`,
+              body: `They'll leave "${activeGroup.name}".`,
+              confirmLabel: "Remove",
+            }).then((ok) => {
+              if (!ok) return;
               void app.removeGroupMember(activeGroup.id, member.id).then((err) => {
-                if (err) alert(err);
+                if (err) void alertDialog(err);
                 else void app.refreshGroupChats();
               });
-            }
+            });
           },
         });
       }
@@ -1144,8 +1179,13 @@ export function DiscordApp() {
                 label: "Rename group",
                 icon: <IconSettings size={16} />,
                 onClick: () => {
-                  const next = prompt("New group name", group.name);
-                  if (next?.trim()) void app.renameGroupChat(group.id, next.trim());
+                  void promptDialog({
+                    title: "Rename Group",
+                    label: "Group name",
+                    defaultValue: group.name,
+                  }).then((next) => {
+                    if (next?.trim()) void app.renameGroupChat(group.id, next.trim());
+                  });
                 },
               },
             ]
@@ -1156,10 +1196,15 @@ export function DiscordApp() {
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm(`Leave "${group.name}"?`)) {
+            void confirmDialog({
+              title: `Leave ${group.name}`,
+              body: "You won't get its messages until someone adds you back.",
+              confirmLabel: "Leave Group",
+            }).then((ok) => {
+              if (!ok) return;
               if (groupCall.groupId === group.id && groupCall.joined) void groupCall.endGroupCall();
               void app.leaveGroupChat(group.id);
-            }
+            });
           },
         },
       ]);
@@ -1221,9 +1266,13 @@ export function DiscordApp() {
             label: "Kick",
             icon: <IconLeave size={16} />,
             onClick: () => {
-              if (confirm(`Kick ${displayName(member.profile)}?`)) {
-                void app.kickMember(member.user_id).then((err) => { if (err) alert(err); });
-              }
+              void confirmDialog({
+                title: `Kick ${displayName(member.profile)}`,
+                body: "They can rejoin with an invite.",
+                confirmLabel: "Kick",
+              }).then((ok) => {
+                if (ok) void app.kickMember(member.user_id).then((err) => { if (err) void alertDialog(err); });
+              });
             },
           });
         }
@@ -1234,9 +1283,13 @@ export function DiscordApp() {
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
-              if (confirm(`Ban ${displayName(member.profile)}? This deletes all their messages and prevents them from rejoining.`)) {
-                void app.banMember(member.user_id).then((err) => { if (err) alert(err); });
-              }
+              void confirmDialog({
+                title: `Ban ${displayName(member.profile)}`,
+                body: "This deletes all their messages and stops them rejoining.",
+                confirmLabel: "Ban",
+              }).then((ok) => {
+                if (ok) void app.banMember(member.user_id).then((err) => { if (err) void alertDialog(err); });
+              });
             },
           });
         }
@@ -1259,7 +1312,7 @@ export function DiscordApp() {
               label: "Remove Timeout",
               icon: <IconTimer size={16} />,
               onClick: () => {
-                void app.removeMemberTimeout(member.user_id).then((err) => { if (err) alert(err); });
+                void app.removeMemberTimeout(member.user_id).then((err) => { if (err) void alertDialog(err); });
               },
             });
           } else {
@@ -1294,7 +1347,7 @@ export function DiscordApp() {
                 ? memberRoleIds.filter((id) => id !== role.id)
                 : [...memberRoleIds, role.id];
               void app.setMemberRoles(member.user_id, next).then((err) => {
-                if (err) alert(err);
+                if (err) void alertDialog(err);
               });
             },
           });
@@ -1306,7 +1359,7 @@ export function DiscordApp() {
             icon: <IconClose size={16} />,
             onClick: () =>
               void app.setMemberRoles(member.user_id, []).then((err) => {
-                if (err) alert(err);
+                if (err) void alertDialog(err);
               }),
           });
         }
@@ -1379,9 +1432,11 @@ export function DiscordApp() {
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm(`Remove ${displayName(friend)} from your friends?`)) {
-              void app.removeFriend(friend.id);
-            }
+            void confirmDialog({
+              title: `Remove ${displayName(friend)}`,
+              body: "They'll be removed from your friends.",
+              confirmLabel: "Remove Friend",
+            }).then((ok) => { if (ok) void app.removeFriend(friend.id); });
           },
         },
         {
@@ -1390,9 +1445,11 @@ export function DiscordApp() {
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
-            if (confirm(`Block ${displayName(friend)}? They won't be able to message you.`)) {
-              void app.blockUser(friend.id);
-            }
+            void confirmDialog({
+              title: `Block ${displayName(friend)}`,
+              body: "They won't be able to message you.",
+              confirmLabel: "Block",
+            }).then((ok) => { if (ok) void app.blockUser(friend.id); });
           },
         },
       ];
@@ -2304,7 +2361,7 @@ export function DiscordApp() {
           profileTarget && profileCanManageRoles
             ? (roleIds) => {
                 void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
-                  if (err) alert(err);
+                  if (err) void alertDialog(err);
                   else setProfileMemberRefresh((n) => n + 1);
                 });
               }
@@ -2315,7 +2372,7 @@ export function DiscordApp() {
           profileTarget?.id === app.user?.id
             ? (roleIds) => {
                 void app.setSelfRoles(roleIds).then((err) => {
-                  if (err) alert(err);
+                  if (err) void alertDialog(err);
                   else setProfileMemberRefresh((n) => n + 1);
                 });
               }
@@ -2352,7 +2409,7 @@ export function DiscordApp() {
           profileTarget?.username
             ? () => {
                 void app.sendFriendRequest(profileTarget.username!).then((err) => {
-                  if (err) alert(err);
+                  if (err) void alertDialog(err);
                   else setProfileTarget(null);
                 });
               }
@@ -2375,21 +2432,30 @@ export function DiscordApp() {
         onRemoveFriend={
           profileTarget && profileFriend
             ? () => {
-                if (confirm(`Remove ${displayName(profileTarget)} as a friend?`)) {
-                  void app.removeFriend(profileTarget.id).then(() => setProfileTarget(null));
-                }
+                void confirmDialog({
+                  title: `Remove ${displayName(profileTarget)}`,
+                  body: "They'll be removed from your friends.",
+                  confirmLabel: "Remove Friend",
+                }).then((ok) => {
+                  if (ok) void app.removeFriend(profileTarget.id).then(() => setProfileTarget(null));
+                });
               }
             : undefined
         }
         onBlock={
           profileTarget && !app.isBlocked(profileTarget.id)
             ? () => {
-                if (confirm(`Block ${displayName(profileTarget)}?`)) {
+                void confirmDialog({
+                  title: `Block ${displayName(profileTarget)}`,
+                  body: "They won't be able to message you.",
+                  confirmLabel: "Block",
+                }).then((ok) => {
+                  if (!ok) return;
                   void app.blockUser(profileTarget.id).then((err) => {
-                    if (err) alert(err);
+                    if (err) void alertDialog(err);
                     else setProfileTarget(null);
                   });
-                }
+                });
               }
             : undefined
         }
@@ -2423,7 +2489,7 @@ export function DiscordApp() {
           profileTarget && profileCanManageRoles
             ? (roleIds) => {
                 void app.setMemberRoles(profileTarget.id, roleIds).then((err) => {
-                  if (err) alert(err);
+                  if (err) void alertDialog(err);
                   else setProfileMemberRefresh((n) => n + 1);
                 });
               }
@@ -2434,7 +2500,7 @@ export function DiscordApp() {
           profileTarget?.id === app.user?.id
             ? (roleIds) => {
                 void app.setSelfRoles(roleIds).then((err) => {
-                  if (err) alert(err);
+                  if (err) void alertDialog(err);
                   else setProfileMemberRefresh((n) => n + 1);
                 });
               }

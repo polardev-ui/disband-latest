@@ -51,7 +51,7 @@ export async function GET(req: Request) {
     .eq("user_id", ctx.user.id)
     .order("created_at", { ascending: false })
     .limit(MAX_LIST);
-  if (error) return NextResponse.json({ error: "Could not load favorites." }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Could not load favourites." }, { status: 500 });
   return NextResponse.json({ favorites: ((data ?? []) as FavoriteRow[]).map(toFavorite) });
 }
 
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     .upsert({ user_id: ctx.user.id, url, title }, { onConflict: "user_id,gif_id", ignoreDuplicates: false })
     .select("gif_id,url,title,created_at")
     .single();
-  if (error) return NextResponse.json({ error: "Could not save favorite." }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Could not save favourite." }, { status: 500 });
   return NextResponse.json({ favorite: toFavorite(data as FavoriteRow) });
 }
 
@@ -109,6 +109,6 @@ export async function DELETE(req: Request) {
     .eq("user_id", ctx.user.id);
   query = hasId ? query.eq("gif_id", id) : query.eq("url", url);
   const { error } = await query;
-  if (error) return NextResponse.json({ error: "Could not remove favorite." }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Could not remove favourite." }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

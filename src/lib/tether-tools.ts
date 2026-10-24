@@ -462,7 +462,7 @@ async function ownedServerOrError(
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "That server doesn't exist." };
   if (data.owner_id !== userId) {
-    return { ok: false, error: "You can only customize servers you own." };
+    return { ok: false, error: "You can only customise spaces you own." };
   }
   return { ok: true, server: data as ServerRow };
 }

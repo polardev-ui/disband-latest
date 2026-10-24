@@ -13,7 +13,7 @@ function CallbackInner() {
     const token = params.get("token");
     if (!token) {
       setState("error");
-      setMessage("Last.fm didn't send an authorization token. Try again from settings.");
+      setMessage("Last.fm didn't send an authorisation token. Try again from settings.");
       return;
     }
     void (async () => {

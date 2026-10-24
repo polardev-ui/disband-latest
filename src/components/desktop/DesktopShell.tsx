@@ -23,7 +23,11 @@ import { NotificationBell } from "@/components/discord/NotificationBell";
  * host is macOS.
  */
 
-const WINDOW_STATE_KEY = "disband:window-state-v1";
+// v2: logical content size. v1 stored outerSize() in physical pixels and
+// restored it with setSize(), which sets the content size, so on Windows and
+// Linux (native frames) the window grew by its frame on every launch, and a
+// move to a screen with another scale factor restored the wrong size.
+const WINDOW_STATE_KEY = "disband:window-state-v2";
 
 interface WindowState {
   w: number;
@@ -113,7 +117,7 @@ async function installAppMenu(): Promise<void> {
         {
           text: "Window",
           items: [
-            { item: "Minimize", text: "Minimize" },
+            { item: "Minimize", text: "Minimise" },
             { item: "Maximize", text: "Zoom" },
             { item: "Separator" },
             { item: "CloseWindow", text: "Close Window" },
@@ -150,13 +154,13 @@ export function DesktopShell() {
 
     void (async () => {
       try {
-        const { getCurrentWindow, PhysicalSize } = await import("@tauri-apps/api/window");
+        const { getCurrentWindow, LogicalSize } = await import("@tauri-apps/api/window");
         const win = getCurrentWindow();
 
         const saved = readWindowState();
         try {
           if (saved?.max) await win.maximize();
-          else if (saved) await win.setSize(new PhysicalSize(saved.w, saved.h));
+          else if (saved) await win.setSize(new LogicalSize(saved.w, saved.h));
         } catch {
           // Keep the configured default size.
         }
@@ -172,8 +176,8 @@ export function DesktopShell() {
                   writeWindowState({ w: prev?.w ?? 1280, h: prev?.h ?? 820, max: true });
                   return;
                 }
-                const size = await win.outerSize();
-                writeWindowState({ w: size.width, h: size.height, max: false });
+                const size = (await win.innerSize()).toLogical(await win.scaleFactor());
+                writeWindowState({ w: Math.round(size.width), h: Math.round(size.height), max: false });
               } catch {
                 // The window closed between the event and the read.
               }

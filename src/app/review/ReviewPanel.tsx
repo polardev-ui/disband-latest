@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
+import { confirmDialog } from "@/lib/dialogs";
 
 interface Review {
   id: string;
@@ -84,7 +85,7 @@ function ReviewForm({
   };
 
   const remove = async () => {
-    if (!confirm("Delete your review?")) return;
+    if (!(await confirmDialog({ title: "Delete your review?", confirmLabel: "Delete" }))) return;
     setSaving(true);
     const { error } = await getSupabaseClient().from("app_reviews").delete().eq("user_id", userId);
     setSaving(false);
