@@ -1,11 +1,14 @@
 package com.wsgpolar.disband.core
 
+import android.text.format.DateFormat as AndroidDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Date
+import java.util.Locale
 
 object TimeFormat {
     /**
@@ -15,6 +18,25 @@ object TimeFormat {
     private val spaced: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX")
             .withZone(ZoneId.systemDefault())
+
+    /** A locale-ordered pattern for a CLDR skeleton (`MMMd`, `yMMMd`, `EEEEMMMd`). */
+    private fun dateFormatter(skeleton: String): DateTimeFormatter =
+        DateTimeFormatter.ofPattern(
+            AndroidDateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton),
+            Locale.getDefault()
+        )
+
+    /**
+     * A short localized clock time. `DateFormat.getTimeInstance` follows the
+     * locale's 12/24-hour convention instead of the old hard-coded `h:mm a`.
+     */
+    private fun timeText(instant: Instant): String =
+        java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, Locale.getDefault())
+            .format(Date.from(instant))
+
+    /** "5 Aug 2026" in the UK, "Aug 5, 2026" in the US — including the weekday when asked. */
+    fun dayHeader(date: LocalDate, weekday: Boolean = false): String =
+        date.format(dateFormatter(if (weekday) "EEEEMMMd" else "yMMMd"))
 
     /**
      * Turn a server timestamp into an instant.
@@ -78,9 +100,7 @@ object TimeFormat {
             if (thatDay == today) return "today"
             if (thatDay == today.plusDays(1)) return "tomorrow"
             val year = now.atZone(ZoneId.systemDefault()).toLocalDate().year
-            return thatDay.format(
-                DateTimeFormatter.ofPattern(if (thatDay.year == year) "MMM d" else "MMM d, yyyy")
-            )
+            return thatDay.format(dateFormatter(if (thatDay.year == year) "MMMd" else "yMMMd"))
         }
         if (seconds < 60) return "now"
         if (seconds < 3600) return "${seconds / 60}m"
@@ -91,7 +111,7 @@ object TimeFormat {
         if (thatDay == day.minusDays(1)) return "Yesterday"
         val days = ChronoUnit.DAYS.between(thatDay, day)
         if (days < 7) return thatDay.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())
-        return thatDay.format(DateTimeFormatter.ofPattern("MMM d"))
+        return thatDay.format(dateFormatter("MMMd"))
     }
 
     /** Longer relative timestamp for message rows. */
@@ -101,13 +121,13 @@ object TimeFormat {
         val local = LocalDateTime.ofInstant(date, zone)
         val today = LocalDate.now(zone)
         val thatDay = local.toLocalDate()
+        val weekday = DateTimeFormatter.ofPattern("EEE", Locale.getDefault())
         return when {
-            thatDay == today -> local.format(DateTimeFormatter.ofPattern("h:mm a"))
-            thatDay == today.minusDays(1) ->
-                "Yesterday ${local.format(DateTimeFormatter.ofPattern("h:mm a"))}"
+            thatDay == today -> timeText(date)
+            thatDay == today.minusDays(1) -> "Yesterday ${timeText(date)}"
             java.time.temporal.ChronoUnit.DAYS.between(thatDay, today) < 7 ->
-                local.format(DateTimeFormatter.ofPattern("EEE h:mm a"))
-            else -> local.format(DateTimeFormatter.ofPattern("MMM d"))
+                "${local.format(weekday)} ${timeText(date)}"
+            else -> thatDay.format(dateFormatter("MMMd"))
         }
     }
 

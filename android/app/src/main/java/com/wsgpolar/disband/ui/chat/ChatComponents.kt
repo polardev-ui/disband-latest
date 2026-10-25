@@ -457,7 +457,7 @@ private fun MessageList(
                 val label = when (day) {
                     today -> "Today"
                     today.minusDays(1) -> "Yesterday"
-                    else -> day.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                    else -> TimeFormat.dayHeader(day)
                 }
                 Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                     Text(label, color = palette.textMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium,
