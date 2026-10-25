@@ -30,7 +30,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handleIntent(intent)
+        // Only a fresh launch owns this intent. On a configuration change
+        // Android replays the same intent, which used to reopen the invite
+        // sheet or re-run notification navigation. onNewIntent handles any
+        // genuinely new tap while the activity is alive.
+        if (savedInstanceState == null) handleIntent(intent)
         val container = (application as DisbandApp).container
         setContent {
             AppRoot(container.appState, pendingNav = pendingNav, onPendingNavConsumed = { consumePending() })
