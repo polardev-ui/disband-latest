@@ -783,8 +783,18 @@ final class ChatViewModel {
         // while you sat reading still counted as unread — and unread is
         // recomputed from those cursors, so the badge came back for the very
         // thread you were looking at.
-        if row.authorId != currentUserId, case .dm(let threadId, _) = source {
-            Task { try? await DatabaseService.markDmRead(threadId: threadId) }
+        if row.authorId != currentUserId {
+            switch source {
+            case .dm(let threadId, _):
+                Task { try? await DatabaseService.markDmRead(threadId: threadId) }
+            case .group(let groupId, _):
+                // Group cursors advanced only when the chat opened too, so a
+                // message read in place still came back as unread after the
+                // next foreground reload.
+                Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
+            case .channel:
+                break
+            }
         }
 
         let author = await resolveProfile(row.authorId)
