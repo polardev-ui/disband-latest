@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,8 +82,9 @@ fun NotesScreen(app: AppState) {
     val loading by app.notes.loading.collectAsStateValue()
     val userId = app.currentUserId
     val scope = rememberCoroutineScope()
-    var filter by remember { mutableStateOf(NoteFilter.All) }
-    var draft by remember { mutableStateOf("") }
+    // Configuration changes used to wipe the filter and whatever was typed.
+    var filter by rememberSaveable { mutableStateOf(NoteFilter.All) }
+    var draft by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(userId) {
         if (userId != null) app.notes.start(userId)
