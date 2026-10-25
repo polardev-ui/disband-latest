@@ -326,7 +326,12 @@ object Database {
     }
 
     suspend fun getOrCreateDmThread(friendId: String): String {
-        return postgrest.rpc("get_or_create_dm_thread", buildJsonObject { put("p_friend_id", friendId) }).data
+        // `.data` is the raw JSON body, so a scalar UUID arrives wrapped in
+        // quotes. decodeAs<String>() unwraps it; the quoted value never
+        // matched a dmThreads id and Friends → Message showed "This
+        // conversation couldn't be opened."
+        return postgrest.rpc("get_or_create_dm_thread", buildJsonObject { put("p_friend_id", friendId) })
+            .decodeAs<String>()
     }
 
     // MARK: - Unread / read state
@@ -400,12 +405,29 @@ object Database {
             .decodeList<GroupIdRow>()
             .map { it.groupId }
         if (ids.isEmpty()) return emptyList()
-        return client.from("group_chats")
+        val groups: List<GroupChat> = client.from("group_chats")
             .select(Columns.ALL) {
                 filter { isIn("id", ids) }
                 order("created_at", Order.ASCENDING)
             }
             .decodeList()
+
+        // `group_chats` has no members column, so `members` was always nil:
+        // every group read "0 members" (and the group-call roster was empty).
+        // One embedded-profile query for every group, same as iOS.
+        val members = runCatching {
+            client.from("group_chat_members")
+                .select(columns("group_id, profile:profiles(*)")) {
+                    filter { isIn("group_id", ids) }
+                }
+                .decodeList<GroupMemberRow>()
+        }.getOrDefault(emptyList())
+        val byGroup = members
+            .mapNotNull { row -> row.profile?.let { row.groupId to it } }
+            .groupBy({ it.first }, { it.second })
+        return groups.map { group ->
+            group.copy(members = byGroup[group.id] ?: emptyList())
+        }
     }
 
     suspend fun groupMessages(groupId: String, limit: Int = 50, before: String? = null): List<GroupMessage> {
@@ -628,6 +650,16 @@ object Database {
         )
     }
 
+    /** Remove this device's push token from the signed-in account. RLS scopes the delete to that user. */
+    suspend fun unregisterDeviceToken(token: String, platform: String = "android") {
+        client.from("device_tokens").delete {
+            filter {
+                eq("token", token)
+                eq("platform", platform)
+            }
+        }
+    }
+
     /** Register this FCM/APNs token with the backend (one row per user+token). */
     suspend fun registerDeviceToken(token: String, platform: String = "android") {
         postgrest.rpc(
@@ -812,4 +844,10 @@ private data class ServerIdRow(
 @Serializable
 private data class GroupIdRow(
     @SerialName("group_id") val groupId: String,
+)
+
+@Serializable
+private data class GroupMemberRow(
+    @SerialName("group_id") val groupId: String,
+    val profile: Profile? = null,
 )
