@@ -116,7 +116,9 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     var inboxLoading by remember { mutableStateOf(true) }
     var inboxError by remember { mutableStateOf<String?>(null) }
-    var spaceLoading by remember { mutableStateOf(false) }
+    // A restored space has a selected id but no channels yet. Starting false
+    // briefly showed "This conversation couldn't be opened" before the load.
+    var spaceLoading by remember { mutableStateOf(shellChrome.selectedServerId != null) }
     var spaceError by remember { mutableStateOf<String?>(null) }
     var retryVersion by remember { mutableStateOf(0) }
 
