@@ -64,7 +64,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 enum class NoteFilter(val label: String) {
     All("All"),
@@ -356,7 +355,7 @@ private fun daySections(notes: List<Note>, filter: NoteFilter): List<DaySection>
             when (day) {
                 today -> "Today"
                 today.minusDays(1) -> "Yesterday"
-                else -> day.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+                else -> TimeFormat.dayHeader(day, weekday = true)
             }
         }
         if (buckets[title] == null) {
