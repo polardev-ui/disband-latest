@@ -313,6 +313,7 @@ fun ServerOverflowSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScopeCompat()
     var leaving by remember { mutableStateOf(false) }
+    var leaveError by remember { mutableStateOf<String?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
     val uid = app.currentUserId
     val isOwner = server.ownerId == uid
@@ -357,7 +358,10 @@ fun ServerOverflowSheet(
                     palette,
                     tint = Brand.danger,
                 ) {
-                    if (!leaving) confirmLeave = true
+                    if (!leaving) {
+                        leaveError = null
+                        confirmLeave = true
+                    }
                 }
             }
         }
@@ -367,18 +371,34 @@ fun ServerOverflowSheet(
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { if (!leaving) confirmLeave = false },
             title = { Text("Leave ${server.name}?") },
-            text = { Text("You'll need a new invite to rejoin.") },
+            text = {
+                Text(
+                    leaveError
+                        ?: "You'll need a new invite to rejoin."
+                )
+            },
             confirmButton = {
                 androidx.compose.material3.TextButton(
                     onClick = {
                         leaving = true
+                        leaveError = null
                         scope.launch {
-                            runCatching { Database.leaveServer(server.id, uid) }
-                            app.loadServers()
-                            leaving = false
-                            confirmLeave = false
-                            onDismiss()
-                            onLeft()
+                            try {
+                                Database.leaveServer(server.id, uid)
+                                app.loadServers()
+                                confirmLeave = false
+                                onDismiss()
+                                onLeft()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // The DELETE is the whole operation. Reporting
+                                // success without it removed the space locally
+                                // and then brought it back on the next load.
+                                leaveError = "Couldn't leave this space. Check your connection and try again."
+                            } finally {
+                                leaving = false
+                            }
                         }
                     },
                     enabled = !leaving,
