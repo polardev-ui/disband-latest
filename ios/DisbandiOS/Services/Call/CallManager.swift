@@ -129,6 +129,14 @@ final class CallManager {
                 await self?.rejectCall(call)
             }
         }
+        callKit.onEndActive = { [weak self] callId in
+            Task { @MainActor [weak self] in
+                // Ignore our own programmatic end: by the time the delegate
+                // runs, reset() has already cleared activeCallId.
+                guard let self, self.phase == .active, self.activeCallId == callId else { return }
+                await self.endCall()
+            }
+        }
         VoipPushService.shared.onReceiveIncomingPush = { [weak self] payload in
             Task { @MainActor [weak self] in
                 await self?.handleVoipPush(payload)

@@ -15,8 +15,14 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     /// Fired on the main actor when the user answers from the system call UI.
     var onAnswer: ((IncomingCall) -> Void)?
-    /// Fired on the main actor when the user declines/ends from the system UI.
+    /// Fired on the main actor when the user declines a ringing call from the
+    /// system UI.
     var onEnd: ((IncomingCall) -> Void)?
+    /// Fired when the user ends an already-connected call from the system UI
+    /// (Lock Screen, Dynamic Island or the call switcher). The ringing entry
+    /// has already been adopted as an active call by then, so `onEnd` does not
+    /// have enough information to tear down the media session.
+    var onEndActive: ((String) -> Void)?
 
     /// MIIT requires CallKit to be deactivated for apps distributed on the
     /// China App Store, so the same binary ships everywhere and switches
@@ -157,9 +163,15 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     func providerDidReset(_ provider: CXProvider) {
         // The system has torn down every call it knew about, adopted ones
         // included. Keeping those mappings would have us request an end for
-        // a UUID that no longer exists.
+        // a UUID that no longer exists. Let the media layer know as well:
+        // clearing only the mappings left an active call running with no way
+        // to end it from the system UI.
+        let activeIds = Array(activeCalls.keys)
         calls.removeAll()
         activeCalls.removeAll()
+        for id in activeIds {
+            onEndActive?(id)
+        }
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -195,12 +207,15 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         let call = calls[action.callUUID]
         action.fulfill()
         Task { @MainActor in
-            // Also drop any adopted mapping for this UUID: ending from the
-            // system UI while the call is in progress goes through here, and
-            // a stale entry would make the next call with the same Disband id
-            // look like it was already active.
+            // Ending from the system UI while the call is in progress goes
+            // through here, but the ringing entry was moved to `activeCalls`
+            // when it was answered — so `calls` is nil. That used to clear the
+            // mapping and stop there, leaving the WebRTC call, microphone and
+            // in-app call screen running after the user hung up.
             if let id = self.activeCalls.first(where: { $0.value == action.callUUID })?.key {
                 self.activeCalls.removeValue(forKey: id)
+                self.onEndActive?(id)
+                return
             }
             if let call {
                 self.onEnd?(call)
