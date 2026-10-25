@@ -203,7 +203,39 @@ export function useCallManager(
     setRtcConnected(false);
     mediaConnectedRef.current = false;
     try {
-      await warmUpMediaDevices();
+      const supabase = getSupabaseClient();
+      const ch = supabase.channel(`call:${callId}`, { config: { broadcast: { self: false } } });
+      // Publish this channel to reset() now, so a failure while the mic or
+      // relay credentials are loading still unsubscribes it.
+      signalRef.current = ch;
+
+      // The offer can arrive while getUserMedia and /api/turn are still
+      // running. Keep it until the peer connection has its handlers, instead
+      // of dropping it and waiting for the caller's 2.5-second retry.
+      let handlePayload: ((payload: CallSignal) => void) | null = null;
+      const earlyPayloads: CallSignal[] = [];
+      ch.on("broadcast", { event: "call" }, ({ payload }) => {
+        const signal = payload as CallSignal;
+        if (!handlePayload) {
+          // Offers are retried every 2.5s until answered. If the mic prompt
+          // kept us busy, replay only the latest one instead of feeding
+          // several setRemoteDescription offers into the same connection.
+          if (signal.type === "offer") {
+            const previous = earlyPayloads.findIndex((queued) => queued.type === "offer");
+            if (previous !== -1) earlyPayloads.splice(previous, 1);
+          }
+          earlyPayloads.push(signal);
+          return;
+        }
+        handlePayload(signal);
+      });
+      // Subscribe in parallel with media setup. This is the slowest part of
+      // a desktop call after a cold start, and it does not need the mic.
+      const subscribeResult = subscribeChannel(ch)
+        .then(() => null)
+        .catch((err: unknown) => err instanceof Error ? err : new Error("Call signaling failed"));
+
+      const iceServersPromise = fetchIceServers();
       const raw = await getDisbandUserMedia({
         audio: true,
         video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
@@ -221,9 +253,7 @@ export function useCallManager(
       setActiveVoiceMixer(mixer);
       applyMic(micMuted);
 
-      const supabase = getSupabaseClient();
-      const ch = supabase.channel(`call:${callId}`, { config: { broadcast: { self: false } } });
-      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+      const pc = new RTCPeerConnection({ iceServers: await iceServersPromise });
       pcRef.current = pc;
 
       const mic0 = stream.getAudioTracks()[0] ?? null;
@@ -364,8 +394,7 @@ export function useCallManager(
         }
       };
 
-      ch.on("broadcast", { event: "call" }, ({ payload }) => {
-        const p = payload as CallSignal;
+      const onCallPayload = (p: CallSignal) => {
         if (p.from === userId || (p.to && p.to !== userId)) return;
         // The `from` field is sender-controlled: only the peer this call was
         // set up with may drive it. Call IDs used to be deterministic
@@ -432,10 +461,12 @@ export function useCallManager(
             await reset();
           }
         })();
-      });
+      };
+      handlePayload = onCallPayload;
+      for (const signal of earlyPayloads.splice(0)) onCallPayload(signal);
 
-      await subscribeChannel(ch);
-      signalRef.current = ch;
+      const subscribeError = await subscribeResult;
+      if (subscribeError) throw subscribeError;
 
       if (asCaller) {
         const offer = await pc.createOffer();
@@ -612,7 +643,11 @@ export function useCallManager(
     if (!userId || !profile) return;
     setError(null);
     void requestNotificationPermissionFromGesture();
-    await warmUpMediaDevices();
+    // Ring immediately. Device enumeration and relay credentials are warmed
+    // in parallel and reused by setupRtc after the call is answered; awaiting
+    // either here delayed the callee's phone for no reason.
+    void warmUpMediaDevices();
+    void fetchIceServers();
     const callId = crypto.randomUUID();
     activeCallIdRef.current = callId;
     activePeerIdRef.current = peer.id;
@@ -651,28 +686,43 @@ export function useCallManager(
 
   const acceptCall = useCallback(async () => {
     if (!incoming || !userId) return;
+    const call = incoming;
     stopRingtone();
     void requestNotificationPermissionFromGesture();
-    await warmUpMediaDevices();
     const supabase = getSupabaseClient();
-    const { data: fp } = await supabase.from("profiles").select("*").eq("id", incoming.fromId).maybeSingle();
-    if (fp) {
-      setActivePeer(fp as Profile);
-      lastPeerRef.current = fp as Profile;
-    }
-    activeCallIdRef.current = incoming.callId;
-    activePeerIdRef.current = incoming.fromId;
+
+    // The ring already carried the profile in the common case. Never block
+    // answering — and therefore the caller's offer — on a second profile
+    // query; fill it in afterwards if the ring did not have one.
+    setActivePeer(call.profile ?? null);
+    if (call.profile) lastPeerRef.current = call.profile;
+    activeCallIdRef.current = call.callId;
+    activePeerIdRef.current = call.fromId;
     setPhase("active");
     setIncoming(null);
+
+    void supabase.from("profiles").select("*").eq("id", call.fromId).maybeSingle().then(({ data }) => {
+      if (!data || activeCallIdRef.current !== call.callId) return;
+      setActivePeer(data as Profile);
+      lastPeerRef.current = data as Profile;
+    });
+
+    // Start local media/TURN/subscription while the accept is in flight.
+    // Waiting for that extra Realtime subscribe/send used to leave the caller
+    // retrying offers against a callee that had not even opened its mic.
+    const rtc = setupRtc(call.callId, call.fromId, false).catch(() => {
+      // setupRtc sets the visible error and resets the call itself.
+    });
+    void notifyOwnClients(call.callId);
     try {
-      await sendToUser(incoming.fromId, { type: "accept", from: userId, to: incoming.fromId, callId: incoming.callId });
-
-      void notifyOwnClients(incoming.callId);
-      await setupRtc(incoming.callId, incoming.fromId, false);
-    } catch {
-
+      await sendToUser(call.fromId, { type: "accept", from: userId, to: call.fromId, callId: call.callId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not answer the call");
+      await reset();
+      return;
     }
-  }, [incoming, userId, sendToUser, setupRtc, notifyOwnClients]);
+    await rtc;
+  }, [incoming, userId, sendToUser, setupRtc, notifyOwnClients, reset]);
 
   const rejectCall = useCallback(async () => {
     if (!incoming || !userId || !profile) return;
@@ -744,20 +794,27 @@ export function useCallManager(
             });
             return;
           }
-          const { data: fp } = await supabase.from("profiles").select("*").eq("id", p.from).maybeSingle();
-          setIncoming({
-            fromId: p.from,
-            callerName: p.callerName ?? "Someone",
-            callId: p.callId,
-            profile: fp as Profile | undefined,
-          });
+          // Cache the relay credentials while the phone rings, and show the
+          // overlay before the profile query: a slow profiles request used to
+          // delay the ringtone and the first frame of the incoming call.
+          void fetchIceServers();
+          void warmUpMediaDevices();
+          const callerName = p.callerName ?? "Someone";
+          setIncoming({ fromId: p.from, callerName, callId: p.callId });
           setPhase("incoming");
           startRingtone();
           notifyUser(
-            `Incoming call from ${p.callerName ?? "Someone"}`,
+            `Incoming call from ${callerName}`,
             "Open Disband to answer",
             { kind: "call", peerId: p.from },
           );
+          void supabase.from("profiles").select("*").eq("id", p.from).maybeSingle().then(({ data }) => {
+            if (!data) return;
+            setIncoming((prev) => {
+              if (!prev || prev.callId !== p.callId) return prev;
+              return { ...prev, profile: data as Profile };
+            });
+          });
         } else if (p.type === "accept" && p.callId && phaseRef.current === "outgoing") {
           stopRingtone();
           setPhase("active");
