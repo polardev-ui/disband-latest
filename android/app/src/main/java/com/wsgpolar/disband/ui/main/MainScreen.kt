@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.wsgpolar.disband.core.LocalPalette
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.data.Channel
 import com.wsgpolar.disband.data.ChannelCategory
 import com.wsgpolar.disband.data.ChannelType
@@ -63,6 +64,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.async
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
 @Composable
@@ -123,8 +127,19 @@ fun MainScreen(
             coroutineScope {
                 val threads = async { Database.myDmThreads(uid) }
                 val groups = async { Database.myGroups(uid) }
+                // The unread maps used to be seeded once at sign-in and never
+                // again, so every dot, bold row, Unread filter and dock badge
+                // stayed frozen at their launch-time values.
+                val dmCounts = async { runCatching { Database.unreadDmCounts() }.getOrNull() }
+                val groupCounts = async { runCatching { Database.unreadGroupCounts() }.getOrNull() }
                 dmThreads = threads.await()
                 groupChats = groups.await()
+                dmCounts.await()?.let { rows ->
+                    app.dmUnread.seedUnread(rows.associate { it.threadId to it.unreadCount })
+                }
+                groupCounts.await()?.let { rows ->
+                    app.dmUnread.seedGroupUnread(rows.associate { it.groupId to it.unreadCount })
+                }
                 inboxError = null
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
@@ -212,6 +227,47 @@ fun MainScreen(
         }
     }
 
+    // Keep the inbox live while it is on screen. The old screen loaded once
+    // and only refreshed on resume, so a message arriving in front of you did
+    // not reorder the list, update its preview or raise an unread count.
+    LaunchedEffect(currentUserId, lifecycle) {
+        if (currentUserId == null) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            val dmLive = try {
+                com.wsgpolar.disband.data.RealtimeService.observeChanges("dm_messages")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val groupLive = try {
+                com.wsgpolar.disband.data.RealtimeService.observeChanges("group_messages")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            try {
+                val flows = listOfNotNull(dmLive?.flow, groupLive?.flow)
+                if (flows.isNotEmpty()) {
+                    merge(*flows.toTypedArray()).collectLatest {
+                        // A burst of messages is one inbox refresh.
+                        delay(350)
+                        refreshInbox()
+                    }
+                }
+            } finally {
+                // The effect is cancelled whenever the screen stops, so the
+                // unsubscribe must not inherit that cancellation or the
+                // channels are left subscribed for the next screen.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    runCatching { dmLive?.channel?.leave() }
+                    runCatching { groupLive?.channel?.leave() }
+                }
+            }
+        }
+    }
+
 
     val openChannel = allChannels.firstOrNull { it.id == selectedChannelId && it.serverId == selectedServerId }
     val openGroup = groupChats.firstOrNull { it.id == selectedChannelId }
@@ -248,10 +304,10 @@ fun MainScreen(
 
     fun openNotificationSource(source: String) {
         scope.launch {
-            // Notification inbox rows store "channel:<uuid>" / "dm:<uuid>";
-            // push payloads store a bare uuid. The resolver only understands
-            // the bare id, so drop the kind hint before asking.
-            val raw = source.substringAfter(':', source)
+            // Notification inbox rows store "channel:<uuid>" / "dm:<uuid>" /
+            // "/group/<uuid>"; push payloads store a bare uuid. The resolver
+            // only understands the bare id, so drop the kind hint first.
+            val raw = notificationSourceId(source)
             val resolved = when (val answer = Database.resolveNotificationSource(raw)) {
                 null -> null
                 else -> when (answer.kind) {
