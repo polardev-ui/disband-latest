@@ -83,3 +83,31 @@ targets:
         CODE_SIGN_STYLE: Manual
         "CODE_SIGN_IDENTITY[sdk=iphoneos*]": "Apple Distribution"
         "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "Disband App Store"
+
+  DisbandiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: DisbandiOSTests
+    dependencies:
+      - target: DisbandiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wsgpolar.disband.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/DisbandiOS.app/DisbandiOS"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  DisbandiOS:
+    build:
+      targets:
+        DisbandiOS: all
+        DisbandiOSTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - DisbandiOSTests
+

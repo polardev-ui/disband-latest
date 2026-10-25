@@ -9,6 +9,27 @@ import Supabase
 struct PresencePayload: Codable, Sendable {
     let userId: String
     let status: UserStatus
+
+    init(userId: String, status: UserStatus) {
+        self.userId = userId
+        self.status = status
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId
+        case status
+    }
+
+    /// Web treats a missing status as online, and an unknown future status must
+    /// not make the whole entry disappear. A strict enum decode did exactly
+    /// that: one client publishing a status this build has never heard of made
+    /// the person look offline everywhere on iOS.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        let raw = try container.decodeIfPresent(String.self, forKey: .status)
+        status = raw.flatMap(UserStatus.init(rawValue:)) ?? .online
+    }
 }
 
 /// Live presence for the signed-in user.
