@@ -39,6 +39,11 @@ final class CallManager {
     var speakerOn = false
     var error: String?
     var callNotice: String?
+    /// Set only when the peer connection reaches `.connected`. `connectedAt`
+    /// is deliberately not set on answer: otherwise the call screen started a
+    /// timer while ICE was still negotiating and the other person could not
+    /// hear you yet.
+    private(set) var rtcConnected = false
     var connectedAt: Date?
 
     /// True while the call is collapsed to a banner so the rest of Disband
@@ -352,30 +357,44 @@ final class CallManager {
         stopRingtone()
         activeCallId = incoming.callId
         activePeerId = incoming.fromId
-        if let profile = try? await DatabaseService.profile(id: incoming.fromId) {
-            activePeer = profile
-        }
+        activePeer = incoming.profile
         phase = .active
         cancelRingWatchdog()
         CallKitProvider.shared.markCallConnected(for: incoming)
         CallKitProvider.shared.startActiveCall(
             id: incoming.callId, title: activePeer?.name ?? incoming.callerName)
         self.incoming = nil
-        connectedAt = Date()
-        CallSounds.shared.playConnected()
-        await send(to: incoming.fromId,
-                   CallSignal(type: "accept", from: uid, to: incoming.fromId,
-                              callId: incoming.callId))
+        rtcConnected = false
+        connectedAt = nil
+        // Fill in a profile the ring did not carry, but never hold up the
+        // accept or the local peer connection on this second query.
+        Task { [weak self] in
+            guard let self,
+                  let profile = try? await DatabaseService.profile(id: incoming.fromId),
+                  self.activeCallId == incoming.callId else { return }
+            self.activePeer = profile
+        }
+
+        // Send the accept and start media at the same time. Waiting for the
+        // accept broadcast — a fresh Realtime subscribe each time — left the
+        // caller retrying offers against a callee that had not opened its
+        // microphone yet.
+        async let accepted: Void = send(
+            to: incoming.fromId,
+            CallSignal(type: "accept", from: uid, to: incoming.fromId,
+                       callId: incoming.callId))
         // Stop this account's other devices ringing.
-        await send(to: uid,
-                   CallSignal(type: "handled", from: uid, to: uid,
-                              callId: incoming.callId))
+        async let handled: Void = send(
+            to: uid,
+            CallSignal(type: "handled", from: uid, to: uid,
+                       callId: incoming.callId))
         do {
             try await setupRtc(callId: incoming.callId, peerId: incoming.fromId, asCaller: false)
         } catch {
             self.error = error.localizedDescription
             await reset()
         }
+        _ = await (accepted, handled)
     }
 
     func rejectCall(_ given: IncomingCall? = nil) async {
@@ -539,23 +558,22 @@ final class CallManager {
                 }
                 return
             }
-            if let profile = try? await DatabaseService.profile(id: p.from) {
-                ringIncoming(call: IncomingCall(fromId: p.from,
-                                                callerName: p.callerName ?? "Someone",
-                                                callId: p.callId!,
-                                                profile: profile))
-            } else {
-                ringIncoming(call: IncomingCall(fromId: p.from,
-                                                callerName: p.callerName ?? "Someone",
-                                                callId: p.callId!))
+            // Ring first, enrich later: the profile query used to delay the
+            // ringtone and the CallKit overlay by a full round trip.
+            ringIncoming(call: IncomingCall(fromId: p.from,
+                                            callerName: p.callerName ?? "Someone",
+                                            callId: p.callId!))
+            if let profile = try? await DatabaseService.profile(id: p.from),
+               incoming?.callId == p.callId {
+                incoming?.profile = profile
             }
 
         case "accept" where p.callId != nil && phase == .outgoing:
             stopRingtone()
             phase = .active
             cancelRingWatchdog()
-            connectedAt = Date()
-            CallSounds.shared.playConnected()
+            rtcConnected = false
+            connectedAt = nil
             do {
                 try await setupRtc(callId: p.callId!, peerId: p.from, asCaller: true)
             } catch {
@@ -651,6 +669,8 @@ final class CallManager {
 
     private func setupRtc(callId: String, peerId: String, asCaller: Bool) async throws {
         guard let uid = app.currentUserId else { return }
+        rtcConnected = false
+        connectedAt = nil
         // Hands the session to WebRTC's own wrapper and starts its audio
         // unit; the previous raw AVAudioSession calls left the two disagreeing
         // and the unit never ran, so both sides heard silence.
@@ -677,6 +697,21 @@ final class CallManager {
                                           await self?.reset()
                                       }
                                   })
+        engine.onConnectionStateChange = { [weak self] state in
+            guard let self, self.phase == .active else { return }
+            switch state {
+            case .connected:
+                self.rtcConnected = true
+                if self.connectedAt == nil {
+                    self.connectedAt = Date()
+                    CallSounds.shared.playConnected()
+                }
+            case .disconnected, .failed, .closed:
+                self.rtcConnected = false
+            default:
+                break
+            }
+        }
         engine.setMicEnabled(!micMuted)
         engine.setRemoteAudioEnabled(!deafened)
         self.engine = engine
@@ -759,9 +794,11 @@ final class CallManager {
     private func reset() async {
         stopRingtone()
         engine?.onConnectionFailed = {}
+        engine?.onConnectionStateChange = { _ in }
         engine?.dispose()
         engine = nil
         remoteHasVideo = false
+        rtcConnected = false
         signalSubscription = nil
         if let signalChannel {
             await signalChannel.unsubscribe()
