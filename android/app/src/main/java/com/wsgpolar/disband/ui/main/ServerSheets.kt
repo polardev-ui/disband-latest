@@ -146,6 +146,8 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
     var query by remember(server.id) { mutableStateOf("") }
     var kickTarget by remember { mutableStateOf<ServerMember?>(null) }
     var kicking by remember { mutableStateOf(false) }
+    var kickError by remember { mutableStateOf<String?>(null) }
+    var permissions by remember(server.id) { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     // Current user's role gates kick visibility — RLS enforces it anyway,
     // but hiding the button for plain members avoids a guaranteed failure.
     val selfId = remember { com.wsgpolar.disband.core.DisbandSupabase.auth.currentSessionOrNull()?.user?.id }
@@ -161,10 +163,17 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
         loading = false
     }
 
-    LaunchedEffect(server.id) { load() }
+    LaunchedEffect(server.id) {
+        load()
+        permissions = ServerAdmin.permissions(server.id)
+    }
 
     val selfRole = members.firstOrNull { it.userId == selfId }?.role
-    val canModerate = selfRole == MemberRole.Owner || selfRole == MemberRole.Admin || selfRole == MemberRole.Moderator
+    // Custom roles can grant kick without the legacy moderator role. Keep the
+    // legacy fallback so a failed permission RPC does not hide a working
+    // action from an existing moderator.
+    val canModerate = permissions["kick"] == true ||
+        selfRole == MemberRole.Owner || selfRole == MemberRole.Admin || selfRole == MemberRole.Moderator
     val needle = query.trim().lowercase()
     val visible = if (needle.isBlank()) members else members.filter {
         (it.profile?.name ?: "").lowercase().contains(needle) ||
@@ -252,7 +261,10 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
                             }
                             if (canModerate && member.userId != selfId && member.role != MemberRole.Owner) {
                                 androidx.compose.material3.IconButton(
-                                    onClick = { kickTarget = member },
+                                    onClick = {
+                                        kickError = null
+                                        kickTarget = member
+                                    },
                                     modifier = Modifier.size(48.dp),
                                 ) {
                                     Icon(
@@ -275,16 +287,31 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { if (!kicking) kickTarget = null },
             title = { Text("Remove ${target.profile?.name ?: "member"}?") },
-            text = { Text("They'll need a new invite to rejoin ${server.name}.") },
+            text = {
+                Text(
+                    kickError
+                        ?: "They'll need a new invite to rejoin ${server.name}."
+                )
+            },
             confirmButton = {
                 androidx.compose.material3.TextButton(
                     onClick = {
                         kicking = true
+                        kickError = null
                         scope.launch {
-                            runCatching { Database.kickMember(server.id, target.userId) }
-                            kicking = false
-                            kickTarget = null
-                            load()
+                            try {
+                                Database.kickMember(server.id, target.userId)
+                                kickTarget = null
+                                load()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // Rank and permission are enforced server-side;
+                                // say so instead of closing as if it worked.
+                                kickError = "Couldn't remove this member. They may rank above you, or you may not have permission."
+                            } finally {
+                                kicking = false
+                            }
                         }
                     },
                     enabled = !kicking,
