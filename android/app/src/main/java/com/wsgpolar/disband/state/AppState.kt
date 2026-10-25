@@ -313,6 +313,10 @@ class AppState(
     }
 
     suspend fun signOut() {
+        // Remove this device's token while the old session still owns it.
+        // Otherwise the old account keeps receiving pushes on this phone and
+        // the next account is skipped because the FCM token has not changed.
+        PushRegistrar.unregisterCurrentDevice(context)
         runCatching { client.auth.signOut() }
     }
 
