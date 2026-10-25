@@ -46,6 +46,8 @@ final class ChatViewModel {
     private var deleteTask: Task<Void, Never>?
     private var reactionChannel: RealtimeChannelV2?
     private var reactionTask: Task<Void, Never>?
+    private var reactionDeleteChannel: RealtimeChannelV2?
+    private var reactionDeleteTask: Task<Void, Never>?
     nonisolated(unsafe) private var foregroundObserver: NSObjectProtocol?
 
     init(source: ChatSource) {
@@ -101,9 +103,10 @@ final class ChatViewModel {
         async let inserts: Void = subscribe()
         async let deletes: Void = subscribeDeletes()
         async let reacts: Void = subscribeReactions()
+        async let reactionDeletes: Void = subscribeReactionDeletes()
         async let selfDm: Void = detectSelfDm()
         async let typing: Void = subscribeTyping()
-        _ = await (inserts, deletes, reacts, selfDm, typing)
+        _ = await (inserts, deletes, reacts, reactionDeletes, selfDm, typing)
     }
 
     private var typingTopic: String? {
@@ -181,12 +184,16 @@ final class ChatViewModel {
         listenTask?.cancel()
         deleteTask?.cancel()
         reactionTask?.cancel()
+        reactionDeleteTask?.cancel()
         typingTask?.cancel()
         for task in typingTimers.values { task.cancel() }
         typingTimers = [:]
-        let ch = channel, dc = deleteChannel, rc = reactionChannel, tc = typingChannel
-        channel = nil; deleteChannel = nil; reactionChannel = nil; typingChannel = nil
-        Task { await ch?.unsubscribe(); await dc?.unsubscribe(); await rc?.unsubscribe(); await tc?.unsubscribe() }
+        let ch = channel, dc = deleteChannel, rc = reactionChannel, rdc = reactionDeleteChannel, tc = typingChannel
+        channel = nil; deleteChannel = nil; reactionChannel = nil; reactionDeleteChannel = nil; typingChannel = nil
+        Task {
+            await ch?.unsubscribe(); await dc?.unsubscribe(); await rc?.unsubscribe()
+            await rdc?.unsubscribe(); await tc?.unsubscribe()
+        }
     }
 
     // MARK: - Loading
@@ -755,6 +762,21 @@ final class ChatViewModel {
                 if self.messages.contains(where: { $0.id == r.messageId }) {
                     await self.loadReactions(for: [r.messageId], replacing: false)
                 }
+            }
+        }
+    }
+
+    private func subscribeReactionDeletes() async {
+        // RLS only exposes a deleted reaction's primary key, not its message,
+        // so a filtered subscription would silently miss every event. Reload
+        // the visible reactions instead; removals are rare.
+        let (ch, stream) = await RealtimeService.observeDeletes(
+            table: "message_reactions", filter: nil)
+        reactionDeleteChannel = ch
+        reactionDeleteTask = Task { [weak self] in
+            for await _ in stream {
+                guard let self else { continue }
+                await self.loadReactions()
             }
         }
     }
