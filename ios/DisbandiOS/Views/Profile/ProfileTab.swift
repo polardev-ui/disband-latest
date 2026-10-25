@@ -11,6 +11,7 @@ struct ProfileTab: View {
     @State private var avatarItem: PhotosPickerItem?
     @State private var bannerItem: PhotosPickerItem?
     @State private var uploading = false
+    @State private var uploadError: String?
     @State private var showPaywall = false
     @State private var showNotifications = false
 
@@ -115,6 +116,14 @@ struct ProfileTab: View {
             .sheet(isPresented: $showStatus) { StatusSheet() }
             .confirmationDialog("Sign out of Disband?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { Task { await app.signOut() } }
+            }
+            .alert("Couldn't update your profile", isPresented: Binding(
+                get: { uploadError != nil },
+                set: { if !$0 { uploadError = nil } }
+            )) {
+                Button("OK", role: .cancel) { uploadError = nil }
+            } message: {
+                Text(uploadError ?? "")
             }
             .onChange(of: avatarItem) { _, item in if let item { Task { await upload(item, banner: false) } } }
             .onChange(of: bannerItem) { _, item in if let item { Task { await upload(item, banner: true) } } }
@@ -327,12 +336,26 @@ struct ProfileTab: View {
     private func upload(_ item: PhotosPickerItem, banner: Bool) async {
         uploading = true
         defer { uploading = false; if banner { bannerItem = nil } else { avatarItem = nil } }
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let result = try? await MediaService.uploadImage(data) else { return }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            uploadError = "Couldn't read that image. Try picking a different one."
+            return
+        }
+        let result: MediaUploadResult
+        do {
+            result = try await MediaService.uploadImage(data)
+        } catch {
+            uploadError = "Couldn't upload that image. Check your connection and try again."
+            return
+        }
         let patch = banner
             ? DatabaseService.ProfilePatch(bannerUrl: result.url)
             : DatabaseService.ProfilePatch(avatarUrl: result.url)
-        await app.saveProfile(patch)
+        // The database enforces a 60-second cooldown and a daily banner limit.
+        // Swallowing this return made the picker close with the old picture
+        // still in place and no explanation.
+        if let error = await app.saveProfile(patch) {
+            uploadError = error
+        }
     }
 }
 
@@ -513,10 +536,14 @@ struct EditProfileSheet: View {
                 }
             }
 
-            await app.saveProfile(.init(
+            if let error = await app.saveProfile(.init(
                 displayName: displayName.trimmingCharacters(in: .whitespaces),
                 bio: bio.trimmingCharacters(in: .whitespaces),
-                accentColor: accent, accentColor2: accent2))
+                accentColor: accent, accentColor2: accent2)) {
+                saveError = error
+                busy = false
+                return
+            }
             if pronouns != (app.profile?.pronouns ?? "") {
                 do {
                     try await ProfileService.updatePronouns(pronouns)
