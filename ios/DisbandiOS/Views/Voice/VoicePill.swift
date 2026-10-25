@@ -60,6 +60,8 @@ struct VoicePill: View {
 
     private var subtitle: String {
         if voice.phase == .connecting { return "Connecting…" }
+        if voice.otherMemberCount == 0 { return "Waiting for others…" }
+        if voice.connectedPeerIds.isEmpty { return "Connecting…" }
         let count = voice.members.count
         return "Voice connected · \(count) \(count == 1 ? "person" : "people")"
     }

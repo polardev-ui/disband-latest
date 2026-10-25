@@ -35,6 +35,10 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     var onRemoteAudioTrack: (RTCAudioTrack?) -> Void
     /// Raised when the peer connection fails or disconnects (main-actor).
     var onConnectionFailed: () -> Void
+    /// Raised for every peer-connection state change (main-actor). The call
+    /// screen uses this to keep saying "Connecting…" until media can flow,
+    /// rather than starting the timer as soon as the call is answered.
+    var onConnectionStateChange: (RTCPeerConnectionState) -> Void = { _ in }
 
     private let factory: RTCPeerConnectionFactory
     private let pc: RTCPeerConnection
@@ -320,9 +324,11 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCPeerConnectionState) {
-        if newState == .disconnected || newState == .failed || newState == .closed {
-            DispatchQueue.main.async { [weak self] in
-                self?.onConnectionFailed()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.onConnectionStateChange(newState)
+            if newState == .disconnected || newState == .failed || newState == .closed {
+                self.onConnectionFailed()
             }
         }
     }

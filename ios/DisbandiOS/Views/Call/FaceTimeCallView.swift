@@ -288,7 +288,7 @@ struct FaceTimeCallView: View {
 
             Spacer()
 
-            if call.phase == .active, let connectedAt = call.connectedAt {
+            if call.phase == .active, call.rtcConnected, let connectedAt = call.connectedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(formatElapsed(connectedAt, at: context.date))
                         .font(.subheadline.weight(.semibold).monospacedDigit())
@@ -297,6 +297,17 @@ struct FaceTimeCallView: View {
                         .padding(.vertical, 7)
                         .background(.black.opacity(0.35), in: .capsule)
                 }
+            } else if call.phase == .outgoing || call.phase == .active {
+                // Keep the connection state visible even when the peer's
+                // camera is on. Without this, the only "Connecting…" label
+                // lived under the avatar and disappeared behind video.
+                Text(call.phase == .outgoing && call.callSignaled ? "Calling\u{2026}" : "Connecting\u{2026}")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.black.opacity(0.35), in: .capsule)
+                    .accessibilityLabel(call.phase == .outgoing && call.callSignaled ? "Calling" : "Connecting")
             }
 
             Spacer()
@@ -451,14 +462,16 @@ struct MinimisedCallBar: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                if call.phase == .active, let connectedAt = call.connectedAt {
+                if call.phase == .active, call.rtcConnected, let connectedAt = call.connectedAt {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(formatElapsed(connectedAt, at: context.date))
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 } else {
-                    Text(call.callSignaled || call.phase != .outgoing ? "Calling\u{2026}" : "Connecting\u{2026}")
+                    // "Calling…" means the ring is out; "Connecting…" means
+                    // media is still negotiating, including after answer.
+                    Text(call.callSignaled && call.phase == .outgoing ? "Calling\u{2026}" : "Connecting\u{2026}")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.8))
                 }

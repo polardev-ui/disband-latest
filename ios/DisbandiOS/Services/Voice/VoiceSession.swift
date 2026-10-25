@@ -111,6 +111,10 @@ final class VoiceSession {
     private(set) var liveScreens: Set<String> = []
     /// Members rung by this device who have not joined yet.
     private(set) var ringingIds: Set<String> = []
+    /// Remote participants whose peer connection has reached `.connected`.
+    /// Presence means someone is in the room; this means their audio can
+    /// actually reach us. The difference is what "Connecting…" reflects.
+    private(set) var connectedPeerIds: Set<String> = []
     var incomingRing: GroupRing?
     /// Stage (false) versus the floating pill (true).
     var minimized = false
@@ -121,6 +125,12 @@ final class VoiceSession {
     @ObservationIgnored private(set) var screenTracks: [String: RTCVideoTrack] = [:]
 
     var isActive: Bool { phase != .idle }
+
+    /// People in the room other than this device. Used to tell an empty room
+    /// ("Waiting for others…") from one whose media has not connected yet.
+    var otherMemberCount: Int {
+        members.reduce(0) { $0 + ($1.userId == userId ? 0 : 1) }
+    }
 
     func isIn(_ roomId: String) -> Bool { room?.id == roomId && isActive }
 
@@ -198,6 +208,7 @@ final class VoiceSession {
         error = nil
         self.room = room
         phase = .connecting
+        connectedPeerIds = []
         minimized = false
         if case .group(let gid, _, _) = room, incomingRing?.groupId == gid { incomingRing = nil }
 
@@ -306,6 +317,7 @@ final class VoiceSession {
         speaking = []
         liveCameras = []
         liveScreens = []
+        connectedPeerIds = []
         ringingIds = []
         connectedAt = nil
         minimized = false
@@ -451,9 +463,18 @@ final class VoiceSession {
             self?.attach(track, lane: lane, from: remoteId)
         }
         peer.onStateChange = { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .connected:
+                self.connectedPeerIds.insert(remoteId)
+            case .disconnected, .failed, .closed:
+                self.connectedPeerIds.remove(remoteId)
+            default:
+                break
+            }
             // The reconcile loop re-offers to anyone still present, so a
             // dropped connection heals instead of leaving a silent tile.
-            if state == .failed || state == .closed { self?.dropPeer(remoteId) }
+            if state == .failed || state == .closed { self.dropPeer(remoteId) }
         }
         peers[remoteId] = peer
 
@@ -465,6 +486,7 @@ final class VoiceSession {
 
     private func dropPeer(_ remoteId: String) {
         peers.removeValue(forKey: remoteId)?.close()
+        connectedPeerIds.remove(remoteId)
         remoteAudio[remoteId] = nil
         cameraTracks[remoteId] = nil
         screenTracks[remoteId] = nil

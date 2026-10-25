@@ -63,10 +63,19 @@ struct VoiceStageView: View {
 
     private var statusLine: String {
         if voice.phase == .connecting { return "Connecting…" }
-        if voice.room?.isGroup == true, !voice.ringingIds.isEmpty, voice.members.count <= 1 {
+        if voice.room?.isGroup == true, !voice.ringingIds.isEmpty, voice.otherMemberCount == 0 {
             return "Ringing \(voice.ringingIds.count)…"
         }
         let base = voice.room?.subtitle ?? ""
+        // Presence puts someone in the room before their audio path exists.
+        // Until at least one peer is connected, say so instead of starting a
+        // timer that makes it look like they can hear you.
+        if voice.otherMemberCount > 0, voice.connectedPeerIds.isEmpty {
+            return "Connecting to \(voice.otherMemberCount) \(voice.otherMemberCount == 1 ? "person" : "people")…"
+        }
+        if voice.otherMemberCount == 0 {
+            return base.isEmpty ? "Waiting for others to join…" : "\(base) · Waiting for others…"
+        }
         guard let start = voice.connectedAt else { return base }
         return base.isEmpty ? Self.elapsed(since: start) : "\(base) · \(Self.elapsed(since: start))"
     }
@@ -183,6 +192,25 @@ struct VoiceStageView: View {
             .frame(height: 28)
             .background(.black.opacity(0.35), in: Capsule())
             .padding(10)
+
+            // Someone can be present without a usable audio path. Show that
+            // on their tile, not just in the header, so a silent call never
+            // looks like a working one.
+            if !isMe, !voice.connectedPeerIds.contains(tile.member.userId) {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(.white)
+                    Text("Connecting…")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(.black.opacity(0.45), in: Capsule())
+                .padding(10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
         }
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
