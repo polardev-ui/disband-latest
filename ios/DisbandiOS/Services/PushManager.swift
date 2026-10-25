@@ -78,6 +78,10 @@ final class PushManager {
     /// user is in Do Not Disturb.
     nonisolated(unsafe) var doNotDisturb = false
     private var pendingToken: String?
+    /// Kept on disk because `pendingToken` is cleared as soon as it is
+    /// registered. Without it, signing out has no way to remove this device's
+    /// row and the next account inherits the previous account's pushes.
+    private static let lastTokenKey = "disband.push.lastToken"
 
     private var client: SupabaseClient { SupabaseManager.client }
 
@@ -105,8 +109,35 @@ final class PushManager {
     /// Called from AppDelegate once APNs returns a token.
     nonisolated func storeToken(_ token: String) {
         Task { @MainActor in
+            UserDefaults.standard.set(token, forKey: Self.lastTokenKey)
             self.pendingToken = token
             await self.flushToken()
+        }
+    }
+
+    /// Remove this device's alert-push token from the outgoing account before
+    /// signing out. `device_tokens` is keyed by user and token, so leaving the
+    /// row behind means the previous account's DMs can still reach the phone,
+    /// and the next account's registration returns early on the unchanged
+    /// token. The token itself is kept pending so the next sign-in can register
+    /// it under the new account without waiting for APNs to hand it over again.
+    func unregisterCurrentDevice() async {
+        guard let userId = client.auth.currentUser?.id.uuidString.lowercased() else { return }
+        let token = pendingToken ?? UserDefaults.standard.string(forKey: Self.lastTokenKey)
+        guard let token, !token.isEmpty else { return }
+        do {
+            try await client.from("device_tokens")
+                .delete()
+                .eq("user_id", value: userId)
+                .eq("platform", value: "ios")
+                .eq("token", value: token)
+                .execute()
+            pendingToken = token
+        } catch {
+            // Best effort. Keep the token so the next account registers it;
+            // the server-side sender is still the only place that can expire
+            // a row when this device was offline at sign-out.
+            print("push token cleanup error: \(error)")
         }
     }
 

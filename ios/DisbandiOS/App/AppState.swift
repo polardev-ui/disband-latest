@@ -165,6 +165,8 @@ final class AppState {
 
         profileError = nil
         authError = "Your session expired and couldn't be renewed. Please sign in again."
+        await PushManager.shared.unregisterCurrentDevice()
+        await VoipPushService.shared.unregisterCurrentDevice()
         try? await client.auth.signOut()
         session = nil
         profile = nil
@@ -252,6 +254,11 @@ final class AppState {
     }
 
     func signOut() async {
+        // Do this before auth.signOut(): RLS only lets the current user delete
+        // their own token rows. Otherwise the old account keeps pushing to
+        // this phone and the next account is never registered.
+        await PushManager.shared.unregisterCurrentDevice()
+        await VoipPushService.shared.unregisterCurrentDevice()
         try? await client.auth.signOut()
     }
 

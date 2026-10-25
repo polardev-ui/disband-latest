@@ -124,6 +124,18 @@ final class VoipPushService: NSObject, PKPushRegistryDelegate {
         Task { await deleteStoredToken(doomed) }
     }
 
+    /// Remove this device's VoIP token from the outgoing account before sign
+    /// out. The token stays pending for the next account: clearing it as well
+    /// would leave calls on this phone silent until PushKit happened to issue
+    /// the token again. `registeredToken` must be cleared or `flushToken()`
+    /// returns early for the new account because the token is unchanged.
+    func unregisterCurrentDevice() async {
+        let token = registeredToken ?? pendingToken
+        await deleteStoredToken(token)
+        registeredToken = nil
+        pendingToken = token
+    }
+
     /// PushKit handed us a VoIP device token — persist it for the signed-in user.
     ///
     /// VoIP tokens live in the same `device_tokens` table as APNs tokens but
