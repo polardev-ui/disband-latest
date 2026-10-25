@@ -61,6 +61,21 @@ object PushRegistrar {
         }
     }
 
+    /**
+     * Delete this device's FCM token from the outgoing account before sign-out.
+     * Call while the session is still valid: RLS rejects the delete afterwards.
+     * The Firebase token itself is stable, so the next account fetches and
+     * registers the same value without waiting for a refresh.
+     */
+    suspend fun unregisterCurrentDevice(context: Context) {
+        if (FirebaseApp.getApps(context).isEmpty()) return
+        val token = registeredToken ?: runCatching { fetchToken() }.getOrNull() ?: return
+        runCatching { Database.unregisterDeviceToken(token, platform = "android") }
+        // Even if the request failed, clear the memo so the next account is
+        // not skipped by the early return in registerIfAuthorized().
+        registeredToken = null
+    }
+
     private suspend fun fetchToken(): String = suspendCancellableCoroutine { cont ->
         val task = FirebaseMessaging.getInstance().token
         task.addOnCompleteListener { t ->
