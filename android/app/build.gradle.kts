@@ -22,6 +22,13 @@ android {
     namespace = "com.wsgpolar.disband"
     compileSdk = 36
 
+    // ChatTimeline logs a failed refresh through android.util.Log, which is a
+    // stub in plain JVM unit tests. Without this the negative-path test fails
+    // with "not mocked" instead of exercising the error state.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     defaultConfig {
         applicationId = "com.wsgpolar.disband"
         minSdk = 26
