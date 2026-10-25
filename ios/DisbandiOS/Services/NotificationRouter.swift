@@ -46,6 +46,21 @@ final class NotificationRouter {
 
     private init() {}
 
+    /// Inbox rows keep the kind in the link (`channel:<uuid>`, `dm:<uuid>`,
+    /// `/group/<uuid>`), while the resolver takes the bare uuid a push carries.
+    /// Passing the link straight through made every inbox row fail its RPC and
+    /// close the sheet without navigating.
+    static func normalizeSource(_ source: String) -> String {
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["channel:", "dm:", "group:"] where trimmed.hasPrefix(prefix) {
+            return String(trimmed.dropFirst(prefix.count))
+        }
+        for prefix in ["/group/", "group/"] where trimmed.hasPrefix(prefix) {
+            return String(trimmed.dropFirst(prefix.count))
+        }
+        return trimmed
+    }
+
     /// Called from the notification-centre delegate. Cheap and synchronous —
     /// the lookup happens on `resolvePending`.
     nonisolated func handleTap(source: String?) {

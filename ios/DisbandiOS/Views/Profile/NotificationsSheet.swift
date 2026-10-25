@@ -126,10 +126,10 @@ struct NotificationsSheet: View {
                 try? await DatabaseService.markNotificationRead(id: item.id, currentUserId: uid)
             }
         }
-        // `link` is the same source id a push carries, so this lands in the
-        // same place tapping the push would.
+        // Inbox links keep the kind (`channel:` / `dm:` / `/group/`); the
+        // resolver wants the bare uuid a push carries.
         if let link = item.link, !link.isEmpty {
-            NotificationRouter.shared.handleTap(source: link)
+            NotificationRouter.shared.handleTap(source: NotificationRouter.normalizeSource(link))
             dismiss()
         }
     }

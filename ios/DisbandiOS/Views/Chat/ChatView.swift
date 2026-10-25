@@ -232,8 +232,8 @@ struct ChatView: View {
             guard !items.isEmpty else { return }
             Task { await uploadAndSend(items) }
         }
-        // Re-counted whenever someone comes online or drops off.
-        .task(id: presence.statuses.count) { await refreshOnlineCount() }
+        // Re-counted whenever the set of visible people changes.
+        .task(id: onlinePresenceKey) { await refreshOnlineCount() }
         .onChange(of: model.loading) { _, loading in
             guard !loading, !initialScrollSettled else { return }
             // Let `.defaultScrollAnchor(.bottom)` and the first layout pass
@@ -311,6 +311,18 @@ struct ChatView: View {
             guard let count = directMessages.groups.first(where: { $0.id == id })?.members?.count else { return nil }
             return ("\(count) member\(count == 1 ? "" : "s")", nil)
         }
+    }
+
+    /// Key the recount on *who* is visible, not how many entries the map has.
+    /// An online → invisible transition keeps the same number of keys, so the
+    /// old `.task(id: statuses.count)` never re-ran and the header kept showing
+    /// the person as online.
+    private var onlinePresenceKey: String {
+        presence.statuses
+            .filter { $0.value != .offline }
+            .keys
+            .sorted()
+            .joined(separator: ",")
     }
 
     private func refreshOnlineCount() async {
