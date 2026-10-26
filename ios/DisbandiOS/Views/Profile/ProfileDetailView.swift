@@ -102,8 +102,11 @@ struct ProfileDetailView: View {
             // On its own line, with the full width to wrap into. Beside the
             // name it had whatever the name left over, which on a long name was
             // room for about two badges.
-            UserBadgesView(profile: profile, size: 15)
-                .padding(.top, 4)
+            HStack(spacing: 6) {
+                GuildTagView(userId: profile.id, size: .medium)
+                UserBadgesView(profile: profile, size: 15)
+            }
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

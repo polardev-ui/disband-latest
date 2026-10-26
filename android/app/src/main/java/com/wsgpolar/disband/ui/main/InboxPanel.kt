@@ -265,6 +265,7 @@ fun InboxPanel(
                         modifier = Modifier.animateItem(),
                         iconUrl = friend?.avatarUrl,
                         name = friend?.name ?: "Unknown",
+                        userId = friend?.id,
                         status = friend?.let { statusOf(it.id) },
                         preview = item.thread.lastMessagePreview,
                         time = TimeFormat.compact(item.thread.lastMessageAt ?: item.thread.createdAt),

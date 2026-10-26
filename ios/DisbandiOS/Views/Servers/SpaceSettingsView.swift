@@ -50,6 +50,13 @@ struct SpaceSettingsView: View {
                     Button { showCatalysts = true } label: {
                         SpaceSettingsRow(title: "Catalysts", symbol: "bolt", chevron: true)
                     }
+                    if can("manage_server") {
+                        NavigationLink {
+                            SpaceGuildTagView(server: server)
+                        } label: {
+                            SpaceSettingsRow(title: "Guild tag", symbol: "tag")
+                        }
+                    }
                 }
                 .listRowBackground(Brand.surface)
 

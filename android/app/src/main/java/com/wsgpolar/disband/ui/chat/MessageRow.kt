@@ -49,6 +49,8 @@ import com.wsgpolar.disband.core.Palette
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.data.StoredAttachment
 import com.wsgpolar.disband.ui.AvatarImage
+import com.wsgpolar.disband.ui.components.GuildTagView
+import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
 
 /**
  * One message, in the shape every other Disband client uses.
@@ -124,6 +126,7 @@ fun MessageRow(
                             modifier = Modifier.weight(1f, fill = false)
                                 .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
                         )
+                        GuildTagView(userId = row.author?.id, size = GuildTagBadgeSize.Small)
                         Spacer(Modifier.width(6.dp))
                         Text(
                             TimeFormat.short(row.createdAt),

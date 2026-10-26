@@ -101,6 +101,7 @@ struct DirectMessagesTab: View {
                                 ConversationRow(
                                     iconUrl: thread.friend?.avatarUrl,
                                     name: thread.friend?.name ?? "Unknown",
+                                    userId: thread.friend?.id,
                                     status: liveStatus(thread.friend),
                                     preview: DirectMessagesViewModel.preview(for: thread),
                                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),

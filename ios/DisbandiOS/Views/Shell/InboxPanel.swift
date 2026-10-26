@@ -141,6 +141,7 @@ struct InboxPanel: View {
                 ConversationRow(
                     iconUrl: thread.friend?.avatarUrl,
                     name: thread.friend?.name ?? "Unknown",
+                    userId: thread.friend?.id,
                     status: thread.friend.map { presence.status(for: $0.id) },
                     preview: DirectMessagesViewModel.preview(for: thread),
                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),

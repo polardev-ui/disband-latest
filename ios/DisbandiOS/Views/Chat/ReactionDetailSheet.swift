@@ -57,6 +57,7 @@ struct ReactionDetailSheet: View {
                                 Text(profile.name)
                                     .font(.subheadline.weight(.medium))
                                     .foregroundStyle(Brand.textPrimary)
+                                GuildTagView(userId: userId, size: .small)
                                 Text("@\(profile.handle)")
                                     .font(.caption)
                                     .foregroundStyle(Brand.textMuted)

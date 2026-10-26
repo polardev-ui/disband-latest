@@ -328,6 +328,7 @@ struct ChannelPanel: View {
                                 .font(.subheadline)
                                 .foregroundStyle(Brand.textSecondary)
                                 .lineLimit(1)
+                            GuildTagView(userId: member.userId, size: .small)
                             Spacer()
                             if member.deafened {
                                 Image(systemName: "headphones.slash")

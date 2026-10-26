@@ -57,6 +57,11 @@ struct ProfileTab: View {
                                              title: "Status", detail: profile?.activeStatusNote ?? ownStatus?.label)
                         }
                         SettingsDivider()
+                        NavigationLink { GuildTagPickerView().hidesDock().solidNavigationBar() } label: {
+                            SettingsRowLabel(symbol: "tag.fill", tint: Color(hex: 0x9B59B6),
+                                             title: "Guild tag", detail: nil)
+                        }
+                        SettingsDivider()
                         NavigationLink { ReferralsView() } label: {
                             SettingsRowLabel(symbol: "gift.fill", tint: Color(hex: 0xEB459E),
                                              title: "Referrals", detail: "Win $100")
@@ -194,7 +199,11 @@ struct ProfileTab: View {
                     .font(.subheadline)
                     .foregroundStyle(Brand.textMuted)
                     if let profile {
-                        UserBadgesView(profile: profile, size: 15).padding(.top, 4)
+                        HStack(spacing: 6) {
+                            GuildTagView(userId: profile.id, size: .medium)
+                            UserBadgesView(profile: profile, size: 15)
+                        }
+                        .padding(.top, 4)
                     }
                 }
 

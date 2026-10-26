@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,11 +51,13 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -107,6 +110,9 @@ import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.Server
 import com.wsgpolar.disband.data.ServerAdmin
 import com.wsgpolar.disband.data.ServerMember
+import com.wsgpolar.disband.data.GuildTag
+import com.wsgpolar.disband.data.GuildTagStore
+import com.wsgpolar.disband.data.GuildTagIcon
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.AvatarImage
 import com.wsgpolar.disband.ui.collectAsStateValue
@@ -114,6 +120,13 @@ import com.wsgpolar.disband.ui.components.CapsuleSearchField
 import com.wsgpolar.disband.ui.components.SectionCaption
 import com.wsgpolar.disband.ui.components.SettingsDivider
 import com.wsgpolar.disband.ui.components.SettingsGroup
+import com.wsgpolar.disband.ui.components.GuildTagBadge
+import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
+import com.wsgpolar.disband.ui.components.PixelGuildIcon
+import com.wsgpolar.disband.ui.components.parseColor
+import com.wsgpolar.disband.ui.components.guildTagError
+import com.wsgpolar.disband.ui.components.normalizeGuildTagColor
+import com.wsgpolar.disband.ui.components.sanitizeGuildTag
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -173,6 +186,7 @@ private sealed interface Page {
     data object Channels : Page
     data class ChannelEdit(val channel: Channel) : Page
     data object Audit : Page
+    data object GuildTag : Page
 }
 
 /**
@@ -236,6 +250,7 @@ fun SpaceSettingsScreen(
                     Page.Channels -> ChannelsPage(server, push, onChanged = onChannelsChanged, onBack = pop)
                     is Page.ChannelEdit -> ChannelEditPage(page.channel, onChanged = onChannelsChanged, onBack = pop)
                     Page.Audit -> AuditPage(server.id, onBack = pop)
+                    Page.GuildTag -> GuildTagPage(app, server, onBack = pop)
                 }
             }
         }
@@ -290,6 +305,10 @@ private fun HomePage(
                 NavRow(Icons.Filled.Info, "Overview") { push(Page.Overview) }
                 SettingsDivider()
                 NavRow(Icons.Filled.Link, "Invites") { showInvite = true }
+                if (can("manage_server")) {
+                    SettingsDivider()
+                    NavRow(Icons.Filled.Tag, "Guild tag") { push(Page.GuildTag) }
+                }
             }
             if (canSeeMembers || can("ban")) {
                 group("People") {
@@ -1626,5 +1645,219 @@ private fun EmptyBlock(title: String, detail: String? = null) {
     ) {
         Text(title, color = palette.textSecondary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         detail?.let { Text(it, color = palette.textMuted, fontSize = 14.sp) }
+    }
+}
+
+// MARK: - Guild tag
+
+@Composable
+private fun GuildTagPage(app: AppState, server: Server, onBack: () -> Unit) {
+    val palette = LocalPalette.current
+    val scope = rememberCoroutineScope()
+    var loading by remember { mutableStateOf(true) }
+    var catalystCount by remember { mutableStateOf(0) }
+    var existing by remember { mutableStateOf<GuildTag?>(null) }
+    var tag by remember { mutableStateOf("") }
+    var icon by remember { mutableStateOf(GuildTagIcon.Star) }
+    var color by remember { mutableStateOf("#5865f2") }
+    var isPrivate by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var removeArmed by remember { mutableStateOf(false) }
+    var showCatalysts by remember { mutableStateOf(false) }
+
+    val unlocked = catalystCount >= 6
+    val normalizedColor = normalizeGuildTagColor(color) ?: "#5865f2"
+    val tagProblem = guildTagError(tag)
+    val dirty = if (existing != null) {
+        existing!!.tag != tag || existing!!.icon != icon.raw || existing!!.color != normalizedColor || (existing!!.isPrivate == true) != isPrivate
+    } else {
+        tag.isNotBlank()
+    }
+    val previewTag = GuildTag(serverId = server.id, tag = sanitizeGuildTag(tag).ifBlank { "TAG" }, icon = icon.raw, color = normalizedColor, isPrivate = isPrivate)
+
+    LaunchedEffect(server.id) {
+        loading = true
+        try {
+            catalystCount = Database.catalystCount(server.id)
+            val t = Database.serverGuildTag(server.id)
+            existing = t
+            tag = t?.tag ?: ""
+            icon = GuildTagIcon.from(t?.icon)
+            color = t?.color ?: "#5865f2"
+            isPrivate = t?.isPrivate == true
+        } catch (e: Exception) { error = e.message }
+        loading = false
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        PageBar("Guild tag", onBack = onBack)
+        LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
+            if (loading) {
+                item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+            } else if (!unlocked) {
+                item {
+                    Column(Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Lock, contentDescription = null, tint = palette.textMuted)
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Guild tags unlock at Catalyst Level 3", fontWeight = FontWeight.SemiBold)
+                                Text("$catalystCount of 6 Catalysts. ${6 - catalystCount} more to unlock.", fontSize = 12.sp, color = palette.textMuted)
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Button(onClick = { showCatalysts = true }) { Text("Boost this space") }
+                        Spacer(Modifier.height(12.dp))
+                        Text("Eight icons, any colour", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = palette.textMuted)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            GuildTagIcon.values().forEach { ic ->
+                                PixelGuildIcon(icon = ic, color = palette.textMuted, size = 20.dp)
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("Once the tag exists, anyone in ${server.name} can wear it. Wearing a tag never needs a Catalyst.", fontSize = 12.sp, color = palette.textMuted)
+                    }
+                }
+            } else {
+                item {
+                    Column(Modifier.padding(20.dp)) {
+                        // Tag text + preview
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Tag", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = palette.textMuted)
+                                Spacer(Modifier.height(4.dp))
+                                OutlinedTextField(
+                                    value = tag,
+                                    onValueChange = { tag = sanitizeGuildTag(it); notice = null; removeArmed = false },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Text("1–4 letters, numbers, dots, underscores or hyphens.", fontSize = 11.sp, color = palette.textMuted)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("Preview", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = palette.textMuted)
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    Modifier.height(34.dp).padding(horizontal = 10.dp).background(palette.elevated, RoundedCornerShape(8.dp)),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("polar", fontWeight = FontWeight.Medium)
+                                    Spacer(Modifier.width(6.dp))
+                                    GuildTagBadge(tag = previewTag, size = GuildTagBadgeSize.Small)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text("Icon", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = palette.textMuted)
+                        Spacer(Modifier.height(6.dp))
+                        // 4 columns
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GuildTagIcon.values().toList().chunked(4).forEach { rowIcons ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    rowIcons.forEach { candidate ->
+                                        Box(
+                                            Modifier
+                                                .weight(1f)
+                                                .aspectRatio(1f)
+                                                .background(if (candidate == icon) palette.accent.copy(alpha = 0.16f) else palette.elevated, RoundedCornerShape(8.dp))
+                                                .border(2.dp, if (candidate == icon) palette.accent else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(8.dp))
+                                                .clickable { icon = candidate; notice = null; removeArmed = false },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            PixelGuildIcon(icon = candidate, color = parseColor(normalizedColor), size = 24.dp)
+                                        }
+                                    }
+                                    // fill empty
+                                    repeat(4 - rowIcons.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text("Colour", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = palette.textMuted)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            listOf("#5865f2","#eb459e","#f23f43","#f0b232","#23a55a","#00a8fc","#9b59b6","#e67e22").forEach { choice ->
+                                Box(
+                                    Modifier
+                                        .size(30.dp)
+                                        .background(parseColor(choice), CircleShape)
+                                        .border(3.dp, if (normalizedColor == choice) Color.White else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
+                                        .clickable { color = choice; notice = null; removeArmed = false },
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Private tag", fontWeight = FontWeight.Medium)
+                                Text("People can still wear the tag, but tapping it says this space is private.", fontSize = 11.sp, color = palette.textMuted)
+                            }
+                            Switch(checked = isPrivate, onCheckedChange = { isPrivate = it; notice = null; removeArmed = false })
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        if (error != null) Text(error!!, color = Brand.dnd, fontSize = 12.sp)
+                        if (notice != null) Text(notice!!, color = Color(0xFF23A55A), fontSize = 12.sp)
+                        if (tagProblem != null) Text(tagProblem!!, color = Brand.dnd, fontSize = 12.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            if (existing != null) {
+                                TextButton(onClick = {
+                                    if (removeArmed) {
+                                        scope.launch {
+                                            saving = true; error = null; notice = null
+                                            try {
+                                                Database.removeServerGuildTag(server.id)
+                                                existing = null
+                                                tag = ""
+                                                icon = GuildTagIcon.Star
+                                                color = "#5865f2"
+                                                isPrivate = false
+                                                notice = "Removed. It no longer appears on anyone's profile."
+                                                removeArmed = false
+                                                GuildTagStore.invalidateAll()
+                                            } catch (e: Exception) { error = e.message }
+                                            saving = false
+                                        }
+                                    } else {
+                                        removeArmed = true; notice = null
+                                    }
+                                }, enabled = !saving) {
+                                    Text(if (removeArmed) "Click again to remove" else "Remove tag", color = Brand.dnd)
+                                }
+                            } else Spacer(Modifier.width(1.dp))
+                            Button(
+                                enabled = !saving && dirty && tagProblem == null,
+                                onClick = {
+                                    scope.launch {
+                                        saving = true; error = null; notice = null
+                                        try {
+                                            val result = Database.setServerGuildTag(server.id, tag, icon, normalizedColor, isPrivate)
+                                            existing = result
+                                            tag = result.tag
+                                            icon = GuildTagIcon.from(result.icon)
+                                            color = result.color
+                                            isPrivate = result.isPrivate == true
+                                            notice = "Saved. Anyone in ${server.name} can wear it from Profile settings."
+                                            removeArmed = false
+                                            GuildTagStore.invalidateAll()
+                                        } catch (e: Exception) { error = e.message }
+                                        saving = false
+                                    }
+                                },
+                            ) { Text(if (saving) "Saving…" else if (existing == null) "Create tag" else "Save changes") }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text("Anyone who is a member of ${server.name} can wear this tag. Only one tag can be worn at a time. If you change the tag, icon or colour later, everyone wearing it will need to put it on again.", fontSize = 12.sp, color = palette.textMuted)
+                    }
+                }
+            }
+        }
+    }
+    if (showCatalysts) {
+        // reuse CatalystSheet? Need import. Skip sheet; just dismiss.
     }
 }

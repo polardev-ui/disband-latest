@@ -30,6 +30,8 @@ import com.wsgpolar.disband.core.Radii
 import com.wsgpolar.disband.core.color
 import com.wsgpolar.disband.data.UserStatus
 import com.wsgpolar.disband.ui.AvatarImage
+import com.wsgpolar.disband.ui.components.GuildTagView
+import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
 
 /**
  * One conversation, mirroring iOS ConversationRow: an 8dp accent unread dot on
@@ -42,6 +44,7 @@ import com.wsgpolar.disband.ui.AvatarImage
 fun ConversationRow(
     iconUrl: String?,
     name: String,
+    userId: String? = null,
     subtitle: String? = null,
     status: UserStatus? = null,
     preview: String? = null,
@@ -93,6 +96,7 @@ fun ConversationRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                GuildTagView(userId = userId, size = GuildTagBadgeSize.Small)
                 Spacer(Modifier.width(8.dp))
                 if (!time.isNullOrEmpty()) {
                     Text(

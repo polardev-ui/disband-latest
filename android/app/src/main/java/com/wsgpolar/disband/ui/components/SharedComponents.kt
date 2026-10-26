@@ -326,6 +326,7 @@ fun FriendRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                GuildTagView(userId = profile?.id, size = GuildTagBadgeSize.Small)
                 profile?.pronouns?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.width(6.dp))
                     Text(it, color = palette.textMuted, fontSize = 12.sp, maxLines = 1)

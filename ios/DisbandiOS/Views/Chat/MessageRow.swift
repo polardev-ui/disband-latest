@@ -143,6 +143,9 @@ struct MessageRow: View {
                             .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
                             .lineLimit(1)
                             .onTapGesture { tapAuthor() }
+                        if message.webhook == nil {
+                            GuildTagView(userId: message.authorId, size: .small)
+                        }
                         if isApp { AppTag() }
                         Text(RelativeTime.short(message.createdAt))
                             .font(.caption2).foregroundStyle(Brand.textMuted)
