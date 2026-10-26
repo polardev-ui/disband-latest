@@ -545,3 +545,77 @@ data class MediaUploadResult(
     val url: String,
     val key: String?,
 )
+// MARK: - Guild tags
+
+enum class GuildTagIcon(val raw: String) {
+    Star("star"), Heart("heart"), Bolt("bolt"), Crown("crown"),
+    Skull("skull"), Moon("moon"), Leaf("leaf"), Flame("flame");
+
+    companion object {
+        fun from(raw: String?): GuildTagIcon =
+            values().firstOrNull { it.raw == raw } ?: Star
+    }
+}
+
+@Serializable
+data class GuildTag(
+    @SerialName("server_id") val serverId: String,
+    val tag: String,
+    val icon: String = "star",
+    val color: String = "#5865f2",
+    @SerialName("is_private") val isPrivate: Boolean? = null,
+) {
+    fun iconEnum(): GuildTagIcon = GuildTagIcon.from(icon)
+}
+
+@Serializable
+data class ProfileGuildTagRow(
+    @SerialName("user_id") val userId: String,
+    @SerialName("server_id") val serverId: String,
+    val tag: String,
+    val icon: String = "star",
+    val color: String = "#5865f2",
+) {
+    fun guildTag(): GuildTag = GuildTag(serverId = serverId, tag = tag, icon = icon, color = color)
+}
+
+@Serializable
+data class GuildTagOption(
+    @SerialName("server_id") val serverId: String,
+    @SerialName("server_name") val serverName: String,
+    @SerialName("server_icon_url") val serverIconUrl: String? = null,
+    val tag: String,
+    val icon: String = "star",
+    val color: String = "#5865f2",
+    @SerialName("is_private") val isPrivate: Boolean? = null,
+    val equipped: Boolean = false,
+) {
+    fun guildTag(): GuildTag = GuildTag(serverId = serverId, tag = tag, icon = icon, color = color, isPrivate = isPrivate)
+}
+
+@Serializable
+data class GuildTagSpace(
+    @SerialName("private") val isPrivate: Boolean? = null,
+    @SerialName("server_id") val serverId: String? = null,
+    val name: String? = null,
+    @SerialName("icon_url") val iconUrl: String? = null,
+    @SerialName("banner_url") val bannerUrl: String? = null,
+    val description: String? = null,
+    val verified: Boolean? = null,
+    val partner: Boolean? = null,
+    val discoverable: Boolean? = null,
+    val joined: Boolean? = null,
+    @SerialName("member_count") val memberCount: Int? = null,
+    @SerialName("online_count") val onlineCount: Int? = null,
+) {
+    val isPrivateSpace: Boolean get() = isPrivate == true
+}
+
+@Serializable
+data class GuildTagSaveParams(
+    @SerialName("p_server_id") val serverId: String,
+    @SerialName("p_tag") val tag: String,
+    @SerialName("p_icon") val icon: String,
+    @SerialName("p_color") val color: String,
+    @SerialName("p_private") val isPrivate: Boolean,
+)

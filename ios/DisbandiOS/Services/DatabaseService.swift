@@ -625,6 +625,89 @@ enum DatabaseService {
         try await client.rpc("leave_group_chat", params: ["p_group_id": groupId]).execute()
     }
 
+    // MARK: - Guild tags
+
+    /// Read the tags worn by a batch of profiles. Missing rows mean "no tag";
+    /// callers cache that fact so a name row does not query repeatedly.
+    static func guildTags(userIds: [String]) async throws -> [ProfileGuildTagRow] {
+        let unique = Array(Set(userIds))
+        guard !unique.isEmpty else { return [] }
+        var rows: [ProfileGuildTagRow] = []
+        for start in stride(from: 0, to: unique.count, by: 100) {
+            let chunk = Array(unique[start ..< min(start + 100, unique.count)])
+            let page: [ProfileGuildTagRow] = try await client
+                .from("profile_guild_tags")
+                .select("user_id, server_id, tag, icon, color")
+                .in("user_id", values: chunk)
+                .execute().value
+            rows.append(contentsOf: page)
+        }
+        return rows
+    }
+
+    static func myGuildTagOptions() async throws -> [GuildTagOption] {
+        let rows: [GuildTagOptionRow] = try await client.rpc("get_my_guild_tags").execute().value
+        return rows.map(\.option)
+    }
+
+    static func equipGuildTag(serverId: String) async throws -> GuildTag {
+        try await client.rpc("equip_guild_tag", params: ["p_server_id": serverId])
+            .execute().value
+    }
+
+    static func clearGuildTag() async throws {
+        try await client.rpc("clear_guild_tag").execute()
+    }
+
+    static func serverGuildTag(serverId: String) async throws -> GuildTag? {
+        let rows: [GuildTag] = try await client
+            .from("server_guild_tags")
+            .select("server_id, tag, icon, color, is_private")
+            .eq("server_id", value: serverId)
+            .limit(1)
+            .execute().value
+        return rows.first
+    }
+
+    private struct SaveGuildTagParams: Encodable {
+        let p_server_id: String
+        let p_tag: String
+        let p_icon: String
+        let p_color: String
+        let p_private: Bool
+    }
+
+    static func setServerGuildTag(serverId: String, tag: String, icon: GuildTagIcon,
+                                  color: String, isPrivate: Bool) async throws -> GuildTag {
+        try await client.rpc("set_server_guild_tag", params: SaveGuildTagParams(
+            p_server_id: serverId,
+            p_tag: tag,
+            p_icon: icon.rawValue,
+            p_color: color,
+            p_private: isPrivate
+        )).execute().value
+    }
+
+    static func removeServerGuildTag(serverId: String) async throws {
+        try await client.rpc("remove_server_guild_tag", params: ["p_server_id": serverId]).execute()
+    }
+
+    static func guildTagSpace(serverId: String) async throws -> GuildTagSpace {
+        try await client.rpc("get_guild_tag_space", params: ["p_server_id": serverId])
+            .execute().value
+    }
+
+    /// Catalyst Level 3 is six Catalysts. The server enforces this; the count
+    /// only decides whether the editor is worth showing.
+    static func catalystCount(serverId: String) async throws -> Int {
+        try await client
+            .from("server_catalysts")
+            .select("id", head: true, count: .exact)
+            .eq("server_id", value: serverId)
+            .execute()
+            .count ?? 0
+    }
+
     // MARK: - Profile & settings updates
 
     struct ProfilePatch: Encodable {
@@ -648,6 +731,23 @@ enum DatabaseService {
             case soundEnabled = "sound_enabled"
             case desktopNotificationsEnabled = "desktop_notifications_enabled"
             case linkPreviewsEnabled = "link_previews_enabled"
+        }
+
+        // Only encode the fields that were actually set. Encoding every nil as
+        // `null` made a partial update (e.g. just a new avatar) overwrite the
+        // other columns with NULL and trip NOT NULL constraints, so profile
+        // pictures silently failed to save.
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            if let displayName { try container.encode(displayName, forKey: .displayName) }
+            if let bio { try container.encode(bio, forKey: .bio) }
+            if let avatarUrl { try container.encode(avatarUrl, forKey: .avatarUrl) }
+            if let bannerUrl { try container.encode(bannerUrl, forKey: .bannerUrl) }
+            if let accentColor { try container.encode(accentColor, forKey: .accentColor) }
+            if let accentColor2 { try container.encode(accentColor2, forKey: .accentColor2) }
+            if let soundEnabled { try container.encode(soundEnabled, forKey: .soundEnabled) }
+            if let desktopNotificationsEnabled { try container.encode(desktopNotificationsEnabled, forKey: .desktopNotificationsEnabled) }
+            if let linkPreviewsEnabled { try container.encode(linkPreviewsEnabled, forKey: .linkPreviewsEnabled) }
         }
     }
 

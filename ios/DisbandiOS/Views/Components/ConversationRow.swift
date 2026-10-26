@@ -8,6 +8,7 @@ import SwiftUI
 struct ConversationRow: View {
     let iconUrl: String?
     let name: String
+    var userId: String? = nil
     var subtitle: String? = nil
     var status: UserStatus? = nil
     var preview: String? = nil
@@ -32,6 +33,7 @@ struct ConversationRow: View {
                         .fontWeight(unread > 0 ? .semibold : .regular)
                         .foregroundStyle(unread > 0 ? Brand.textPrimary : Brand.textSecondary)
                         .lineLimit(1)
+                    GuildTagView(userId: userId, size: .small)
                     Spacer(minLength: 6)
                     if let time, !time.isEmpty {
                         Text(time)

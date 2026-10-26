@@ -154,6 +154,7 @@ struct FriendsTab: View {
                                     .foregroundStyle(Brand.textSecondary)
                                     .lineLimit(1)
                                     .frame(width: 64)
+                                GuildTagView(userId: profile.id, size: .small)
                             }
                         }
                         .buttonStyle(.plain)
@@ -342,6 +343,7 @@ struct FriendRow: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(Brand.textPrimary)
                         .lineLimit(1)
+                    GuildTagView(userId: profile?.id, size: .small)
                     if let pronouns = profile?.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
                             .font(.caption)

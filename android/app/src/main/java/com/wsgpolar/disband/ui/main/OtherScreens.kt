@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -123,6 +124,7 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     var showAccount by remember { mutableStateOf(false) }
     var showStatus by remember { mutableStateOf(false) }
     var showReferrals by remember { mutableStateOf(false) }
+    var showGuildTag by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
     var showNotificationInbox by remember { mutableStateOf(false) }
     var showNotificationSettings by remember { mutableStateOf(false) }
@@ -220,6 +222,11 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
                         tint = Color(0xFFFAA61A), palette = palette,
                     ) { showStatus = true },
                     SettingsRow(
+                        Icons.Filled.Tag, "Guild tag",
+                        detail = null,
+                        tint = Color(0xFF9B59B6), palette = palette,
+                    ) { showGuildTag = true },
+                    SettingsRow(
                         Icons.Filled.CardGiftcard, "Referrals",
                         detail = "Win $100",
                         tint = Color(0xFF1ABC9C), palette = palette,
@@ -305,6 +312,7 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     if (showAccount) AccountSheet(app) { showAccount = false }
     if (showStatus) StatusSheet(app) { showStatus = false }
     if (showReferrals) ReferralsSheet(app) { showReferrals = false }
+    if (showGuildTag) GuildTagPickerScreen(app) { showGuildTag = false }
     if (showAppearance) AppearanceSheet(app) { showAppearance = false }
     if (showNotificationInbox) {
         NotificationInboxSheet(
@@ -437,6 +445,12 @@ private fun ProfileHeroCard(
                     profile.pronouns?.takeIf { it.isNotBlank() }?.let {
                         Text(" · $it", color = palette.textMuted, fontSize = 13.sp)
                     }
+                }
+                Row(modifier = Modifier.offset(y = (-20).dp).padding(top = 4.dp)) {
+                    com.wsgpolar.disband.ui.components.GuildTagView(
+                        userId = profile.id,
+                        size = com.wsgpolar.disband.ui.components.GuildTagBadgeSize.Medium,
+                    )
                 }
                 // Badges: the web's own emblems (see BadgeIcon), catalogue
                 // first, the legacy profile flags as a fallback.

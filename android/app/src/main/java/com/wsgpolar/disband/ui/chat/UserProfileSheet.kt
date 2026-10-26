@@ -37,6 +37,8 @@ import com.wsgpolar.disband.core.seeded
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.ui.AvatarImage
+import com.wsgpolar.disband.ui.components.GuildTagView
+import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
 
 /**
  * Someone's profile, opened by tapping their avatar or name in a chat.
@@ -82,6 +84,8 @@ fun UserProfileSheet(initial: Profile, onDismiss: () -> Unit) {
                 Text(profile.name, color = palette.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 val sub = listOfNotNull("@${profile.handle}", profile.pronouns?.takeIf { it.isNotBlank() }).joinToString(" · ")
                 Text(sub, color = palette.textMuted, fontSize = 14.sp)
+                Spacer(Modifier.height(6.dp))
+                GuildTagView(userId = profile.id, size = GuildTagBadgeSize.Medium)
 
                 profile.activeStatusNote?.let {
                     Spacer(Modifier.height(12.dp))

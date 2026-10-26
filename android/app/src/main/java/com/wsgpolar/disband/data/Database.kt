@@ -832,6 +832,74 @@ object Database {
     suspend fun deleteNote(noteId: String) {
         client.from("notes").delete { filter { eq("id", noteId) } }
     }
+    // MARK: - Guild tags
+
+    suspend fun guildTags(userIds: List<String>): List<ProfileGuildTagRow> {
+        if (userIds.isEmpty()) return emptyList()
+        val unique = userIds.distinct()
+        val rows = mutableListOf<ProfileGuildTagRow>()
+        unique.chunked(100).forEach { chunk ->
+            rows += client.from("profile_guild_tags")
+                .select(columns("user_id, server_id, tag, icon, color")) {
+                    filter { isIn("user_id", chunk) }
+                }
+                .decodeList<ProfileGuildTagRow>()
+        }
+        return rows
+    }
+
+    suspend fun myGuildTagOptions(): List<GuildTagOption> {
+        return postgrest.rpc("get_my_guild_tags").decodeList()
+    }
+
+    suspend fun equipGuildTag(serverId: String): GuildTag {
+        return postgrest.rpc("equip_guild_tag", buildJsonObject { put("p_server_id", serverId) })
+            .decodeAs<GuildTag>()
+    }
+
+    suspend fun clearGuildTag() {
+        postgrest.rpc("clear_guild_tag")
+    }
+
+    suspend fun serverGuildTag(serverId: String): GuildTag? {
+        return client.from("server_guild_tags")
+            .select(columns("server_id, tag, icon, color, is_private")) {
+                filter { eq("server_id", serverId) }
+                limit(1)
+            }
+            .decodeList<GuildTag>()
+            .firstOrNull()
+    }
+
+    suspend fun setServerGuildTag(serverId: String, tag: String, icon: GuildTagIcon,
+                                 color: String, isPrivate: Boolean): GuildTag {
+        return postgrest.rpc("set_server_guild_tag", buildJsonObject {
+            put("p_server_id", serverId)
+            put("p_tag", tag)
+            put("p_icon", icon.raw)
+            put("p_color", color)
+            put("p_private", isPrivate)
+        }).decodeAs<GuildTag>()
+    }
+
+    suspend fun removeServerGuildTag(serverId: String) {
+        postgrest.rpc("remove_server_guild_tag", buildJsonObject { put("p_server_id", serverId) })
+    }
+
+    suspend fun guildTagSpace(serverId: String): GuildTagSpace {
+        return postgrest.rpc("get_guild_tag_space", buildJsonObject { put("p_server_id", serverId) })
+            .decodeAs<GuildTagSpace>()
+    }
+
+    suspend fun catalystCount(serverId: String): Int {
+        // Head count not supported easily; select ids.
+        return client.from("server_catalysts")
+            .select(columns("id")) { filter { eq("server_id", serverId) } }
+            .decodeList<InsertedId>()
+            .size
+    }
+
+
 }
 
 // MARK: - Private row helpers
