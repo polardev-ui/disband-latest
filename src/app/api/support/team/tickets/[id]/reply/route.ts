@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
-import { isSupportStaff } from "@/lib/support/staff";
+
 import { sendResendEmail } from "@/lib/resend";
 
 function escapeHtml(value: string): string {
@@ -34,9 +34,10 @@ function buildReplyHtml(subject: string, reply: string, supportUrl: string) {
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getRouteUser(req);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!isSupportStaff(user.id)) return NextResponse.json({ error: "Access denied." }, { status: 403 });
-
   const supabase = getServiceSupabase();
+  if (!supabase) return NextResponse.json({ error: "Unavailable" }, { status: 500 });
+  const { data: staffProfile } = await supabase.from("profiles").select("is_support_staff").eq("id", user.id).maybeSingle();
+  if (!staffProfile?.is_support_staff) return NextResponse.json({ error: "Access denied." }, { status: 403 });
   if (!supabase) return NextResponse.json({ error: "Unavailable" }, { status: 500 });
 
   const { id } = await params;

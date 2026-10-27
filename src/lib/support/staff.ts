@@ -1,10 +1,13 @@
-export const SUPPORT_STAFF_USER_IDS = [
-  "18c3ef6d-7540-43ec-a826-0bed8d83beb7",
-  "cbcbf98b-aa53-44cf-a2b0-1c551a8267c7",
-  "9970924c-9497-465e-9fbf-8699f3dc3ed0",
-  "772987e0-ed7a-4551-84e6-84e335e0cd33",
-];
+/**
+ * Support-staff access is managed in the database (`profiles.is_support_staff`),
+ * not hardcoded here. This keeps the allowlist editable without a code deploy.
+ *
+ * To grant/revoke access: UPDATE profiles SET is_support_staff = true/false WHERE id = '<user_id>';
+ */
 
-export function isSupportStaff(userId: string): boolean {
-  return SUPPORT_STAFF_USER_IDS.includes(userId);
+/**
+ * Client-side check: reads from an already-loaded profile. Falls back to false.
+ */
+export function isSupportStaffFromProfile(profile: { is_support_staff?: boolean | null } | null | undefined): boolean {
+  return profile?.is_support_staff === true;
 }

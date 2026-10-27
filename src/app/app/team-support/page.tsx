@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { isSupportStaff } from "@/lib/support/staff";
+import { isSupportStaffFromProfile } from "@/lib/support/staff";
 
 interface TeamTicket {
   id: string;
@@ -80,7 +80,13 @@ export default function TeamSupportPage() {
       router.replace("/login?next=%2Fapp%2Fteam-support");
       return false;
     }
-    if (!isSupportStaff(data.session.user.id)) {
+    // Check support staff status from the database (profiles.is_support_staff)
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_support_staff")
+      .eq("id", data.session.user.id)
+      .maybeSingle();
+    if (!isSupportStaffFromProfile(profile)) {
       setPhase("denied");
       return false;
     }
