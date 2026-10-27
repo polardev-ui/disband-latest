@@ -426,15 +426,15 @@ function Row({
         <span
           className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""} ${nameFontClass}`}
           style={
-            p.name_color
+            (p.name_color || p.name_color_2)
               ? p.name_color_2
                 ? {
-                    backgroundImage: `linear-gradient(135deg, ${p.name_color}, ${p.name_color_2})`,
+                    backgroundImage: `linear-gradient(${p.name_gradient_dir || "135deg"}, ${p.name_color || "#ffffff"}, ${p.name_color_2})`,
                     WebkitBackgroundClip: "text",
                     backgroundClip: "text",
                     color: "transparent",
                   }
-                : { color: p.name_color }
+                : { color: p.name_color ?? undefined }
               : gradStyle ?? undefined
           }
         >

@@ -489,17 +489,18 @@ function ChatMessageImpl({
       : author
         ? getUsernameStyle(author)
         : undefined;
+  const nameStart = author?.name_color || (author?.name_color_2 ? "#ffffff" : null);
   const nameStyle =
-    author?.name_color && !webhook
-      ? author.name_color_2
+    nameStart && !webhook
+      ? author?.name_color_2
         ? {
             ...(baseNameStyle ?? {}),
-            backgroundImage: `linear-gradient(135deg, ${author.name_color}, ${author.name_color_2})`,
+            backgroundImage: `linear-gradient(${author?.name_gradient_dir || "135deg"}, ${nameStart}, ${author.name_color_2})`,
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
             color: "transparent",
           }
-        : { ...(baseNameStyle ?? {}), color: author.name_color }
+        : { ...(baseNameStyle ?? {}), color: nameStart }
       : baseNameStyle;
   const nameFontClass = !webhook ? NAME_FONT_CLASS[(author?.name_font as NameFontId) ?? "default"] ?? "" : "";
   const canOpenProfile = !!shownAuthor && !!onAuthorClick && !webhook;

@@ -311,15 +311,15 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
             <p
               className={`truncate text-[20px] font-semibold leading-6 text-header-primary ${NAME_FONT_CLASS[(profile?.name_font as NameFontId) ?? "default"] ?? ""}`}
               style={
-                profile?.name_color
+                (profile?.name_color || profile?.name_color_2)
                   ? profile?.name_color_2
                     ? {
-                        backgroundImage: `linear-gradient(135deg, ${profile.name_color}, ${profile.name_color_2})`,
+                        backgroundImage: `linear-gradient(${profile?.name_gradient_dir || "135deg"}, ${profile?.name_color || "#ffffff"}, ${profile.name_color_2})`,
                         WebkitBackgroundClip: "text",
                         backgroundClip: "text",
                         color: "transparent",
                       }
-                    : { color: profile.name_color }
+                    : { color: profile?.name_color ?? undefined }
                   : undefined
               }
             >
