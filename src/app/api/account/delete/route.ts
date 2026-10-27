@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRouteUser, getServiceSupabase, getUserScopedSupabase } from "@/lib/supabase/server";
+import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { purgeAnonymousAccount } from "@/lib/anon-accounts.server";
 import { findAnonByNumber } from "@/lib/anon-accounts.server";
 
@@ -45,10 +45,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, instant: true });
   }
 
-  const scoped = getUserScopedSupabase(request);
-  if (!scoped) return NextResponse.json({ error: "Unavailable" }, { status: 503 });
-
-  const { data, error } = await scoped.rpc("request_account_deletion");
+  // Use the service role so the deletion timestamps aren't reverted by the
+  // protect_profile_security_fields trigger (which blocks client-side updates).
+  const { data, error } = await service.rpc("request_account_deletion_for_user", { p_user_id: user.id });
   if (error) {
     console.error("[account/delete]", error.message);
     return NextResponse.json({ error: "Could not start deletion. Try again." }, { status: 500 });
