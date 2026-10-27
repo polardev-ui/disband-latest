@@ -12,6 +12,7 @@ interface DisplayNameProps {
     name_font?: string | null;
     name_color?: string | null;
     name_color_2?: string | null;
+    name_gradient_dir?: string | null;
   };
   className?: string;
 }
@@ -26,16 +27,18 @@ export function DisplayName({ profile, className = "" }: DisplayNameProps) {
   const name = displayName(profile);
   const item = shopItem(profile.equipped_name_effect);
   const fontClass = NAME_FONT_CLASS[(profile.name_font as NameFontId) ?? "default"] ?? "";
-  const hasGradient = Boolean(profile.name_color && profile.name_color_2);
+  const startColor = profile.name_color || (profile.name_color_2 ? "#ffffff" : null);
+  const hasGradient = Boolean(startColor && profile.name_color_2);
+  const angle = profile.name_gradient_dir || "135deg";
   const colorStyle = hasGradient
     ? {
-        backgroundImage: `linear-gradient(135deg, ${profile.name_color}, ${profile.name_color_2})`,
+        backgroundImage: `linear-gradient(${angle}, ${startColor}, ${profile.name_color_2})`,
         WebkitBackgroundClip: "text",
         backgroundClip: "text",
         color: "transparent",
       }
-    : profile.name_color
-      ? { color: profile.name_color }
+    : startColor
+      ? { color: startColor }
       : undefined;
 
   if (!item) {

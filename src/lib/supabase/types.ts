@@ -27,6 +27,8 @@ export interface Profile {
   name_color?: string | null;
   /** Optional second color for a gradient name (Aero only). */
   name_color_2?: string | null;
+  /** Gradient direction for name color (e.g. "90deg", "180deg"). */
+  name_gradient_dir?: string | null;
   is_bot?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */
   account_type?: string | null;

@@ -261,6 +261,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [nameFont, setNameFont] = useState<string>("default");
   const [nameColor, setNameColor] = useState<string>("");
   const [nameColor2, setNameColor2] = useState<string>("");
+  const [nameGradientDir, setNameGradientDir] = useState<string>("135deg");
   const [statusDuration, setStatusDuration] = useState<StatusDurationId>("never");
   const [accent1, setAccent1] = useState(DEFAULT_ACCENT);
   const [accent2, setAccent2] = useState("#eb459e");
@@ -653,6 +654,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setNameFont(profile.name_font ?? "default");
     setNameColor(profile.name_color ?? "");
     setNameColor2(profile.name_color_2 ?? "");
+    setNameGradientDir(profile.name_gradient_dir ?? "135deg");
     setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
@@ -756,8 +758,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         accent_color_2: useDefaultAccent ? null : accent2,
         status,
         name_font: nameFont === "default" ? null : nameFont,
-        name_color: subPlan === "aero" ? (nameColor || null) : null,
+        name_color: subPlan === "aero" ? (nameColor || (nameColor2 ? "#ffffff" : null)) : null,
         name_color_2: subPlan === "aero" ? (nameColor2 || null) : null,
+        name_gradient_dir: subPlan === "aero" ? (nameGradientDir || "135deg") : null,
       };
       if (usernameChanged) patch.username = sanitizedUsername;
       if (pendingAvatarFile && avatarUrl) {
@@ -828,6 +831,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     nameFont !== (profile.name_font ?? "default") ||
     nameColor !== (profile.name_color ?? "") ||
     nameColor2 !== (profile.name_color_2 ?? "") ||
+    nameGradientDir !== (profile.name_gradient_dir ?? "135deg") ||
     statusDuration !== presetForExpiresAt(profile.status_expires_at) ||
     status !== (profile.preferred_status ?? profile.status) ||
     useDefaultAccent !== !usesCustomAccent(profile) ||
@@ -859,6 +863,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setNameFont(profile.name_font ?? "default");
     setNameColor(profile.name_color ?? "");
     setNameColor2(profile.name_color_2 ?? "");
+    setNameGradientDir(profile.name_gradient_dir ?? "135deg");
     setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
@@ -1198,6 +1203,23 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           >
                             Clear gradient
                           </button>
+                          <label className="flex flex-col gap-1 text-[12px] text-text-muted">
+                            <span>Gradient direction</span>
+                            <select
+                              value={nameGradientDir}
+                              onChange={(e) => setNameGradientDir(e.target.value)}
+                              className="h-10 rounded border border-divider bg-bg-tertiary px-2 text-text-normal"
+                            >
+                              <option value="90deg">Left to right</option>
+                              <option value="180deg">Top to bottom</option>
+                              <option value="270deg">Right to left</option>
+                              <option value="0deg">Bottom to top</option>
+                              <option value="45deg">Bottom-left to top-right</option>
+                              <option value="135deg">Top-left to bottom-right</option>
+                              <option value="225deg">Top-right to bottom-left</option>
+                              <option value="315deg">Bottom-right to top-left</option>
+                            </select>
+                          </label>
                         </div>
                       ) : (
                         <p className="text-[12px] text-text-muted">Upgrade to Aero to customize your name colour.</p>
@@ -1423,6 +1445,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           name_font: nameFont === "default" ? null : nameFont,
                           name_color: subPlan === "aero" ? (nameColor || null) : null,
                           name_color_2: subPlan === "aero" ? (nameColor2 || null) : null,
+                          name_gradient_dir: subPlan === "aero" ? (nameGradientDir || "135deg") : null,
                         }}
                         displayName={displayName}
                         username={username}
