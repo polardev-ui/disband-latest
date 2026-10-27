@@ -108,6 +108,7 @@ export default function RootLayout({
           className={`${GeistSans.variable} ${NotoSans.variable}`}>
       <head>
         <meta name="referrer" content="no-referrer" />
+        <link rel="preload" as="image" href="/logo.png" />
         <Script id="theme-init" strategy="beforeInteractive">
           {`
 (function () {
