@@ -16,6 +16,7 @@ import { RolePicker } from "@/components/ui/RolePicker";
 import { BotTag } from "@/components/ui/BotTag";
 import { IconClose, IconEdit } from "@/components/icons";
 import { displayName } from "@/lib/utils";
+import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import { safeImageUrl } from "@/lib/safe-url";
 import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
@@ -203,7 +204,12 @@ export function UserProfilePopout({
         {/* Inner card */}
         <div className={`mx-4 mb-4 mt-7 rounded-lg p-3 ${theme ? "bg-black/10" : "bg-bg-floating"}`}>
           <div className="flex items-center gap-1">
-            <h2 className="min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary">{displayName(p)}</h2>
+            <h2
+              className={`min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary ${NAME_FONT_CLASS[(p.name_font as NameFontId) ?? "default"] ?? ""}`}
+              style={p.name_color ? (p.name_color_2 ? { backgroundImage: `linear-gradient(135deg, ${p.name_color}, ${p.name_color_2})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : { color: p.name_color }) : undefined}
+            >
+              {displayName(p)}
+            </h2>
             <GuildTag userId={p.id} size="sm" />
             <BotTag profile={p} size="sm" />
           </div>
