@@ -2,12 +2,15 @@
 
 import { displayName } from "@/lib/utils";
 import { effectClass, shopItem } from "@/lib/shop";
+import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 
 interface DisplayNameProps {
   profile: {
     display_name?: string | null;
     username?: string | null;
     equipped_name_effect?: string | null;
+    name_font?: string | null;
+    name_color?: string | null;
   };
   className?: string;
 }
@@ -21,7 +24,16 @@ interface DisplayNameProps {
 export function DisplayName({ profile, className = "" }: DisplayNameProps) {
   const name = displayName(profile);
   const item = shopItem(profile.equipped_name_effect);
-  if (!item) return <span className={className}>{name}</span>;
+  const fontClass = NAME_FONT_CLASS[(profile.name_font as NameFontId) ?? "default"] ?? "";
+  const colorStyle = profile.name_color ? { color: profile.name_color } : undefined;
+
+  if (!item) {
+    return (
+      <span className={`${fontClass} ${className}`} style={colorStyle}>
+        {name}
+      </span>
+    );
+  }
 
   const fx = effectClass(profile.equipped_name_effect);
 
@@ -29,7 +41,7 @@ export function DisplayName({ profile, className = "" }: DisplayNameProps) {
   // index per span. Everything else paints the whole string at once.
   if (item.id === "name-wave") {
     return (
-      <span className={`fx-name ${fx} ${className}`} aria-label={name}>
+      <span className={`fx-name ${fx} ${fontClass} ${className}`} style={colorStyle} aria-label={name}>
         {Array.from(name).map((ch, i) => (
           <span key={`${ch}-${i}`} style={{ ["--fx-i" as string]: i }} aria-hidden>
             {ch === " " ? " " : ch}
@@ -39,5 +51,9 @@ export function DisplayName({ profile, className = "" }: DisplayNameProps) {
     );
   }
 
-  return <span className={`fx-name ${fx} ${className}`}>{name}</span>;
+  return (
+    <span className={`fx-name ${fx} ${fontClass} ${className}`} style={colorStyle}>
+      {name}
+    </span>
+  );
 }

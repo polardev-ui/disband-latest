@@ -47,6 +47,14 @@ export default function TermsPage() {
             or artificially inflate activity.
           </p>
 
+          <h2 className="text-lg font-semibold text-white">2a. Account sharing and responsibility for content</h2>
+          <p>
+            Sharing, selling, transferring, or allowing anyone else to use your account is against the
+            rules. You are responsible for all activity and all content posted, sent, or uploaded
+            through your account, including content posted by anyone you allow to access it. Violations
+            may result in suspension or termination of the account.
+          </p>
+
           <h2 className="text-lg font-semibold text-white">3. Acceptable use</h2>
           <p>
             You may not use the Service to: harass, threaten, or bully others; distribute malware,

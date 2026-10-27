@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — The Internet, Reconnected. (9:16)</title>
+<!-- Renders any frame of the spot: renderFrame(t). 1080×1920 at CSS pixel
+     ratio 1; VIEWPORT=1080x1920 STAGE=reconnect/stage.html. All type lives in
+     the 3D scene (reconnect/world.js); the page is the canvas and a vignette. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0b0c0e; }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+#vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(115% 72% at 50% 46%, transparent 60%, rgba(0,0,0,.5) 100%); }
+</style>
+</head>
+<body>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<div id="vig"></div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

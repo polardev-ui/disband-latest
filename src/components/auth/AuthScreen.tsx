@@ -54,6 +54,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [birthdate, setBirthdate] = useState("");
   const [error, setError] = useState<string | null>(() => (overlay ? addAccountPrefill?.notice ?? null : null));
 
   const needsConfirmation = error === EMAIL_NOT_CONFIRMED;
@@ -133,13 +134,31 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
           );
         }
       } else {
+        if (!birthdate) {
+          setError("Please enter your date of birth.");
+          submittingRef.current = false;
+          setLoading(false);
+          return;
+        }
+        const birth = new Date(birthdate);
+        const now = new Date();
+        let age = now.getFullYear() - birth.getFullYear();
+        const m = now.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
+        if (Number.isNaN(age) || age < 13) {
+          setError("You must be at least 13 years old to create an account.");
+          submittingRef.current = false;
+          setLoading(false);
+          return;
+        }
+
         const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
         if (sanitized.length < 2) {
           setError("Username must be at least 2 characters (letters, numbers, and underscores).");
         } else if (password !== confirmPassword) {
           setError("Passwords don't match. Re-enter them and try again.");
         } else {
-          const result = await signUp(email, password, username, appliedRef, turnstileToken);
+          const result = await signUp(email, password, username, appliedRef, turnstileToken, birthdate);
           if (result.error) {
             setError(result.error);
           } else if (result.needsEmailConfirmation !== false) {
@@ -462,6 +481,19 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                   {confirmPassword && password !== confirmPassword && (
                     <p className="mt-1 text-xs text-status-dnd">Passwords don&apos;t match yet.</p>
                   )}
+                </Field>
+              )}
+
+              {mode === "signup" && (
+                <Field label="Date of birth">
+                  <input
+                    required
+                    type="date"
+                    value={birthdate}
+                    onChange={(e) => setBirthdate(e.target.value)}
+                    max={new Date().toISOString().slice(0, 10)}
+                    className={fieldClass}
+                  />
                 </Field>
               )}
 

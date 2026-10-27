@@ -52,6 +52,13 @@ export function MyAccountPanel({
   const [signedOut, setSignedOut] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ageValue, setAgeValue] = useState<string>(() => {
+    const meta = (user as { user_metadata?: { birthdate?: string } } | null)?.user_metadata;
+    return meta?.birthdate ?? "";
+  });
+  const [savingAge, setSavingAge] = useState(false);
+  const [ageError, setAgeError] = useState<string | null>(null);
+  const [ageSaved, setAgeSaved] = useState(false);
 
   const copyId = useCallback(async () => {
     if (!profile?.id) return;
@@ -223,6 +230,99 @@ export function MyAccountPanel({
         >
           {signedOut ? "Logged Out Everywhere Else" : signingOut ? "Logging Out…" : "Log Out All Known Devices"}
         </button>
+      </section>
+
+      <div className="my-10 h-px bg-[#3f4147]" />
+
+      {/* Your age */}
+      <section>
+        <h3 className={`${HEADING} mb-2`}>Your Age</h3>
+        <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
+          Your age is used to apply the right requirements for your region. It is stored privately and
+          is never shown to other users. Age can only be set once.
+        </p>
+        {ageValue ? (
+          <p className="text-[14px] text-header-primary">
+            Date of birth on file: <span className="font-mono">{ageValue}</span>
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
+                  Date of birth
+                </span>
+                <input
+                  type="date"
+                  value={ageValue}
+                  onChange={(e) => setAgeValue(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                  className={classicInput}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={savingAge || !ageValue}
+                onClick={async () => {
+                  setSavingAge(true);
+                  setAgeError(null);
+                  setAgeSaved(false);
+                  const { error: err } = await getSupabaseClient().auth.updateUser({
+                    data: { birthdate: ageValue || null },
+                  });
+                  setSavingAge(false);
+                  if (err) setAgeError(err.message);
+                  else setAgeSaved(true);
+                }}
+                className={`${classicBtn.brand} ${classicBtn.sm}`}
+              >
+                {savingAge ? "Saving…" : "Save"}
+              </button>
+            </div>
+            {ageError && <p className="mt-3 text-[14px] text-status-dnd">{ageError}</p>}
+            {ageSaved && <p className="mt-3 text-[14px] text-status-online">Saved. Your age is not shown publicly.</p>}
+          </>
+        )}
+      </section>
+
+      <div className="my-10 h-px bg-[#3f4147]" />
+
+      {/* Your data */}
+      <section>
+        <h3 className={`${HEADING} mb-2`}>Your Data</h3>
+        <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
+          Download a copy of your account data, or request deletion. Deletion schedules your account for removal and cancels any active subscription per our terms.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const payload = {
+                exported_at: new Date().toISOString(),
+                account: {
+                  id: profile?.id ?? null,
+                  username: profile?.username ?? null,
+                  display_name: profile?.display_name ?? null,
+                  email: user?.email ?? null,
+                  created_at: profile?.created_at ?? null,
+                },
+                profile: profile ?? null,
+              };
+              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `disband-data-${profile?.id ?? "account"}.json`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+            }}
+            className={`${classicBtn.grey} ${classicBtn.sm}`}
+          >
+            Download My Data
+          </button>
+        </div>
       </section>
 
       <div className="my-10 h-px bg-[#3f4147]" />
