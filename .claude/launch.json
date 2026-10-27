@@ -22,6 +22,21 @@
       ],
       "port": 5173,
       "autoPort": false
+    },
+    {
+      "name": "disband-classic",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "../disband-classic",
+        "exec",
+        "next",
+        "dev",
+        "--port",
+        "3017"
+      ],
+      "port": 3017,
+      "autoPort": false
     }
   ]
 }

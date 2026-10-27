@@ -13,6 +13,8 @@ export const PEOPLE = {
   mila: { name: "Mila Oduya", initials: "M", color: "#ed4245", status: "online" },
   kai: { name: "Kai Tanaka", initials: "K", color: "#3ba55d", status: "offline" },
   disband: { name: "Disband", logo: true, status: "online" },
+  // An anonymous account as the app creates it: display name "Anonymous", no avatar.
+  anon: { name: "Anonymous", initials: "A", color: "#4e5058", status: "online" },
 };
 
 // Rail order matches the app: inbox, then joined spaces, then add / discover.

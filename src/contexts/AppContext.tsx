@@ -4901,6 +4901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const kickMember = useCallback(async (targetUserId: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("kick_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -4912,6 +4913,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const banMember = useCallback(async (targetUserId: string, reason?: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("ban_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -4924,6 +4926,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const unbanMember = useCallback(async (targetUserId: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("unban_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -4935,6 +4938,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const timeoutMember = useCallback(async (targetUserId: string, seconds: number, reason?: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("timeout_server_member", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -4948,6 +4952,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const removeMemberTimeout = useCallback(async (targetUserId: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("remove_timeout", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -5054,6 +5059,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [serverFolders]);
 
   const setServerSlot = useCallback(async (serverId: string, position: number, folderId: string | null) => {
+    await ensureFreshSession();
     const supabase = getSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return "Not signed in";
@@ -5074,6 +5080,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const reorderServers = useCallback(async (slots: { server_id: string; position: number; folder_id: string | null }[]) => {
+    await ensureFreshSession();
     const supabase = getSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return "Not signed in";
@@ -5102,8 +5109,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Desktop (and any session that has sat idle) can end up with an expired
+  // access token; permission-gated RPCs then run as anon (auth.uid() is null)
+  // and fail with "Insufficient permissions". Refresh before mutating.
+  const ensureFreshSession = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase.auth.getSession();
+    if (data.session && isAccessTokenExpired(data.session)) {
+      await refreshSessionOnce();
+    }
+  }, []);
+
   const createRole = useCallback(async (data: { name: string; color: string; icon?: string | null; permissions?: ServerRole["permissions"] }) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().from("server_roles").insert({
       server_id: activeServerId,
       name: data.name.trim(),
@@ -5122,6 +5141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patch: Partial<Pick<ServerRole, "name" | "color" | "icon" | "permissions" | "gradient_to" | "gradient_animated" | "self_assignable">>,
   ) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const update: Record<string, unknown> = {};
     if (patch.name !== undefined) update.name = patch.name.trim();
     if (patch.color !== undefined) update.color = patch.color;
@@ -5142,6 +5162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMemberRoles = useCallback(async (targetUserId: string, roleIds: string[]) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("set_member_roles", {
       p_server_id: activeServerId,
       p_user_id: targetUserId,
@@ -5173,6 +5194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setSelfRoles = useCallback(async (roleIds: string[]) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     if (!userId) return "Sign in first";
     const { error } = await getSupabaseClient().rpc("set_self_member_roles", {
       p_server_id: activeServerId,
@@ -5239,6 +5261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createChannel = useCallback(async (data: { name: string; type?: ChannelType; categoryId?: string | null }) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { data: id, error } = await getSupabaseClient().rpc("create_channel", {
       p_server_id: activeServerId,
       p_name: data.name.trim(),
@@ -5253,6 +5276,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setChannelReadOnly = useCallback(async (channelId: string, readOnly: boolean) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient()
       .from("channels")
       .update({ read_only: readOnly })
@@ -5264,6 +5288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const renameChannel = useCallback(async (channelId: string, name: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("rename_channel", {
       p_channel_id: channelId,
       p_name: name.trim(),
@@ -5275,6 +5300,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteChannel = useCallback(async (channelId: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("delete_channel", {
       p_channel_id: channelId,
     });
@@ -5286,6 +5312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createCategory = useCallback(async (name: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { data: id, error } = await getSupabaseClient().rpc("create_category", {
       p_server_id: activeServerId,
       p_name: name.trim(),
@@ -5297,6 +5324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const renameCategory = useCallback(async (categoryId: string, name: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("rename_category", {
       p_category_id: categoryId,
       p_name: name.trim(),
@@ -5308,6 +5336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("delete_category", {
       p_category_id: categoryId,
     });
@@ -5318,6 +5347,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const moveChannel = useCallback(async (channelId: string, categoryId: string | null, index: number) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("move_channel", {
       p_channel_id: channelId,
       p_category_id: categoryId,
@@ -5330,6 +5360,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const moveCategory = useCallback(async (categoryId: string, index: number) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("move_category", {
       p_category_id: categoryId,
       p_index: index,
@@ -5341,6 +5372,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteRole = useCallback(async (roleId: string) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("delete_server_role", {
       p_role_id: roleId,
     });
@@ -5351,6 +5383,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const moveRole = useCallback(async (roleId: string, position: number) => {
     if (!activeServerId) return "No space selected";
+    await ensureFreshSession();
     const { error } = await getSupabaseClient().rpc("move_role", {
       p_role_id: roleId,
       p_new_position: position,

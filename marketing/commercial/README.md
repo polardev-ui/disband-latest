@@ -117,6 +117,140 @@ npm run nextapp:render   # -> build/nextapp-frames/
 npm run nextapp:encode   # -> build/disband-nextapp-9x16-1080p.mp4
 ```
 
+## Anonymous Accounts launch (9:16)
+
+A 20-second 1080×1920 spot at 30 fps announcing anonymous accounts, in a dark
+violet "premium dark-tech" look: glass cards with neon rims, bokeh, fog, grid,
+scanlines and grain. A ghost dissolves over sixteen spinning reels ("Want to
+vanish from the internet?"); the account-number card types its 16 digits and
+flashes NEW; it turns over to a scrambled random @disband.dev address; three
+chips go green under a scanner (No email · No IP logging · No password) while a
+silhouette walks through and dissolves; five duration tiles flip and 1 week is
+chosen; Can / Can't panels with a lock; a profile counts down and burns to
+embers while its messages turn to ash; a golden vault opens on a JSON copy with
+a 30-day ring; an Anonymous member appears in #general on the web app (the
+feature is web and desktop only); the end card is the glass mark, DISBAND,
+"Open Disband →" and a "Create an Anonymous Account" button with NEW. Captions
+sit in the platform-safe zone; the last 0.3 s ease back to the void so the spot
+loops.
+
+Every line is checked against the shipped feature (`src/lib/anon-accounts*.ts`,
+`src/app/api/auth/anon/*`, `AnonymousAuthPanel.tsx`); see `COPY` in
+`anon/timeline.js`. Demo values are fake. `anon/handoff.mjs` samples the stage
+into `anon/handoff.json` and `anon/HANDOFF.md`: per-layer keyframes (screen and
+world position, scale, rotation, opacity) for a UI developer. Soundtrack in
+`tools/audio_anon.py` (A minor, 120 BPM, about −14 LUFS).
+
+```bash
+npm run capture
+npm run anon:audio       # -> build/audio/anon-mix.wav
+npm run anon:render      # -> build/anon-frames/ (30 fps)
+npm run anon:encode      # -> build/disband-anon-9x16-1080p30.mp4 (~14 Mbps)
+npm run anon:handoff     # -> anon/handoff.json, anon/HANDOFF.md
+```
+
+## Anonymous accounts — "Nothing to Keep" (9:16)
+
+A 24.5-second 1080×1920 spot at 30 fps in black, white and grays, built on the
+verified behaviour in `ephemeral/FEATURE-SUMMARY.md` (read that first: it lists
+what the code confirms and which claims were narrowed). A point of light opens
+into the phone's outline and the phone materialises behind a scan line; the
+real create screen (captured from the running web app at phone size and framed
+in mobile-browser chrome at disband.dev) shows the heading and the durations,
+1 day → 1 week; sixteen digits snap into four groups on four clicks and fly onto
+the real login field; five duration panels align in white, 1 WEEK lit in the
+app's selection blue; a timer ring closes round the phone and the screen breaks
+into small squares that drift into the dark, under near silence; the end card
+holds the mark, "Anonymous accounts. Your terms.", the slogan, DISBAND.DEV and a
+disclosure line about the scheduled sweep and the 30-day copy.
+
+The screens come from the app itself: run the web app locally, then
+`npm run ephemeral:capture` (it opens the anonymous panels at 402×748 pt and
+types the fictional number into the login field; nothing is submitted).
+
+```bash
+npm run ephemeral:capture   # needs the web app on APP_URL (default http://localhost:3000)
+npm run ephemeral:audio     # -> build/audio/ephemeral-mix.wav
+npm run ephemeral:render    # -> build/ephemeral-frames/ (30 fps)
+npm run ephemeral:encode    # -> build/disband-anonymous-accounts-9x16-1080p30.mp4
+```
+
+## "A Familiar Feeling. A New Home." — classic UI (9:16, TikTok)
+
+A 38-second 1080×1920 spot at 30 fps for TikTok and TikTok Promote, showing
+the classic web/desktop UI from the `disband-classic` worktree. Every UI frame
+is a capture of that running app (its `/dev/classic` preview: the real
+`DiscordApp` against fictional sample data, no sign-in), at 1440×900 and 3×,
+on flat window planes in 3D; close-ups frame regions of those captures so text
+stays sharp. A white kite turns into the mark; panels cut from the real UI
+emerge under "Remember when online communities felt simple?"; the app window
+turns frontal ("Meet Disband." / "A new home for your communities."); six
+framings of real states (rail hover, channel hover, typing in the composer,
+member list and a profile card, a DM with the profile rail, the whole app);
+"Familiar by design." / "Built for your next community."; the window folds and
+turns into the mark on white with DISBAND and the slogan; the end card holds the
+mark, a thumbnail of the app, "Your community starts here." and disband.dev.
+See `classic/PRODUCTION-SUMMARY.md` for what was inspected and the limits of
+the preview (no sending; calls and signed-in screens not shown).
+
+```bash
+# with disband-classic's dev server running (APP_URL, default http://localhost:3000)
+npm run classic:capture   # -> build/classic/*.png
+npm run classic:audio     # -> build/audio/classic-mix.wav (original score)
+npm run classic:render    # -> build/classic-frames/ (30 fps)
+npm run classic:encode    # -> build/disband-classic-9x16-1080p30.mp4
+```
+
+## "The Way It Used to Feel." — morphing classic UI (9:16, TikTok)
+
+A 35-second 1080×1920 spot at 30 fps for TikTok and TikTok Promote in which the
+classic web/desktop UI from `disband-classic` is the motion graphics. Two
+captures of its `/dev/classic` preview (the real `DiscordApp` against fictional
+sample data, no sign-in) — a space with the member list and a DM with the
+profile rail, 1440×900 at 3× — are cut into pieces by the rectangles measured
+from the live DOM (rail items, channel rows, message groups, regions), so every
+morph starts and ends on the exact interface: a point of light opens into the
+mark's hull, whose edges become the window's frame as the regions snap in; the
+rail's items become a strip that travels, turns over into the channel rows and
+drops into the column; the camera runs down the list and through the column
+edge; the window splits into bands at the message edges that fan, flip and
+close as the DM view; the DM view breaks apart and converges, flipping in
+flight, as the whole app; the app folds in on itself twice into one block that
+turns once and becomes the mark; the end holds the mark over the app, "FIND
+YOUR COMMUNITY." and disband.dev. Type is Inter 800 stacked in the app's own
+greys for depth. See `morph/ART-DIRECTION.md` for the palette and morph plan.
+
+```bash
+# with disband-classic's dev server running (APP_URL, default http://localhost:3017)
+npm run morph:capture   # -> build/morph/{main,dm}.png and part rectangles {main,dm}.json
+npm run morph:audio     # -> build/audio/morph-mix.wav (original score and sound design)
+npm run morph:render    # -> build/morph-frames/ (30 fps)
+npm run morph:encode    # -> build/disband-morph-9x16-1080p30.mp4
+```
+
+## "The Internet, Reconnected." — the classic UI as an architectural world (9:16, TikTok)
+
+A 38-second 1080×1920 spot at 30 fps for TikTok and TikTok Promote. One
+continuous 3D scene built from the parts of the classic UI in `disband-classic`
+(its `/dev/classic` preview: the real `DiscordApp` on fictional sample data):
+every part sits at the rectangle measured from the live DOM, so whenever the
+parts are home the world is the real interface. The layout's dividers become
+metal lines that link the rail's icons (extruded tokens with the captured
+icons on their faces), run out into a grid, become rails in depth along which
+the rows and messages fly into place, and finally bend into the outline of the
+official mark; type is 3D and emerges through those lines. See
+`reconnect/PRODUCTION-NOTES.md` and the asset library index
+`reconnect/library/LIBRARY.md`.
+
+```bash
+# with disband-classic's dev server running (APP_URL, default http://localhost:3017)
+npm run reconnect:capture   # -> reconnect/library/ (captures, layout.json, crops, brand)
+npm run reconnect:audio     # -> build/audio/reconnect-mix.wav (original score and sound design)
+npm run reconnect:preview   # -> build/reconnect-preview/ (0–12 s, 3 samples, for review)
+npm run reconnect:render    # -> build/reconnect-frames/ (30 fps)
+npm run reconnect:encode    # -> build/disband-reconnected-9x16-1080p30.mp4
+```
+
 ## How it fits together
 
 | Path | What it does |
@@ -133,6 +267,11 @@ npm run nextapp:encode   # -> build/disband-nextapp-9x16-1080p.mp4
 | `connect/*`, `tools/audio_connect.py` | "A New Way to Connect.": cue sheet, prism/converge/pair/type shots, type moves and iris, and its soundtrack. |
 | `loud/*`, `tools/audio_loud.py` | "The internet is loud.": cue sheet, the fragment field, the layered phone and recede, the silhouette-to-mark morph, and its soundtrack. |
 | `nextapp/*`, `tools/audio_nextapp.py` | "Not another boring app.": cue sheet, hero/corridor, the cut-on-beat shots, the row and the extruded mark, the word flip, and its soundtrack. |
+| `anon/*`, `tools/audio_anon.py` | Anonymous Accounts launch: cue sheet and verified copy, glass-card shots with the dissolve shader and embers, captions and overlays, the keyframe handoff, and its soundtrack. |
+| `ephemeral/*`, `tools/audio_ephemeral.py` | "Nothing to Keep": verified feature summary, real-app capture, outline/materialise, digits onto the login field, duration panels, timer and fragment dissolve, end card, and its soundtrack. |
+| `classic/*`, `tools/audio_classic.py` | Classic UI TikTok spot: production summary, capture of the classic app, window/panel shots, statements and end card, and its soundtrack. |
+| `morph/*`, `tools/audio_morph.py` | "The Way It Used to Feel.": art direction, capture of the classic app with part rectangles, the one continuous morphing scene (tiles cut from the captures), dimensional type and end lines, and its soundtrack. |
+| `reconnect/*`, `tools/audio_reconnect.py` | "The Internet, Reconnected.": asset library capture and crops, cue sheet, the world (lines, tokens, strata, 3D type, the mark, the keyframed camera), the stage, production notes, and its soundtrack. |
 | `tools/render.mjs`, `tools/encode.sh` | Parallel headless frame capture (`STAGE` picks the page, `VIEWPORT` its size) and the delivery encode (BT.709). |
 
 ## About the screens
@@ -154,7 +293,7 @@ persona is a placeholder, "Riley Park".
 
 ## Credits
 
-Inter typeface, SIL Open Font License (`assets/fonts/OFL.txt`). Roboto
+Inter typeface, SIL Open Font License (`assets/fonts/OFL.txt`). JetBrains Mono, SIL Open Font License (`assets/fonts/JetBrainsMono-OFL.txt`). Roboto
 typeface, SIL Open Font License (`assets/fonts/Roboto-OFL.txt`). Material
 Design icons © Google, Apache License 2.0 (`assets/material-icons/LICENSE`). Twemoji
 graphics © Twitter, Inc. and contributors, CC BY 4.0. three.js, MIT. The
