@@ -10,6 +10,7 @@ import { IconCheck, IconPlus, IconSettings, IconChevron, IconEdit } from "@/comp
 import { getAccentBackground, usesCustomAccent } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import { displayName } from "@/lib/utils";
+import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import { statusLabel } from "@/lib/presence";
 import {
   STATUS_DURATION_PRESETS,
@@ -307,7 +308,23 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
           </div>
 
           <div className="mt-3 rounded-t-lg bg-bg-floating px-3 pb-2 pt-3">
-            <p className="truncate text-[20px] font-semibold leading-6 text-header-primary">{name}</p>
+            <p
+              className={`truncate text-[20px] font-semibold leading-6 text-header-primary ${NAME_FONT_CLASS[(profile?.name_font as NameFontId) ?? "default"] ?? ""}`}
+              style={
+                profile?.name_color
+                  ? profile?.name_color_2
+                    ? {
+                        backgroundImage: `linear-gradient(135deg, ${profile.name_color}, ${profile.name_color_2})`,
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
+                      }
+                    : { color: profile.name_color }
+                  : undefined
+              }
+            >
+              {name}
+            </p>
             <p className="truncate text-[14px] leading-[18px] text-header-primary">
               {profile?.username ?? ""}
               <span className="text-header-secondary"> • {statusText}</span>
