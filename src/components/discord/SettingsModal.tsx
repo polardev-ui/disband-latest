@@ -1049,6 +1049,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           // Local previews win until the uploaded URL lands.
                           avatar_url: removeAvatar ? null : avatarPreview ?? profile.avatar_url,
                           banner_url: removeBanner ? null : bannerPreview ?? profile.banner_url,
+                          name_font: nameFont === "default" ? null : nameFont,
+                          name_color: subPlan === "aero" ? (nameColor || null) : null,
                         }}
                         displayName={displayName}
                         username={username}
