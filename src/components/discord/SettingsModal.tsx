@@ -77,7 +77,7 @@ import {
   usesCustomAccent,
   type ProfileAccentFields,
 } from "@/lib/profileColor";
-import { NAME_FONT_OPTIONS, isNameFontAvailable } from "@/lib/nameFonts";
+import { NAME_FONT_OPTIONS, isNameFontAvailable, NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import type { UserStatus, Profile } from "@/lib/supabase/types";
 import {
   STATUS_DURATION_PRESETS,
@@ -1034,71 +1034,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           {activeTab ? t(activeTab.label) : t("Settings")}
         </h2>
               {tab === "profile" && (
-                <div className="pb-20">
-                  {profile && (
-                    <div className="mb-6">
-                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                        Preview
-                      </p>
-                      <ProfilePreview
-
-                        profile={{
-                          ...profile,
-                          display_name: displayName,
-                          username,
-                          bio,
-                          pronouns,
-                          status_note: statusNote,
-                          accent_color: useDefaultAccent ? null : accent1,
-                          accent_color_2: useDefaultAccent ? null : accent2,
-                          // Local previews win until the uploaded URL lands.
-                          avatar_url: removeAvatar ? null : avatarPreview ?? profile.avatar_url,
-                          banner_url: removeBanner ? null : bannerPreview ?? profile.banner_url,
-                          name_font: nameFont === "default" ? null : nameFont,
-                          name_color: subPlan === "aero" ? (nameColor || null) : null,
-                          name_color_2: subPlan === "aero" ? (nameColor2 || null) : null,
-                        }}
-                        displayName={displayName}
-                        username={username}
-                        bio={bio}
-                        status={status}
-
-                        onChangeAvatar={pickAvatar}
-                        onChangeBanner={(file) => void handleBanner(file)}
-                      />
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRemoveAvatar(true);
-                            if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
-                            previewUrlsRef.current.avatar = null;
-                            setAvatarPreview(null);
-                            setPendingAvatarFile(null);
-                          }}
-                          className={`${classicBtn.grey} ${classicBtn.sm}`}
-                        >
-                          Remove avatar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRemoveBanner(true);
-                            if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
-                            previewUrlsRef.current.banner = null;
-                            setBannerPreview(null);
-                            setPendingBannerFile(null);
-                          }}
-                          className={`${classicBtn.grey} ${classicBtn.sm}`}
-                        >
-                          Remove banner
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <SettingsSection
-                    title="Identity"
+                <div className="grid grid-cols-1 gap-6 pb-20 lg:grid-cols-[1fr_320px]">
+                  <div className="min-w-0 space-y-6">
+                    <SettingsSection
+                      title="Identity"
                     description="How your name appears across Disband."
                   >
                     <SettingRow label="Display name" htmlFor="settings-display-name" stacked>
@@ -1213,7 +1152,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             key={f.id}
                             type="button"
                             onClick={() => setNameFont(f.id)}
-                            className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                            className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${NAME_FONT_CLASS[f.id as NameFontId] ?? ""} ${
                               nameFont === f.id
                                 ? "bg-brand text-white"
                                 : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
@@ -1464,6 +1403,66 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </div>
                   )}
                 </div>
+
+                {profile && (
+                  <div className="hidden lg:block">
+                    <div className="sticky top-4">
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Preview</p>
+                      <ProfilePreview
+                        profile={{
+                          ...profile,
+                          display_name: displayName,
+                          username,
+                          bio,
+                          pronouns,
+                          status_note: statusNote,
+                          accent_color: useDefaultAccent ? null : accent1,
+                          accent_color_2: useDefaultAccent ? null : accent2,
+                          avatar_url: removeAvatar ? null : avatarPreview ?? profile.avatar_url,
+                          banner_url: removeBanner ? null : bannerPreview ?? profile.banner_url,
+                          name_font: nameFont === "default" ? null : nameFont,
+                          name_color: subPlan === "aero" ? (nameColor || null) : null,
+                          name_color_2: subPlan === "aero" ? (nameColor2 || null) : null,
+                        }}
+                        displayName={displayName}
+                        username={username}
+                        bio={bio}
+                        status={status}
+                        onChangeAvatar={pickAvatar}
+                        onChangeBanner={(file) => void handleBanner(file)}
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRemoveAvatar(true);
+                            if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+                            previewUrlsRef.current.avatar = null;
+                            setAvatarPreview(null);
+                            setPendingAvatarFile(null);
+                          }}
+                          className={`${classicBtn.grey} ${classicBtn.sm}`}
+                        >
+                          Remove avatar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRemoveBanner(true);
+                            if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+                            previewUrlsRef.current.banner = null;
+                            setBannerPreview(null);
+                            setPendingBannerFile(null);
+                          }}
+                          className={`${classicBtn.grey} ${classicBtn.sm}`}
+                        >
+                          Remove banner
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               )}
 
               {tab === "account" && (
