@@ -260,6 +260,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [statusNote, setStatusNote] = useState("");
   const [nameFont, setNameFont] = useState<string>("default");
   const [nameColor, setNameColor] = useState<string>("");
+  const [nameColor2, setNameColor2] = useState<string>("");
   const [statusDuration, setStatusDuration] = useState<StatusDurationId>("never");
   const [accent1, setAccent1] = useState(DEFAULT_ACCENT);
   const [accent2, setAccent2] = useState("#eb459e");
@@ -651,6 +652,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setStatusNote(profile.status_note ?? "");
     setNameFont(profile.name_font ?? "default");
     setNameColor(profile.name_color ?? "");
+    setNameColor2(profile.name_color_2 ?? "");
     setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
@@ -755,6 +757,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         status,
         name_font: nameFont === "default" ? null : nameFont,
         name_color: subPlan === "aero" ? (nameColor || null) : null,
+        name_color_2: subPlan === "aero" ? (nameColor2 || null) : null,
       };
       if (usernameChanged) patch.username = sanitizedUsername;
       if (pendingAvatarFile && avatarUrl) {
@@ -824,6 +827,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     statusNote !== (profile.status_note ?? "") ||
     nameFont !== (profile.name_font ?? "default") ||
     nameColor !== (profile.name_color ?? "") ||
+    nameColor2 !== (profile.name_color_2 ?? "") ||
     statusDuration !== presetForExpiresAt(profile.status_expires_at) ||
     status !== (profile.preferred_status ?? profile.status) ||
     useDefaultAccent !== !usesCustomAccent(profile) ||
@@ -854,6 +858,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setStatusNote(profile.status_note ?? "");
     setNameFont(profile.name_font ?? "default");
     setNameColor(profile.name_color ?? "");
+    setNameColor2(profile.name_color_2 ?? "");
     setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
@@ -1051,6 +1056,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           banner_url: removeBanner ? null : bannerPreview ?? profile.banner_url,
                           name_font: nameFont === "default" ? null : nameFont,
                           name_color: subPlan === "aero" ? (nameColor || null) : null,
+                          name_color_2: subPlan === "aero" ? (nameColor2 || null) : null,
                         }}
                         displayName={displayName}
                         username={username}
@@ -1227,12 +1233,33 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       stacked
                     >
                       {subPlan === "aero" ? (
-                        <input
-                          type="color"
-                          value={nameColor || "#ffffff"}
-                          onChange={(e) => setNameColor(e.target.value)}
-                          className="h-10 w-20 cursor-pointer rounded border border-divider bg-bg-tertiary"
-                        />
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="flex flex-col gap-1 text-[12px] text-text-muted">
+                            <span>Start colour</span>
+                            <input
+                              type="color"
+                              value={nameColor || "#ffffff"}
+                              onChange={(e) => setNameColor(e.target.value)}
+                              className="h-10 w-20 cursor-pointer rounded border border-divider bg-bg-tertiary"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1 text-[12px] text-text-muted">
+                            <span>End colour (gradient)</span>
+                            <input
+                              type="color"
+                              value={nameColor2 || nameColor || "#ffffff"}
+                              onChange={(e) => setNameColor2(e.target.value)}
+                              className="h-10 w-20 cursor-pointer rounded border border-divider bg-bg-tertiary"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setNameColor2("")}
+                            className="text-[12px] text-text-muted hover:text-text-normal"
+                          >
+                            Clear gradient
+                          </button>
+                        </div>
                       ) : (
                         <p className="text-[12px] text-text-muted">Upgrade to Aero to customize your name colour.</p>
                       )}

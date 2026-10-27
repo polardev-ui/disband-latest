@@ -1,0 +1,1 @@
+alter table public.profiles add column if not exists name_color_2 text;

@@ -25,6 +25,8 @@ export interface Profile {
   name_font?: string | null;
   /** Optional custom display-name color (Aero only). */
   name_color?: string | null;
+  /** Optional second color for a gradient name (Aero only). */
+  name_color_2?: string | null;
   is_bot?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */
   account_type?: string | null;

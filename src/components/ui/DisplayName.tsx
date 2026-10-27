@@ -11,6 +11,7 @@ interface DisplayNameProps {
     equipped_name_effect?: string | null;
     name_font?: string | null;
     name_color?: string | null;
+    name_color_2?: string | null;
   };
   className?: string;
 }
@@ -25,7 +26,17 @@ export function DisplayName({ profile, className = "" }: DisplayNameProps) {
   const name = displayName(profile);
   const item = shopItem(profile.equipped_name_effect);
   const fontClass = NAME_FONT_CLASS[(profile.name_font as NameFontId) ?? "default"] ?? "";
-  const colorStyle = profile.name_color ? { color: profile.name_color } : undefined;
+  const hasGradient = Boolean(profile.name_color && profile.name_color_2);
+  const colorStyle = hasGradient
+    ? {
+        backgroundImage: `linear-gradient(135deg, ${profile.name_color}, ${profile.name_color_2})`,
+        WebkitBackgroundClip: "text",
+        backgroundClip: "text",
+        color: "transparent",
+      }
+    : profile.name_color
+      ? { color: profile.name_color }
+      : undefined;
 
   if (!item) {
     return (

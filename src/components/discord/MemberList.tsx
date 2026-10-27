@@ -423,7 +423,23 @@ function Row({
         className={`flex w-full min-w-0 items-center gap-1 truncate text-[16px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
         style={color ? { color } : undefined}
       >
-        <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""} ${nameFontClass}`} style={p.name_color ? { color: p.name_color } : gradStyle ?? undefined}>{displayName(p)}</span>
+        <span
+          className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""} ${nameFontClass}`}
+          style={
+            p.name_color
+              ? p.name_color_2
+                ? {
+                    backgroundImage: `linear-gradient(135deg, ${p.name_color}, ${p.name_color_2})`,
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                    color: "transparent",
+                  }
+                : { color: p.name_color }
+              : gradStyle ?? undefined
+          }
+        >
+          {displayName(p)}
+        </span>
         <GuildTag userId={p.id} size="sm" />
         {iconRole && <RoleIcon icon={iconRole.icon} name={iconRole.name} size={15} />}
         <BotTag profile={p} size="sm" />
