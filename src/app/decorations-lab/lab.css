@@ -1,0 +1,46 @@
+.lab { min-height: 100vh; background: var(--lab-bg); color: #dbdee1; font-family: var(--font-sans, system-ui), system-ui, sans-serif; padding-bottom: 80px; }
+.lab-light { color: #2e3338; }
+.lab-bar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 24px; background: color-mix(in srgb, var(--lab-bg) 88%, #000); border-bottom: 1px solid rgb(255 255 255 / .06); }
+.lab-light .lab-bar { background: #e3e5e8; border-color: rgb(0 0 0 / .08); }
+.lab-home { font-weight: 700; letter-spacing: -.01em; color: inherit; text-decoration: none; }
+.lab-home span { opacity: .4; margin: 0 4px; }
+.lab-knobs { display: flex; flex-wrap: wrap; gap: 8px; }
+.lab-knobs [role="group"] { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid rgb(127 127 127 / .3); }
+.lab button { font: inherit; font-size: 13px; padding: 6px 10px; color: inherit; background: rgb(127 127 127 / .12); border: 0; cursor: pointer; text-transform: capitalize; }
+.lab-knobs > button { border-radius: 6px; border: 1px solid rgb(127 127 127 / .3); }
+.lab button[aria-pressed="true"] { background: #5865f2; color: #fff; }
+.lab-intro { max-width: 1240px; margin: 32px auto 8px; padding: 0 24px; }
+.lab-intro h1 { font-size: 28px; font-weight: 750; letter-spacing: -.02em; }
+.lab-intro p { opacity: .7; margin-top: 6px; }
+.lab-grid { max-width: 1240px; margin: 24px auto; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+.lab-card { border-radius: 14px; background: rgb(0 0 0 / .18); border: 1px solid rgb(255 255 255 / .06); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.lab-light .lab-card { background: #fff; border-color: rgb(0 0 0 / .06); }
+.lab-card header { display: flex; justify-content: space-between; gap: 12px; }
+.lab-card h2 { font-size: 17px; font-weight: 700; }
+.lab-card header p { font-size: 13px; opacity: .7; margin-top: 2px; }
+.lab-price { font-size: 12px; opacity: .65; white-space: nowrap; }
+.lab-stage { display: flex; align-items: center; justify-content: space-around; gap: 16px; padding: 70px 10px 60px; border-radius: 10px; background: var(--lab-bg); }
+.lab-sizes { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.lab-sizes figure { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.lab-sizes figcaption { font-size: 11px; opacity: .55; }
+.lab-face { display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #2b2d31; }
+.lab-face img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.lab-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; }
+.lab-controls button { border-radius: 6px; }
+.lab-scrub { display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 220px; }
+.lab-scrub input[type="range"] { flex: 1; }
+.lab-scrub output { font-variant-numeric: tabular-nums; opacity: .7; min-width: 92px; text-align: right; }
+.lab-film { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.lab-frame { display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 34px 0 10px; border-radius: 8px; background: var(--lab-bg); }
+.lab-frame span:last-child { font-size: 11px; opacity: .55; font-variant-numeric: tabular-nums; }
+.lab-chat { max-width: 1240px; margin: 40px auto 0; padding: 0 24px; }
+.lab-chat h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin: 26px 0 10px; }
+.lab-message { display: flex; gap: 16px; padding: 10px 14px; border-radius: 6px; }
+.lab-message:hover { background: rgb(0 0 0 / .08); }
+.lab-message strong { margin-right: 8px; }
+.lab-message p span { font-size: 12px; opacity: .5; }
+.lab-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.lab-member { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 6px; }
+.lab-member:hover { background: rgb(0 0 0 / .08); }
+.lab-focus { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 60px); }
+.lab [hidden] { display: none !important; }

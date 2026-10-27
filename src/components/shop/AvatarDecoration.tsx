@@ -1,6 +1,7 @@
 "use client";
 
 import { DECORATIONS } from "@/components/shop/effects/Decorations";
+import { Decoration } from "@/components/shop/decorations/Decoration";
 import { LottieEffect } from "@/components/shop/effects/LottieEffect";
 import { lottieSrc, shopItem } from "@/lib/shop";
 import { AnimatedCosmetic } from "./AnimatedCosmetic";
@@ -26,6 +27,9 @@ export function AvatarDecoration({
   if (!itemId) return null;
   const item = shopItem(itemId);
   if (!item || !item.overAvatar) return null;
+  // Drawn decorations size and layer themselves (a back layer behind the
+  // photo, a front layer over it), so they mount straight into the wrapper.
+  if (item.decoration) return <Decoration design={item.decoration} playing={playing} />;
 
   const art = lottieSrc(itemId);
   const renderedScale = scale ?? item.art?.scale ?? (item.sketch === "graphite" ? 1.3 : item.sketch ? 1.22 : item.flight ? 1.5 : 1.38);

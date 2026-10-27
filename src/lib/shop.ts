@@ -5,6 +5,8 @@
  * server-side shop_items table; keep the catalogue migration in sync.
  */
 
+import type { DecorationDesign } from "@/components/shop/decorations/designs";
+
 export type ShopCategory = "name" | "ring" | "overlay";
 
 export interface CosmeticArt {
@@ -50,6 +52,13 @@ export interface ShopItem {
   /** Illustrated atlas with separately hinged wings, jewelry, and accents. */
   flight?: FlightDesign;
   sketch?: SketchDesign;
+  /** Drawn, layered avatar decoration (components/shop/decorations). */
+  decoration?: DecorationDesign;
+  /**
+   * Built and previewable (the decoration lab), but not on sale yet: it has
+   * no shop_items row, so checkout would refuse it.
+   */
+  unreleased?: boolean;
 }
 
 /** Where shop artwork lives. Keep exports named after the item id. */
@@ -193,13 +202,40 @@ const ART_UPGRADES = new Map<string, Partial<ShopItem>>(
   }),
 );
 
+/*
+ Avatar decorations, October 2026. Drawn SVG with a back and a front layer
+ and a hover performance each. Graphite keeps its id (it has owners) and
+ trades its old sketch for the redrawn one; the rest are new.
+*/
+const DECORATION_ITEMS: ShopItem[] = ([
+  { id: "ring-round-the-world", name: "'Round The World", description: "A little race car doing laps of your picture. Hover and it puts its foot down.", priceCents: 499, decoration: "round-the-world", unreleased: true },
+  { id: "ring-angelic", name: "Angelic", description: "A gold halo that floats over your head and glows brighter when someone hovers.", priceCents: 449, decoration: "angelic", unreleased: true },
+  { id: "ring-treat-no-trick", name: "Treat, No Trick", description: "A dark skull holding your picture in its jaws. Hover and it bites, twice.", priceCents: 549, decoration: "treat-no-trick", unreleased: true },
+  { id: "ring-devils-demise", name: "Devil's Demise", description: "Two red horns. Hover and they catch fire.", priceCents: 399, decoration: "devils-demise", unreleased: true },
+  { id: "ring-love-you-forever", name: "Love You Forever", description: "Three hearts up the side of your picture that beat in turn on hover.", priceCents: 349, decoration: "love-you-forever", unreleased: true },
+  { id: "ring-on-guard", name: "On Guard!", description: "Crossed cutlasses that rise and duel when someone hovers.", priceCents: 549, decoration: "on-guard", unreleased: true },
+] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
+
+const DECORATION_UPGRADES = new Map<string, Partial<ShopItem>>([
+  ["ring-graphite", { decoration: "graphite", description: "Pencil circles that won't sit still, and the pencil that drew them. Hover and it draws another." }],
+]);
+
 // Stable IDs preserve previous purchases. Older effects remain wearable but
 // are no longer offered to new buyers until they receive finished artwork.
-export const SHOP_ITEMS: ShopItem[] = [...SKETCH_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
-  .map((item) => ({ ...item, ...ART_UPGRADES.get(item.id) }));
+export const SHOP_ITEMS: ShopItem[] = [...SKETCH_ITEMS, ...DECORATION_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
+  .map((item) => ({ ...item, ...ART_UPGRADES.get(item.id), ...DECORATION_UPGRADES.get(item.id) }));
 
 export function isShopItemAvailable(item: ShopItem): boolean {
+  // Avatar decorations are the drawn set only; the older sketch, flight and
+  // illustrated frames are retired (no one owns them) and unreleased ones wait
+  // for their shop_items row.
+  if (item.category === "ring") return !!item.decoration && !item.unreleased;
   return item.category === "name" || !!item.art || !!item.flight || !!item.sketch;
+}
+
+/** Every drawn decoration, released or not, in catalogue order. */
+export function decorationItems(): ShopItem[] {
+  return SHOP_ITEMS.filter((item) => item.decoration);
 }
 
 const BY_ID = new Map(SHOP_ITEMS.map((i) => [i.id, i]));
