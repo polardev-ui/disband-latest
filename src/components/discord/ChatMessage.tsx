@@ -20,6 +20,7 @@ import { extractPreviewUrls, removeUrlsFromText } from "@/lib/link-preview";
 import { areLinkPreviewsEnabled } from "@/lib/user-settings";
 import { isEmojiOnlyMessage, emojiOnlySizeClass } from "@/lib/emoji";
 import { getUsernameStyle } from "@/lib/profileColor";
+import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { summarizeReactions, toReplyAuthor, type ReactionSummary } from "@/lib/messages";
 import { useProfiles } from "@/lib/profile-store";
@@ -481,13 +482,18 @@ function ChatMessageImpl({
         : author;
   const isOwn = message.author_id === currentUserId;
   const isSystem = !message.author_id;
-  const nameStyle = webhook
+  const baseNameStyle = webhook
     ? undefined
     : authorColor
       ? { color: authorColor }
       : author
         ? getUsernameStyle(author)
         : undefined;
+  const nameStyle =
+    author?.name_color && !webhook
+      ? { ...(baseNameStyle ?? {}), color: author.name_color }
+      : baseNameStyle;
+  const nameFontClass = !webhook ? NAME_FONT_CLASS[(author?.name_font as NameFontId) ?? "default"] ?? "" : "";
   const canOpenProfile = !!shownAuthor && !!onAuthorClick && !webhook;
   const body = normalizeMessageContent(message.content);
   const reactionSummaries: ReactionSummary[] = summarizeReactions(reactions, message.id, currentUserId);
@@ -741,13 +747,13 @@ function ChatMessageImpl({
             type="button"
             onClick={openAuthor}
             onContextMenu={authorContextMenu}
-            className="text-[16px] font-medium leading-[22px] text-header-primary hover:underline focus:outline-none"
+            className={`text-[16px] font-medium leading-[22px] text-header-primary hover:underline focus:outline-none ${nameFontClass}`}
             style={nameStyle}
           >
             {displayName(shownAuthor ?? {})}
           </button>
         ) : (
-          <span className="text-[16px] font-medium leading-[22px] text-header-primary" style={nameStyle}>
+          <span className={`text-[16px] font-medium leading-[22px] text-header-primary ${nameFontClass}`} style={nameStyle}>
             {displayName(shownAuthor ?? {})}
           </span>
         )}
