@@ -1,0 +1,344 @@
+/*
+ Avatar decorations. See Decoration.tsx for the canvas (200 × 200, avatar is
+ the r=50 circle at the centre) and designs/ for the artwork.
+
+ Conventions
+ - Every duration and delay is multiplied by --deco-slow (the lab's slow
+   motion), and the JS cycle timers follow the same factor.
+ - `.di` marks idle loops: they pause when the avatar is off screen, the tab
+   is hidden, or the surface has paused cosmetics.
+ - Hover performances hang off `.xx-play`, a class on a group keyed on the
+   cycle, so each performance restarts at 0%. Their last keyframe is always
+   the resting pose, so nothing jumps when the class comes off.
+ - A CSS transform replaces an SVG transform attribute, so animated elements
+   never carry one; position lives on a wrapper group.
+*/
+
+.deco { display: block; width: 100%; height: 100%; overflow: visible; }
+.deco * { transform-box: view-box; }
+.deco[data-running="false"] .di { animation-play-state: paused !important; }
+
+/* ---------------------------------------------------------------- graphite */
+
+.deco-graphite { color: #e2ded5; }
+.cosmetic-profile-light .deco-graphite { color: #4f4d48; }
+.gr-frame { opacity: 0; animation: gr-boil calc(1350ms * var(--deco-slow, 1)) steps(1, end) infinite; }
+.gr-frame-0 { opacity: 1; }
+.gr-frame-1 { animation-delay: calc(-900ms * var(--deco-slow, 1)); }
+.gr-frame-2 { animation-delay: calc(-450ms * var(--deco-slow, 1)); }
+@keyframes gr-boil { 0%, 33.32% { opacity: 1; } 33.33%, 100% { opacity: 0; } }
+
+.gr-fresh { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; }
+.gr-orbit { transform-origin: 100px 100px; }
+.gr-grip, .gr-scribble { transform-origin: 0 0; }
+.gr-play .gr-orbit { animation: gr-orbit calc(1700ms * var(--deco-slow, 1)) both; }
+.gr-play .gr-grip { animation: gr-grip calc(1700ms * var(--deco-slow, 1)) both; }
+.gr-play .gr-scribble { animation: gr-scribble calc(1700ms * var(--deco-slow, 1)) both; }
+.gr-play .gr-fresh { animation: gr-fresh calc(1700ms * var(--deco-slow, 1)) both; }
+/* A small pull back, then once round, keeping the same grip (the grip
+   counter-rotates by exactly what the orbit turns). */
+@keyframes gr-orbit {
+  0% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  6% { transform: rotate(-7deg); animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  80%, 100% { transform: rotate(360deg); }
+}
+@keyframes gr-grip {
+  0% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  6% { transform: rotate(7deg); animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  80%, 100% { transform: rotate(-360deg); }
+}
+/* Lift, touch down, a writing tremor, lift off, rest. */
+@keyframes gr-scribble {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  5% { transform: translate(4px, -5px) rotate(-5deg); }
+  10% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(.4px, 0) rotate(2deg); }
+  30% { transform: translate(-.3px, 0) rotate(-1.5deg); }
+  40% { transform: translate(.4px, 0) rotate(2deg); }
+  50% { transform: translate(-.3px, 0) rotate(-1.5deg); }
+  60% { transform: translate(.3px, 0) rotate(1.5deg); }
+  70% { transform: translate(-.2px, 0) rotate(-1deg); }
+  80% { transform: translate(0, 0) rotate(0deg); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  87% { transform: translate(4px, -5px) rotate(-5deg); animation-timing-function: cubic-bezier(.5, 0, .4, 1.4); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+@keyframes gr-fresh {
+  0%, 6% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* ------------------------------------------------------- treat, no trick */
+
+.tnt-cranium { transform: translateY(-34px); transform-origin: 100px 101px; }
+.tnt-jaw { transform: translateY(32px); transform-origin: 100px 99px; }
+.tnt-shake { transform-origin: 100px 100px; }
+.tnt-jaw-idle { animation: tnt-breathe calc(3600ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes tnt-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2.4px); } }
+.tnt-ember { transform-box: fill-box; transform-origin: center; animation: tnt-ember calc(2600ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes tnt-ember { 0%, 100% { opacity: .5; transform: scale(.88); } 50% { opacity: .95; transform: scale(1.08); } }
+.tnt-ember-core { opacity: .85; transform-box: fill-box; transform-origin: center; }
+
+.tnt-play .tnt-cranium { animation: tnt-cranium calc(1150ms * var(--deco-slow, 1)) both; }
+.tnt-play .tnt-jaw { animation: tnt-jaw calc(1150ms * var(--deco-slow, 1)) both; }
+.tnt-play .tnt-shake { animation: tnt-shake calc(1150ms * var(--deco-slow, 1)) linear both; }
+.tnt-play .tnt-ember-core { animation: tnt-flash calc(1150ms * var(--deco-slow, 1)) both; }
+.tnt-play .tnt-chip { animation: tnt-chip calc(1150ms * var(--deco-slow, 1)) both; }
+/* The cranium's shadow on the photo has nothing to fall on once the mouth
+   shuts (it would only darken the lower teeth), so it fades with each bite. */
+.tnt-play .tnt-shade { animation: tnt-shade calc(1150ms * var(--deco-slow, 1)) both; }
+@keyframes tnt-shade { 0%, 100% { opacity: 1; } 14%, 28% { opacity: 0; } 40%, 49% { opacity: 1; } 58%, 72% { opacity: 0; } 88% { opacity: 1; } }
+.deco-treat-no-trick[data-phase="play"] .tnt-jaw-idle { animation-play-state: paused; }
+
+/* Each bite accelerates shut, squashes on contact, rebounds a touch, then
+   opens decelerating past the rest pose and settles back into it. */
+@keyframes tnt-cranium {
+  0% { transform: translateY(-34px) scale(1, 1); animation-timing-function: cubic-bezier(.5, 0, .9, .4); }
+  17% { transform: translateY(0) scale(1.012, .975); animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  21% { transform: translateY(-3.5px) scale(.996, 1.008); animation-timing-function: cubic-bezier(.45, 0, .6, 1); }
+  25% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(.15, .6, .35, 1); }
+  43% { transform: translateY(-37px) scale(1, 1); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  47% { transform: translateY(-33px) scale(1, 1); animation-timing-function: cubic-bezier(.55, 0, .95, .45); }
+  61% { transform: translateY(0) scale(1.012, .975); animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  65% { transform: translateY(-3px) scale(.996, 1.008); animation-timing-function: cubic-bezier(.45, 0, .6, 1); }
+  69% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(.12, .6, .3, 1); }
+  90% { transform: translateY(-36.5px) scale(1, 1); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  100% { transform: translateY(-34px) scale(1, 1); }
+}
+@keyframes tnt-jaw {
+  0% { transform: translateY(32px) scale(1, 1); animation-timing-function: cubic-bezier(.5, 0, .9, .4); }
+  17% { transform: translateY(0) scale(1.012, .975); animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  21% { transform: translateY(3.5px) scale(.996, 1.008); animation-timing-function: cubic-bezier(.45, 0, .6, 1); }
+  25% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(.15, .6, .35, 1); }
+  43% { transform: translateY(35px) scale(1, 1); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  47% { transform: translateY(31px) scale(1, 1); animation-timing-function: cubic-bezier(.55, 0, .95, .45); }
+  61% { transform: translateY(0) scale(1.012, .975); animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  65% { transform: translateY(3px) scale(.996, 1.008); animation-timing-function: cubic-bezier(.45, 0, .6, 1); }
+  69% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(.12, .6, .3, 1); }
+  90% { transform: translateY(34.5px) scale(1, 1); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  100% { transform: translateY(32px) scale(1, 1); }
+}
+@keyframes tnt-shake {
+  0%, 16.9% { transform: translate(0, 0) rotate(0deg); }
+  17% { transform: translate(1.6px, 0) rotate(.7deg); }
+  18.6% { transform: translate(-1.3px, 0) rotate(-.55deg); }
+  20.2% { transform: translate(.8px, 0) rotate(.3deg); }
+  21.8% { transform: translate(-.4px, 0) rotate(-.15deg); }
+  23.4%, 60.9% { transform: translate(0, 0) rotate(0deg); }
+  61% { transform: translate(-1.6px, 0) rotate(-.7deg); }
+  62.6% { transform: translate(1.3px, 0) rotate(.55deg); }
+  64.2% { transform: translate(-.8px, 0) rotate(-.3deg); }
+  65.8% { transform: translate(.4px, 0) rotate(.15deg); }
+  67.4%, 100% { transform: translate(0, 0) rotate(0deg); }
+}
+@keyframes tnt-flash {
+  0%, 15% { opacity: .85; transform: scale(1); }
+  17% { opacity: 1; transform: scale(2.6); }
+  30%, 59% { opacity: .85; transform: scale(1); }
+  61% { opacity: 1; transform: scale(2.6); }
+  74%, 100% { opacity: .85; transform: scale(1); }
+}
+.tnt-chip { opacity: 0; }
+@keyframes tnt-chip {
+  0%, 16.9% { opacity: 0; transform: translate(0, 0); }
+  17% { opacity: 1; transform: translate(0, 0); animation-timing-function: cubic-bezier(.1, .7, .3, 1); }
+  31% { opacity: 0; transform: translate(var(--cx), var(--cy)); }
+  60.9% { opacity: 0; transform: translate(0, 0); }
+  61% { opacity: 1; transform: translate(0, 0); animation-timing-function: cubic-bezier(.1, .7, .3, 1); }
+  75%, 100% { opacity: 0; transform: translate(calc(var(--cx) * -.8), var(--cy)); }
+}
+
+/* ----------------------------------------------------------------- angelic */
+
+.ang-float { animation: ang-float calc(4200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes ang-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.6px); } }
+.ang-lift { transition: transform calc(700ms * var(--deco-slow, 1)) cubic-bezier(.3, 1.45, .5, 1); }
+.deco-angelic[data-hover="true"] .ang-lift { transform: translateY(-3px); }
+.ang-glow { transition: opacity calc(500ms * var(--deco-slow, 1)); }
+.deco-angelic[data-hover="true"] .ang-glow { animation: ang-glow calc(1400ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes ang-glow { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+.ang-aura { opacity: .5; transform-box: fill-box; transform-origin: center; transition: opacity calc(600ms * var(--deco-slow, 1)), transform calc(600ms * var(--deco-slow, 1)); }
+.deco-angelic[data-hover="true"] .ang-aura { opacity: 1; transform: scale(1.14); }
+.ang-rays { opacity: 0; transform-origin: 100px 52px; transform: scale(.7); transition: opacity calc(600ms * var(--deco-slow, 1)), transform calc(800ms * var(--deco-slow, 1)) cubic-bezier(.2, .9, .3, 1.2); }
+.deco-angelic[data-hover="true"] .ang-rays { opacity: .85; transform: scale(1); animation: ang-rays calc(5200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes ang-rays { 0%, 100% { transform: scale(1) rotate(-6deg); } 50% { transform: scale(1.06) rotate(6deg); } }
+.ang-spill { opacity: .16; transition: opacity calc(600ms * var(--deco-slow, 1)); }
+.deco-angelic[data-hover="true"] .ang-spill { opacity: .5; }
+.ang-star { opacity: 0; transform-box: fill-box; transform-origin: center; animation: ang-twinkle calc(4800ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.ang-star-1 { animation-delay: calc(-800ms * var(--deco-slow, 1)); }
+.ang-star-2 { animation-delay: calc(-1600ms * var(--deco-slow, 1)); }
+.ang-star-3 { animation-delay: calc(-2400ms * var(--deco-slow, 1)); }
+.ang-star-4 { animation-delay: calc(-3200ms * var(--deco-slow, 1)); }
+.ang-star-5 { animation-delay: calc(-4000ms * var(--deco-slow, 1)); }
+.deco-angelic[data-hover="true"] .ang-star { animation-duration: calc(1700ms * var(--deco-slow, 1)); }
+@keyframes ang-twinkle {
+  0%, 68%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); }
+  80% { opacity: 1; transform: scale(1) rotate(45deg); }
+  92% { opacity: 0; transform: scale(.4) rotate(90deg); }
+}
+
+/* ----------------------------------------------------------- devil's demise */
+
+.dd-horn { transform-origin: 74px 61px; }
+.dd-play .dd-horn { animation: dd-flex calc(1600ms * var(--deco-slow, 1)) both; }
+@keyframes dd-flex {
+  0% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  16% { transform: rotate(-7deg); animation-timing-function: cubic-bezier(.4, 0, .4, 1); }
+  34% { transform: rotate(2.5deg); animation-timing-function: cubic-bezier(.4, 0, .4, 1); }
+  50% { transform: rotate(-1deg); animation-timing-function: cubic-bezier(.4, 0, .4, 1); }
+  64%, 100% { transform: rotate(0deg); }
+}
+.dd-heat { opacity: .3; animation: dd-heat calc(3200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes dd-heat { 0%, 100% { opacity: .22; } 50% { opacity: .48; } }
+.deco-devils-demise[data-hover="true"] .dd-heat { animation-name: dd-heat-hot; animation-duration: calc(900ms * var(--deco-slow, 1)); }
+@keyframes dd-heat-hot { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+.dd-fire { opacity: 0; transition: opacity calc(450ms * var(--deco-slow, 1)); }
+.deco-devils-demise[data-hover="true"] .dd-fire { opacity: 1; animation: dd-fire calc(900ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes dd-fire { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
+.dd-flame { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; transform: scale(.2); transition: opacity calc(300ms * var(--deco-slow, 1)), transform calc(400ms * var(--deco-slow, 1)); }
+.deco-devils-demise[data-hover="true"] .dd-flame { opacity: 1; transform: scale(1); animation: dd-flicker calc(220ms * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes dd-flicker { from { transform: scale(.85, .92) skewX(-5deg); } to { transform: scale(1.05, 1.18) skewX(5deg); } }
+.dd-ember { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.deco-devils-demise[data-hover="true"] .dd-ember {
+  animation: dd-ember calc(1100ms * var(--deco-slow, 1)) ease-out infinite;
+  animation-delay: calc(var(--d) * 1000ms * var(--deco-slow, 1));
+}
+@keyframes dd-ember {
+  0% { opacity: 0; transform: translate(0, 0) scale(1); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.35); }
+}
+.dd-idle-ember { opacity: 0; animation: dd-idle-ember calc(3400ms * var(--deco-slow, 1)) ease-out infinite; }
+.dd-idle-ember-2 { animation-delay: calc(-1700ms * var(--deco-slow, 1)); --drift: 3px; }
+@keyframes dd-idle-ember {
+  0%, 58% { opacity: 0; transform: translate(0, 0); }
+  64% { opacity: .9; }
+  100% { opacity: 0; transform: translate(var(--drift, -3px), -18px); }
+}
+.deco-devils-demise[data-hover="true"] .dd-idle-ember { opacity: 0; animation: none; }
+
+/* -------------------------------------------------------- love you forever */
+
+.lyf-bob { animation: lyf-bob calc(3400ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.lyf-bob-1 { animation-delay: calc(-1100ms * var(--deco-slow, 1)); }
+.lyf-bob-2 { animation-delay: calc(-2200ms * var(--deco-slow, 1)); }
+@keyframes lyf-bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.4px) rotate(-2deg); } }
+.lyf-beat { transform-box: fill-box; transform-origin: center; }
+.lyf-play .lyf-beat { animation: lyf-beat calc(640ms * var(--deco-slow, 1)) both; }
+.lyf-play .lyf-beat-1 { animation-delay: calc(220ms * var(--deco-slow, 1)); }
+.lyf-play .lyf-beat-2 { animation-delay: calc(440ms * var(--deco-slow, 1)); }
+/* Lub-dub: a quick swell, a smaller second swell, a soft settle. */
+@keyframes lyf-beat {
+  0% { transform: scale(1); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  14% { transform: scale(1.3); animation-timing-function: cubic-bezier(.5, 0, .5, 1); }
+  28% { transform: scale(.92); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  42% { transform: scale(1.17); animation-timing-function: cubic-bezier(.5, 0, .5, 1); }
+  60% { transform: scale(.97); animation-timing-function: cubic-bezier(.4, 0, .4, 1); }
+  78% { transform: scale(1.02); animation-timing-function: cubic-bezier(.4, 0, .4, 1); }
+  100% { transform: scale(1); }
+}
+.lyf-float { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.lyf-play .lyf-float { animation: lyf-float calc(950ms * var(--deco-slow, 1)) calc(500ms * var(--deco-slow, 1)) cubic-bezier(.2, .7, .4, 1) both; }
+.lyf-play .lyf-float-1 { animation-delay: calc(640ms * var(--deco-slow, 1)); --fx: 7px; --fr: 14deg; }
+@keyframes lyf-float {
+  0% { opacity: 0; transform: translate(0, 0) scale(.4) rotate(0deg); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--fx, -6px), -18px) scale(1) rotate(var(--fr, -12deg)); }
+}
+.lyf-glint { opacity: 0; transform-box: fill-box; transform-origin: center; animation: ang-twinkle calc(4200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+
+/* ---------------------------------------------------------------- on guard */
+
+.og-sword { transform-origin: 0 0; }
+.og-sword-a { transform: translate(54px, 160px) rotate(.6deg); }
+.og-sword-b { transform: translate(148px, 152px) rotate(-19.6deg); }
+.og-play .og-sword-a { animation: og-sword-a calc(3200ms * var(--deco-slow, 1)) both; }
+.og-play .og-sword-b { animation: og-sword-b calc(3200ms * var(--deco-slow, 1)) both; }
+.og-spark { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.og-play .og-spark-0 { animation: og-spark-0 calc(3200ms * var(--deco-slow, 1)) linear both; }
+.og-play .og-spark-1 { animation: og-spark-1 calc(3200ms * var(--deco-slow, 1)) linear both; }
+.og-play .og-spark-2 { animation: og-spark-2 calc(3200ms * var(--deco-slow, 1)) linear both; }
+.og-play .og-spark-3 { animation: og-spark-3 calc(3200ms * var(--deco-slow, 1)) linear both; }
+.og-play .og-spark-4 { animation: og-spark-4 calc(3200ms * var(--deco-slow, 1)) linear both; }
+.og-play .og-spark-5 { animation: og-spark-5 calc(3200ms * var(--deco-slow, 1)) linear both; }
+.og-glint { opacity: 0; transform-box: fill-box; transform-origin: center; animation: og-glint calc(5200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes og-glint { 0%, 74%, 100% { opacity: 0; transform: translateX(-14px) scale(.3) rotate(0deg); } 84% { opacity: 1; transform: translateX(0) scale(1) rotate(45deg); } 94% { opacity: 0; transform: translateX(10px) scale(.3) rotate(90deg); } }
+.deco-on-guard[data-phase="play"] .og-glint { animation: none; opacity: 0; }
+/* Generated from the solved poses: strikes ease in (accelerate into the
+   clash), recoils ease out, the return to rest overshoots a little. */
+@keyframes og-sword-a {
+  0% { transform:translate(54px,160px) rotate(0.6deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  12% { transform:translate(30px,104px) rotate(-54.5deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  17% { transform:translate(22px,110px) rotate(-78.5deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  21.5% { transform:translate(48px,76px) rotate(-33.7deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  25% { transform:translate(34px,94px) rotate(-46.3deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  29% { transform:translate(36px,96px) rotate(-43.2deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  33.5% { transform:translate(40px,84px) rotate(-46.7deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  37% { transform:translate(32px,98px) rotate(-51.0deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  40% { transform:translate(26px,104px) rotate(-67.4deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  43% { transform:translate(56px,80px) rotate(-31.4deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  46% { transform:translate(40px,92px) rotate(-40.8deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  49% { transform:translate(46px,80px) rotate(-38.4deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  53% { transform:translate(34px,98px) rotate(-49.2deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  58% { transform:translate(22px,110px) rotate(-89.7deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  64% { transform:translate(50px,74px) rotate(-36.1deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  68% { transform:translate(52px,76px) rotate(-37.3deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  73% { transform:translate(30px,102px) rotate(-55.7deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  77% { transform:translate(30px,104px) rotate(-55.7deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  94% { transform:translate(54px,160px) rotate(0.6deg); animation-timing-function:cubic-bezier(.3,1.35,.6,1); }
+  100% { transform:translate(54px,160px) rotate(0.6deg); }
+}
+@keyframes og-sword-b {
+  0% { transform:translate(148px,152px) rotate(-19.6deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  12% { transform:translate(170px,104px) rotate(54.5deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  17% { transform:translate(166px,98px) rotate(48.8deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  21.5% { transform:translate(154px,78px) rotate(33.8deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  25% { transform:translate(166px,92px) rotate(44.5deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  29% { transform:translate(178px,100px) rotate(79.6deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  33.5% { transform:translate(130px,70px) rotate(32.3deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  37% { transform:translate(168px,94px) rotate(48.9deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  40% { transform:translate(166px,96px) rotate(42.4deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  43% { transform:translate(156px,84px) rotate(38.5deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  46% { transform:translate(160px,90px) rotate(39.0deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  49% { transform:translate(146px,76px) rotate(33.7deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  53% { transform:translate(168px,96px) rotate(47.8deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  58% { transform:translate(178px,110px) rotate(89.7deg); animation-timing-function:cubic-bezier(.6,0,.95,.5); }
+  64% { transform:translate(150px,74px) rotate(36.1deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  68% { transform:translate(148px,72px) rotate(32.3deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  73% { transform:translate(170px,102px) rotate(55.7deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  77% { transform:translate(170px,104px) rotate(55.7deg); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  94% { transform:translate(148px,152px) rotate(-19.6deg); animation-timing-function:cubic-bezier(.3,1.35,.6,1); }
+  100% { transform:translate(148px,152px) rotate(-19.6deg); }
+}
+@keyframes og-spark-0 { 0%,21.4% { opacity:0; transform:scale(.2) rotate(0deg); } 21.5% { opacity:1; transform:scale(.55) rotate(0deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); } 24.5% { opacity:.85; transform:scale(1.0) rotate(18deg); } 27.5%,100% { opacity:0; transform:scale(1.15) rotate(30deg); } }
+@keyframes og-spark-1 { 0%,33.4% { opacity:0; transform:scale(.2) rotate(0deg); } 33.5% { opacity:1; transform:scale(.55) rotate(0deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); } 36.5% { opacity:.85; transform:scale(1.0) rotate(18deg); } 39.5%,100% { opacity:0; transform:scale(1.15) rotate(30deg); } }
+@keyframes og-spark-2 { 0%,42.9% { opacity:0; transform:scale(.2) rotate(0deg); } 43% { opacity:1; transform:scale(.55) rotate(0deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); } 46.0% { opacity:.85; transform:scale(1.0) rotate(18deg); } 49.0%,100% { opacity:0; transform:scale(1.15) rotate(30deg); } }
+@keyframes og-spark-3 { 0%,48.9% { opacity:0; transform:scale(.2) rotate(0deg); } 49% { opacity:1; transform:scale(.55) rotate(0deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); } 52.0% { opacity:.85; transform:scale(1.0) rotate(18deg); } 55.0%,100% { opacity:0; transform:scale(1.15) rotate(30deg); } }
+@keyframes og-spark-4 { 0%,63.9% { opacity:0; transform:scale(.2) rotate(0deg); } 64% { opacity:1; transform:scale(.55) rotate(0deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); } 67.0% { opacity:.85; transform:scale(1.35) rotate(18deg); } 70.0%,100% { opacity:0; transform:scale(1.55) rotate(30deg); } }
+@keyframes og-spark-5 { 0%,67.9% { opacity:0; transform:scale(.2) rotate(0deg); } 68% { opacity:1; transform:scale(.55) rotate(0deg); animation-timing-function:cubic-bezier(.1,.7,.3,1); } 71.0% { opacity:.85; transform:scale(1.35) rotate(18deg); } 74.0%,100% { opacity:0; transform:scale(1.55) rotate(30deg); } }
+
+/* ---------------------------------------------------------- round the world */
+
+.rtw-orbit { transform-origin: 100px 100px; animation: rtw-orbit calc(9000ms * var(--deco-slow, 1)) linear infinite; }
+@keyframes rtw-orbit { to { transform: rotate(360deg); } }
+.rtw-bounce { animation: rtw-bounce calc(340ms * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes rtw-bounce { from { transform: translateY(0); } to { transform: translateY(-.6px); } }
+.rtw-wheel { transform-box: fill-box; transform-origin: center; animation: rtw-spin calc(420ms * var(--deco-slow, 1)) linear infinite; }
+@keyframes rtw-spin { to { transform: rotate(360deg); } }
+.rtw-puff { opacity: 0; transform-box: fill-box; transform-origin: center; animation: rtw-puff calc(900ms * var(--deco-slow, 1)) ease-out infinite; }
+.rtw-puff-1 { animation-delay: calc(-450ms * var(--deco-slow, 1)); }
+@keyframes rtw-puff { 0% { opacity: .75; transform: translate(0, 0) scale(.6); } 100% { opacity: 0; transform: translate(-8px, -2.5px) scale(1.9); } }
+.deco[data-running="false"] :is(.rtw-wheel, .rtw-puff) { animation-play-state: paused; }
+.rtw-trail, .rtw-flame, .rtw-beam { opacity: 0; transition: opacity calc(350ms * var(--deco-slow, 1)); }
+.deco-round-the-world[data-hover="true"] .rtw-trail { opacity: 1; animation: rtw-trail calc(240ms * var(--deco-slow, 1)) linear infinite; }
+.deco-round-the-world[data-hover="true"] .rtw-flame { opacity: 1; animation: rtw-flame calc(120ms * var(--deco-slow, 1)) steps(2, end) infinite; }
+.deco-round-the-world[data-hover="true"] .rtw-beam { opacity: .9; }
+@keyframes rtw-trail { 0% { transform: translateX(2px); opacity: .4; } 50% { opacity: 1; } 100% { transform: translateX(-3px); opacity: .4; } }
+@keyframes rtw-flame { 0% { opacity: .6; } 50% { opacity: 1; } }
+
+/* ------------------------------------------------------------ reduced motion */
+
+[data-motion="reduced"] .deco *, [data-motion="reduced"] .deco { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .deco, .deco * { animation: none !important; transition: none !important; }
+}
