@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { safeImageUrl } from "@/lib/safe-url";
 import { ClassicModal } from "@/components/ui/ClassicModal";
 
 export function AccountViewerModal({
@@ -43,9 +44,22 @@ export function AccountViewerModal({
         <p className="text-sm text-text-muted">Loading account…</p>
       ) : profile ? (
         <div className="space-y-3 text-sm">
+          {safeImageUrl(profile.banner_url) && (
+            <div className="h-24 w-full overflow-hidden rounded-[3px] bg-bg-tertiary">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={safeImageUrl(profile.banner_url)!} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-tertiary text-lg font-bold text-text-normal">
-              {(profile.display_name || profile.username || "?").charAt(0).toUpperCase()}
+            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-bg-tertiary">
+              {safeImageUrl(profile.avatar_url) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={safeImageUrl(profile.avatar_url)!} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-lg font-bold text-text-normal">
+                  {(profile.display_name || profile.username || "?").charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
             <div>
               <p className="font-semibold text-text-normal">{profile.display_name || profile.username || "Unknown"}</p>
