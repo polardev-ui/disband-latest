@@ -105,10 +105,12 @@ export default function TeamSupportPage() {
   interface FlagRow {
     id: string;
     reporter_id: string;
+    reported_user_id?: string | null;
     target_type: string;
     target_surface: string;
     reason: string;
     status: string;
+    details?: string | null;
     created_at: string;
     snapshot?: any;
     reporter?: { username: string | null; display_name: string | null } | null;
@@ -358,7 +360,7 @@ export default function TeamSupportPage() {
           </div>
         </div>
         <div className="border-t border-divider bg-bg-secondary">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-2 sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
             {([
               ["tickets", "Tickets", tickets.length],
               ["bans", "Bans", bans.length],
@@ -369,13 +371,16 @@ export default function TeamSupportPage() {
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
-                className={`rounded-[3px] px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                className={`rounded-lg px-4 py-2 text-[13px] font-semibold transition-all duration-150 ${
                   activeTab === id
-                    ? "bg-brand px-4 text-white"
+                    ? "bg-brand text-white shadow-md shadow-brand/20"
                     : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                 }`}
               >
-                {label} <span className="ml-1 tabular-nums">{count}</span>
+                {label}
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] tabular-nums ${activeTab === id ? "bg-white/20" : "bg-bg-secondary"}`}>
+                  {count}
+                </span>
               </button>
             ))}
           </div>
@@ -552,6 +557,182 @@ export default function TeamSupportPage() {
           )}
         </main>
       </div>
+      )}
+
+      {activeTab === "bans" && (
+        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+          <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Platform bans</h2>
+            {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
+            {bansLoading && <p className="mt-4 text-sm text-text-muted">Loading bans…</p>}
+            {!bansLoading && bans.length === 0 && !error && <p className="mt-4 text-sm text-text-muted">No bans found.</p>}
+            <div className="mt-4 space-y-3">
+              {bans.map((ban) => (
+                <div key={ban.user_id} className="flex items-center justify-between rounded-lg border border-divider bg-bg-tertiary p-4 transition-colors hover:bg-interactive-hover">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-dnd/20 text-sm font-bold text-status-dnd">
+                      {(ban.profile?.display_name || ban.profile?.username || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text-normal">{ban.profile?.display_name || ban.profile?.username || ban.user_id}</p>
+                      <p className="mt-0.5 text-xs text-text-muted">{ban.reason || "No reason provided"}</p>
+                      <p className="mt-0.5 text-[11px] text-text-muted/70">{new Date(ban.created_at).toLocaleString()}{ban.email ? ` · ${ban.email}` : ""}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await apiFetch("/api/moderation/platform-ban", {
+                        method: "POST",
+                        body: JSON.stringify({ action: "unban", userId: ban.user_id }),
+                      });
+                      if (res.ok) void loadBans();
+                    }}
+                    className="shrink-0 rounded-md border border-status-dnd/40 bg-status-dnd/10 px-3 py-1.5 text-xs font-semibold text-status-dnd transition-colors hover:bg-status-dnd/20"
+                  >
+                    Unban
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "appeals" && (
+        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+          <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Ban appeals</h2>
+            {appealsLoading && <p className="mt-4 text-sm text-text-muted">Loading appeals…</p>}
+            {!appealsLoading && appeals.length === 0 && <p className="mt-4 text-sm text-text-muted">No appeals found.</p>}
+            <div className="mt-4 space-y-3">
+              {appeals.map((appeal) => (
+                <div key={appeal.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text-normal">{appeal.profile?.display_name || appeal.profile?.username || appeal.user_id}</p>
+                      <p className="mt-1 text-xs text-text-muted">Submitted {new Date(appeal.created_at).toLocaleString()} · {appeal.status}</p>
+                    </div>
+                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{appeal.status}</span>
+                  </div>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-normal">{appeal.reason}</p>
+                  {appeal.status === "pending" && (
+                    <div className="mt-4 space-y-2">
+                      <textarea
+                        value={selectedAppealId === appeal.id ? appealDecision : ""}
+                        onChange={(e) => { setSelectedAppealId(appeal.id); setAppealDecision(e.target.value); }}
+                        rows={3}
+                        placeholder="Decision note (optional)…"
+                        className="w-full resize-y rounded-[3px] border border-divider bg-bg-primary p-3 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await apiFetch(`/api/moderation/ban-appeals/${appeal.id}/decide`, {
+                              method: "POST",
+                              body: JSON.stringify({ approve: true, decision: appealDecision }),
+                            });
+                            if (res.ok) { setAppealDecision(""); setSelectedAppealId(null); void loadAppeals(); void loadBans(); }
+                          }}
+                          className="rounded-[3px] bg-status-online px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-status-online/80"
+                        >
+                          Approve (unban)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await apiFetch(`/api/moderation/ban-appeals/${appeal.id}/decide`, {
+                              method: "POST",
+                              body: JSON.stringify({ approve: false, decision: appealDecision }),
+                            });
+                            if (res.ok) { setAppealDecision(""); setSelectedAppealId(null); void loadAppeals(); }
+                          }}
+                          className="rounded-[3px] bg-status-dnd px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-status-dnd/80"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {appeal.decision && (
+                    <p className="mt-3 text-xs text-text-muted">Decision: {appeal.decision}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "flags" && (
+        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+          <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Message / profile flags</h2>
+            {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
+            {flagsLoading && <p className="mt-4 text-sm text-text-muted">Loading flags…</p>}
+            {!flagsLoading && flags.length === 0 && <p className="mt-4 text-sm text-text-muted">No flags found.</p>}
+            <div className="mt-4 space-y-3">
+              {flags.map((flag) => (
+                <div key={flag.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text-normal">
+                        {flag.target_type} · {flag.target_surface} · {flag.reason}
+                      </p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        Reported by {flag.reporter?.display_name || flag.reporter?.username || flag.reporter_id} · {new Date(flag.created_at).toLocaleString()}
+                      </p>
+                      {flag.reported && (
+                        <p className="mt-1 text-xs text-text-muted">
+                          Reported user: {flag.reported.display_name || flag.reported.username || flag.reported_user_id}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{flag.status}</span>
+                  </div>
+                  {flag.details && <p className="mt-2 text-sm text-text-muted">{flag.details}</p>}
+                  {flag.snapshot && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs text-text-muted hover:text-text-normal">View snapshot</summary>
+                      <pre className="mt-2 max-h-40 overflow-auto rounded-[3px] bg-bg-primary p-3 text-xs text-text-muted">{JSON.stringify(flag.snapshot, null, 2)}</pre>
+                    </details>
+                  )}
+                  {flag.status === "pending" && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await apiFetch(`/api/moderation/message-reports/${flag.id}/resolve`, {
+                            method: "POST",
+                            body: JSON.stringify({ action: "dismiss", decision: "Dismissed by staff." }),
+                          });
+                          if (res.ok) void loadFlags();
+                        }}
+                        className="rounded-[3px] border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover"
+                      >
+                        Dismiss
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await apiFetch(`/api/moderation/message-reports/${flag.id}/resolve`, {
+                            method: "POST",
+                            body: JSON.stringify({ action: "actioned", decision: "Actioned by staff." }),
+                          });
+                          if (res.ok) void loadFlags();
+                        }}
+                        className="rounded-[3px] bg-status-dnd px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-status-dnd/80"
+                      >
+                        Action
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
