@@ -71,7 +71,51 @@ export default function TeamSupportPage() {
   const [replying, setReplying] = useState(false);
   const [replyStatus, setReplyStatus] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  const [activeTab, setActiveTab] = useState<"tickets" | "bans" | "appeals" | "flags">("tickets");
   const messagesRef = useRef<HTMLDivElement | null>(null);
+
+  // Bans
+  interface BanRow {
+    user_id: string;
+    reason: string | null;
+    email: string | null;
+    created_at: string;
+    banned_by: string | null;
+    profile?: { username: string | null; display_name: string | null } | null;
+  }
+  const [bans, setBans] = useState<BanRow[]>([]);
+  const [bansLoading, setBansLoading] = useState(false);
+
+  // Appeals
+  interface AppealRow {
+    id: string;
+    user_id: string;
+    reason: string;
+    status: string;
+    decision: string | null;
+    created_at: string;
+    profile?: { username: string | null; display_name: string | null; avatar_url: string | null } | null;
+  }
+  const [appeals, setAppeals] = useState<AppealRow[]>([]);
+  const [appealsLoading, setAppealsLoading] = useState(false);
+  const [selectedAppealId, setSelectedAppealId] = useState<string | null>(null);
+  const [appealDecision, setAppealDecision] = useState("");
+
+  // Flags (message reports)
+  interface FlagRow {
+    id: string;
+    reporter_id: string;
+    target_type: string;
+    target_surface: string;
+    reason: string;
+    status: string;
+    created_at: string;
+    snapshot?: any;
+    reporter?: { username: string | null; display_name: string | null } | null;
+    reported?: { username: string | null; display_name: string | null } | null;
+  }
+  const [flags, setFlags] = useState<FlagRow[]>([]);
+  const [flagsLoading, setFlagsLoading] = useState(false);
 
   const canAccess = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -124,6 +168,48 @@ export default function TeamSupportPage() {
     }
   }, [selectedId]);
 
+  const loadBans = useCallback(async () => {
+    setBansLoading(true);
+    try {
+      const res = await apiFetch("/api/moderation/platform-ban");
+      const json = await res.json() as { bans?: BanRow[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not load bans.");
+      setBans(json.bans ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load bans.");
+    } finally {
+      setBansLoading(false);
+    }
+  }, []);
+
+  const loadAppeals = useCallback(async () => {
+    setAppealsLoading(true);
+    try {
+      const res = await apiFetch("/api/moderation/ban-appeals");
+      const json = await res.json() as { appeals?: AppealRow[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not load appeals.");
+      setAppeals(json.appeals ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load appeals.");
+    } finally {
+      setAppealsLoading(false);
+    }
+  }, []);
+
+  const loadFlags = useCallback(async () => {
+    setFlagsLoading(true);
+    try {
+      const res = await apiFetch("/api/moderation/message-reports");
+      const json = await res.json() as { reports?: FlagRow[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not load flags.");
+      setFlags(json.reports ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load flags.");
+    } finally {
+      setFlagsLoading(false);
+    }
+  }, []);
+
   const loadTicket = useCallback(async (id: string) => {
     setDetailLoading(true);
     setError(null);
@@ -143,6 +229,13 @@ export default function TeamSupportPage() {
   useEffect(() => {
     if (phase === "ready") void loadTickets();
   }, [phase, loadTickets]);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    if (activeTab === "bans") void loadBans();
+    if (activeTab === "appeals") void loadAppeals();
+    if (activeTab === "flags") void loadFlags();
+  }, [phase, activeTab, loadBans, loadAppeals, loadFlags]);
 
   useEffect(() => {
     if (selectedId) void loadTicket(selectedId);
@@ -265,12 +358,34 @@ export default function TeamSupportPage() {
           </div>
         </div>
         <div className="border-t border-divider bg-bg-secondary">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-2 sm:px-6">
             {([
-              ["all", "All", counts.all],
-              ["awaiting", "Awaiting human", counts.awaiting],
-              ["resolved", "Resolved", counts.resolved],
+              ["tickets", "Tickets", tickets.length],
+              ["bans", "Bans", bans.length],
+              ["appeals", "Appeals", appeals.filter((a) => a.status === "pending").length],
+              ["flags", "Flags", flags.filter((f) => f.status === "pending").length],
             ] as const).map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`rounded-[3px] px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                  activeTab === id
+                    ? "bg-brand px-4 text-white"
+                    : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                }`}
+              >
+                {label} <span className="ml-1 tabular-nums">{count}</span>
+              </button>
+            ))}
+          </div>
+          {activeTab === "tickets" && (
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-3 sm:px-6">
+              {([
+                ["all", "All", counts.all],
+                ["awaiting", "Awaiting human", counts.awaiting],
+                ["resolved", "Resolved", counts.resolved],
+              ] as const).map(([id, label, count]) => (
               <button
                 key={id}
                 type="button"
@@ -286,9 +401,11 @@ export default function TeamSupportPage() {
             ))}
             <p className="ml-auto text-xs text-text-muted">Open requests sort above closed tickets automatically.</p>
           </div>
+          )}
         </div>
       </header>
 
+      {activeTab === "tickets" && (
       <div className="mx-auto grid h-[calc(100vh-10.5rem)] max-w-7xl gap-4 p-4 sm:p-6 lg:grid-cols-[390px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-divider bg-bg-secondary shadow-none">
           <div className="border-b border-divider px-5 py-4">
@@ -435,6 +552,7 @@ export default function TeamSupportPage() {
           )}
         </main>
       </div>
+      )}
     </div>
   );
 }

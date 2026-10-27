@@ -3,6 +3,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   getUserFromRequest,
   requirePlatformOwner,
+  requireSupportStaff,
   verifyOwnerPassword,
 } from "@/lib/server-auth";
 import { getClientIp } from "@/lib/request-ip";
@@ -21,8 +22,8 @@ export async function POST(request: Request) {
     const userLimit = rateLimit(`platform-ban:user:${user.id}`, 10, 60_000);
     if (!userLimit.allowed) return tooManyRequests(userLimit.retryAfterSeconds);
 
-    const isOwner = await requirePlatformOwner(user.id);
-    if (!isOwner) {
+    const isStaff = await requireSupportStaff(user.id);
+    if (!isStaff) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
 
@@ -31,10 +32,6 @@ export async function POST(request: Request) {
       body = (await request.json()) as typeof body;
     } catch {
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-    }
-
-    if (!verifyOwnerPassword(body.password)) {
-      return NextResponse.json({ error: "Invalid owner password." }, { status: 403 });
     }
 
     const service = getServiceSupabase();
@@ -102,8 +99,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
 
-    const isOwner = await requirePlatformOwner(user.id);
-    if (!isOwner) {
+    const isStaff = await requireSupportStaff(user.id);
+    if (!isStaff) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
 
