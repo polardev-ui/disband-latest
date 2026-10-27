@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { isSupportStaffFromProfile } from "@/lib/support/staff";
+import { AccountViewerModal } from "@/components/modals/AccountViewerModal";
 
 interface TeamTicket {
   id: string;
@@ -118,6 +119,7 @@ export default function TeamSupportPage() {
   }
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [flagsLoading, setFlagsLoading] = useState(false);
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   const canAccess = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -335,7 +337,8 @@ export default function TeamSupportPage() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-bg-primary text-text-normal">
+    <>
+      <div className="h-screen overflow-hidden bg-bg-primary text-text-normal">
       <header className="sticky top-0 z-20 border-b border-divider bg-bg-primary">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-4 px-4 sm:px-6">
           <div>
@@ -579,19 +582,28 @@ export default function TeamSupportPage() {
                       <p className="mt-0.5 text-[11px] text-text-muted/70">{new Date(ban.created_at).toLocaleString()}{ban.email ? ` · ${ban.email}` : ""}</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await apiFetch("/api/moderation/platform-ban", {
-                        method: "POST",
-                        body: JSON.stringify({ action: "unban", userId: ban.user_id }),
-                      });
-                      if (res.ok) void loadBans();
-                    }}
-                    className="shrink-0 rounded-md border border-status-dnd/40 bg-status-dnd/10 px-3 py-1.5 text-xs font-semibold text-status-dnd transition-colors hover:bg-status-dnd/20"
-                  >
-                    Unban
-                  </button>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewingUserId(ban.user_id)}
+                      className="rounded-md border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                    >
+                      View account
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await apiFetch("/api/moderation/platform-ban", {
+                          method: "POST",
+                          body: JSON.stringify({ action: "unban", userId: ban.user_id }),
+                        });
+                        if (res.ok) void loadBans();
+                      }}
+                      className="rounded-md border border-status-dnd/40 bg-status-dnd/10 px-3 py-1.5 text-xs font-semibold text-status-dnd transition-colors hover:bg-status-dnd/20"
+                    >
+                      Unban
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -613,7 +625,16 @@ export default function TeamSupportPage() {
                       <p className="text-sm font-semibold text-text-normal">{appeal.profile?.display_name || appeal.profile?.username || appeal.user_id}</p>
                       <p className="mt-1 text-xs text-text-muted">Submitted {new Date(appeal.created_at).toLocaleString()} · {appeal.status}</p>
                     </div>
-                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{appeal.status}</span>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setViewingUserId(appeal.user_id)}
+                        className="rounded-md border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                      >
+                        View account
+                      </button>
+                      <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{appeal.status}</span>
+                    </div>
                   </div>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-normal">{appeal.reason}</p>
                   {appeal.status === "pending" && (
@@ -700,6 +721,15 @@ export default function TeamSupportPage() {
                   )}
                   {flag.status === "pending" && (
                     <div className="mt-3 flex gap-2">
+                      {flag.reported_user_id && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingUserId(flag.reported_user_id!)}
+                          className="rounded-[3px] border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover"
+                        >
+                          View account
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={async () => {
@@ -735,5 +765,7 @@ export default function TeamSupportPage() {
         </div>
       )}
     </div>
+      {viewingUserId && <AccountViewerModal userId={viewingUserId} onClose={() => setViewingUserId(null)} />}
+    </>
   );
 }
