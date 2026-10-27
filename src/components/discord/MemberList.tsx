@@ -6,6 +6,7 @@ import { BotTag } from "@/components/ui/BotTag";
 import { GuildTag } from "@/components/ui/GuildTag";
 import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { displayName } from "@/lib/utils";
+import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import { roleGradientTextStyle, roleIsGradientAnimated } from "@/lib/profileColor";
 import { memberIconRole } from "@/lib/role-icons";
 import { listeningFor } from "@/lib/presence";
@@ -399,6 +400,7 @@ function Row({
   const gradRole = topRole(m, roles);
   const gradStyle = roleGradientTextStyle(gradRole);
   const iconRole = memberIconRole(m, roles);
+  const nameFontClass = NAME_FONT_CLASS[(p.name_font as NameFontId) ?? "default"] ?? "";
   return (
     <button
       type="button"
@@ -421,7 +423,7 @@ function Row({
         className={`flex w-full min-w-0 items-center gap-1 truncate text-[16px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
         style={color ? { color } : undefined}
       >
-        <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""}`} style={gradStyle ?? undefined}>{displayName(p)}</span>
+        <span className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""} ${nameFontClass}`} style={p.name_color ? { color: p.name_color } : gradStyle ?? undefined}>{displayName(p)}</span>
         <GuildTag userId={p.id} size="sm" />
         {iconRole && <RoleIcon icon={iconRole.icon} name={iconRole.name} size={15} />}
         <BotTag profile={p} size="sm" />
