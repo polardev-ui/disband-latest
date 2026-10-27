@@ -46,7 +46,6 @@ import { BadgeGlyph } from "@/lib/badge-icons";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { GIFT_PLAN_NAME, giftUrl, monthsLabel, type GiftPlan } from "@/lib/gifts";
 import { apiFetch } from "@/lib/api";
-import { AvatarCropModal } from "@/components/modals/AvatarCropModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic, IconLanguage, IconCheck, IconExternalLink } from "@/components/icons";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
@@ -78,7 +77,6 @@ import {
   usesCustomAccent,
   type ProfileAccentFields,
 } from "@/lib/profileColor";
-import type { AvatarCrop } from "@/lib/utils";
 import type { UserStatus, Profile } from "@/lib/supabase/types";
 import {
   STATUS_DURATION_PRESETS,
@@ -266,15 +264,11 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [status, setStatus] = useState<UserStatus>("online");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [cropOpen, setCropOpen] = useState(false);
-  const [cropSource, setCropSource] = useState<string | null>(null);
-  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
   // Instant local previews for avatar/banner: the picked file shows in the
   // preview card immediately, while the upload + profile write happen
   // quietly in the background. Cleared once the real URL lands.
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
-  const [pendingAvatarCrop, setPendingAvatarCrop] = useState<AvatarCrop | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [pendingBannerFile, setPendingBannerFile] = useState<File | null>(null);
   const previewUrlsRef = useRef<{ avatar: string | null; banner: string | null }>({ avatar: null, banner: null });
@@ -722,10 +716,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setSaving(true);
     try {
       let avatarUrl: string | null = null;
-      let avatarCrop: AvatarCrop | null = pendingAvatarCrop;
       if (pendingAvatarFile) {
         const res = await upload(pendingAvatarFile);
         if (!res) {
+          console.error("[saveProfile] avatar upload returned null");
           setError("Couldn't upload your profile picture. Please try again.");
           if (typeof window !== "undefined") window.alert("Couldn't upload your profile picture. Please try again.");
           return;
@@ -736,6 +730,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       if (pendingBannerFile) {
         const res = await upload(pendingBannerFile);
         if (!res) {
+          console.error("[saveProfile] banner upload returned null");
           setError("Couldn't upload your banner. Please try again.");
           if (typeof window !== "undefined") window.alert("Couldn't upload your banner. Please try again.");
           return;
@@ -755,7 +750,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       if (usernameChanged) patch.username = sanitizedUsername;
       if (pendingAvatarFile && avatarUrl) {
         patch.avatar_url = avatarUrl;
-        if (avatarCrop) patch.avatar_crop = avatarCrop;
       }
       if (pendingBannerFile && bannerUrl) patch.banner_url = bannerUrl;
       const err = await updateProfile(patch as Parameters<typeof updateProfile>[0]);
@@ -765,7 +759,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           previewUrlsRef.current.avatar = null;
           setAvatarPreview(null);
           setPendingAvatarFile(null);
-          setPendingAvatarCrop(null);
         }
         if (pendingBannerFile) {
           if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
@@ -814,7 +807,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       previewUrlsRef.current.avatar = null;
       setAvatarPreview(null);
       setPendingAvatarFile(null);
-      setPendingAvatarCrop(null);
     }
     if (pendingBannerFile) {
       if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
@@ -836,27 +828,11 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   }
 
   function pickAvatar(file: File) {
-    if (cropSource) URL.revokeObjectURL(cropSource);
-    const url = URL.createObjectURL(file);
-    setCropSourceFile(file);
-    setCropSource(url);
     if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+    const url = URL.createObjectURL(file);
     previewUrlsRef.current.avatar = url;
     setAvatarPreview(url);
-    setCropOpen(true);
-  }
-
-  function saveAvatarCrop(crop: AvatarCrop) {
-    if (!cropSourceFile) return;
-    // Hold the file for Save Changes. Without it the save uploaded nothing,
-    // the preview never cleared, and the button stayed on "Save Changes".
-    setPendingAvatarFile(cropSourceFile);
-    setPendingAvatarCrop(crop);
-    setCropOpen(false);
-    // cropSource is also the live preview (previewUrlsRef owns it), so it is
-    // revoked when the preview clears, not here.
-    setCropSource(null);
-    setCropSourceFile(null);
+    setPendingAvatarFile(file);
   }
 
   function handleBanner(file: File) {
@@ -2190,25 +2166,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 </div>
               )}
       </SettingsLayer>
-
-      {cropSource && (
-        <AvatarCropModal
-          open={cropOpen}
-          imageUrl={cropSource}
-          onClose={() => {
-            setCropOpen(false);
-            if (cropSource) URL.revokeObjectURL(cropSource);
-            setCropSource(null);
-            setCropSourceFile(null);
-            if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
-            previewUrlsRef.current.avatar = null;
-            setAvatarPreview(null);
-            setPendingAvatarFile(null);
-            setPendingAvatarCrop(null);
-          }}
-          onSave={(crop) => void saveAvatarCrop(crop)}
-        />
-      )}
 
       <SubscriptionModal
         open={showSubscription}
