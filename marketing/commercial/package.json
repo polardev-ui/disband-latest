@@ -5,6 +5,7 @@
   "description": "Frame-accurate renderer for the Disband promotional films (16:9 commercials and the 9:16 social spot).",
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.2.5",
     "playwright": "1.56.1",
     "potrace": "^2.1.8",
     "three": "0.170.0"
@@ -37,6 +38,30 @@
     "nextapp:audio": "node tools/timeline-json.mjs nextapp/timeline.js build/nextapp-timeline.json && TIMELINE=build/nextapp-timeline.json python3 tools/audio_nextapp.py",
     "nextapp:render": "VIEWPORT=1080x1920 STAGE=nextapp/stage.html node tools/render.mjs --fps 60 --to 20 --workers 3 --out build/nextapp-frames",
     "nextapp:encode": "AUDIO=build/audio/nextapp-mix.wav TITLE='Disband — Not another boring app.' tools/encode.sh build/nextapp-frames 60 build/disband-nextapp-9x16-1080p.mp4",
-    "nextapp:build": "npm run capture && npm run vertical:layers && npm run nextapp:audio && npm run nextapp:render && npm run nextapp:encode"
+    "nextapp:build": "npm run capture && npm run vertical:layers && npm run nextapp:audio && npm run nextapp:render && npm run nextapp:encode",
+    "anon:audio": "node tools/timeline-json.mjs anon/timeline.js build/anon-timeline.json && TIMELINE=build/anon-timeline.json python3 tools/audio_anon.py",
+    "anon:render": "VIEWPORT=1080x1920 STAGE=anon/stage.html node tools/render.mjs --fps 30 --to 20 --workers 3 --out build/anon-frames",
+    "anon:encode": "AUDIO=build/audio/anon-mix.wav TITLE='Disband — Anonymous Accounts' RATE='-b:v 14M -maxrate 16M -bufsize 28M' tools/encode.sh build/anon-frames 30 build/disband-anon-9x16-1080p30.mp4",
+    "anon:handoff": "node anon/handoff.mjs",
+    "anon:build": "npm run capture && npm run anon:audio && npm run anon:render && npm run anon:encode && npm run anon:handoff",
+    "ephemeral:capture": "node ephemeral/capture-app.mjs",
+    "ephemeral:audio": "node tools/timeline-json.mjs ephemeral/timeline.js build/ephemeral-timeline.json && TIMELINE=build/ephemeral-timeline.json python3 tools/audio_ephemeral.py",
+    "ephemeral:render": "VIEWPORT=1080x1920 STAGE=ephemeral/stage.html node tools/render.mjs --fps 30 --to 24.5 --workers 3 --out build/ephemeral-frames",
+    "ephemeral:encode": "AUDIO=build/audio/ephemeral-mix.wav TITLE='Disband — Anonymous accounts' tools/encode.sh build/ephemeral-frames 30 build/disband-anonymous-accounts-9x16-1080p30.mp4",
+    "classic:capture": "node classic/capture-classic.mjs",
+    "classic:audio": "node tools/timeline-json.mjs classic/timeline.js build/classic-timeline.json && TIMELINE=build/classic-timeline.json python3 tools/audio_classic.py",
+    "classic:render": "VIEWPORT=1080x1920 STAGE=classic/stage.html node tools/render.mjs --fps 30 --to 38 --workers 3 --out build/classic-frames",
+    "classic:encode": "AUDIO=build/audio/classic-mix.wav TITLE='Disband — A Familiar Feeling. A New Home.' RATE='-b:v 14M -maxrate 18M -bufsize 32M' tools/encode.sh build/classic-frames 30 build/disband-classic-9x16-1080p30.mp4",
+    "morph:capture": "node morph/capture.mjs",
+    "morph:audio": "node tools/timeline-json.mjs morph/timeline.js build/morph-timeline.json && TIMELINE=build/morph-timeline.json python3 tools/audio_morph.py",
+    "morph:render": "VIEWPORT=1080x1920 STAGE=morph/stage.html node tools/render.mjs --fps 30 --to 35 --workers 3 --out build/morph-frames",
+    "morph:encode": "AUDIO=build/audio/morph-mix.wav TITLE='Disband — The Way It Used to Feel.' RATE='-b:v 14M -maxrate 18M -bufsize 32M' tools/encode.sh build/morph-frames 30 build/disband-morph-9x16-1080p30.mp4",
+    "morph:build": "npm run morph:capture && npm run morph:audio && npm run morph:render && npm run morph:encode",
+    "reconnect:capture": "node reconnect/capture.mjs && python3 reconnect/extract.py",
+    "reconnect:audio": "node tools/timeline-json.mjs reconnect/timeline.js build/reconnect-timeline.json && TIMELINE=build/reconnect-timeline.json python3 tools/audio_reconnect.py",
+    "reconnect:preview": "VIEWPORT=1080x1920 STAGE=reconnect/stage.html node tools/render.mjs --fps 30 --from 0 --to 12 --workers 3 --preview --out build/reconnect-preview",
+    "reconnect:render": "VIEWPORT=1080x1920 STAGE=reconnect/stage.html node tools/render.mjs --fps 30 --to 38 --workers 3 --out build/reconnect-frames",
+    "reconnect:encode": "AUDIO=build/audio/reconnect-mix.wav TITLE='Disband — The Internet, Reconnected.' RATE='-b:v 16M -maxrate 20M -bufsize 36M' tools/encode.sh build/reconnect-frames 30 build/disband-reconnected-9x16-1080p30.mp4",
+    "reconnect:build": "npm run reconnect:capture && npm run reconnect:audio && npm run reconnect:render && npm run reconnect:encode"
   }
 }

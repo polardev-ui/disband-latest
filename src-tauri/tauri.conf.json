@@ -26,7 +26,8 @@
         "zoomHotkeysEnabled": false,
         "backgroundColor": "#0b0c0e",
         "titleBarStyle": "Overlay",
-        "hiddenTitle": true
+        "hiddenTitle": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

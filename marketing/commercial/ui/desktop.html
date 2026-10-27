@@ -222,7 +222,7 @@ const msg = (k, time, lines, extra = "") => {
     ${lines.map((l) => `<div class="x">${rich(l)}</div>`).join("")}${extra}</div></div>`;
 };
 
-function serverChat() {
+function serverChat({ anon = false } = {}) {
   const art = `<div class="att" style="background:radial-gradient(90% 120% at 20% 10%,#ffd8a8 0%,#f59f6b 35%,#c2410c 70%,#431407 100%)">
       <div style="position:absolute;left:40px;top:40px;width:120px;height:120px;border-radius:60px;background:rgba(255,255,255,.85)"></div>
       <div style="position:absolute;right:-40px;bottom:-60px;width:260px;height:260px;border-radius:50%;border:26px solid rgba(20,10,5,.55)"></div>
@@ -250,11 +250,12 @@ function serverChat() {
         ${msg("kai", "Today at 9:26 AM", ["nice. p95 is down to 84ms after the batching change too"], `<div class="rx"><span class="mine">${E("1f525")}4</span><span>${E("1f440")}2</span></div>`)}
         ${msg("iris", "Today at 9:31 AM", ["sketch dump from the weekend, ignore the rough edges"], art)}
         ${msg("me", "Today at 9:40 AM", [`welcome to everyone who joined this week 🎉 <span class="mention">@everyone</span>`])}
+        ${anon ? `<div data-new="1">${msg("anon", "Today at 9:44 AM", ["first time here — what's everyone building?"])}</div>` : ""}
       </div>
       <div class="inputwrap"><div class="input"><span style="color:#b5bac1">${I.plusCircle(22)}</span><span class="ph">Message #general</span>
         <span class="tools">${I.gift(22)}${I.sticker(22)}${I.smile(22)}</span></div></div></div>
-    <div class="members"><h6>Online — 5</h6>
-      ${["me", "iris", "kai", "mila", "nova"].map((k) => { const p = person(k); return `<div class="mem">${av(p, 32, "var(--bg-secondary)")}<div><span class="n on">${p.name}</span>${k === "nova" ? '<span class="s">In Lounge</span>' : ""}</div></div>`; }).join("")}
+    <div class="members"><h6>Online — ${anon ? 6 : 5}</h6>
+      ${["me", "iris", "kai", "mila", "nova", ...(anon ? ["anon"] : [])].map((k) => { const p = person(k); return `<div class="mem"${k === "anon" ? ' data-anon="1"' : ""}>${av(p, 32, "var(--bg-secondary)")}<div><span class="n on">${p.name}</span>${k === "nova" ? '<span class="s">In Lounge</span>' : ""}</div></div>`; }).join("")}
       <h6>Offline — 2</h6>
       ${["sam", "theo"].map((k) => { const p = person(k); return `<div class="mem" style="opacity:.5">${av(p, 32, "var(--bg-secondary)", false)}<span class="n">${p.name}</span></div>`; }).join("")}
     </div>`;
@@ -307,6 +308,7 @@ const SCREENS = {
   "dm-sent": () => dm({ sent: true }),
   security: () => `${rail("hq")}${security()}`,
   friends: serverChat,
+  anon: () => serverChat({ anon: true }),
 };
 
 document.getElementById("root").innerHTML = `

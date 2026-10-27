@@ -252,14 +252,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         }
     }
 
-    // An announcement channel is closed only to people who can't manage
-    // channels. This locked it for everyone, so a space's own owner was told
-    // only moderators could post. my_server_permissions reports everything
-    // as allowed for the owner.
-    val permissions by androidx.compose.runtime.produceState<Map<String, Boolean>?>(null, channel.serverId) {
-        value = com.wsgpolar.disband.data.ServerAdmin.permissions(channel.serverId)
-    }
-    val readOnly = channel.readOnly == true && permissions?.get("manage_channels") != true
+    val readOnly = channel.readOnly == true
     ChatScaffold(
         title = "#" + channel.name,
         subtitle = serverName,
