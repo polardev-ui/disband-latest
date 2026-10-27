@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUpRight, Check, Moon, Pause, Play, Sun } from "lucide-r
 import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
 import { ShopModal } from "@/components/shop/ShopModal";
 import { CosmeticMotionContext } from "@/components/shop/AnimatedCosmetic";
-import { ART_COLLECTIONS, formatPrice, shopItem } from "@/lib/shop";
+import { ART_COLLECTIONS, formatPrice, shopItem, decorationItems } from "@/lib/shop";
 import "./gallery.css";
 
 export default function ShopGalleryPage() {
@@ -16,7 +16,17 @@ export default function ShopGalleryPage() {
   const [light, setLight] = useState(false);
   const [name, setName] = useState("polar");
   const [shopOpen, setShopOpen] = useState(false);
-  const collections = ART_COLLECTIONS.filter((set) => category === "ring" || set.profileId);
+  const ringCollections = decorationItems().map((item) => ({
+    id: item.id,
+    name: item.name,
+    line: item.description,
+    description: item.description,
+    ringId: item.id,
+    profileId: null as string | null,
+    color: "#5865f2",
+    surface: "#1e1f22",
+  }));
+  const collections = category === "ring" ? ringCollections : ART_COLLECTIONS.filter((set) => set.profileId);
   const collection = collections[selected] ?? collections[0];
   const item = shopItem(category === "ring" ? collection.ringId : collection.profileId)!;
   const self = { name };
@@ -43,7 +53,7 @@ export default function ShopGalleryPage() {
         <section className="studio-catalogue" aria-label="Cosmetic collections">
           <div className="studio-catalogue-header">
             <div className="studio-tabs" role="group" aria-label="Cosmetic type">
-              <button type="button" aria-pressed={category === "ring"} onClick={() => { setCategory("ring"); setSelected(0); }}>Avatar decorations <span>{String(ART_COLLECTIONS.length).padStart(2, "0")}</span></button>
+              <button type="button" aria-pressed={category === "ring"} onClick={() => { setCategory("ring"); setSelected(0); }}>Avatar decorations <span>{String(decorationItems().length).padStart(2, "0")}</span></button>
               <button type="button" aria-pressed={category === "overlay"} onClick={() => { setCategory("overlay"); setSelected(0); }}>Profile skins <span>{String(ART_COLLECTIONS.filter((set) => set.profileId).length).padStart(2, "0")}</span></button>
             </div>
           </div>
