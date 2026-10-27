@@ -639,7 +639,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass}  [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -686,7 +686,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative min-h-[22px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+        className={`group relative min-h-[22px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -721,7 +721,7 @@ function ChatMessageImpl({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`group relative mt-[17px] min-h-[44px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "msg-enter opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+      className={`group relative mt-[17px] min-h-[44px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
