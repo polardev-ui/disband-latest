@@ -25,36 +25,6 @@ const TIP = { x: 143.7, y: 136.6 };
 // The fresh stroke drawn on hover: a full clockwise turn starting at the tip.
 const FRESH = "M143.7 136.6A57 57 0 1 1 56.3 63.4A57 57 0 1 1 143.7 136.6";
 
-function Pencil({ uid }: { uid: string }) {
-  return (
-    <g transform="rotate(35)">
-      <defs>
-        <linearGradient id={`${uid}-wood`} x1="0" y1="-4" x2="0" y2="4" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#f3d6b2" />
-          <stop offset="1" stopColor="#c99a6b" />
-        </linearGradient>
-        <linearGradient id={`${uid}-ferrule`} x1="0" y1="-4" x2="0" y2="4" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#f2f4f7" />
-          <stop offset=".5" stopColor="#a9b0ba" />
-          <stop offset="1" stopColor="#6d747e" />
-        </linearGradient>
-      </defs>
-      <path d="M2 7.5 L52 7.5" stroke="#000" strokeOpacity=".22" strokeWidth="5" strokeLinecap="round" />
-      <path d="M0 0 L4.6 -1.5 L4.6 1.5 Z" fill="#3a3a3d" />
-      <path d="M4.6 -1.5 L12 -3.9 L12 3.9 L4.6 1.5 Z" fill={`url(#${uid}-wood)`} />
-      <path d="M12 -3.9 L12 3.9" stroke="#a87b4f" strokeWidth=".5" />
-      <rect x="12" y="-3.9" width="33" height="2.6" fill="#ffd84a" />
-      <rect x="12" y="-1.3" width="33" height="2.6" fill="#f5b71c" />
-      <rect x="12" y="1.3" width="33" height="2.6" fill="#d8960c" />
-      <path d="M15 -2.6 H44" stroke="#fff6c9" strokeWidth=".55" opacity=".8" />
-      <rect x="45" y="-4.1" width="6" height="8.2" rx=".6" fill={`url(#${uid}-ferrule)`} />
-      <path d="M47 -4 V4 M49 -4 V4" stroke="#5f6670" strokeWidth=".45" opacity=".8" />
-      <path d="M51 -4 H54.5 Q57.5 -4 57.5 -1 V1 Q57.5 4 54.5 4 H51 Z" fill="#f08e9e" />
-      <path d="M52 -2.6 H55" stroke="#ffd0d7" strokeWidth=".7" strokeLinecap="round" />
-    </g>
-  );
-}
-
 function Front({ uid, phase, cycle }: DecorationLayerProps) {
   const play = phase === "play";
   return (
@@ -69,18 +39,9 @@ function Front({ uid, phase, cycle }: DecorationLayerProps) {
           </g>
         ))}
       </g>
-      {/* The fresh loop and the travelling pencil restart together each cycle. */}
+      {/* The fresh loop draws on its own now; the pencil is gone. */}
       <g key={cycle} className={play ? "gr-play" : undefined}>
         <path className="gr-fresh" d={FRESH} pathLength={1} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-        <g className="gr-orbit">
-          <g transform={`translate(${TIP.x} ${TIP.y})`}>
-            <g className="gr-grip">
-              <g className="gr-scribble">
-                <Pencil uid={uid} />
-              </g>
-            </g>
-          </g>
-        </g>
       </g>
     </>
   );
