@@ -22,7 +22,7 @@ export function AccountViewerModal({
       const supabase = getSupabaseClient();
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, display_name, email, status, created_at, bio, is_bot, is_support_staff, show_staff_badge, subscription_plan, deletion_requested_at")
+        .select("id, username, display_name, status, created_at, bio, is_bot, is_support_staff, show_staff_badge, deletion_requested_at")
         .eq("id", userId)
         .maybeSingle();
       if (alive) {
@@ -54,9 +54,7 @@ export function AccountViewerModal({
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div><span className="text-text-muted">User ID</span><p className="font-mono text-text-normal">{profile.id}</p></div>
-            <div><span className="text-text-muted">Email</span><p className="text-text-normal">{profile.email || "—"}</p></div>
             <div><span className="text-text-muted">Created</span><p className="text-text-normal">{profile.created_at ? new Date(profile.created_at).toLocaleString() : "—"}</p></div>
-            <div><span className="text-text-muted">Plan</span><p className="text-text-normal">{profile.subscription_plan || "free"}</p></div>
             <div><span className="text-text-muted">Staff</span><p className="text-text-normal">{profile.is_support_staff ? "Yes" : "No"}</p></div>
             <div><span className="text-text-muted">Bot</span><p className="text-text-normal">{profile.is_bot ? "Yes" : "No"}</p></div>
           </div>
