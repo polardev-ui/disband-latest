@@ -38,6 +38,17 @@ export async function requirePlatformOwner(userId: string): Promise<boolean> {
   return data?.show_owner_badge === true;
 }
 
+export async function requireSupportStaff(userId: string): Promise<boolean> {
+  const service = getServiceSupabase();
+  if (!service) return false;
+  const { data } = await service
+    .from("profiles")
+    .select("is_support_staff")
+    .eq("id", userId)
+    .maybeSingle();
+  return data?.is_support_staff === true;
+}
+
 export function verifyOwnerPassword(input: string | undefined | null): boolean {
   const expected = process.env.OWNER_PASSWORD;
   if (!expected || !input) return false;
