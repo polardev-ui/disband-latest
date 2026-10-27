@@ -208,12 +208,12 @@ const ART_UPGRADES = new Map<string, Partial<ShopItem>>(
  trades its old sketch for the redrawn one; the rest are new.
 */
 const DECORATION_ITEMS: ShopItem[] = ([
-  { id: "ring-round-the-world", name: "'Round The World", description: "A little race car doing laps of your picture. Hover and it puts its foot down.", priceCents: 499, decoration: "round-the-world", unreleased: true },
-  { id: "ring-angelic", name: "Angelic", description: "A gold halo that floats over your head and glows brighter when someone hovers.", priceCents: 449, decoration: "angelic", unreleased: true },
-  { id: "ring-treat-no-trick", name: "Treat, No Trick", description: "A dark skull holding your picture in its jaws. Hover and it bites, twice.", priceCents: 549, decoration: "treat-no-trick", unreleased: true },
-  { id: "ring-devils-demise", name: "Devil's Demise", description: "Two red horns. Hover and they catch fire.", priceCents: 399, decoration: "devils-demise", unreleased: true },
-  { id: "ring-love-you-forever", name: "Love You Forever", description: "Three hearts up the side of your picture that beat in turn on hover.", priceCents: 349, decoration: "love-you-forever", unreleased: true },
-  { id: "ring-on-guard", name: "On Guard!", description: "Crossed cutlasses that rise and duel when someone hovers.", priceCents: 549, decoration: "on-guard", unreleased: true },
+  { id: "ring-round-the-world", name: "'Round The World", description: "A little race car doing laps of your picture. Hover and it puts its foot down.", priceCents: 499, decoration: "round-the-world" },
+  { id: "ring-angelic", name: "Angelic", description: "A gold halo that floats over your head and glows brighter when someone hovers.", priceCents: 449, decoration: "angelic" },
+  { id: "ring-treat-no-trick", name: "Treat, No Trick", description: "A dark skull holding your picture in its jaws. Hover and it bites, twice.", priceCents: 549, decoration: "treat-no-trick" },
+  { id: "ring-devils-demise", name: "Devil's Demise", description: "Two red horns. Hover and they catch fire.", priceCents: 399, decoration: "devils-demise" },
+  { id: "ring-love-you-forever", name: "Love You Forever", description: "Three hearts up the side of your picture that beat in turn on hover.", priceCents: 349, decoration: "love-you-forever" },
+  { id: "ring-on-guard", name: "On Guard!", description: "Crossed cutlasses that rise and duel when someone hovers.", priceCents: 549, decoration: "on-guard" },
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
 
 const DECORATION_UPGRADES = new Map<string, Partial<ShopItem>>([
