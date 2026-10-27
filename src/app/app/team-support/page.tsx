@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { isSupportStaffFromProfile } from "@/lib/support/staff";
 import { AccountViewerModal } from "@/components/modals/AccountViewerModal";
+import { ClassicModal } from "@/components/ui/ClassicModal";
 
 interface TeamTicket {
   id: string;
@@ -120,6 +121,12 @@ export default function TeamSupportPage() {
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [flagsLoading, setFlagsLoading] = useState(false);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+
+  // Flag action modal
+  const [actioningFlag, setActioningFlag] = useState<FlagRow | null>(null);
+  const [actionType, setActionType] = useState<"actioned" | "dismissed">("actioned");
+  const [actionDecision, setActionDecision] = useState("");
+  const [actioning, setActioning] = useState(false);
 
   const canAccess = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -745,15 +752,9 @@ export default function TeamSupportPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={async () => {
-                          const res = await apiFetch(`/api/moderation/message-reports/${flag.id}/resolve`, {
-                            method: "POST",
-                            body: JSON.stringify({ action: "actioned", decision: "Actioned by staff." }),
-                          });
-                          if (res.ok) void loadFlags();
-                        }}
+                        onClick={() => { setActioningFlag(flag); setActionType("actioned"); setActionDecision(""); }}
                         className="rounded-[3px] bg-status-dnd px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-status-dnd/80"
-                        title="Mark this report as actioned (content removed or restricted)"
+                        title="Take action on this report"
                       >
                         Take action
                       </button>
@@ -766,6 +767,68 @@ export default function TeamSupportPage() {
         </div>
       )}
     </div>
+      {actioningFlag && (
+        <ClassicModal open={true} title="Take action on report" onClose={() => { if (!actioning) setActioningFlag(null); }}>
+          <div className="space-y-4">
+            <p className="text-sm text-text-muted">
+              Choose how to handle this {actioningFlag.target_type} report and add a decision note.
+            </p>
+            <label className="block">
+              <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Action</span>
+              <select
+                value={actionType}
+                onChange={(e) => setActionType(e.target.value as "actioned" | "dismissed")}
+                className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[15px] text-text-normal outline-none transition-colors focus:border-[#00a8fc]"
+              >
+                <option value="actioned">Take action (remove/restrict content)</option>
+                <option value="dismissed">Dismiss (no action)</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Decision note</span>
+              <textarea
+                value={actionDecision}
+                onChange={(e) => setActionDecision(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="What action was taken and why…"
+                className="w-full resize-y rounded-[3px] border border-transparent bg-bg-tertiary p-3 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={actioning}
+                onClick={() => setActioningFlag(null)}
+                className="rounded-[3px] border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actioning}
+                onClick={async () => {
+                  setActioning(true);
+                  const res = await apiFetch(`/api/moderation/message-reports/${actioningFlag.id}/resolve`, {
+                    method: "POST",
+                    body: JSON.stringify({ action: actionType, decision: actionDecision.trim() || (actionType === "actioned" ? "Actioned by staff." : "Dismissed by staff.") }),
+                  });
+                  setActioning(false);
+                  if (res.ok) {
+                    setActioningFlag(null);
+                    setActionDecision("");
+                    void loadFlags();
+                  }
+                }}
+                className={`rounded-[3px] px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${actionType === "actioned" ? "bg-status-dnd hover:bg-status-dnd/80" : "bg-bg-tertiary hover:bg-interactive-hover text-text-normal"}`}
+              >
+                {actioning ? "Saving…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </ClassicModal>
+      )}
+
       {viewingUserId && <AccountViewerModal userId={viewingUserId} onClose={() => setViewingUserId(null)} />}
     </>
   );
