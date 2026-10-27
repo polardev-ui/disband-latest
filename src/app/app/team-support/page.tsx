@@ -563,7 +563,7 @@ export default function TeamSupportPage() {
       )}
 
       {activeTab === "bans" && (
-        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
           <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
             <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Platform bans</h2>
             {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
@@ -612,7 +612,7 @@ export default function TeamSupportPage() {
       )}
 
       {activeTab === "appeals" && (
-        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
           <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
             <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Ban appeals</h2>
             {appealsLoading && <p className="mt-4 text-sm text-text-muted">Loading appeals…</p>}
@@ -687,7 +687,7 @@ export default function TeamSupportPage() {
       )}
 
       {activeTab === "flags" && (
-        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
           <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
             <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Message / profile flags</h2>
             {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
@@ -753,8 +753,9 @@ export default function TeamSupportPage() {
                           if (res.ok) void loadFlags();
                         }}
                         className="rounded-[3px] bg-status-dnd px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-status-dnd/80"
+                        title="Mark this report as actioned (content removed or restricted)"
                       >
-                        Action
+                        Take action
                       </button>
                     </div>
                   )}
