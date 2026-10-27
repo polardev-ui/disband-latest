@@ -217,7 +217,7 @@ const DECORATION_ITEMS: ShopItem[] = ([
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
 
 const DECORATION_UPGRADES = new Map<string, Partial<ShopItem>>([
-  ["ring-graphite", { decoration: "graphite", description: "Pencil circles that won't sit still, and the pencil that drew them. Hover and it draws another." }],
+  ["ring-graphite", { decoration: "graphite", description: "Pencil circles that won't sit still. Hover and they draw another." }],
 ]);
 
 // Stable IDs preserve previous purchases. Older effects remain wearable but
