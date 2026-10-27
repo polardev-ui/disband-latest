@@ -77,6 +77,7 @@ import {
   usesCustomAccent,
   type ProfileAccentFields,
 } from "@/lib/profileColor";
+import { NAME_FONT_OPTIONS, isNameFontAvailable } from "@/lib/nameFonts";
 import type { UserStatus, Profile } from "@/lib/supabase/types";
 import {
   STATUS_DURATION_PRESETS,
@@ -257,6 +258,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [bio, setBio] = useState("");
   const [pronouns, setPronouns] = useState("");
   const [statusNote, setStatusNote] = useState("");
+  const [nameFont, setNameFont] = useState<string>("default");
+  const [nameColor, setNameColor] = useState<string>("");
   const [statusDuration, setStatusDuration] = useState<StatusDurationId>("never");
   const [accent1, setAccent1] = useState(DEFAULT_ACCENT);
   const [accent2, setAccent2] = useState("#eb459e");
@@ -270,6 +273,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [removeBanner, setRemoveBanner] = useState(false);
   const [pendingBannerFile, setPendingBannerFile] = useState<File | null>(null);
   const previewUrlsRef = useRef<{ avatar: string | null; banner: string | null }>({ avatar: null, banner: null });
   useEffect(() => {
@@ -644,6 +649,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setBio(profile.bio ?? "");
     setPronouns(profile.pronouns ?? "");
     setStatusNote(profile.status_note ?? "");
+    setNameFont(profile.name_font ?? "default");
+    setNameColor(profile.name_color ?? "");
     setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
@@ -746,12 +753,20 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         accent_color: useDefaultAccent ? null : accent1,
         accent_color_2: useDefaultAccent ? null : accent2,
         status,
+        name_font: nameFont === "default" ? null : nameFont,
+        name_color: subPlan === "aero" ? (nameColor || null) : null,
       };
       if (usernameChanged) patch.username = sanitizedUsername;
       if (pendingAvatarFile && avatarUrl) {
         patch.avatar_url = avatarUrl;
+      } else if (removeAvatar) {
+        patch.avatar_url = null;
       }
-      if (pendingBannerFile && bannerUrl) patch.banner_url = bannerUrl;
+      if (pendingBannerFile && bannerUrl) {
+        patch.banner_url = bannerUrl;
+      } else if (removeBanner) {
+        patch.banner_url = null;
+      }
       const err = await updateProfile(patch as Parameters<typeof updateProfile>[0]);
       if (!err) {
         if (pendingAvatarFile) {
@@ -760,11 +775,25 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
           setAvatarPreview(null);
           setPendingAvatarFile(null);
         }
+        if (removeAvatar) {
+          if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+          previewUrlsRef.current.avatar = null;
+          setAvatarPreview(null);
+          setPendingAvatarFile(null);
+          setRemoveAvatar(false);
+        }
         if (pendingBannerFile) {
           if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
           previewUrlsRef.current.banner = null;
           setBannerPreview(null);
           setPendingBannerFile(null);
+        }
+        if (removeBanner) {
+          if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+          previewUrlsRef.current.banner = null;
+          setBannerPreview(null);
+          setPendingBannerFile(null);
+          setRemoveBanner(false);
         }
       }
       if (err) {
@@ -786,11 +815,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     bannerPreview !== null ||
     pendingAvatarFile !== null ||
     pendingBannerFile !== null ||
+    removeAvatar ||
+    removeBanner ||
     displayName !== (profile.display_name ?? "") ||
     username !== (profile.username ?? "") ||
     bio !== (profile.bio ?? "") ||
     pronouns !== (profile.pronouns ?? "") ||
     statusNote !== (profile.status_note ?? "") ||
+    nameFont !== (profile.name_font ?? "default") ||
+    nameColor !== (profile.name_color ?? "") ||
     statusDuration !== presetForExpiresAt(profile.status_expires_at) ||
     status !== (profile.preferred_status ?? profile.status) ||
     useDefaultAccent !== !usesCustomAccent(profile) ||
@@ -819,6 +852,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setBio(profile.bio ?? "");
     setPronouns(profile.pronouns ?? "");
     setStatusNote(profile.status_note ?? "");
+    setNameFont(profile.name_font ?? "default");
+    setNameColor(profile.name_color ?? "");
     setStatusDuration(presetForExpiresAt(profile.status_expires_at));
     const custom = usesCustomAccent(profile);
     setUseDefaultAccent(!custom);
@@ -1012,8 +1047,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           accent_color: useDefaultAccent ? null : accent1,
                           accent_color_2: useDefaultAccent ? null : accent2,
                           // Local previews win until the uploaded URL lands.
-                          avatar_url: avatarPreview ?? profile.avatar_url,
-                          banner_url: bannerPreview ?? profile.banner_url,
+                          avatar_url: removeAvatar ? null : avatarPreview ?? profile.avatar_url,
+                          banner_url: removeBanner ? null : bannerPreview ?? profile.banner_url,
                         }}
                         displayName={displayName}
                         username={username}
@@ -1023,6 +1058,34 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         onChangeAvatar={pickAvatar}
                         onChangeBanner={(file) => void handleBanner(file)}
                       />
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRemoveAvatar(true);
+                            if (previewUrlsRef.current.avatar) URL.revokeObjectURL(previewUrlsRef.current.avatar);
+                            previewUrlsRef.current.avatar = null;
+                            setAvatarPreview(null);
+                            setPendingAvatarFile(null);
+                          }}
+                          className={`${classicBtn.grey} ${classicBtn.sm}`}
+                        >
+                          Remove avatar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRemoveBanner(true);
+                            if (previewUrlsRef.current.banner) URL.revokeObjectURL(previewUrlsRef.current.banner);
+                            previewUrlsRef.current.banner = null;
+                            setBannerPreview(null);
+                            setPendingBannerFile(null);
+                          }}
+                          className={`${classicBtn.grey} ${classicBtn.sm}`}
+                        >
+                          Remove banner
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1128,6 +1191,49 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </button>
                         ))}
                       </div>
+                    </SettingRow>
+                  </SettingsSection>
+
+                  <SettingsSection
+                    title="Name style (beta)"
+                    description="Customize the font of your display name. Colour customization requires Disband Aero."
+                  >
+                    <SettingRow label="Name font" description="Choose a font for your display name. Spooky is available during Halloween." stacked>
+                      <div className="flex flex-wrap gap-2">
+                        {NAME_FONT_OPTIONS.filter((f) => isNameFontAvailable(f.id)).map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setNameFont(f.id)}
+                            className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                              nameFont === f.id
+                                ? "bg-brand text-white"
+                                : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                            }`}
+                          >
+                            {f.label}
+                            {f.beta && <span className="ml-1 text-[10px] opacity-70">beta</span>}
+                            {f.limited && <span className="ml-1 text-[10px] opacity-70">limited</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </SettingRow>
+
+                    <SettingRow
+                      label="Name colour"
+                      description={subPlan === "aero" ? "Pick a colour for your display name." : "Requires Disband Aero."}
+                      stacked
+                    >
+                      {subPlan === "aero" ? (
+                        <input
+                          type="color"
+                          value={nameColor || "#ffffff"}
+                          onChange={(e) => setNameColor(e.target.value)}
+                          className="h-10 w-20 cursor-pointer rounded border border-divider bg-bg-tertiary"
+                        />
+                      ) : (
+                        <p className="text-[12px] text-text-muted">Upgrade to Aero to customize your name colour.</p>
+                      )}
                     </SettingRow>
                   </SettingsSection>
 

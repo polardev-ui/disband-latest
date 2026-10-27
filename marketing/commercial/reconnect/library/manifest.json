@@ -1,0 +1,468 @@
+{
+  "source": "disband-classic /dev/classic (fictional sample data)",
+  "scale": 3,
+  "parts": [
+    {
+      "file": "crops/rail-00.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 12,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Direct Messages"
+    },
+    {
+      "file": "crops/rail-01.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 68,
+        "w": 48,
+        "h": 48
+      },
+      "note": "2 unread messages from Nova Reyes"
+    },
+    {
+      "file": "crops/rail-02.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 134,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Disband Demo HQ"
+    },
+    {
+      "file": "crops/rail-03.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 190,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Night Owls"
+    },
+    {
+      "file": "crops/rail-04.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 246,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Design Lab"
+    },
+    {
+      "file": "crops/rail-05.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 302,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Speedrunners"
+    },
+    {
+      "file": "crops/rail-06.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 358,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Music"
+    },
+    {
+      "file": "crops/rail-07.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 414,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Add a Space"
+    },
+    {
+      "file": "crops/rail-08.png",
+      "kind": "rail icon",
+      "rect": {
+        "x": 12,
+        "y": 470,
+        "w": 48,
+        "h": 48
+      },
+      "note": "Explore discoverable spaces"
+    },
+    {
+      "file": "crops/rail-hover-night-owls.png",
+      "kind": "rail hover state",
+      "rect": {
+        "x": 0,
+        "y": 186,
+        "w": 190,
+        "h": 56
+      },
+      "note": "Night Owls hovered: pill and tooltip"
+    },
+    {
+      "file": "crops/rail-separator-0.png",
+      "kind": "rail separator",
+      "rect": {
+        "x": 20,
+        "y": 124,
+        "w": 32,
+        "h": 2
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/channel-header.png",
+      "kind": "channel column header",
+      "rect": {
+        "x": 72,
+        "y": 0,
+        "w": 240,
+        "h": 48
+      },
+      "note": "space name"
+    },
+    {
+      "file": "crops/channel-00.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 56,
+        "w": 240,
+        "h": 29
+      },
+      "note": "Level 2 \u00b7 3 Boosts"
+    },
+    {
+      "file": "crops/channel-01.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 85,
+        "w": 240,
+        "h": 36
+      },
+      "note": "Text Channels"
+    },
+    {
+      "file": "crops/channel-02.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 121,
+        "w": 240,
+        "h": 32
+      },
+      "note": "welcome"
+    },
+    {
+      "file": "crops/channel-03.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 153,
+        "w": 240,
+        "h": 32
+      },
+      "note": "general"
+    },
+    {
+      "file": "crops/channel-04.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 185,
+        "w": 240,
+        "h": 32
+      },
+      "note": "random"
+    },
+    {
+      "file": "crops/channel-05.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 217,
+        "w": 240,
+        "h": 32
+      },
+      "note": "design-review"
+    },
+    {
+      "file": "crops/channel-06.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 253,
+        "w": 240,
+        "h": 36
+      },
+      "note": "Voice Channels"
+    },
+    {
+      "file": "crops/channel-07.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 289,
+        "w": 240,
+        "h": 32
+      },
+      "note": "Lounge"
+    },
+    {
+      "file": "crops/channel-08.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 321,
+        "w": 240,
+        "h": 32
+      },
+      "note": "Studio"
+    },
+    {
+      "file": "crops/channel-09.png",
+      "kind": "channel row",
+      "rect": {
+        "x": 72,
+        "y": 357,
+        "w": 240,
+        "h": 36
+      },
+      "note": "Uncategorized"
+    },
+    {
+      "file": "crops/user-panel.png",
+      "kind": "user panel",
+      "rect": {
+        "x": 72,
+        "y": 848,
+        "w": 240,
+        "h": 52
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/chat-header.png",
+      "kind": "chat header",
+      "rect": {
+        "x": 312,
+        "y": 0,
+        "w": 888,
+        "h": 48
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-00.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 48,
+        "w": 888,
+        "h": 44
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-01.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 92,
+        "w": 888,
+        "h": 65
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-02.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 157,
+        "w": 888,
+        "h": 65
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-03.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 222,
+        "w": 888,
+        "h": 65
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-04.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 287,
+        "w": 888,
+        "h": 65
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-05.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 352,
+        "w": 888,
+        "h": 109
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-06.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 461,
+        "w": 888,
+        "h": 89
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-07.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 550,
+        "w": 888,
+        "h": 122
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/message-08.png",
+      "kind": "message band",
+      "rect": {
+        "x": 312,
+        "y": 672,
+        "w": 888,
+        "h": 140
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/composer.png",
+      "kind": "composer",
+      "rect": {
+        "x": 312,
+        "y": 812,
+        "w": 888,
+        "h": 88
+      },
+      "note": ""
+    },
+    {
+      "file": "crops/member-00.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 41,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Riley Park"
+    },
+    {
+      "file": "crops/member-01.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 125,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Iris Bennet"
+    },
+    {
+      "file": "crops/member-02.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 168,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Mila Oduya"
+    },
+    {
+      "file": "crops/member-03.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 252,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Nova Reyes"
+    },
+    {
+      "file": "crops/member-04.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 336,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Helper"
+    },
+    {
+      "file": "crops/member-05.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 420,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Kai Tanaka"
+    },
+    {
+      "file": "crops/member-06.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 504,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Sam Whitfield"
+    },
+    {
+      "file": "crops/member-07.png",
+      "kind": "member row",
+      "rect": {
+        "x": 1200,
+        "y": 547,
+        "w": 240,
+        "h": 42
+      },
+      "note": "Theo Marsh"
+    }
+  ]
+}

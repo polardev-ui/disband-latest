@@ -166,7 +166,7 @@ interface AppContextValue {
   setMicMuted: (v: boolean) => void;
   setDeafened: (v: boolean) => void;
   signIn: (email: string, password: string, turnstileToken?: string | null) => Promise<string | null>;
-  signUp: (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null) => Promise<SignUpResult>;
+  signUp: (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null, birthdate?: string | null) => Promise<SignUpResult>;
   requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
   requestAccountDeletion: () => Promise<{ ok?: boolean; error?: string; instant?: boolean; cancel_until?: string; purge_at?: string }>;
@@ -3830,7 +3830,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [refreshMfaStatus, rememberSession]);
 
-  const signUp = useCallback(async (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null): Promise<SignUpResult> => {
+  const signUp = useCallback(async (email: string, password: string, username: string, referralCode?: string | null, turnstileToken?: string | null, birthdate?: string | null): Promise<SignUpResult> => {
     const supabase = getSupabaseClient();
     const normalized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
     const displayNameVal = username.trim();
@@ -3874,6 +3874,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           username: normalized,
           display_name: displayNameVal,
 
+          ...(birthdate ? { birthdate } : {}),
           ...(referralCode ? { referral_code: referralCode } : {}),
         },
       },

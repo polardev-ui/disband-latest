@@ -14,7 +14,8 @@ import { UpdateToast } from "@/components/desktop/UpdateToast";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { SelfXssWarning } from "@/components/SelfXssWarning";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
-import { MaintenanceNotice } from "@/components/maintenance/MaintenanceNotice";
+import { AgePrompt } from "@/components/AgePrompt";
+import { CookieConsent } from "@/components/CookieConsent";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
 
@@ -100,12 +101,13 @@ export function DisbandRoot() {
           {}
           <div className="flex h-screen flex-col">
             <DesktopShell />
-            <MaintenanceNotice />
+            <AgePrompt />
             <div className="min-h-0 flex-1">
               <AppShell />
             </div>
           </div>
           <AddAccountOverlay />
+          <CookieConsent />
         </ContextMenuProvider>
         </SkinBoundary>
       </AppProvider>

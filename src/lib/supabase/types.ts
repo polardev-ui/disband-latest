@@ -21,9 +21,15 @@ export interface Profile {
   banner_url: string | null;
   accent_color: string | null;
   accent_color_2: string | null;
+  /** Optional custom display-name font (beta). Null/undefined = default. */
+  name_font?: string | null;
+  /** Optional custom display-name color (Aero only). */
+  name_color?: string | null;
   is_bot?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */
   account_type?: string | null;
+  /** Whether the user has access to the team support dashboard. */
+  is_support_staff?: boolean;
   deletion_requested_at?: string | null;
   deletion_cancel_until?: string | null;
   deletion_purge_at?: string | null;
