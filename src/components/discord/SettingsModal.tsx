@@ -645,8 +645,19 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
   }, [open]);
 
+  const profileInitRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!profile) return;
+    if (!open) profileInitRef.current = null;
+  }, [open]);
+
+  useEffect(() => {
+    if (!profile || !open) return;
+    // Only seed the form when the modal opens or the account changes. Re-seeding
+    // on every profile update (presence, listening, etc.) was wiping in-progress
+    // edits such as a half-typed bio.
+    if (profileInitRef.current === profile.id) return;
+    profileInitRef.current = profile.id;
     setDisplayName(profile.display_name ?? "");
     setUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
