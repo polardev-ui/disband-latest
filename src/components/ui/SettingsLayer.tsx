@@ -68,7 +68,7 @@ export function SettingsLayer({
               {mobileNav && <div className="mb-4 md:hidden">{mobileNav}</div>}
               {children}
             </div>
-            <div className="w-[48px] shrink-0 pt-6 md:pt-[60px]">
+            <div className="w-[48px] shrink-0 pt-6 md:mr-6 md:pt-[60px]">
               <div className="sticky top-[60px] flex flex-col items-center">
                 <button
                   type="button"
