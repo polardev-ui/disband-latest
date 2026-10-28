@@ -159,6 +159,20 @@ export async function POST(req: Request) {
           break;
         }
 
+        if (session.metadata?.kind === "promotion") {
+          const supabase = getServiceSupabase();
+          const { server_id: serverId, user_id: buyerId, days, cents } = session.metadata;
+          if (supabase && serverId && session.payment_status === "paid") {
+            // Idempotent on the session id, so a retried event can't add days twice.
+            const { error } = await supabase.rpc("record_server_promotion", {
+              p_server: serverId, p_buyer: buyerId ?? null,
+              p_days: parseInt(days ?? "0", 10), p_amount: parseInt(cents ?? "0", 10), p_session: session.id,
+            });
+            if (error) throw new Error(error.message);
+          }
+          break;
+        }
+
         if (session.metadata?.kind === "catalyst") {
           const supabase = getServiceSupabase();
           const buyerId = session.metadata.user_id;

@@ -166,6 +166,16 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
 function badgeDetail(badge: AwardedBadge): string | null {
   const m = badge.metadata ?? {};
   const n = (k: string) => (typeof m[k] === "number" ? (m[k] as number) : null);
+  const followers = n("followers");
+  if (followers) {
+    // Creator badge: the biggest connected account, then any others.
+    const platforms = Array.isArray(m.platforms) ? (m.platforms as { platform: string; followers: number }[]) : [];
+    const label = (p: string) => ({ youtube: "YouTube", tiktok: "TikTok", twitch: "Twitch" } as Record<string, string>)[p] ?? p;
+    const noun = (p: string) => (p === "youtube" ? "subscribers" : "followers");
+    const fmt = (v: number) => new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(v);
+    const list = platforms.length ? platforms : [{ platform: String(m.platform ?? ""), followers }];
+    return list.map((p) => `${fmt(p.followers)} ${noun(p.platform)} on ${label(p.platform)}`).join(" · ");
+  }
   const reports = n("reports");
   if (reports) return `${reports} confirmed report${reports === 1 ? "" : "s"}`;
   const members = n("members");

@@ -118,7 +118,7 @@ export function DiscordApp() {
   const [shopCategory, setShopCategory] = useState<ShopCategory>("ring");
   const [shopPurchase, setShopPurchase] = useState<string | null>(null);
   const [giftReturn, setGiftReturn] = useState<string | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | null>(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | "creator" | null>(null);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
@@ -187,6 +187,14 @@ export function DiscordApp() {
 
   const [catalystServerId, setCatalystServerId] = useState<string | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
+
+  // Back from connecting YouTube, TikTok or Twitch: open the Creator Program
+  // tab, which reads the result from the same query string.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("creator")) return;
+    setSettingsInitialTab("creator");
+    setSettingsOpen(true);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
