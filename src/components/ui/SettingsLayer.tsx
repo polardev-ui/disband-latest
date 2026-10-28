@@ -64,7 +64,7 @@ export function SettingsLayer({
       <div className="relative min-w-0 flex-[1_1_800px] bg-bg-primary">
         <div className="settings-scroll h-full overflow-y-auto">
           <div className="flex">
-            <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1000px]" : "max-w-[740px]"}`}>
+            <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1180px]" : "max-w-[820px]"}`}>
               {mobileNav && <div className="mb-4 md:hidden">{mobileNav}</div>}
               {children}
             </div>
