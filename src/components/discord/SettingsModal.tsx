@@ -936,6 +936,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         exiting={exiting}
         onClose={onClose}
         contentKey={tab}
+        wide
         mobileNav={
           <select
             value={tab}
