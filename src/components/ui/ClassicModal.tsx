@@ -21,6 +21,7 @@ export function ClassicModal({
   onClose,
   width = 440,
   centered = true,
+  banner,
 }: {
   open: boolean;
   title: string;
@@ -31,6 +32,8 @@ export function ClassicModal({
   width?: number;
   /** Centre the header, as on Discord's account modals. */
   centered?: boolean;
+  /** Full-bleed artwork above the title. */
+  banner?: ReactNode;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -63,6 +66,7 @@ export function ClassicModal({
         >
           <IconClose size={22} />
         </button>
+        {banner}
         <div className={`px-4 pt-6 ${centered ? "text-center" : ""}`}>
           <h2 className={`font-bold leading-[30px] text-header-primary ${centered ? "text-[24px]" : "text-[20px]"}`}>{title}</h2>
           {subtitle && <p className="mt-2 text-[16px] leading-5 text-header-secondary">{subtitle}</p>}
