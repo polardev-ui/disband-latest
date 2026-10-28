@@ -159,7 +159,7 @@
 @keyframes ang-glow { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 .ang-aura { opacity: .5; transform-box: fill-box; transform-origin: center; transition: opacity calc(600ms * var(--deco-slow, 1)), transform calc(600ms * var(--deco-slow, 1)); }
 .deco-angelic[data-hover="true"] .ang-aura { opacity: 1; transform: scale(1.14); }
-.ang-rays { opacity: 0; transform-origin: 100px 52px; transform: scale(.7); transition: opacity calc(600ms * var(--deco-slow, 1)), transform calc(800ms * var(--deco-slow, 1)) cubic-bezier(.2, .9, .3, 1.2); }
+.ang-rays { opacity: 0; transform-origin: 100px 63px; transform: scale(.7); transition: opacity calc(600ms * var(--deco-slow, 1)), transform calc(800ms * var(--deco-slow, 1)) cubic-bezier(.2, .9, .3, 1.2); }
 .deco-angelic[data-hover="true"] .ang-rays { opacity: .85; transform: scale(1); animation: ang-rays calc(5200ms * var(--deco-slow, 1)) ease-in-out infinite; }
 @keyframes ang-rays { 0%, 100% { transform: scale(1) rotate(-6deg); } 50% { transform: scale(1.06) rotate(6deg); } }
 .ang-spill { opacity: .16; transition: opacity calc(600ms * var(--deco-slow, 1)); }
