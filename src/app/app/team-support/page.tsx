@@ -73,7 +73,9 @@ export default function TeamSupportPage() {
   const [reply, setReply] = useState("");
   const [replying, setReplying] = useState(false);
   const [replyStatus, setReplyStatus] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  // Open on what needs a person; "All" is a click away.
+  const [filter, setFilter] = useState<Filter>("awaiting");
+  const [ticketQuery, setTicketQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"tickets" | "bans" | "appeals" | "flags" | "servers">("tickets");
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
@@ -353,12 +355,31 @@ export default function TeamSupportPage() {
   }, [messages, selectedId]);
 
   const visibleTickets = useMemo(() => {
+    const q = ticketQuery.trim().toLowerCase();
     return tickets.filter((item) => {
+      if (q && !`${item.subject} ${item.email}`.toLowerCase().includes(q)) return false;
       if (filter === "all") return true;
       if (filter === "resolved") return item.status === "closed";
       return item.status !== "closed";
     });
-  }, [tickets, filter]);
+  }, [tickets, filter, ticketQuery]);
+
+  // j / k step through the list, like a mail client, when not typing.
+  useEffect(() => {
+    if (activeTab !== "tickets") return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key !== "j" && e.key !== "k") return;
+      if (visibleTickets.length === 0) return;
+      const i = visibleTickets.findIndex((x) => x.id === selectedId);
+      const next = e.key === "j" ? Math.min(visibleTickets.length - 1, i + 1) : Math.max(0, i === -1 ? 0 : i - 1);
+      setSelectedId(visibleTickets[next].id);
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeTab, visibleTickets, selectedId]);
 
   const counts = useMemo(() => {
     return {
@@ -530,7 +551,14 @@ export default function TeamSupportPage() {
               <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Requests</h2>
               <span className="rounded-[3px] bg-bg-tertiary px-2.5 py-1 text-xs text-text-muted">{visibleTickets.length}</span>
             </div>
-            <p className="mt-1 text-xs text-text-muted">Select a request to review, reply, and resolve.</p>
+            <p className="mt-1 text-xs text-text-muted">Select a request to review, reply, and resolve. <kbd className="rounded bg-bg-tertiary px-1">J</kbd>/<kbd className="rounded bg-bg-tertiary px-1">K</kbd> to move.</p>
+            <input
+              value={ticketQuery}
+              onChange={(e) => setTicketQuery(e.target.value)}
+              placeholder="Search subject or email"
+              aria-label="Search requests"
+              className="mt-3 h-8 w-full rounded-[3px] bg-bg-tertiary px-2.5 text-[13px] text-text-normal outline-none placeholder:text-text-muted focus:ring-1 focus:ring-[#00a8fc]"
+            />
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -641,7 +669,8 @@ export default function TeamSupportPage() {
                       onChange={(e) => setReply(e.target.value)}
                       rows={3}
                       maxLength={4000}
-                      placeholder="Reply as human support…"
+                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitReply(); } }}
+                      placeholder="Reply as human support… (Ctrl/⌘+Enter to send)"
                       className="min-h-[84px] flex-1 resize-y rounded-[3px] border border-divider bg-bg-tertiary p-4 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc] "
                     />
                     <button

@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-export type BotScope = "messages.read" | "messages.write" | "messages.delete" | "messages.react" | "members.read" | "channels.read" | "channels.manage" | "webhooks.manage";
+export type BotScope = "messages.read" | "messages.write" | "messages.delete" | "messages.react" | "members.read" | "members.kick" | "members.ban" | "members.timeout" | "channels.read" | "channels.manage" | "webhooks.manage";
 
-export const BOT_SCOPES: BotScope[] = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "channels.read", "channels.manage", "webhooks.manage"];
+export const BOT_SCOPES: BotScope[] = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "members.kick", "members.ban", "members.timeout", "channels.read", "channels.manage", "webhooks.manage"];
 
 export interface BotActor {
   botId: string;
