@@ -3,9 +3,22 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import Link from "next/link";
+import { isTauri } from "@/lib/platform";
 
 const TOS_VERSION = "2026-10-28";
+
+async function openExternal(url: string) {
+  if (isTauri()) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("plugin:opener|open_url", { url });
+      return;
+    } catch {
+      // Fall through to browser open.
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 export function TosConsentPopup() {
   const { ready, session, user } = useApp();
@@ -40,12 +53,20 @@ export function TosConsentPopup() {
         continue using Disband.
       </p>
       <div className="mt-3 flex items-center gap-3 text-[13px]">
-        <Link href="/terms" className="text-brand hover:underline" target="_blank" rel="noopener noreferrer">
+        <button
+          type="button"
+          onClick={() => void openExternal(`${window.location.origin}/terms`)}
+          className="text-brand hover:underline"
+        >
           Terms
-        </Link>
-        <Link href="/privacy" className="text-brand hover:underline" target="_blank" rel="noopener noreferrer">
+        </button>
+        <button
+          type="button"
+          onClick={() => void openExternal(`${window.location.origin}/privacy`)}
+          className="text-brand hover:underline"
+        >
           Privacy
-        </Link>
+        </button>
       </div>
       <div className="mt-4 flex justify-end">
         <button
