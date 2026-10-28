@@ -94,13 +94,31 @@ function videoTierConstraints(plan?: string): MediaTrackConstraints {
 
 export const NOISE_CANCELLATION_KEY = "disband:noise-cancellation-enabled";
 export const NOISE_CANCELLATION_STRENGTH_KEY = "disband:noise-cancellation-strength";
+export const NOISE_MODE_KEY = "disband:noise-suppression-mode";
+
+export type NoiseSuppressionMode = "off" | "standard" | "enhanced";
+
+export function getNoiseSuppressionMode(): NoiseSuppressionMode {
+  if (typeof window === "undefined") return "off";
+  const value = localStorage.getItem(NOISE_MODE_KEY);
+  if (value === "standard" || value === "enhanced" || value === "off") return value;
+  // Back-compat with the old boolean toggle.
+  const legacy = localStorage.getItem(NOISE_CANCELLATION_KEY);
+  if (legacy === "true") return "standard";
+  return "off";
+}
+
+export function setNoiseSuppressionMode(mode: NoiseSuppressionMode) {
+  try {
+    localStorage.setItem(NOISE_MODE_KEY, mode);
+    localStorage.setItem(NOISE_CANCELLATION_KEY, mode !== "off" ? "true" : "false");
+  } catch {
+    // Ignore storage errors.
+  }
+}
 
 export function isNoiseCancellationEnabled(): boolean {
-  if (typeof window === "undefined") return false;
-  const value = localStorage.getItem(NOISE_CANCELLATION_KEY);
-  // Default off: the browser's built-in suppression is aggressive and
-  // chops voices. Users can opt in from Settings.
-  return value === "true";
+  return getNoiseSuppressionMode() !== "off";
 }
 
 export function setNoiseCancellationEnabled(enabled: boolean) {
