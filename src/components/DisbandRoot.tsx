@@ -16,6 +16,7 @@ import { SelfXssWarning } from "@/components/SelfXssWarning";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { AgePrompt } from "@/components/AgePrompt";
 import { CookieConsent } from "@/components/CookieConsent";
+import { TosConsentPopup } from "@/components/TosConsentPopup";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useEffect, useRef } from "react";
 import { alertDialog } from "@/lib/dialogs";
@@ -111,6 +112,7 @@ export function DisbandRoot() {
           </div>
           <AddAccountOverlay />
           <CookieConsent />
+          <TosConsentPopup />
         </ContextMenuProvider>
         </SkinBoundary>
       </AppProvider>
