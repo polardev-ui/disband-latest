@@ -237,7 +237,12 @@ export function useCallManager(
 
       const iceServersPromise = fetchIceServers();
       const iceServers = await iceServersPromise;
-      const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 4 });
+      const pc = new RTCPeerConnection({
+        iceServers,
+        iceCandidatePoolSize: 10,
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require",
+      });
       pcRef.current = pc;
       callerRef.current = asCaller;
 
