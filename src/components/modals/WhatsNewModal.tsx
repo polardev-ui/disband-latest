@@ -5,13 +5,11 @@ import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { CURRENCY } from "@/lib/currency";
 
 /*
- What's new in this version, once per person per version. It waits until the
- community announcement (ReleaseModal) has been read, so the two never stack.
+ What's new in this version, once per person per version.
 */
 
 export const WHATS_NEW_VERSION = "2.33.169";
 const SEEN_KEY = `disband-whats-new:${WHATS_NEW_VERSION}`;
-const ANNOUNCEMENT_KEY = "disband-announcement-seen:community-update-2026-10";
 
 const ITEMS: { title: string; body: string; accent: string }[] = [
   { title: `${CURRENCY.plural}`, body: `Earn ${CURRENCY.plural} by chatting, creating and joining spaces and more, then spend them on Aero for a week or a free decoration. Settings → ${CURRENCY.plural}.`, accent: "#9b7bff" },
@@ -28,7 +26,7 @@ export function WhatsNewModal() {
 
   useEffect(() => {
     try {
-      if (!localStorage.getItem(SEEN_KEY) && localStorage.getItem(ANNOUNCEMENT_KEY)) setOpen(true);
+      if (!localStorage.getItem(SEEN_KEY)) setOpen(true);
     } catch {
       // No storage: skip rather than show it on every load.
     }
