@@ -493,6 +493,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const openActivity = useCallback((activityId: string) => setActiveActivityId(activityId), []);
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
+  const [showNewMessages, setShowNewMessages] = useState(false);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const prevLenRef = useRef(messages.length);
   const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
   const messagesRef = useRef(messages);
@@ -758,6 +761,17 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }, [messages, readCursorScope]);
 
   useEffect(() => {
+    if (messages.length > prevLenRef.current) {
+      if (!stickToBottomRef.current) setShowNewMessages(true);
+    }
+    if (stickToBottomRef.current) {
+      setShowNewMessages(false);
+      setShowScrollDown(false);
+    }
+    prevLenRef.current = messages.length;
+  }, [messages.length]);
+
+  useEffect(() => {
     return () => {
       const scope = readScopeRef.current;
       if (scope && messagesRef.current.length > 0) {
@@ -783,6 +797,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         // stop re-pinning to the bottom as late content loads.
         topAnchorRef.current = null;
         pinToBottomRef.current = false;
+        const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setShowScrollDown(distanceFromBottom > 1800);
+        if (stickToBottomRef.current) {
+          setShowNewMessages(false);
+          setShowScrollDown(false);
+        }
         if (el.scrollTop < 96) void requestLoadMore();
       });
     };
@@ -811,8 +831,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t?.tagName === "TEXTAREA" && stickToBottomRef.current) {
-        requestAnimationFrame(() => scrollToBottom("auto", true));
+      if (t?.tagName === "TEXTAREA") {
+        // On iOS the keyboard animation finishes after focus; wait before
+        // re-pinning so the newest message isn't hidden behind the composer.
+        window.setTimeout(() => {
+          if (stickToBottomRef.current) scrollToBottom("auto", true);
+        }, 320);
       }
     };
     window.addEventListener("focusin", onFocusIn);
@@ -960,7 +984,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   return (
-    <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
+    <main className="view-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
         {headerLeading}
         <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
@@ -1059,6 +1083,30 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         onSelect={(emoji) => picker && onToggleReaction?.(picker.messageId, emoji)}
         onClose={() => setPicker(null)}
       />
+
+      {(showNewMessages || showScrollDown) && (
+        <div className="pointer-events-none absolute bottom-20 left-1/2 z-[5] flex -translate-x-1/2 flex-col items-center gap-2 md:left-auto md:right-4 md:translate-x-0">
+          {showNewMessages && (
+            <button
+              type="button"
+              onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
+              className="pointer-events-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
+            >
+              New messages
+            </button>
+          )}
+          {showScrollDown && (
+            <button
+              type="button"
+              onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-bg-secondary text-text-normal shadow-lg transition-transform hover:scale-105"
+              aria-label="Scroll to bottom"
+            >
+              ↓
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="shrink-0">
         {composerLockedReason ? (
