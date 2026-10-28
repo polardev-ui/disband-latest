@@ -23,7 +23,7 @@ import { MicTest } from "./settings/MicTest";
 import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { MyAccountPanel } from "./settings/MyAccountPanel";
-import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength } from "@/lib/audio-settings";
+import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength, getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import {
@@ -314,6 +314,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [audioInput, setAudioInput] = useState("");
   const [noiseCancellation, setNoiseCancellationState] = useState(isNoiseCancellationEnabled());
   const [noiseCancellationStrength, setNoiseCancellationStrengthState] = useState(getNoiseCancellationStrength());
+  const [noiseMode, setNoiseModeState] = useState<NoiseSuppressionMode>(getNoiseSuppressionMode());
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
@@ -1811,18 +1812,24 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     description="Reduce background noise before your microphone reaches everyone else."
                   >
                     <SettingRow
-                      label="Noise cancellation"
-                      description="Echo and noise suppression applied while capturing your voice."
+                      label="Noise suppression"
+                      description="Choose how Disband handles background noise. 'Enhanced' uses a lighter touch to avoid clipping your voice."
                     >
-                      <Toggle
-                        label="Noise cancellation"
-                        checked={noiseCancellation}
-                        onChange={() => {
-                          const next = !noiseCancellation;
-                          setNoiseCancellationState(next);
-                          setNoiseCancellationEnabled(next);
+                      <select
+                        value={noiseMode}
+                        onChange={(e) => {
+                          const mode = e.target.value as NoiseSuppressionMode;
+                          setNoiseModeState(mode);
+                          setNoiseSuppressionMode(mode);
+                          setNoiseCancellationState(mode !== "off");
+                          setNoiseCancellationEnabled(mode !== "off");
                         }}
-                      />
+                        className={settingsInputClass}
+                      >
+                        <option value="off">Off (no suppression)</option>
+                        <option value="standard">Standard (browser)</option>
+                        <option value="enhanced">Enhanced (lighter)</option>
+                      </select>
                     </SettingRow>
                     <SettingRow
                       label="Noise cancellation strength"
