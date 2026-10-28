@@ -2493,7 +2493,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadProfile(userId);
   }, [userId, loadProfile]);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (onShellReady?: () => void) => {
     if (!userId) return;
     // Phase 1 — attention state first. Notifications, threads and unread
     // badges resolve before any message history is fetched, so a refresh
@@ -2509,6 +2509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ]);
 
     await seedUnread(userId, threads);
+    onShellReady?.();
 
     // Phase 2 — the open conversation and server details stream in after.
     // These are independent lookups, so they run together instead of stacking
@@ -2562,6 +2563,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           session = refreshed?.session ?? (error?.name === "AuthRetryableFetchError" ? session : null);
         } else {
+          // The token is still in date, so open the app now and confirm it
+          // with Supabase in the background; a rejected session signs out.
+          setSession(session);
+          rememberSession(session);
+          setReady(true);
           const { error: verifyError } = await supabase.auth.getUser();
           if (verifyError) {
             if (verifyError.name === "AuthRetryableFetchError") {
@@ -2811,7 +2817,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        await ensureProfile(userId, user?.email);
+        // Creating the profile row only matters for a brand-new account; it
+        // runs alongside the load instead of in front of it, and the profile
+        // is read again below if it wasn't there yet.
+        const ensured = ensureProfile(userId, user?.email);
         // Paint last-known badges/notifications instantly so a refresh never
         // shows a clean slate while the network catches up. refreshAll
         // overwrites all of this with server truth moments later.
@@ -2843,7 +2852,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setNotifications(snapshot.notifications);
           }
         }
-        await refreshAll();
+        await Promise.all([
+          ensured,
+          // The shell opens once the profile is in too, so forms that seed
+          // from it (Settings → Profiles) never start out blank.
+          refreshAll(() => { void ensured.then(() => { if (!cancelled) setDataLoaded(true); }); }),
+        ]);
+        if (!profileRef.current) await loadProfile(userId);
       } catch (err) {
 
         console.error("Initial load failed:", err);
@@ -2878,7 +2893,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...groupChats.flatMap((g) => [g.icon_url, ...g.members.map((m) => m.avatar_url)]),
     ];
 
-    void preloadImages(urls).finally(() => setHydrated(true));
+    // Give avatars a moment to land so the first paint isn't all initials,
+    // but never hold the app for them: they keep loading behind it.
+    void Promise.race([preloadImages(urls), new Promise((r) => setTimeout(r, 350))]).finally(() => setHydrated(true));
   }, [dataLoaded, hydrated, profile, friends, dmThreads, servers, groupChats]);
 
   useEffect(() => {

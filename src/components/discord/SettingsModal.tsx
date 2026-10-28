@@ -681,8 +681,11 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     // Only seed the form when the modal opens or the account changes. Re-seeding
     // on every profile update (presence, listening, etc.) was wiping in-progress
     // edits such as a half-typed bio.
-    if (profileInitRef.current === profile.id) return;
-    profileInitRef.current = profile.id;
+    // Keyed on the username too: a placeholder profile painted before the real
+    // row arrives has no username, and seeding from it left the form blank.
+    const seedKey = `${profile.id}:${profile.username ?? ""}`;
+    if (profileInitRef.current === seedKey) return;
+    profileInitRef.current = seedKey;
     setDisplayName(profile.display_name ?? "");
     setUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
