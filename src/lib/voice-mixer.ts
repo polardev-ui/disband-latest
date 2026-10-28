@@ -52,10 +52,12 @@ export class VoiceMixer {
     if (cancellation) {
       // Keep the frequency shaping very gentle. Heavy high/low-pass cutoffs
       // were hollowing out the voice and making it sound stuttery/laggy.
-      this.noiseHighpass.frequency.value = Math.round(50 + strength * 3);
-      this.noiseLowpass.frequency.value = Math.round(16000 - strength * 50);
-      this.noiseHighpass.Q.value = 0.7;
-      this.noiseLowpass.Q.value = 0.7;
+      // Even gentler now: only trim rumble and extreme highs, never the
+      // speech band, so voices stay natural and aren't chopped.
+      this.noiseHighpass.frequency.value = Math.round(40 + strength * 1.2);
+      this.noiseLowpass.frequency.value = Math.round(18000 - strength * 25);
+      this.noiseHighpass.Q.value = 0.5;
+      this.noiseLowpass.Q.value = 0.5;
     } else {
       this.noiseHighpass.frequency.value = 0;
       this.noiseLowpass.frequency.value = 22000;
