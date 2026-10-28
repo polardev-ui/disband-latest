@@ -616,7 +616,7 @@ declare s text;
 begin
   if p_scopes is null then return false; end if;
   foreach s in array p_scopes loop
-    if s not in ('messages.read', 'messages.write', 'messages.delete', 'messages.react', 'messages.pin',
+    if s not in ('messages.read', 'messages.write', 'messages.delete', 'messages.react',
                  'members.read', 'members.kick', 'members.ban', 'members.timeout',
                  'channels.read', 'channels.manage', 'webhooks.manage') then
       return false;
@@ -679,3 +679,64 @@ $$;
 grant execute on function public.wallet_apply(uuid, int, text, text, int) to service_role;
 grant execute on function public.record_server_promotion(uuid, uuid, int, int, text) to service_role;
 grant execute on function public.bot_install_link(uuid, uuid, text[]) to service_role;
+
+-- Moderation for bots. Each checks the bot's grant for the space, and none
+-- will touch the owner, anyone who can moderate, or another bot.
+create or replace function public.bot_can_moderate(p_bot_id uuid, p_server_id uuid, p_scope text, p_target uuid)
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare v_bot public.bots%rowtype;
+begin
+  select * into v_bot from public.bots where id = p_bot_id and revoked_at is null;
+  if not found then raise exception 'Bot not found'; end if;
+  if not exists (select 1 from public.bot_grants where bot_id = p_bot_id and server_id = p_server_id and p_scope = any(scopes)) then
+    raise exception 'Missing permission: %', p_scope;
+  end if;
+  if exists (select 1 from public.servers where id = p_server_id and owner_id = p_target) then raise exception 'Cannot act on the space owner'; end if;
+  if p_target = v_bot.user_id or exists (select 1 from public.profiles where id = p_target and is_bot) then raise exception 'Cannot act on a bot'; end if;
+  if public.member_has_server_permission(p_server_id, p_target, 'kick')
+     or public.member_has_server_permission(p_server_id, p_target, 'ban')
+     or public.member_has_server_permission(p_server_id, p_target, 'manage_server') then
+    raise exception 'Cannot act on a moderator';
+  end if;
+  return v_bot.user_id;
+end; $$;
+
+create or replace function public.bot_kick_member(p_bot_id uuid, p_server_id uuid, p_user_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_actor uuid;
+begin
+  v_actor := public.bot_can_moderate(p_bot_id, p_server_id, 'members.kick', p_user_id);
+  delete from public.server_members where server_id = p_server_id and user_id = p_user_id;
+  perform public.write_audit_log(p_server_id, 'member.kick', 'user', p_user_id::text, jsonb_build_object('bot', p_bot_id));
+end; $$;
+
+create or replace function public.bot_ban_member(p_bot_id uuid, p_server_id uuid, p_user_id uuid, p_reason text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_actor uuid;
+begin
+  v_actor := public.bot_can_moderate(p_bot_id, p_server_id, 'members.ban', p_user_id);
+  insert into public.server_bans (server_id, user_id, banned_by, reason) values (p_server_id, p_user_id, v_actor, left(p_reason, 500))
+  on conflict do nothing;
+  delete from public.server_members where server_id = p_server_id and user_id = p_user_id;
+  perform public.write_audit_log(p_server_id, 'member.ban', 'user', p_user_id::text, jsonb_build_object('bot', p_bot_id, 'reason', p_reason));
+end; $$;
+
+create or replace function public.bot_timeout_member(p_bot_id uuid, p_server_id uuid, p_user_id uuid, p_minutes int, p_reason text default null)
+returns timestamptz language plpgsql security definer set search_path = public as $$
+declare v_actor uuid; v_until timestamptz;
+begin
+  v_actor := public.bot_can_moderate(p_bot_id, p_server_id, 'members.timeout', p_user_id);
+  if p_minutes is null or p_minutes < 1 or p_minutes > 40320 then raise exception 'Timeouts are 1 minute to 28 days'; end if;
+  v_until := now() + make_interval(mins => p_minutes);
+  insert into public.server_timeouts (server_id, user_id, expires_at, reason, created_by)
+  values (p_server_id, p_user_id, v_until, left(p_reason, 500), v_actor)
+  on conflict (server_id, user_id) do update set expires_at = excluded.expires_at, reason = excluded.reason, created_by = excluded.created_by;
+  perform public.write_audit_log(p_server_id, 'member.timeout', 'user', p_user_id::text, jsonb_build_object('bot', p_bot_id, 'minutes', p_minutes));
+  return v_until;
+end; $$;
+revoke all on function public.bot_kick_member(uuid, uuid, uuid) from public, anon, authenticated;
+revoke all on function public.bot_ban_member(uuid, uuid, uuid, text) from public, anon, authenticated;
+revoke all on function public.bot_timeout_member(uuid, uuid, uuid, int, text) from public, anon, authenticated;
+grant execute on function public.bot_kick_member(uuid, uuid, uuid) to service_role;
+grant execute on function public.bot_ban_member(uuid, uuid, uuid, text) to service_role;
+grant execute on function public.bot_timeout_member(uuid, uuid, uuid, int, text) to service_role;

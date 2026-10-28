@@ -21,6 +21,18 @@ export const BOT_SCOPE_LABELS: Record<BotScope, { label: string; description: st
     label: "Read members",
     description: "See the member list of spaces the bot has joined.",
   },
+  "members.kick": {
+    label: "Kick members",
+    description: "Remove members from a space. Never the owner, moderators or other bots.",
+  },
+  "members.ban": {
+    label: "Ban members",
+    description: "Ban members from a space. Never the owner, moderators or other bots.",
+  },
+  "members.timeout": {
+    label: "Time out members",
+    description: "Stop a member chatting for up to 28 days.",
+  },
   "channels.read": {
     label: "Read channels",
     description: "List channels and categories.",
@@ -41,6 +53,9 @@ export const BOT_SCOPE_ORDER: BotScope[] = [
   "messages.delete",
   "messages.react",
   "members.read",
+  "members.kick",
+  "members.ban",
+  "members.timeout",
   "channels.read",
   "channels.manage",
   "webhooks.manage",
