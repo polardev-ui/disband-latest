@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, useMemo, type ReactNode } from "react";
+import { Fragment, memo, useMemo, useState, useEffect, type ReactNode } from "react";
 import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
 import { readAttachments } from "@/lib/message-attachments";
 import {
@@ -316,7 +316,66 @@ function MessageBody({  content,
   customEmoji?: Record<string, string>;
   roles?: ServerRole[];
 }) {
-  const codes = extractInviteCodes(content);
+  function formatDiscordTimestamp(unix: number, flag: string): string {
+  const date = new Date(unix * 1000);
+  switch (flag) {
+    case "t":
+      return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    case "T":
+      return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    case "d":
+      return date.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "numeric" });
+    case "D":
+      return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    case "F":
+      return date.toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+    case "R": {
+      const diff = (unix * 1000 - Date.now()) / 1000;
+      const abs = Math.abs(diff);
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+      if (abs < 60) return rtf.format(Math.round(diff), "second");
+      if (abs < 3600) return rtf.format(Math.round(diff / 60), "minute");
+      if (abs < 86400) return rtf.format(Math.round(diff / 3600), "hour");
+      if (abs < 2592000) return rtf.format(Math.round(diff / 86400), "day");
+      if (abs < 31536000) return rtf.format(Math.round(diff / 2592000), "month");
+      return rtf.format(Math.round(diff / 31536000), "year");
+    }
+    case "f":
+    default:
+      return date.toLocaleString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+}
+
+function fullTimestampLabel(unix: number): string {
+  return new Date(unix * 1000).toLocaleString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function TimestampChip({ unix, flag }: { unix: number; flag: string }) {
+  const [label, setLabel] = useState(() => formatDiscordTimestamp(unix, flag));
+  useEffect(() => {
+    const interval = flag === "R" ? 1000 : 60000;
+    const id = window.setInterval(() => setLabel(formatDiscordTimestamp(unix, flag)), interval);
+    return () => clearInterval(id);
+  }, [unix, flag]);
+  return (
+    <span
+      className="inline rounded bg-white/10 px-1 py-0.5 text-[0.9em] font-medium text-text-normal"
+      title={fullTimestampLabel(unix)}
+    >
+      {label}
+    </span>
+  );
+}
+
+const codes = extractInviteCodes(content);
   const giftCodes = extractGiftCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
   // A GIF link renders as the GIF itself (see GifLinkEmbed below), so its raw
@@ -349,7 +408,18 @@ function MessageBody({  content,
           ) : emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
-            <Twemoji>{renderCustomEmojiMarkdown(textOnly, members, onMentionClick, channels, onChannelClick, customEmoji, roles)}</Twemoji>
+            <>
+              {textOnly.split(/(<t:\d+:[tTdDfFR]>)/g).map((segment, i) => {
+                const m = segment.match(/^<t:(\d+):([tTdDfFR])>$/);
+                if (m) return <TimestampChip key={i} unix={Number(m[1])} flag={m[2]} />;
+                if (!segment) return null;
+                return (
+                  <Twemoji key={i}>
+                    {renderCustomEmojiMarkdown(segment, members, onMentionClick, channels, onChannelClick, customEmoji, roles)}
+                  </Twemoji>
+                );
+              })}
+            </>
           )}
         </div>
       )}
