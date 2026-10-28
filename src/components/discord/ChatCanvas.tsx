@@ -1085,7 +1085,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       />
 
       {(showNewMessages || showScrollDown) && (
-        <div className="pointer-events-none absolute bottom-20 left-1/2 z-[5] flex -translate-x-1/2 flex-col items-center gap-2 md:left-auto md:right-4 md:translate-x-0">
+        <div className="pointer-events-none absolute bottom-20 left-1/2 z-[200] flex -translate-x-1/2 flex-col items-center gap-2 md:left-auto md:right-4 md:translate-x-0">
           {showNewMessages && (
             <button
               type="button"
