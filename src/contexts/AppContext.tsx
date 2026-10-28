@@ -4390,10 +4390,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setChannelHasMore(false);
     }
     if (viewMode !== "space") setViewMode("space");
-    const channel = channelsRef.current.find((c) => c.id === channelId);
+    const channel = channels.find((c) => c.id === channelId) ?? channelsRef.current.find((c) => c.id === channelId);
     if (channel) {
       clearServerIndicator(channel.server_id);
       setLastChannelId(channel.server_id, channelId);
+      // Optimistically clear this channel's mention contribution so the
+      // server badge doesn't linger until the async refresh lands.
+      const channelMentions = channelMentionMap.get(channelId) ?? 0;
+      if (channelMentions > 0) {
+        setServerMentionCounts((prev) => {
+          const next = new Map(prev);
+          const current = next.get(channel.server_id) ?? 0;
+          const updated = current - channelMentions;
+          if (updated <= 0) next.delete(channel.server_id);
+          else next.set(channel.server_id, updated);
+          return next;
+        });
+      }
     }
     setChannelUnreadMap((prev) => {
       if (!prev.has(channelId)) return prev;
@@ -4411,7 +4424,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Opening the channel is the acknowledgement. Persist it so a restart does
     // not repaint the mention we just read.
     void markChannelMentionsRead(channelId);
-  }, [viewMode, clearServerIndicator, markActivity, markChannelMentionsRead, restoreChannelSnapshot]);
+  }, [viewMode, channels, clearServerIndicator, markActivity, markChannelMentionsRead, restoreChannelSnapshot]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
     markActivity();
