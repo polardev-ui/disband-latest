@@ -74,7 +74,7 @@ export default function TeamSupportPage() {
   const [replying, setReplying] = useState(false);
   const [replyStatus, setReplyStatus] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
-  const [activeTab, setActiveTab] = useState<"tickets" | "bans" | "appeals" | "flags">("tickets");
+  const [activeTab, setActiveTab] = useState<"tickets" | "bans" | "appeals" | "flags" | "servers">("tickets");
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
   // Bans
@@ -122,6 +122,42 @@ export default function TeamSupportPage() {
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [flagsLoading, setFlagsLoading] = useState(false);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+
+  // Servers (staff search)
+  interface ServerRow {
+    id: string;
+    name: string;
+    owner_id: string;
+    icon_url: string | null;
+    created_at: string;
+    member_count: number;
+  }
+  interface ServerMemberRow {
+    user_id: string;
+    role: string;
+    joined_at: string;
+    profile?: { username: string | null; display_name: string | null; avatar_url: string | null; is_support_staff?: boolean; show_staff_badge?: boolean } | null;
+  }
+  interface AuditEntry {
+    id: number;
+    server_id: string;
+    actor_id: string | null;
+    action: string;
+    target_type: string | null;
+    target_id: string | null;
+    details: any;
+    created_at: string;
+    actor?: { username: string | null; display_name: string | null } | null;
+  }
+  const [serverQuery, setServerQuery] = useState("");
+  const [servers, setServers] = useState<ServerRow[]>([]);
+  const [serversLoading, setServersLoading] = useState(false);
+  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
+  const [serverMembers, setServerMembers] = useState<ServerMemberRow[]>([]);
+  const [serverAudit, setServerAudit] = useState<AuditEntry[]>([]);
+  const [serverDetailLoading, setServerDetailLoading] = useState(false);
+  const [serverUserCheck, setServerUserCheck] = useState("");
+  const [serverUserResult, setServerUserResult] = useState<any>(null);
 
   // Flag action modal
   const [actioningFlag, setActioningFlag] = useState<FlagRow | null>(null);
@@ -222,6 +258,64 @@ export default function TeamSupportPage() {
     }
   }, []);
 
+  const loadServers = useCallback(async (q: string) => {
+    setServersLoading(true);
+    try {
+      const res = await apiFetch(`/api/moderation/servers/search?q=${encodeURIComponent(q)}`);
+      const json = await res.json() as { servers?: ServerRow[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not load servers.");
+      setServers(json.servers ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load servers.");
+    } finally {
+      setServersLoading(false);
+    }
+  }, []);
+
+  const loadServerDetail = useCallback(async (id: string) => {
+    setSelectedServerId(id);
+    setServerDetailLoading(true);
+    setServerMembers([]);
+    setServerAudit([]);
+    setServerUserResult(null);
+    try {
+      const [membersRes, auditRes] = await Promise.all([
+        apiFetch(`/api/moderation/servers/${id}/members`),
+        apiFetch(`/api/moderation/servers/${id}/audit`),
+      ]);
+      const membersJson = await membersRes.json() as { members?: ServerMemberRow[]; error?: string };
+      const auditJson = await auditRes.json() as { entries?: AuditEntry[]; error?: string };
+      if (!membersRes.ok) throw new Error(membersJson.error ?? "Could not load members.");
+      if (!auditRes.ok) throw new Error(auditJson.error ?? "Could not load audit log.");
+      setServerMembers(membersJson.members ?? []);
+      setServerAudit(auditJson.entries ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load server details.");
+    } finally {
+      setServerDetailLoading(false);
+    }
+  }, []);
+
+  const checkServerUser = useCallback(async () => {
+    if (!selectedServerId || !serverUserCheck.trim()) return;
+    setServerUserResult(null);
+    try {
+      // Resolve user id from username if needed
+      let userId = serverUserCheck.trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+        const res = await apiFetch(`/api/moderation/servers/search?q=${encodeURIComponent(userId)}`);
+        // not a server search; instead look up profile via a direct query is not available client-side.
+        // Fall back: try as username in members list.
+      }
+      const member = serverMembers.find((m) => m.user_id === userId || m.profile?.username?.toLowerCase() === userId.toLowerCase());
+      const auditRes = await apiFetch(`/api/moderation/servers/${selectedServerId}/audit?userId=${encodeURIComponent(member?.user_id ?? userId)}`);
+      const auditJson = await auditRes.json() as { entries?: AuditEntry[] };
+      setServerUserResult({ member: member ?? null, audit: auditJson.entries ?? [] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not check user.");
+    }
+  }, [selectedServerId, serverUserCheck, serverMembers]);
+
   const loadTicket = useCallback(async (id: string) => {
     setDetailLoading(true);
     setError(null);
@@ -247,7 +341,8 @@ export default function TeamSupportPage() {
     if (activeTab === "bans") void loadBans();
     if (activeTab === "appeals") void loadAppeals();
     if (activeTab === "flags") void loadFlags();
-  }, [phase, activeTab, loadBans, loadAppeals, loadFlags]);
+    if (activeTab === "servers") void loadServers(serverQuery);
+  }, [phase, activeTab, loadBans, loadAppeals, loadFlags, loadServers, serverQuery]);
 
   useEffect(() => {
     if (selectedId) void loadTicket(selectedId);
@@ -382,6 +477,7 @@ export default function TeamSupportPage() {
               ["bans", "Bans", bans.length],
               ["appeals", "Appeals", appeals.filter((a) => a.status === "pending").length],
               ["flags", "Flags", flags.filter((f) => f.status === "pending").length],
+              ["servers", "Servers", servers.length],
             ] as const).map(([id, label, count]) => (
               <button
                 key={id}
@@ -834,6 +930,152 @@ export default function TeamSupportPage() {
           </div>
         </ClassicModal>
       )}
+
+
+      {activeTab === "servers" && (
+        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
+          <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Search servers</h2>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={serverQuery}
+                  onChange={(e) => setServerQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void loadServers(serverQuery); }}
+                  placeholder="Server name or ID…"
+                  className="flex-1 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
+                />
+                <button
+                  type="button"
+                  onClick={() => void loadServers(serverQuery)}
+                  className="rounded-[3px] bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
+                >
+                  Search
+                </button>
+              </div>
+              {serversLoading && <p className="mt-4 text-sm text-text-muted">Loading servers…</p>}
+              {!serversLoading && servers.length === 0 && <p className="mt-4 text-sm text-text-muted">No servers found.</p>}
+              <div className="mt-4 space-y-2">
+                {servers.map((sv) => (
+                  <button
+                    key={sv.id}
+                    type="button"
+                    onClick={() => void loadServerDetail(sv.id)}
+                    className={`w-full rounded-[3px] border p-3 text-left transition-colors ${selectedServerId === sv.id ? "border-brand/60 bg-brand/10" : "border-transparent bg-bg-tertiary hover:border-divider hover:bg-bg-tertiary"}`}
+                  >
+                    <p className="text-sm font-semibold text-text-normal">{sv.name}</p>
+                    <p className="mt-1 text-xs text-text-muted">{sv.member_count} members · {new Date(sv.created_at).toLocaleDateString()}</p>
+                    <p className="mt-1 font-mono text-[10px] text-text-muted/70">{sv.id}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
+              {!selectedServerId ? (
+                <p className="text-sm text-text-muted">Select a server to view members and audit log.</p>
+              ) : serverDetailLoading ? (
+                <p className="text-sm text-text-muted">Loading details…</p>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Members ({serverMembers.length})</h2>
+                    <div className="mt-3 space-y-2">
+                      {serverMembers.map((m) => (
+                        <div key={m.user_id} className="flex items-center justify-between rounded-[3px] border border-divider bg-bg-tertiary p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-text-normal">{m.profile?.display_name || m.profile?.username || m.user_id}</p>
+                            <p className="mt-0.5 text-xs text-text-muted">@{m.profile?.username || "—"} · joined {new Date(m.joined_at).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className={`rounded-[3px] px-2 py-0.5 text-[11px] font-medium ${m.role === "owner" ? "bg-amber-400/12 text-amber-300" : m.role === "admin" ? "bg-brand/12 text-brand" : m.role === "moderator" ? "bg-purple-400/12 text-purple-300" : "bg-bg-secondary text-text-muted"}`}>
+                              {m.role}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setViewingUserId(m.user_id)}
+                              className="rounded-md border border-divider bg-bg-tertiary px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+                            >
+                              View
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {serverMembers.length === 0 && <p className="text-sm text-text-muted">No members found.</p>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Check a user</h2>
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        value={serverUserCheck}
+                        onChange={(e) => setServerUserCheck(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void checkServerUser(); }}
+                        placeholder="Username or user ID…"
+                        className="flex-1 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void checkServerUser()}
+                        className="rounded-[3px] bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
+                      >
+                        Check
+                      </button>
+                    </div>
+                    {serverUserResult && (
+                      <div className="mt-3 rounded-[3px] border border-divider bg-bg-tertiary p-3 text-sm">
+                        {serverUserResult.member ? (
+                          <p className="text-text-normal">
+                            <strong>{serverUserResult.member.profile?.display_name || serverUserResult.member.profile?.username || serverUserResult.member.user_id}</strong>
+                            {" "}is currently a <strong>{serverUserResult.member.role}</strong> (joined {new Date(serverUserResult.member.joined_at).toLocaleDateString()}).
+                          </p>
+                        ) : (
+                          <p className="text-text-muted">User not found in this server.</p>
+                        )}
+                        <p className="mt-2 text-xs text-text-muted">
+                          Audit entries: {serverUserResult.audit.length}
+                        </p>
+                        {serverUserResult.audit.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-xs text-text-muted">
+                            {serverUserResult.audit.slice(0, 10).map((a: any) => (
+                              <li key={a.id}>{a.action} · {new Date(a.created_at).toLocaleString()}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Audit log ({serverAudit.length})</h2>
+                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                      {serverAudit.map((entry) => (
+                        <div key={entry.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-3 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-text-normal">{entry.action}</span>
+                            <span className="text-text-muted">{new Date(entry.created_at).toLocaleString()}</span>
+                          </div>
+                          <p className="mt-1 text-text-muted">
+                            Actor: {entry.actor?.display_name || entry.actor?.username || entry.actor_id || "—"}
+                            {entry.target_type ? ` · Target: ${entry.target_type}` : ""}
+                            {entry.target_id ? ` (${entry.target_id})` : ""}
+                          </p>
+                          {entry.details && (
+                            <pre className="mt-1 max-h-20 overflow-auto text-[10px] text-text-muted/70">{JSON.stringify(entry.details)}</pre>
+                          )}
+                        </div>
+                      ))}
+                      {serverAudit.length === 0 && <p className="text-sm text-text-muted">No audit entries.</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {viewingUserId && <AccountViewerModal userId={viewingUserId} onClose={() => setViewingUserId(null)} />}
     </>
