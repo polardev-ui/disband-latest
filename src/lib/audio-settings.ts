@@ -57,10 +57,14 @@ export async function applyAudioOutputToElement(
 export function buildAudioConstraints(): boolean | MediaTrackConstraints {
   const deviceId = getPreferredAudioInputId();
   const cancellation = isNoiseCancellationEnabled();
+  const strength = getNoiseCancellationStrength();
+  // Treat very low strength as "off" so the browser's aggressive
+  // suppression doesn't chop quiet voices.
+  const effective = cancellation && strength >= 20;
   const constraints: MediaTrackConstraints = {
     ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
-    echoCancellation: cancellation,
-    noiseSuppression: cancellation,
+    echoCancellation: effective,
+    noiseSuppression: effective,
     // Automatic gain control frequently pumps and adds perceived lag /
     // stutter. Noise suppression is handled natively by the browser when
     // enabled; Web Audio only fine-tunes the captured signal.
@@ -94,7 +98,9 @@ export const NOISE_CANCELLATION_STRENGTH_KEY = "disband:noise-cancellation-stren
 export function isNoiseCancellationEnabled(): boolean {
   if (typeof window === "undefined") return false;
   const value = localStorage.getItem(NOISE_CANCELLATION_KEY);
-  return value === null ? true : value === "true";
+  // Default off: the browser's built-in suppression is aggressive and
+  // chops voices. Users can opt in from Settings.
+  return value === "true";
 }
 
 export function setNoiseCancellationEnabled(enabled: boolean) {
