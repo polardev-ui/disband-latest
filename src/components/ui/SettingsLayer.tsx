@@ -56,19 +56,19 @@ export function SettingsLayer({
       aria-label={label}
       className={`settings-layer${exiting ? " settings-layer-out" : ""} fixed inset-0 z-[70] flex bg-bg-primary`}
     >
-      <div className="hidden flex-[1_0_218px] justify-end bg-bg-secondary md:flex">
-        <nav aria-label={`${label} sections`} className="settings-sidebar w-[218px] overflow-y-auto py-[60px] pl-5 pr-1.5">
+      <div className="hidden flex-[1_0_240px] justify-end bg-bg-secondary md:flex">
+        <nav aria-label={`${label} sections`} className="settings-sidebar w-[240px] overflow-y-auto py-[60px] pl-5 pr-1.5">
           {sidebar}
         </nav>
       </div>
-      <div className="relative min-w-0 flex-[1_1_800px] bg-bg-primary">
+      <div className="relative min-w-0 flex-[1_1_900px] bg-bg-primary">
         <div className="settings-scroll h-full overflow-y-auto">
           <div className="flex">
-            <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1180px]" : "max-w-[820px]"}`}>
+            <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1320px]" : "max-w-[900px]"}`}>
               {mobileNav && <div className="mb-4 md:hidden">{mobileNav}</div>}
               {children}
             </div>
-            <div className="w-[60px] shrink-0 pt-6 md:pt-[60px]">
+            <div className="w-[24px] shrink-0 pt-6 md:pt-[60px]">
               <div className="sticky top-[60px] flex flex-col items-center">
                 <button
                   type="button"
