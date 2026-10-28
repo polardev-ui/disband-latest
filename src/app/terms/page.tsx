@@ -15,200 +15,318 @@ export default function TermsPage() {
       <MarketingNav />
       <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
         <h1 className="text-3xl font-bold text-white">Terms of Service</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: September 2026</p>
+        <p className="mt-2 text-sm text-[#949ba4]">Last updated: October 28, 2026</p>
 
         <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
           <p>
-            By creating an account, downloading, accessing, or using Disband (the &quot;Service&quot;),
-            you agree to these Terms of Service (the &quot;Terms&quot;). If you do not agree to these
-            Terms, do not use the Service. Your continued use of the Service after we post changes to
-            these Terms constitutes acceptance of those changes.
+            These Terms of Service (“Terms”) form a legal agreement between you and{" "}
+            <strong>Genysis IQ LLC</strong> (“Genysis IQ,” “Disband,” “we,” “us,” or “our”).
+          </p>
+          <p>
+            By creating an account, downloading, accessing, or using Disband, you agree to these
+            Terms. If you do not agree, do not use the Service.
           </p>
 
           <h2 className="text-lg font-semibold text-white">1. The Service</h2>
+          <p>Disband provides online communications and community features, including:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Spaces and channels;</li>
+            <li>Direct messages;</li>
+            <li>Group chats;</li>
+            <li>Voice and video calls;</li>
+            <li>User profiles;</li>
+            <li>Media and file sharing;</li>
+            <li>Moderation tools; and</li>
+            <li>Paid products and subscriptions.</li>
+          </ul>
           <p>
-            Disband provides spaces and channels, direct messages, group chats, and voice and video
-            calling across desktop, mobile, and the web. The Service is provided as-is, may evolve
-            over time, and some features may be made available only on certain platforms or to paid
-            subscribers (&quot;Disband Aero&quot;). Nothing in these Terms grants you
-            ownership of Disband, its software, branding, or infrastructure.
+            The Service may change, evolve, be interrupted, or be discontinued. Features may vary by
+            platform, region, account type, or subscription.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">2. Your account</h2>
+          <h2 className="text-lg font-semibold text-white">2. Eligibility</h2>
           <p>
-            You are responsible for everything done through your account. You must keep your password
-            and login credentials private, and you should sign out on shared devices. If you believe
-            your account has been compromised, change your password immediately and contact us at{" "}
-            <a href="mailto:legal@disband.dev" className="text-[#00a8fc] hover:underline">
-              legal@disband.dev
-            </a>
-            . One person may operate more than one account, but each account must have a genuine,
-            distinct identity — you may not create accounts to evade a ban, circumvent a restriction,
-            or artificially inflate activity.
+            You must be at least 13 years old to use Disband, unless a higher minimum age applies
+            where you live.
+          </p>
+          <p>You may not use Disband if doing so would violate applicable law or if you have been permanently banned from the Service.</p>
+          <p>
+            You must provide accurate registration information, including your date of birth, and keep
+            it reasonably current.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">2a. Account sharing and responsibility for content</h2>
+          <h2 className="text-lg font-semibold text-white">3. Your Account</h2>
+          <p>You are responsible for activity conducted through your account.</p>
+          <p>You must:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Keep your password and login credentials confidential;</li>
+            <li>Avoid sharing account access;</li>
+            <li>Sign out of shared devices;</li>
+            <li>Notify us if you believe your account is compromised; and</li>
+            <li>Provide accurate account information.</li>
+          </ul>
           <p>
-            Sharing, selling, transferring, or allowing anyone else to use your account is against the
-            rules. You are responsible for all activity and all content posted, sent, or uploaded
-            through your account, including content posted by anyone you allow to access it. Violations
-            may result in suspension or termination of the account.
+            You may operate more than one account only if each account is legitimate and is not used to
+            evade a ban, restriction, or moderation action.
+          </p>
+          <p>Contact <strong>legal@disband.dev</strong> if you believe your account has been compromised.</p>
+
+          <h2 className="text-lg font-semibold text-white">4. Acceptable Use</h2>
+          <p>You may not use Disband to:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Break the law;</li>
+            <li>Harass, threaten, stalk, or bully others;</li>
+            <li>Promote hate or violent threats;</li>
+            <li>Exploit or endanger children;</li>
+            <li>Distribute malware, viruses, or harmful code;</li>
+            <li>Send spam, scams, phishing links, or deceptive content;</li>
+            <li>Impersonate another person or organization;</li>
+            <li>Share another person’s private information without authorization;</li>
+            <li>Infringe intellectual-property or privacy rights;</li>
+            <li>Facilitate fraud or illegal activity;</li>
+            <li>Evade a ban or suspension;</li>
+            <li>Interfere with the Service or other users;</li>
+            <li>Probe, scan, overload, or attack our systems;</li>
+            <li>Circumvent rate limits or access controls;</li>
+            <li>Modify, tamper with, or reverse engineer the Service;</li>
+            <li>Forge requests, inject unauthorized data, or access restricted areas;</li>
+            <li>Use unauthorized bots, scripts, or automation; or</li>
+            <li>Use Disband to distribute content you do not have the right to share.</li>
+          </ul>
+          <p>
+            Good-faith bug and security reports are permitted when submitted through authorized
+            channels and do not involve unauthorized access, disruption, data extraction, or disclosure.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">3. Acceptable use</h2>
+          <h2 className="text-lg font-semibold text-white">5. Encryption and Privacy</h2>
           <p>
-            You may not use the Service to: harass, threaten, or bully others; distribute malware,
-            viruses, or harmful code; send spam, scams, or phishing; impersonate other people or
-            organizations; engage in any illegal activity; share content you do not have the right to
-            share; evade a ban, suspension, or other restriction; or interfere with other users'
-            enjoyment of the Service. We may remove content and suspend accounts that violate these
-            rules — including permanent suspension, at our discretion and without notice.
+            Disband messages and media are not end-to-end encrypted. They may be stored in
+            server-readable form and accessed by authorized Disband personnel for moderation, abuse
+            investigations, account recovery, security, legal compliance, and operation of the
+            Service.
+          </p>
+          <p>
+            Voice and video calls use WebRTC transport encryption where supported. Call signaling and
+            metadata pass through Disband servers.
+          </p>
+          <p>
+            Do not use Disband for information that requires end-to-end encryption or a legally
+            protected confidential communications system.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">4. No illegal modifications</h2>
+          <h2 className="text-lg font-semibold text-white">6. User Content</h2>
           <p>
-            You must not modify, reverse engineer, decompile, disassemble, tamper with, or attempt to
-            defeat any part of Disband — including its client software, spaces, configuration,
-            databases, APIs, security measures, rate limits, or the experience of other users. You may
-            not use scripts, automated tools, or unauthorized third-party software to modify the app,
-            inject data, forge requests, access areas you are not permitted to access, or otherwise
-            manipulate the Service in a way that is not intended. Making unauthorized modifications to
-            the app — or abusing, exploiting, or attempting to circumvent its protections — is a
-            serious violation of these Terms and <strong>will result in the permanent suspension of
-            your account</strong>. Illegal activity committed in connection with such modifications
-            (including unauthorized access to systems or data) may also be reported to law enforcement
-            and pursued to the fullest extent of the law. Reporting a bug or security issue in good
-            faith through our documented channels is welcome and is not a violation of this section.
+            You retain ownership of content you post or upload, subject to the rights of other people
+            and entities that may own or control that content.
+          </p>
+          <p>You represent that:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>You own the content or have permission to use it;</li>
+            <li>Your content does not violate the law;</li>
+            <li>Your content does not infringe another person’s rights; and</li>
+            <li>You have the necessary authority to submit the content.</li>
+          </ul>
+          <p>You grant Genysis IQ a worldwide, non-exclusive, royalty-free license to host, store, reproduce, transmit, display, process, and technically modify your content only as reasonably necessary to:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Provide and operate the Service;</li>
+            <li>Deliver content to intended recipients;</li>
+            <li>Maintain and secure the Service;</li>
+            <li>Moderate and investigate abuse;</li>
+            <li>Create backups;</li>
+            <li>Comply with legal obligations; and</li>
+            <li>Enforce these Terms.</li>
+          </ul>
+          <p>
+            This license ends within a reasonable period after deletion of the applicable content or
+            account, except for copies retained in backups, legal records, abuse records, or copies
+            lawfully retained by other users.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">5. Encryption &amp; privacy</h2>
+          <h2 className="text-lg font-semibold text-white">7. Moderation</h2>
+          <p>Space owners and moderators may establish additional rules for their communities.</p>
+          <p>We may, but are not required to:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Review content;</li>
+            <li>Remove or restrict content;</li>
+            <li>Investigate reports;</li>
+            <li>Limit features;</li>
+            <li>Suspend accounts;</li>
+            <li>Remove spaces; or</li>
+            <li>Report conduct to law enforcement.</li>
+          </ul>
+          <p>We do not guarantee that all unlawful, harmful, or rule-breaking content will be detected or removed.</p>
+
+          <h2 className="text-lg font-semibold text-white">8. Suspension and Termination</h2>
+          <p>We may suspend or terminate accounts, spaces, or content when we reasonably believe that:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>These Terms or applicable law were violated;</li>
+            <li>The Service or users were harmed or threatened;</li>
+            <li>The account presents a security or fraud risk;</li>
+            <li>A user attempted to evade moderation;</li>
+            <li>A user abused staff or safety systems; or</li>
+            <li>Action is required to protect the Service or community.</li>
+          </ul>
+          <p>Serious or repeated violations may result in permanent suspension.</p>
           <p>
-            Disband provides end-to-end encrypted messaging. You are responsible for safeguarding your
-            account credentials. We design our systems so that encrypted conversation content is not
-            accessible to Disband or third parties, including through subpoena or similar legal process
-            directed at message contents. Nothing in these Terms requires you to abandon your privacy
-            rights, and no modification of the Service may be used to bypass that encryption.
+            You may stop using the Service and delete your account at any time. Account deletion does
+            not automatically delete copies retained by other users, legal records, backups, or
+            information required for security or compliance.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">6. Content you post</h2>
+          <h2 className="text-lg font-semibold text-white">9. Paid Services</h2>
+          <p>Disband may offer paid products, including:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li><strong>Disband Lite:</strong> currently $2.99 per month;</li>
+            <li><strong>Disband Aero:</strong> currently $8.99 per month; and</li>
+            <li><strong>Server Catalysts:</strong> one-time purchases applied to a selected space.</li>
+          </ul>
+          <p>Prices, features, taxes, and availability may change. Applicable taxes may be calculated and collected by Stripe or the relevant app store.</p>
+
+          <h3 className="text-base font-semibold text-white">Subscriptions</h3>
           <p>
-            You retain ownership of the content you post, send, or upload. You grant Disband a
-            worldwide, non-exclusive, royalty-free license to store, transmit, display, and process
-            that content solely to operate and improve the Service. You represent that you own or have
-            the necessary rights to every piece of content you post. We may remove content that
-            violates these Terms, applicable law, or the rights of others, and we may retain or delete
-            content in accordance with our policies and legal obligations.
+            Subscriptions automatically renew unless canceled before the renewal deadline shown by the
+            applicable payment platform.
+          </p>
+          <p>
+            For web purchases, Stripe processes payment. For purchases through Apple or Google, the
+            applicable app store processes payment and controls subscription management under its
+            rules.
+          </p>
+          <p>
+            Canceling a subscription generally stops future renewals but does not automatically refund
+            the current billing period. You generally retain access until the end of the paid period
+            unless your account is suspended or terminated.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">7. Moderation, suspensions, and termination</h2>
+          <h3 className="text-base font-semibold text-white">Refunds</h3>
           <p>
-            We take action against accounts and communities that violate these Terms. Measures range
-            from warnings, content removal, and temporary suspension to{" "}
-            <strong>permanent suspension</strong> — which ends your ability to use the Service,
-            including any paid features. Permanent suspension may result from: serious or repeated
-            violations of acceptable use; illegal modifications to the app or its infrastructure;
-            attempts to evade moderation or bans; abuse of our staff or safety systems; or activity
-            that harms other users, the Service, or its operation. Depending on the conduct, we may
-            also terminate or disable specific spaces, restrict access, withhold or claw back
-            features, or report unlawful activity to the appropriate authorities. You may delete your
-            account at any time; some information may be retained where required by law.
+            Except where required by law, or where Genysis IQ cannot provide the paid service, payments
+            are non-refundable.
+          </p>
+          <p>
+            Apple and Google purchases are also subject to their respective refund policies. Genysis IQ
+            may not be able to issue refunds for transactions processed directly by those stores.
+          </p>
+          <p>
+            If your account is permanently suspended, we may terminate paid services and deny refunds
+            for unused time to the extent permitted by law.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">8. Billing and paid plans</h2>
+          <h3 className="text-base font-semibold text-white">Server Catalysts</h3>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Are one-time purchases;</li>
+            <li>Apply only to the selected space;</li>
+            <li>Do not automatically renew;</li>
+            <li>Are not transferable between spaces; and</li>
+            <li>May not have cash value outside the Service.</li>
+          </ul>
+
+          <h2 className="text-lg font-semibold text-white">10. Availability and Changes</h2>
           <p>
-            Disband Aero is an auto-renewing subscription. It is billed on a recurring basis and
-            renews automatically at the end of each period until you cancel it. Payment is taken at
-            confirmation of purchase, and renewal is charged within 24 hours of the current period
-            ending. Cancelling takes effect at the end of the period you have already paid for —
-            you keep Aero until then. Promotion codes and payments are subject to the terms shown at
-            checkout. We do not provide refunds except where required by law or where we are unable
-            to provide the paid service. If you are permanently suspended, we may terminate your
-            paid plan and deny refunds for the unused portion, in our discretion and to the extent
-            permitted by law.
+            The Service is provided on an “as available” basis. We do not guarantee uninterrupted,
+            timely, secure, or error-free operation.
           </p>
           <p>
-            Server Catalysts are a one-time purchase applied to the space you choose. They do not
-            renew and are not transferable between spaces.
+            We may change, suspend, or discontinue features, including paid features, when reasonably
+            necessary for legal, technical, business, security, or operational reasons.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">
-            8a. Subscriptions bought through the App Store
-          </h2>
+          <h2 className="text-lg font-semibold text-white">11. Disclaimers</h2>
           <p>
-            Where you buy Aero inside the iOS app, the purchase is made through your Apple Account
-            and Apple&apos;s terms apply to the transaction. Payment is charged to your Apple Account
-            at confirmation of purchase. The subscription renews automatically unless auto-renew is
-            turned off at least 24 hours before the end of the current period, and your account is
-            charged for renewal within 24 hours of that period ending.
+            To the maximum extent permitted by law, the Service is provided “as is” and “as
+            available,” without warranties of any kind, express or implied.
           </p>
+          <p>We disclaim warranties of:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Merchantability;</li>
+            <li>Fitness for a particular purpose;</li>
+            <li>Non-infringement;</li>
+            <li>Accuracy;</li>
+            <li>Reliability;</li>
+            <li>Availability; and</li>
+            <li>Security.</li>
+          </ul>
+          <p>Nothing in these Terms excludes a warranty or consumer right that cannot legally be excluded.</p>
+
+          <h2 className="text-lg font-semibold text-white">12. Limitation of Liability</h2>
           <p>
-            Manage or cancel an App Store subscription in your Apple Account settings
-            (Settings &rarr; your name &rarr; Subscriptions) — we cannot cancel or refund it for you,
-            because we never hold the payment. Refunds for App Store purchases are handled by Apple
-            under its own policies. Any unused portion of a free trial, where one is offered, is
-            forfeited when you buy a subscription.
+            To the maximum extent permitted by law, Genysis IQ, its owners, employees, contractors,
+            advisors, affiliates, and service providers will not be liable for indirect, incidental,
+            special, consequential, exemplary, or punitive damages, including loss of:
+          </p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Data;</li>
+            <li>Profits;</li>
+            <li>Revenue;</li>
+            <li>Business opportunities;</li>
+            <li>Goodwill; or</li>
+            <li>Access to the Service.</li>
+          </ul>
+          <p>Our total liability for all claims relating to the Service will not exceed the greater of:</p>
+          <ol className="list-decimal space-y-1.5 pl-5">
+            <li>The amounts you paid to Genysis IQ during the 12 months before the event giving rise to the claim; or</li>
+            <li><strong>$25.00</strong>.</li>
+          </ol>
+          <p>
+            This limitation does not apply where liability cannot legally be limited, including
+            certain liability for fraud, intentional misconduct, personal injury, or non-waivable
+            consumer rights.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">9. Service availability</h2>
+          <h2 className="text-lg font-semibold text-white">13. Indemnification</h2>
           <p>
-            We strive for high availability but do not guarantee uninterrupted service. The Service
-            may be unavailable for maintenance, upgrades, or reasons outside our control, and features
-            may change as Disband evolves. You accept that temporary interruptions are part of any
-            online service.
+            To the maximum extent permitted by law, you agree to defend, indemnify, and hold harmless
+            Genysis IQ, its owners, employees, contractors, advisors, affiliates, and service
+            providers from claims, damages, liabilities, losses, costs, and reasonable legal fees
+            arising from:
+          </p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>Your use of the Service;</li>
+            <li>Your content;</li>
+            <li>Your violation of these Terms;</li>
+            <li>Your violation of applicable law;</li>
+            <li>Your violation of another person’s rights; or</li>
+            <li>Your unauthorized modification, misuse, or abuse of the Service.</li>
+          </ul>
+          <p>This provision does not require you to indemnify Genysis IQ for Genysis IQ’s own unlawful conduct.</p>
+
+          <h2 className="text-lg font-semibold text-white">14. Governing Law and Courts</h2>
+          <p>These Terms are governed by the laws of the State of Florida, without regard to conflict-of-law rules.</p>
+          <p>
+            Any dispute arising from these Terms or the Service must be brought exclusively in the
+            state or federal courts located in Orange County, Florida, and you consent to those
+            courts’ jurisdiction and venue.
+          </p>
+          <p>Nothing in this section prevents a consumer from asserting rights that cannot legally be waived.</p>
+
+          <h2 className="text-lg font-semibold text-white">15. Changes to These Terms</h2>
+          <p>
+            We may update these Terms. When material changes are made, we may update the “Last
+            updated” date and provide notice where reasonably practical.
+          </p>
+          <p>
+            Your continued use of the Service after the effective date of revised Terms means you
+            accept them. If you do not agree, stop using the Service and delete your account.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">10. Limitation of liability</h2>
+          <h2 className="text-lg font-semibold text-white">16. General Provisions</h2>
           <p>
-            Disband is provided &quot;as is&quot; and &quot;as available&quot; to the maximum extent
-            permitted by law. We do not warrant that the Service will be error-free, secure, or wholly
-            uninterrupted. To the maximum extent permitted by law, Disband and its operators are not
-            liable for indirect, incidental, special, consequential, or punitive damages, loss of
-            profits, data, or goodwill, or for any damages arising from your use of — or inability to
-            use — the Service. Our total liability for any claim related to the Service will not
-            exceed the greater of (a) the amount you paid us in the twelve (12) months preceding the
-            claim or (b) twenty-five dollars ($25).
+            If a court finds part of these Terms unenforceable, the remaining provisions will remain
+            in effect.
+          </p>
+          <p>Our failure to enforce a provision is not a waiver of our right to enforce it later.</p>
+          <p>
+            These Terms, together with applicable policies and written agreements, constitute the
+            agreement between you and Genysis IQ concerning the Service.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">11. Indemnity</h2>
-          <p>
-            You agree to indemnify and hold harmless Disband and its operators, affiliates, and staff
-            from any claims, damages, liabilities, and expenses (including reasonable legal fees)
-            arising out of your use of the Service, your content, your violation of these Terms, or
-            your violation of any law or the rights of a third party — including claims arising from
-            unauthorized modifications you make to the Service.
-          </p>
-
-          <h2 className="text-lg font-semibold text-white">12. Changes to these Terms</h2>
-          <p>
-            We may update these Terms from time to time. When we make material changes, we will update
-            the &quot;Last updated&quot; date above and, where practical, notify you in the app or by
-            email. Continued use of the Service after changes take effect means you accept the updated
-            Terms. If you do not agree, you should stop using the Service and delete your account.
-          </p>
-
-          <h2 className="text-lg font-semibold text-white">13. Governing law and disputes</h2>
-          <p>
-            These Terms are governed by the laws of the jurisdiction in which Disband operates
-            (United States), without regard to conflict-of-law principles. You agree that any dispute
-            arising out of these Terms or the Service will be resolved exclusively in the appropriate
-            federal or state courts, and you consent to the personal jurisdiction of those courts.
-          </p>
-
-          <h2 className="text-lg font-semibold text-white">14. Severability and waiver</h2>
-          <p>
-            If any provision of these Terms is found to be unenforceable, that provision will be
-            enforced to the maximum extent permissible, and the remaining provisions will remain in
-            full force and effect. Our failure to enforce any provision is not a waiver of that
-            provision or of our right to enforce it later.
-          </p>
-
-          <h2 className="text-lg font-semibold text-white">15. Contact</h2>
-          <p>
-            Questions about these Terms or reports of abuse or security issues can be sent to:{" "}
-            <a href="mailto:legal@disband.dev" className="text-[#00a8fc] hover:underline">
-              legal@disband.dev
-            </a>
-          </p>
+          <h2 className="text-lg font-semibold text-white">17. Contact</h2>
+          <p>Genysis IQ LLC</p>
+          <p>10524 Moss Park Rd, Suite 204-653</p>
+          <p>Orlando, Florida 32832</p>
+          <p>United States</p>
+          <p>Legal: legal@disband.dev</p>
+          <p>Privacy: privacy@disband.dev</p>
         </div>
 
         <Link href="/home" className="mt-10 inline-block text-sm text-brand hover:underline">
