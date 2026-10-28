@@ -47,7 +47,12 @@ import { GiftModal } from "@/components/gift/GiftModal";
 import { GIFT_PLAN_NAME, giftUrl, monthsLabel, type GiftPlan } from "@/lib/gifts";
 import { apiFetch } from "@/lib/api";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic, IconLanguage, IconCheck, IconExternalLink } from "@/components/icons";
+import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic, IconLanguage, IconCheck, IconExternalLink, IconShield, IconStar, IconSparkle, IconGroup } from "@/components/icons";
+import { CURRENCY } from "@/lib/currency";
+import { CurrencyPanel } from "@/components/discord/settings/CurrencyPanel";
+import { StandingPanel } from "@/components/discord/settings/StandingPanel";
+import { CreatorPanel } from "@/components/discord/settings/CreatorPanel";
+import { ManagementPanel } from "@/components/discord/settings/ManagementPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
 import { OfficialBroadcastPanel } from "@/components/discord/OfficialBroadcastPanel";
@@ -110,12 +115,21 @@ const TABS = [
   { id: "connections" as const, label: "Connections", group: "Account", icon: <IconMusic size={17} />,
     description: "Spotify and SoundCloud — show what you're listening to.",
     keywords: "spotify soundcloud lastfm music listening currently playing connect integrate account" },
+  { id: "standing" as const, label: "Account Standing", group: "Account", icon: <IconShield size={17} />,
+    description: "Where your account stands, and why.",
+    keywords: "standing strikes warnings restrictions suspended banned good risk" },
+  { id: "creator" as const, label: "Creator Program", group: "Account", icon: <IconStar size={17} />,
+    description: "Connect YouTube, TikTok or Twitch for the Content Creator badge.",
+    keywords: "creator youtube tiktok twitch followers subscribers badge verify influencer" },
   { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
     description: "Create and manage bots that act on your behalf.",
     keywords: "bot token api developer webhook" },
   { id: "subscriptions" as const, label: "Subscription", group: "Billing", icon: <IconCrown size={17} />,
     description: "Your plan, billing and perks.",
     keywords: "aero lite plan billing upgrade gift perks premium" },
+  { id: "wallet" as const, label: CURRENCY.plural, group: "Billing", icon: <IconSparkle size={17} />,
+    description: `Earn ${CURRENCY.plural} by using Disband and spend them on perks.`,
+    keywords: "currency wallet earn rewards points ads redeem balance" },
   { id: "referrals" as const, label: "Referrals", group: "Billing", icon: <IconGift size={17} />,
     description: "Invite people and track what you've earned.",
     keywords: "invite referral link rewards friends" },
@@ -137,13 +151,17 @@ const TABS = [
   { id: "textMedia" as const, label: "Text & Media", group: "App", icon: <IconMessage size={17} />,
     description: "Link previews, embeds and media in chat.",
     keywords: "links previews embeds images gif media unfurl" },
+  { id: "management" as const, label: "Management", group: "Disband", icon: <IconGroup size={17} />,
+    description: "The Disband team, space suspensions and strikes.",
+    keywords: "manager staff moderator suspend space strike team" },
 ];
 
-const NAV_GROUPS = ["Account", "Billing", "App"] as const;
+const NAV_GROUPS = ["Account", "Billing", "App", "Disband"] as const;
 const NAV_GROUP_LABEL: Record<(typeof NAV_GROUPS)[number], string> = {
   Account: "User Settings",
   Billing: "Billing Settings",
   App: "App Settings",
+  Disband: "Disband Staff",
 };
 
 function formatBytes(bytes: number): string {
@@ -209,6 +227,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const { theme, themes, setTheme } = useTheme();
   const { t, language, setLanguage } = useI18n();
   const { profile, user, updateProfile, signOut, requestAccountDeletion } = useApp();
+  const [isManager, setIsManager] = useState(false);
+  useEffect(() => {
+    if (!open || !user) return;
+    void getSupabaseClient().rpc("is_platform_manager", { p_user: user.id })
+      .then(({ data }) => setIsManager(data === true));
+  }, [open, user]);
   const isAnonymous = profile?.account_type === "anonymous";
 
   const [myAllBadges, setMyAllBadges] = useState<Array<AwardedBadge & { visible: boolean }>>([]);
@@ -931,11 +955,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
   }
 
-  const activeTab = TABS.find((item) => item.id === tab);
+  // Management is for Disband managers and the owner only.
+  const visibleTabs = TABS.filter((item) => item.id !== "management" || isManager);
+  const activeTab = visibleTabs.find((item) => item.id === tab);
   const navQ = navQuery.trim().toLowerCase();
   const navMatches = navQ
-    ? TABS.filter((item) => `${t(item.label)} ${item.keywords} ${item.label}`.toLowerCase().includes(navQ))
-    : TABS;
+    ? visibleTabs.filter((item) => `${t(item.label)} ${item.keywords} ${item.label}`.toLowerCase().includes(navQ))
+    : visibleTabs;
   const selectedLanguage = languageFor(language);
   const docsHref = selectedLanguage.docsPath
     ? `https://docs.disband.dev/${selectedLanguage.docsPath}/`
@@ -970,7 +996,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
             aria-label={t("Settings section")}
             className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
           >
-            {TABS.map((item) => (
+            {visibleTabs.map((item) => (
               <option key={item.id} value={item.id}>{t(item.label)}</option>
             ))}
           </select>
@@ -2104,6 +2130,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 </div>
               )}
 
+              {tab === "wallet" && <CurrencyPanel />}
+              {tab === "standing" && <StandingPanel />}
+              {tab === "creator" && <CreatorPanel />}
+              {tab === "management" && isManager && <ManagementPanel isOwner={!!profile?.show_owner_badge} />}
               {tab === "referrals" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">

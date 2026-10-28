@@ -23,6 +23,8 @@ export interface DiscoverableServer {
   created_at: string;
   verified?: boolean;
   partner?: boolean;
+  /** Set while a paid promotion is running; promoted spaces lead both tabs. */
+  promoted_until?: string | null;
 }
 
 export type DiscoverTab = "popular" | "new";
@@ -199,7 +201,8 @@ export function DiscoverView({
       : items;
 
     return [...filtered].sort((a, b) =>
-      tab === "popular" ? b.member_count - a.member_count : b.created_at.localeCompare(a.created_at),
+      Number(!!b.promoted_until) - Number(!!a.promoted_until) ||
+      (tab === "popular" ? b.member_count - a.member_count : b.created_at.localeCompare(a.created_at)),
     );
   }, [items, query, tab]);
 
@@ -321,6 +324,11 @@ export function DiscoverView({
                     {banner && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={banner} alt="" className="h-full w-full object-cover" />
+                    )}
+                    {server.promoted_until && (
+                      <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#ffd166] backdrop-blur-sm">
+                        Promoted
+                      </span>
                     )}
                     <span className="absolute -bottom-[26px] left-3 rounded-[16px] bg-bg-secondary p-1 transition-colors group-hover:bg-bg-secondary-alt">
                       <SpaceIcon server={server} className="h-10 w-10 rounded-[12px] text-[14px]" />

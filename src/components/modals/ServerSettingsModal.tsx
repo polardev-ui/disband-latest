@@ -21,6 +21,7 @@ import {
   IconSpeaker,
   IconTag,
   IconTrash,
+  IconStar,
 } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
 import { serverInitials } from "@/lib/utils";
@@ -30,6 +31,7 @@ import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator
 import { OverviewSection } from "./server-settings/OverviewSection";
 import { AppearanceSection } from "./server-settings/AppearanceSection";
 import { InvitesSection } from "./server-settings/InvitesSection";
+import { PromoteSection } from "./server-settings/PromoteSection";
 import { WebhooksSection } from "./server-settings/WebhooksSection";
 import { CatalystSection } from "./server-settings/CatalystSection";
 import { ChannelsSection } from "./server-settings/ChannelsSection";
@@ -55,6 +57,7 @@ type Section =
   | "invite"
   | "integrations"
   | "catalysts"
+  | "promote"
   | "members"
   | "roles"
   | "bans"
@@ -83,6 +86,7 @@ const NAV: NavItem[] = [
   { id: "invite", label: "Invites", group: "Space", icon: IconLink, description: "Share a link, claim a custom one, or send invites to friends." },
   { id: "integrations", label: "Integrations", group: "Space", icon: IconLink, permission: "manage_webhooks", description: "Webhooks that post into this space from other services." },
   { id: "catalysts", label: "Catalysts", group: "Space", icon: IconSparkle, description: "Perks unlocked by members boosting this space." },
+  { id: "promote", label: "Promote", group: "Space", icon: IconStar, permission: "manage_server", description: "Pay to put this space at the top of Discover." },
   { id: "members", label: "Members", group: "People", icon: IconFriends, permission: "manage_roles", description: "Everyone in this space. Assign roles, kick or ban." },
   { id: "roles", label: "Roles", group: "People", icon: IconShield, permission: "manage_roles", description: "Group members, give them a colour and icon, and decide what they can do." },
   { id: "bans", label: "Bans", group: "People", icon: IconLock, permission: "ban", description: "People who can't rejoin until you lift their ban." },
@@ -211,6 +215,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
       {current.id === "appearance" && <AppearanceSection {...shared} />}
       {current.id === "guild" && <GuildTagSection {...shared} />}
       {current.id === "invite" && <InvitesSection {...shared} />}
+      {current.id === "promote" && <PromoteSection {...shared} />}
       {current.id === "integrations" && <WebhooksSection {...shared} />}
       {current.id === "catalysts" && <CatalystSection {...shared} />}
       {current.id === "members" && <MembersSection {...shared} />}

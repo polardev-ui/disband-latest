@@ -29,6 +29,8 @@ const ART: Record<string, ReactNode> = {
   beta: <><path fill="#c7d3d7" d="M8 2h8v3h-1v4l6 10c1 2-1 3-3 3H6c-2 0-4-1-3-3L9 9V5H8Z" /><path fill="#59c993" d="m8 13-4 7h16l-4-7Z" /><path fill="#d4f6e4" d="M8 16h2v2H8zm5-2h2v2h-2z" /></>,
   mobile: <><path fill="#9ba6de" d="M6 1h12v22H6Z" /><path fill="#4352a2" d="M8 4h8v14H8Z" /><path fill="#e0e4ff" d="M10 20h4v1h-4z" /></>,
   voice: <><rect fill="#59c993" x="8" y="1" width="8" height="13" rx="4" /><path fill="none" stroke="#a6dfc0" strokeWidth="2.2" d="M4 10v1a8 8 0 0 0 16 0v-1M12 19v3m-5 0h10" /></>,
+  manager: <><path fill="#f0883e" d="m12 1 9 4v7c0 5-4 9-9 11-5-2-9-6-9-11V5Z" /><path fill="#ffd2a8" d="m12 6 1.6 3.4 3.7.4-2.8 2.5.8 3.7L12 14.1 8.7 16l.8-3.7-2.8-2.5 3.7-.4Z" /><path fill="#9c4a12" d="M7 18h10v2H7z" /></>,
+  creator: <><rect fill="#ff4f6d" x="2" y="4" width="20" height="15" rx="4" /><path fill="#fff" d="M10 8v7l6-3.5Z" /><path fill="#ffd166" d="m19 1 .9 2.1L22 4l-2.1.9L19 7l-.9-2.1L16 4l2.1-.9Z" /></>,
 };
 
 export function BadgeArt({ badgeKey, size = 20 }: { badgeKey: string; size?: number }) {
