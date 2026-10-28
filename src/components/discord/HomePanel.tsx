@@ -5,7 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
 import { GuildTag } from "@/components/ui/GuildTag";
-import { displayName } from "@/lib/utils";
+import { displayName, formatMessageTime } from "@/lib/utils";
 import { listeningFor } from "@/lib/presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -94,6 +94,7 @@ export function HomePanel({
     pendingIncoming,
     dmListEntries,
     groupChats,
+    groupMessages,
     groupCallCounts,
     activeGroupChatId,
     activeDmThreadId,
@@ -172,11 +173,14 @@ export function HomePanel({
       entry?: (typeof dmListEntries)[number];
     }[] = [];
     for (const g of groupChats) {
+      const lastMsg = groupMessages
+        .filter((m) => m.group_id === g.id)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
       items.push({
         kind: "group",
         id: `group:${g.id}`,
         unread: getGroupUnreadCount(g.id),
-        sortAt: g.created_at,
+        sortAt: g.last_message_at ?? lastMsg?.created_at ?? g.created_at,
         group: g,
       });
     }
@@ -195,7 +199,7 @@ export function HomePanel({
       if (aUnread !== bUnread) return bUnread - aUnread;
       return b.sortAt.localeCompare(a.sortAt);
     });
-  }, [groupChats, dmListEntries, getGroupUnreadCount]);
+  }, [groupChats, groupMessages, dmListEntries, getGroupUnreadCount]);
 
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
@@ -336,6 +340,7 @@ export function HomePanel({
                       <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
                       <span className="block truncate text-[12px] leading-4 text-text-muted">
                         {g.members.length} members
+                        {item.sortAt && item.sortAt !== g.created_at ? ` · ${formatMessageTime(item.sortAt)}` : ""}
                         {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
                       </span>
                     </div>

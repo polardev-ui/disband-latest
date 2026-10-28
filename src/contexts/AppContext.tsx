@@ -3323,6 +3323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const row = record as unknown as GroupMessage;
         if (row.group_id !== activeGroupChatId) return;
         setGroupMessages((prev) => appendLiveMessage(prev, row, author));
+        setGroupChats((prev) => prev.map((g) => (g.id === row.group_id ? { ...g, last_message_at: row.created_at } : g)));
       });
       channel.subscribe((status) => {
         if (disposed || sub !== channel) return;
@@ -5944,6 +5945,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (trimmed) setGroupHasMore(true);
       return windowed;
     });
+    setGroupChats((prev) => prev.map((g) => (g.id === activeGroupChatId ? { ...g, last_message_at: optimistic.created_at } : g)));
 
     if (files.length > 0) {
       try {

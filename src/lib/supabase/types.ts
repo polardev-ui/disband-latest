@@ -315,6 +315,7 @@ export interface GroupChat {
   owner_id: string;
   icon_url: string | null;
   created_at: string;
+  last_message_at?: string | null;
 }
 
 export interface GroupChatMember {
