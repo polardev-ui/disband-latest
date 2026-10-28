@@ -17,11 +17,11 @@ import type { DesignSpec, DecorationLayerProps } from "../Decoration";
 // Dome, temples, cheekbones, then in to the upper jaw. The corners it leaves
 // beside the teeth are filled by the jaw's rami when the mouth is shut.
 const CRANIUM =
-  "M56 101C50 97 45 92 42 86C38 80 37 72 38 65C39 54 48 46 62 42C74 39.5 86 39 100 39C114 39 126 39.5 138 42C152 46 161 54 162 65C163 72 162 80 158 86C155 92 150 97 144 101Z";
+  "M44 72C40 52 60 36 100 35C140 36 160 52 156 72C153 76 152 78 155 82C161 85 162 90 158 92C154 93 150 92 148 94L141 101L59 101L52 94C50 92 46 93 42 92C38 90 39 85 45 82C48 78 47 76 44 72Z";
 // The mandible: a rami on each side rising to the condyle and coronoid, the
 // teeth row between their front edges, and the body curving down to the chin.
 const JAW =
-  "M38 70C38 65 44 63 47 67L50 74L55 69C57 80 57 91 58 99L142 99C143 91 143 80 145 69L150 74L153 67C156 63 162 65 162 70C163 92 160 108 156 116C150 134 128 152 100 156C72 152 50 134 44 116C40 108 37 92 38 70Z";
+  "M40 74C39 70 45 69 47 72L51 78L56 73L58 99L142 99L144 73L149 78L153 72C155 69 161 70 160 74L158 112C158 118 155 122 150 125L122 150C114 156 108 158 100 158C92 158 86 156 78 150L50 125C45 122 42 118 42 112Z";
 const SOCKET_L = "M63 62C64 55 72 53 80 55C88 57 92 62 91 70C90 78 84 82 76 81C67 80 62 72 63 62Z";
 
 /** Eight teeth across x 64–136; centre teeth longer, canines (1 and 6) pointed. */
@@ -88,8 +88,11 @@ function Cranium({ uid }: { uid: string }) {
       <path d={CRANIUM} fill={`url(#${uid}-bone)`} stroke="#120e10" strokeWidth="1.4" strokeLinejoin="round" />
       {/* Rim light along the dome, darker temples. */}
       <path d="M50 58C60 48 80 44 100 44C118 44 134 46.5 146 53" fill="none" stroke="#b7aba1" strokeWidth="2" strokeLinecap="round" opacity=".5" />
-      <ellipse cx="47" cy="76" rx="6" ry="15" fill="#000" opacity=".22" />
-      <ellipse cx="153" cy="76" rx="6" ry="15" fill="#000" opacity=".3" />
+      {/* Temporal hollows above the cheekbone arches, and the arches' undersides. */}
+      <path d="M45 74C49 72 52 76 50 82C47 81 45 78 45 74Z" fill="#000" opacity=".35" />
+      <path d="M155 74C151 72 148 76 150 82C153 81 155 78 155 74Z" fill="#000" opacity=".42" />
+      <path d="M41 89C45 91 50 91 53 93M159 89C155 91 150 91 147 93" fill="none" stroke="#0e0a0b" strokeWidth="1.3" strokeLinecap="round" opacity=".6" />
+      <path d="M43 84C47 83 51 84 54 86M157 84C153 83 149 84 146 86" fill="none" stroke="#b2a69d" strokeWidth=".8" strokeLinecap="round" opacity=".4" />
       {/* Temporal lines sweeping back over the temples. */}
       <path d="M46 70C47 58 54 50 64 46" fill="none" stroke="#2a2224" strokeWidth=".9" opacity=".55" />
       <path d="M154 70C153 58 146 50 136 46" fill="none" stroke="#1c1617" strokeWidth=".9" opacity=".6" />
@@ -153,12 +156,18 @@ function Jaw({ uid }: { uid: string }) {
       ))}
       <ToothShading upper={false} />
       {JAW_PORES.map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="#1a1415" opacity=".55" />)}
+      {/* Mental protuberance: the raised triangle of the chin. */}
+      <path d="M90 146L100 136L110 146C106 151 94 151 90 146Z" fill="#8a7f78" opacity=".22" />
+      <path d="M92 147L100 139L108 147" fill="none" stroke="#110d0e" strokeWidth=".9" opacity=".5" />
+      {/* Jawline: lit along the left, in shadow along the right. */}
+      <path d="M51 124L78 148C86 154 92 156 100 156" fill="none" stroke="#a89c93" strokeWidth="1" strokeLinecap="round" opacity=".35" />
+      <path d="M149 124L122 148C114 154 108 156 100 156" fill="none" stroke="#0c0909" strokeWidth="1.4" strokeLinecap="round" opacity=".55" />
       {/* A hairline crack running down from the teeth. */}
       <path d="M112 112l2 6-3 5 2 6" fill="none" stroke="#151112" strokeWidth=".9" strokeLinejoin="round" />
       {/* Rami, chin and the two mental foramina. */}
       {/* Gonial angles and the oblique lines running forward to the chin. */}
-      <path d="M45 114C49 120 52 124 56 127" fill="none" stroke="#1d1718" strokeWidth="1.3" strokeLinecap="round" opacity=".7" />
-      <path d="M155 114C151 120 148 124 144 127" fill="none" stroke="#1d1718" strokeWidth="1.3" strokeLinecap="round" opacity=".8" />
+      <path d="M44 114C46 119 48 122 52 124" fill="none" stroke="#1d1718" strokeWidth="1.3" strokeLinecap="round" opacity=".7" />
+      <path d="M156 114C154 119 152 122 148 124" fill="none" stroke="#1d1718" strokeWidth="1.3" strokeLinecap="round" opacity=".8" />
       <path d="M58 118C64 132 74 142 86 148" fill="none" stroke="#9c9087" strokeWidth=".9" strokeLinecap="round" opacity=".35" />
       <path d="M142 118C136 132 126 142 114 148" fill="none" stroke="#0f0b0c" strokeWidth=".9" strokeLinecap="round" opacity=".45" />
       <ellipse cx="80" cy="128" rx="2.4" ry="1.6" fill="#100c0d" />
