@@ -199,9 +199,19 @@ export async function executeGitHubWebhook(request: NextRequest, p: Params) {
   const { hook } = await loadHook(p);
   if (!hook) return unknownWebhook();
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown> = {};
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    const raw = await request.text();
+    if (raw.trim()) {
+      const ct = request.headers.get("content-type") ?? "";
+      if (ct.includes("application/x-www-form-urlencoded")) {
+        const params = new URLSearchParams(raw);
+        const payload = params.get("payload");
+        body = payload ? (JSON.parse(payload) as Record<string, unknown>) : {};
+      } else {
+        body = JSON.parse(raw) as Record<string, unknown>;
+      }
+    }
   } catch {
     return discordError("Bad Request", 0, 400);
   }
