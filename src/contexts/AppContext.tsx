@@ -3625,6 +3625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeServerId || !configured) return;
     const supabase = getSupabaseClient();
+    const refresh = () => void loadServerDetails(activeServerId, { refreshMembers: true });
     const sub = supabase
       .channel(`sm:${activeServerId}`)
       .on(
@@ -3632,7 +3633,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServerId}` },
         // A join, leave or member update makes the cached roster stale; the
         // refresh re-reads the first member page (the rest page in lazily).
-        () => void loadServerDetails(activeServerId, { refreshMembers: true }),
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "member_roles", filter: `server_id=eq.${activeServerId}` },
+        // Role changes live in member_roles, so a separate subscription is
+        // needed or the roster never refreshes when a role is granted/revoked.
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "server_roles", filter: `server_id=eq.${activeServerId}` },
+        refresh,
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
