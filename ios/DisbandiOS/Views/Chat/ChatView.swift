@@ -234,14 +234,17 @@ struct ChatView: View {
         }
         // Re-counted whenever the set of visible people changes.
         .task(id: onlinePresenceKey) { await refreshOnlineCount() }
-        .onChange(of: model.loading) { _, loading in
-            guard !loading, !initialScrollSettled else { return }
+        // Runs on appear as well as when loading changes. A conversation
+        // painted from the cache never shows a loading state, so watching
+        // only for the change left it unsettled for good: "follow the
+        // bottom" could never switch off, and every new message dragged a
+        // reader who had scrolled up back down to it.
+        .task(id: model.loading) {
+            guard !model.loading, !initialScrollSettled else { return }
             // Let `.defaultScrollAnchor(.bottom)` and the first layout pass
             // finish before the top sentinel is allowed to page history.
-            Task {
-                try? await Task.sleep(for: .milliseconds(250))
-                initialScrollSettled = true
-            }
+            try? await Task.sleep(for: .milliseconds(250))
+            initialScrollSettled = true
         }
     }
 
@@ -549,10 +552,17 @@ struct ChatView: View {
                  */
                 .onChange(of: keyboardHeight) { _, height in
                     guard height > 0, stickToBottom, let last = model.messages.last else { return }
-                    // After the keyboard's own animation has laid things out;
-                    // scrolling into a frame that is still moving lands short.
                     withAnimation(.easeOut(duration: 0.25)) {
                         proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                    // Again once the keyboard has finished moving: a scroll
+                    // aimed into a frame that is still animating lands short,
+                    // which left the newest message under the composer.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        guard stickToBottom, let last = model.messages.last else { return }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -827,6 +837,9 @@ struct ChatView: View {
         let content = draft
         let reply = replyingTo?.id
         draft = ""
+        // Whatever the reader was looking at, their own message is what they
+        // want to see next.
+        stickToBottom = true
         withAnimation { replyingTo = nil }
         guard let uid = app.currentUserId else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -836,6 +849,7 @@ struct ChatView: View {
     private func sendGif(_ gif: GiphyGif) {
         guard let uid = app.currentUserId, let url = gif.fullUrl else { return }
         let reply = replyingTo?.id
+        stickToBottom = true
         withAnimation { replyingTo = nil }
         Task { await model.sendAttachment(OutgoingAttachment(url: url, type: "gif", key: nil),
                                           replyToId: reply, authorId: uid) }

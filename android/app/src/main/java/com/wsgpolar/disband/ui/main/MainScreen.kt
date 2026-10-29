@@ -80,6 +80,7 @@ fun MainScreen(
     var inviteFor by remember { mutableStateOf<Server?>(null) }
     var membersFor by remember { mutableStateOf<Server?>(null) }
     var overflowFor by remember { mutableStateOf<Server?>(null) }
+    var settingsFor by remember { mutableStateOf<Server?>(null) }
     val shellChrome = rememberShellChrome()
     val currentUserId = app.currentUserId
     // `app.servers.value` read the flow ONCE at composition and never
@@ -406,6 +407,19 @@ fun MainScreen(
             // Leaving a space you are looking at has to put you somewhere
             // else, or the panel renders a server you are no longer in.
             onLeft = { shellChrome.selectedServerId = null },
+            onOpenSettings = { settingsFor = server },
+        )
+    }
+    settingsFor?.let { server ->
+        SpaceSettingsScreen(
+            app = app,
+            server = server,
+            onDismiss = { settingsFor = null },
+            onDeleted = {
+                settingsFor = null
+                shellChrome.selectedServerId = null
+            },
+            onChannelsChanged = { retryVersion++ },
         )
     }
 }

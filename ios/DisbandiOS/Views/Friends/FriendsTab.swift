@@ -148,7 +148,8 @@ struct FriendsTab: View {
                         Button { selectedProfile = profile } label: {
                             VStack(spacing: 6) {
                                 AvatarView(url: profile.avatarUrl, name: profile.name, size: 58,
-                                           status: presence.status(for: profile.id))
+                                           status: presence.status(for: profile.id),
+                                           decoration: profile.equippedRingEffect)
                                 Text(profile.name)
                                     .font(.caption.weight(.medium))
                                     .foregroundStyle(Brand.textSecondary)

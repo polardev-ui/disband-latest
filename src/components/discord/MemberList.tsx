@@ -12,6 +12,8 @@ import { memberIconRole } from "@/lib/role-icons";
 import { listeningFor } from "@/lib/presence";
 import type { Listening } from "@/lib/music-presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
+import { ActivityLine } from "@/components/ui/ActivityLine";
+import { activityFor, type Activity } from "@/lib/activity";
 import { useMemberWindow } from "@/hooks/useMemberWindow";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -92,7 +94,7 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
 }
 
 export function MemberList({ serverId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
-  const { presenceMap, listeningMap, serverTimeouts } = useApp();
+  const { presenceMap, listeningMap, activityMap, serverTimeouts } = useApp();
   const windowed = useMemberWindow(serverId, presenceMap);
   const useWindow = !!serverId && windowed.mode === "window" && windowed.total !== null;
 
@@ -321,6 +323,7 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
                   roles={roles}
                   live={liveStatus(m.profile)}
                   listening={null}
+                  activity={null}
                   timedOut={timedOutIds.has(m.user_id)}
                   onClick={onMemberClick}
                   onContext={onMemberContext}
@@ -336,6 +339,7 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
               roles={roles}
               live={liveStatus(item.member.profile)}
               listening={liveStatus(item.member.profile) === "offline" ? null : listeningFor(item.member.profile, listeningMap)}
+              activity={liveStatus(item.member.profile) === "offline" ? null : activityFor(item.member.profile, activityMap)}
               timedOut={timedOutIds.has(item.member.user_id)}
               onClick={onMemberClick}
               onContext={onMemberContext}
@@ -385,12 +389,13 @@ function binarySearch(offsets: number[], y: number, count: number): number {
 }
 
 function Row({
-  m, roles, live, listening, timedOut, onClick, onContext,
+  m, roles, live, listening, activity, timedOut, onClick, onContext,
 }: {
   m: Member;
   roles: ServerRole[];
   live: UserStatus;
   listening: Listening | null;
+  activity: Activity | null;
   timedOut: boolean;
   onClick?: (m: Member) => void;
   onContext?: (m: Member, x: number, y: number) => void;
@@ -464,7 +469,9 @@ function Row({
           </Tooltip>
         )}
       </span>
-      {listening && <ListeningLine listening={listening} className="w-full !leading-[16px]" />}
+      {activity ? (
+        <ActivityLine activity={activity} className="w-full !leading-[16px]" />
+      ) : listening && <ListeningLine listening={listening} className="w-full !leading-[16px]" />}
       </span>
     </button>
   );

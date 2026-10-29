@@ -648,7 +648,7 @@ begin
    limit 1;
   if v_code is not null then return v_code; end if;
   update public.bot_invites set status = 'expired' where bot_id = p_bot_id and reusable and status = 'pending';
-  v_code := encode(gen_random_bytes(12), 'hex');
+  v_code := replace(gen_random_uuid()::text, '-', '');
   insert into public.bot_invites (bot_id, server_id, code, scopes, created_by, reusable, expires_at)
   values (p_bot_id, null, v_code, p_scopes, p_actor_id, true, now() + interval '100 years');
   return v_code;

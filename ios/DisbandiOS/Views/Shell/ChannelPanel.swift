@@ -26,6 +26,7 @@ struct ChannelPanel: View {
     @State private var showInvite = false
     @State private var showSettings = false
     @State private var showCatalysts = false
+    @State private var catalystCount = 0
     @State private var confirmLeave = false
     @State private var effects: [String: ChannelEffect] = [:]
     @State private var permissions: [String: Bool] = [:]
@@ -123,17 +124,15 @@ struct ChannelPanel: View {
                 )
 
                 HStack(alignment: .center, spacing: 8) {
+                    // Seal first, then the name, as on desktop.
+                    if let kind = ServerBadgeKind.of(verified: server.verified, partner: server.partner,
+                                                     catalysts: catalystCount) {
+                        ServerBadgeView(kind: kind, size: 20)
+                    }
                     Text(server.name)
                         .font(.title3.weight(.bold))
                         .foregroundStyle(Brand.textPrimary)
                         .lineLimit(1)
-                    if server.verified == true {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(Brand.verified)
-                            .accessibilityLabel("Verified space")
-                    } else if server.partner == true {
-                        PartnerBadge()
-                    }
                     Spacer(minLength: 8)
                     menu
                 }
@@ -149,8 +148,47 @@ struct ChannelPanel: View {
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+
+            boostBar
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
         }
+        .task(id: server.id) {
+            catalystCount = (try? await DatabaseService.catalystCount(serverId: server.id)) ?? 0
+        }
+    }
+
+    /// The desktop's "Level 2 · 4 Boosts" row under the space name.
+    private var boostBar: some View {
+        Button { showCatalysts = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: 0xFF73FA))
+                Text(boostLabel)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Brand.textSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Brand.textMuted)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(boostLabel)
+    }
+
+    private var boostLabel: String {
+        guard catalystCount > 0 else { return "Boost this space" }
+        let level = catalystCount >= 6 ? 3 : catalystCount >= 3 ? 2 : 1
+        return "Level \(level) · \(catalystCount) \(catalystCount == 1 ? "Boost" : "Boosts")"
     }
 
     private var bannerFallback: some View {

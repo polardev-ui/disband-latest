@@ -28,6 +28,10 @@ interface CatalystModalProps {
   onClose: () => void;
 }
 
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 function Check({ locked }: { locked?: boolean }) {
   return (
     <svg
@@ -55,6 +59,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
     myCatalysts,
     allocateCatalyst,
     withdrawCatalyst,
+    transferCatalyst,
     refreshCatalysts,
     servers,
   } = useApp();
@@ -81,10 +86,29 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
     () => (server ? myCatalysts.filter((c) => c.server_id === server.id).length : 0),
     [myCatalysts, server],
   );
+  // Only plan credits count against the monthly allowance, as on the server.
   const monthlyUsed = useMemo(
-    () => myCatalysts.filter((c) => c.created_at >= monthStart).length,
+    () => myCatalysts.filter((c) => (c.source ?? "grant") === "grant" && c.created_at >= monthStart).length,
     [myCatalysts, monthStart],
   );
+  const mine = useMemo(
+    () => myCatalysts
+      .filter((c) => c.id && c.source !== "official")
+      .sort((a, b) => (a.expires_at ?? "").localeCompare(b.expires_at ?? "")),
+    [myCatalysts],
+  );
+  const [moving, setMoving] = useState<string | null>(null);
+  const [moveTo, setMoveTo] = useState("");
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const doMove = useCallback(async (catalystId: string) => {
+    if (!moveTo || busy) return;
+    setBusy(true);
+    setMoveError(null);
+    const err = await transferCatalyst(catalystId, moveTo);
+    setBusy(false);
+    if (err) setMoveError(err);
+    else { setMoving(null); setMoveTo(""); }
+  }, [moveTo, busy, transferCatalyst]);
   const balance = monthlyRemaining(plan, monthlyUsed);
 
   useEffect(() => {
@@ -282,10 +306,74 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
           </div>
         </div>
 
+        {mine.length > 0 && (
+          <div className="border-t border-bg-tertiary px-5 py-4">
+            <p className="text-sm font-bold">Your Catalysts</p>
+            <p className="mt-0.5 text-[14px] text-text-muted">
+              Each lasts a month. Move one to another space once it has been on its current space for a week.
+            </p>
+            {moveError && <p className="mt-2 text-[14px] text-status-dnd">{moveError}</p>}
+            <ul className="mt-3 space-y-1.5">
+              {mine.map((c) => {
+                const here = servers.find((s) => s.id === c.server_id);
+                const movableAt = c.placed_at ? new Date(c.placed_at).getTime() + 7 * 24 * 3600_000 : null;
+                const canMove = movableAt !== null && movableAt <= Date.now();
+                const targets = servers.filter((s) => s.id !== c.server_id);
+                return (
+                  <li key={c.id} className="rounded-[4px] bg-bg-secondary px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-semibold text-text-normal">{here?.name ?? "A space you left"}</span>
+                        <span className="block text-[12px] text-text-muted">
+                          {c.expires_at ? `Expires ${shortDate(c.expires_at)}` : "No expiry"}
+                          {c.source === "purchase" ? " · Bought" : c.source === "grant" ? " · Plan credit" : ""}
+                        </span>
+                      </span>
+                      {moving === c.id ? (
+                        <button type="button" onClick={() => { setMoving(null); setMoveError(null); }} className="text-[13px] text-text-muted hover:text-text-normal">Cancel</button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={!canMove || targets.length === 0 || busy}
+                          title={!canMove && movableAt ? `You can move this from ${shortDate(new Date(movableAt).toISOString())}` : undefined}
+                          onClick={() => { setMoving(c.id!); setMoveTo(targets[0]?.id ?? ""); setMoveError(null); }}
+                          className="h-7 rounded-[3px] bg-button-secondary px-3 text-[13px] font-medium text-white hover:bg-button-secondary-hover disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {canMove || !movableAt ? "Move" : `Move from ${shortDate(new Date(movableAt).toISOString())}`}
+                        </button>
+                      )}
+                    </div>
+                    {moving === c.id && (
+                      <div className="mt-2 flex gap-2">
+                        <select
+                          value={moveTo}
+                          onChange={(e) => setMoveTo(e.target.value)}
+                          aria-label="Move to"
+                          className="min-w-0 flex-1 rounded-[3px] bg-bg-tertiary px-2 text-[14px] text-text-normal"
+                        >
+                          {targets.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!moveTo || busy}
+                          onClick={() => void doMove(c.id!)}
+                          className="h-8 rounded-[3px] bg-brand px-3 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          {busy ? "Moving…" : "Move here"}
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <div className="bg-bg-secondary px-5 py-4">
           <p className="text-sm font-bold">Buy Catalysts</p>
           <p className="mt-0.5 text-[14px] text-text-muted">
-            One-time purchase, never expire · {formatCents(unitCents)} each
+            Each lasts a month from purchase · {formatCents(unitCents)} each
           </p>
             {buySecret ? (
             <div className="mt-3">

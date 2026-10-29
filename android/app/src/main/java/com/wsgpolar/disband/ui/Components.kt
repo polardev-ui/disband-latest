@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.wsgpolar.disband.core.AppConfig
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.seeded
 
@@ -33,8 +36,10 @@ fun AvatarImage(
     ring: Color = LocalPalette.current.background,
     /** Offline reads as a hollow ring rather than a solid grey dot. */
     hollow: Boolean = false,
+    /** An equipped avatar decoration (shop item id); see [AvatarDecoration]. */
+    decoration: String? = null,
 ) {
-    Box(modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
         if (url.isNullOrBlank()) {
             Box(
                 Modifier.size(size).clip(CircleShape).background(Color.seeded(name)),
@@ -55,6 +60,7 @@ fun AvatarImage(
                 modifier = Modifier.size(size).clip(CircleShape),
             )
         }
+        AvatarDecoration(decoration, avatarSize = size)
         if (presence != null) {
             Box(
                 Modifier
@@ -83,4 +89,23 @@ fun AvatarImage(
             }
         }
     }
+}
+
+/**
+ * An avatar decoration, drawn from the art the web exports to
+ * /decorations/<item>.png. That art is twice the photo's size and centred on
+ * it, so it reaches past the photo on every side as it does on desktop. It is
+ * drawn unbounded: place it centred on the photo, outside any clip.
+ */
+@Composable
+fun AvatarDecoration(itemId: String?, avatarSize: Dp, modifier: Modifier = Modifier) {
+    if (itemId.isNullOrBlank()) return
+    AsyncImage(
+        model = "${AppConfig.WEB_APP_URL}/decorations/$itemId.png",
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = modifier
+            .wrapContentSize(unbounded = true)
+            .requiredSize(avatarSize * 2),
+    )
 }

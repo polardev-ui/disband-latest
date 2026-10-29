@@ -73,6 +73,9 @@ struct Profile: Codable, Identifiable, Hashable {
     var createdAt: String?
     /// Bots and webhooks; shown with an APP tag beside their name.
     var isBot: Bool? = nil
+    /// The avatar decoration they wear (a shop item id such as
+    /// "ring-angelic"). Drawn by `AvatarView` from the web's exported art.
+    var equippedRingEffect: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio, status, theme, pronouns
@@ -93,6 +96,7 @@ struct Profile: Codable, Identifiable, Hashable {
         case linkPreviewsEnabled = "link_previews_enabled"
         case createdAt = "created_at"
         case isBot = "is_bot"
+        case equippedRingEffect = "equipped_ring_effect"
     }
 
     /// Display name, else username. A name made only of invisible

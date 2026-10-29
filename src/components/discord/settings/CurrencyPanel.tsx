@@ -9,13 +9,14 @@ import { decorationItems } from "@/lib/shop";
 import { confirmDialog } from "@/lib/dialogs";
 import { SettingsSection } from "./SettingsPrimitives";
 import { btn } from "@/components/modals/server-settings/ui";
+import { AvatarDecoration } from "@/components/shop/AvatarDecoration";
 
 interface Wallet { balance: number; lifetime: number; message_count: number }
 interface LedgerRow { id: number; amount: number; reason: string; created_at: string }
 
 /** The currency tab: balance, how to earn, what to spend it on, and history. */
 export function CurrencyPanel() {
-  const { user } = useApp();
+  const { user, profile } = useApp();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [owned, setOwned] = useState<Set<string>>(new Set());
@@ -104,10 +105,24 @@ export function CurrencyPanel() {
                 <p className="font-semibold text-header-primary">{r.label}</p>
                 <p className="text-[13px] text-text-muted">{r.description}</p>
                 {r.id === "decoration" && (
-                  <select value={pick} onChange={(e) => setPick(e.target.value)} className="mt-2 rounded-[3px] bg-bg-tertiary px-2 py-1.5 text-[14px] text-text-normal" aria-label="Decoration to redeem">
-                    <option value="">Choose a decoration…</option>
-                    {decorations.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                  <div role="radiogroup" aria-label="Decoration to redeem" className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
+                    {decorations.length === 0 && <p className="text-[13px] text-text-muted">You own every decoration already.</p>}
+                    {decorations.map((d) => (
+                      <button key={d.id} type="button" role="radio" aria-checked={pick === d.id} onClick={() => setPick(d.id)}
+                        className={`group flex flex-col items-center gap-2 rounded-lg border-2 bg-bg-secondary px-2 pb-2 pt-4 transition-colors ${pick === d.id ? "border-brand" : "border-transparent hover:border-divider"}`}>
+                        <span className="relative h-12 w-12">
+                          {profile?.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={profile.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
+                          ) : (
+                            <span className="block h-full w-full rounded-full bg-brand" />
+                          )}
+                          <AvatarDecoration itemId={d.id} />
+                        </span>
+                        <span className="w-full truncate text-center text-[12px] font-semibold text-header-primary">{d.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
               <button type="button" disabled={balance < r.cost || busy !== null} onClick={() => void redeem(r.id)} className={btn.primary}>

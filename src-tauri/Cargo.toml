@@ -31,6 +31,11 @@ serde_json = "1"
 # Pin transitive `time` — 0.3.50 fails to compile against published time-macros 0.2.29.
 time = "=0.3.49"
 
+# Game activity: the running-process scan in src/activity.rs. Minor-frozen
+# like the others, since there is no Cargo.lock and 0.x minors break APIs.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+sysinfo = { version = "~0.40", default-features = false, features = ["system"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6.6"
 tauri-plugin-macos-permissions = "2"

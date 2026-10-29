@@ -52,11 +52,21 @@ interface Props {
   onJump: (messageId: string, containerId: string, sourceKind: string) => void;
   onClose: () => void;
   initialQuery?: string;
+  /** Set when the header search box owns the query; the panel then shows results only (its own box stays for narrow screens). */
+  query?: string;
+  onQueryChange?: (query: string) => void;
 }
 
-export default function SearchPanel({ scopeKind, serverId, containerId, onJump, onClose, initialQuery }: Props) {
+export default function SearchPanel({ scopeKind, serverId, containerId, onJump, onClose, initialQuery, query: controlledQuery, onQueryChange }: Props) {
   useApp();
-  const [query, setQuery] = useState(initialQuery ?? "");
+  const [ownQuery, setOwnQuery] = useState(initialQuery ?? "");
+  const controlled = controlledQuery !== undefined;
+  const query = controlled ? controlledQuery : ownQuery;
+  const setQuery = useCallback((next: string | ((current: string) => string)) => {
+    const value = typeof next === "function" ? next(query) : next;
+    if (controlled) onQueryChange?.(value);
+    else setOwnQuery(value);
+  }, [controlled, onQueryChange, query]);
   const [sort, setSort] = useState<"newest" | "oldest" | "relevance">("newest");
   const [results, setResults] = useState<SearchResultRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -129,7 +139,14 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
     }
   }, [filters, scopeKind, serverId, containerId, sort, page]);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  // The header box keeps focus on wide screens; the panel's own box is the
+  // one to type in when the header has no room for it.
+  const focusInput = useCallback(() => {
+    const header = controlled ? document.getElementById("header-search-input") : null;
+    if (header && header.offsetParent !== null) header.focus();
+    else inputRef.current?.focus();
+  }, [controlled]);
+  useEffect(() => { focusInput(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const t = setTimeout(() => {
       if (query.trim().length >= 2) void runSearch(true);
@@ -186,7 +203,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
         </button>
       </div>
 
-      <div className="px-4 pb-2 pt-3">
+      <div className={`px-4 pb-2 pt-3 ${controlled ? "lg:hidden" : ""}`}>
         <input
           ref={inputRef}
           type="text"
@@ -209,7 +226,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
                 type="button"
                 onClick={() => {
                   setQuery((q) => (q ? `${q} ${o.token}` : o.token));
-                  inputRef.current?.focus();
+                  focusInput();
                 }}
                 className="mx-2 flex h-8 w-[calc(100%-16px)] items-center gap-1.5 rounded-[3px] px-2 text-left text-[14px] hover:bg-interactive-hover"
               >

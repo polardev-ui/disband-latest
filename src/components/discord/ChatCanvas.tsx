@@ -811,6 +811,48 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     return () => el.removeEventListener("scroll", onScroll);
   }, [requestLoadMore]);
 
+  // A deliberate move up releases the bottom at once. The scroll handler
+  // ignores events for a moment after the app scrolls by itself, and while
+  // images or new messages kept resizing the chat, that window kept eating
+  // the reader's scroll and the next message yanked them back down.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const release = () => {
+      stickToBottomRef.current = false;
+      pinToBottomRef.current = false;
+      topAnchorRef.current = null;
+      programmaticScrollRef.current = 0;
+    };
+    const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
+    let touchY: number | null = null;
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? null; };
+    const onTouchMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY;
+      // Finger moving down drags the history up into view.
+      if (touchY !== null && y !== undefined && y - touchY > 8) release();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "PageUp" || e.key === "Home" || (e.key === "ArrowUp" && e.target === el)) release();
+    };
+    // Grabbing the scrollbar itself.
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.target === el && e.offsetX > el.clientWidth) release();
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("keydown", onKeyDown);
+    el.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("keydown", onKeyDown);
+      el.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, []);
+
   // Mobile keyboards resize the visual viewport without scrolling the chat
   // container, which used to strand the view mid-history when the keyboard
   // opened. While the user is pinned to the bottom, follow the resize so

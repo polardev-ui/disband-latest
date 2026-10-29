@@ -5,7 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
-import { IconBell, IconBellOff, IconCheckAll, IconPin, IconSearch, IconFriends, IconInbox } from "@/components/icons";
+import { IconBell, IconBellOff, IconCheckAll, IconPin, IconSearch, IconFriends, IconInbox, IconHelp } from "@/components/icons";
 import { Tooltip } from "./Tooltip";
 
 type MuteLevel = "all" | "mentions" | "nothing";
@@ -17,6 +17,11 @@ export interface HeaderToolbarProps {
   searchOpen?: boolean;
   onOpenSearch: () => void;
   onCloseSearch?: () => void;
+  /** What is typed in the header search box; results show in the search panel. */
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
+  /** Shown first in the row, at the same spacing (the call button). */
+  leading?: React.ReactNode;
   pinnedOpen?: boolean;
   onTogglePins?: () => void;
   showPins?: boolean;
@@ -34,6 +39,9 @@ export function HeaderToolbar({
   searchOpen,
   onOpenSearch,
   onCloseSearch,
+  searchQuery,
+  onSearchQueryChange,
+  leading,
   pinnedOpen,
   onTogglePins,
   showPins = true,
@@ -93,7 +101,8 @@ export function HeaderToolbar({
     }`;
 
   return (
-    <div className={`flex items-center gap-3 md:gap-4 ${className ?? ""}`}>
+    <div className={`flex items-center gap-4 ${className ?? ""}`}>
+      {leading}
       {canMute && (
         <div className="relative">
           <Tooltip label={t("Notification Settings")} side="bottom">
@@ -158,12 +167,26 @@ export function HeaderToolbar({
       {showSearch && (
         <div className="relative hidden lg:block">
           <input
+            id="header-search-input"
             type="text"
-            readOnly
-            onFocus={() => onOpenSearch()}
+            value={searchQuery ?? ""}
+            onChange={(e) => {
+              onSearchQueryChange?.(e.target.value);
+              if (!searchOpen) onOpenSearch();
+            }}
+            onFocus={() => { if (!searchOpen) onOpenSearch(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.currentTarget.blur();
+                onCloseSearch?.();
+              }
+            }}
             placeholder={t("Search")}
             aria-label={t("Search")}
-            className="h-6 w-36 rounded-[4px] bg-bg-tertiary pl-1.5 pr-7 text-[14px] text-text-normal outline-none transition-[width] duration-200 ease-out placeholder:text-text-muted focus:w-60"
+            autoComplete="off"
+            spellCheck={false}
+            className={`h-6 rounded-[4px] bg-bg-tertiary pl-1.5 pr-7 text-[14px] text-text-normal outline-none transition-[width] duration-200 ease-out placeholder:text-text-muted ${searchOpen || searchQuery ? "w-60" : "w-36 focus:w-60"}`}
           />
           {searchOpen && onCloseSearch ? (
             <button type="button" aria-label={t("Clear search")} onClick={onCloseSearch} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-interactive-normal hover:text-interactive-active">×</button>
@@ -198,9 +221,7 @@ export function HeaderToolbar({
 
       <Tooltip label={t("Help")} side="bottom">
         <a href="/support" target="_blank" rel="noreferrer" aria-label={t("Help")} className={iconBtn(false)}>
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
-            <path fill="currentColor" d="M12 2C6.486 2 2 6.487 2 12c0 5.515 4.486 10 10 10s10-4.485 10-10c0-5.513-4.486-10-10-10Zm0 16.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm1-4.375V15h-2v-2h1c1.104 0 2-.897 2-2 0-1.104-.896-2-2-2s-2 .896-2 2H8c0-2.205 1.795-4 4-4s4 1.795 4 4a4.01 4.01 0 0 1-3 3.875Z" />
-          </svg>
+          <IconHelp size={24} />
         </a>
       </Tooltip>
     </div>

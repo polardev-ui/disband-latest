@@ -61,7 +61,7 @@ export function SettingsLayer({
           {sidebar}
         </nav>
       </div>
-      <div className="relative min-w-0 flex-[1_1_900px] bg-bg-primary">
+      <div className={`relative min-w-0 bg-bg-primary ${wide ? "flex-[0_1_1392px]" : "flex-[0_1_972px]"}`}>
         <div className="settings-scroll h-full overflow-y-auto">
           <div className="flex">
             <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1320px]" : "max-w-[900px]"}`}>
@@ -84,6 +84,8 @@ export function SettingsLayer({
           </div>
         </div>
       </div>
+      {/* Mirrors the sidebar's spare width so the sidebar and page sit centred. */}
+      <div aria-hidden className="hidden flex-[1_1_0px] bg-bg-primary md:block" />
     </div>,
     document.body,
   );

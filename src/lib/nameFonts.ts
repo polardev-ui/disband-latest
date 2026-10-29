@@ -15,15 +15,17 @@ export const NAME_FONT_OPTIONS: { id: NameFontId; label: string; beta: boolean; 
   { id: "sharp", label: "Sharp", beta: true },
 ];
 
-const matcha = localFont({ src: "../fonts/Matcha.otf", display: "swap" });
-const gothic = localFont({ src: "../fonts/Gothic.otf", display: "swap" });
-const future = localFont({ src: "../fonts/Future.otf", display: "swap" });
-const spooky = localFont({ src: "../fonts/Spooky.otf", display: "swap" });
-const pixels = localFont({ src: "../fonts/Pixels.ttf", display: "swap" });
-const brutal = localFont({ src: "../fonts/Brutal.ttf", display: "swap" });
-const graffiti = localFont({ src: "../fonts/Graffiti.otf", display: "swap" });
-const dunker = localFont({ src: "../fonts/Dunker.otf", display: "swap" });
-const sharp = localFont({ src: "../fonts/Sharp.otf", display: "swap" });
+// Not preloaded: each font downloads only when a name on screen uses it.
+// Preloading all nine put ~270 KB of fonts in front of the app on every load.
+const matcha = localFont({ src: "../fonts/Matcha.otf", display: "swap", preload: false });
+const gothic = localFont({ src: "../fonts/Gothic.otf", display: "swap", preload: false });
+const future = localFont({ src: "../fonts/Future.otf", display: "swap", preload: false });
+const spooky = localFont({ src: "../fonts/Spooky.otf", display: "swap", preload: false });
+const pixels = localFont({ src: "../fonts/Pixels.ttf", display: "swap", preload: false });
+const brutal = localFont({ src: "../fonts/Brutal.ttf", display: "swap", preload: false });
+const graffiti = localFont({ src: "../fonts/Graffiti.otf", display: "swap", preload: false });
+const dunker = localFont({ src: "../fonts/Dunker.otf", display: "swap", preload: false });
+const sharp = localFont({ src: "../fonts/Sharp.otf", display: "swap", preload: false });
 
 export const NAME_FONT_CLASS: Record<NameFontId, string> = {
   default: "",

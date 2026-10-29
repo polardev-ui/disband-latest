@@ -9,6 +9,8 @@ import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
 import { Avatar } from "@/components/ui/Avatar";
 import { GuildTag } from "@/components/ui/GuildTag";
 import { ListeningCard } from "@/components/ui/ListeningCard";
+import { ActivityCard } from "@/components/ui/ActivityCard";
+import { activityFor } from "@/lib/activity";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
 import { RoleIcon } from "@/components/ui/RoleIcon";
@@ -80,7 +82,7 @@ export function UserProfilePopout({
   selfAssignableRoles = [],
   onSetSelfRoles,
 }: UserProfilePopoutProps) {
-  const { presenceMap, listeningMap, user, openDmWithFriend, sendDmMessage } = useApp();
+  const { presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage } = useApp();
   const open = !!profile && !!anchor;
   const { mounted, exiting } = usePresence(open);
   const lastProfile = useRef<Profile | null>(null);
@@ -125,6 +127,7 @@ export function UserProfilePopout({
   }, [open, anchor, p?.id]);
 
   const listening = p && presenceStatusFor(p, presenceMap) !== "offline" ? listeningFor(p, listeningMap) : null;
+  const activity = p ? activityFor(p, activityMap) : null;
 
   if (!mounted || !p || typeof document === "undefined") return null;
 
@@ -252,6 +255,7 @@ export function UserProfilePopout({
             </div>
           </Section>
 
+          {activity && <div className="mb-3"><ActivityCard activity={activity} /></div>}
           {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
           {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
