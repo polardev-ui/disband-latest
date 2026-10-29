@@ -36,6 +36,8 @@ import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.core.seeded
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.data.Profile
+import androidx.compose.ui.Alignment
+import com.wsgpolar.disband.ui.AvatarDecoration
 import com.wsgpolar.disband.ui.AvatarImage
 import com.wsgpolar.disband.ui.components.GuildTagView
 import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
@@ -79,6 +81,8 @@ fun UserProfileSheet(initial: Profile, onDismiss: () -> Unit) {
                 Box(Modifier.clip(CircleShape).background(palette.surface).padding(5.dp)) {
                     AvatarImage(url = profile.avatarUrl, name = profile.name, size = 84.dp)
                 }
+                // Outside the clipped ring, centred on the photo.
+                AvatarDecoration(profile.equippedRingEffect, avatarSize = 84.dp, Modifier.align(Alignment.Center))
             }
             Column(Modifier.offset(y = (-34).dp).padding(horizontal = 20.dp)) {
                 Text(profile.name, color = palette.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)

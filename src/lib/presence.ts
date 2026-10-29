@@ -10,6 +10,8 @@ export interface PresencePayload {
   status: UserStatus;
   /** Live "now listening"; null/absent when nothing is playing. */
   listening?: Listening | null;
+  /** Live game activity; null/absent when not playing. */
+  activity?: import("@/lib/activity").Activity | null;
 }
 
 export type PresenceMap = Map<string, UserStatus>;

@@ -105,14 +105,20 @@ struct AttachmentMosaic: View {
         Button { onOpen(attachment) } label: {
             // `fill` plus a clip: every cell in a row is the same height, so a
             // portrait photo next to a landscape one has to be cropped rather
-            // than letterboxed, or the row grows gaps.
-            RemoteImage(url: attachment.url, contentMode: .fill) {
-                Rectangle().fill(Brand.elevated)
-                    .overlay(ProgressView().tint(Brand.textMuted).controlSize(.small))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .contentShape(Rectangle())
+            // than letterboxed, or the row grows gaps. The cell's size comes
+            // from the clear shape; the picture only overlays it. Sized by the
+            // picture instead, a wide image asked for more width than its
+            // half of the row and pushed both images off the screen edges.
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    RemoteImage(url: attachment.url, contentMode: .fill) {
+                        Rectangle().fill(Brand.elevated)
+                            .overlay(ProgressView().tint(Brand.textMuted).controlSize(.small))
+                    }
+                }
+                .clipped()
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

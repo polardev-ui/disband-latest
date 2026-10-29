@@ -8,6 +8,13 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 object TimeFormat {
+    /** "Monday, 27 October" (or "27 October"); the year is added when it is not this one. */
+    fun dayHeader(day: LocalDate, weekday: Boolean = false): String {
+        val base = if (weekday) "EEEE, d MMMM" else "d MMMM"
+        val pattern = if (day.year == LocalDate.now().year) base else "$base yyyy"
+        return day.format(DateTimeFormatter.ofPattern(pattern, java.util.Locale.UK))
+    }
+
     /**
      * Postgres' own rendering, with a space instead of a `T`. Only reached
      * for values that did not come through PostgREST.

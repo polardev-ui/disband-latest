@@ -6,6 +6,8 @@ import { useApp } from "@/contexts/AppContext";
 import { BOT_SCOPE_LABELS, BOT_SCOPE_ORDER } from "@/lib/bot-scopes";
 import type { BotScope } from "@/lib/bot-auth";
 import { confirmDialog } from "@/lib/dialogs";
+import { uploadMedia } from "@/lib/media/uploadMedia";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface Bot {
   id: string;
@@ -26,6 +28,29 @@ const GROUPS: { label: string; scopes: BotScope[] }[] = [
   { label: "Members", scopes: ["members.read", "members.kick", "members.ban", "members.timeout"] },
   { label: "Channels", scopes: ["channels.read", "channels.manage", "webhooks.manage"] },
 ];
+
+/** A picture slot: shows the current image and uploads a new one on pick. */
+function ImagePick({ label, url, wide, busy, onPick, onClear }: {
+  label: string; url: string; wide?: boolean; busy: boolean; onPick: (file: File) => void; onClear: () => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1.5 block text-[12px] font-bold uppercase text-text-muted">{label}</span>
+      <div className="flex items-center gap-3">
+        <div className={`shrink-0 overflow-hidden bg-bg-tertiary ${wide ? "h-16 w-36 rounded-md" : "h-16 w-16 rounded-full"}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {url && <img src={url} alt="" className="h-full w-full object-cover" />}
+        </div>
+        <label className={`cursor-pointer rounded bg-bg-tertiary px-3 py-2 text-[14px] font-semibold text-text-normal hover:bg-bg-modifier-hover ${busy ? "pointer-events-none opacity-50" : ""}`}>
+          {busy ? "Uploading…" : url ? "Change" : "Upload"}
+          <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only"
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick(f); }} />
+        </label>
+        {url && <button type="button" onClick={onClear} className="text-[14px] text-text-muted hover:text-status-dnd">Remove</button>}
+      </div>
+    </div>
+  );
+}
 
 async function post<T>(url: string, body: unknown): Promise<{ ok: boolean; data: T & { error?: string } }> {
   const res = await apiFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -81,6 +106,8 @@ export function DeveloperPortal() {
   const [saving, setSaving] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftAvatar, setDraftAvatar] = useState("");
+  const [draftBanner, setDraftBanner] = useState("");
+  const [uploading, setUploading] = useState<"avatar" | "banner" | null>(null);
   const [draftScopes, setDraftScopes] = useState<BotScope[]>([]);
   const [installScopes, setInstallScopes] = useState<BotScope[]>([]);
   const [installUrl, setInstallUrl] = useState<string | null>(null);
@@ -101,6 +128,10 @@ export function DeveloperPortal() {
     if (!selected) return;
     setDraftName(selected.name);
     setDraftAvatar(selected.avatar_url ?? "");
+    setDraftBanner("");
+    // The banner lives on the bot's profile row, not the bots table.
+    void getSupabaseClient().from("profiles").select("banner_url").eq("id", selected.user_id).maybeSingle()
+      .then(({ data }) => setDraftBanner((data as { banner_url: string | null } | null)?.banner_url ?? ""));
     setDraftScopes(selected.scopes);
     setInstallScopes(selected.scopes);
     setInstallUrl(null);
@@ -129,6 +160,21 @@ export function DeveloperPortal() {
     setSaving(false);
     if (!ok) setError(data.error ?? "Couldn't save.");
     else void load();
+  }
+
+  async function pickImage(kind: "avatar" | "banner", file: File) {
+    if (!file.type.startsWith("image/")) return setError("Pick an image file.");
+    setUploading(kind);
+    setError(null);
+    try {
+      const { url } = await uploadMedia(file, { maxUploadBytes: 8 * 1024 * 1024 });
+      if (kind === "avatar") setDraftAvatar(url);
+      else setDraftBanner(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't upload that image.");
+    } finally {
+      setUploading(null);
+    }
   }
 
   async function makeLink() {
@@ -221,15 +267,13 @@ export function DeveloperPortal() {
                     <span className="mb-1.5 block text-[12px] font-bold uppercase text-text-muted">Name</span>
                     <input value={draftName} onChange={(e) => setDraftName(e.target.value)} maxLength={25} className="w-full rounded-[3px] bg-bg-tertiary px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#00a8fc]" />
                   </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-bold uppercase text-text-muted">Picture URL</span>
-                    <input value={draftAvatar} onChange={(e) => setDraftAvatar(e.target.value)} placeholder="https://…" className="w-full rounded-[3px] bg-bg-tertiary px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#00a8fc]" />
-                  </label>
+                  <ImagePick label="Profile picture" url={draftAvatar} busy={uploading === "avatar"} onPick={(f) => void pickImage("avatar", f)} onClear={() => setDraftAvatar("")} />
+                  <ImagePick label="Banner" wide url={draftBanner} busy={uploading === "banner"} onPick={(f) => void pickImage("banner", f)} onClear={() => setDraftBanner("")} />
                   <dl className="grid grid-cols-2 gap-3 text-[13px]">
                     <div><dt className="text-text-muted">Token</dt><dd className="font-mono">{selected.token_prefix ? `${selected.token_prefix}…` : "—"}</dd></div>
                     <div><dt className="text-text-muted">Created</dt><dd>{new Date(selected.created_at).toLocaleDateString()}</dd></div>
                   </dl>
-                  <button type="button" disabled={saving} onClick={() => void save({ name: draftName, avatarUrl: draftAvatar.trim() || null })} className="rounded bg-brand px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-50">
+                  <button type="button" disabled={saving || uploading !== null} onClick={() => void save({ name: draftName, avatarUrl: draftAvatar.trim() || null, bannerUrl: draftBanner || null })} className="rounded bg-brand px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-50">
                     {saving ? "Saving…" : "Save changes"}
                   </button>
                   <p className="text-[13px] text-text-muted">Building something? Read the <a className="text-text-link hover:underline" href="/developers/docs">bot docs</a>.</p>

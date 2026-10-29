@@ -128,7 +128,8 @@ struct MessageRow: View {
                 Color.clear.frame(width: 40)
             } else {
                 Button { tapAuthor() } label: {
-                    AvatarView(url: authorAvatar, name: authorName, size: 40)
+                    AvatarView(url: authorAvatar, name: authorName, size: 40,
+                               decoration: message.webhook == nil ? message.author?.equippedRingEffect : nil)
                 }
                 .buttonStyle(.plain)
             }

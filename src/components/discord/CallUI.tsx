@@ -355,9 +355,9 @@ export function HeaderCallButton({ disabled, onClick }: { disabled?: boolean; on
       disabled={disabled}
       onClick={onClick}
       title="Start voice call"
-      className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-status-online transition-all hover:bg-status-online/15 disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-6 w-6 shrink-0 items-center justify-center text-status-online transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
     >
-      <IconPhone size={20} />
+      <IconPhone size={22} />
     </button>
   );
 }

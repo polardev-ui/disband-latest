@@ -146,6 +146,8 @@ data class Profile(
     @SerialName("desktop_notifications_enabled") var desktopNotificationsEnabled: Boolean? = null,
     @SerialName("link_previews_enabled") var linkPreviewsEnabled: Boolean? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    /** The avatar decoration they wear (a shop item id such as "ring-angelic"). */
+    @SerialName("equipped_ring_effect") var equippedRingEffect: String? = null,
 ) {
     val name: String get() = displayName ?: username ?: "Unknown"
     val handle: String get() = username ?: "user"

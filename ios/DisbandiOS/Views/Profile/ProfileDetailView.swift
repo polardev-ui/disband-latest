@@ -61,7 +61,8 @@ struct ProfileDetailView: View {
             BannerImage(url: profile.bannerUrl, height: 140) { accentGradient }
 
             AvatarView(url: profile.avatarUrl, name: profile.name, size: 88,
-                       status: liveStatus, ringColors: accentColors, ringWidth: 5)
+                       status: liveStatus, ringColors: accentColors, ringWidth: 5,
+                       decoration: profile.equippedRingEffect)
                 .background(Circle().fill(Brand.background).padding(-3))
                 .padding(.leading, 18)
                 .offset(y: 44)

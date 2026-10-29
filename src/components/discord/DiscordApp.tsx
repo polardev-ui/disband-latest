@@ -85,6 +85,7 @@ import { ForwardModal, type ForwardDestination } from "./ForwardModal";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 import { HeaderToolbar } from "./HeaderToolbar";
 import SearchPanel from "./SearchPanel";
+import { useGameActivity } from "@/hooks/useGameActivity";
 import { DmProfileRail } from "./DmProfileRail";
 import { CatalystModal } from "./CatalystModal";
 import { CallIndicator } from "./CallIndicator";
@@ -154,7 +155,15 @@ export function DiscordApp() {
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const [showDmProfile, setShowDmProfile] = useState(true);
+  // Desktop: publish the game you're playing (detection and Rich Presence).
+  useGameActivity();
   const [searchOpen, setSearchOpen] = useState(false);
+  // Typed in the header search box; the search panel shows its results.
+  const [searchQuery, setSearchQuery] = useState("");
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
   const [membersVisible, setMembersVisible] = useState(true);
   useEffect(() => {
     try {
@@ -1999,15 +2008,16 @@ export function DiscordApp() {
             }
             headerTrailing={
               !dmCallActive ? (
-	                <div className="flex items-center gap-1">
-	                  <HeaderToolbar
+	                <HeaderToolbar
 	                    scopeKind="dm"
 	                    serverId={null}
 	                    containerId={app.activeDmThreadId}
 	                    pinnedOpen={pinnedOpen}
 	                    searchOpen={searchOpen}
 	                    onOpenSearch={() => setSearchOpen(true)}
-	                    onCloseSearch={() => setSearchOpen(false)}
+	                    onCloseSearch={closeSearch}
+	                    searchQuery={searchQuery}
+	                    onSearchQueryChange={setSearchQuery}
 	                    onTogglePins={() => {
 	                      setPinnedOpen(true);
 	                      if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
@@ -2015,12 +2025,13 @@ export function DiscordApp() {
 	                    showMembersToggle
 	                    membersVisible={showDmProfile}
 	                    onToggleMembers={() => setShowDmProfile((v) => !v)}
+	                    leading={
+	                      <HeaderCallButton
+	                        disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+	                        onClick={() => void startVoiceCall(dmFriend)}
+	                      />
+	                    }
 	                  />
-                  <HeaderCallButton
-                    disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-                    onClick={() => void startVoiceCall(dmFriend)}
-                  />
-                </div>
               ) : null
             }
             callPanel={renderCallPanel()}
@@ -2035,13 +2046,15 @@ export function DiscordApp() {
           />
           </div>
           {searchOpen && (
-            <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
               <SearchPanel
                 scopeKind="dm"
                 serverId={null}
                 containerId={app.activeDmThreadId}
                 onJump={handleSearchJump}
-                onClose={() => setSearchOpen(false)}
+                onClose={closeSearch}
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
               />
             </div>
           )}
@@ -2121,15 +2134,16 @@ export function DiscordApp() {
                 typingScope={{ kind: "group", id: app.activeGroupChatId! }}
                 readCursorScope={{ kind: "group", id: app.activeGroupChatId! }}
                 headerTrailing={
-	                  <div className="flex items-center gap-1">
-	                    <HeaderToolbar
+	                  <HeaderToolbar
 	                      scopeKind="group"
 	                      serverId={null}
 	                      containerId={app.activeGroupChatId}
 	                      pinnedOpen={pinnedOpen}
 	                      searchOpen={searchOpen}
 	                      onOpenSearch={() => setSearchOpen(true)}
-	                      onCloseSearch={() => setSearchOpen(false)}
+	                      onCloseSearch={closeSearch}
+	                      searchQuery={searchQuery}
+	                      onSearchQueryChange={setSearchQuery}
 	                      onTogglePins={() => {
 	                        setPinnedOpen(true);
 	                        if (app.activeGroupChatId) void app.loadPinnedMessages("group", app.activeGroupChatId);
@@ -2137,12 +2151,13 @@ export function DiscordApp() {
 	                      showMembersToggle
                           membersVisible={membersVisible}
                           onToggleMembers={() => persistMembersVisible(!membersVisible)}
+	                      leading={
+	                        <HeaderCallButton
+	                          disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+	                          onClick={startGroupVoiceCall}
+	                        />
+	                      }
 	                    />
-                    <HeaderCallButton
-                      disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-                      onClick={startGroupVoiceCall}
-                    />
-                  </div>
                 }
                 onSend={app.sendGroupMessage}
                 onEdit={app.editGroupMessage}
@@ -2156,13 +2171,15 @@ export function DiscordApp() {
             )}
           </div>
           {searchOpen ? (
-            <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
               <SearchPanel
                 scopeKind="group"
                 serverId={null}
                 containerId={app.activeGroupChatId}
                 onJump={handleSearchJump}
-                onClose={() => setSearchOpen(false)}
+                onClose={closeSearch}
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
               />
             </div>
           ) : (membersVisible ? (
@@ -2294,7 +2311,9 @@ export function DiscordApp() {
               pinnedOpen={pinnedOpen}
               searchOpen={searchOpen}
               onOpenSearch={() => setSearchOpen(true)}
-              onCloseSearch={() => setSearchOpen(false)}
+              onCloseSearch={closeSearch}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
               onTogglePins={() => {
                 setPinnedOpen(true);
                 if (app.activeChannelId) void app.loadPinnedMessages("channel", app.activeChannelId);
@@ -2317,14 +2336,16 @@ export function DiscordApp() {
         </div>
       )}
 
-      {app.viewMode === "space" && !isMobile && searchOpen && (
-        <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+      {app.viewMode === "space" && searchOpen && (
+        <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
           <SearchPanel
             scopeKind="server"
             serverId={app.activeServerId}
             containerId={null}
             onJump={handleSearchJump}
-            onClose={() => setSearchOpen(false)}
+            onClose={closeSearch}
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
           />
         </div>
       )}

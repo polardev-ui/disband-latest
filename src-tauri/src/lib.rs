@@ -78,6 +78,9 @@ fn play_notification_sound() -> Result<(), String> {
     Err("native notification sound is only available on macOS".into())
 }
 
+#[cfg(desktop)]
+mod activity;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -113,12 +116,21 @@ pub fn run() {
             })
             .setup(|app| {
                 build_tray(app.handle())?;
+                activity::start(app.handle());
                 Ok(())
             });
     }
 
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        show_macos_notification,
+        play_notification_sound,
+        activity::current_activity
+    ]);
+    #[cfg(not(desktop))]
+    let builder = builder.invoke_handler(tauri::generate_handler![show_macos_notification, play_notification_sound]);
+
     builder
-        .invoke_handler(tauri::generate_handler![show_macos_notification, play_notification_sound])
         .run(tauri::generate_context!())
         .expect("error while running the Disband desktop application");
 }

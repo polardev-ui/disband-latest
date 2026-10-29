@@ -80,6 +80,7 @@ import {
   ChevronLeft,
   Trophy,
   Languages,
+  CircleHelp,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -97,6 +98,7 @@ export const IconSpeaker = icon(Volume2);
 export const IconSpeakerOff = icon(VolumeX);
 export const IconMaximize = icon(Maximize2);
 export const IconSearch = icon(Search);
+export const IconHelp = icon(CircleHelp);
 export const IconChevron = icon(ChevronDown);
 export const IconMic = icon(Mic);
 export const IconMicOff = icon(MicOff);

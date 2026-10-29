@@ -40,6 +40,10 @@ struct RemoteImage<Placeholder: View>: View {
                         image.size.width / max(image.size.height, 1),
                         contentMode: contentMode
                     )
+                    // A UIKit view takes the touch for itself, so a button
+                    // wrapped round a GIF (a space icon with an animated
+                    // picture) never saw the tap. Images never need touches.
+                    .allowsHitTesting(false)
                 } else {
                     Image(uiImage: image)
                         .resizable()

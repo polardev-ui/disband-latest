@@ -18,6 +18,9 @@ struct ServerRail: View {
     var onCreate: () -> Void
     var onDiscover: () -> Void
 
+    /// Live Catalysts per space, for the level seal in each icon's corner.
+    @State private var catalysts: [String: Int] = [:]
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 10) {
@@ -61,11 +64,12 @@ struct ServerRail: View {
                                 .background(Brand.online, in: Circle())
                                 .overlay(Circle().stroke(Brand.background, lineWidth: 2.5))
                                 .offset(x: 3, y: 3)
-                        } else if server.verified == true {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Brand.verified)
-                                .background(Circle().fill(Brand.background).padding(-1.5))
+                        } else if let kind = ServerBadgeKind.of(verified: server.verified, partner: server.partner,
+                                                                catalysts: catalysts[server.id] ?? 0) {
+                            // The same seal the desktop shows beside a space's
+                            // name: Verified, Partner, or its Catalyst level.
+                            ServerBadgeView(kind: kind, size: 16)
+                                .background(Circle().fill(Brand.background).padding(-2))
                                 .offset(x: 3, y: 3)
                         }
                     }
@@ -87,6 +91,11 @@ struct ServerRail: View {
             .padding(.bottom, 90)
         }
         .frame(width: 72)
+        .task(id: servers.map(\.id)) {
+            if let counts = try? await DatabaseService.catalystCounts(serverIds: servers.map(\.id)) {
+                catalysts = counts
+            }
+        }
     }
 
     private func railButton<Icon: View, Badge: View>(

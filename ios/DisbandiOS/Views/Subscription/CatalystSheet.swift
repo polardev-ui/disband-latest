@@ -243,7 +243,7 @@ struct CatalystSheet: View {
 
     private var legal: some View {
         VStack(spacing: 8) {
-            Text("Catalysts are a one-time purchase applied to \(serverName). They do not renew and are not transferable between spaces.")
+            Text("Each Catalyst lasts a month from the day you buy it and does not renew. After a week on \(serverName) you can move it to another space you are in.")
                 .font(.caption)
                 .foregroundStyle(Brand.textMuted)
                 .multilineTextAlignment(.center)

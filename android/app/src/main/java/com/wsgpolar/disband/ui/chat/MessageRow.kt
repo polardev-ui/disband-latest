@@ -107,8 +107,10 @@ fun MessageRow(
                     url = row.author?.avatarUrl,
                     name = row.author?.name ?: "?",
                     size = 40.dp,
-                    modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape)
-                        .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
+                    // No clip here: it would cut off the decoration, which
+                    // reaches past the photo.
+                    modifier = Modifier.clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
+                    decoration = row.author?.equippedRingEffect,
                 )
             }
             Spacer(Modifier.width(12.dp))

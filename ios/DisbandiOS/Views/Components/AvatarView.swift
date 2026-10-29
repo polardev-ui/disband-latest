@@ -9,6 +9,10 @@ struct AvatarView: View {
     /// Optional gradient ring drawn around the avatar (e.g. a profile's accent gradient).
     var ringColors: [Color]? = nil
     var ringWidth: CGFloat = 0
+    /// An equipped avatar decoration (shop item id). Its art is exported from
+    /// the web at twice the photo's size, centred on it, so it can reach past
+    /// the photo on every side the way it does on desktop.
+    var decoration: String? = nil
 
     var body: some View {
         // Status dot is the LAST element so it always overlays the ring/avatar.
@@ -22,6 +26,14 @@ struct AvatarView: View {
                             lineWidth: ringWidth)
                     }
                 }
+                .overlay {
+                    if let art = decorationURL {
+                        RemoteImage(url: art, contentMode: .fit) { Color.clear }
+                            .frame(width: size * 2, height: size * 2)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
             if let status {
                 Circle()
                     .fill(status.color)
@@ -30,6 +42,11 @@ struct AvatarView: View {
                     .offset(x: size * 0.02, y: size * 0.02)
             }
         }
+    }
+
+    private var decorationURL: String? {
+        guard let decoration, !decoration.isEmpty else { return nil }
+        return AppConfig.webAppURL.appendingPathComponent("decorations/\(decoration).png").absoluteString
     }
 
     @ViewBuilder private var avatar: some View {

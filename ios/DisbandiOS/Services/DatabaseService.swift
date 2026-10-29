@@ -708,6 +708,20 @@ enum DatabaseService {
             .count ?? 0
     }
 
+    /// Live Catalysts per space for a set of spaces, in one request. Expired
+    /// ones are already hidden by the table's read policy.
+    static func catalystCounts(serverIds: [String]) async throws -> [String: Int] {
+        guard !serverIds.isEmpty else { return [:] }
+        struct Row: Decodable { let server_id: String }
+        let rows: [Row] = try await client
+            .from("server_catalysts")
+            .select("server_id")
+            .in("server_id", values: serverIds)
+            .execute()
+            .value
+        return rows.reduce(into: [:]) { counts, row in counts[row.server_id, default: 0] += 1 }
+    }
+
     // MARK: - Profile & settings updates
 
     struct ProfilePatch: Encodable {

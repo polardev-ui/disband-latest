@@ -56,6 +56,9 @@ export interface Profile {
    * SoundCloud integration and cleared when playback stops. Optional so
    * older profile rows (and every mock in tests) keep compiling.
    */
+  /** What they're playing; see src/lib/activity.ts. Expires on its own. */
+  activity?: import("@/lib/activity").Activity | null;
+  activity_updated_at?: string | null;
   listening?: {
     source: "spotify" | "soundcloud" | "lastfm";
     track: string;

@@ -172,7 +172,8 @@ struct ProfileTab: View {
                 HStack(alignment: .bottom) {
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 88,
-                                   status: ownStatus, ringColors: accentColors, ringWidth: 4)
+                                   status: ownStatus, ringColors: accentColors, ringWidth: 4,
+                                   decoration: profile?.equippedRingEffect)
                             .background(Circle().fill(Brand.surface).padding(-5))
                             .overlay(alignment: .bottomTrailing) {
                                 if uploading { ProgressView().controlSize(.small) } else { editPip("camera.fill") }

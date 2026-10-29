@@ -91,6 +91,7 @@ import com.wsgpolar.disband.data.Note
 import com.wsgpolar.disband.data.Profile
 import com.wsgpolar.disband.data.UserStatus
 import com.wsgpolar.disband.state.AppState
+import com.wsgpolar.disband.ui.AvatarDecoration
 import com.wsgpolar.disband.ui.AvatarImage
 import com.wsgpolar.disband.ui.collectAsStateValue
 import com.wsgpolar.disband.ui.components.EmptyState
@@ -399,6 +400,7 @@ private fun ProfileHeroCard(
                     ) {
                         AvatarImage(url = profile.avatarUrl, name = profile.name, size = 82.dp)
                     }
+                    AvatarDecoration(profile.equippedRingEffect, avatarSize = 82.dp, Modifier.align(Alignment.Center))
                     Box(
                         Modifier
                             .align(Alignment.BottomEnd)

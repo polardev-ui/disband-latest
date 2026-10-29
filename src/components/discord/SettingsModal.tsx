@@ -47,11 +47,12 @@ import { GiftModal } from "@/components/gift/GiftModal";
 import { GIFT_PLAN_NAME, giftUrl, monthsLabel, type GiftPlan } from "@/lib/gifts";
 import { apiFetch } from "@/lib/api";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic, IconLanguage, IconCheck, IconExternalLink, IconShield, IconStar, IconSparkle, IconGroup } from "@/components/icons";
+import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconGift, IconBot, IconPalette, IconImage, IconMic, IconMessage, IconBug, IconLeave, IconSearch, IconMusic, IconLanguage, IconCheck, IconExternalLink, IconShield, IconStar, IconSparkle, IconGroup, IconLink } from "@/components/icons";
 import { CURRENCY } from "@/lib/currency";
 import { CurrencyPanel } from "@/components/discord/settings/CurrencyPanel";
 import { StandingPanel } from "@/components/discord/settings/StandingPanel";
 import { CreatorPanel } from "@/components/discord/settings/CreatorPanel";
+import { LinksPanel } from "@/components/discord/settings/LinksPanel";
 import { ManagementPanel } from "@/components/discord/settings/ManagementPanel";
 import { UsernameAvailabilityInput } from "@/components/discord/UsernameAvailabilityInput";
 import { PlatformModerationPanel } from "@/components/discord/PlatformModerationPanel";
@@ -121,6 +122,9 @@ const TABS = [
   { id: "creator" as const, label: "Creator Program", group: "Account", icon: <IconStar size={17} />,
     description: "Connect YouTube, TikTok or Twitch for the Content Creator badge.",
     keywords: "creator youtube tiktok twitch followers subscribers badge verify influencer" },
+  { id: "links" as const, label: "Links", group: "Account", icon: <IconLink size={17} />,
+    description: "Sign in with Disband: apps you've signed in to, and Links for your own site.",
+    keywords: "oauth sign in with disband login developer client id secret redirect authorised apps connected" },
   { id: "bots" as const, label: "Bots", group: "Account", icon: <IconBot size={17} />,
     description: "Create and manage bots that act on your behalf.",
     keywords: "bot token api developer webhook" },
@@ -228,10 +232,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const { t, language, setLanguage } = useI18n();
   const { profile, user, updateProfile, signOut, requestAccountDeletion } = useApp();
   const [isManager, setIsManager] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   useEffect(() => {
     if (!open || !user) return;
-    void getSupabaseClient().rpc("is_platform_manager", { p_user: user.id })
-      .then(({ data }) => setIsManager(data === true));
+    const supabase = getSupabaseClient();
+    void supabase.rpc("is_platform_manager", { p_user: user.id }).then(({ data }) => setIsManager(data === true));
+    void supabase.rpc("is_platform_owner", { p_user: user.id }).then(({ data }) => setIsOwner(data === true));
   }, [open, user]);
   const isAnonymous = profile?.account_type === "anonymous";
 
@@ -977,7 +983,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         exiting={exiting}
         onClose={onClose}
         contentKey={tab}
-        wide
+        wide={tab === "profile"}
         mobileNav={
           <select
             value={tab}
@@ -2136,7 +2142,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               {tab === "wallet" && <CurrencyPanel />}
               {tab === "standing" && <StandingPanel />}
               {tab === "creator" && <CreatorPanel />}
-              {tab === "management" && isManager && <ManagementPanel isOwner={!!profile?.show_owner_badge} />}
+              {tab === "links" && <LinksPanel />}
+              {tab === "management" && isManager && <ManagementPanel isOwner={isOwner} />}
               {tab === "referrals" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">
