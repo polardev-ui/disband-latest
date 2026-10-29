@@ -187,6 +187,86 @@ export async function editWebhookMessage(request: NextRequest, p: Params) {
   return NextResponse.json(toDiscordMessage(data, hook?.server_id ?? ""));
 }
 
+export async function executeGitHubWebhook(request: NextRequest, p: Params) {
+  if (!validParams(p)) return unknownWebhook();
+
+  const burst = rateLimit(`webhook:${p.token}`, 5, 2000);
+  if (!burst.allowed) return discordRateLimited(burst.retryAfterSeconds);
+
+  const service = getServiceSupabase();
+  if (!service) return discordError("503: Service Unavailable", 0, 503);
+
+  const { hook } = await loadHook(p);
+  if (!hook) return unknownWebhook();
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return discordError("Bad Request", 0, 400);
+  }
+
+  const event = request.headers.get("x-github-event") ?? "push";
+  const content = formatGitHubEvent(event, body);
+  if (!content) return new NextResponse(null, { status: 204 });
+
+  const { error } = await service.rpc("webhook_execute", {
+    p_server_key: p.serverKey,
+    p_token: p.token,
+    p_content: content,
+    p_username: "GitHub",
+    p_avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    p_embeds: null,
+    p_parse_users: false,
+    p_parse_everyone: false,
+  });
+  if (error) return webhookRpcError(error);
+
+  const wait = request.nextUrl.searchParams.get("wait");
+  if (wait === "true" || wait === "1") {
+    return NextResponse.json({ ok: true });
+  }
+  return new NextResponse(null, { status: 204 });
+}
+
+function formatGitHubEvent(event: string, body: Record<string, unknown>): string {
+  const repo = (body.repository as { full_name?: string; name?: string } | undefined)?.full_name
+    ?? (body.repository as { name?: string } | undefined)?.name
+    ?? "repository";
+  const sender = (body.sender as { login?: string } | undefined)?.login ?? "someone";
+
+  if (event === "push") {
+    const commits = (body.commits as { message?: string }[] | undefined) ?? [];
+    const branch = String(body.ref ?? "").replace("refs/heads/", "");
+    const lines = commits.slice(0, 5).map((c) => `• ${String(c.message ?? "").split("\\n")[0]}`);
+    const more = commits.length > 5 ? `\\n…and ${commits.length - 5} more` : "";
+    return `**${sender}** pushed ${commits.length} commit${commits.length === 1 ? "" : "s"} to \`${branch}\` in **${repo}**${lines.length ? "\\n" + lines.join("\\n") + more : ""}`;
+  }
+  if (event === "pull_request") {
+    const pr = body.pull_request as { number?: number; title?: string; merged?: boolean; state?: string; html_url?: string } | undefined;
+    const action = String(body.action ?? "updated");
+    const verb = action === "closed" && pr?.merged ? "merged" : action;
+    return `**${sender}** ${verb} pull request #${pr?.number ?? ""} in **${repo}**: ${pr?.title ?? ""}`;
+  }
+  if (event === "issues") {
+    const issue = body.issue as { number?: number; title?: string } | undefined;
+    const action = String(body.action ?? "updated");
+    return `**${sender}** ${action} issue #${issue?.number ?? ""} in **${repo}**: ${issue?.title ?? ""}`;
+  }
+  if (event === "release") {
+    const release = body.release as { tag_name?: string; name?: string } | undefined;
+    const action = String(body.action ?? "published");
+    return `**${sender}** ${action} release \`${release?.tag_name ?? release?.name ?? ""}\` in **${repo}**`;
+  }
+  if (event === "star" || event === "watch") {
+    return `**${sender}** starred **${repo}**`;
+  }
+  if (event === "fork") {
+    return `**${sender}** forked **${repo}**`;
+  }
+  return `GitHub event \`${event}\` in **${repo}** by ${sender}`;
+}
+
 export async function deleteWebhookMessage(_request: NextRequest, p: Params) {
   if (!validParams(p)) return unknownWebhook();
   const id = messageId(p);

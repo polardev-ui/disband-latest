@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import type { ChatMessageData } from "./ChatMessage";
 import { toReplyAuthor, type ReplyPreview } from "@/lib/messages";
 
@@ -27,6 +27,20 @@ export function MessageActionBar({
   onOpenReactionPicker,
   onMoreActions,
 }: MessageActionBarProps) {
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    if (!hovered || !onMoreActions) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Shift" && !e.repeat) {
+        moreRef.current?.click();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hovered, onMoreActions]);
+
   const replyPreview: ReplyPreview | null = useMemo(() => {
     if (!message.id) return null;
     return {
