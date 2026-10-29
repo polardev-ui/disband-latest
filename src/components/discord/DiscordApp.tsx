@@ -1492,6 +1492,9 @@ export function DiscordApp() {
     created_at: string;
     mentions?: string[];
     author?: Profile | null;
+    embeds?: import("@/lib/embeds").Embed[] | null;
+    webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
+    reply_to_deleted?: boolean;
   }): ChatMessageData => ({
     id: m.id,
     author_id: m.author_id,
@@ -1512,6 +1515,11 @@ export function DiscordApp() {
     created_at: m.created_at,
     mentions: m.mentions ?? [],
     author: m.author ?? undefined,
+    // Webhook and bot posts (GitHub, CI) carry their content in embeds; left
+    // out here they reached the renderer as bare one-line text.
+    embeds: m.embeds ?? null,
+    webhook: m.webhook ?? null,
+    reply_to_deleted: m.reply_to_deleted ?? false,
   });
 
   const channelMessages = useMemo(
