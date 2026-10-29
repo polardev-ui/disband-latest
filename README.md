@@ -69,8 +69,8 @@ Check the [Releases page](https://github.com/polardev-ui/disband-latest/releases
 ## Project Links
 
 - **Web App:** [www.disband.dev](https://www.disband.dev)
-- **Source Code:** [github.com/polardev-ui/disband-latest](https://github.com/polardev-ui/disband-latest)
-- **Desktop Releases:** [github.com/polardev-ui/disband-latest/releases](https://github.com/polardev-ui/disband-latest/releases)
+- **Source Code:** [https://github.com/polardev-ui/disband-latest](https://github.com/polardev-ui/disband-latest)
+- **Desktop Releases:** [https://github.com/polardev-ui/disband-latest/releases](https://github.com/polardev-ui/disband-latest/releases)
 
 ---
 
