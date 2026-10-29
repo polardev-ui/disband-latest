@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { normalizeEmbeds } from "@/lib/embeds";
+import { normalizeEmbeds, safeEmbedUrl, type Embed } from "@/lib/embeds";
 import {
   DISCORD_CODES,
   WEBHOOK_CONTENT_MAX,
@@ -217,16 +217,20 @@ export async function executeGitHubWebhook(request: NextRequest, p: Params) {
   }
 
   const event = request.headers.get("x-github-event") ?? "push";
-  const { content, embeds } = formatGitHubEvent(event, body);
-  if (!content && !embeds) return new NextResponse(null, { status: 204 });
+  const formatted = formatGitHubEvent(event, body);
+  // Keep the same validation/limits the Discord-compatible endpoint uses so
+  // GitHub payloads can never write a malformed embed row.
+  const norm = normalizeEmbeds(formatted.embeds);
+  const embeds = norm.ok ? norm.embeds : [];
+  if (!formatted.content && !embeds.length) return new NextResponse(null, { status: 204 });
 
   const { error } = await service.rpc("webhook_execute", {
     p_server_key: p.serverKey,
     p_token: p.token,
-    p_content: content,
+    p_content: formatted.content,
     p_username: "GitHub",
     p_avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-    p_embeds: embeds,
+    p_embeds: embeds.length ? embeds : null,
     p_parse_users: false,
     p_parse_everyone: false,
   });
@@ -239,28 +243,99 @@ export async function executeGitHubWebhook(request: NextRequest, p: Params) {
   return new NextResponse(null, { status: 204 });
 }
 
-function formatGitHubEvent(event: string, body: Record<string, unknown>): { content: string; embeds: unknown[] | null } {
-  const repo = (body.repository as { full_name?: string; name?: string } | undefined)?.full_name
-    ?? (body.repository as { name?: string } | undefined)?.name
-    ?? "repository";
-  const sender = (body.sender as { login?: string } | undefined)?.login ?? "someone";
-  const repoUrl = (body.repository as { html_url?: string } | undefined)?.html_url;
+type GitHubRepo = {
+  full_name?: string;
+  name?: string;
+  html_url?: string;
+  description?: string | null;
+  stargazers_count?: number;
+  forks_count?: number;
+};
+
+type GitHubUser = { login?: string; avatar_url?: string };
+
+function formatGitHubEvent(event: string, body: Record<string, unknown>): { content: string; embeds: Embed[] | null } {
+  const repository = body.repository as GitHubRepo | undefined;
+  const repo = repository?.full_name ?? repository?.name ?? "repository";
+  const repoUrl = repository?.html_url;
+  const senderObj = body.sender as GitHubUser | undefined;
+  const sender = senderObj?.login ?? "someone";
+  const senderIcon = safeEmbedUrl(senderObj?.avatar_url);
+  // Discord-style author line: who did the thing, with their GitHub avatar.
+  const author = { name: sender, icon_url: senderIcon };
 
   if (event === "push") {
     const commits = (body.commits as { message?: string; url?: string }[] | undefined) ?? [];
-    const branch = String(body.ref ?? "").replace("refs/heads/", "");
+    const ref = String(body.ref ?? "");
+    const isTag = ref.startsWith("refs/tags/");
+    const createdAt = body.created === true;
+    const deletedAt = body.deleted === true;
+    const name = ref.replace(/^refs\/(heads|tags)\//, "");
+
+    // GitHub sends tag pushes as a push event with zero commits. Showing
+    // "pushed 0 commits to refs/tags/..." and no embed made tag releases look
+    // broken; describe the tag itself instead.
+    if (isTag) {
+      const verb = deletedAt ? "deleted" : createdAt ? "created" : "updated";
+      const tagUrl = repoUrl ? `${repoUrl}/tree/${encodeURIComponent(name)}` : undefined;
+      return {
+        content: `**${sender}** ${verb} tag \`${name}\` in **${repo}**`,
+        embeds: [
+          {
+            title: `Tag ${name}`,
+            url: tagUrl,
+            description: deletedAt ? "This tag was deleted." : `Tag ${createdAt ? "created" : "updated"} on ${repo}.`,
+            color: deletedAt ? 0xda3633 : 0x1f6feb,
+            author,
+            footer: { text: `github.com/${repo}` },
+          },
+        ],
+      };
+    }
+
+    const count = commits.length;
     const lines = commits.slice(0, 5).map((c) => `• ${String(c.message ?? "").split("\n")[0]}`);
-    const more = commits.length > 5 ? `\n…and ${commits.length - 5} more` : "";
-    const content = `**${sender}** pushed ${commits.length} commit${commits.length === 1 ? "" : "s"} to \`${branch}\` in **${repo}**`;
-    const embed = {
-      title: `${commits.length} commit${commits.length === 1 ? "" : "s"} to ${branch}`,
-      description: lines.join("\n") + more || "No commit messages",
-      url: repoUrl,
-      color: 0x24292e,
-      footer: { text: sender },
+    const more = count > 5 ? `\n…and ${count - 5} more` : "";
+    const content = deletedAt
+      ? `**${sender}** deleted branch \`${name}\` in **${repo}**`
+      : createdAt
+        ? `**${sender}** created branch \`${name}\` in **${repo}**`
+        : `**${sender}** pushed ${count} commit${count === 1 ? "" : "s"} to \`${name}\` in **${repo}**`;
+    const compare = safeEmbedUrl(body.compare);
+    const embed: Embed = {
+      title: deletedAt
+        ? `Branch deleted: ${name}`
+        : createdAt
+          ? `Branch created: ${name}`
+          : `${count} commit${count === 1 ? "" : "s"} to ${name}`,
+      description: count ? lines.join("\n") + more : deletedAt ? undefined : "No new commits.",
+      url: compare ?? repoUrl,
+      color: deletedAt ? 0xda3633 : 0x24292e,
+      author,
+      footer: { text: `github.com/${repo}` },
     };
-    return { content, embeds: commits.length ? [embed] : null };
+    return { content, embeds: [embed] };
   }
+
+  if (event === "create" || event === "delete") {
+    const refType = String(body.ref_type ?? "branch");
+    const name = String(body.ref ?? "");
+    const label = refType === "tag" ? "tag" : "branch";
+    const verb = event === "create" ? "created" : "deleted";
+    return {
+      content: `**${sender}** ${verb} ${label} \`${name}\` in **${repo}**`,
+      embeds: [
+        {
+          title: `${label === "tag" ? "Tag" : "Branch"} ${verb}: ${name}`,
+          url: repoUrl ? `${repoUrl}/tree/${encodeURIComponent(name)}` : undefined,
+          color: event === "create" ? 0x238636 : 0xda3633,
+          author,
+          footer: { text: `github.com/${repo}` },
+        },
+      ],
+    };
+  }
+
   if (event === "pull_request") {
     const pr = body.pull_request as { number?: number; title?: string; merged?: boolean; state?: string; html_url?: string; body?: string } | undefined;
     const action = String(body.action ?? "updated");
@@ -271,10 +346,32 @@ function formatGitHubEvent(event: string, body: Record<string, unknown>): { cont
       description: (pr?.body ?? "").slice(0, 300) || undefined,
       url: pr?.html_url,
       color: pr?.merged ? 0x8957e5 : pr?.state === "open" ? 0x238636 : 0xda3633,
+      author,
       footer: { text: `${sender} · ${verb}` },
     };
     return { content, embeds: [embed] };
   }
+
+  if (event === "pull_request_review") {
+    const review = body.review as { state?: string; html_url?: string; body?: string } | undefined;
+    const pr = body.pull_request as { number?: number; title?: string; html_url?: string } | undefined;
+    const state = String(review?.state ?? "commented").toLowerCase();
+    const verb = state === "approved" ? "approved" : state === "changes_requested" ? "requested changes on" : "reviewed";
+    return {
+      content: `**${sender}** ${verb} PR #${pr?.number ?? ""} in **${repo}**: ${pr?.title ?? ""}`,
+      embeds: [
+        {
+          title: `Review: ${pr?.title ?? `PR #${pr?.number ?? ""}`}`,
+          description: (review?.body ?? "").slice(0, 300) || `${sender} ${verb} this pull request.`,
+          url: review?.html_url ?? pr?.html_url,
+          color: state === "approved" ? 0x238636 : state === "changes_requested" ? 0xda3633 : 0x1f6feb,
+          author,
+          footer: { text: `${sender} · ${verb}` },
+        },
+      ],
+    };
+  }
+
   if (event === "issues") {
     const issue = body.issue as { number?: number; title?: string; html_url?: string; body?: string } | undefined;
     const action = String(body.action ?? "updated");
@@ -284,33 +381,143 @@ function formatGitHubEvent(event: string, body: Record<string, unknown>): { cont
       description: (issue?.body ?? "").slice(0, 300) || undefined,
       url: issue?.html_url,
       color: action === "closed" ? 0x8957e5 : 0x238636,
+      author,
       footer: { text: `${sender} · ${action}` },
     };
     return { content, embeds: [embed] };
   }
+
+  if (event === "issue_comment") {
+    const issue = body.issue as { number?: number; title?: string; html_url?: string } | undefined;
+    const comment = body.comment as { html_url?: string; body?: string } | undefined;
+    const action = String(body.action ?? "created");
+    return {
+      content: `**${sender}** ${action} a comment on #${issue?.number ?? ""} in **${repo}**`,
+      embeds: [
+        {
+          title: issue?.title ?? `Comment on #${issue?.number ?? ""}`,
+          description: (comment?.body ?? "").slice(0, 300) || undefined,
+          url: comment?.html_url ?? issue?.html_url,
+          color: 0x1f6feb,
+          author,
+          footer: { text: `${sender} · ${action}` },
+        },
+      ],
+    };
+  }
+
   if (event === "release") {
-    const release = body.release as { tag_name?: string; name?: string; html_url?: string; body?: string } | undefined;
+    const release = body.release as { tag_name?: string; name?: string; html_url?: string; body?: string; published_at?: string } | undefined;
     const action = String(body.action ?? "published");
-    const content = `**${sender}** ${action} release \`${release?.tag_name ?? release?.name ?? ""}\` in **${repo}**`;
+    const tag = release?.tag_name ?? release?.name ?? "";
+    const content = `**${sender}** ${action} release \`${tag}\` in **${repo}**`;
     const embed = {
       title: release?.name ?? release?.tag_name ?? "Release",
       description: (release?.body ?? "").slice(0, 300) || undefined,
       url: release?.html_url,
-      color: 0x1f6feb,
+      color: action === "deleted" ? 0xda3633 : 0x1f6feb,
+      timestamp: release?.published_at,
+      author,
       footer: { text: `${sender} · ${action}` },
     };
     return { content, embeds: [embed] };
   }
+
+  if (event === "workflow_run") {
+    const run = body.workflow_run as {
+      name?: string;
+      display_title?: string;
+      conclusion?: string | null;
+      status?: string;
+      html_url?: string;
+      head_branch?: string;
+    } | undefined;
+    const action = String(body.action ?? "completed");
+    const conclusion = run?.conclusion ?? run?.status ?? "unknown";
+    const failed = conclusion === "failure" || conclusion === "timed_out" || conclusion === "cancelled";
+    const title = run?.display_title ? `${run.name ?? "Workflow"}: ${run.display_title}` : run?.name ?? "Workflow run";
+    return {
+      content: `**${sender}** workflow \`${run?.name ?? "run"}\` ${action} on \`${run?.head_branch ?? "unknown"}\` in **${repo}** — **${conclusion}**`,
+      embeds: [
+        {
+          title,
+          description: `Result: **${conclusion}**`,
+          url: run?.html_url,
+          color: failed ? 0xda3633 : conclusion === "success" ? 0x238636 : 0xf0b232,
+          author,
+          footer: { text: `${sender} · ${action}` },
+        },
+      ],
+    };
+  }
+
   if (event === "star" || event === "watch") {
-    const content = `**${sender}** starred **${repo}**`;
-    return { content, embeds: null };
+    const action = String(body.action ?? "created");
+    const removed = action === "deleted";
+    return {
+      content: `**${sender}** ${removed ? "removed a star from" : "starred"} **${repo}**`,
+      embeds: [
+        {
+          title: removed ? `Star removed from ${repo}` : `New star on ${repo}`,
+          description: repository?.description ?? undefined,
+          url: repoUrl,
+          color: removed ? 0xda3633 : 0xf0b232,
+          author,
+          footer: {
+            text: repository?.stargazers_count != null ? `${repository.stargazers_count} stargazers` : `github.com/${repo}`,
+          },
+        },
+      ],
+    };
   }
+
   if (event === "fork") {
-    const content = `**${sender}** forked **${repo}**`;
-    return { content, embeds: null };
+    const fork = body.forkee as { full_name?: string; html_url?: string } | undefined;
+    return {
+      content: `**${sender}** forked **${repo}**${fork?.full_name ? ` to **${fork.full_name}**` : ""}`,
+      embeds: [
+        {
+          title: `Fork: ${fork?.full_name ?? repo}`,
+          description: repository?.description ?? undefined,
+          url: fork?.html_url ?? repoUrl,
+          color: 0x1f6feb,
+          author,
+          footer: { text: `github.com/${repo}` },
+        },
+      ],
+    };
   }
+
+  if (event === "ping") {
+    return {
+      content: `GitHub webhook connected to **${repo}**`,
+      embeds: [
+        {
+          title: "Webhook connected",
+          description: String(body.zen ?? "GitHub successfully delivered a ping event to this channel."),
+          url: repoUrl,
+          color: 0x238636,
+          author,
+          footer: { text: `github.com/${repo}` },
+        },
+      ],
+    };
+  }
+
   const content = `GitHub event \`${event}\` in **${repo}** by ${sender}`;
-  return { content, embeds: null };
+  return {
+    content,
+    embeds: [
+      {
+        title: `GitHub event: ${event}`,
+        description: `\`${event}\` event received from ${repo}.`,
+        url: repoUrl,
+        color: 0x24292e,
+        author,
+        footer: { text: `github.com/${repo}` },
+      },
+    ],
+  };
 }
 export async function deleteWebhookMessage(_request: NextRequest, p: Params) {
   if (!validParams(p)) return unknownWebhook();
