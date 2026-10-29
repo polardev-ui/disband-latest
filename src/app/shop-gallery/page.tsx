@@ -98,6 +98,6 @@ export default function ShopGalleryPage() {
       </div>
       <footer className="studio-footer"><span>Make yourself at home.</span><span>DISBAND SHOP</span></footer>
     </div>
-    <ShopModal open={shopOpen} onClose={() => setShopOpen(false)} self={self} initialCategory={category} />
+    {shopOpen && <ShopModal open={shopOpen} onClose={() => setShopOpen(false)} self={self} initialCategory={category} />}
   </main></CosmeticMotionContext.Provider>;
 }
