@@ -31,6 +31,8 @@ export interface Activity {
   large_text?: string | null;
   small_image?: string | null;
   small_text?: string | null;
+  /** Up to two link buttons a game offers ("Follow on Medal"). https only. */
+  buttons?: { label: string; url: string }[] | null;
   source: ActivitySource;
   /** Discord application id or Disband Link id, when the game sent one. */
   application_id?: string | null;
@@ -138,6 +140,13 @@ export function sanitizeActivity(
     large_text: text(r.large_text ?? assets.large_text, 128),
     small_image: image(r.small_image ?? assets.small_image),
     small_text: text(r.small_text ?? assets.small_text, 128),
+    buttons: Array.isArray(r.buttons)
+      ? (r.buttons as unknown[])
+          .map((b) => (b && typeof b === "object" ? b as Record<string, unknown> : null))
+          .filter((b): b is Record<string, unknown> => !!b && !!text(b.label, 32) && !!image(b.url))
+          .slice(0, 2)
+          .map((b) => ({ label: text(b.label, 32)!, url: image(b.url)! }))
+      : null,
     source: opts.source,
     application_id: opts.applicationId ?? null,
     expires_at: new Date(Date.now() + (opts.ttlMs ?? ACTIVITY_TTL_MS)).toISOString(),

@@ -10,6 +10,7 @@ import {
 import { randomInt, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { ArcadeError, arcadeInitialState, arcadeMove, arcadeView, isArcadeKind } from "@/lib/activity-arcade.server";
 import type {
   ActivityRoom,
   ActivityKind,
@@ -42,7 +43,15 @@ const KINDS: ActivityKind[] = [
   "would_you_rather",
   "four_in_row",
   "reversi",
+  "hangman",
+  "emoji_riddle",
+  "scramble",
+  "minesweeper",
+  "higher_lower",
 ];
+
+/** Every game is open for a day; after that only its results can be viewed. */
+const LIFETIME_MS = 24 * 3600_000;
 const SCOPES: ActivityScope[] = ["channel", "dm", "group", "public"];
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1101,7 +1110,9 @@ export async function getActivityById(
     },
   };
 
-  if (isBoardKind(raw.kind)) {
+  if (isArcadeKind(raw.kind)) {
+    base.arcade = arcadeView(raw.kind, raw.state, (myRow?.state ?? {}) as Record<string, unknown>, !!myRow?.finished || expired);
+  } else if (isBoardKind(raw.kind)) {
     const board = raw.state as unknown as BoardState;
     base.board = {
       ...board,
@@ -1206,7 +1217,9 @@ export async function createActivity(
   }
 
   let state: Record<string, unknown>;
-  if (isBoardKind(kindValue)) {
+  if (isArcadeKind(kindValue)) {
+    state = arcadeInitialState(kindValue);
+  } else if (isBoardKind(kindValue)) {
     state = { ...initialBoard(kindValue) };
   } else if (kindValue === "wordle") {
     state = { answer: pickOne(WORDLE_ANSWERS), maxGuesses: 6 };
@@ -1226,9 +1239,7 @@ export async function createActivity(
       scope_id: scopeIdValue,
       host_id: userId,
       state,
-      expires_at: new Date(
-        Date.now() + (isBoardKind(kindValue) ? 2 * 60 * 60_000 : 7 * 86400_000),
-      ).toISOString(),
+      expires_at: new Date(Date.now() + LIFETIME_MS).toISOString(),
     })
     .select("id")
     .single();
@@ -1578,16 +1589,58 @@ export async function performActivityAction(
     return getActivityById(raw.id, userId);
   }
   const action = typeof body.action === "string" ? body.action : "";
+  if (isArcadeKind(raw.kind) && action === "arcade_move") {
+    const player = await requirePlayer(service, raw.id, userId);
+    if (player.finished) throw new ActivityError("You've finished this one. Check the results.", 409);
+    let outcome;
+    try {
+      outcome = arcadeMove(raw.kind, raw.state, (player.state ?? {}) as Record<string, unknown>, body);
+    } catch (error) {
+      if (error instanceof ArcadeError) throw new ActivityError(error.message, 400);
+      throw error;
+    }
+    const { state, score, finished, won } = outcome;
+    await commitMove(
+      service,
+      raw,
+      userId,
+      [{ userId, state, score, finished, won }],
+      finished ? [{ userId, plays: 1, wins: won ? 1 : 0, points: score, best: score }] : [],
+    );
+    await closeIfEveryoneFinished(service, raw.id);
+    return getActivityById(raw.id, userId);
+  }
   if (raw.kind === "wordle" && action === "wordle_guess")
-    return playWordle(service, raw, userId, body);
+    return closeAfter(service, raw.id, userId, playWordle(service, raw, userId, body));
   if (raw.kind === "eight_ball" && action === "eight_ball_ask")
     return askEightBall(service, raw, userId, body);
   if (raw.kind === "trivia" && action === "trivia_answer")
-    return answerTriviaQuestion(service, raw, userId, body);
+    return closeAfter(service, raw.id, userId, answerTriviaQuestion(service, raw, userId, body));
   if (raw.kind === "would_you_rather" && action === "wyr_vote") {
-    return voteWouldYouRather(service, raw, userId, body);
+    return closeAfter(service, raw.id, userId, voteWouldYouRather(service, raw, userId, body));
   }
   throw new ActivityError("That action isn't available in this activity.", 400);
+}
+
+/**
+ * A game ends once everyone who joined has finished; it can't wait a full
+ * day for players who are done. Its results stay viewable.
+ */
+async function closeIfEveryoneFinished(service: SupabaseClient, id: string): Promise<boolean> {
+  const players = await loadPlayers(service, id);
+  if (players.length === 0 || players.some((p) => !p.finished)) return false;
+  await service.from("activity_sessions").update({ status: "closed" }).eq("id", id).eq("status", "open");
+  return true;
+}
+
+async function closeAfter(
+  service: SupabaseClient,
+  id: string,
+  userId: string,
+  move: Promise<ActivitySession>,
+): Promise<ActivitySession> {
+  const result = await move;
+  return (await closeIfEveryoneFinished(service, id)) ? getActivityById(id, userId) : result;
 }
 
 export async function getActivityLeaderboard(

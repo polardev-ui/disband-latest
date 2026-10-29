@@ -21,8 +21,11 @@ async function userIdFor(username: string): Promise<string | null> {
   return (data as { id: string } | null)?.id ?? null;
 }
 
-/** Disband Management: the team, space suspensions and strikes. Managers only. */
-export function ManagementPanel({ isOwner }: { isOwner: boolean }) {
+/**
+ * Disband Management. Managers get the team, space suspensions, strikes and
+ * bots; staff get strikes and bots.
+ */
+export function ManagementPanel({ isOwner, isManager = true }: { isOwner: boolean; isManager?: boolean }) {
   const [team, setTeam] = useState<Member[]>([]);
   const [note, setNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [grantName, setGrantName] = useState("");
@@ -43,7 +46,7 @@ export function ManagementPanel({ isOwner }: { isOwner: boolean }) {
     if (error) say("error", error.message);
     else setTeam((data as Member[]) ?? []);
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (isManager) void load(); }, [load, isManager]);
 
   async function setRole(userId: string, role: Role, grant: boolean) {
     const { error } = await getSupabaseClient().rpc("manager_set_role", { p_user: userId, p_role: role, p_grant: grant });
@@ -102,6 +105,7 @@ export function ManagementPanel({ isOwner }: { isOwner: boolean }) {
     <div className="space-y-6">
       {note && <p role="status" className={`rounded-md px-3 py-2 text-[14px] ${note.tone === "ok" ? "bg-status-online/15 text-status-online" : "bg-status-dnd/15 text-status-dnd"}`}>{note.text}</p>}
 
+      {isManager && <>
       <SettingsSection title="Team" description={isOwner ? "Appoint managers, staff and moderators." : "Appoint staff and moderators. Only the owner appoints managers."}>
         <div className="flex flex-wrap gap-2 border-b border-divider px-5 py-4">
           <input value={grantName} onChange={(e) => setGrantName(e.target.value)} placeholder="username" className={`${settingsInputClass} max-w-[220px]`} />
@@ -146,6 +150,10 @@ export function ManagementPanel({ isOwner }: { isOwner: boolean }) {
         </div>
       </SettingsSection>
 
+      </>}
+
+      <BotModeration />
+
       <SettingsSection title="Issue a strike" description="Strikes last 90 days and move the person's Account Standing.">
         <div className="space-y-3 px-5 py-4">
           <div className="flex flex-wrap gap-2">
@@ -170,5 +178,152 @@ export function ManagementPanel({ isOwner }: { isOwner: boolean }) {
         </div>
       </SettingsSection>
     </div>
+  );
+}
+
+interface ModBot {
+  id: string; name: string; avatar_url: string | null; description: string | null; scopes: string[];
+  revoked_at: string | null; created_at: string; last_seen_at: string | null; installs?: number;
+  owner: { id?: string; username: string | null; display_name: string | null } | null;
+}
+interface BotDetail {
+  bot: ModBot;
+  owner: { username: string | null; display_name: string | null } | null;
+  installs: { server_id: string; scopes: string[]; created_at: string; server: { name: string; suspended_at: string | null } | null }[];
+  messages: { id: string; content: string | null; created_at: string; channel: string | null }[];
+  log: { action: string; reason: string; created_at: string }[];
+}
+
+const shortDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "never");
+
+/** Staff: find a bot, look at what it does, warn its owner or switch it off. */
+function BotModeration() {
+  const [query, setQuery] = useState("");
+  const [bots, setBots] = useState<ModBot[] | null>(null);
+  const [open, setOpen] = useState<BotDetail | null>(null);
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const search = useCallback(async (q: string) => {
+    const res = await apiFetch(`/api/admin/bots?q=${encodeURIComponent(q)}`);
+    const json = (await res.json().catch(() => ({}))) as { bots?: ModBot[]; error?: string };
+    if (!res.ok) setNote({ tone: "error", text: json.error ?? "Couldn't search bots." });
+    setBots(json.bots ?? []);
+  }, []);
+  useEffect(() => { void search(""); }, [search]);
+
+  async function openBot(id: string) {
+    setNote(null);
+    setReason("");
+    const res = await apiFetch(`/api/admin/bots?id=${id}`);
+    const json = (await res.json().catch(() => ({}))) as BotDetail & { error?: string };
+    if (!res.ok) return setNote({ tone: "error", text: json.error ?? "Couldn't open that bot." });
+    setOpen(json);
+  }
+
+  async function act(action: "warn" | "deactivate" | "reactivate") {
+    if (!open) return;
+    if (action === "deactivate" && !(await confirmDialog({ title: `Deactivate ${open.bot.name}?`, body: "Its token stops working at once in every space. The owner is told why.", confirmLabel: "Deactivate" }))) return;
+    setBusy(true);
+    const res = await apiFetch("/api/admin/bots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bot_id: open.bot.id, action, reason }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    setBusy(false);
+    if (!res.ok) return setNote({ tone: "error", text: json.error ?? "That didn't work." });
+    setNote({ tone: "ok", text: action === "warn" ? "Owner warned." : action === "deactivate" ? "Bot deactivated and owner told." : "Bot reactivated." });
+    void openBot(open.bot.id);
+    void search(query);
+  }
+
+  return (
+    <SettingsSection title="Bots" description="Check bots against the Terms of Service. Search by name, owner username, or bot ID.">
+      <div className="space-y-3 px-5 py-4">
+        {note && <p role="status" className={`rounded-md px-3 py-2 text-[14px] ${note.tone === "ok" ? "bg-status-online/15 text-status-online" : "bg-status-dnd/15 text-status-dnd"}`}>{note.text}</p>}
+        <form onSubmit={(e) => { e.preventDefault(); void search(query); }} className="flex gap-2">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Bot name, owner or ID" className={settingsInputClass} />
+          <button type="submit" className={btn.primary}>Search</button>
+        </form>
+
+        {open ? (
+          <div className="rounded-lg bg-bg-secondary p-4">
+            <div className="flex items-start gap-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[16px] font-semibold text-header-primary">
+                  {open.bot.name}
+                  {open.bot.revoked_at && <span className="ml-2 rounded bg-status-dnd/20 px-1.5 py-0.5 text-[11px] font-bold uppercase text-status-dnd">Off</span>}
+                </span>
+                <span className="block text-[13px] text-text-muted">
+                  Owner {open.owner?.display_name || open.owner?.username || "unknown"} (@{open.owner?.username ?? "?"}) · Made {shortDate(open.bot.created_at)} · Last seen {shortDate(open.bot.last_seen_at)}
+                </span>
+                <code className="mt-1 block text-[12px] text-text-muted">{open.bot.id}</code>
+              </span>
+              <button type="button" className="text-[13px] text-text-link hover:underline" onClick={() => setOpen(null)}>Back</button>
+            </div>
+            {open.bot.description && <p className="mt-2 text-[14px] text-text-normal">{open.bot.description}</p>}
+            <p className="mt-2 text-[13px] text-text-muted">Permissions: {open.bot.scopes.join(", ") || "none"}</p>
+
+            <p className="mt-4 text-[12px] font-bold uppercase text-header-secondary">Installed in {open.installs.length} {open.installs.length === 1 ? "space" : "spaces"}</p>
+            <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto text-[13px] text-text-normal">
+              {open.installs.map((i) => (
+                <li key={i.server_id} className="truncate">{i.server?.name ?? i.server_id}{i.server?.suspended_at ? " (suspended)" : ""} · since {shortDate(i.created_at)}</li>
+              ))}
+            </ul>
+
+            <p className="mt-4 text-[12px] font-bold uppercase text-header-secondary">Recent messages it posted</p>
+            <ul className="mt-1 max-h-56 space-y-1.5 overflow-y-auto">
+              {open.messages.length === 0 && <li className="text-[13px] text-text-muted">None in spaces.</li>}
+              {open.messages.map((m) => (
+                <li key={m.id} className="rounded bg-bg-tertiary px-2.5 py-1.5 text-[13px]">
+                  <span className="text-text-muted">#{m.channel ?? "?"} · {shortDate(m.created_at)}</span>
+                  <p className="whitespace-pre-wrap break-words text-text-normal">{m.content || "(attachment)"}</p>
+                </li>
+              ))}
+            </ul>
+
+            {open.log.length > 0 && (
+              <>
+                <p className="mt-4 text-[12px] font-bold uppercase text-header-secondary">Staff history</p>
+                <ul className="mt-1 space-y-0.5 text-[13px] text-text-normal">
+                  {open.log.map((l, i) => <li key={i}>{shortDate(l.created_at)} · <span className="font-semibold capitalize">{l.action}</span>: {l.reason}</li>)}
+                </ul>
+              </>
+            )}
+
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason the owner will read" className={`${settingsInputClass} mt-4`} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={busy || !reason.trim()} className={btn.secondary} onClick={() => void act("warn")}>Warn owner</button>
+              {open.bot.revoked_at ? (
+                <button type="button" disabled={busy || !reason.trim()} className={btn.primary} onClick={() => void act("reactivate")}>Reactivate</button>
+              ) : (
+                <button type="button" disabled={busy || !reason.trim()} className={btn.danger} onClick={() => void act("deactivate")}>Deactivate</button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-divider rounded-lg bg-bg-secondary">
+            {bots === null && <li className="h-12 animate-pulse" />}
+            {bots?.length === 0 && <li className="px-3 py-3 text-[14px] text-text-muted">No bots found.</li>}
+            {bots?.map((b) => (
+              <li key={b.id}>
+                <button type="button" onClick={() => void openBot(b.id)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-interactive-hover">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-header-primary">
+                      {b.name}
+                      {b.revoked_at && <span className="ml-2 rounded bg-status-dnd/20 px-1.5 py-0.5 text-[11px] font-bold uppercase text-status-dnd">Off</span>}
+                    </span>
+                    <span className="block truncate text-[13px] text-text-muted">@{b.owner?.username ?? "?"} · {b.installs ?? 0} {(b.installs ?? 0) === 1 ? "space" : "spaces"} · last seen {shortDate(b.last_seen_at)}</span>
+                  </span>
+                  <span className="text-[13px] text-text-link">Review</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </SettingsSection>
   );
 }

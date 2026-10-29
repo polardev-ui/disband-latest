@@ -18,23 +18,35 @@ export function sharesActivity(): boolean {
   }
 }
 
-interface DetectedGame { name: string; started_at: number }
+interface DetectedGame { name: string; started_at: number; app_id?: string | null; icon?: string | null }
 interface RpcActivity { client_id: string; pid: number | null; activity: Record<string, unknown> | null }
 
-const names = new Map<string, Promise<string | null>>();
+interface AppInfo { name: string; icon_url: string | null; assets?: Record<string, string> }
+const apps = new Map<string, Promise<AppInfo | null>>();
 
-/** The game behind a Rich Presence application id (cached for the session). */
-function appName(clientId: string): Promise<string | null> {
+/** The game behind a Rich Presence application id: name, logo, image set (cached for the session). */
+function appInfo(clientId: string): Promise<AppInfo | null> {
   if (!clientId) return Promise.resolve(null);
-  let hit = names.get(clientId);
+  let hit = apps.get(clientId);
   if (!hit) {
     hit = apiFetch(`/api/rpc/app/${encodeURIComponent(clientId)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { name?: string } | null) => j?.name ?? null)
+      .then((j: AppInfo | null) => (j?.name ? j : null))
       .catch(() => null);
-    names.set(clientId, hit);
+    apps.set(clientId, hit);
   }
   return hit;
+}
+
+/**
+ * A Rich Presence image as a URL. Games send an asset name ("map_dust2"),
+ * an external "mp:" image Discord proxies, or a plain https URL.
+ */
+function imageUrl(key: unknown, app: AppInfo | null): string | null {
+  if (typeof key !== "string" || !key) return null;
+  if (key.startsWith("https://")) return key;
+  if (key.startsWith("mp:")) return `https://media.discordapp.net/${key.slice(3)}`;
+  return app?.assets?.[key] ?? null;
 }
 
 /**
@@ -61,13 +73,25 @@ export function useGameActivity() {
       }
       const live = [...rpc.values()].reverse().find((r) => r.activity);
       if (live?.activity) {
-        const name = (await appName(live.client_id)) ?? game?.name ?? null;
+        const app = await appInfo(live.client_id);
         if (!alive) return;
-        setGameActivity(sanitizeActivity(live.activity, { name, source: "rpc", applicationId: live.client_id }));
+        const a = live.activity;
+        const assets = (a.assets ?? {}) as Record<string, unknown>;
+        // Like Discord: the game's art large, and its logo as the small badge
+        // when the game didn't pick a small image of its own. No art: the logo.
+        const large = imageUrl(assets.large_image, app);
+        const small = imageUrl(assets.small_image, app);
+        setGameActivity(sanitizeActivity(
+          { ...a, assets: { ...assets, large_image: large ?? app?.icon_url ?? game?.icon ?? null, small_image: small ?? (large ? app?.icon_url ?? null : null) } },
+          { name: app?.name ?? game?.name ?? null, source: "rpc", applicationId: live.client_id },
+        ));
         return;
       }
       if (game) {
-        setGameActivity(sanitizeActivity({ started_at: game.started_at * 1000 }, { name: game.name, source: "process" }));
+        setGameActivity(sanitizeActivity(
+          { started_at: game.started_at * 1000, large_image: game.icon ?? null },
+          { name: game.name, source: "process", applicationId: game.app_id ?? null },
+        ));
         return;
       }
       setGameActivity(null);

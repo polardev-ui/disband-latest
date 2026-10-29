@@ -8,7 +8,6 @@ import {
 } from "@/lib/activities";
 import { subscribeActivityUpdated } from "@/lib/activity-events";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconChevron } from "@/components/icons";
 import { ActivityGlyph } from "./ActivityGlyph";
 
 interface ActivityCardProps {
@@ -168,6 +167,31 @@ export function ActivityCard({ activityId, onOpen }: ActivityCardProps) {
   );
 }
 
+function ArcadePreview({ activity }: { activity: ActivitySession }) {
+  const view = activity.arcade;
+  if (!view) return null;
+  if (!activity.mine.joined) {
+    return <p className="mt-1 text-[13px] text-text-muted">{activityDefinition(activity.kind).cardNote}</p>;
+  }
+  const line =
+    view.kind === "hangman" ? `${view.pattern.map((l) => l ?? "_").join(" ")} · ${view.lives - view.misses} lives`
+    : view.kind === "emoji_riddle" ? `Riddle ${Math.min(view.current + 1, view.rounds.length)} of ${view.rounds.length}`
+    : view.kind === "scramble" ? `Word ${Math.min(view.current + 1, view.words.length)} of ${view.words.length}`
+    : view.kind === "minesweeper" ? `${view.cells.filter((c) => typeof c === "number").length} squares cleared`
+    : `Streak ${view.streak}`;
+  return (
+    <p className="mt-1 truncate font-mono text-[13px] text-header-secondary">
+      {activity.mine.finished ? `Done · ${activity.mine.score} points` : line}
+    </p>
+  );
+}
+
+function timeLeft(expiresAt: string): string {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "Closed";
+  return ms < 3_600_000 ? `${Math.max(1, Math.ceil(ms / 60_000))}m left` : `${Math.ceil(ms / 3_600_000)}h left`;
+}
+
 export function ActivityCardContent({
   activity,
   error = null,
@@ -178,23 +202,25 @@ export function ActivityCardContent({
   onOpen: (id: string) => void;
 }) {
   const def = activityDefinition(activity.kind);
-  const actionLabel =
-    activity.participantCount >= activity.capacity && !activity.mine.joined
+  const actionLabel = activity.expired
+    ? "Results"
+    : activity.participantCount >= activity.capacity && !activity.mine.joined
       ? "Watch"
-      : activity.expired
-        ? "View results"
-        : activity.mine.joined
-          ? activity.mine.finished
-            ? "View results"
-            : "Play"
-          : "Join";
+      : activity.mine.joined
+        ? activity.mine.finished
+          ? "Results"
+          : "Play"
+        : "Join";
   const visiblePlayers = activity.participants.slice(0, 5);
+  const leader = activity.expired || activity.participants.every((p) => p.finished)
+    ? [...activity.participants].sort((a, b) => b.score - a.score)[0]
+    : null;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Open ${def.name} activity`}
+      aria-label={`Open ${def.name}`}
       onClick={() => onOpen(activity.id)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -202,115 +228,71 @@ export function ActivityCardContent({
           onOpen(activity.id);
         }
       }}
-      className="group/activity mt-1 w-full max-w-[480px] cursor-pointer overflow-hidden rounded-[4px] border border-divider bg-bg-secondary text-left transition-colors hover:border-[#4f545c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-      style={{
-        borderLeftWidth: 3,
-        borderLeftColor: def.accent,
-        backgroundImage: `linear-gradient(115deg, color-mix(in srgb, ${def.accent} 16%, transparent), transparent 46%)`,
-      }}
+      className="group/activity mt-1 w-full max-w-[460px] cursor-pointer overflow-hidden rounded-xl bg-bg-secondary text-left ring-1 ring-divider transition-[box-shadow,transform] hover:ring-[color:var(--interactive-normal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
     >
-      <div className="flex items-start gap-4 p-4">
-        <ActivityGlyph
-          kind={activity.kind}
-          size={52}
-          muted={activity.expired}
-        />
+      <div className="flex items-center gap-4 p-3.5">
+        <span className="transition-transform group-hover/activity:scale-[1.03]">
+          <ActivityGlyph kind={activity.kind} size={84} radius={20} muted={activity.expired} />
+        </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.02em] text-text-muted">
-            <span>Activity</span>
-            <span aria-hidden>·</span>
-            <span>
-              {activity.participantCount}{" "}
-              {activity.participantCount === 1 ? "player" : "players"}
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${activity.expired ? "bg-bg-accent text-text-muted" : "bg-status-online/15 text-status-online"}`}>
+              {!activity.expired && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-online" />}
+              {activity.expired ? "Closed" : `Live · ${timeLeft(activity.expiresAt)}`}
             </span>
-            {activity.expired && (
-              <span className="text-status-dnd">· Ended</span>
-            )}
+            <span className="truncate text-[12px] text-text-muted">{def.genre}</span>
           </div>
-          <p className="mt-1 text-[20px] font-semibold leading-6 text-header-primary">
-            {def.name}
-          </p>
-          {activity.board && (
-            <p className="mt-2 text-[14px] text-header-secondary">
-              {activity.expired
-                ? activity.board.winner === 0
-                  ? "A draw — play again?"
-                  : "Match finished. View the results."
-                : activity.participantCount < 2
-                  ? "An open seat is waiting for you."
-                  : `${activity.participants.find((p) => p.userId === activity.board!.seats[activity.board!.turn - 1])?.displayName ?? "Opponent"}’s turn`}
+          <p className="mt-1 truncate text-[18px] font-extrabold leading-6 text-header-primary">{def.name}</p>
+          {leader && leader.score > 0 ? (
+            <p className="mt-1 truncate text-[13px] text-header-secondary">🏆 {leader.displayName} won with {leader.score}</p>
+          ) : activity.board ? (
+            <p className="mt-1 truncate text-[13px] text-header-secondary">
+              {activity.participantCount < 2
+                ? "An open seat is waiting for you"
+                : `${activity.participants.find((p) => p.userId === activity.board!.seats[activity.board!.turn - 1])?.displayName ?? "Opponent"}'s turn`}
             </p>
-          )}
-          {activity.kind === "wordle" && <WordlePreview activity={activity} />}
-          {activity.kind === "eight_ball" && (
+          ) : activity.arcade ? (
+            <ArcadePreview activity={activity} />
+          ) : activity.kind === "wordle" ? (
+            <WordlePreview activity={activity} />
+          ) : activity.kind === "eight_ball" ? (
             <EightBallPreview activity={activity} />
-          )}
-          {activity.kind === "trivia" && <TriviaPreview activity={activity} />}
-          {activity.kind === "would_you_rather" && (
+          ) : activity.kind === "trivia" ? (
+            <TriviaPreview activity={activity} />
+          ) : (
             <WouldYouRatherPreview activity={activity} />
           )}
-          {visiblePlayers.length > 0 && (
-            <div className="mt-2 flex items-center gap-1">
-              {visiblePlayers.map((player) => (
-                <Avatar
-                  key={player.userId}
-                  profile={{
-                    display_name: player.displayName,
-                    username: player.username,
-                    avatar_url: player.avatarUrl,
-                  }}
-                  size="sm"
-                  className="!h-6 !w-6 !text-[10px]"
-                />
+          <div className="mt-2 flex items-center gap-2">
+            <span className="flex">
+              {visiblePlayers.map((player, i) => (
+                <span key={player.userId} className="rounded-full ring-2 ring-bg-secondary" style={{ marginLeft: i ? -6 : 0 }}>
+                  <Avatar
+                    profile={{ display_name: player.displayName, username: player.username, avatar_url: player.avatarUrl }}
+                    size="sm"
+                    className="!h-6 !w-6 !text-[10px]"
+                  />
+                </span>
               ))}
-              <span className="ml-1 truncate text-[12px] text-text-muted">
-                {visiblePlayers
-                  .map((player) => player.displayName)
-                  .slice(0, 2)
-                  .join(", ")}
-                {activity.participantCount > 2
-                  ? ` and ${activity.participantCount - 2} more`
-                  : ""}
-              </span>
-            </div>
-          )}
+            </span>
+            <span className="truncate text-[12px] text-text-muted">
+              {activity.participantCount} {activity.participantCount === 1 ? "player" : "players"}
+            </span>
+          </div>
         </div>
         <button
           type="button"
-          aria-label={`${actionLabel} ${def.name}`}
+          aria-label={`${actionLabel}: ${def.name}`}
           onClick={(event) => {
             event.stopPropagation();
             onOpen(activity.id);
           }}
-          className="mt-1 flex h-8 shrink-0 items-center gap-1 rounded-[3px] px-3 text-[13px] font-semibold transition-[filter] hover:brightness-110"
-          style={{
-            backgroundColor: def.accent,
-            color: def.accent === "#f0b232" ? "#111214" : "#ffffff",
-          }}
+          className="h-10 shrink-0 self-center rounded-xl px-4 text-[14px] font-extrabold text-white shadow-[0_3px_0_rgba(0,0,0,.35)] transition-transform hover:-translate-y-px active:translate-y-0.5"
+          style={{ background: activity.expired ? "var(--button-secondary)" : `linear-gradient(180deg, ${def.accent}, ${def.accent2})` }}
         >
           {actionLabel}
-          <IconChevron size={12} className="-rotate-90" />
         </button>
       </div>
-      <div className="flex items-center justify-between gap-3 bg-bg-secondary-alt px-4 py-2.5 text-[12px] text-text-muted">
-        <span className="truncate">{def.cardNote}</span>
-        <span className="shrink-0">
-          {activity.board
-            ? "2-player match"
-            : activity.kind === "wordle" && activity.wordle
-              ? `${activity.wordle.solvedBy.length} solved`
-              : activity.kind === "eight_ball"
-                ? "The ball is listening"
-                : activity.kind === "trivia"
-                  ? `${activity.trivia?.total ?? 0} questions`
-                  : "Pick a side"}
-        </span>
-      </div>
-      {error && (
-        <p className="bg-bg-secondary-alt px-4 py-2.5 text-[12px] text-status-dnd">
-          {error}
-        </p>
-      )}
+      {error && <p className="px-4 pb-3 text-[12px] text-status-dnd">{error}</p>}
     </div>
   );
 }
