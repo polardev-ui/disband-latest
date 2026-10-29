@@ -9,8 +9,32 @@ export const ACTIVITY_KINDS = [
   "would_you_rather",
   "four_in_row",
   "reversi",
+  "hangman",
+  "emoji_riddle",
+  "scramble",
+  "minesweeper",
+  "higher_lower",
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+/** Games every player plays against the same puzzle, at their own pace. */
+export type ArcadeKind = "hangman" | "emoji_riddle" | "scramble" | "minesweeper" | "higher_lower";
+
+export interface PlayingCard {
+  rank: number;
+  suit: "♠" | "♥" | "♦" | "♣";
+}
+
+/** One player's view of an arcade game; secrets appear only once they're done. */
+export type ArcadeView =
+  | { kind: "hangman"; category: string; pattern: (string | null)[]; guessed: string[]; misses: number; lives: number; answer: string | null }
+  | { kind: "emoji_riddle"; current: number; rounds: { emoji: string | null; category: string; options: string[]; choice: number | null; answer: number | null }[] }
+  | { kind: "scramble"; current: number; triesLeft: number; lastWrong: boolean; words: { scrambled: string | null; hint: string | null; solved: boolean | null; answer: string | null }[] }
+  | { kind: "minesweeper"; size: number; mineCount: number; cells: (number | "flag" | "mine" | null)[]; exploded: number | null }
+  | { kind: "higher_lower"; shown: PlayingCard[]; remaining: number; streak: number; busted: boolean };
+
+/** How long a game stays open before only its results remain. */
+export const ACTIVITY_LIFETIME_MS = 24 * 3600_000;
 
 export const ACTIVITY_SCOPES = ["channel", "dm", "group", "public"] as const;
 export type ActivityScope = (typeof ACTIVITY_SCOPES)[number];
@@ -24,6 +48,10 @@ export interface ActivityDefinition {
   accent: string;
   /** A short line shown under the title on a chat card. */
   cardNote: string;
+  /** Shelf in the game library. */
+  genre: "Versus" | "Puzzle" | "Party" | "Quiz";
+  /** A second colour for the cover art. */
+  accent2: string;
 }
 
 export const ACTIVITIES: ActivityDefinition[] = [
@@ -36,6 +64,8 @@ export const ACTIVITIES: ActivityDefinition[] = [
     players: "2 players",
     accent: "var(--brand)",
     cardNote: "A head-to-head game of strategy.",
+    genre: "Versus",
+    accent2: "#3c45a5",
   },
   {
     kind: "reversi",
@@ -46,6 +76,8 @@ export const ACTIVITIES: ActivityDefinition[] = [
     players: "2 players",
     accent: "var(--status-online)",
     cardNote: "Claim the corners. Control the board.",
+    genre: "Versus",
+    accent2: "#1a6334",
   },
   {
     kind: "wordle",
@@ -56,6 +88,8 @@ export const ACTIVITIES: ActivityDefinition[] = [
     players: "1–20 players",
     accent: "#3ba55d",
     cardNote: "Six guesses. One word. Everyone racing.",
+    genre: "Puzzle",
+    accent2: "#1f5c33",
   },
   {
     kind: "eight_ball",
@@ -66,6 +100,8 @@ export const ACTIVITIES: ActivityDefinition[] = [
     players: "1–20 players",
     accent: "#5865f2",
     cardNote: "Ask a question and see what the ball says.",
+    genre: "Party",
+    accent2: "#1e1f22",
   },
   {
     kind: "trivia",
@@ -76,6 +112,8 @@ export const ACTIVITIES: ActivityDefinition[] = [
     players: "1–20 players",
     accent: "#f0b232",
     cardNote: "Five questions. Keep your score.",
+    genre: "Quiz",
+    accent2: "#a26b05",
   },
   {
     kind: "would_you_rather",
@@ -86,6 +124,63 @@ export const ACTIVITIES: ActivityDefinition[] = [
     players: "1–20 players",
     accent: "#eb459e",
     cardNote: "Five choices. No wrong answers.",
+    genre: "Party",
+    accent2: "#8c1f5c",
+  },
+  {
+    kind: "minesweeper",
+    name: "Minesweeper",
+    tagline: "Clear the field, don't blow up",
+    description: "Everyone gets the same minefield. Open squares, flag the mines, clear the board. Most squares cleared wins.",
+    players: "1–20 players",
+    accent: "#38bdf8",
+    cardNote: "Same field for everyone. Who clears it?",
+    genre: "Puzzle",
+    accent2: "#0c4a6e",
+  },
+  {
+    kind: "hangman",
+    name: "Hangman",
+    tagline: "Guess the word letter by letter",
+    description: "One hidden word, six lives. Everyone guesses on their own board; fewer misses scores more.",
+    players: "1–20 players",
+    accent: "#f97316",
+    cardNote: "Six lives. One word. Don't swing.",
+    genre: "Puzzle",
+    accent2: "#7c2d12",
+  },
+  {
+    kind: "emoji_riddle",
+    name: "Emoji Riddles",
+    tagline: "Films, games and phrases in emoji",
+    description: "Six riddles told only in emoji. Pick the answer before your friends do.",
+    players: "1–20 players",
+    accent: "#facc15",
+    cardNote: "Six emoji riddles. How many can you crack?",
+    genre: "Quiz",
+    accent2: "#854d0e",
+  },
+  {
+    kind: "scramble",
+    name: "Word Scramble",
+    tagline: "Unscramble five words",
+    description: "Five jumbled words with a hint each. Three tries per word, then it moves on.",
+    players: "1–20 players",
+    accent: "#a78bfa",
+    cardNote: "Five jumbled words. Three tries each.",
+    genre: "Puzzle",
+    accent2: "#4c1d95",
+  },
+  {
+    kind: "higher_lower",
+    name: "Higher or Lower",
+    tagline: "How long can your streak go?",
+    description: "The same deck for everyone. Call whether the next card is higher or lower. One wrong call ends your run.",
+    players: "1–20 players",
+    accent: "#f43f5e",
+    cardNote: "One deck. One wrong call and you're out.",
+    genre: "Party",
+    accent2: "#881337",
   },
 ];
 
@@ -223,6 +318,7 @@ export interface ActivitySession {
   eightBall?: EightBallActivity;
   trivia?: TriviaActivity;
   wouldYouRather?: WouldYouRatherActivity;
+  arcade?: ArcadeView;
 }
 
 interface ErrorPayload {
@@ -360,6 +456,19 @@ export async function rematchActivity(id: string): Promise<ActivitySession> {
     await apiJson<ActivitySession>(
       `/api/activities/${encodeURIComponent(id)}/rematch`,
       jsonInit("POST", {}),
+    ),
+  );
+}
+
+/** One move in an arcade game: a letter, an answer, a square, a call. */
+export async function arcadeMove(
+  id: string,
+  move: Record<string, unknown>,
+): Promise<ActivitySession> {
+  return unwrap<ActivitySession>(
+    await apiJson<ActivitySession>(
+      `/api/activities/${encodeURIComponent(id)}/action`,
+      jsonInit("POST", { ...move, action: "arcade_move" }),
     ),
   );
 }

@@ -144,17 +144,34 @@ export async function POST(req: Request) {
           const supabase = getServiceSupabase();
           const buyerId = session.metadata.user_id;
           const itemId = session.metadata.item_id;
+          const recipientId = session.metadata.recipient_id || null;
           if (supabase && buyerId && itemId && session.payment_status === "paid") {
             // Ownership is permanent and one row per person per item, so the
             // primary key already makes a retry a no-op. The session id is
             // kept for the audit trail and for reconciling a refund.
-            const { error } = await supabase
+            const { data: granted, error } = await supabase
               .from("user_shop_items")
               .upsert(
-                { user_id: buyerId, item_id: itemId, stripe_session_id: session.id },
+                { user_id: recipientId ?? buyerId, item_id: itemId, stripe_session_id: session.id },
                 { onConflict: "user_id,item_id", ignoreDuplicates: true },
-              );
+              )
+              .select("item_id");
             if (error) throw new Error(error.message);
+            // A gift: tell them, once (a redelivered event grants nothing new).
+            if (recipientId && granted?.length) {
+              const [{ data: buyer }, { data: item }] = await Promise.all([
+                supabase.from("profiles").select("display_name, username").eq("id", buyerId).maybeSingle(),
+                supabase.from("shop_items").select("name, category").eq("id", itemId).maybeSingle(),
+              ]);
+              const from = buyer?.display_name || buyer?.username || "Someone";
+              await supabase.from("notifications").insert({
+                user_id: recipientId,
+                type: "gift",
+                title: "You got a gift",
+                body: `${from} gifted you ${item?.name ?? "something"} from the Shop. Wear it from the Shop.`,
+                link: `shop:${item?.category ?? "ring"}`,
+              });
+            }
           }
           break;
         }

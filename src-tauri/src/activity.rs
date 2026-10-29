@@ -23,6 +23,10 @@ pub struct DetectedGame {
     pub name: String,
     /// Seconds since the Unix epoch when the game's process started.
     pub started_at: u64,
+    /// Discord's application id for the game, when it is in their list.
+    pub app_id: Option<String>,
+    /// The game's logo (Discord's CDN), when known.
+    pub icon: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -68,12 +72,15 @@ pub fn start(app: &AppHandle) {
 
 mod detect {
     use super::{ActivityState, DetectedGame};
+    use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::sync::Arc;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, UpdateKind};
-    use tauri::{AppHandle, Emitter};
+    use tauri::{AppHandle, Emitter, Manager};
 
-    /// Executable names (lower case, no extension) of popular games.
+    /// Fallback names for when Discord's list hasn't downloaded yet.
     const KNOWN: &[(&str, &str)] = &[
         ("robloxplayerbeta", "Roblox"),
         ("robloxplayer", "Roblox"),
@@ -83,20 +90,8 @@ mod detect {
         ("cs2", "Counter-Strike 2"),
         ("dota2", "Dota 2"),
         ("rocketleague", "Rocket League"),
-        ("gta5", "Grand Theft Auto V"),
-        ("gta5_enhanced", "Grand Theft Auto V"),
         ("r5apex", "Apex Legends"),
-        ("overwatch", "Overwatch 2"),
-        ("genshinimpact", "Genshin Impact"),
-        ("among us", "Among Us"),
         ("terraria", "Terraria"),
-        ("stardew valley", "Stardew Valley"),
-        ("rustclient", "Rust"),
-        ("eldenring", "ELDEN RING"),
-        ("fallguys_client_game", "Fall Guys"),
-        ("deadbydaylight-win64-shipping", "Dead by Daylight"),
-        ("cod", "Call of Duty"),
-        ("marvel-win64-shipping", "Marvel Rivals"),
     ];
 
     /// Things that live in a game folder but are not the game.
@@ -106,13 +101,140 @@ mod detect {
         "beservice", "launcher", "epicwebhelper", "vc_redist.x64", "dxsetup", "uninstall",
     ];
 
+    #[cfg(target_os = "windows")]
+    const OS: &str = "win32";
+    #[cfg(target_os = "macos")]
+    const OS: &str = "darwin";
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    const OS: &str = "linux";
+
+    /// One game from Discord's public list of detectable applications.
+    #[derive(Deserialize, Serialize, Clone)]
+    struct Game {
+        id: String,
+        name: String,
+        #[serde(default, alias = "icon_hash")]
+        icon: Option<String>,
+        /// Lower-case executable paths for this OS ("robloxplayerbeta.exe", "roblox.app", "minecraft/java").
+        #[serde(default)]
+        exes: Vec<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct RawExe {
+        name: String,
+        os: String,
+        #[serde(default)]
+        is_launcher: bool,
+    }
+
+    #[derive(Deserialize)]
+    struct RawGame {
+        id: String,
+        name: String,
+        #[serde(default)]
+        icon_hash: Option<String>,
+        #[serde(default)]
+        executables: Option<Vec<RawExe>>,
+    }
+
+    /// Discord's ~25,000 detectable games, cut down to this OS and cached for a week.
+    struct Catalogue {
+        games: Vec<Game>,
+        /// Last path segment of each executable → indices into `games`.
+        by_file: HashMap<String, Vec<usize>>,
+    }
+
+    impl Catalogue {
+        fn new(games: Vec<Game>) -> Self {
+            let mut by_file: HashMap<String, Vec<usize>> = HashMap::new();
+            for (i, g) in games.iter().enumerate() {
+                for exe in &g.exes {
+                    let file = exe.rsplit('/').next().unwrap_or(exe).to_string();
+                    by_file.entry(file).or_default().push(i);
+                }
+            }
+            Catalogue { games, by_file }
+        }
+
+        /// The game whose executable this path ends with (or, on macOS, whose .app bundle it sits in).
+        fn lookup(&self, path: &str) -> Option<&Game> {
+            let path = path.to_lowercase();
+            let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            for (i, seg) in segments.iter().enumerate().rev() {
+                let Some(candidates) = self.by_file.get(*seg) else { continue };
+                let prefix = segments[..=i].join("/");
+                for &c in candidates {
+                    let game = &self.games[c];
+                    if game.exes.iter().any(|e| prefix.ends_with(e.as_str()) && (prefix.len() == e.len() || prefix.as_bytes()[prefix.len() - e.len() - 1] == b'/')) {
+                        return Some(game);
+                    }
+                }
+            }
+            None
+        }
+    }
+
+    const LIST_URL: &str = "https://discord.com/api/v10/applications/detectable";
+    const MAX_AGE: Duration = Duration::from_secs(7 * 24 * 3600);
+
+    fn cache_file(app: &AppHandle) -> Option<PathBuf> {
+        let dir = app.path().app_cache_dir().ok()?;
+        let _ = std::fs::create_dir_all(&dir);
+        Some(dir.join("detectable-games.json"))
+    }
+
+    fn load(app: &AppHandle) -> Option<Catalogue> {
+        let file = cache_file(app)?;
+        let fresh = std::fs::metadata(&file).ok()?.modified().ok()
+            .and_then(|m| SystemTime::now().duration_since(m).ok())
+            .map_or(false, |age| age < MAX_AGE);
+        if fresh {
+            if let Some(games) = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Vec<Game>>(&b).ok()) {
+                return Some(Catalogue::new(games));
+            }
+        }
+        let games = download().or_else(|| {
+            // Offline: an old list beats none.
+            std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Vec<Game>>(&b).ok())
+        })?;
+        if let Ok(bytes) = serde_json::to_vec(&games) {
+            let _ = std::fs::write(&file, bytes);
+        }
+        Some(Catalogue::new(games))
+    }
+
+    fn download() -> Option<Vec<Game>> {
+        let mut res = ureq::get(LIST_URL).header("User-Agent", "Disband (https://www.disband.dev)").call().ok()?;
+        let body = res.body_mut().with_config().limit(64 * 1024 * 1024).read_to_vec().ok()?;
+        let raw: Vec<RawGame> = serde_json::from_slice(&body).ok()?;
+        Some(
+            raw.into_iter()
+                .filter_map(|g| {
+                    let exes: Vec<String> = g.executables.unwrap_or_default().into_iter()
+                        .filter(|e| e.os == OS && !e.is_launcher)
+                        .map(|e| e.name.to_lowercase().replace('\\', "/").trim_start_matches('>').to_string())
+                        .collect();
+                    (!exes.is_empty()).then(|| Game { id: g.id, name: g.name, icon: g.icon_hash, exes })
+                })
+                .collect(),
+        )
+    }
+
     pub fn spawn(app: AppHandle, state: Arc<ActivityState>) {
         std::thread::spawn(move || {
             // No process list on this system (a locked-down sandbox): no detection.
             let Ok(mut sys) = System::new_with_specifics(RefreshKind::nothing()) else { return };
+            let mut catalogue: Option<Catalogue> = None;
+            let mut tried_at: Option<SystemTime> = None;
             let mut last: Option<String> = None;
             loop {
-                let game = scan(&mut sys);
+                // (Re)load the list now and then; detection runs on the fallback names meanwhile.
+                if catalogue.is_none() && tried_at.map_or(true, |t| t.elapsed().map_or(true, |e| e > Duration::from_secs(1800))) {
+                    tried_at = Some(SystemTime::now());
+                    catalogue = load(&app);
+                }
+                let game = scan(&mut sys, catalogue.as_ref());
                 let key = game.as_ref().map(|g| g.name.clone());
                 if key != last {
                     last = key;
@@ -126,7 +248,7 @@ mod detect {
         });
     }
 
-    fn scan(sys: &mut System) -> Option<DetectedGame> {
+    fn scan(sys: &mut System, catalogue: Option<&Catalogue>) -> Option<DetectedGame> {
         sys.refresh_processes_specifics(
             ProcessesToUpdate::All,
             true,
@@ -134,34 +256,46 @@ mod detect {
         );
         let mut best: Option<DetectedGame> = None;
         for process in sys.processes().values() {
-            let Some(name) = game_name(process) else { continue };
-            let started_at = process.start_time();
+            let Some(mut game) = identify(process, catalogue) else { continue };
+            game.started_at = process.start_time();
             // The longest-running match is the game itself rather than a helper it spawned.
-            if best.as_ref().map_or(true, |b| started_at < b.started_at) {
-                best = Some(DetectedGame { name, started_at });
+            if best.as_ref().map_or(true, |b| game.started_at < b.started_at) {
+                best = Some(game);
             }
         }
         best
     }
 
-    fn game_name(process: &sysinfo::Process) -> Option<String> {
+    fn named(name: String) -> DetectedGame {
+        DetectedGame { name, started_at: 0, app_id: None, icon: None }
+    }
+
+    fn identify(process: &sysinfo::Process, catalogue: Option<&Catalogue>) -> Option<DetectedGame> {
         let exe_name = process.name().to_string_lossy().to_lowercase();
         let stem = exe_name.strip_suffix(".exe").unwrap_or(&exe_name).to_string();
         if NOT_GAMES.contains(&stem.as_str()) {
             return None;
         }
+        let path = process.exe().map(|p| p.to_string_lossy().replace('\\', "/"));
+        if let (Some(catalogue), Some(path)) = (catalogue, path.as_deref()) {
+            if let Some(g) = catalogue.lookup(path) {
+                return Some(DetectedGame {
+                    name: g.name.clone(),
+                    started_at: 0,
+                    app_id: Some(g.id.clone()),
+                    icon: g.icon.as_ref().map(|h| format!("https://cdn.discordapp.com/app-icons/{}/{}.png?size=160", g.id, h)),
+                });
+            }
+        }
         if let Some((_, title)) = KNOWN.iter().find(|(exe, _)| *exe == stem) {
-            return Some((*title).to_string());
+            return Some(named((*title).to_string()));
         }
         // Minecraft runs inside Java.
         if stem == "java" || stem == "javaw" {
-            let is_minecraft = process
-                .cmd()
-                .iter()
-                .any(|arg| arg.to_string_lossy().contains("net.minecraft"));
-            return is_minecraft.then(|| "Minecraft".to_string());
+            let is_minecraft = process.cmd().iter().any(|arg| arg.to_string_lossy().contains("net.minecraft"));
+            return is_minecraft.then(|| named("Minecraft".to_string()));
         }
-        let path = process.exe()?.to_string_lossy().replace('\\', "/");
+        let path = path?;
         for marker in ["/steamapps/common/", "/Epic Games/"] {
             if let Some(at) = path.find(marker) {
                 let folder = path[at + marker.len()..].split('/').next()?.trim();
@@ -172,7 +306,7 @@ mod detect {
                 {
                     return None;
                 }
-                return Some(folder.to_string());
+                return Some(named(folder.to_string()));
             }
         }
         None

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 type Params = { params: Promise<{ id: string }> };
-type AppInfo = { name: string; icon_url: string | null };
+/** `assets`: Rich Presence image keys → CDN URLs, so "large_image": "map_dust2" can be shown. */
+type AppInfo = { name: string; icon_url: string | null; assets?: Record<string, string> };
 
 // Names rarely change; a per-instance cache keeps the desktop app from
 // asking Discord again for every Rich Presence update.
@@ -29,7 +30,16 @@ export async function GET(_req: Request, { params }: Params) {
       const res = await fetch(`https://discord.com/api/v10/applications/${id}/rpc`, { headers: { "User-Agent": "Disband (https://www.disband.dev)" } });
       if (res.ok) {
         const app = (await res.json()) as { name?: string; icon?: string | null };
-        if (app.name) info = { name: app.name, icon_url: app.icon ? `https://cdn.discordapp.com/app-icons/${id}/${app.icon}.png?size=128` : null };
+        if (app.name) {
+          const assets: Record<string, string> = {};
+          const a = await fetch(`https://discord.com/api/v10/oauth2/applications/${id}/assets`, { headers: { "User-Agent": "Disband (https://www.disband.dev)" } }).catch(() => null);
+          if (a?.ok) {
+            for (const asset of ((await a.json()) as { id: string; name: string }[]).slice(0, 300)) {
+              assets[asset.name] = `https://cdn.discordapp.com/app-assets/${id}/${asset.id}.png`;
+            }
+          }
+          info = { name: app.name, icon_url: app.icon ? `https://cdn.discordapp.com/app-icons/${id}/${app.icon}.png?size=160` : null, assets };
+        }
       }
     } catch {
       // Unknown or unreachable: the caller falls back to the process name.

@@ -233,11 +233,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const { profile, user, updateProfile, signOut, requestAccountDeletion } = useApp();
   const [isManager, setIsManager] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   useEffect(() => {
     if (!open || !user) return;
     const supabase = getSupabaseClient();
     void supabase.rpc("is_platform_manager", { p_user: user.id }).then(({ data }) => setIsManager(data === true));
     void supabase.rpc("is_platform_owner", { p_user: user.id }).then(({ data }) => setIsOwner(data === true));
+    void supabase.rpc("is_platform_staff", { p_user: user.id }).then(({ data }) => setIsStaff(data === true));
   }, [open, user]);
   const isAnonymous = profile?.account_type === "anonymous";
 
@@ -965,7 +967,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   }
 
   // Management is for Disband managers and the owner only.
-  const visibleTabs = TABS.filter((item) => item.id !== "management" || isManager);
+  const visibleTabs = TABS.filter((item) => item.id !== "management" || isManager || isStaff);
   const activeTab = visibleTabs.find((item) => item.id === tab);
   const navQ = navQuery.trim().toLowerCase();
   const navMatches = navQ
@@ -2143,7 +2145,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               {tab === "standing" && <StandingPanel />}
               {tab === "creator" && <CreatorPanel />}
               {tab === "links" && <LinksPanel />}
-              {tab === "management" && isManager && <ManagementPanel isOwner={isOwner} />}
+              {tab === "management" && (isManager || isStaff) && <ManagementPanel isOwner={isOwner} isManager={isManager} />}
               {tab === "referrals" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">

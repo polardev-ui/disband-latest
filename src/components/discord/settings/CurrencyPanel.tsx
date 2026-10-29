@@ -16,7 +16,16 @@ interface LedgerRow { id: number; amount: number; reason: string; created_at: st
 
 /** The currency tab: balance, how to earn, what to spend it on, and history. */
 export function CurrencyPanel() {
-  const { user, profile } = useApp();
+  const { user, profile, friendships } = useApp();
+  // Who a decoration is for: you (empty) or a friend's id.
+  const [giftTo, setGiftTo] = useState("");
+  const friends = useMemo(
+    () => friendships
+      .filter((f) => f.status === "accepted")
+      .map((f) => (f.requester_id === user?.id ? f.addressee : f.requester))
+      .filter((p): p is NonNullable<typeof p> => !!p && !p.is_bot),
+    [friendships, user?.id],
+  );
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [owned, setOwned] = useState<Set<string>>(new Set());
@@ -46,7 +55,8 @@ export function CurrencyPanel() {
       .catch(() => setAdsReady(false));
   }, []);
 
-  const decorations = useMemo(() => decorationItems().filter((d) => !d.unreleased && !owned.has(d.id)), [owned]);
+  // For a friend, every decoration is offered; the server checks they don't already have it.
+  const decorations = useMemo(() => decorationItems().filter((d) => !d.unreleased && (giftTo !== "" || !owned.has(d.id))), [owned, giftTo]);
   const balance = wallet?.balance ?? 0;
   const toNextChat = 18 - ((wallet?.message_count ?? 0) % 18);
 
@@ -56,20 +66,23 @@ export function CurrencyPanel() {
       setNote({ tone: "error", text: "Pick a decoration first." });
       return;
     }
+    const friend = rewardId === "decoration" && giftTo ? friends.find((f) => f.id === giftTo) : null;
     const ok = await confirmDialog({
-      title: `Redeem ${reward.label}?`,
+      title: friend ? `Gift this decoration to ${friend.display_name || friend.username}?` : `Redeem ${reward.label}?`,
       body: `This spends ${formatCurrency(reward.cost)}.`,
-      confirmLabel: "Redeem",
+      confirmLabel: friend ? "Send gift" : "Redeem",
       tone: "primary",
     });
     if (!ok) return;
     setBusy(rewardId);
     setNote(null);
-    const { error } = await getSupabaseClient().rpc("wallet_redeem", { p_reward: rewardId, p_item: rewardId === "decoration" ? pick : null });
+    const { error } = friend
+      ? await getSupabaseClient().rpc("wallet_gift_decoration", { p_item: pick, p_recipient: friend.id })
+      : await getSupabaseClient().rpc("wallet_redeem", { p_reward: rewardId, p_item: rewardId === "decoration" ? pick : null });
     setBusy(null);
     if (error) setNote({ tone: "error", text: error.message });
     else {
-      setNote({ tone: "ok", text: rewardId === "aero_week" ? "Aero is yours for the next seven days." : "Decoration added. Wear it from Profiles." });
+      setNote({ tone: "ok", text: friend ? `Sent! ${friend.display_name || friend.username} has it now.` : rewardId === "aero_week" ? "Aero is yours for the next seven days." : "Decoration added. Wear it from Profiles." });
       setPick("");
       void load();
     }
@@ -104,6 +117,15 @@ export function CurrencyPanel() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-header-primary">{r.label}</p>
                 <p className="text-[13px] text-text-muted">{r.description}</p>
+                {r.id === "decoration" && friends.length > 0 && (
+                  <label className="mt-2 flex items-center gap-2 text-[13px] text-text-muted">
+                    For
+                    <select value={giftTo} onChange={(e) => { setGiftTo(e.target.value); setPick(""); }} className="rounded-[3px] bg-bg-tertiary px-2 py-1 text-[14px] text-text-normal">
+                      <option value="">Me</option>
+                      {friends.map((f) => <option key={f.id} value={f.id}>{f.display_name || f.username}</option>)}
+                    </select>
+                  </label>
+                )}
                 {r.id === "decoration" && (
                   <div role="radiogroup" aria-label="Decoration to redeem" className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
                     {decorations.length === 0 && <p className="text-[13px] text-text-muted">You own every decoration already.</p>}
