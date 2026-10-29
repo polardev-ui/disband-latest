@@ -217,8 +217,8 @@ export async function executeGitHubWebhook(request: NextRequest, p: Params) {
   }
 
   const event = request.headers.get("x-github-event") ?? "push";
-  const content = formatGitHubEvent(event, body);
-  if (!content) return new NextResponse(null, { status: 204 });
+  const { content, embeds } = formatGitHubEvent(event, body);
+  if (!content && !embeds) return new NextResponse(null, { status: 204 });
 
   const { error } = await service.rpc("webhook_execute", {
     p_server_key: p.serverKey,
@@ -226,7 +226,7 @@ export async function executeGitHubWebhook(request: NextRequest, p: Params) {
     p_content: content,
     p_username: "GitHub",
     p_avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-    p_embeds: null,
+    p_embeds: embeds,
     p_parse_users: false,
     p_parse_everyone: false,
   });
@@ -239,44 +239,79 @@ export async function executeGitHubWebhook(request: NextRequest, p: Params) {
   return new NextResponse(null, { status: 204 });
 }
 
-function formatGitHubEvent(event: string, body: Record<string, unknown>): string {
+function formatGitHubEvent(event: string, body: Record<string, unknown>): { content: string; embeds: unknown[] | null } {
   const repo = (body.repository as { full_name?: string; name?: string } | undefined)?.full_name
     ?? (body.repository as { name?: string } | undefined)?.name
     ?? "repository";
   const sender = (body.sender as { login?: string } | undefined)?.login ?? "someone";
+  const repoUrl = (body.repository as { html_url?: string } | undefined)?.html_url;
 
   if (event === "push") {
-    const commits = (body.commits as { message?: string }[] | undefined) ?? [];
+    const commits = (body.commits as { message?: string; url?: string }[] | undefined) ?? [];
     const branch = String(body.ref ?? "").replace("refs/heads/", "");
-    const lines = commits.slice(0, 5).map((c) => `• ${String(c.message ?? "").split("\\n")[0]}`);
-    const more = commits.length > 5 ? `\\n…and ${commits.length - 5} more` : "";
-    return `**${sender}** pushed ${commits.length} commit${commits.length === 1 ? "" : "s"} to \`${branch}\` in **${repo}**${lines.length ? "\\n" + lines.join("\\n") + more : ""}`;
+    const lines = commits.slice(0, 5).map((c) => `• ${String(c.message ?? "").split("\n")[0]}`);
+    const more = commits.length > 5 ? `\n…and ${commits.length - 5} more` : "";
+    const content = `**${sender}** pushed ${commits.length} commit${commits.length === 1 ? "" : "s"} to \`${branch}\` in **${repo}**`;
+    const embed = {
+      title: `${commits.length} commit${commits.length === 1 ? "" : "s"} to ${branch}`,
+      description: lines.join("\n") + more || "No commit messages",
+      url: repoUrl,
+      color: 0x24292e,
+      footer: { text: sender },
+    };
+    return { content, embeds: commits.length ? [embed] : null };
   }
   if (event === "pull_request") {
-    const pr = body.pull_request as { number?: number; title?: string; merged?: boolean; state?: string; html_url?: string } | undefined;
+    const pr = body.pull_request as { number?: number; title?: string; merged?: boolean; state?: string; html_url?: string; body?: string } | undefined;
     const action = String(body.action ?? "updated");
     const verb = action === "closed" && pr?.merged ? "merged" : action;
-    return `**${sender}** ${verb} pull request #${pr?.number ?? ""} in **${repo}**: ${pr?.title ?? ""}`;
+    const content = `**${sender}** ${verb} pull request #${pr?.number ?? ""} in **${repo}**: ${pr?.title ?? ""}`;
+    const embed = {
+      title: `PR #${pr?.number ?? ""}: ${pr?.title ?? ""}`,
+      description: (pr?.body ?? "").slice(0, 300) || undefined,
+      url: pr?.html_url,
+      color: pr?.merged ? 0x8957e5 : pr?.state === "open" ? 0x238636 : 0xda3633,
+      footer: { text: `${sender} · ${verb}` },
+    };
+    return { content, embeds: [embed] };
   }
   if (event === "issues") {
-    const issue = body.issue as { number?: number; title?: string } | undefined;
+    const issue = body.issue as { number?: number; title?: string; html_url?: string; body?: string } | undefined;
     const action = String(body.action ?? "updated");
-    return `**${sender}** ${action} issue #${issue?.number ?? ""} in **${repo}**: ${issue?.title ?? ""}`;
+    const content = `**${sender}** ${action} issue #${issue?.number ?? ""} in **${repo}**: ${issue?.title ?? ""}`;
+    const embed = {
+      title: `Issue #${issue?.number ?? ""}: ${issue?.title ?? ""}`,
+      description: (issue?.body ?? "").slice(0, 300) || undefined,
+      url: issue?.html_url,
+      color: action === "closed" ? 0x8957e5 : 0x238636,
+      footer: { text: `${sender} · ${action}` },
+    };
+    return { content, embeds: [embed] };
   }
   if (event === "release") {
-    const release = body.release as { tag_name?: string; name?: string } | undefined;
+    const release = body.release as { tag_name?: string; name?: string; html_url?: string; body?: string } | undefined;
     const action = String(body.action ?? "published");
-    return `**${sender}** ${action} release \`${release?.tag_name ?? release?.name ?? ""}\` in **${repo}**`;
+    const content = `**${sender}** ${action} release \`${release?.tag_name ?? release?.name ?? ""}\` in **${repo}**`;
+    const embed = {
+      title: release?.name ?? release?.tag_name ?? "Release",
+      description: (release?.body ?? "").slice(0, 300) || undefined,
+      url: release?.html_url,
+      color: 0x1f6feb,
+      footer: { text: `${sender} · ${action}` },
+    };
+    return { content, embeds: [embed] };
   }
   if (event === "star" || event === "watch") {
-    return `**${sender}** starred **${repo}**`;
+    const content = `**${sender}** starred **${repo}**`;
+    return { content, embeds: null };
   }
   if (event === "fork") {
-    return `**${sender}** forked **${repo}**`;
+    const content = `**${sender}** forked **${repo}**`;
+    return { content, embeds: null };
   }
-  return `GitHub event \`${event}\` in **${repo}** by ${sender}`;
+  const content = `GitHub event \`${event}\` in **${repo}** by ${sender}`;
+  return { content, embeds: null };
 }
-
 export async function deleteWebhookMessage(_request: NextRequest, p: Params) {
   if (!validParams(p)) return unknownWebhook();
   const id = messageId(p);
