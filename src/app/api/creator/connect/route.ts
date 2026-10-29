@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { PLATFORMS, authorizeUrl, platformConfigured, signState, type CreatorPlatform } from "@/lib/creator.server";
+import { PLATFORMS, authorizeUrl, platformConfigured, signState, generateCodeVerifier, type CreatorPlatform } from "@/lib/creator.server";
 import { syncCreatorBadge } from "./badge";
 
 /** Which platforms can be connected on this deployment. */
@@ -20,7 +20,9 @@ export async function POST(req: Request) {
   if (!PLATFORMS.includes(platform as CreatorPlatform)) return NextResponse.json({ error: "Unknown platform" }, { status: 400 });
   const p = platform as CreatorPlatform;
   if (!platformConfigured(p)) return NextResponse.json({ error: "That platform isn't available yet." }, { status: 503 });
-  return NextResponse.json({ url: authorizeUrl(p, checkoutOrigin(req), signState(user.id, p)) });
+  const codeVerifier = generateCodeVerifier();
+  const state = signState(user.id, p, codeVerifier);
+  return NextResponse.json({ url: authorizeUrl(p, checkoutOrigin(req), state, codeVerifier) });
 }
 
 /** Disconnect a platform and re-check the badge. */

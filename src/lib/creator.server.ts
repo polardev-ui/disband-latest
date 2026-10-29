@@ -1,5 +1,13 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual, randomBytes, createHash } from "node:crypto";
+
+export function generateCodeVerifier(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function codeChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
 
 /*
  Creator Program connections. Each platform is a standard OAuth code flow:
@@ -38,50 +46,59 @@ function stateSecret(): string {
 }
 
 /** A signed, ten-minute state tying the callback to the user who started it. */
-export function signState(userId: string, platform: CreatorPlatform): string {
-  const payload = `${userId}.${platform}.${Date.now()}`;
+export function signState(userId: string, platform: CreatorPlatform, codeVerifier: string): string {
+  const payload = `${userId}.${platform}.${Date.now()}.${codeVerifier}`;
   const sig = createHmac("sha256", stateSecret()).update(payload).digest("base64url");
   return `${Buffer.from(payload).toString("base64url")}.${sig}`;
 }
 
-export function verifyState(state: string, platform: CreatorPlatform): string | null {
+export function verifyState(state: string, platform: CreatorPlatform): { userId: string; codeVerifier: string } | null {
   const [body, sig] = state.split(".");
   if (!body || !sig || !stateSecret()) return null;
   const payload = Buffer.from(body, "base64url").toString();
   const expected = createHmac("sha256", stateSecret()).update(payload).digest();
   const given = Buffer.from(sig, "base64url");
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
-  const [userId, p, at] = payload.split(".");
+  const [userId, p, at, codeVerifier] = payload.split(".");
   if (p !== platform || Date.now() - Number(at) > 10 * 60_000) return null;
-  return userId;
+  if (!userId || !codeVerifier) return null;
+  return { userId, codeVerifier };
 }
 
 export function redirectUri(origin: string, p: CreatorPlatform): string {
   return `${origin}/api/creator/callback/${p}`;
 }
 
-export function authorizeUrl(p: CreatorPlatform, origin: string, state: string): string {
+export function authorizeUrl(p: CreatorPlatform, origin: string, state: string, codeVerifier?: string): string {
   const redirect = redirectUri(origin, p);
+  const challenge = codeVerifier ? codeChallenge(codeVerifier) : null;
+
   if (p === "youtube") {
-    const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    u.search = new URLSearchParams({
+    const params: Record<string, string> = {
       client_id: env("GOOGLE_OAUTH_CLIENT_ID"), redirect_uri: redirect, response_type: "code",
       scope: "https://www.googleapis.com/auth/youtube.readonly", state, prompt: "consent",
-    }).toString();
+    };
+    if (challenge) { params.code_challenge = challenge; params.code_challenge_method = "S256"; }
+    const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    u.search = new URLSearchParams(params).toString();
     return u.toString();
   }
   if (p === "tiktok") {
-    const u = new URL("https://www.tiktok.com/v2/auth/authorize/");
-    u.search = new URLSearchParams({
+    const params: Record<string, string> = {
       client_key: env("TIKTOK_CLIENT_KEY"), redirect_uri: redirect, response_type: "code",
       scope: "user.info.basic,user.info.profile,user.info.stats", state,
-    }).toString();
+    };
+    if (challenge) { params.code_challenge = challenge; params.code_challenge_method = "S256"; }
+    const u = new URL("https://www.tiktok.com/v2/auth/authorize/");
+    u.search = new URLSearchParams(params).toString();
     return u.toString();
   }
-  const u = new URL("https://id.twitch.tv/oauth2/authorize");
-  u.search = new URLSearchParams({
+  const params: Record<string, string> = {
     client_id: env("TWITCH_CLIENT_ID"), redirect_uri: redirect, response_type: "code", scope: "", state,
-  }).toString();
+  };
+  if (challenge) { params.code_challenge = challenge; params.code_challenge_method = "S256"; }
+  const u = new URL("https://id.twitch.tv/oauth2/authorize");
+  u.search = new URLSearchParams(params).toString();
   return u.toString();
 }
 
@@ -91,13 +108,13 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 /** Exchange the code and read the account's follower count. */
-export async function fetchAccount(p: CreatorPlatform, code: string, origin: string): Promise<CreatorAccount> {
+export async function fetchAccount(p: CreatorPlatform, code: string, origin: string, codeVerifier?: string): Promise<CreatorAccount> {
   const redirect = redirectUri(origin, p);
   if (p === "youtube") {
     const token = await json<{ access_token: string }>(await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ code, client_id: env("GOOGLE_OAUTH_CLIENT_ID"), client_secret: env("GOOGLE_OAUTH_CLIENT_SECRET"), redirect_uri: redirect, grant_type: "authorization_code" }),
+      body: new URLSearchParams({ code, client_id: env("GOOGLE_OAUTH_CLIENT_ID"), client_secret: env("GOOGLE_OAUTH_CLIENT_SECRET"), redirect_uri: redirect, grant_type: "authorization_code", ...(codeVerifier ? { code_verifier: codeVerifier } : {}) }),
     }));
     const data = await json<{ items?: { id: string; snippet?: { title?: string; customUrl?: string }; statistics?: { subscriberCount?: string; hiddenSubscriberCount?: boolean } }[] }>(
       await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true", { headers: { Authorization: `Bearer ${token.access_token}` } }),
@@ -111,7 +128,7 @@ export async function fetchAccount(p: CreatorPlatform, code: string, origin: str
     const token = await json<{ access_token: string }>(await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ code, client_key: env("TIKTOK_CLIENT_KEY"), client_secret: env("TIKTOK_CLIENT_SECRET"), redirect_uri: redirect, grant_type: "authorization_code" }),
+      body: new URLSearchParams({ code, client_key: env("TIKTOK_CLIENT_KEY"), client_secret: env("TIKTOK_CLIENT_SECRET"), redirect_uri: redirect, grant_type: "authorization_code", ...(codeVerifier ? { code_verifier: codeVerifier } : {}) }),
     }));
     const data = await json<{ data?: { user?: { open_id: string; username?: string; display_name?: string; follower_count?: number } } }>(
       await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,username,display_name,follower_count", { headers: { Authorization: `Bearer ${token.access_token}` } }),
@@ -123,7 +140,7 @@ export async function fetchAccount(p: CreatorPlatform, code: string, origin: str
   const token = await json<{ access_token: string }>(await fetch("https://id.twitch.tv/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ code, client_id: env("TWITCH_CLIENT_ID"), client_secret: env("TWITCH_CLIENT_SECRET"), redirect_uri: redirect, grant_type: "authorization_code" }),
+    body: new URLSearchParams({ code, client_id: env("TWITCH_CLIENT_ID"), client_secret: env("TWITCH_CLIENT_SECRET"), redirect_uri: redirect, grant_type: "authorization_code", ...(codeVerifier ? { code_verifier: codeVerifier } : {}) }),
   }));
   const headers = { Authorization: `Bearer ${token.access_token}`, "Client-Id": env("TWITCH_CLIENT_ID") };
   const users = await json<{ data: { id: string; login: string }[] }>(await fetch("https://api.twitch.tv/helix/users", { headers }));

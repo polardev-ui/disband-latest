@@ -17,13 +17,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ platform
   const p = platform as CreatorPlatform;
   if (url.searchParams.get("error")) return back("cancelled");
   const code = url.searchParams.get("code");
-  const userId = verifyState(url.searchParams.get("state") ?? "", p);
-  if (!code || !userId) return back("error", "That connection link expired. Try again.");
+  const verified = verifyState(url.searchParams.get("state") ?? "", p);
+  if (!code || !verified) return back("error", "That connection link expired. Try again.");
+  const userId = verified.userId;
+  const codeVerifier = verified.codeVerifier;
   const supabase = getServiceSupabase();
   if (!supabase) return back("error", "Connections are unavailable right now.");
 
   try {
-    const account = await fetchAccount(p, code, url.origin);
+    const account = await fetchAccount(p, code, url.origin, codeVerifier);
     const { data: other } = await supabase.from("creator_connections").select("user_id")
       .eq("platform", p).eq("account_id", account.accountId).neq("user_id", userId).maybeSingle();
     if (other) return back("error", "That account is already connected to another Disband account.");
