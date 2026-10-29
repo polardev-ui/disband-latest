@@ -11,7 +11,7 @@ import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components
 import { SubscriptionBadgeModal } from "@/components/subscription/SubscriptionBadgeModal";
 import type { SubscriptionPlan } from "@/lib/subscription";
 
-const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "partner", "og"]);
+const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "manager", "partner", "og"]);
 
 export interface UserBadgesProps {
   userId: string | null | undefined;
