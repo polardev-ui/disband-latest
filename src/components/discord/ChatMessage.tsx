@@ -53,6 +53,7 @@ export interface ChatMessageData {
   attachment_name?: string | null;
   attachment_size?: number | null;
   reply_to_id?: string | null;
+  reply_to_deleted?: boolean;
   reply_to?: ReplyPreview | null;
   embeds?: Embed[] | null;
   webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
@@ -644,6 +645,11 @@ function ChatMessageImpl({
 
   const replyBlock = message.reply_to ? (
     <ReplyQuote reply={message.reply_to} onJump={onJumpToReply} />
+  ) : message.reply_to_deleted ? (
+    <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message was deleted">
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
+      <span className="truncate italic text-text-muted">Original message was deleted</span>
+    </div>
   ) : null;
 
   const embedBlock = (

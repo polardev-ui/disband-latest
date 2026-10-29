@@ -239,6 +239,7 @@ export interface DbMessage {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   mentions: string[];
   /** Discord-shaped rich embeds from a webhook or bot. */
   embeds?: Embed[] | null;
@@ -268,6 +269,7 @@ export interface DbDmMessage {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   mentions: string[];
   created_at: string;
   edited_at: string | null;
@@ -291,6 +293,7 @@ export interface DbNote {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   pinned: boolean;
   created_at: string;
   edited_at: string | null;
@@ -340,6 +343,7 @@ export interface GroupMessage {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   mentions: string[];
   created_at: string;
   edited_at: string | null;
