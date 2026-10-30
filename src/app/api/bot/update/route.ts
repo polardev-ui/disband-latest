@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       botId?: string;
       name?: string;
       avatarUrl?: string | null;
+      bannerUrl?: string | null;
       bio?: string | null;
       scopes?: string[];
     };
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
       updates.avatar_url = body.avatarUrl;
     }
 
+    if (body.bannerUrl !== undefined) {
+      // banner_url lives on the linked profile, not the bots table
+    }
+
     if (body.scopes !== undefined) {
       if (!Array.isArray(body.scopes) || body.scopes.length === 0 || !body.scopes.every(isBotScope)) {
         return NextResponse.json({ error: "Invalid scopes." }, { status: 400 });
@@ -72,6 +77,7 @@ export async function POST(request: NextRequest) {
     if (body.name !== undefined) profileUpdates.display_name = body.name.trim();
     if (body.avatarUrl !== undefined) profileUpdates.avatar_url = body.avatarUrl;
     if (body.bio !== undefined) profileUpdates.bio = body.bio?.trim() || null;
+    if (body.bannerUrl !== undefined) profileUpdates.banner_url = body.bannerUrl;
 
     if (Object.keys(profileUpdates).length > 0) {
       await service.from("profiles").update(profileUpdates).eq("id", bot.user_id);
