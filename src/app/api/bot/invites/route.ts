@@ -18,21 +18,27 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as {
       botId?: string;
-      serverId?: string;
+      serverId?: string | null;
       scopes?: string[];
+      general?: boolean;
     };
 
-    if (!body.botId || !body.serverId || !Array.isArray(body.scopes) || body.scopes.length === 0) {
-      return NextResponse.json({ error: "botId, serverId and scopes are required." }, { status: 400 });
+    if (!body.botId || !Array.isArray(body.scopes) || body.scopes.length === 0) {
+      return NextResponse.json({ error: "botId and scopes are required." }, { status: 400 });
     }
     if (!body.scopes.every(isBotScope)) {
       return NextResponse.json({ error: "Invalid scope." }, { status: 400 });
     }
 
+    const serverId = body.general ? null : (body.serverId ?? null);
+    if (!body.general && !serverId) {
+      return NextResponse.json({ error: "serverId is required for a targeted invite." }, { status: 400 });
+    }
+
     const { data: code, error } = await service.rpc("bot_create_invite", {
       p_bot_id: body.botId,
       p_actor_id: user.id,
-      p_server_id: body.serverId,
+      p_server_id: serverId,
       p_scopes: body.scopes,
     });
 

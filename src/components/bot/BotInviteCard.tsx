@@ -18,7 +18,7 @@ interface InviteData {
   created_at: string | null;
   scopes: BotScope[];
   bot: { id: string; user_id: string; name: string; avatar_url: string | null };
-  server: { id: string; name: string; icon_url: string | null; owner_id: string };
+  server: { id: string; name: string; icon_url: string | null; owner_id: string } | null;
 }
 
 const STATUS_COPY: Record<InviteData["status"], { label: string; tone: string }> = {
@@ -56,10 +56,19 @@ export function BotInviteCard({ code }: { code: string }) {
     })();
   }, [code]);
 
+  const [selectedServerId, setSelectedServerId] = useState("");
+  const [userServers, setUserServers] = useState<{ id: string; name: string }[]>([]);
+
   useEffect(() => {
     void (async () => {
       const { data } = await getSupabaseClient().auth.getSession();
       setSignedIn(!!data.session);
+      if (data.session) {
+        const res = await apiFetch("/api/servers"); // or use supabase directly
+        // fallback: fetch via supabase
+        const { data: servers } = await getSupabaseClient().from("servers").select("id, name").limit(50);
+        if (servers) setUserServers(servers as { id: string; name: string }[]);
+      }
     })();
   }, []);
 
@@ -74,9 +83,15 @@ export function BotInviteCard({ code }: { code: string }) {
           setSignedIn(false);
           return;
         }
+        const isGeneral = !invite?.server;
+        if (isGeneral && action === "approve" && !selectedServerId) {
+          setError("Pick a space to add the bot to.");
+          return;
+        }
         const res = await apiFetch(`/api/bot/invites/${code}/${action}`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: action === "approve" && isGeneral ? JSON.stringify({ serverId: selectedServerId }) : undefined,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
@@ -87,7 +102,7 @@ export function BotInviteCard({ code }: { code: string }) {
         setBusy(false);
       }
     },
-    [code],
+    [code, invite?.server, selectedServerId],
   );
 
   const pending = invite?.status === "pending";
@@ -125,7 +140,9 @@ export function BotInviteCard({ code }: { code: string }) {
               <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
                 Bot invite
               </p>
-              <h1 className="mt-1 text-xl font-bold text-text-normal">Join {invite.server.name}?</h1>
+              <h1 className="mt-1 text-xl font-bold text-text-normal">
+                {invite.server ? `Join ${invite.server.name}?` : `Add ${invite.bot.name} to a space?`}
+              </h1>
               {status && <p className={`mt-2 text-sm font-medium ${status.tone}`}>{status.label}</p>}
             </div>
 
@@ -144,9 +161,29 @@ export function BotInviteCard({ code }: { code: string }) {
                     <p className="truncate text-lg font-semibold text-text-normal">{invite.bot.name}</p>
                     <BotTag profile={{ is_bot: true }} size="sm" />
                   </div>
-                  <p className="text-sm text-text-muted">wants access to {invite.server.name}</p>
+                  <p className="text-sm text-text-muted">
+                    {invite.server ? `wants access to ${invite.server.name}` : "wants to join one of your spaces"}
+                  </p>
                 </div>
               </div>
+
+              {!invite.server && pending && signedIn && (
+                <div className="mt-4">
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                    Choose a space
+                  </p>
+                  <select
+                    value={selectedServerId}
+                    onChange={(e) => setSelectedServerId(e.target.value)}
+                    className="w-full rounded-[3px] border border-divider bg-bg-secondary px-3 py-2 text-sm text-text-normal outline-none"
+                  >
+                    <option value="">Pick a space…</option>
+                    {userServers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="mt-6">
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
@@ -200,7 +237,7 @@ export function BotInviteCard({ code }: { code: string }) {
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                     >
                       <span aria-hidden>✓</span>
-                      {busy ? "Working…" : `Add to ${invite.server.name}`}
+                      {busy ? "Working…" : `Add to ${invite.server?.name ?? "space"}`}
                     </button>
                   </div>
                 ) : (
