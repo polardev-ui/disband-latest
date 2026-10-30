@@ -13,6 +13,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { exchangeRefreshToken, getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetRefreshState, resetSupabaseClient } from "@/lib/supabase/client";
+import { fetchIceServers } from "@/lib/ice-servers";
 import { getSavedSessions, getSavedSessionTokens, clearSavedSessionTokens, saveSession as persistSavedSession, removeSavedSession as dropSavedSession, type SavedSession } from "@/lib/saved-sessions";
 import { memberIconRole } from "@/lib/role-icons";
 import { getSavedRefreshToken, saveSwitchRefreshToken, clearSavedRefreshToken } from "@/lib/switch-refresh-tokens";
@@ -604,6 +605,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
+
+  // Pre-warm TURN/STUN credentials so the first call doesn't pay the
+  // /api/turn round trip. Cached 30 min; fire-and-forget.
+  useEffect(() => {
+    void fetchIceServers();
+  }, []);
 
   const rememberSession = useCallback((s: Session | null | undefined, p?: Profile | null) => {
     persistSavedSession(s, p);
