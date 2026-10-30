@@ -101,8 +101,11 @@ export function UserProfilePopout({
   // window, otherwise to its left; vertically aligned and kept on screen.
   // Re-placed whenever the card changes height (badges, roles and notes load
   // after it opens) or the window resizes, so it never runs off the bottom.
+  // Waits for `mounted`: usePresence renders the card a beat after `open`,
+  // and running before that measured nothing and never attached the
+  // observer, so a card opened from closed stayed placed for a 480px guess.
   useLayoutEffect(() => {
-    if (!open || !anchor) return;
+    if (!open || !anchor || !mounted) return;
     const place = () => {
       // A roomy bottom margin: on macOS the window often runs behind the Dock,
       // so "just inside the viewport" can still be hidden.
@@ -125,7 +128,7 @@ export function UserProfilePopout({
       ro?.disconnect();
       window.removeEventListener("resize", place);
     };
-  }, [open, anchor, p?.id]);
+  }, [open, anchor, p?.id, mounted]);
 
   const listening = p && presenceStatusFor(p, presenceMap) !== "offline" ? listeningFor(p, listeningMap) : null;
   const activity = p ? activityFor(p, activityMap) : null;
