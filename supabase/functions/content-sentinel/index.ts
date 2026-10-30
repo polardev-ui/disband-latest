@@ -112,6 +112,9 @@ Deno.serve(async (req) => {
   }
   if (!authorised) return json({ error: "unauthorized" }, 401);
 
+  // Once a day: everything Sentinel and staff did in the last 24 hours.
+  if (mode === "digest") return json(await sendDigest(supabase));
+
   const { data: run } = await supabase
     .from("safety_runs").insert({}).select("id, started_at").single();
   const runId = run?.id as string | undefined;
@@ -1739,4 +1742,101 @@ async function sweepSpaces(
   }
 
   return { checked, flagged, suspended };
+}
+
+/* ------------------------------------------------------------------ digest */
+
+// The daily summary. Per-run emails only go out when a run does something;
+// this one always arrives, so a quiet day (or a scheduler that stopped
+// running) is visible too. Identifiers, categories and AI reasoning only —
+// never the reported material.
+async function sendDigest(supabase: SupabaseClient) {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey) return { ok: false, error: "RESEND_API_KEY not set" };
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+
+  const [runs, actions, decided, waiting, flags, suspended, violations] = await Promise.all([
+    supabase.from("safety_runs").select("status, error, text_scanned, media_scanned, reports_scanned, flags_reviewed, flags_escalated, actions_taken, accounts_held").gte("started_at", since),
+    supabase.from("moderation_actions").select("action, src_table, src_id, owner_id, category, reason, actor, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(200),
+    supabase.from("message_reports").select("id, target_type, target_id, reason, status, decision, action, last_error, reported_user_id, reviewed_at, reported:profiles!message_reports_reported_user_id_fkey(username)").gte("reviewed_at", since).in("status", ["actioned", "dismissed"]).order("reviewed_at", { ascending: false }).limit(200),
+    supabase.from("message_reports").select("id, target_type, target_id, reason, last_error, created_at, reported:profiles!message_reports_reported_user_id_fkey(username)").in("status", ["pending", "reviewing", "needs_review", "failed"]).order("created_at", { ascending: true }).limit(200),
+    supabase.from("content_flags").select("state, rule_id, src_table, src_id, resolution").gte("resolved_at", since).limit(500),
+    supabase.from("servers").select("id, name, suspended_reason, suspended_by, suspended_at").gte("suspended_at", since),
+    supabase.from("user_violations").select("user_id, category, severity, reason, created_at").gte("created_at", since).limit(200),
+  ]);
+
+  const runRows = runs.data ?? [];
+  const sum = (k: string) => runRows.reduce((n, r: Record<string, unknown>) => n + Number(r[k] ?? 0), 0);
+  const failedRuns = runRows.filter((r: { status: string }) => r.status !== "ok");
+  const flagRows = flags.data ?? [];
+  const count = (state: string) => flagRows.filter((f: { state: string }) => f.state === state).length;
+  const user = (r: { reported?: { username?: string | null } | { username?: string | null }[] | null; reported_user_id?: string | null }) => {
+    const p = Array.isArray(r.reported) ? r.reported[0] : r.reported;
+    return p?.username ? `@${p.username}` : (r.reported_user_id ?? "—");
+  };
+
+  const table = (head: string[], rows: string[][]) => rows.length
+    ? `<table style="border-collapse:collapse;width:100%;font-size:13px;margin-top:6px">
+        <tr style="text-align:left;background:#f5f5f5">${head.map((h) => `<th style="padding:6px 8px">${h}</th>`).join("")}</tr>
+        ${rows.map((r) => `<tr>${r.map((c) => `<td style="padding:6px 8px;border-bottom:1px solid #eee;vertical-align:top">${escape(c)}</td>`).join("")}</tr>`).join("")}
+      </table>`
+    : `<p style="color:#666;margin:6px 0 0">None.</p>`;
+  const section = (title: string, body: string) => `<h3 style="margin:24px 0 0;font-size:16px">${title}</h3>${body}`;
+
+  const actionRows = (actions.data ?? []).map((a: Record<string, string | null>) => [
+    new Date(a.created_at!).toUTCString().slice(17, 22), a.action ?? "", a.category ?? "", `${a.src_table}#${a.src_id}`, a.owner_id ?? "—", a.reason ?? "",
+  ]);
+  const decidedRows = (decided.data ?? []).map((r: Record<string, unknown>) => [
+    String(r.status), String(r.target_type), String(r.reason), user(r as never), String(r.action ?? r.decision ?? ""), String(r.last_error ?? ""),
+  ]);
+  const waitingRows = (waiting.data ?? []).map((r: Record<string, unknown>) => [
+    String(r.created_at).slice(0, 16).replace("T", " "), String(r.target_type), String(r.reason), user(r as never), String(r.last_error ?? ""),
+  ]);
+  const spaceRows = (suspended.data ?? []).map((s: Record<string, string | null>) => [
+    s.name ?? "", s.id ?? "", s.suspended_by ? "staff" : "Sentinel", s.suspended_reason ?? "",
+  ]);
+  const violationRows = (violations.data ?? []).map((v: Record<string, string | null>) => [
+    v.user_id ?? "", v.category ?? "", v.severity ?? "", v.reason ?? "",
+  ]);
+
+  const needsYou = waitingRows.length + spaceRows.filter((r) => r[2] === "Sentinel").length;
+  const subject = failedRuns.length
+    ? `Disband Safety daily — ${failedRuns.length} run${failedRuns.length === 1 ? "" : "s"} failed`
+    : `Disband Safety daily — ${actionRows.length} action${actionRows.length === 1 ? "" : "s"}, ${needsYou} waiting on staff`;
+
+  const html = `
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111;max-width:900px">
+      <h2 style="margin:0 0 4px">Disband Safety — daily summary</h2>
+      <p style="color:#666;margin:0 0 16px">The 24 hours to ${new Date().toUTCString()}</p>
+      ${runRows.length === 0 ? `<p style="background:#fee;padding:12px;border-radius:8px"><b>No Sentinel runs in the last 24 hours.</b> The schedule may have stopped.</p>` : ""}
+      ${failedRuns.length ? `<p style="background:#fee;padding:12px;border-radius:8px"><b>${failedRuns.length} of ${runRows.length} runs failed.</b> Latest error: ${escape(String((failedRuns[0] as { error?: string }).error ?? "unknown"))}</p>` : ""}
+      <p style="line-height:1.7">
+        Runs: <b>${runRows.length}</b> &middot; Text rows scanned: <b>${sum("text_scanned")}</b> &middot;
+        Media scanned: <b>${sum("media_scanned")}</b> &middot; Reports reviewed: <b>${sum("reports_scanned")}</b><br>
+        Flags actioned: <b>${count("actioned")}</b> &middot; dismissed by AI or staff: <b>${count("dismissed")}</b> &middot;
+        escalated to staff: <b>${count("escalated")}</b> &middot; Accounts held: <b>${sum("accounts_held")}</b>
+      </p>
+      ${section(`Content removed (${actionRows.length})`, table(["Time (UTC)", "Action", "Category", "Where", "Owner", "Reason"], actionRows))}
+      ${section(`Spaces suspended (${spaceRows.length})`, table(["Space", "Id", "By", "Reason"], spaceRows))}
+      ${section(`Strikes given (${violationRows.length})`, table(["User", "Category", "Severity", "Reason"], violationRows))}
+      ${section(`Reports closed (${decidedRows.length})`, table(["Outcome", "Type", "Reason", "Reported", "Action", "AI / notes"], decidedRows))}
+      ${section(`Waiting on staff (${waitingRows.length})`, table(["Filed (UTC)", "Type", "Reason", "Reported", "AI / notes"], waitingRows))}
+      <p style="margin-top:16px">Review these in <a href="https://www.disband.dev/app/team-support">Team Support → Flags</a>.</p>
+      <p style="margin-top:20px;padding:12px;background:#fff8e1;border-radius:8px;font-size:13px">
+        <b>Confirmed CSAM must be reported to NCMEC's CyberTipline within 24 hours</b>
+        (18 U.S.C. § 2258A). This email contains identifiers only, never the material.
+      </p>
+    </div>`;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: REPORT_FROM, to: [REPORT_TO], subject, html }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    console.error("[sentinel] digest resend", response.status, text);
+    return { ok: false, error: `resend ${response.status}` };
+  }
+  return { ok: true, actions: actionRows.length, closed: decidedRows.length, waiting: waitingRows.length };
 }
