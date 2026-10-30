@@ -1,3 +1,4 @@
+import { requireSupportStaff } from "@/lib/server-auth";
 import { NextResponse } from "next/server";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 
@@ -7,8 +8,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const supabase = getServiceSupabase();
   if (!supabase) return NextResponse.json({ error: "Unavailable" }, { status: 500 });
-  const { data: staffProfile } = await supabase.from("profiles").select("is_support_staff").eq("id", user.id).maybeSingle();
-  if (!staffProfile?.is_support_staff) return NextResponse.json({ error: "Access denied." }, { status: 403 });
+  if (!(await requireSupportStaff(user.id))) return NextResponse.json({ error: "Access denied." }, { status: 403 });
 
   const { id } = await params;
   const { error } = await supabase
