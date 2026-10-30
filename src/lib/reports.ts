@@ -6,8 +6,8 @@
  * constraint in `0146_message_reports.sql`.
  */
 
-export type ReportTargetType = "message" | "profile";
-export type ReportSurface = "channel" | "dm" | "group" | "profile";
+export type ReportTargetType = "message" | "profile" | "server";
+export type ReportSurface = "channel" | "dm" | "group" | "profile" | "server";
 
 export type ReportReason =
   | "harassment"
@@ -102,6 +102,39 @@ export const PROFILE_REPORT_REASONS: ReportReasonOption[] = [
   },
 ];
 
+export const SERVER_REPORT_REASONS: ReportReasonOption[] = [
+  {
+    id: "illegal_content",
+    label: "Child safety or illegal content",
+    description: "Sexual content involving minors, or a space trading illegal material.",
+  },
+  {
+    id: "sexual_content",
+    label: "Sexual content",
+    description: "A space built around pornography or explicit imagery.",
+  },
+  {
+    id: "hate_speech",
+    label: "Hate or extremism",
+    description: "A space organised around attacking a protected group.",
+  },
+  {
+    id: "violence_gore",
+    label: "Violence or gore",
+    description: "Graphic violence, threats, or a space planning harm.",
+  },
+  {
+    id: "spam",
+    label: "Spam or scams",
+    description: "Phishing, fake giveaways, or selling stolen accounts.",
+  },
+  {
+    id: "other",
+    label: "Something else",
+    description: "Tell us what is wrong and we will take a look.",
+  },
+];
+
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   harassment: "Harassment or bullying",
   hate_speech: "Hate speech",
@@ -117,6 +150,7 @@ export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
 export const MAX_REPORT_DETAILS = 1000;
 
 export function reportReasonsFor(targetType: ReportTargetType): ReportReasonOption[] {
+  if (targetType === "server") return SERVER_REPORT_REASONS;
   return targetType === "profile" ? PROFILE_REPORT_REASONS : MESSAGE_REPORT_REASONS;
 }
 

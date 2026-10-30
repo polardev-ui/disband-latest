@@ -109,13 +109,14 @@ export default function TeamSupportPage() {
   // Flags (message reports)
   interface FlagRow {
     id: string;
-    reporter_id: string;
+    reporter_id: string | null;
     reported_user_id?: string | null;
     target_type: string;
     target_surface: string;
     reason: string;
     status: string;
     details?: string | null;
+    last_error?: string | null;
     created_at: string;
     snapshot?: any;
     reporter?: { username: string | null; display_name: string | null } | null;
@@ -840,7 +841,7 @@ export default function TeamSupportPage() {
                         {flag.target_type} · {flag.target_surface} · {flag.reason}
                       </p>
                       <p className="mt-1 text-xs text-text-muted">
-                        Reported by {flag.reporter?.display_name || flag.reporter?.username || flag.reporter_id} · {new Date(flag.created_at).toLocaleString()}
+                        {flag.reporter_id ? <>Reported by {flag.reporter?.display_name || flag.reporter?.username || flag.reporter_id}</> : "Found by Sentinel"} · {new Date(flag.created_at).toLocaleString()}
                       </p>
                       {flag.reported && (
                         <p className="mt-1 text-xs text-text-muted">
@@ -851,6 +852,7 @@ export default function TeamSupportPage() {
                     <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{flag.status.replace("_", " ")}</span>
                   </div>
                   {flag.details && <p className="mt-2 text-sm text-text-muted">{flag.details}</p>}
+                  {flag.last_error && <p className="mt-2 rounded-[3px] bg-bg-secondary px-3 py-2 text-xs text-text-muted">{flag.last_error}</p>}
                   {flag.snapshot && (
                     <details className="mt-3">
                       <summary className="cursor-pointer text-xs text-text-muted hover:text-text-normal">View snapshot</summary>

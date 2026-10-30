@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
     let query = service
       .from("message_reports")
-      .select("id, reporter_id, target_type, target_surface, target_table, target_id, container_id, reported_user_id, reason, details, status, decision, action, snapshot, created_at, reviewed_at, reporter:profiles!message_reports_reporter_id_fkey(username, display_name), reported:profiles!message_reports_reported_user_id_fkey(username, display_name)")
+      .select("id, reporter_id, target_type, target_surface, target_table, target_id, container_id, reported_user_id, reason, details, status, decision, action, last_error, snapshot, created_at, reviewed_at, reporter:profiles!message_reports_reporter_id_fkey(username, display_name), reported:profiles!message_reports_reported_user_id_fkey(username, display_name)")
       .order("created_at", { ascending: false })
       .limit(100);
 
