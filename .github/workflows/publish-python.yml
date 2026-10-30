@@ -1,0 +1,37 @@
+name: Publish Python bot
+on:
+  push:
+    tags: ['bot-py-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.1.1)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install build tools
+        run: pip install build twine
+      - name: Bump version if provided
+        if: inputs.version
+        run: |
+          cd packages/disband-bot-python
+          sed -i "s/^version = .*/version = \\"${{ inputs.version }}\\"/" pyproject.toml
+      - name: Build
+        run: cd packages/disband-bot-python && python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/disband-bot-python/dist/
+          password: ${{ secrets.PYPI_API_TOKEN }}

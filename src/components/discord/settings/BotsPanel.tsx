@@ -140,6 +140,7 @@ export function BotsPanel() {
   const [editingBot, setEditingBot] = useState<ManagedBot | null>(null);
   const [editName, setEditName] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [editBannerUrl, setEditBannerUrl] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editScopes, setEditScopes] = useState<BotScope[]>([]);
   const [editSaving, setEditSaving] = useState(false);
@@ -149,6 +150,7 @@ export function BotsPanel() {
     setEditingBot(bot);
     setEditName(bot.name);
     setEditAvatarUrl(bot.avatar_url ?? "");
+    setEditBannerUrl("");
     setEditBio("");
     setEditScopes([...bot.scopes]);
     setEditError(null);
@@ -163,6 +165,7 @@ export function BotsPanel() {
         botId: editingBot.id,
         name: editName.trim(),
         avatarUrl: editAvatarUrl.trim() || null,
+        bannerUrl: editBannerUrl.trim() || null,
         bio: editBio.trim() || null,
         scopes: editScopes,
       });
@@ -578,6 +581,10 @@ export function BotsPanel() {
               <div>
                 <label className="mb-1 block text-[13px] font-medium text-text-normal">Avatar URL</label>
                 <input value={editAvatarUrl} onChange={(e) => setEditAvatarUrl(e.target.value)} className={settingsInputClass} placeholder="https://..." />
+              </div>
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">Banner URL</label>
+                <input value={editBannerUrl} onChange={(e) => setEditBannerUrl(e.target.value)} className={settingsInputClass} placeholder="https://..." />
               </div>
               <div>
                 <label className="mb-1 block text-[13px] font-medium text-text-normal">Bio</label>
