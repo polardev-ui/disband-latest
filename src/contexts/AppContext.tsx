@@ -3223,14 +3223,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
   useEffect(() => {
     if (!userId || !configured || friendIdsKey === "") return;
-    const sub = getSupabaseClient()
-      .channel(`profiles:friends:${userId}`)
-      .on(
+    const sub = getSupabaseClient().channel(`profiles:friends:${userId}`);
+    // Realtime rejects an `in` filter over 100 values, and the rejection
+    // took the whole subscription down for anyone with 101+ friends.
+    const ids = friendIdsKey.split(",");
+    for (let i = 0; i < ids.length; i += 100) {
+      sub.on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${friendIdsKey})` },
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
         () => void loadFriendships(userId),
-      )
-      .subscribe();
+      );
+    }
+    sub.subscribe();
     return () => {
       void sub.unsubscribe();
     };
@@ -4931,6 +4935,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const normalized = username.trim().toLowerCase();
     if (!normalized) return "Enter a username";
 
+    // Answer from the friend list already in memory when we can: no
+    // round trip to Oregon just to say "already friends".
+    const known = friendships.find((f) => {
+      const other = f.requester_id === userId ? f.addressee : f.requester;
+      return other?.username?.toLowerCase() === normalized;
+    });
+    if (known) {
+      if (known.status === "accepted") return "You are already friends";
+      if (known.status === "pending") {
+        return known.requester_id === userId
+          ? "Friend request already sent"
+          : "This user already sent you a friend request — check Pending to accept or decline";
+      }
+    }
+
     const supabase = getSupabaseClient();
     const { data: target, error: lookupError } = await supabase
       .from("profiles")
@@ -4943,36 +4962,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (target.id === userId) return "Cannot friend yourself";
     if (target.is_bot) return "Tether and other bots can't receive friend requests.";
 
-    const { data: existingRows, error: existingError } = await supabase
+    // No separate "does a row exist?" query: friendships_pair_unique makes
+    // the insert itself fail with 23505 for any existing pair, either way
+    // round, and the conflict branch below explains which case it is.
+    const { data: created, error } = await supabase
       .from("friendships")
-      .select("id, status, requester_id, addressee_id")
-      .or(
-        `and(requester_id.eq.${userId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${userId})`,
-      );
-
-    if (existingError) return existingError.message;
-
-    const existing = (existingRows ?? [])[0];
-    if (existing) {
-      if (existing.status === "accepted") return "You are already friends";
-      if (existing.status === "pending") {
-        if (existing.requester_id === target.id) {
-          return "This user already sent you a friend request — check Pending to accept or decline";
-        }
-        return "Friend request already sent";
-      }
-      if (existing.status === "blocked") {
-        if (existing.requester_id === userId) {
-          return "You have blocked this user. Unblock them first to send a friend request.";
-        }
-        return "This user has blocked you. You cannot send a friend request.";
-      }
-    }
-
-    const { error } = await supabase.from("friendships").insert({
-      requester_id: userId,
-      addressee_id: target.id,
-    });
+      .insert({ requester_id: userId, addressee_id: target.id })
+      .select("*, requester:profiles!requester_id(*), addressee:profiles!addressee_id(*)")
+      .single();
     if (error) {
       if (error.code === "23505") {
         const { data: conflict } = await supabase
@@ -4999,34 +4996,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return error.message;
     }
-    await loadFriendships(userId);
+    // Show it straight away from the insert's own result instead of
+    // re-reading every friendship; the realtime feed reconciles later.
+    if (created) {
+      const row = created as unknown as DbFriendship & { requester: Profile | null; addressee: Profile | null };
+      setFriendships((prev) => [
+        ...prev.filter((f) => f.id !== row.id),
+        { ...row, requester: row.requester ?? undefined, addressee: row.addressee ?? undefined },
+      ]);
+    } else {
+      void loadFriendships(userId);
+    }
     return null;
-  }, [userId, loadFriendships, hasRestriction]);
+  }, [userId, friendships, loadFriendships, hasRestriction]);
 
   const respondFriendRequest = useCallback(async (id: string, accept: boolean) => {
     if (!userId) return;
     const supabase = getSupabaseClient();
     const pending = friendships.find((f) => f.id === id);
-    if (accept) {
-      await supabase.from("friendships").update({ status: "accepted" }).eq("id", id);
-      if (pending) {
-        const friendId = pending.requester_id === userId ? pending.addressee_id : pending.requester_id;
-        bumpFriendActivity(friendId);
-      }
-    } else {
-      await supabase.from("friendships").delete().eq("id", id);
+    // Update the list first and write behind it, so Accept and Ignore feel
+    // instant even from the other side of the world. A failed write puts
+    // the real state back.
+    setFriendships((prev) => accept
+      ? prev.map((f) => (f.id === id ? { ...f, status: "accepted" } : f))
+      : prev.filter((f) => f.id !== id));
+    if (accept && pending) {
+      const friendId = pending.requester_id === userId ? pending.addressee_id : pending.requester_id;
+      bumpFriendActivity(friendId);
     }
-    await loadFriendships(userId);
+    const { error } = accept
+      ? await supabase.from("friendships").update({ status: "accepted" }).eq("id", id)
+      : await supabase.from("friendships").delete().eq("id", id);
+    if (error) void loadFriendships(userId);
   }, [userId, friendships, loadFriendships, bumpFriendActivity]);
 
   const removeFriend = useCallback(async (friendId: string) => {
     if (!userId) return;
     const supabase = getSupabaseClient();
-    await supabase
+    setFriendships((prev) => prev.filter((f) =>
+      !(f.status !== "blocked" &&
+        ((f.requester_id === userId && f.addressee_id === friendId) ||
+         (f.requester_id === friendId && f.addressee_id === userId)))));
+    const { error } = await supabase
       .from("friendships")
       .delete()
       .or(`and(requester_id.eq.${userId},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${userId})`);
-    await loadFriendships(userId);
+    if (error) void loadFriendships(userId);
   }, [userId, loadFriendships]);
 
   const blockUser = useCallback(async (targetUserId: string) => {

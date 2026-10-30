@@ -294,10 +294,22 @@ struct FriendsTab: View {
         return presence.status(for: profile.id)
     }
 
+    /// Moves the request in the list straight away and writes behind it, so
+    /// Accept and Ignore feel instant. A failed write reloads the real state.
     private func respond(_ f: Friendship, accept: Bool) {
+        if accept {
+            if let i = friendships.firstIndex(where: { $0.id == f.id }) {
+                friendships[i].status = .accepted
+            }
+        } else {
+            friendships.removeAll { $0.id == f.id }
+        }
         Task {
-            try? await DatabaseService.respondToFriendRequest(id: f.id, accept: accept)
-            await load()
+            do {
+                try await DatabaseService.respondToFriendRequest(id: f.id, accept: accept)
+            } catch {
+                await load()
+            }
         }
     }
 
