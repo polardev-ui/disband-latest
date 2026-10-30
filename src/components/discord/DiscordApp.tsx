@@ -2370,6 +2370,7 @@ export function DiscordApp() {
       {app.viewMode === "space" && !isMobile && !searchOpen && membersVisible && (
         <MemberList
           serverId={app.activeServerId}
+          channelId={app.activeChannelId}
           members={app.members}
           roles={app.serverRoles}
           ownerId={app.activeServer?.owner_id ?? null}

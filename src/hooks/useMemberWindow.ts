@@ -68,7 +68,20 @@ function toMember(r: Row): WindowMember | null {
  * database, or a preview without a session); callers then fall back to the
  * members they already have.
  */
-export function useMemberWindow(serverId: string | null, presence: PresenceMap) {
+export function useMemberWindow(
+  serverId: string | null,
+  presence: PresenceMap,
+  /** Scope the list to who can see this channel (a private channel lists fewer people). */
+  channelId: string | null = null,
+  /** Bumped when the roster changed (kick, join, role or channel permission change). */
+  version = 0,
+) {
+  // One list per space+channel; the channel RPCs take the channel instead of the space.
+  const listKey = serverId ? `${serverId}:${channelId ?? ""}` : null;
+  const scope = channelId ? { p_channel_id: channelId } : { p_server_id: serverId };
+  const fn = (name: "counts" | "ids" | "offline") => channelId
+    ? { counts: "get_channel_member_counts", ids: "get_channel_members_by_ids", offline: "get_channel_offline_members" }[name]
+    : { counts: "get_server_member_counts", ids: "get_server_members_by_ids", offline: "get_server_offline_members" }[name];
   const [total, setTotal] = useState<number | null>(null);
   const [mode, setMode] = useState<"window" | "local">("window");
   const [onlineById, setOnlineById] = useState<Map<string, WindowMember>>(new Map());
@@ -117,14 +130,14 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   // New space: start over, from the cache when this space was seen before.
   useEffect(() => {
     generation.current += 1;
-    const cached = serverId ? spaceCache.get(serverId) : undefined;
+    const cached = listKey ? spaceCache.get(listKey) : undefined;
     setTotal(cached?.total ?? null);
     setMode("window");
     setOnlineById(cached ? new Map(cached.onlineById) : new Map());
     setResolvedOnlineIds(cached ? new Set(cached.onlineById.keys()) : new Set());
     setOnlineReady(!!cached);
     refreshCached.current = !!cached;
-    setStateServerId(serverId);
+    setStateServerId(listKey);
     setPages(new Map());
     inflight.current.clear();
     attemptedOnlineIds.current.clear();
@@ -134,7 +147,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     }
     if (!serverId) return;
     const gen = generation.current;
-    void rpc("get_server_member_counts", { p_server_id: serverId })
+    void rpc(fn("counts"), scope)
       .then(({ data, error }) => {
         if (gen !== generation.current) return;
         const row = (Array.isArray(data) ? data[0] : data) as { total?: number | string } | null;
@@ -144,7 +157,8 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
         }
         setTotal(Number(row.total));
       });
-  }, [serverId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, version]);
 
   // Resolve the online ids to members of this space. Chunked instead of
   // slicing at 1,000: the old cap silently dropped the rest of a busy roster
@@ -169,7 +183,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     void Promise.all(
       chunks.map(async (ids) => ({
         ids,
-        result: await rpc("get_server_members_by_ids", { p_server_id: serverId, p_user_ids: ids }),
+        result: await rpc(fn("ids"), { ...scope, p_user_ids: ids }),
       })),
     ).then((results) => {
       if (gen !== generation.current) return;
@@ -210,19 +224,20 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
         }, 2000);
       }
     });
-  }, [serverId, mode, settledOnline, onlineById, onlineRetry]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, version, mode, settledOnline, onlineById, onlineRetry]);
 
   // Keep the cache current for the next visit.
   useEffect(() => {
-    if (!serverId || mode !== "window" || stateServerId !== serverId) return;
-    spaceCache.delete(serverId);
-    spaceCache.set(serverId, { total, onlineById });
+    if (!listKey || mode !== "window" || stateServerId !== listKey) return;
+    spaceCache.delete(listKey);
+    spaceCache.set(listKey, { total, onlineById });
     while (spaceCache.size > SPACE_CACHE_LIMIT) {
       const oldest = spaceCache.keys().next().value;
       if (oldest === undefined) break;
       spaceCache.delete(oldest);
     }
-  }, [serverId, stateServerId, mode, total, onlineById]);
+  }, [listKey, stateServerId, mode, total, onlineById]);
 
   // Members of this space who are online right now (non-members drop out
   // because the RPC only returns people in the space).
@@ -287,8 +302,8 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
         if (page * MEMBER_WINDOW_PAGE >= offlineCount) break;
         if (inflight.current.has(page)) continue;
         inflight.current.add(page);
-        void rpc("get_server_offline_members", {
-            p_server_id: serverId,
+        void rpc(fn("offline"), {
+            ...scope,
             p_exclude: exclude,
             p_offset: page * MEMBER_WINDOW_PAGE,
             p_limit: MEMBER_WINDOW_PAGE,
@@ -310,7 +325,8 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
           });
       }
     },
-    [serverId, mode, offlineCount, onlineMemberIds],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [listKey, version, mode, offlineCount, onlineMemberIds],
   );
 
   const offlineAt = useCallback(
