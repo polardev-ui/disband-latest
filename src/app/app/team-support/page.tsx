@@ -175,13 +175,12 @@ export default function TeamSupportPage() {
       router.replace("/login?next=%2Fapp%2Fteam-support");
       return false;
     }
-    // Check support staff status from the database (profiles.is_support_staff)
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("is_support_staff")
-      .eq("id", data.session.user.id)
-      .maybeSingle();
-    if (!isSupportStaffFromProfile(profile)) {
+    // The support flag on the profile, or any staff/moderator/manager badge.
+    const [{ data: profile }, { data: badged }] = await Promise.all([
+      supabase.from("profiles").select("is_support_staff").eq("id", data.session.user.id).maybeSingle(),
+      supabase.rpc("is_platform_staff", { p_user: data.session.user.id }),
+    ]);
+    if (!isSupportStaffFromProfile(profile) && badged !== true) {
       setPhase("denied");
       return false;
     }
