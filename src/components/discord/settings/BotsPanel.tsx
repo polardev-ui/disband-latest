@@ -65,6 +65,7 @@ export function BotsPanel() {
   if (invitingBot) lastInvitingBotRef.current = invitingBot;
   const shownInvitingBot = invitingBot ?? lastInvitingBotRef.current;
   const [inviteServerId, setInviteServerId] = useState("");
+  const [inviteGeneral, setInviteGeneral] = useState(false);
   const [inviteScopes, setInviteScopes] = useState<BotScope[]>([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -139,6 +140,7 @@ export function BotsPanel() {
   function openInvite(bot: ManagedBot) {
     setInvitingBot(bot);
     setInviteServerId(servers[0]?.id ?? "");
+    setInviteGeneral(false);
     setInviteScopes([...bot.scopes]);
     setInviteUrl(null);
     setInviteError(null);
@@ -147,8 +149,8 @@ export function BotsPanel() {
 
   async function generateInvite() {
     if (!invitingBot) return;
-    if (!inviteServerId) {
-      setInviteError("Pick a space for the bot to join.");
+    if (!inviteGeneral && !inviteServerId) {
+      setInviteError("Pick a space for the bot to join, or enable general invite.");
       return;
     }
     if (inviteScopes.length === 0) {
@@ -160,8 +162,9 @@ export function BotsPanel() {
     try {
       const { ok, data } = await postJson("/api/bot/invites", {
         botId: invitingBot.id,
-        serverId: inviteServerId,
+        serverId: inviteGeneral ? null : inviteServerId,
         scopes: inviteScopes,
+        general: inviteGeneral,
       });
       if (!ok) throw new Error(data.error ?? "Could not create the invite.");
       setInviteUrl(data.invite_url);
@@ -390,21 +393,38 @@ export function BotsPanel() {
 
             <div className="mt-4 space-y-4">
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-text-normal" htmlFor="bot-invite-space">
-                  Space
+                <label className="mb-1.5 flex items-center gap-2 text-[13px] font-medium text-text-normal">
+                  <input
+                    type="checkbox"
+                    checked={inviteGeneral}
+                    onChange={(e) => setInviteGeneral(e.target.checked)}
+                    className="h-4 w-4 rounded border-divider"
+                  />
+                  General invite (recipient picks the space)
                 </label>
-                <select
-                  id="bot-invite-space"
-                  value={inviteServerId}
-                  onChange={(e) => setInviteServerId(e.target.value)}
-                  className={settingsInputClass}
-                >
-                  {servers.length === 0 && <option value="">No spaces — join one first</option>}
-                  {servers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <p className="mb-2 text-[11.5px] text-text-muted">
+                  Anyone with the link can sign in and add the bot to a space they manage.
+                </p>
               </div>
+
+              {!inviteGeneral && (
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-medium text-text-normal" htmlFor="bot-invite-space">
+                    Space
+                  </label>
+                  <select
+                    id="bot-invite-space"
+                    value={inviteServerId}
+                    onChange={(e) => setInviteServerId(e.target.value)}
+                    className={settingsInputClass}
+                  >
+                    {servers.length === 0 && <option value="">No spaces — join one first</option>}
+                    {servers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-text-normal">
