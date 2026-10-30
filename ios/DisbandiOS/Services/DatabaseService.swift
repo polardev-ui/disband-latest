@@ -795,9 +795,24 @@ enum DatabaseService {
             let reason: String?
         }
         do {
-            let result: Result = try await client
-                .rpc("check_username_available", params: Params(p_username: username))
-                .execute().value
+            let result: Result
+            if client.auth.currentSession == nil {
+                // Sign-up has no session yet, and the RPC is members-only: it
+                // was refused every time and read as "available". The web's
+                // rate-limited endpoint answers for signed-out callers.
+                var components = URLComponents(
+                    url: AppConfig.webAppURL.appendingPathComponent("api/profile/check-username"),
+                    resolvingAgainstBaseURL: false
+                )
+                components?.queryItems = [URLQueryItem(name: "username", value: username)]
+                guard let url = components?.url else { return nil }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                result = try JSONDecoder().decode(Result.self, from: data)
+            } else {
+                result = try await client
+                    .rpc("check_username_available", params: Params(p_username: username))
+                    .execute().value
+            }
             return result.available ? nil : (result.reason ?? "That username is taken.")
         } catch {
             // Network/permission trouble: don't block the save here — the RPC
