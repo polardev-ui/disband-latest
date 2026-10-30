@@ -250,7 +250,7 @@ export function useVoiceChannel(
       const promise: Promise<RTCPeerConnection | null> = (async () => {
         let pc: RTCPeerConnection;
         try {
-          pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+          pc = new RTCPeerConnection({ iceServers: await fetchIceServers(), iceCandidatePoolSize: 4 });
         } catch {
           pc = new RTCPeerConnection();
         }

@@ -209,7 +209,7 @@ export function useGroupCallManager(
       if (!userId || !groupIdRef.current || remoteId === userId) return;
       if (peersRef.current.has(remoteId)) return;
 
-      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers(), iceCandidatePoolSize: 4 });
       peersRef.current.set(remoteId, pc);
 
       ensureLanes(pc);
@@ -354,10 +354,10 @@ export function useGroupCallManager(
             }
           }
           if (!peer.remoteDescription) {
-            offerTimersRef.current.set(remoteId, window.setTimeout(resendOffer, 2500));
+            offerTimersRef.current.set(remoteId, window.setTimeout(resendOffer, 1000));
           }
         };
-        offerTimersRef.current.set(remoteId, window.setTimeout(resendOffer, 2500));
+        offerTimersRef.current.set(remoteId, window.setTimeout(resendOffer, 1000));
       }
     },
     [userId, broadcast],

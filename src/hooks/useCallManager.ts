@@ -236,39 +236,10 @@ export function useCallManager(
         .catch((err: unknown) => err instanceof Error ? err : new Error("Call signaling failed"));
 
       const iceServersPromise = fetchIceServers();
-      const raw = await getDisbandUserMedia({
-        audio: true,
-        video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
-      });
-      const rawMic = raw.getAudioTracks()[0] ?? null;
-      const cameraTracks = raw.getVideoTracks();
-      const mixer = new VoiceMixer(rawMic, {
-        micMuted,
-        noiseCancellation: isNoiseCancellationEnabled(),
-        noiseStrength: getNoiseCancellationStrength(),
-      });
-      const stream = new MediaStream([mixer.audioTrack, ...cameraTracks]);
-      localRef.current = stream;
-      setLocalStream(stream);
-      setActiveVoiceMixer(mixer);
-      applyMic(micMuted);
-
-      const pc = new RTCPeerConnection({ iceServers: await iceServersPromise });
+      const iceServers = await iceServersPromise;
+      const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 4 });
       pcRef.current = pc;
-
-      const mic0 = stream.getAudioTracks()[0] ?? null;
-      const cam0 = stream.getVideoTracks()[0] ?? null;
-      // Both sides need the lane transceivers up front: the callee used to
-      // rely on the browser auto-creating them during createAnswer(), which is
-      // implementation-dependent and broke calls on some desktop browsers.
-      ensureLanes(pc);
-      if (asCaller) {
-        await setLaneTrack(pc, LANE_AUDIO, mic0);
-        await setLaneTrack(pc, LANE_CAMERA, cam0);
-      } else {
-
-        pendingLocalRef.current = { mic: mic0, cam: cam0 };
-      }
+      callerRef.current = asCaller;
 
       pc.ontrack = (ev) => {
         if (laneOfTransceiver(pc, ev.transceiver) === LANE_SCREEN_AUDIO) {
@@ -294,7 +265,38 @@ export function useCallManager(
           });
         }
       };
-      callerRef.current = asCaller;
+
+      // Acquire the mic while ICE candidates are already being gathered.
+      const raw = await getDisbandUserMedia({
+        audio: true,
+        video: cameraRef.current ? buildVideoConstraints(planRef.current) : false,
+      });
+      const rawMic = raw.getAudioTracks()[0] ?? null;
+      const cameraTracks = raw.getVideoTracks();
+      const mixer = new VoiceMixer(rawMic, {
+        micMuted,
+        noiseCancellation: isNoiseCancellationEnabled(),
+        noiseStrength: getNoiseCancellationStrength(),
+      });
+      const stream = new MediaStream([mixer.audioTrack, ...cameraTracks]);
+      localRef.current = stream;
+      setLocalStream(stream);
+      setActiveVoiceMixer(mixer);
+      applyMic(micMuted);
+
+      const mic0 = stream.getAudioTracks()[0] ?? null;
+      const cam0 = stream.getVideoTracks()[0] ?? null;
+      // Both sides need the lane transceivers up front: the callee used to
+      // rely on the browser auto-creating them during createAnswer(), which is
+      // implementation-dependent and broke calls on some desktop browsers.
+      ensureLanes(pc);
+      if (asCaller) {
+        await setLaneTrack(pc, LANE_AUDIO, mic0);
+        await setLaneTrack(pc, LANE_CAMERA, cam0);
+      } else {
+
+        pendingLocalRef.current = { mic: mic0, cam: cam0 };
+      }
 
       pc.onnegotiationneeded = () => {
         if (!callerRef.current || pc.signalingState !== "stable") return;
@@ -490,11 +492,11 @@ export function useCallManager(
               // Next tick retries while attempts remain.
             }
             if (!live.remoteDescription) {
-              offerRetryRef.current = window.setTimeout(resend, 2500);
+              offerRetryRef.current = window.setTimeout(resend, 1000);
             }
           })();
         };
-        offerRetryRef.current = window.setTimeout(resend, 2500);
+        offerRetryRef.current = window.setTimeout(resend, 1000);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start call";
