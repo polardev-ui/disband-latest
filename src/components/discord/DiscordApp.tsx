@@ -119,7 +119,7 @@ export function DiscordApp() {
   const [shopCategory, setShopCategory] = useState<ShopCategory>("ring");
   const [shopPurchase, setShopPurchase] = useState<string | null>(null);
   const [giftReturn, setGiftReturn] = useState<string | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | "creator" | null>(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | "creator" | "account" | null>(null);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
@@ -210,8 +210,11 @@ export function DiscordApp() {
     // Payment-failure emails (and the lapsed-theme notice) link straight to
     // Settings → Subscription, where "Manage billing" opens the Stripe portal
     // and lets the member replace the declined card.
-    if (params.get("settings") === "subscriptions") {
-      setSettingsInitialTab("subscriptions");
+    // "account" is where the desktop app sends people to add a passkey,
+    // which only works on disband.dev.
+    const settingsTab = params.get("settings");
+    if (settingsTab === "subscriptions" || settingsTab === "account") {
+      setSettingsInitialTab(settingsTab);
       setSettingsOpen(true);
       params.delete("settings");
       const query = params.toString();
