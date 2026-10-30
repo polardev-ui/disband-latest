@@ -1,18 +1,20 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Geist, Noto_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { DialogHost } from "@/components/ui/DialogHost";
 
-// Geist (Vercel) — self-hosted via next/font/google → woff2 bundled at build,
-// served from our own origin, no runtime font CDN hit (privacy-first).
-const GeistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+// Geist (Vercel), served from our own origin with no runtime font CDN hit
+// (privacy-first). The variable woff2 lives in ./fonts rather than coming
+// from next/font/google, which downloads it during the build: a Google Fonts
+// hiccup on a CI runner used to fail the whole desktop release.
+const GeistSans = localFont({ src: "./fonts/geist-latin.woff2", weight: "100 900", variable: "--font-geist-sans", display: "swap" });
 // The app UI uses Noto Sans — the face Discord itself falls back to when its
 // proprietary gg sans is unavailable — so the classic layout keeps its metrics.
-const NotoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-noto", weight: ["400", "500", "600", "700", "800"] });
+const NotoSans = localFont({ src: "./fonts/noto-sans-latin.woff2", weight: "400 800", variable: "--font-noto", display: "swap" });
 
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
 
