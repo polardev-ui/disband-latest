@@ -7,17 +7,17 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
 import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
-import { isNoiseCancellationEnabled, getNoiseCancellationStrength } from "@/lib/audio-settings";
 import { buildVideoConstraints } from "@/lib/audio-settings";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { playCallConnected, playCallEnd, playCallJoin, playCallLeave } from "@/lib/call-sounds";
 import { displayName } from "@/lib/utils";
 import {
-  attachRemoteTrack, createOfferForPeer, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack,
+  attachRemoteTrack, createOfferForPeer, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus,
   LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
-import { fetchIceServers, refreshIceServers } from "@/lib/ice-servers";
+import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
+import { fetchIceServers, fetchIceServersQuick, refreshIceServers } from "@/lib/ice-servers";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
@@ -209,7 +209,7 @@ export function useGroupCallManager(
       if (!userId || !groupIdRef.current || remoteId === userId) return;
       if (peersRef.current.has(remoteId)) return;
 
-      const pc = new RTCPeerConnection({ iceServers: await fetchIceServers(), iceCandidatePoolSize: 4 });
+      const pc = new RTCPeerConnection({ iceServers: await fetchIceServersQuick(), iceCandidatePoolSize: 4, bundlePolicy: "max-bundle" });
       peersRef.current.set(remoteId, pc);
 
       ensureLanes(pc);
@@ -333,7 +333,7 @@ export function useGroupCallManager(
       };
 
       if (initiator) {
-        const offer = await pc.createOffer();
+        const offer = tuneOpus(await pc.createOffer());
         await pc.setLocalDescription(offer);
         broadcast({ type: "offer", from: userId, to: remoteId, sdp: offer });
         // The remote may not be on the signal channel yet (slow join,
@@ -445,7 +445,7 @@ export function useGroupCallManager(
           await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
         }
         await flushIce(payload.from, pc);
-        const ans = await pc.createAnswer();
+        const ans = tuneOpus(await pc.createAnswer());
         await pc.setLocalDescription(ans);
         broadcast({ type: "answer", from: userId, to: payload.from, sdp: ans });
       } else if (payload.type === "answer" && payload.sdp) {
@@ -486,6 +486,9 @@ export function useGroupCallManager(
   );
 
   const joinCallMedia = useCallback(async () => {
+    // Mint TURN credentials while the mic opens, so peers rarely start without them.
+    void fetchIceServers();
+    preloadAiNoiseSuppression();
     await warmUpMediaDevices();
     const stream = await getDisbandUserMedia({
       audio: true,
@@ -495,8 +498,6 @@ export function useGroupCallManager(
     const cameraTracks = stream.getVideoTracks();
     const mixer = new VoiceMixer(rawMic, {
       micMuted,
-      noiseCancellation: isNoiseCancellationEnabled(),
-      noiseStrength: getNoiseCancellationStrength(),
     });
     const mixedStream = new MediaStream([mixer.audioTrack, ...cameraTracks]);
     localRef.current = mixedStream;

@@ -1,7 +1,10 @@
+import { getNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { AI_NOISE_SAMPLE_RATE, createAiDenoiser, type AiDenoiser } from "@/lib/noise-suppression";
+
 export interface VoiceMixerOptions {
   micMuted?: boolean;
-  noiseCancellation?: boolean;
-  noiseStrength?: number;
+  /** Defaults to the saved setting. */
+  noiseMode?: NoiseSuppressionMode;
 }
 
 let audioContextConstructor: typeof AudioContext | null = null;
@@ -9,11 +12,33 @@ if (typeof window !== "undefined") {
   audioContextConstructor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ?? null;
 }
 
+/**
+ * Opus and the AI filter both run at 48 kHz, so the mixer asks for that and
+ * skips a resample. Firefox can't feed a mic at another rate into it, so fall
+ * back to the device rate there (the AI filter then defers to the browser's).
+ */
+function openContext(rawMicTrack: MediaStreamTrack | null): { context: AudioContext; source: MediaStreamAudioSourceNode | null } {
+  if (!audioContextConstructor) throw new Error("Web Audio is not available in this environment.");
+  const connect = (context: AudioContext) => ({
+    context,
+    source: rawMicTrack ? context.createMediaStreamSource(new MediaStream([rawMicTrack])) : null,
+  });
+  let preferred: AudioContext | null = null;
+  try {
+    preferred = new audioContextConstructor({ latencyHint: "interactive", sampleRate: AI_NOISE_SAMPLE_RATE });
+    return connect(preferred);
+  } catch {
+    void preferred?.close().catch(() => {});
+    return connect(new audioContextConstructor({ latencyHint: "interactive" }));
+  }
+}
 
 /**
  * Mixes a microphone track with independent soundboard tracks into one stable
  * outbound MediaStreamTrack. WebRTC senders can keep the same track while
  * soundboard clips connect and disconnect underneath.
+ *
+ * Mic path: source → [AI denoiser] → rumble high-pass → gain → destination.
  */
 export class VoiceMixer {
   readonly context: AudioContext;
@@ -23,54 +48,94 @@ export class VoiceMixer {
 
   private micSource: MediaStreamAudioSourceNode | null = null;
   private micGain: GainNode;
-  private noiseHighpass: BiquadFilterNode;
-  private noiseLowpass: BiquadFilterNode;
+  private rumbleFilter: BiquadFilterNode;
   private rawMicTrack: MediaStreamTrack | null = null;
   private soundNodes = new Set<AudioNode>();
+  private noiseMode: NoiseSuppressionMode;
+  private denoiser: AiDenoiser | null = null;
+  private denoiserLoading: Promise<AiDenoiser | null> | null = null;
+  private closed = false;
 
   constructor(rawMicTrack: MediaStreamTrack | null, options: VoiceMixerOptions = {}) {
-    if (!audioContextConstructor) throw new Error("Web Audio is not available in this environment.");
-    this.context = new audioContextConstructor();
+    const { context, source } = openContext(rawMicTrack);
+    this.context = context;
+    this.micSource = source;
+    this.rawMicTrack = rawMicTrack;
+    // Some browsers start the context suspended until a gesture; the join
+    // click usually counts, but never leave the mic stuck silent.
+    if (this.context.state === "suspended") void this.context.resume().catch(() => {});
     this.destination = this.context.createMediaStreamDestination();
     this.stream = this.destination.stream;
     this.audioTrack = this.stream.getAudioTracks()[0];
     this.audioTrack.enabled = !(options.micMuted ?? false);
+    // Tell the encoder this is speech, not music.
+    try { this.audioTrack.contentHint = "speech"; } catch { }
 
     this.micGain = this.context.createGain();
     this.micGain.gain.value = 1;
 
-    this.noiseHighpass = this.context.createBiquadFilter();
-    this.noiseHighpass.type = "highpass";
-    this.noiseHighpass.frequency.value = 0;
+    // Only trims desk thumps and hum below the voice band.
+    this.rumbleFilter = this.context.createBiquadFilter();
+    this.rumbleFilter.type = "highpass";
+    this.rumbleFilter.Q.value = 0.5;
+    this.rumbleFilter.connect(this.micGain);
+    this.micGain.connect(this.destination);
 
-    this.noiseLowpass = this.context.createBiquadFilter();
-    this.noiseLowpass.type = "lowpass";
-    this.noiseLowpass.frequency.value = 20000;
+    this.noiseMode = options.noiseMode ?? getNoiseSuppressionMode();
 
-    const cancellation = options.noiseCancellation ?? true;
-    const strength = Math.min(100, Math.max(0, options.noiseStrength ?? 50));
-    if (cancellation) {
-      // Keep the frequency shaping very gentle. Heavy high/low-pass cutoffs
-      // were hollowing out the voice and making it sound stuttery/laggy.
-      // Even gentler now: only trim rumble and extreme highs, never the
-      // speech band, so voices stay natural and aren't chopped.
-      this.noiseHighpass.frequency.value = Math.round(40 + strength * 1.2);
-      this.noiseLowpass.frequency.value = Math.round(18000 - strength * 25);
-      this.noiseHighpass.Q.value = 0.5;
-      this.noiseLowpass.Q.value = 0.5;
+    this.route();
+    if (this.noiseMode === "ai") void this.enableAi();
+  }
+
+  /** Switch noise suppression mid-call; no renegotiation needed. */
+  async setNoiseMode(mode: NoiseSuppressionMode) {
+    this.noiseMode = mode;
+    this.route();
+    if (mode === "ai") await this.enableAi();
+    else await this.applyBrowserSuppression(mode === "standard");
+  }
+
+  private route() {
+    if (!this.micSource) return;
+    try { this.micSource.disconnect(); } catch { }
+    try { this.denoiser?.node.disconnect(); } catch { }
+    this.rumbleFilter.frequency.value = this.noiseMode === "off" ? 20 : 80;
+    if (this.noiseMode === "ai" && this.denoiser) {
+      this.micSource.connect(this.denoiser.node);
+      this.denoiser.node.connect(this.rumbleFilter);
     } else {
-      this.noiseHighpass.frequency.value = 0;
-      this.noiseLowpass.frequency.value = 22000;
+      this.micSource.connect(this.rumbleFilter);
     }
+  }
 
-    if (rawMicTrack) {
-      this.rawMicTrack = rawMicTrack;
-      const micStream = new MediaStream([rawMicTrack]);
-      this.micSource = this.context.createMediaStreamSource(micStream);
-      this.micSource.connect(this.noiseHighpass);
-      this.noiseHighpass.connect(this.noiseLowpass);
-      this.noiseLowpass.connect(this.micGain);
-      this.micGain.connect(this.destination);
+  private async enableAi() {
+    if (!this.micSource) return;
+    if (!this.denoiser) {
+      this.denoiserLoading ??= createAiDenoiser(this.context);
+      this.denoiser = await this.denoiserLoading;
+      this.denoiserLoading = null;
+    }
+    if (this.closed) {
+      this.denoiser?.destroy();
+      return;
+    }
+    if (this.noiseMode !== "ai") return;
+    if (this.denoiser) {
+      this.route();
+      await this.applyBrowserSuppression(false);
+    } else {
+      // No AudioWorklet/WASM here: the browser's suppressor is the next best.
+      await this.applyBrowserSuppression(true);
+    }
+  }
+
+  private async applyBrowserSuppression(enabled: boolean) {
+    const track = this.rawMicTrack;
+    if (!track || track.readyState !== "live") return;
+    try {
+      await track.applyConstraints({ ...track.getConstraints(), noiseSuppression: enabled, echoCancellation: true, autoGainControl: true });
+    } catch {
+      // Some devices refuse live constraint changes; the next call picks it up.
     }
   }
 
@@ -116,10 +181,12 @@ export class VoiceMixer {
       try { node.disconnect(); } catch { }
     });
     this.soundNodes.clear();
+    this.closed = true;
     this.micSource?.disconnect();
+    this.denoiser?.destroy();
+    this.denoiser = null;
     this.micGain.disconnect();
-    this.noiseHighpass.disconnect();
-    this.noiseLowpass.disconnect();
+    this.rumbleFilter.disconnect();
     this.destination.disconnect();
     try { this.rawMicTrack?.stop(); } catch {} 
     await this.context.close().catch(() => {});
@@ -152,4 +219,9 @@ export function playVoiceSoundboardSound(url: string, volume = 1): HTMLAudioElem
 
 export function setVoiceMixerMicrophoneEnabled(enabled: boolean) {
   activeVoiceMixer?.setMicrophoneEnabled(enabled);
+}
+
+/** Applies a new noise suppression choice to the call in progress, if any. */
+export function setVoiceMixerNoiseMode(mode: NoiseSuppressionMode) {
+  void activeVoiceMixer?.setNoiseMode(mode);
 }

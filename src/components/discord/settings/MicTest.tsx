@@ -2,14 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisbandUserMedia } from "@/lib/media";
+import { buildAudioConstraints, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { VoiceMixer } from "@/lib/voice-mixer";
 
-export function MicTest({ deviceId }: { deviceId: string }) {
+/** Plays your mic back through the same pipeline a call uses, so the
+ *  noise suppression choice can be heard before joining. */
+export function MicTest({ deviceId, noiseMode }: { deviceId: string; noiseMode: NoiseSuppressionMode }) {
   const [running, setRunning] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
+  const mixerRef = useRef<VoiceMixer | null>(null);
   const rafRef = useRef<number | null>(null);
 
   const stop = useCallback(() => {
@@ -19,11 +24,17 @@ export function MicTest({ deviceId }: { deviceId: string }) {
     streamRef.current = null;
     void ctxRef.current?.close();
     ctxRef.current = null;
+    void mixerRef.current?.close();
+    mixerRef.current = null;
     setRunning(false);
     setLevel(0);
   }, []);
 
   useEffect(() => stop, [stop]);
+
+  useEffect(() => {
+    void mixerRef.current?.setNoiseMode(noiseMode);
+  }, [noiseMode]);
 
   useEffect(() => {
     if (running) stop();
@@ -34,13 +45,15 @@ export function MicTest({ deviceId }: { deviceId: string }) {
     setError(null);
     try {
       const stream = await getDisbandUserMedia({
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: deviceId ? { ...buildAudioConstraints(), deviceId: { exact: deviceId } } : true,
       });
       streamRef.current = stream;
+      const mixer = new VoiceMixer(stream.getAudioTracks()[0] ?? null, { noiseMode });
+      mixerRef.current = mixer;
 
       const ctx = new AudioContext();
       ctxRef.current = ctx;
-      const source = ctx.createMediaStreamSource(stream);
+      const source = ctx.createMediaStreamSource(mixer.stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       const monitor = ctx.createGain();
@@ -68,6 +81,8 @@ export function MicTest({ deviceId }: { deviceId: string }) {
       setError(err instanceof Error ? err.message : "Could not open the microphone.");
       stop();
     }
+    // noiseMode changes are applied live by the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId, stop]);
 
   return (

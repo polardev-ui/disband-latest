@@ -78,6 +78,27 @@ export async function fetchIceServers(): Promise<RTCIceServer[]> {
   return inflight;
 }
 
+/**
+ * For building a peer connection: waits at most `maxWaitMs` for fresh TURN
+ * credentials, then starts with what it has (the last good set, or STUN and
+ * any static TURN). Most calls connect directly, so a slow /api/turn should
+ * not hold every call up; a peer that does need the relay fails over and
+ * reconnects with the credentials that have arrived by then.
+ */
+export async function fetchIceServersQuick(maxWaitMs = 1_500): Promise<RTCIceServer[]> {
+  if (cached && Date.now() - cached.fetchedAt < CACHE_MS) return cached.servers;
+  const fallback = cached?.servers ?? getIceServers();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<RTCIceServer[]>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), maxWaitMs);
+  });
+  try {
+    return await Promise.race([fetchIceServers(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Bypass the cache: ICE retry paths call this so a restart never reuses
  *  the credentials that just failed. */
 export function refreshIceServers(): Promise<RTCIceServer[]> {

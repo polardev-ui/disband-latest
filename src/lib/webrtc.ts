@@ -90,9 +90,45 @@ export async function createOfferForPeer(pc: RTCPeerConnection): Promise<RTCSess
       pc.addEventListener("signalingstatechange", done);
     });
   }
-  const offer = await pc.createOffer();
+  const offer = tuneOpus(await pc.createOffer());
   await pc.setLocalDescription(offer);
   return offer;
+}
+
+const OPUS_VOICE_PARAMS: Record<string, string> = {
+  // In-band FEC: a lost packet is rebuilt from the next one instead of
+  // becoming a click or a robotic gap.
+  useinbandfec: "1",
+  // Chrome's default is 32 kbps. 64 kbps is Discord's default and keeps
+  // voices full rather than phone-like; the encoder still drops on a bad link.
+  maxaveragebitrate: "64000",
+  maxplaybackrate: "48000",
+};
+
+/**
+ * Rewrites the Opus fmtp line of a description for voice chat. Apply it to
+ * every local offer and answer before setLocalDescription: the parameters
+ * tell the far side how to encode what it sends us.
+ */
+export function tuneOpus<T extends RTCSessionDescriptionInit>(description: T): T {
+  const sdp = description.sdp;
+  if (!sdp) return description;
+  // Every audio m-line (mic and screen sound) repeats the same payload type.
+  const payloadTypes = new Set([...sdp.matchAll(/^a=rtpmap:(\d+) opus\/48000\/2\r?$/gim)].map((m) => m[1]));
+  let next = sdp;
+  for (const pt of payloadTypes) {
+    next = next.replace(new RegExp(`^a=fmtp:${pt} (.*?)(\\r?)$`, "gm"), (_line, current: string, cr: string) => {
+      const params = new Map<string, string>();
+      for (const part of current.split(";")) {
+        const [key, value] = part.split("=");
+        if (key?.trim()) params.set(key.trim(), (value ?? "").trim());
+      }
+      for (const [key, value] of Object.entries(OPUS_VOICE_PARAMS)) params.set(key, value);
+      return `a=fmtp:${pt} ${[...params].map(([k, v]) => `${k}=${v}`).join(";")}${cr}`;
+    });
+  }
+  // Spread would drop `type`: on RTCSessionDescription it's a getter.
+  return { ...description, type: description.type, sdp: next };
 }
 
 export function attachRemoteTrack(
@@ -246,6 +282,23 @@ export async function setLaneTrack(
   const transceiver = transceiverForLane(pc, lane);
   if (!transceiver) return;
   await transceiver.sender.replaceTrack(track);
+  if (lane === LANE_AUDIO && track) await prioritiseVoice(transceiver.sender);
+}
+
+/** Voice goes ahead of camera and screen when the uplink is congested. */
+async function prioritiseVoice(sender: RTCRtpSender) {
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings?.length) return;
+    let changed = false;
+    for (const encoding of params.encodings) {
+      if (encoding.priority !== "high") { encoding.priority = "high"; changed = true; }
+      if (encoding.networkPriority !== "high") { encoding.networkPriority = "high"; changed = true; }
+    }
+    if (changed) await sender.setParameters(params);
+  } catch {
+    // Not every browser supports priorities; the call works without them.
+  }
 }
 
 export function bindLaneStream(
