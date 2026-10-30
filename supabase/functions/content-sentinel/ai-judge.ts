@@ -39,6 +39,14 @@ export function aiAvailable(): boolean {
  */
 export async function judgeText(text: string, context: string): Promise<Judgement> {
   if (!KEY) return ESCALATE("AI review unavailable");
+  // An occasional empty or malformed reply is worth one more try before a
+  // person has to look at it.
+  const first = await judgeOnce(text, context);
+  if (first.decision !== "escalate" || !/unreadable|returned nothing|errored/.test(first.reason)) return first;
+  return await judgeOnce(text, context);
+}
+
+async function judgeOnce(text: string, context: string): Promise<Judgement> {
   const body = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) : text;
 
   try {
@@ -84,11 +92,19 @@ export async function judgeText(text: string, context: string): Promise<Judgemen
     }
 
     const payload = await response.json();
-    const raw = payload?.choices?.[0]?.message?.content;
-    if (typeof raw !== "string") return ESCALATE("AI review returned nothing");
+    const message = payload?.choices?.[0]?.message;
+    // Reasoning models can leave content empty and put the answer alongside.
+    const raw = [message?.content, message?.reasoning_content].find((v) => typeof v === "string" && v.includes("{"));
+    if (typeof raw !== "string") {
+      console.error("[sentinel] ai judge empty reply", JSON.stringify(payload).slice(0, 300));
+      return ESCALATE("AI review returned nothing");
+    }
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) return ESCALATE("AI review unreadable");
+    if (start < 0 || end <= start) {
+      console.error("[sentinel] ai judge unreadable", raw.slice(0, 300));
+      return ESCALATE("AI review unreadable");
+    }
     const parsed = JSON.parse(raw.slice(start, end + 1)) as {
       verdict?: string; category?: string; confidence?: number; reason?: string;
     };
