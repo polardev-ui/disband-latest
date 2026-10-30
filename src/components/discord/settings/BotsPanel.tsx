@@ -287,7 +287,7 @@ export function BotsPanel() {
               <code className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[11.5px]">new Client(&#123; token: "…" &#125;)</code>.
               See the{" "}
               <a
-                href="https://docs.disband.dev/docs/bots/"
+                href="/developers/docs"
                 target="_blank"
                 rel="noreferrer"
                 className="text-brand hover:underline"
