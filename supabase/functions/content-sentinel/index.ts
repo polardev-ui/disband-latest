@@ -43,7 +43,7 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scanText, type RuleHit } from "./rules.ts";
-import { describe, judgeText, type Judgement } from "./ai-judge.ts";
+import { describe, judgeText, type Judgement, type JudgeScope } from "./ai-judge.ts";
 
 const REPORT_TO = Deno.env.get("SAFETY_REPORT_TO") ?? "beluga7133@gmail.com";
 const REPORT_FROM = Deno.env.get("SAFETY_REPORT_FROM") ?? "Disband Safety <safety@disband.dev>";
@@ -535,6 +535,27 @@ interface ConfirmedViolation {
   score?: number;
 }
 
+// The official Disband space (vanity /disband) has stricter rules than the
+// rest of the platform: slurs, insults and spam are only enforced there.
+let officialSpace: Promise<string | null> | null = null;
+function officialSpaceId(supabase: SupabaseClient): Promise<string | null> {
+  officialSpace ??= Promise.resolve(
+    supabase.from("servers").select("id").ilike("vanity_code", "disband").limit(1).maybeSingle(),
+  ).then(({ data }) => (data?.id as string | undefined) ?? null, () => null);
+  return officialSpace;
+}
+
+async function scopeFor(supabase: SupabaseClient, table: string | null | undefined, id: string | null | undefined): Promise<JudgeScope> {
+  const official = await officialSpaceId(supabase);
+  if (!official || !id) return "platform";
+  if (table === "servers") return id === official ? "official" : "platform";
+  if (table !== "messages") return "platform";
+  const { data: message } = await supabase.from("messages").select("channel_id").eq("id", id).maybeSingle();
+  if (!message?.channel_id) return "platform";
+  const { data: channel } = await supabase.from("channels").select("server_id").eq("id", message.channel_id).maybeSingle();
+  return channel?.server_id === official ? "official" : "platform";
+}
+
 interface ReportOutcome {
   // "retry" means a check could not run (an API failure); the report goes
   // back in the queue rather than being decided on half the evidence.
@@ -772,6 +793,7 @@ async function reviewReport(
   const notes: string[] = [];
 
   const textFields = reportTextFields(snapshot);
+  const scope = await scopeFor(supabase, report.target_table, report.target_id);
   let textJudged = false;
   for (const field of textFields) {
     const hits = scanText(field.value);
@@ -780,7 +802,7 @@ async function reviewReport(
     // The rule only says where to look; the AI decides whether it is an
     // offence or someone talking about one.
     textJudged = true;
-    const judgement = await judgeText(field.value ?? "", `reported as ${report.reason}; matched rule ${hit.rule.id}`);
+    const judgement = await judgeText(field.value ?? "", `reported as ${report.reason}; matched rule ${hit.rule.id}`, scope);
     if (judgement.decision === "retry") return { status: "retry", detail: describe(judgement) };
     if (judgement.decision === "act") {
       best = stronger(best, aiViolation(judgement, field.field ?? "content", hit.rule.id));
@@ -834,7 +856,7 @@ async function reviewReport(
     const context = `reported as ${report.reason}` +
       (report.details ? `; reporter said: ${String(report.details).slice(0, 300)}` : "") +
       (notes.length ? `; attachments: ${notes.join("; ")}` : "");
-    const judgement = await judgeText(text, context);
+    const judgement = await judgeText(text, context, scope);
     if (judgement.decision === "retry") return { status: "retry", detail: describe(judgement) };
     if (judgement.decision === "act") {
       best = aiViolation(judgement, textFields[0].field ?? "content", `report:${report.reason}`);
@@ -1159,9 +1181,19 @@ async function reviewTextFlag(
   const hit = hits.find((h) => !h.demoted) ?? hits[0];
   if (!hit) return { state: "dismissed", action: "Tether: no violation", detail: "The content no longer matches any rule." };
 
+  const scope = await scopeFor(supabase, flag.src_table, flag.src_id);
+  // Slurs are a rule of the official space only; nothing to ask the AI.
+  if (hit.rule.category === "hate" && scope === "platform") {
+    return {
+      state: "dismissed",
+      action: "Tether: no violation",
+      detail: "Slurs are only enforced in the official Disband space, and this wasn't posted there.",
+    };
+  }
   const judgement = await judgeText(
     body,
     `matched rule ${hit.rule.id}${hit.demoted ? " (wording looks like quoting or reporting)" : ""}`,
+    scope,
   );
   if (judgement.decision === "dismiss") {
     return { state: "dismissed", action: "dismissed", detail: describe(judgement) };
@@ -1533,12 +1565,25 @@ function json(body: unknown, status = 200): Response {
 // must be surer before it does.
 const SPACE_SUSPEND_CONFIDENCE = 0.8;
 
+// Only serious harm closes a space. Spam, pings, slurs and edgy humour never
+// do. The text is the reason @disband gives the owner and every member
+// (migration 0192), so it is written for them, not for staff.
+const SPACE_SUSPEND_REASONS: Record<string, string> = {
+  illegal_content:
+    "Disband Safety found that the space was being used to share, seek or trade illegal material, " +
+    "including content that exploits or endangers children.",
+  violence_gore:
+    "Disband Safety found that the space was set up to share graphic real-world violence or gore.",
+};
+
 const SPACE_CONTEXT =
   "This is a whole community space (name, description, channel names and a sample of " +
   "recent messages), not one message. Decide whether the space itself is organised around " +
   "or actively offering, seeking or trading illegal material — above all anything sexualising " +
-  "minors — or is otherwise built around severe harm. A space where a few people misbehave, " +
-  "or that discusses or moderates these topics, is not a violation of the space.";
+  "minors — or is otherwise built around severe harm such as sharing real gore. A space where a " +
+  "few people misbehave, or that discusses or moderates these topics, is not a violation of the " +
+  "space. Spam, mass pings, @everyone raids, repeated invite links, advertising, slurs, offensive " +
+  "or edgy humour and trolling are never reasons to close a space.";
 
 async function spaceSnapshot(supabase: SupabaseClient, server: { id: string; name: string | null; description: string | null; icon_url?: string | null; banner_url?: string | null }) {
   const fields: { field: string; value: string }[] = [];
@@ -1587,6 +1632,9 @@ async function reviewServerReport(
   report: ReportRow,
   dryRun: boolean,
 ): Promise<ReportOutcome> {
+  if (report.target_id === await officialSpaceId(supabase)) {
+    return { status: "dismissed", detail: "Tether: the official Disband space is never suspended automatically." };
+  }
   const snapshot = report.snapshot ?? {};
   const text = spaceText(reportTextFields(snapshot));
   const context = `${SPACE_CONTEXT} It was reported as ${report.reason}` +
@@ -1603,15 +1651,17 @@ async function reviewServerReport(
 
   // Tether's call is final. A confirmed problem with a space's name,
   // description or artwork suspends the space; staff can lift it.
-  const textAct = judgement?.decision === "act" && judgement.confidence >= SPACE_SUSPEND_CONFIDENCE;
-  const category = textAct ? judgement!.category : mediaViolation?.category ?? null;
+  const textAct = judgement?.decision === "act" && judgement.confidence >= SPACE_SUSPEND_CONFIDENCE
+    && !!judgement.category && judgement.category in SPACE_SUSPEND_REASONS;
+  const mediaAct = !!mediaViolation && mediaViolation.category in SPACE_SUSPEND_REASONS;
+  const category = textAct ? judgement!.category! : mediaAct ? mediaViolation!.category : null;
   if (category) {
-    const childSafety = category === "illegal_content" || mediaViolation?.category === "illegal_content";
+    const childSafety = category === "illegal_content";
     const label = childSafety ? "child safety" : category.replace(/_/g, " ");
     if (!dryRun) {
       await supabase.rpc("sentinel_suspend_server", {
         p_server: report.target_id,
-        p_reason: `Suspended by Disband Safety (${label}).`,
+        p_reason: SPACE_SUSPEND_REASONS[category],
       });
     }
     return {
@@ -1627,7 +1677,9 @@ async function reviewServerReport(
   }
   return {
     status: "dismissed",
-    detail: judgement?.decision === "act" ? `Not sure enough to suspend the space. ${notes}` : notes,
+    detail: judgement?.decision === "act" || mediaViolation
+      ? `Not grounds to suspend a space. ${notes}`
+      : notes,
   };
 }
 
@@ -1646,10 +1698,12 @@ async function sweepSpaces(
   if (error) throw new Error(`space queue: ${error.message}`);
 
   const deadline = Date.now() + SPACE_TIME_BUDGET_MS;
+  const official = await officialSpaceId(supabase);
   let checked = 0, flagged = 0, suspended = 0;
 
   for (const server of servers ?? []) {
     if (Date.now() > deadline) break;
+    if (server.id === official) continue;
     checked++;
     const snapshot = await spaceSnapshot(supabase, server);
     const text = spaceText(snapshot.text_fields);
@@ -1660,6 +1714,7 @@ async function sweepSpaces(
     }
     // Tether acts on a confident violation and leaves everything else.
     if (judgement?.decision !== "act" || judgement.confidence < SPACE_SUSPEND_CONFIDENCE) continue;
+    if (!judgement.category || !(judgement.category in SPACE_SUSPEND_REASONS)) continue;
 
     const childSafety = judgement.category === "illegal_content";
     const label = childSafety ? "child safety" : (judgement.category ?? "other").replace(/_/g, " ");
@@ -1674,7 +1729,7 @@ async function sweepSpaces(
 
     const { data: done } = await supabase.rpc("sentinel_suspend_server", {
       p_server: server.id,
-      p_reason: `Suspended by Disband Safety (${label}).`,
+      p_reason: SPACE_SUSPEND_REASONS[judgement.category],
     });
     if (done) suspended++;
 
