@@ -658,6 +658,15 @@ export function DiscordApp() {
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(server.id),
         },
+        ...(server.owner_id !== app.user?.id
+          ? [{
+              id: "report",
+              label: "Report Space",
+              icon: <IconShield size={16} />,
+              danger: true,
+              onClick: () => setReportTarget({ kind: "server", server: { id: server.id, name: server.name } }),
+            } as ContextMenuItem]
+          : []),
         {
           id: "leave",
           label: "Leave Space",

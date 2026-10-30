@@ -26,6 +26,10 @@ export type ReportTarget =
   | {
       kind: "profile";
       profile: Profile;
+    }
+  | {
+      kind: "server";
+      server: { id: string; name: string };
     };
 
 interface ReportModalProps {
@@ -35,6 +39,7 @@ interface ReportModalProps {
 
 function targetIdentity(target: ReportTarget | null) {
   if (!target) return "";
+  if (target.kind === "server") return target.server.id;
   return target.kind === "message" ? target.message.id : target.profile.id;
 }
 
@@ -69,13 +74,14 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
     setSubmitted(false);
   }, [identity, open]);
 
-  const targetType: ReportTargetType = target?.kind === "profile" ? "profile" : "message";
+  const targetType: ReportTargetType = target?.kind === "profile" ? "profile" : target?.kind === "server" ? "server" : "message";
   const reasons = useMemo(() => reportReasonsFor(targetType), [targetType]);
 
-  const author = target?.kind === "message" ? target.message.author : target?.profile;
-  const name = author ? displayName(author) : "this user";
-  const preview = target?.kind === "message" ? messagePreview(target.message) : "Report this profile";
-  const heading = target?.kind === "profile" ? "Report profile" : "Report message";
+  const author = target?.kind === "message" ? target.message.author : target?.kind === "profile" ? target.profile : undefined;
+  const name = target?.kind === "server" ? target.server.name : author ? displayName(author) : "this user";
+  const preview = target?.kind === "message" ? messagePreview(target.message)
+    : target?.kind === "server" ? "Report this space" : "Report this profile";
+  const heading = target?.kind === "profile" ? "Report profile" : target?.kind === "server" ? "Report space" : "Report message";
 
   if (!target) return null;
 
@@ -85,7 +91,9 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
     setError(null);
 
     const payload =
-      target?.kind === "profile"
+      target?.kind === "server"
+        ? { targetType: "server", surface: "server", targetId: target.server.id, reason, details }
+        : target?.kind === "profile"
         ? {
             targetType: "profile",
             surface: "profile",

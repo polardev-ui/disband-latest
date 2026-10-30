@@ -61,6 +61,8 @@ const MAX_VISION_BYTES = 8 * 1024 * 1024;
 const MAX_REPORT_MEDIA = 4;
 const REPORT_TIME_BUDGET_MS = 80_000;
 const FLAG_TIME_BUDGET_MS = 80_000;
+const SPACES_PER_RUN = Number(Deno.env.get("SENTINEL_SPACES_PER_RUN") ?? "10");
+const SPACE_TIME_BUDGET_MS = 60_000;
 const DEFAULT_MEDIA_BATCH = 250;
 // PostgREST caps a response at its own max-rows (1000 by default). The loop
 // advances by however many rows actually came back rather than by the page
@@ -140,6 +142,9 @@ Deno.serve(async (req) => {
       totals.reports += r.scanned; totals.reportActions += r.actions;
       totals.flags += r.flags; totals.actions += r.actions;
       totals.held += r.held;
+      // The hourly report run also reads a few spaces end to end.
+      const sp = await sweepSpaces(supabase, SPACES_PER_RUN, dryRun, findings);
+      totals.flags += sp.flagged; totals.actions += sp.suspended;
     }
     if (mode === "flags") {
       const f = await sweepFlags(supabase, mediaLimit, dryRun, findings);
@@ -501,7 +506,7 @@ interface ReportSnapshot {
 
 interface ReportRow {
   id: string;
-  target_type: "message" | "profile";
+  target_type: "message" | "profile" | "server";
   target_surface: string;
   target_table: string;
   target_id: string;
@@ -749,6 +754,8 @@ async function reviewReport(
   report: ReportRow,
   dryRun: boolean,
 ): Promise<ReportOutcome> {
+  if (report.target_type === "server") return await reviewServerReport(supabase, report, dryRun);
+
   const snapshot = report.snapshot ?? {};
   let best: ConfirmedViolation | null = null;
   let needsReview: string | null = null;
@@ -1560,4 +1567,176 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/* ------------------------------------------------------------------ spaces */
+
+// A space is judged as a whole: its name, description, channel names and a
+// sample of recent messages. Only a confident child-safety verdict closes a
+// space automatically (suspension, never deletion), and even then the report
+// stays in the staff queue so a person confirms it and runs the member review.
+const SPACE_CONTEXT =
+  "This is a whole community space (name, description, channel names and a sample of " +
+  "recent messages), not one message. Decide whether the space itself is organised around " +
+  "or actively offering, seeking or trading illegal material — above all anything sexualising " +
+  "minors — or is otherwise built around severe harm. A space where a few people misbehave, " +
+  "or that discusses or moderates these topics, is not a violation of the space.";
+
+async function spaceSnapshot(supabase: SupabaseClient, server: { id: string; name: string | null; description: string | null; icon_url?: string | null; banner_url?: string | null }) {
+  const fields: { field: string; value: string }[] = [];
+  if (server.name?.trim()) fields.push({ field: "name", value: server.name });
+  if (server.description?.trim()) fields.push({ field: "description", value: server.description });
+  const { data: channels } = await supabase.from("channels").select("id, name").eq("server_id", server.id).limit(200);
+  const names = (channels ?? []).map((c: { name: string | null }) => c.name).filter(Boolean);
+  if (names.length) fields.push({ field: "channel_names", value: names.join(", ").slice(0, 2000) });
+  const ids = (channels ?? []).map((c: { id: string }) => c.id);
+  if (ids.length) {
+    const { data: recent } = await supabase.from("messages").select("content")
+      .in("channel_id", ids).not("content", "is", null)
+      .order("created_at", { ascending: false }).limit(80);
+    const sample = (recent ?? []).map((m: { content: string | null }) => (m.content ?? "").trim())
+      .filter(Boolean).reverse().join("\n").slice(-6000);
+    if (sample) fields.push({ field: "recent_messages", value: sample });
+  }
+  const media = [
+    { url: server.icon_url, field: "icon_url", kind: "image" },
+    { url: server.banner_url, field: "banner_url", kind: "image" },
+  ].filter((m): m is { url: string; field: string; kind: string } => isTrustedMediaUrl(m.url));
+  return { text_fields: fields, media };
+}
+
+function spaceText(fields: { field?: string; value?: string }[]): string {
+  return fields.filter((f) => f.value?.trim()).map((f) => `${f.field}: ${f.value}`).join("\n");
+}
+
+/** Images on a space (icon, banner). Returns the worst verdict, if any. */
+async function spaceMediaVerdict(supabase: SupabaseClient, media: { url: string }[]): Promise<Verdict | null> {
+  let worst: Verdict | null = null;
+  for (const item of media) {
+    const image = await fetchVisionImage(item.url);
+    if (!image) continue;
+    const banned = await bannedHash(supabase, image.sha256);
+    const verdict: Verdict | null = banned
+      ? { category: banned.category as Verdict["category"], score: 1, action: "block" }
+      : await classifyReportImage(item.url, image.dataUrl);
+    if (verdict && verdict.category !== "clean" && (!worst || verdict.score > worst.score)) worst = verdict;
+  }
+  return worst;
+}
+
+async function reviewServerReport(
+  supabase: SupabaseClient,
+  report: ReportRow,
+  dryRun: boolean,
+): Promise<ReportOutcome> {
+  const snapshot = report.snapshot ?? {};
+  const text = spaceText(reportTextFields(snapshot));
+  const context = `${SPACE_CONTEXT} It was reported as ${report.reason}` +
+    (report.details ? `; the reporter said: ${String(report.details).slice(0, 300)}` : "") + ".";
+  const judgement = text ? await judgeText(text, context) : null;
+  const media = await spaceMediaVerdict(supabase, reportMedia(snapshot));
+
+  const childSafety = (judgement?.decision === "act" && judgement.category === "illegal_content")
+    || (media?.category === "illegal" || media?.category === "csam");
+  const notes = [judgement ? describe(judgement) : null, media ? `Image check: ${media.category} (${media.score.toFixed(2)})` : null]
+    .filter(Boolean).join(" · ");
+
+  if (childSafety) {
+    if (!dryRun) {
+      await supabase.rpc("sentinel_suspend_server", {
+        p_server: report.target_id,
+        p_reason: "Suspended by Disband Safety pending review (child safety).",
+      });
+    }
+    return {
+      status: "needs_review",
+      detail: `Space suspended automatically pending staff confirmation. ${notes}`,
+      finding: {
+        kind: "report", category: "illegal_content", rule: "space-ai",
+        where: `servers#${report.target_id}`, owner: report.reported_user_id,
+        action: dryRun ? "would suspend space" : "space suspended (needs confirmation)", detail: notes,
+      },
+    };
+  }
+  if (judgement?.decision === "act" || (media && media.category !== "clean")) {
+    return { status: "needs_review", detail: `Possible problem with this space. ${notes}` };
+  }
+  if (judgement?.decision === "dismiss" && !media) {
+    return { status: "dismissed", detail: notes || "AI review: no problem found" };
+  }
+  return { status: "needs_review", detail: notes || "Space could not be checked automatically." };
+}
+
+async function sweepSpaces(
+  supabase: SupabaseClient,
+  limit: number,
+  dryRun: boolean,
+  findings: Finding[],
+) {
+  if (limit <= 0) return { checked: 0, flagged: 0, suspended: 0 };
+  const { data: servers, error } = await supabase.from("servers")
+    .select("id, name, description, icon_url, banner_url, owner_id")
+    .is("suspended_at", null)
+    .order("ai_checked_at", { ascending: true, nullsFirst: true })
+    .limit(Math.min(limit, 50));
+  if (error) throw new Error(`space queue: ${error.message}`);
+
+  const deadline = Date.now() + SPACE_TIME_BUDGET_MS;
+  let checked = 0, flagged = 0, suspended = 0;
+
+  for (const server of servers ?? []) {
+    if (Date.now() > deadline) break;
+    checked++;
+    const snapshot = await spaceSnapshot(supabase, server);
+    const text = spaceText(snapshot.text_fields);
+    const judgement = text ? await judgeText(text, `${SPACE_CONTEXT} This is a routine check; nobody reported it.`) : null;
+
+    if (!dryRun) {
+      await supabase.from("servers").update({ ai_checked_at: new Date().toISOString() }).eq("id", server.id);
+    }
+    // Only confident problems are filed. "Unsure" on a routine check of a
+    // space nobody complained about would bury staff in noise.
+    if (judgement?.decision !== "act") continue;
+
+    const childSafety = judgement.category === "illegal_content";
+    flagged++;
+    findings.push({
+      kind: "report", category: judgement.category ?? "other", rule: "space-ai-routine",
+      where: `servers#${server.id}`, owner: server.owner_id,
+      action: childSafety ? (dryRun ? "would suspend space" : "space suspended (needs confirmation)") : "filed for review",
+      detail: describe(judgement),
+    });
+    if (dryRun) continue;
+
+    if (childSafety) {
+      const { data: done } = await supabase.rpc("sentinel_suspend_server", {
+        p_server: server.id,
+        p_reason: "Suspended by Disband Safety pending review (child safety).",
+      });
+      if (done) suspended++;
+    }
+
+    const { count } = await supabase.from("message_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("target_id", server.id).is("reporter_id", null)
+      .in("status", ["pending", "reviewing", "needs_review"]);
+    if ((count ?? 0) > 0) continue;
+
+    await supabase.from("message_reports").insert({
+      reporter_id: null,
+      target_type: "server",
+      target_surface: "server",
+      target_table: "servers",
+      target_id: server.id,
+      reported_user_id: server.owner_id,
+      reason: childSafety ? "illegal_content" : "other",
+      details: "Filed by Sentinel's routine space check.",
+      snapshot: { version: 1, target_type: "server", surface: "server", context: { space_name: server.name }, ...snapshot },
+      status: "needs_review",
+      decision: "ai_escalated",
+      last_error: (childSafety ? "Space suspended automatically pending staff confirmation. " : "") + describe(judgement),
+    });
+  }
+
+  return { checked, flagged, suspended };
 }
