@@ -300,6 +300,7 @@ async function sweepText(
         where: `${row.src_table}.${row.src_column}#${row.src_id}`,
         owner: row.owner_id,
         action: top.rule.suspend ? "redacted + account held" : "redacted",
+        detail: describe(judgement),
       });
     }
 
@@ -894,7 +895,7 @@ async function reviewReport(
           result.action ?? "actioned",
           count > 1 ? `${count} violations in 365 days` : null,
         ].filter(Boolean).join("; "),
-        detail: best.score ? `score ${best.score.toFixed(2)}` : undefined,
+        detail: notes.join(" | ") || (best.score ? `score ${best.score.toFixed(2)}` : undefined),
       },
     };
   }
@@ -1456,6 +1457,7 @@ async function sendReport(
       <td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px">${escape(f.where)}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px">${escape(f.owner ?? "—")}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #eee">${escape(f.action)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:13px">${escape(f.detail ?? "—")}</td>
     </tr>`).join("");
 
   const subject = failure
@@ -1483,6 +1485,7 @@ async function sendReport(
           <th style="padding:6px 10px">Kind</th><th style="padding:6px 10px">Category</th>
           <th style="padding:6px 10px">Rule</th><th style="padding:6px 10px">Where</th>
           <th style="padding:6px 10px">Owner</th><th style="padding:6px 10px">Action</th>
+          <th style="padding:6px 10px">Tether's reasoning</th>
         </tr>${rows}
       </table>` : "<p>No enforcement actions this run.</p>"}
       <p style="margin-top:16px;padding:12px;background:#eef2ff;border-radius:8px;font-size:13px">
@@ -1663,7 +1666,7 @@ async function sweepSpaces(
     flagged++;
     findings.push({
       kind: "report", category: judgement.category ?? "other", rule: "space-ai-routine",
-      where: `servers#${server.id}`, owner: server.owner_id,
+      where: `servers#${server.id} (${server.name ?? "unnamed"})`, owner: server.owner_id,
       action: dryRun ? "would suspend space" : "space suspended",
       detail: describe(judgement),
     });
