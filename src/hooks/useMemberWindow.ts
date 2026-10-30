@@ -18,9 +18,33 @@ let rpcOverride: Rpc | null = null;
 export function setMemberWindowRpcForPreview(fn: Rpc | null) {
   rpcOverride = fn;
 }
+/**
+ * "Permission denied" or a rejected JWT means this client has no signed-in
+ * session. Retrying cannot succeed; two such clients once sent 15,000
+ * member lookups in a day retrying every two seconds.
+ */
+function isAuthError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === "42501" || code === "PGRST301" || code === "PGRST303";
+}
+
+const ONLINE_RETRY_MIN_MS = 2_000;
+const ONLINE_RETRY_MAX_MS = 60_000;
+
+// Presence churn and roster pings re-run every lookup within seconds, so a
+// signed-out client pauses them all for a while after its first rejection.
+const AUTH_PAUSE_MS = 30_000;
+let authPausedUntil = 0;
+
 function rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> {
   if (rpcOverride) return rpcOverride(fn, args);
-  return Promise.resolve(getSupabaseClient().rpc(fn, args)).then(({ data, error }) => ({ data, error }));
+  if (Date.now() < authPausedUntil) {
+    return Promise.resolve({ data: null, error: { code: "42501", message: "Signed out; member lookups paused" } });
+  }
+  return Promise.resolve(getSupabaseClient().rpc(fn, args)).then(({ data, error }) => {
+    if (isAuthError(error)) authPausedUntil = Date.now() + AUTH_PAUSE_MS;
+    return { data, error };
+  });
 }
 
 interface Row {
@@ -99,6 +123,7 @@ export function useMemberWindow(
   // changed role, name or avatar doesn't stick around.
   const refreshCached = useRef(false);
   const onlineRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onlineRetryDelay = useRef(ONLINE_RETRY_MIN_MS);
   // Bumped when the space changes: drops every in-flight response.
   const generation = useRef(0);
   // Bumped when the offline pages are invalidated (who's online changed).
@@ -189,9 +214,11 @@ export function useMemberWindow(
       if (gen !== generation.current) return;
       const rows: Row[] = [];
       let failed = false;
+      let signedOut = false;
       for (const { ids, result } of results) {
         if (result.error) {
           failed = true;
+          if (isAuthError(result.error)) signedOut = true;
           for (const id of ids) attemptedOnlineIds.current.delete(id);
           continue;
         }
@@ -216,12 +243,18 @@ export function useMemberWindow(
       setOnlineReady(true);
 
       // A transient failure must not downgrade a 5,000-person roster to the
-      // first local page. Retry those ids shortly instead.
-      if (failed && !onlineRetryTimer.current) {
+      // first local page. Retry those ids, backing off while it keeps
+      // failing. A signed-out client waits for the next space or roster
+      // change instead of retrying at all.
+      if (!failed) {
+        onlineRetryDelay.current = ONLINE_RETRY_MIN_MS;
+      } else if (!signedOut && !onlineRetryTimer.current) {
+        const delay = onlineRetryDelay.current;
+        onlineRetryDelay.current = Math.min(delay * 2, ONLINE_RETRY_MAX_MS);
         onlineRetryTimer.current = setTimeout(() => {
           onlineRetryTimer.current = null;
           setOnlineRetry((n) => n + 1);
-        }, 2000);
+        }, delay);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
