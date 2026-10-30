@@ -116,14 +116,31 @@ export default function TeamSupportPage() {
     reason: string;
     status: string;
     details?: string | null;
+    decision?: string | null;
+    action?: string | null;
     last_error?: string | null;
     created_at: string;
+    reviewed_at?: string | null;
     snapshot?: any;
     reporter?: { username: string | null; display_name: string | null } | null;
     reported?: { username: string | null; display_name: string | null } | null;
   }
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [flagsLoading, setFlagsLoading] = useState(false);
+  // Sentinel's rule matches, each with Tether's verdict in `resolution`.
+  interface ContentFlagRow {
+    id: string;
+    src_table: string;
+    src_column: string;
+    src_id: string;
+    category: string;
+    rule_id: string;
+    state: string;
+    resolution: string | null;
+    created_at: string;
+    resolved_at: string | null;
+  }
+  const [contentFlags, setContentFlags] = useState<ContentFlagRow[]>([]);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   // Servers (staff search)
@@ -249,10 +266,18 @@ export default function TeamSupportPage() {
   const loadFlags = useCallback(async () => {
     setFlagsLoading(true);
     try {
-      const res = await apiFetch("/api/moderation/message-reports");
-      const json = await res.json() as { reports?: FlagRow[]; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Could not load flags.");
+      // Tether decides every report and flag, so show his finished work, not
+      // just what's still open.
+      const [reportsRes, flagsRes] = await Promise.all([
+        apiFetch("/api/moderation/message-reports?status=all"),
+        apiFetch("/api/moderation/content-flags"),
+      ]);
+      const json = await reportsRes.json() as { reports?: FlagRow[]; error?: string };
+      if (!reportsRes.ok) throw new Error(json.error ?? "Could not load flags.");
       setFlags(json.reports ?? []);
+      const flagJson = await flagsRes.json() as { flags?: ContentFlagRow[]; error?: string };
+      if (!flagsRes.ok) throw new Error(flagJson.error ?? "Could not load Sentinel flags.");
+      setContentFlags(flagJson.flags ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load flags.");
     } finally {
@@ -497,7 +522,7 @@ export default function TeamSupportPage() {
               ["tickets", "Tickets", tickets.length],
               ["bans", "Bans", bans.length],
               ["appeals", "Appeals", appeals.filter((a) => a.status === "pending").length],
-              ["flags", "Flags", flags.length],
+              ["flags", "Flags", flags.filter((f) => f.status !== "actioned" && f.status !== "dismissed").length],
               ["servers", "Servers", servers.length],
             ] as const).map(([id, label, count]) => (
               <button
@@ -827,7 +852,7 @@ export default function TeamSupportPage() {
       {activeTab === "flags" && (
         <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
           <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Message / profile flags</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Reports</h2>
             {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
             {flagsLoading && <p className="mt-4 text-sm text-text-muted">Loading flags…</p>}
             {!flagsLoading && flags.length === 0 && <p className="mt-4 text-sm text-text-muted">No flags found.</p>}
@@ -851,6 +876,7 @@ export default function TeamSupportPage() {
                     <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{flag.status.replace("_", " ")}</span>
                   </div>
                   {flag.details && <p className="mt-2 text-sm text-text-muted">{flag.details}</p>}
+                  {flag.action && <p className="mt-2 text-xs font-medium text-text-normal">{flag.action}{flag.reviewed_at ? ` · ${new Date(flag.reviewed_at).toLocaleString()}` : ""}</p>}
                   {flag.last_error && <p className="mt-2 rounded-[3px] bg-bg-secondary px-3 py-2 text-xs text-text-muted">{flag.last_error}</p>}
                   {flag.snapshot && (
                     <details className="mt-3">
@@ -892,6 +918,28 @@ export default function TeamSupportPage() {
                       </button>
                     </div>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 rounded-[3px] border border-divider bg-bg-secondary p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Sentinel flags</h2>
+            {!flagsLoading && contentFlags.length === 0 && <p className="mt-4 text-sm text-text-muted">No flags found.</p>}
+            <div className="mt-4 space-y-3">
+              {contentFlags.map((cf) => (
+                <div key={cf.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text-normal">{cf.category} · {cf.rule_id}</p>
+                      <p className="mt-1 truncate text-xs text-text-muted">
+                        {cf.src_table}.{cf.src_column} · {new Date(cf.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{cf.state}</span>
+                  </div>
+                  <p className="mt-2 rounded-[3px] bg-bg-secondary px-3 py-2 text-xs text-text-muted">
+                    {cf.resolution ?? "Waiting for Tether's next pass."}
+                  </p>
                 </div>
               ))}
             </div>
