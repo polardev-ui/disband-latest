@@ -15,12 +15,20 @@ export default function DevelopersApplicationsPage() {
                 <h1 className="text-2xl font-bold">Disband Developers</h1>
                 <p className="text-sm text-text-muted">Applications · Bots · OAuth2</p>
               </div>
-              <a
-                href="/app"
-                className="rounded-lg border border-divider px-4 py-2 text-sm font-semibold hover:bg-interactive-hover"
-              >
-                Back to Disband
-              </a>
+              <div className="flex gap-2">
+                <a
+                  href="/developers/docs"
+                  className="rounded-lg border border-divider px-4 py-2 text-sm font-semibold hover:bg-interactive-hover"
+                >
+                  Bot Docs
+                </a>
+                <a
+                  href="/app"
+                  className="rounded-lg border border-divider px-4 py-2 text-sm font-semibold hover:bg-interactive-hover"
+                >
+                  Back to Disband
+                </a>
+              </div>
             </div>
           </header>
           <main className="mx-auto max-w-5xl px-6 py-8">
