@@ -42,6 +42,7 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scanText, type RuleHit } from "./rules.ts";
+import { describe, judgeText, type Judgement } from "./ai-judge.ts";
 
 const REPORT_TO = Deno.env.get("SAFETY_REPORT_TO") ?? "beluga7133@gmail.com";
 const REPORT_FROM = Deno.env.get("SAFETY_REPORT_FROM") ?? "Disband Safety <safety@disband.dev>";
@@ -248,6 +249,22 @@ async function sweepText(
 
       if (top.rule.severity !== "block") continue;
 
+      // A pattern match alone never removes anything: the AI reads the whole
+      // message first. Talking *about* abuse (staff, reporters, news) is not
+      // committing it.
+      const judgement = await judgeText(row.body as string, `matched rule ${top.rule.id}`);
+      if (judgement.decision !== "act") {
+        if (!dryRun) {
+          await supabase.from("content_flags").update({
+            state: judgement.decision === "dismiss" ? "dismissed" : "escalated",
+            resolution: describe(judgement).slice(0, 1000),
+            resolved_at: new Date().toISOString(),
+          }).eq("src_table", row.src_table).eq("src_column", row.src_column)
+            .eq("src_id", row.src_id).eq("rule_id", top.rule.id).eq("state", "open");
+        }
+        continue;
+      }
+
       if (dryRun) {
         findings.push({
           kind: "text", category: top.rule.category, rule: top.rule.id,
@@ -262,7 +279,7 @@ async function sweepText(
         p_column: row.src_column,
         p_id: row.src_id,
         p_category: top.rule.category,
-        p_reason: `rule ${top.rule.id}`,
+        p_reason: `rule ${top.rule.id}; ${describe(judgement)}`.slice(0, 500),
         p_suspend: top.rule.suspend,
       });
       if (actionError) { console.error("[sentinel] redact failed", actionError.message); continue; }
@@ -684,6 +701,22 @@ function stronger(
   return violationRank(candidate) > violationRank(current) ? candidate : current;
 }
 
+// A text violation the AI confirmed. Text never bans an account outright;
+// restrictions escalate through the usual violation count instead.
+function aiViolation(j: Judgement, textField: string, rule: string): ConfirmedViolation {
+  const category = j.category ?? "other";
+  const days: Record<string, number | null> = {
+    illegal_content: 30, hate_speech: 3, sexual_content: 3, violence_gore: 3,
+    harassment: 1, spam: 1, other: null,
+  };
+  return {
+    category, textField, platformBan: false,
+    restrictionDays: days[category] ?? null,
+    rule: `${rule} (${describe(j)})`.slice(0, 300),
+    score: j.confidence,
+  };
+}
+
 function reportTextFields(snapshot: ReportSnapshot): ReportSnapshotField[] {
   const fields = Array.isArray(snapshot.text_fields) ? snapshot.text_fields : [];
   return fields.filter(
@@ -723,20 +756,20 @@ async function reviewReport(
   let mediaSeen = 0;
   let mediaClean = 0;
 
-  for (const field of reportTextFields(snapshot)) {
+  const textFields = reportTextFields(snapshot);
+  let textJudged = false;
+  for (const field of textFields) {
     const hits = scanText(field.value);
-    for (const hit of hits) {
-      const candidate = textRuleViolation(hit);
-      if (candidate) {
-        best = stronger(best, { ...candidate, textField: field.field });
-      } else if (hit.rule.severity === "review" || hit.demoted) {
-        // A demoted hit is quoted or describes abuse rather than committing
-        // it. It must not trigger an automatic penalty, but it should still
-        // reach a person instead of disappearing when the report is reviewed.
-        needsReview = hit.demoted
-          ? `Possible ${hit.rule.id} in ${field.field} (quoted or report context)`
-          : `Possible ${hit.rule.id} match in ${field.field}`;
-      }
+    const hit = hits.find((h) => !h.demoted) ?? hits[0];
+    if (!hit) continue;
+    // The rule only says where to look; the AI decides whether it is an
+    // offence or someone talking about one.
+    textJudged = true;
+    const judgement = await judgeText(field.value ?? "", `reported as ${report.reason}; matched rule ${hit.rule.id}`);
+    if (judgement.decision === "act") {
+      best = stronger(best, aiViolation(judgement, field.field ?? "content", hit.rule.id));
+    } else if (judgement.decision === "escalate") {
+      needsReview = `Possible ${hit.rule.id} in ${field.field}. ${describe(judgement)}`;
     }
   }
 
@@ -787,6 +820,23 @@ async function reviewReport(
       mediaClean++;
     } else {
       needsReview = `Possible ${verdict.category} (${verdict.score.toFixed(2)}) in ${item.field}`;
+    }
+  }
+
+  // Reports nothing matched (harassment, spam, "other"...) used to wait for a
+  // person every time. The AI reads them now; only the ones it can't settle
+  // still go to staff. Reports with media we couldn't check stay human.
+  if (!best && !needsReview && !unscannable && !textJudged && textFields.length
+      && (HUMAN_REVIEW_REASONS.has(report.reason) || (report.reason === "illegal_content" && mediaSeen === 0))) {
+    const text = textFields.map((f) => `${f.field}: ${f.value}`).join("\n");
+    const context = `reported as ${report.reason}${report.details ? `; reporter said: ${String(report.details).slice(0, 300)}` : ""}`;
+    const judgement = await judgeText(text, context);
+    if (judgement.decision === "act") {
+      best = aiViolation(judgement, textFields[0].field ?? "content", `report:${report.reason}`);
+    } else if (judgement.decision === "dismiss") {
+      return { status: "dismissed", detail: describe(judgement) };
+    } else {
+      return { status: "needs_review", detail: describe(judgement) };
     }
   }
 
@@ -892,7 +942,7 @@ async function sweepReports(
   const { data, error } = await supabase
     .from("message_reports")
     .select("id, target_type, target_surface, target_table, target_id, reported_user_id, reason, details, snapshot, review_attempts")
-    .in("status", ["pending", "reviewing"])
+    .or("status.in.(pending,reviewing),and(status.eq.needs_review,decision.eq.needs_review,review_attempts.lt.3)")
     .order("created_at", { ascending: true })
     .limit(Math.max(1, Math.min(limit, 100)));
   if (error) throw new Error(`report queue: ${error.message}`);
@@ -928,8 +978,10 @@ async function sweepReports(
           const needsReview = outcome.status === "needs_review";
           await supabase.from("message_reports").update({
             status: outcome.status,
-            decision: needsReview ? "needs_review" : "no_violation",
-            action: needsReview ? null : "Dismissed — no rule match",
+            // "ai_escalated" keeps it out of the queue above once the AI has
+            // had its go; it still shows in the Flags tab for staff.
+            decision: needsReview ? "ai_escalated" : "no_violation",
+            action: needsReview ? null : (outcome.detail?.startsWith("AI review") ? "Dismissed by AI review" : "Dismissed — no rule match"),
             reviewed_at: needsReview ? null : new Date().toISOString(),
             last_error: outcome.detail ? outcome.detail.slice(0, 500) : null,
           }).eq("id", row.id);
@@ -1128,60 +1180,52 @@ async function reviewTextFlag(
   }
 
   const hits = scanText(body);
-  const actionable = hits.find((hit) => !hit.demoted && hit.rule.severity === "block");
-  if (actionable) {
-    if (dryRun) {
-      return {
-        state: "actioned",
-        action: "would redact",
-        finding: {
-          kind: "flag",
-          category: actionable.rule.category,
-          rule: actionable.rule.id,
-          where: `content_flags#${flag.id}`,
-          owner: flag.owner_id,
-          action: "would redact",
-        },
-      };
-    }
-    const { data, error } = await supabase.rpc("sentinel_redact_text", {
-      p_table: flag.src_table,
-      p_column: flag.src_column,
-      p_id: flag.src_id,
-      p_category: actionable.rule.category,
-      p_reason: `Flag review: ${actionable.rule.id}`,
-      p_suspend: actionable.rule.suspend,
-    });
-    if (error) throw new Error(`flag redact: ${error.message}`);
-    const result = (data ?? {}) as { account_held?: boolean };
+  const hit = hits.find((h) => !h.demoted) ?? hits[0];
+  if (!hit) return { state: "dismissed", action: "no current rule match" };
+
+  const judgement = await judgeText(
+    body,
+    `matched rule ${hit.rule.id}${hit.demoted ? " (wording looks like quoting or reporting)" : ""}`,
+  );
+  if (judgement.decision === "dismiss") {
+    return { state: "dismissed", action: "AI: not a violation", detail: describe(judgement) };
+  }
+  if (judgement.decision === "escalate") {
+    return { state: "escalated", action: "needs a person", detail: describe(judgement) };
+  }
+
+  const category = hit.rule.category;
+  if (dryRun) {
     return {
       state: "actioned",
-      action: actionable.rule.suspend ? "redacted + account held" : "redacted",
-      held: result.account_held === true,
+      action: "would redact",
       finding: {
-        kind: "flag",
-        category: actionable.rule.category,
-        rule: actionable.rule.id,
-        where: `content_flags#${flag.id}`,
-        owner: flag.owner_id,
-        action: actionable.rule.suspend ? "redacted + account held" : "redacted",
+        kind: "flag", category, rule: hit.rule.id,
+        where: `content_flags#${flag.id}`, owner: flag.owner_id, action: "would redact",
+        detail: describe(judgement),
       },
     };
   }
-
-  const possible = hits.find((hit) => !hit.demoted)
-    ?? hits.find((hit) => hit.demoted);
-  if (possible) {
-    return {
-      state: "escalated",
-      action: "possible rule match needs a person",
-      detail: possible.demoted
-        ? `Quoted or report-context match for ${possible.rule.id}; not auto-actioned.`
-        : `Review-severity match for ${possible.rule.id}.`,
-    };
-  }
-
-  return { state: "dismissed", action: "no current rule match" };
+  // Text alone never holds an account (see rules.ts); it only removes the text.
+  const { error } = await supabase.rpc("sentinel_redact_text", {
+    p_table: flag.src_table,
+    p_column: flag.src_column,
+    p_id: flag.src_id,
+    p_category: category,
+    p_reason: `Flag review: ${hit.rule.id}; ${describe(judgement)}`.slice(0, 500),
+    p_suspend: false,
+  });
+  if (error) throw new Error(`flag redact: ${error.message}`);
+  return {
+    state: "actioned",
+    action: "redacted",
+    detail: describe(judgement),
+    finding: {
+      kind: "flag", category, rule: hit.rule.id,
+      where: `content_flags#${flag.id}`, owner: flag.owner_id, action: "redacted",
+      detail: describe(judgement),
+    },
+  };
 }
 
 async function reviewFlag(
