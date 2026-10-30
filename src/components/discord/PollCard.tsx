@@ -33,22 +33,27 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     void load();
   }, [load]);
 
+  // Votes and poll rows are private to their owners (0155), so table change
+  // feeds never reach other viewers and only produced Realtime errors. Anyone
+  // who votes or closes the poll tells the others on a broadcast topic, and
+  // they reload the aggregate counts through get_poll().
+  const channelRef = useRef<ReturnType<ReturnType<typeof getSupabaseClient>["channel"]> | null>(null);
   useEffect(() => {
-    const channel = getSupabaseClient()
-      .channel(`poll:${pollId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "poll_votes", filter: `poll_id=eq.${pollId}` },
-        () => { if (!inFlight.current) void load(); },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "polls", filter: `id=eq.${pollId}` },
-        () => { if (!inFlight.current) void load(); },
-      )
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel(`poll:${pollId}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "changed" }, () => { if (!inFlight.current) void load(); })
       .subscribe();
-    return () => { void getSupabaseClient().removeChannel(channel); };
+    channelRef.current = channel;
+    return () => {
+      channelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
   }, [pollId, load]);
+
+  function announce() {
+    void channelRef.current?.send({ type: "broadcast", event: "changed", payload: {} });
+  }
 
   async function vote(index: number) {
     if (busy || !poll || poll.closed) return;
@@ -56,6 +61,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     inFlight.current = true;
     try {
       setPoll(await votePoll(pollId, index));
+      announce();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not record your vote.");
     } finally {
@@ -70,6 +76,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     inFlight.current = true;
     try {
       setPoll(await closePoll(pollId));
+      announce();
     } catch {
       setError("Could not close the poll.");
     } finally {
