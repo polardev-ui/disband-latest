@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer } from "react";
+import { apiFetch } from "@/lib/api";
 import { gifFavKey } from "@/lib/gif-favorites";
 import { getSupabaseClient, isAccessTokenExpired, refreshSessionOnce } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
@@ -16,7 +17,12 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 let cache: FavGif[] | null = null;
-let inflight: Promise<FavGif[]> | null = null;
+let inflight: Promise<FavGif[] | null> | null = null;
+let lastFetch = 0;
+let watching = false;
+
+/** A star on another device shows up here when the tab comes back into focus. */
+const FOCUS_REFETCH_MS = 30_000;
 
 /**
  * The session lives in localStorage, not cookies, so `getRouteUser` has
@@ -43,25 +49,62 @@ function notify() {
   for (const l of listeners) l();
 }
 
-async function fetchAll(force = false): Promise<FavGif[]> {
+/**
+ * A failed read keeps whatever list we already have: a 429 or a blip must
+ * not blank the Favorited tab (or every star in chat) out. A failed *first*
+ * read leaves the list unloaded rather than caching an empty one — on a
+ * reload the first read usually races the session restore and gets a 401,
+ * and caching that as "no favourites" hid them until the next full reload.
+ *
+ * `apiFetch` matters on desktop: the Tauri shell has no `/api`, so a
+ * relative fetch never reached the server there.
+ */
+async function fetchAll(force = false): Promise<FavGif[] | null> {
   if (cache && !force) return cache;
   if (!inflight) {
-    // A failed read keeps whatever list we already have: a 429 or a blip
-    // must not blank the Favorited tab (or every star in chat) out.
-    const prev = cache;
     inflight = (async () => {
-      const res = await fetch("/api/gifs/favorites", { headers: await authHeaders() });
-      if (!res.ok) return prev ?? [];
+      const headers = await authHeaders();
+      if (!headers.Authorization) return null;
+      const res = await apiFetch("/api/gifs/favorites", { headers, cache: "no-store" });
+      if (!res.ok) return null;
       const json = (await res.json()) as { favorites?: FavGif[] };
       return json.favorites ?? [];
     })()
-      .catch(() => prev ?? [])
+      .catch(() => null)
       .finally(() => {
         inflight = null;
       });
   }
-  cache = await inflight;
+  const next = await inflight;
+  if (next) {
+    cache = next;
+    lastFetch = Date.now();
+  }
   return cache;
+}
+
+/**
+ * Once per page: load when the session arrives, forget on sign-out, and
+ * catch up on stars made elsewhere when the window regains focus.
+ */
+function watchSession() {
+  if (watching || typeof window === "undefined") return;
+  watching = true;
+  getSupabaseClient().auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") {
+      cache = null;
+      notify();
+    } else if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || (event === "TOKEN_REFRESHED" && !cache)) {
+      void fetchAll(event === "SIGNED_IN").then(() => notify());
+    }
+  });
+  const onFocus = () => {
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - lastFetch < FOCUS_REFETCH_MS) return;
+    void fetchAll(true).then(() => notify());
+  };
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onFocus);
 }
 
 /**
@@ -79,6 +122,7 @@ export function useGifFavorites() {
   useEffect(() => {
     const l = () => tick();
     listeners.add(l);
+    watchSession();
     void fetchAll().then(() => notify());
     return () => {
       listeners.delete(l);
@@ -91,6 +135,9 @@ export function useGifFavorites() {
   }, []);
 
   const toggle = useCallback(async (url: string, title: string | null, active: boolean) => {
+    // Starring before the list has loaded would otherwise leave a one-item
+    // cache that reads as the whole list.
+    if (!cache) await fetchAll();
     const prev = cache ? [...cache] : null;
     const key = gifFavKey(url);
     // Unfavoriting must address the row as *stored*: the entry may have been
@@ -104,7 +151,7 @@ export function useGifFavorites() {
     }
     notify();
     try {
-      const res = await fetch("/api/gifs/favorites", {
+      const res = await apiFetch("/api/gifs/favorites", {
         method: active ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify(

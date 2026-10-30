@@ -99,7 +99,7 @@ struct GifPickerView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(favorites.favorites.reversed(), id: \.stableId) { fav in
+                    ForEach(favorites.favorites, id: \.stableId) { fav in
                         Button {
                             onPick(GiphyGif(id: fav.stableId, url: fav.url, preview: nil, images: nil))
                             dismiss()
