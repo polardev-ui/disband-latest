@@ -23,7 +23,8 @@ import { MicTest } from "./settings/MicTest";
 import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { MyAccountPanel } from "./settings/MyAccountPanel";
-import { isNoiseCancellationEnabled, setNoiseCancellationEnabled, getNoiseCancellationStrength, setNoiseCancellationStrength, getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { setVoiceMixerNoiseMode } from "@/lib/voice-mixer";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import {
@@ -344,8 +345,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
   const [audioInput, setAudioInput] = useState("");
-  const [noiseCancellation, setNoiseCancellationState] = useState(isNoiseCancellationEnabled());
-  const [noiseCancellationStrength, setNoiseCancellationStrengthState] = useState(getNoiseCancellationStrength());
   const [noiseMode, setNoiseModeState] = useState<NoiseSuppressionMode>(getNoiseSuppressionMode());
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
@@ -1845,12 +1844,18 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   </SettingsSection>
 
                   <SettingsSection
-                    title="Noise cancellation"
-                    description="Reduce background noise before your microphone reaches everyone else."
+                    title="Noise suppression"
+                    description="Remove background noise like keyboards, fans, dogs and traffic before your voice reaches anyone else."
                   >
                     <SettingRow
                       label="Noise suppression"
-                      description="Choose how Disband handles background noise. 'Enhanced' uses a lighter touch to avoid clipping your voice."
+                      description={
+                        noiseMode === "ai"
+                          ? "AI noise suppression runs a speech model on your device and keeps only your voice. Changes apply straight away, even mid-call."
+                          : noiseMode === "standard"
+                            ? "Your browser's built-in filter. Lighter on the CPU, but lets more noise through."
+                            : "No filtering. Best for music or a studio mic in a quiet room."
+                      }
                     >
                       <select
                         value={noiseMode}
@@ -1858,46 +1863,27 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           const mode = e.target.value as NoiseSuppressionMode;
                           setNoiseModeState(mode);
                           setNoiseSuppressionMode(mode);
-                          setNoiseCancellationState(mode !== "off");
-                          setNoiseCancellationEnabled(mode !== "off");
+                          setVoiceMixerNoiseMode(mode);
                         }}
                         className={settingsInputClass}
                       >
-                        <option value="off">Off (no suppression)</option>
-                        <option value="standard">Standard (browser)</option>
-                        <option value="enhanced">Enhanced (lighter)</option>
+                        <option value="ai">AI noise suppression (recommended)</option>
+                        <option value="standard">Standard</option>
+                        <option value="off">None</option>
                       </select>
-                    </SettingRow>
-                    <SettingRow
-                      label="Noise cancellation strength"
-                      description="Higher values remove more noise but can clip your voice."
-                      stacked
-                    >
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={noiseCancellationStrength}
-                        onChange={(event) => {
-                          const value = Number(event.target.value);
-                          setNoiseCancellationStrengthState(value);
-                          setNoiseCancellationStrength(value);
-                        }}
-                        className={settingsInputClass}
-                      />
                     </SettingRow>
                   </SettingsSection>
 
                   <SettingsSection
                     title="Microphone test"
-                    description="Relay your voice back to yourself to check noise cancellation."
+                    description="Hear yourself through the same noise suppression a call uses."
                   >
                     <SettingRow
                       label="Live input level"
                       description="Speak and watch the meter move."
                       stacked
                     >
-                      <MicTest deviceId={audioInput} />
+                      <MicTest deviceId={audioInput} noiseMode={noiseMode} />
                     </SettingRow>
                   </SettingsSection>
 

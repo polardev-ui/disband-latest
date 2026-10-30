@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buildScreenConstraints } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import {
-  attachRemoteTrack, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack,
+  attachRemoteTrack, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus,
   LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
@@ -14,12 +14,12 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { fetchIceServers } from "@/lib/ice-servers";
+import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
+import { fetchIceServers, fetchIceServersQuick } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
-import { isNoiseCancellationEnabled, getNoiseCancellationStrength } from "@/lib/audio-settings";
 
 interface SignalPayload {
-  type: "offer" | "answer" | "ice" | "leave" | "screen";
+  type: "offer" | "answer" | "ice" | "leave" | "screen" | "hello";
 
   sharing?: boolean;
   from: string;
@@ -172,6 +172,9 @@ export function useVoiceChannel(
     // everyone already in the channel.
     const loaded = rows.map((r) => ({ ...r }));
     if (presenceLoadRef.current !== generation) return loaded;
+    // Update the signal allowlist now, not after the next render, so an
+    // offer that arrives right behind this read is accepted.
+    participantIdsRef.current = new Set(loaded.map((p) => p.user_id));
     setParticipants((prev) => {
       const profiles = new Map(prev.map((p) => [p.user_id, p.profile]));
       return loaded.map((p) => ({ ...p, profile: profiles.get(p.user_id) }));
@@ -250,7 +253,7 @@ export function useVoiceChannel(
       const promise: Promise<RTCPeerConnection | null> = (async () => {
         let pc: RTCPeerConnection;
         try {
-          pc = new RTCPeerConnection({ iceServers: await fetchIceServers(), iceCandidatePoolSize: 4 });
+          pc = new RTCPeerConnection({ iceServers: await fetchIceServersQuick(), iceCandidatePoolSize: 4, bundlePolicy: "max-bundle" });
         } catch {
           pc = new RTCPeerConnection();
         }
@@ -420,7 +423,7 @@ export function useVoiceChannel(
         const startOffer = async () => {
           if (peersRef.current.get(remoteId) !== pc) return;
           if (pc.signalingState !== "stable" || pc.remoteDescription) return;
-          const offer = await pc.createOffer();
+          const offer = tuneOpus(await pc.createOffer());
           if (pc.signalingState !== "stable") return;
           await pc.setLocalDescription(offer);
           sendOffer(0);
@@ -441,7 +444,7 @@ export function useVoiceChannel(
                 reconnectLater(1_200);
               });
             }
-          }, 2_500);
+          }, 1_500);
         }
 
         return pc;
@@ -466,11 +469,23 @@ export function useVoiceChannel(
     async (payload: SignalPayload) => {
       if (!userId || payload.from === userId) return;
       if (payload.to && payload.to !== userId) return;
+      // A joiner announces itself the moment its presence row is written.
+      // Re-reading presence here starts negotiation straight away instead of
+      // waiting on the postgres_changes feed, which can lag by seconds. The
+      // payload itself is never trusted: only the database row counts.
+      if (payload.type === "hello") {
+        if (!participantIdsRef.current.has(payload.from)) void loadPresence();
+        return;
+      }
       // Drop signals from anyone outside voice presence without a negotiated
       // peer: forged `leave`s would otherwise drop live tiles, and forged
-      // offers would harvest srflx (IP-revealing) candidates. Joiners
-      // bootstrap through the presence-driven initiator path below.
-      if (!participantIdsRef.current.has(payload.from) && !peersRef.current.has(payload.from)) return;
+      // offers would harvest srflx (IP-revealing) candidates. An offer can
+      // beat our presence read, so check the database once before dropping it.
+      if (!participantIdsRef.current.has(payload.from) && !peersRef.current.has(payload.from)) {
+        if (payload.type !== "offer") return;
+        await loadPresence();
+        if (!participantIdsRef.current.has(payload.from)) return;
+      }
 
       // A stop signal can arrive before the track's ended event (or instead
       // of it when the sharer's tab was closed). Clear the tile immediately.
@@ -523,7 +538,7 @@ export function useVoiceChannel(
           await setLaneTrack(pc, LANE_SCREEN, screenTrackRef.current);
           await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
         }
-        const answer = await pc.createAnswer();
+        const answer = tuneOpus(await pc.createAnswer());
         await pc.setLocalDescription(answer);
         signalRef.current?.send({
           type: "broadcast",
@@ -563,7 +578,7 @@ export function useVoiceChannel(
         dropPeer(payload.from);
       }
     },
-    [createPeer, dropPeer, flushQueuedIce, userId],
+    [createPeer, dropPeer, flushQueuedIce, loadPresence, userId],
   );
 
   const cleanup = useCallback(async () => {
@@ -622,12 +637,11 @@ export function useVoiceChannel(
       // The first `/api/turn` call can take seconds; peers must not wait for
       // it serially after presence says we've joined.
       void fetchIceServers();
+      preloadAiNoiseSuppression();
       const raw = await getDisbandUserMedia({ audio: true, video: false });
       const rawMic = raw.getAudioTracks()[0] ?? null;
       const mixer = new VoiceMixer(rawMic, {
         micMuted,
-        noiseCancellation: isNoiseCancellationEnabled(),
-        noiseStrength: getNoiseCancellationStrength(),
       });
       localStreamRef.current = new MediaStream([mixer.audioTrack]);
       setActiveVoiceMixer(mixer);
@@ -652,6 +666,11 @@ export function useVoiceChannel(
         user_id: userId,
         muted: micMuted,
         deafened,
+      });
+      void ch.send({
+        type: "broadcast",
+        event: "signal",
+        payload: { type: "hello", from: userId } satisfies SignalPayload,
       });
 
       // loadPresence returns the presence rows before it resolves names and

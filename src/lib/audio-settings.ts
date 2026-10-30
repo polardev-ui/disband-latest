@@ -54,24 +54,20 @@ export async function applyAudioOutputToElement(
   }
 }
 
-export function buildAudioConstraints(): boolean | MediaTrackConstraints {
+export function buildAudioConstraints(): MediaTrackConstraints {
   const deviceId = getPreferredAudioInputId();
-  const cancellation = isNoiseCancellationEnabled();
-  const strength = getNoiseCancellationStrength();
-  // Treat very low strength as "off" so the browser's aggressive
-  // suppression doesn't chop quiet voices.
-  const effective = cancellation && strength >= 20;
-  const constraints: MediaTrackConstraints = {
+  // Echo cancellation and gain control stay on in every mode: without them
+  // speakers feed back into the call and quiet mics are barely audible.
+  // The browser's own suppressor only runs in Standard; the AI filter does
+  // the work in AI mode and stacking both muffles voices.
+  return {
     ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
-    echoCancellation: effective,
-    noiseSuppression: effective,
-    // Automatic gain control frequently pumps and adds perceived lag /
-    // stutter. Noise suppression is handled natively by the browser when
-    // enabled; Web Audio only fine-tunes the captured signal.
-    autoGainControl: false,
+    echoCancellation: true,
+    autoGainControl: true,
+    noiseSuppression: getNoiseSuppressionMode() === "standard",
+    channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48_000 },
   };
-  if (!deviceId && !cancellation) return true;
-  return constraints;
 }
 
 export function buildVideoConstraints(plan?: string): boolean | MediaTrackConstraints {
@@ -93,19 +89,27 @@ function videoTierConstraints(plan?: string): MediaTrackConstraints {
 }
 
 export const NOISE_CANCELLATION_KEY = "disband:noise-cancellation-enabled";
-export const NOISE_CANCELLATION_STRENGTH_KEY = "disband:noise-cancellation-strength";
 export const NOISE_MODE_KEY = "disband:noise-suppression-mode";
 
-export type NoiseSuppressionMode = "off" | "standard" | "enhanced";
+/** "ai" is the on-device neural filter (Krisp-style); "standard" is the
+ *  browser's built-in suppressor. */
+export type NoiseSuppressionMode = "off" | "standard" | "ai";
 
 export function getNoiseSuppressionMode(): NoiseSuppressionMode {
-  if (typeof window === "undefined") return "off";
-  const value = localStorage.getItem(NOISE_MODE_KEY);
-  if (value === "standard" || value === "enhanced" || value === "off") return value;
-  // Back-compat with the old boolean toggle.
-  const legacy = localStorage.getItem(NOISE_CANCELLATION_KEY);
-  if (legacy === "true") return "standard";
-  return "off";
+  if (typeof window === "undefined") return "ai";
+  try {
+    const value = localStorage.getItem(NOISE_MODE_KEY);
+    if (value === "ai" || value === "standard" || value === "off") return value;
+    // "enhanced" was the old name for the strongest option.
+    if (value === "enhanced") return "ai";
+    // Back-compat with the old boolean toggle.
+    const legacy = localStorage.getItem(NOISE_CANCELLATION_KEY);
+    if (legacy === "true") return "standard";
+    if (legacy === "false") return "off";
+  } catch {
+    // Storage blocked: fall through to the default.
+  }
+  return "ai";
 }
 
 export function setNoiseSuppressionMode(mode: NoiseSuppressionMode) {
@@ -116,25 +120,3 @@ export function setNoiseSuppressionMode(mode: NoiseSuppressionMode) {
     // Ignore storage errors.
   }
 }
-
-export function isNoiseCancellationEnabled(): boolean {
-  return getNoiseSuppressionMode() !== "off";
-}
-
-export function setNoiseCancellationEnabled(enabled: boolean) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(NOISE_CANCELLATION_KEY, String(enabled));
-}
-
-export function getNoiseCancellationStrength(): number {
-  if (typeof window === "undefined") return 50;
-  const value = Number(localStorage.getItem(NOISE_CANCELLATION_STRENGTH_KEY));
-  if (Number.isNaN(value)) return 50;
-  return Math.min(100, Math.max(0, value));
-}
-
-export function setNoiseCancellationStrength(strength: number) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(NOISE_CANCELLATION_STRENGTH_KEY, String(Math.min(100, Math.max(0, strength))));
-}
-
