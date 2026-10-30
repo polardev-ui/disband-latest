@@ -28,6 +28,8 @@ concurrency:
 jobs:
   build:
     runs-on: ${{ matrix.platform }}
+    outputs:
+      tag: ${{ steps.build.outputs.mode == 'branch' && steps.tag.outputs.name || steps.build.outputs.release_tag }}
     strategy:
       fail-fast: false
       matrix:
@@ -163,7 +165,24 @@ jobs:
             [All releases](https://github.com/${{ github.repository }}/releases)
           releaseDraft: false
           prerelease: ${{ steps.build.outputs.mode == 'branch' }}
-          # Publishes latest.json beside the installers — the manifest the
-          # in-app updater polls.
-          includeUpdaterJson: true
+          # latest.json is written once by the updater-manifest job below.
+          # Each matrix job writing it raced: the second macOS build dropped
+          # the first one's entry.
+          includeUpdaterJson: false
           args: --target ${{ matrix.target }}
+
+  updater-manifest:
+    name: Publish updater manifest
+    needs: build
+    # Still runs if one platform failed, so the others keep auto-updating.
+    if: ${{ always() && needs.build.outputs.tag != '' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build latest.json from the signed bundles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/merge-updater-json.mjs "${{ needs.build.outputs.tag }}"
