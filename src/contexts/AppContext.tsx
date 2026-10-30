@@ -232,6 +232,8 @@ interface AppContextValue {
   removeGroupMember: (groupId: string, userId: string) => Promise<string | null>;
   loadMutuals: (userId: string) => Promise<{ serverIds: string[]; friendIds: string[] }>;
   serverTimeouts: ServerTimeout[];
+  /** Bumped when the active space's members, roles or channel permissions change. */
+  rosterVersion: number;
   serverBans: ServerBan[];
   serverFolders: ServerFolder[];
   serverListState: ServerListState[];
@@ -645,6 +647,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [viewMode, setViewMode] = useState<ViewMode>("home");
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [rosterVersion, setRosterVersion] = useState(0);
   const [activeDmThreadId, setActiveDmThreadId] = useState<string | null>(null);
   const [pinnedBySource, setPinnedBySource] = useState<Record<string, PinnedMessage[]>>({});
   const [activeGroupChatId, setActiveGroupChatId] = useState<string | null>(null);
@@ -3625,30 +3628,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeServerId || !configured) return;
     const supabase = getSupabaseClient();
-    const refresh = () => void loadServerDetails(activeServerId, { refreshMembers: true });
+    // Those tables aren't in the Realtime publication (table change feeds on
+    // a 13,000-member space were most of the database timeouts), so a
+    // statement-level trigger sends one "roster" ping per change (0189).
+    // Pings are coalesced: a burst of joins becomes one refresh.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let last = 0;
+    const MIN_GAP_MS = 4000;
+    const refresh = () => {
+      if (timer) return;
+      const wait = Math.max(300, last + MIN_GAP_MS - Date.now());
+      timer = setTimeout(() => {
+        timer = null;
+        last = Date.now();
+        setRosterVersion((v) => v + 1);
+        void loadServerDetails(activeServerId, { refreshMembers: true });
+      }, wait);
+    };
     const sub = supabase
-      .channel(`sm:${activeServerId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServerId}` },
-        // A join, leave or member update makes the cached roster stale; the
-        // refresh re-reads the first member page (the rest page in lazily).
-        refresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "member_roles", filter: `server_id=eq.${activeServerId}` },
-        // Role changes live in member_roles, so a separate subscription is
-        // needed or the roster never refreshes when a role is granted/revoked.
-        refresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "server_roles", filter: `server_id=eq.${activeServerId}` },
-        refresh,
-      )
+      .channel(`server-roster:${activeServerId}`, { config: { broadcast: { self: true } } })
+      .on("broadcast", { event: "roster" }, refresh)
       .subscribe();
-    return () => { void sub.unsubscribe(); };
+    return () => {
+      if (timer) clearTimeout(timer);
+      void supabase.removeChannel(sub);
+    };
   }, [activeServerId, configured, loadServerDetails]);
 
   useEffect(() => {
@@ -6838,6 +6842,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeGroupMember,
     loadMutuals,
     serverTimeouts,
+    rosterVersion,
     serverBans,
     serverFolders,
     serverListState,

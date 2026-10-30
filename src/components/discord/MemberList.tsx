@@ -27,6 +27,8 @@ interface MemberListProps {
   serverId?: string | null;
   members: (ServerMember & { profile: Profile })[];
   roles: ServerRole[];
+  /** The open channel: only people who can see it are listed. */
+  channelId?: string | null;
   /** The space's owner. Wins over member rows, a few of which carry a stale role. */
   ownerId?: string | null;
   loading?: boolean;
@@ -93,9 +95,9 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
-export function MemberList({ serverId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
-  const { presenceMap, listeningMap, activityMap, serverTimeouts } = useApp();
-  const windowed = useMemberWindow(serverId, presenceMap);
+export function MemberList({ serverId = null, channelId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
+  const { presenceMap, listeningMap, activityMap, serverTimeouts, rosterVersion } = useApp();
+  const windowed = useMemberWindow(serverId, presenceMap, channelId, rosterVersion);
   const useWindow = !!serverId && windowed.mode === "window" && windowed.total !== null;
 
   const timedOutIds = useMemo(() => {
