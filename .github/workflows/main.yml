@@ -169,6 +169,8 @@ jobs:
           # Each matrix job writing it raced: the second macOS build dropped
           # the first one's entry.
           includeUpdaterJson: false
+          # pnpm tauri, retried once on macOS where DMG bundling is flaky.
+          tauriScript: node scripts/tauri-retry.mjs
           args: --target ${{ matrix.target }}
 
   updater-manifest:
