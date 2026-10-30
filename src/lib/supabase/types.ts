@@ -30,6 +30,8 @@ export interface Profile {
   /** Gradient direction for name color (e.g. "90deg", "180deg"). */
   name_gradient_dir?: string | null;
   is_bot?: boolean;
+  /** Privacy: people who share a space may send a message request. Migration 0193. */
+  allow_message_requests?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */
   account_type?: string | null;
   /** Whether the user has access to the team support dashboard. */
@@ -309,6 +311,12 @@ export interface DbDmThread {
   user_a: string;
   user_b: string;
   created_at: string;
+  /** Who started it without being friends; null for a normal DM. Migration 0193. */
+  requested_by?: string | null;
+  /** When the recipient replied to or accepted the request. */
+  accepted_at?: string | null;
+  /** The recipient ignored the request: hidden from them. */
+  request_ignored_at?: string | null;
 }
 
 export interface DmThread extends DbDmThread {
@@ -683,6 +691,10 @@ export interface Database {
       get_or_create_dm_thread: {
         Args: { p_friend_id: string };
         Returns: string;
+      };
+      respond_message_request: {
+        Args: { p_thread_id: string; p_action: "accept" | "ignore" };
+        Returns: undefined;
       };
       ensure_user_profile: {
         Args: Record<string, never>;

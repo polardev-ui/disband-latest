@@ -391,6 +391,8 @@ interface ChatCanvasProps {
   placeholder?: string;
 
   composerLockedReason?: string | null;
+  /** Shown just above the composer, e.g. the message request bar. */
+  composerNotice?: React.ReactNode;
   typingScope?: { kind: "channel" | "dm" | "group"; id: string; serverId?: string } | null;
 
   channels?: ChannelLite[];
@@ -435,6 +437,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     introText,
     placeholder,
     composerLockedReason,
+    composerNotice,
     typingScope = null,
     readCursorScope = null,
     channels,
@@ -1151,6 +1154,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       )}
 
       <div className="shrink-0">
+        {composerNotice}
         {composerLockedReason ? (
           <div className="mx-4 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />

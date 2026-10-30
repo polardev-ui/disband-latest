@@ -102,6 +102,9 @@ struct ChatView: View {
                                value: model.typers.map(\.userId))
                 }
             if let error = model.sendError { sendErrorBanner(error) }
+            if case .dm(let threadId, _) = model.source {
+                MessageRequestBar(threadId: threadId, peer: callPeer)
+            }
             if let composerLockedReason {
                 lockedComposer(composerLockedReason)
             } else {
@@ -843,6 +846,7 @@ struct ChatView: View {
         withAnimation { replyingTo = nil }
         guard let uid = app.currentUserId else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if case .dm(let threadId, _) = model.source { directMessages.markRepliedTo(threadId) }
         Task { await model.send(content: content, authorId: uid, replyToId: reply) }
     }
 

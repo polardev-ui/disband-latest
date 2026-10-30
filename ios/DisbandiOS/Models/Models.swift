@@ -73,6 +73,8 @@ struct Profile: Codable, Identifiable, Hashable {
     var createdAt: String?
     /// Bots and webhooks; shown with an APP tag beside their name.
     var isBot: Bool? = nil
+    /// Privacy: people who share a space may send a message request (migration 0193).
+    var allowMessageRequests: Bool? = nil
     /// The avatar decoration they wear (a shop item id such as
     /// "ring-angelic"). Drawn by `AvatarView` from the web's exported art.
     var equippedRingEffect: String? = nil
@@ -96,6 +98,7 @@ struct Profile: Codable, Identifiable, Hashable {
         case linkPreviewsEnabled = "link_previews_enabled"
         case createdAt = "created_at"
         case isBot = "is_bot"
+        case allowMessageRequests = "allow_message_requests"
         case equippedRingEffect = "equipped_ring_effect"
     }
 
@@ -278,6 +281,12 @@ struct DmThread: Codable, Identifiable, Hashable {
     let createdAt: String?
     var lastMessageAt: String?
     var lastMessagePreview: String?
+    /// Message requests (migration 0193): who started it without being
+    /// friends (nil for a normal DM), and whether the recipient accepted or
+    /// ignored it.
+    var requestedBy: String?
+    var acceptedAt: String?
+    var requestIgnoredAt: String?
     var friend: Profile?
 
     enum CodingKeys: String, CodingKey {
@@ -287,6 +296,21 @@ struct DmThread: Codable, Identifiable, Hashable {
         case createdAt = "created_at"
         case lastMessageAt = "last_message_at"
         case lastMessagePreview = "last_message_preview"
+        case requestedBy = "requested_by"
+        case acceptedAt = "accepted_at"
+        case requestIgnoredAt = "request_ignored_at"
+    }
+
+    /// A request someone else sent you that you haven't replied to or accepted.
+    func isIncomingRequest(for uid: String?) -> Bool {
+        guard let requestedBy, let uid else { return false }
+        return requestedBy != uid && acceptedAt == nil
+    }
+
+    /// A request you sent that hasn't been answered yet.
+    func isOutgoingRequest(for uid: String?) -> Bool {
+        guard let requestedBy, let uid else { return false }
+        return requestedBy == uid && acceptedAt == nil
     }
 }
 

@@ -289,7 +289,8 @@ export function UserProfileModal({
     if (!text || statusReplySending) return;
     setStatusReplySending(true);
     try {
-      await openDmWithFriend(profile.id);
+      // A failed open leaves some other DM active; never send into it.
+      if (await openDmWithFriend(profile.id)) return;
       const content = `> ${statusNote}\n${text}`;
       setTimeout(() => {
         void sendDmMessage(content);
@@ -380,7 +381,9 @@ export function UserProfileModal({
   } else if (!isBot) {
     actions = (
       <>
-        {friend && onMessage && (
+        {/* Non-friends can message too when they allow message requests;
+            the server checks for a shared space (migration 0193). */}
+        {(friend || profile.allow_message_requests !== false) && onMessage && (
           <button type="button" onClick={onMessage} className={BTN_SOLID}>
             <IconMessage size={15} /> Send Message
           </button>

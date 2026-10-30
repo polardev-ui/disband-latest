@@ -208,7 +208,15 @@ interface AppContextValue {
   renameGroupChat: (groupId: string, name: string) => Promise<string | null>;
   deleteGroupMessage: (messageId: string) => Promise<void>;
   groupCallCounts: Map<string, number>;
-  openDmWithFriend: (friendId: string) => Promise<void>;
+  /** Opens (or starts) a DM. Returns an error message, or null on success. */
+  openDmWithFriend: (friendId: string) => Promise<string | null>;
+  /** Incoming message requests: DMs from people you share a space with, not yet accepted. */
+  messageRequests: { threadId: string; friend: Profile; unreadCount: number; sortAt: string; preview: string | null }[];
+  /** True when the thread is a message request you received and haven't accepted. */
+  isIncomingRequest: (threadId: string | null | undefined) => boolean;
+  /** True when the thread is a request you sent that hasn't been answered yet. */
+  isOutgoingRequest: (threadId: string | null | undefined) => boolean;
+  respondMessageRequest: (threadId: string, action: "accept" | "ignore") => Promise<string | null>;
   sendInviteToFriend: (friendId: string, inviteUrl: string, serverName: string) => Promise<string | null>;
   sendFriendRequest: (username: string) => Promise<string | null>;
   respondFriendRequest: (id: string, accept: boolean) => Promise<void>;
@@ -874,16 +882,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isBlocked = useCallback((id: string) => blockedUserIds.has(id), [blockedUserIds]);
   const isBlockedEitherWay = useCallback((id: string) => blockRelatedIds.has(id), [blockRelatedIds]);
 
+  // Message requests (migration 0193): a non-friend's thread stays out of the
+  // DM list until you reply, accept or become friends. Ignored ones are
+  // hidden entirely.
+  const incomingRequestIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!userId) return ids;
+    for (const t of dmThreads) {
+      if (t.requested_by && t.requested_by !== userId && !t.accepted_at) ids.add(t.id);
+    }
+    return ids;
+  }, [dmThreads, userId]);
+
+  // Requests have their own count in the Message Requests row, so they never
+  // light up the DM badges.
   const dmUnreads = useMemo((): { threadId: string; friend: Profile; count: number }[] => {
     return [...dmUnreadMap.entries()]
-      .filter(([, entry]) => entry.count > 0)
+      .filter(([threadId, entry]) => entry.count > 0 && !incomingRequestIds.has(threadId))
       .sort((a, b) => b[1].latestAt.localeCompare(a[1].latestAt))
       .map(([threadId, entry]) => ({
         threadId,
         friend: entry.friend,
         count: entry.count,
       }));
-  }, [dmUnreadMap]);
+  }, [dmUnreadMap, incomingRequestIds]);
 
   const getDmUnreadCount = useCallback(
     (threadId: string) => dmUnreadMap.get(threadId)?.count ?? 0,
@@ -900,6 +922,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   }, [dmThreads, dmThreadActivity, blockRelatedIds]);
 
+  const messageRequests = useMemo(() => {
+    return sortedDmThreads
+      .filter((t) => incomingRequestIds.has(t.id) && !t.request_ignored_at)
+      .map((t) => ({
+        threadId: t.id,
+        friend: t.friend,
+        unreadCount: dmUnreadMap.get(t.id)?.count ?? 0,
+        sortAt: dmThreadActivity[t.id] ?? t.created_at,
+        preview: (t as DmThread & { last_message_preview?: string | null }).last_message_preview ?? null,
+      }));
+  }, [sortedDmThreads, incomingRequestIds, dmUnreadMap, dmThreadActivity]);
+
+  const isIncomingRequest = useCallback(
+    (threadId: string | null | undefined) => !!threadId && incomingRequestIds.has(threadId),
+    [incomingRequestIds],
+  );
+
+  const isOutgoingRequest = useCallback(
+    (threadId: string | null | undefined) => {
+      if (!threadId || !userId) return false;
+      const t = dmThreads.find((x) => x.id === threadId);
+      return !!t && t.requested_by === userId && !t.accepted_at;
+    },
+    [dmThreads, userId],
+  );
+
   const dmListEntries = useMemo(() => {
     const threadByFriend = new Map(sortedDmThreads.map((t) => [t.friend.id, t]));
     const entries: {
@@ -912,6 +960,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     for (const thread of sortedDmThreads) {
       if (closedDmFriendIds.includes(thread.friend.id)) continue;
+      if (incomingRequestIds.has(thread.id)) continue;
       entries.push({
         key: thread.id,
         friend: thread.friend,
@@ -946,7 +995,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (aThread !== bThread) return bThread - aThread;
       return b.sortAt.localeCompare(a.sortAt);
     });
-  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds]);
+  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds, incomingRequestIds]);
 
   const serverUnreadIds = useMemo(() => {
     const ids = new Set(serverIndicators);
@@ -3845,6 +3894,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (msg.author_id === userId) return;
           if (inActiveDmChat) return;
+          // An ignored message request stays silent.
+          if (dmThreadsRef.current.some((t) => t.id === msg.thread_id && t.request_ignored_at && !t.accepted_at)) return;
 
           void (async () => {
             const author = await resolveLiveAuthor(msg.author_id);
@@ -4854,12 +4905,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error && activeGroupChatId) await loadGroupMessages(activeGroupChatId);
   }, [activeGroupChatId, loadGroupMessages]);
 
-  const openDmWithFriend = useCallback(async (friendId: string) => {
-    if (!userId) return;
+  const openDmWithFriend = useCallback(async (friendId: string): Promise<string | null> => {
+    if (!userId) return "Not signed in";
     // Tether is not a friend and never can be (bots can't accept requests),
     // so it gets its own gate: Aero subscribers may DM Tether directly, which
     // get_or_create_dm_thread permits for flagged bots (migration 0102).
-    if (friendId === tetherProfile?.id && subscriptionPlan !== "aero") return;
+    if (friendId === tetherProfile?.id && subscriptionPlan !== "aero") return "Messaging Tether needs Aero.";
     const token = ++dmOpenTokenRef.current;
     const supabase = getSupabaseClient();
     let { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -4873,11 +4924,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Could not open DM thread:", error.message);
-      return;
+      return error.message;
     }
     const threadId = data as string;
 
-    if (token !== dmOpenTokenRef.current) return;
+    if (token !== dmOpenTokenRef.current) return "Superseded";
 
     let friendProfile = friends.find((f) => f.id === friendId);
     if (!friendProfile) {
@@ -4908,7 +4959,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     await selectDmThread(threadId);
     void loadDmThreads(userId);
+    return null;
   }, [userId, friends, selectDmThread, loadDmThreads, tetherProfile, subscriptionPlan]);
+
+  const respondMessageRequest = useCallback(async (threadId: string, action: "accept" | "ignore") => {
+    const { error } = await getSupabaseClient().rpc("respond_message_request", { p_thread_id: threadId, p_action: action });
+    if (error) return error.message;
+    const now = new Date().toISOString();
+    setDmThreads((prev) => prev.map((t) => (t.id === threadId
+      ? action === "accept"
+        ? { ...t, accepted_at: now, request_ignored_at: null }
+        : { ...t, request_ignored_at: now }
+      : t)));
+    if (action === "ignore") clearDmUnread(threadId);
+    return null;
+  }, [clearDmUnread]);
 
   const sendInviteToFriend = useCallback(async (friendId: string, inviteUrl: string, serverName: string) => {
     if (!userId || !profile) return "Not signed in";
@@ -6016,6 +6081,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const pingErr = checkMentionSend(userId, parseMentions(normalized, other, userId), normalized);
       if (pingErr) return pingErr;
     }
+    // Replying to a request accepts it (the database does the same on insert),
+    // so the conversation moves into the DM list straight away.
+    if (thread && incomingRequestIds.has(thread.id)) {
+      const acceptedAt = new Date().toISOString();
+      setDmThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, accepted_at: acceptedAt, request_ignored_at: null } : t)));
+    }
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     // One message carries the whole set; `pendingFile` is the single-file
     // form the GIF and poll callers still use.
@@ -6151,7 +6222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isTetherThread = !!tetherProfile?.id && thread?.friend?.id === tetherProfile.id;
     fireTetherAsk(saved.id, "dm", normalized, isTetherThread ? { force: true } : undefined);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile, hasRestriction]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile, hasRestriction, incomingRequestIds]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
@@ -6925,6 +6996,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMaxBioLength,
     dmUnreads,
     dmListEntries,
+    messageRequests,
+    isIncomingRequest,
+    isOutgoingRequest,
+    respondMessageRequest,
     serverUnreadIds,
     getDmUnreadCount,
     clearDmUnread,

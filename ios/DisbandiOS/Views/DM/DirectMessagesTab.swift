@@ -64,12 +64,41 @@ struct DirectMessagesTab: View {
     private var content: some View {
         if vm.loading {
             StateView(kind: .loading)
-        } else if visibleThreads.isEmpty && vm.groups.isEmpty && !showTetherRow {
+        } else if visibleThreads.isEmpty && vm.groups.isEmpty && !showTetherRow && vm.messageRequests.isEmpty {
             StateView(kind: .empty,
                       title: "No conversations yet.\nStart one from the Friends tab.",
                       systemImage: "bubble.left.and.bubble.right")
         } else {
             List {
+                // People you share a space with who messaged you without being
+                // friends (migration 0193). Replying or accepting moves them
+                // down into Direct Messages.
+                if !vm.messageRequests.isEmpty {
+                    Section {
+                        ForEach(vm.messageRequests) { thread in
+                            NavigationLink {
+                                ChatView(source: .dm(threadId: thread.id,
+                                                     title: thread.friend?.name ?? "Message Request"),
+                                         callPeer: thread.friend)
+                            } label: {
+                                ConversationRow(
+                                    iconUrl: thread.friend?.avatarUrl,
+                                    name: thread.friend?.name ?? "Unknown",
+                                    userId: thread.friend?.id,
+                                    status: liveStatus(thread.friend),
+                                    preview: DirectMessagesViewModel.preview(for: thread),
+                                    time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
+                                    unread: unreadStore.count(for: thread.id)
+                                )
+                            }
+                        }
+                    } header: {
+                        Text("Message Requests (\(vm.messageRequests.count))")
+                    } footer: {
+                        Text("From people you share a space with. They won't know you've seen it unless you reply.")
+                    }
+                }
+
                 if !visibleThreads.isEmpty || showTetherRow {
                     Section("Direct Messages") {
                         if showTetherRow, let info = tetherInfo {
@@ -143,7 +172,7 @@ struct DirectMessagesTab: View {
     /// recency stops rows from shuffling when two chats are both unread.
     /// Closed rows are filtered out until a message or the chat itself opens.
     private var sortedThreads: [DmThread] {
-        vm.threads.filter { !closedDms.isClosed($0.friend?.id) }
+        vm.threads.filter { !closedDms.isClosed($0.friend?.id) && !$0.isIncomingRequest(for: app.currentUserId) }
             .enumerated()
             .sorted { lhs, rhs in
                 let lUnread = unreadStore.count(for: lhs.element.id) > 0

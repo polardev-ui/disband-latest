@@ -91,6 +91,7 @@ export function UserProfilePopout({
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
   const [message, setMessage] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
   const badgeCount = useBadgeCount(p?.id, isSelf ? plan : undefined);
   const note = useUserNote(open && !isSelf ? user?.id : null, open && !isSelf ? p?.id : null);
 
@@ -145,7 +146,13 @@ export function UserProfilePopout({
     const text = message.trim();
     if (!text || !p) return;
     setMessage("");
-    await openDmWithFriend(p.id);
+    const err = await openDmWithFriend(p.id);
+    if (err) {
+      // Never send: the open failed, so the active DM is someone else's.
+      setMessage(text);
+      setSendError(err);
+      return;
+    }
     // The thread id settles after the open resolves; same beat as forwarding.
     window.setTimeout(() => void sendDmMessage(text), 250);
     onClose();
@@ -339,7 +346,7 @@ export function UserProfilePopout({
           ) : (
             <input
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => { setMessage(e.target.value); setSendError(null); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -351,6 +358,7 @@ export function UserProfilePopout({
               className="mt-1 h-10 w-full rounded-[3px] border border-bg-tertiary bg-transparent px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
             />
           )}
+          {sendError && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{sendError}</p>}
         </div>
       </div>
     </div>,

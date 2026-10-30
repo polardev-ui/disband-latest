@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var sound = true
     @State private var notifications = true
     @State private var linkPreviews = true
+    @State private var messageRequests = true
     @State private var showDeleteConfirm = false
     @State private var deleting = false
     @State private var error: String?
@@ -121,6 +122,18 @@ struct SettingsView: View {
                                       title: "Link previews", isOn: $linkPreviews)
                 }
 
+                SectionCaption("Privacy & Safety")
+                SettingsGroup {
+                    SettingsToggleRow(symbol: "tray.fill", tint: Color(hex: 0x5865F2),
+                                      title: "Allow message requests", isOn: $messageRequests)
+                }
+                Text("People who share a space with you can send you a message. It goes to Message Requests until you reply or accept. Friends can always message you, and the official Disband space doesn't count.")
+                    .font(.footnote)
+                    .foregroundStyle(Brand.textMuted)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 SectionCaption("Danger zone")
                 SettingsGroup {
                     Button { showDeleteConfirm = true } label: {
@@ -154,6 +167,7 @@ struct SettingsView: View {
         .onChange(of: sound) { _, v in if loaded { save(.init(soundEnabled: v)) } }
         .onChange(of: notifications) { _, v in if loaded { save(.init(desktopNotificationsEnabled: v)) } }
         .onChange(of: linkPreviews) { _, v in if loaded { save(.init(linkPreviewsEnabled: v)) } }
+        .onChange(of: messageRequests) { _, v in if loaded { save(.init(allowMessageRequests: v)) } }
         .confirmationDialog(
             billingPrompt == .resume ? "Resume subscription?" : "Cancel subscription?",
             isPresented: Binding(
@@ -277,6 +291,7 @@ struct SettingsView: View {
         sound = app.profile?.soundEnabled ?? true
         notifications = app.profile?.desktopNotificationsEnabled ?? true
         linkPreviews = app.profile?.linkPreviewsEnabled ?? true
+        messageRequests = app.profile?.allowMessageRequests ?? true
         DispatchQueue.main.async { loaded = true }
     }
 

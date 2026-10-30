@@ -87,6 +87,7 @@ import { HeaderToolbar } from "./HeaderToolbar";
 import SearchPanel from "./SearchPanel";
 import { useGameActivity } from "@/hooks/useGameActivity";
 import { DmProfileRail } from "./DmProfileRail";
+import { MessageRequestBar } from "./MessageRequestBar";
 import { CatalystModal } from "./CatalystModal";
 import { CallIndicator } from "./CallIndicator";
 import { QuickSwitcher } from "./QuickSwitcher";
@@ -2026,6 +2027,7 @@ export function DiscordApp() {
                 ? "This is a certified Disband broadcast. Replies are closed — watch for new notices here."
                 : undefined
             }
+            composerNotice={<MessageRequestBar threadId={app.activeDmThreadId!} friend={dmFriend} />}
             headerTrailing={
               !dmCallActive ? (
 	                <HeaderToolbar
@@ -2442,8 +2444,10 @@ export function DiscordApp() {
         onMessage={
           profileTarget
             ? () => {
-                void app.openDmWithFriend(profileTarget.id);
-                setProfileTarget(null);
+                void app.openDmWithFriend(profileTarget.id).then((err) => {
+                  if (err) void alertDialog(err);
+                  else setProfileTarget(null);
+                });
               }
             : undefined
         }
