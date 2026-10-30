@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — Anonymous Accounts (9:16)</title>
+<!-- Renders any frame of the Anonymous Accounts launch spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=anon/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "JetBrains Mono"; src: url("../assets/fonts/JetBrainsMono-latin-500.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: "JetBrains Mono"; src: url("../assets/fonts/JetBrainsMono-latin-700.woff2") format("woff2"); font-weight: 700; }
+:root { --bg: #0d1117; --violet: #7c5cff; --indigo: #5865f2; --text: #f2f3f5; --muted: #949ba4; --red: #f23f43; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; color: var(--text); }
+#gl, .full { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+.screen { mix-blend-mode: screen; pointer-events: none; }
+#grid { background-image: linear-gradient(rgba(124,92,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(124,92,255,.07) 1px, transparent 1px);
+  background-size: 90px 90px; -webkit-mask-image: radial-gradient(70% 45% at 50% 40%, #000 0%, transparent 100%); mask-image: radial-gradient(70% 45% at 50% 40%, #000 0%, transparent 100%); }
+#scan { background: repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 4px); }
+#grain { mix-blend-mode: overlay; opacity: .5; }
+#vig { background: radial-gradient(120% 80% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%); }
+.layer { position: absolute; inset: 0; display: none; }
+#wipe { display: none; }
+
+/* Hook reels */
+#reels { position: absolute; left: 0; right: 0; top: 960px; text-align: center; }
+#reels .lbl { font: 700 34px "JetBrains Mono", monospace; letter-spacing: .3em; color: #b5b9ff; text-shadow: 0 0 18px rgba(124,92,255,.8); margin-bottom: 22px; }
+#reels .row { display: inline-flex; gap: 0; height: 104px; overflow: hidden; -webkit-mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent); mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent); }
+#reels .reel { width: 50px; height: 104px; position: relative; }
+#reels .gap { width: 26px; }
+#reels .strip { position: absolute; left: 0; right: 0; top: 0; font: 700 84px/104px "JetBrains Mono", monospace; color: #fff; text-shadow: 0 0 22px rgba(124,92,255,.95), 0 0 4px rgba(255,255,255,.6); }
+
+/* Captions: bottom-centred, clear of the platform UI (bottom 220 px, top 140 px). */
+.cap { position: absolute; left: 81px; right: 81px; bottom: 230px; text-align: center; font-weight: 800; letter-spacing: -0.03em; line-height: 1.04;
+  text-shadow: 0 5px 6px rgba(0,0,0,.55), 0 0 30px rgba(0,0,0,.35); }
+.cap .line { display: block; white-space: nowrap; }
+.cap .wd { display: inline-block; position: relative; transform-origin: 50% 80%; white-space: pre; }
+.cap .hl { color: #9d87ff; text-shadow: 0 5px 6px rgba(0,0,0,.55), 0 0 26px rgba(124,92,255,.75); }
+.cap .burn { color: var(--red); text-shadow: 0 5px 6px rgba(0,0,0,.55), 0 0 30px rgba(242,63,67,.7); }
+.cap .ul { position: absolute; left: 0.04em; right: 0.04em; bottom: -0.06em; height: 0.07em; border-radius: 0.04em; background: linear-gradient(90deg, var(--indigo), var(--violet)); box-shadow: 0 0 18px rgba(124,92,255,.9); transform-origin: 0 50%; }
+
+/* End card */
+#end .t { position: absolute; left: 0; right: 0; text-align: center; }
+#wordmark { top: 880px; font-size: 84px; font-weight: 700; letter-spacing: .3em; text-indent: .3em; }
+#tagline { top: 990px; font-size: 46px; font-weight: 500; color: #b9bdc6; letter-spacing: -0.01em; }
+#open { top: 1130px; font-size: 44px; font-weight: 600; color: #e8e9ec; }
+#pillWrap { position: absolute; left: 0; right: 0; top: 1205px; display: flex; justify-content: center; }
+#pill { position: relative; height: 128px; padding: 0 62px; border-radius: 64px; display: flex; align-items: center; font-size: 50px; font-weight: 800; letter-spacing: -0.02em; color: #fff;
+  background: linear-gradient(90deg, var(--indigo), var(--violet)); box-shadow: 0 0 0 2px rgba(255,255,255,.12) inset, 0 18px 50px rgba(88,101,242,.45); }
+#pillRing { position: absolute; inset: -6px; border-radius: 70px; border: 3px solid rgba(157,135,255,.9); }
+#newBadge { position: absolute; right: -26px; top: -30px; height: 58px; padding: 0 20px; border-radius: 29px; background: var(--indigo); display: flex; align-items: center;
+  font-size: 30px; font-weight: 800; letter-spacing: .06em; color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.45), 0 0 24px rgba(88,101,242,.8); }
+#url { top: 1395px; font-size: 40px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; }
+#legal { position: absolute; right: 60px; top: 1655px; font-size: 24px; font-weight: 500; color: #fff; opacity: .4; }
+</style>
+</head>
+<body>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<div class="full screen" id="fog"></div>
+<canvas class="full screen" id="bokeh" width="1080" height="1920"></canvas>
+<div class="full screen" id="grid"></div>
+<canvas class="full" id="wipe" width="1080" height="1920"></canvas>
+<div class="layer" id="hook" data-layer="number"><div id="reels"><div class="lbl">16 DIGITS</div><div class="row" id="reelRow"></div></div></div>
+<div id="caps"></div>
+<div class="layer" id="end">
+  <div class="t" id="wordmark" data-layer="end-card">DISBAND</div>
+  <div class="t" id="tagline" data-layer="end-card">chat without trails.</div>
+  <div class="t" id="open" data-layer="cta">Open Disband →</div>
+  <div id="pillWrap"><div id="pill" data-layer="cta"><div id="pillRing"></div>Create an Anonymous Account<div id="newBadge">NEW</div></div></div>
+  <div class="t" id="url" data-layer="end-card">disband.dev</div>
+  <div id="legal" data-layer="legal">Available in Disband. Account terms apply.</div>
+</div>
+<div class="full" id="scan"></div>
+<canvas class="full" id="grain" width="540" height="960"></canvas>
+<div class="full" id="vig"></div>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <filter id="mb1" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="0 3"/></filter>
+  <filter id="mb2" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="0 8"/></filter>
+  <filter id="mb3" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="0 16"/></filter>
+</defs></svg>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

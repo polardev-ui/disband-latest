@@ -8,7 +8,7 @@ import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 const MAX_BOTS_PER_OWNER = 5;
 
 const MAX_BOT_NAME = 25;
-const ALLOWED_SCOPES = ["messages.read", "messages.write", "members.read", "channels.manage"];
+const ALLOWED_SCOPES = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "channels.read", "channels.manage", "webhooks.manage"];
 
 export async function POST(request: NextRequest) {
   try {

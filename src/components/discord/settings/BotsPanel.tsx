@@ -137,6 +137,51 @@ export function BotsPanel() {
     }
   }
 
+  const [editingBot, setEditingBot] = useState<ManagedBot | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editScopes, setEditScopes] = useState<BotScope[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function openEdit(bot: ManagedBot) {
+    setEditingBot(bot);
+    setEditName(bot.name);
+    setEditAvatarUrl(bot.avatar_url ?? "");
+    setEditBio("");
+    setEditScopes([...bot.scopes]);
+    setEditError(null);
+  }
+
+  async function saveEdit() {
+    if (!editingBot) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const { ok, data } = await postJson("/api/bot/update", {
+        botId: editingBot.id,
+        name: editName.trim(),
+        avatarUrl: editAvatarUrl.trim() || null,
+        bio: editBio.trim() || null,
+        scopes: editScopes,
+      });
+      if (!ok) throw new Error(data.error ?? "Could not update the bot.");
+      setEditingBot(null);
+      await loadBots();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not update the bot.");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  function toggleEditScope(scope: BotScope) {
+    setEditScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    );
+  }
+
   function openInvite(bot: ManagedBot) {
     setInvitingBot(bot);
     setInviteServerId(servers[0]?.id ?? "");
@@ -317,6 +362,13 @@ export function BotsPanel() {
                   <Hint>Token {bot.token_prefix}</Hint>
                   {bot.last_seen_at && <Hint>Last seen {fmtDate(bot.last_seen_at)}</Hint>}
                   <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(bot)}
+                      className="rounded-[3px] border border-divider px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                    >
+                      Edit
+                    </button>
                     <button
                       type="button"
                       onClick={() => openInvite(bot)}
@@ -504,6 +556,68 @@ export function BotsPanel() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingBot && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-text-normal">Edit bot</h3>
+              <button type="button" onClick={() => setEditingBot(null)} className="text-text-muted hover:text-text-normal" aria-label="Close">
+                <IconClose size={20} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">Name</label>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className={settingsInputClass} maxLength={25} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">Avatar URL</label>
+                <input value={editAvatarUrl} onChange={(e) => setEditAvatarUrl(e.target.value)} className={settingsInputClass} placeholder="https://..." />
+              </div>
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">Bio</label>
+                <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} className={settingsInputClass} rows={3} maxLength={200} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[13px] font-medium text-text-normal">Scopes</label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_SCOPES.map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      aria-pressed={editScopes.includes(scope)}
+                      onClick={() => toggleEditScope(scope)}
+                      className="rounded-[3px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+                      style={
+                        editScopes.includes(scope)
+                          ? { borderColor: "var(--brand, #5865f2)", color: "var(--brand, #5865f2)" }
+                          : undefined
+                      }
+                    >
+                      {BOT_SCOPE_LABELS[scope].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {editError && <p className="text-[13px] text-status-dnd">{editError}</p>}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditingBot(null)} className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveEdit()}
+                disabled={editSaving || !editName.trim() || editScopes.length === 0}
+                className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+              >
+                {editSaving ? "Saving…" : "Save"}
+              </button>
             </div>
           </div>
         </div>

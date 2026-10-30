@@ -1,0 +1,319 @@
+{
+  "scale": 3,
+  "viewport": {
+    "w": 1440,
+    "h": 900
+  },
+  "rail": [
+    {
+      "label": "Direct Messages",
+      "x": 12,
+      "y": 12,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "2 unread messages from Nova Reyes",
+      "x": 12,
+      "y": 68,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "Disband Demo HQ",
+      "x": 12,
+      "y": 134,
+      "w": 48,
+      "h": 48,
+      "active": true
+    },
+    {
+      "label": "Night Owls",
+      "x": 12,
+      "y": 190,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "Design Lab",
+      "x": 12,
+      "y": 246,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "Speedrunners",
+      "x": 12,
+      "y": 302,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "Music",
+      "x": 12,
+      "y": 358,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "Add a Space",
+      "x": 12,
+      "y": 414,
+      "w": 48,
+      "h": 48,
+      "active": false
+    },
+    {
+      "label": "Explore discoverable spaces",
+      "x": 12,
+      "y": 470,
+      "w": 48,
+      "h": 48,
+      "active": false
+    }
+  ],
+  "railSeparators": [
+    {
+      "x": 20,
+      "y": 124,
+      "w": 32,
+      "h": 2
+    }
+  ],
+  "channels": [
+    {
+      "text": "Disband Demo HQ",
+      "x": 72,
+      "y": 0,
+      "w": 240,
+      "h": 48
+    },
+    {
+      "text": "Level 2 · 3 Boosts",
+      "x": 80,
+      "y": 56,
+      "w": 224,
+      "h": 29
+    },
+    {
+      "text": "Text Channels",
+      "x": 80,
+      "y": 85,
+      "w": 206,
+      "h": 36
+    },
+    {
+      "text": "welcome",
+      "x": 80,
+      "y": 121,
+      "w": 224,
+      "h": 32
+    },
+    {
+      "text": "general",
+      "x": 80,
+      "y": 153,
+      "w": 224,
+      "h": 32
+    },
+    {
+      "text": "random",
+      "x": 80,
+      "y": 185,
+      "w": 224,
+      "h": 32
+    },
+    {
+      "text": "design-review",
+      "x": 80,
+      "y": 217,
+      "w": 224,
+      "h": 32
+    },
+    {
+      "text": "Voice Channels",
+      "x": 80,
+      "y": 253,
+      "w": 206,
+      "h": 36
+    },
+    {
+      "text": "Lounge",
+      "x": 80,
+      "y": 289,
+      "w": 224,
+      "h": 32
+    },
+    {
+      "text": "Studio",
+      "x": 80,
+      "y": 321,
+      "w": 224,
+      "h": 32
+    },
+    {
+      "text": "Uncategorized",
+      "x": 80,
+      "y": 357,
+      "w": 206,
+      "h": 36
+    },
+    {
+      "text": "R",
+      "x": 72,
+      "y": 848,
+      "w": 240,
+      "h": 52
+    }
+  ],
+  "messages": [
+    {
+      "author": "Mila Oduya",
+      "x": 312,
+      "y": -62,
+      "w": 888,
+      "h": 48
+    },
+    {
+      "author": "Nova Reyes",
+      "x": 312,
+      "y": 27,
+      "w": 888,
+      "h": 48
+    },
+    {
+      "author": "Kai Tanaka",
+      "x": 312,
+      "y": 92,
+      "w": 888,
+      "h": 48
+    },
+    {
+      "author": "Iris Bennet",
+      "x": 312,
+      "y": 157,
+      "w": 888,
+      "h": 48
+    },
+    {
+      "author": "Riley Park",
+      "x": 312,
+      "y": 222,
+      "w": 888,
+      "h": 48
+    },
+    {
+      "author": "Helper",
+      "x": 312,
+      "y": 287,
+      "w": 888,
+      "h": 48
+    },
+    {
+      "author": "Nova Reyes",
+      "x": 312,
+      "y": 352,
+      "w": 888,
+      "h": 92
+    },
+    {
+      "author": "Nova Reyes",
+      "x": 312,
+      "y": 461,
+      "w": 888,
+      "h": 72
+    },
+    {
+      "author": "Nova Reyes",
+      "x": 312,
+      "y": 550,
+      "w": 888,
+      "h": 105
+    },
+    {
+      "author": "Mila Oduya",
+      "x": 312,
+      "y": 672,
+      "w": 888,
+      "h": 134
+    }
+  ],
+  "members": [
+    {
+      "name": "Riley Park",
+      "x": 1208,
+      "y": 41,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Iris Bennet",
+      "x": 1208,
+      "y": 125,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Mila Oduya",
+      "x": 1208,
+      "y": 168,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Nova Reyes",
+      "x": 1208,
+      "y": 252,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Helper",
+      "x": 1208,
+      "y": 336,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Kai Tanaka",
+      "x": 1208,
+      "y": 420,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Sam Whitfield",
+      "x": 1208,
+      "y": 504,
+      "w": 224,
+      "h": 42
+    },
+    {
+      "name": "Theo Marsh",
+      "x": 1208,
+      "y": 547,
+      "w": 224,
+      "h": 42
+    }
+  ],
+  "memberHeaders": [],
+  "composer": {
+    "x": 328,
+    "y": 830,
+    "w": 856,
+    "h": 46
+  },
+  "typeClip": {
+    "x": 312,
+    "y": 812,
+    "w": 888,
+    "h": 88
+  },
+  "typed": "the old crew is back — game night friday?"
+}
