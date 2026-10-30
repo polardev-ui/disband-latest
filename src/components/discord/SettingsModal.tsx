@@ -711,7 +711,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setSoundEnabled(profile.sound_enabled ?? true);
     setDesktopNotifications(profile.desktop_notifications_enabled ?? true);
     setLinkPreviews(profile.link_previews_enabled ?? true);
-  }, [profile]);
+    // `open` must be a dependency: the profile is usually loaded long before
+    // Settings opens, and without it the form stayed blank until some
+    // unrelated profile update (presence, a heartbeat) re-ran this seconds later.
+  }, [profile, open]);
 
   // Routed through the overlay Escape stack so nested layers (avatar crop,
   // subscription) close one per press instead of all at once.
