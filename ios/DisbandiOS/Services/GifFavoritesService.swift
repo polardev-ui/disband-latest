@@ -7,7 +7,9 @@ import Supabase
 
  Favourites are matched the way the web matches them (`gifFavKey`): host
  without `www.` plus path, ignoring query and fragment, since CDNs add sizing
- and tracking parameters to the same GIF.
+ and tracking parameters to the same GIF. Giphy is keyed by its GIF id alone,
+ because each search hands back the same GIF under a different `mediaN` host
+ and `v1.<token>` path segment. Keep in step with `gif_favorite_id` (0194).
  */
 @MainActor
 final class GifFavoritesService: ObservableObject {
@@ -30,9 +32,25 @@ final class GifFavoritesService: ObservableObject {
         guard let comps = URLComponents(string: raw), let host = comps.host else { return raw }
         var h = host.lowercased()
         if h.hasPrefix("www.") { h.removeFirst(4) }
-        var path = comps.path
+        // Percent-encoded, as the web's `URL.pathname` is.
+        var path = comps.percentEncodedPath
         while path.hasSuffix("/") { path.removeLast() }
+        if let id = giphyId(host: h, path: path) { return "giphy.com/media/\(id)" }
         return h + path
+    }
+
+    /// `media2.giphy.com/media/v1.Y2lk…/abc123/giphy.gif` → `abc123`.
+    nonisolated private static func giphyId(host: String, path: String) -> String? {
+        let isGiphy = host == "giphy.com" || host == "i.giphy.com"
+            || (host.hasPrefix("media") && host.hasSuffix(".giphy.com")
+                && host.dropFirst(5).dropLast(10).allSatisfy(\.isNumber))
+        guard isGiphy else { return nil }
+        var parts = path.split(separator: "/", omittingEmptySubsequences: false).dropFirst()
+        guard parts.first == "media" else { return nil }
+        parts = parts.dropFirst()
+        if let first = parts.first, first.hasPrefix("v1.") { parts = parts.dropFirst() }
+        guard parts.count == 2, let id = parts.first, !id.isEmpty, !parts.last!.isEmpty else { return nil }
+        return String(id)
     }
 
     func isFavorite(_ url: String) -> Bool {
@@ -59,7 +77,7 @@ final class GifFavoritesService: ObservableObject {
             let body: [String: Any] = existing.id.map { ["id": $0] } ?? ["url": existing.url]
             if (try? await request(method: "DELETE", body: body)) == nil { favorites = previous }
         } else {
-            favorites.append(Favorite(id: nil, url: url, title: title))
+            favorites.insert(Favorite(id: nil, url: url, title: title), at: 0)
             var body: [String: Any] = ["url": url]
             if let title { body["title"] = title }
             if (try? await request(method: "POST", body: body)) == nil {
