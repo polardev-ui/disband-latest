@@ -917,7 +917,21 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         mobileNav={
           <select
             value={tab}
-            onChange={(e) => setTab(e.target.value as SettingsTab)}
+            onChange={(e) => {
+              const id = e.target.value as SettingsTab;
+              if (id === "bots") {
+                const url = "https://disband.dev/developers/applications";
+                if (isTauri()) {
+                  void import("@tauri-apps/api/core").then(({ invoke }) =>
+                    invoke("plugin:opener|open_url", { url }),
+                  );
+                } else {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }
+                return;
+              }
+              setTab(id);
+            }}
             aria-label={t("Settings section")}
             className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
           >
@@ -961,6 +975,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       key={item.id}
                       active={tab === item.id}
                       onClick={() => {
+                        if (item.id === "bots") {
+                          const url = "https://disband.dev/developers/applications";
+                          if (isTauri()) {
+                            void import("@tauri-apps/api/core").then(({ invoke }) =>
+                              invoke("plugin:opener|open_url", { url }),
+                            );
+                          } else {
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          }
+                          return;
+                        }
                         setTab(item.id);
                         setNavQuery("");
                       }}
