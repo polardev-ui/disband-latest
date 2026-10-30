@@ -1526,6 +1526,10 @@ function json(body: unknown, status = 200): Response {
 // A space is judged as a whole: its name, description, channel names and a
 // sample of recent messages. A confirmed violation suspends the space (never
 // deletes it); staff can lift a suspension.
+// Suspending a whole space is heavier than removing one message, so Tether
+// must be surer before it does.
+const SPACE_SUSPEND_CONFIDENCE = 0.8;
+
 const SPACE_CONTEXT =
   "This is a whole community space (name, description, channel names and a sample of " +
   "recent messages), not one message. Decide whether the space itself is organised around " +
@@ -1596,7 +1600,8 @@ async function reviewServerReport(
 
   // Tether's call is final. A confirmed problem with a space's name,
   // description or artwork suspends the space; staff can lift it.
-  const category = judgement?.decision === "act" ? judgement.category : mediaViolation?.category ?? null;
+  const textAct = judgement?.decision === "act" && judgement.confidence >= SPACE_SUSPEND_CONFIDENCE;
+  const category = textAct ? judgement!.category : mediaViolation?.category ?? null;
   if (category) {
     const childSafety = category === "illegal_content" || mediaViolation?.category === "illegal_content";
     const label = childSafety ? "child safety" : category.replace(/_/g, " ");
@@ -1617,7 +1622,10 @@ async function reviewServerReport(
       },
     };
   }
-  return { status: "dismissed", detail: notes };
+  return {
+    status: "dismissed",
+    detail: judgement?.decision === "act" ? `Not sure enough to suspend the space. ${notes}` : notes,
+  };
 }
 
 async function sweepSpaces(
@@ -1648,7 +1656,7 @@ async function sweepSpaces(
       await supabase.from("servers").update({ ai_checked_at: new Date().toISOString() }).eq("id", server.id);
     }
     // Tether acts on a confident violation and leaves everything else.
-    if (judgement?.decision !== "act") continue;
+    if (judgement?.decision !== "act" || judgement.confidence < SPACE_SUSPEND_CONFIDENCE) continue;
 
     const childSafety = judgement.category === "illegal_content";
     const label = childSafety ? "child safety" : (judgement.category ?? "other").replace(/_/g, " ");
