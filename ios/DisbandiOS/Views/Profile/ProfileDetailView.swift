@@ -1,3 +1,4 @@
+import Supabase
 import SwiftUI
 
 /// A read-only view of another user's profile, presented as a sheet from
@@ -14,6 +15,9 @@ struct ProfileDetailView: View {
     @State private var relation: FriendshipStatus?
     @State private var working = false
     @State private var error: String?
+    /// The DM opened from here when no presenter handles it (e.g. a profile
+    /// opened from a space's chat), shown inside this sheet's stack.
+    @State private var openedDm: ChatSource?
 
     private var isSelf: Bool { profile.id == app.currentUserId }
 
@@ -51,6 +55,9 @@ struct ProfileDetailView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $openedDm) { source in
+                ChatView(source: source, callPeer: profile)
+            }
         }
         .presentationDetents([.large])
         .task { await loadRelation() }
@@ -125,8 +132,7 @@ struct ProfileDetailView: View {
     @ViewBuilder private var actions: some View {
         VStack(spacing: 10) {
             Button {
-                onStartDM?(profile)
-                dismiss()
+                Task { await startDm() }
             } label: {
                 Label("Message", systemImage: "bubble.left.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -182,6 +188,23 @@ struct ProfileDetailView: View {
             (f.requesterId == uid && f.addresseeId == profile.id) ||
             (f.requesterId == profile.id && f.addresseeId == uid)
         }?.status
+    }
+
+    /// Opens the DM, or explains why not (not friends and no shared space,
+    /// or they've turned message requests off). Never navigates on failure.
+    private func startDm() async {
+        error = nil
+        do {
+            let threadId = try await DatabaseService.getOrCreateDmThread(friendId: profile.id)
+            if let onStartDM {
+                onStartDM(profile)
+                dismiss()
+            } else {
+                openedDm = .dm(threadId: threadId, title: profile.name)
+            }
+        } catch {
+            self.error = (error as? PostgrestError)?.message ?? error.localizedDescription
+        }
     }
 
     private func run(_ op: @escaping () async throws -> Void) async {

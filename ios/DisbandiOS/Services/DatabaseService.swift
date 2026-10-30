@@ -342,6 +342,14 @@ enum DatabaseService {
             .execute().value
     }
 
+    /// Accept or ignore a message request you received (migration 0193).
+    static func respondMessageRequest(threadId: String, accept: Bool) async throws {
+        try await client.rpc("respond_message_request", params: [
+            "p_thread_id": threadId,
+            "p_action": accept ? "accept" : "ignore",
+        ]).execute()
+    }
+
     // MARK: - Unread / read state
 
     struct DmUnreadRow: Decodable {
@@ -734,6 +742,7 @@ enum DatabaseService {
         var soundEnabled: Bool? = nil
         var desktopNotificationsEnabled: Bool? = nil
         var linkPreviewsEnabled: Bool? = nil
+        var allowMessageRequests: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
             case bio
@@ -745,6 +754,7 @@ enum DatabaseService {
             case soundEnabled = "sound_enabled"
             case desktopNotificationsEnabled = "desktop_notifications_enabled"
             case linkPreviewsEnabled = "link_previews_enabled"
+            case allowMessageRequests = "allow_message_requests"
         }
 
         // Only encode the fields that were actually set. Encoding every nil as
@@ -762,6 +772,7 @@ enum DatabaseService {
             if let soundEnabled { try container.encode(soundEnabled, forKey: .soundEnabled) }
             if let desktopNotificationsEnabled { try container.encode(desktopNotificationsEnabled, forKey: .desktopNotificationsEnabled) }
             if let linkPreviewsEnabled { try container.encode(linkPreviewsEnabled, forKey: .linkPreviewsEnabled) }
+            if let allowMessageRequests { try container.encode(allowMessageRequests, forKey: .allowMessageRequests) }
         }
     }
 

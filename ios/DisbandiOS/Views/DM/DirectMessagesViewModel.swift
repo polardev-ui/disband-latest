@@ -132,6 +132,53 @@ final class DirectMessagesViewModel {
         }
     }
 
+    // MARK: - Message requests
+
+    /// Requests you received and haven't answered, newest first. Ignored ones
+    /// stay hidden (web parity).
+    var messageRequests: [DmThread] {
+        threads.filter { $0.isIncomingRequest(for: currentUserId) && $0.requestIgnoredAt == nil }
+    }
+
+    func thread(_ id: String) -> DmThread? {
+        threads.first { $0.id == id }
+    }
+
+    func isIncomingRequest(_ threadId: String) -> Bool {
+        thread(threadId)?.isIncomingRequest(for: currentUserId) ?? false
+    }
+
+    func isOutgoingRequest(_ threadId: String) -> Bool {
+        thread(threadId)?.isOutgoingRequest(for: currentUserId) ?? false
+    }
+
+    /// Accept or ignore. Returns an error message, or nil.
+    func respondToRequest(_ threadId: String, accept: Bool) async -> String? {
+        do {
+            try await DatabaseService.respondMessageRequest(threadId: threadId, accept: accept)
+        } catch {
+            return (error as? PostgrestError)?.message ?? error.localizedDescription
+        }
+        let now = ISO8601DateFormatter().string(from: Date())
+        if let idx = threads.firstIndex(where: { $0.id == threadId }) {
+            if accept {
+                threads[idx].acceptedAt = now
+                threads[idx].requestIgnoredAt = nil
+            } else {
+                threads[idx].requestIgnoredAt = now
+            }
+        }
+        return nil
+    }
+
+    /// Replying accepts a request; the database does the same on insert.
+    func markRepliedTo(_ threadId: String) {
+        guard let idx = threads.firstIndex(where: { $0.id == threadId }),
+              threads[idx].isIncomingRequest(for: currentUserId) else { return }
+        threads[idx].acceptedAt = ISO8601DateFormatter().string(from: Date())
+        threads[idx].requestIgnoredAt = nil
+    }
+
     // MARK: - Real-time updates
 
     private func subscribeToMessages() async {
@@ -161,6 +208,14 @@ final class DirectMessagesViewModel {
     }
 
     private func handleIncoming(_ message: DmMessage) async {
+        // An ignored message request stays silent.
+        if let ignored = thread(message.threadId), ignored.requestIgnoredAt != nil, ignored.acceptedAt == nil {
+            return
+        }
+        // A brand-new request isn't in the list yet; reload so it appears.
+        if thread(message.threadId) == nil, message.authorId != currentUserId {
+            Task { await load(currentUserId: currentUserId) }
+        }
         unreadStore?.increment(threadId: message.threadId,
                                senderId: message.authorId,
                                currentUserId: currentUserId)

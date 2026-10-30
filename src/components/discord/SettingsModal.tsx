@@ -52,6 +52,7 @@ import { IconClose, IconBell, IconDownload, IconUser, IconLock, IconCrown, IconG
 import { CURRENCY } from "@/lib/currency";
 import { CurrencyPanel } from "@/components/discord/settings/CurrencyPanel";
 import { StandingPanel } from "@/components/discord/settings/StandingPanel";
+import { PrivacyPanel } from "@/components/discord/settings/PrivacyPanel";
 import { CreatorPanel } from "@/components/discord/settings/CreatorPanel";
 import { LinksPanel } from "@/components/discord/settings/LinksPanel";
 import { ManagementPanel } from "@/components/discord/settings/ManagementPanel";
@@ -120,6 +121,9 @@ const TABS = [
   { id: "standing" as const, label: "Account Standing", group: "Account", icon: <IconShield size={17} />,
     description: "Where your account stands, and why.",
     keywords: "standing strikes warnings restrictions suspended banned good risk" },
+  { id: "privacy" as const, label: "Privacy & Safety", group: "Account", icon: <IconMessage size={17} />,
+    description: "Who can send you message requests.",
+    keywords: "privacy safety message requests dm direct messages strangers shared space who can message" },
   { id: "creator" as const, label: "Creator Program", group: "Account", icon: <IconStar size={17} />,
     description: "Connect YouTube, TikTok or Twitch for the Content Creator badge.",
     keywords: "creator youtube tiktok twitch followers subscribers badge verify influencer" },
@@ -2132,6 +2136,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
               {tab === "wallet" && <CurrencyPanel />}
               {tab === "standing" && <StandingPanel />}
+              {tab === "privacy" && <PrivacyPanel />}
               {tab === "creator" && <CreatorPanel />}
               {tab === "links" && <LinksPanel />}
               {tab === "management" && (isManager || isStaff) && <ManagementPanel isOwner={isOwner} isManager={isManager} />}
