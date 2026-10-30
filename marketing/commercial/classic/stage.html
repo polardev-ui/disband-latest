@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — A Familiar Feeling. A New Home. (9:16)</title>
+<!-- Renders any frame of the classic-UI TikTok spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=classic/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --char: #0e0f12; --ink: #0b0b0c; --ink2: #3a3a3e; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--char); }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; }
+#bg { position: absolute; inset: 0; background: var(--char); }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+#vig { position: absolute; inset: 0; background: radial-gradient(120% 80% at 50% 45%, transparent 55%, rgba(0,0,0,.5) 100%); }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.line { display: block; white-space: nowrap; }
+/* Statements: centred, inside a 900 px safe width, clear of TikTok's top
+   (≈150 px) and bottom (≈380 px) interface. */
+.say { position: absolute; left: 90px; right: 90px; text-align: center; color: #fff; font-weight: 700; letter-spacing: -0.03em; line-height: 1.06; display: none;
+  text-shadow: 0 4px 24px rgba(0,0,0,.55); }
+#headline { top: 760px; }
+#meet { top: 200px; }
+#home { top: 1430px; }
+#familiar { top: 220px; }
+#built { top: 1440px; }
+svg.mark { width: 100%; height: 100%; display: block; overflow: visible; }
+#logo1 { position: absolute; left: 50%; top: 50%; width: 320px; height: 360px; margin: -180px 0 0 -160px; color: #fff; display: none; }
+
+#end { position: absolute; inset: 0; display: none; }
+#logo2 { position: absolute; left: 50%; top: 760px; width: 300px; height: 337px; margin: -168px 0 0 -150px; color: var(--ink); }
+#end .t { position: absolute; left: 0; right: 0; text-align: center; color: var(--ink); }
+#title { top: 990px; font-size: 80px; font-weight: 700; letter-spacing: .32em; text-indent: .32em; line-height: 1; }
+#slogan { top: 1100px; font-size: 48px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink2) !important; }
+#thumb { position: absolute; left: 110px; width: 860px; top: 520px; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 30px 70px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.06); transform-origin: 50% 0%; }
+#thumb img { display: block; width: 860px; height: 537.5px; }
+#cta { top: 1140px; font-size: 60px; font-weight: 700; letter-spacing: -0.025em; }
+#url { top: 1232px; font-size: 128px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<div id="vig"></div>
+<svg width="0" height="0" style="position:absolute">
+  <defs><symbol id="mark" viewBox="582 465 1905 2142"><path fill="currentColor" fill-rule="evenodd" id="markpath"/></symbol></defs>
+</svg>
+<div id="logo1"><svg class="mark"><use href="#mark"/></svg></div>
+<div class="say" id="headline"></div>
+<div class="say" id="meet"></div>
+<div class="say" id="home"></div>
+<div class="say" id="familiar"></div>
+<div class="say" id="built"></div>
+<div id="end">
+  <div id="logo2"><svg class="mark"><use href="#mark"/></svg></div>
+  <div class="t" id="title"></div>
+  <div class="t" id="slogan"></div>
+  <div id="thumb"><img src="../build/classic/main.png" alt=""></div>
+  <div class="t" id="cta"></div>
+  <div class="t" id="url"></div>
+</div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>

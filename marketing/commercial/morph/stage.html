@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Disband — The Way It Used to Feel. (9:16)</title>
+<!-- Renders any frame of the morphing classic-UI spot: renderFrame(t).
+     1080×1920 at CSS pixel ratio 1; VIEWPORT=1080x1920 STAGE=morph/stage.html. -->
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js","three/addons/":"../node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face { font-family: "Inter"; src: url("../assets/fonts/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --void: #0b0c0e; --head: #f2f3f5; --muted: #949ba4; --normal: #b5bac1; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--void); }
+body { font-family: "Inter", sans-serif; font-optical-sizing: auto; -webkit-font-smoothing: antialiased; }
+#gl { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+#vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(110% 70% at 50% 48%, transparent 58%, rgba(0,0,0,.55) 100%); }
+
+/* Dimensional type: a stack of copies of the words, front white, the layers
+   behind in the app's greys, spread in depth while moving and settled into a
+   short extrusion. Inside a 900 px safe width, clear of TikTok's top (≈150 px)
+   and bottom (≈380 px) interface. */
+.dim { position: absolute; left: 90px; right: 90px; text-align: center; display: none; perspective: 1500px; }
+.dim .rig { position: relative; transform-style: preserve-3d; }
+.dim .layer { position: absolute; left: 0; right: 0; top: 0; }
+.dim .layer.front { position: relative; color: var(--head); text-shadow: 0 6px 30px rgba(0,0,0,.55); }
+.dim .txt { font-weight: 800; letter-spacing: -0.02em; line-height: 1.02; text-transform: none; }
+.k { display: inline-block; white-space: pre; transform-origin: 50% 85%; }
+.w { display: inline-block; white-space: nowrap; }
+.line { display: block; white-space: nowrap; }
+
+#title { top: 230px; }
+#home { top: 200px; }
+#familiar { top: 240px; }
+#next { top: 1370px; }
+#name { top: 1180px; }
+#cta { top: 985px; }
+
+.flat { position: absolute; left: 0; right: 0; text-align: center; display: none; }
+#slogan { top: 1338px; font-size: 46px; font-weight: 500; letter-spacing: -0.01em; color: var(--normal); }
+#url { top: 1080px; font-size: 156px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.1; color: var(--head); }
+
+</style>
+</head>
+<body>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<div id="vig"></div>
+<div class="dim" id="title"></div>
+<div class="dim" id="home"></div>
+<div class="dim" id="familiar"></div>
+<div class="dim" id="next"></div>
+<div class="dim" id="name"></div>
+<div class="flat" id="slogan"></div>
+<div class="dim" id="cta"></div>
+<div class="flat" id="url"></div>
+<script type="module" src="./stage.js"></script>
+</body>
+</html>
