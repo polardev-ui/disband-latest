@@ -1,5 +1,6 @@
 import { mapAuthError } from "@/lib/authErrors";
 import { apiFetch } from "@/lib/api";
+import { isTauri } from "@/lib/platform";
 import {
   HIDDEN_PASSKEY_TOTP_NAME,
   type PasskeyMfaStatus,
@@ -48,9 +49,14 @@ function isManagedPasskeyFactor(factor: MfaFactor): boolean {
   return factor.factor_type === "totp" && factor.friendly_name === HIDDEN_PASSKEY_TOTP_NAME;
 }
 
-function formatAuthError(error: { message?: string; status?: number } | null | undefined, fallback: string): string {
+function formatAuthError(error: { message?: string; name?: string; status?: number } | null | undefined, fallback: string): string {
   if (!error) return fallback;
   const raw = error.message ?? fallback;
+  // WebKit words NotAllowedError as "The request is not allowed by the user
+  // agent…", which matched nothing below and reached the user verbatim.
+  if (error.name === "NotAllowedError" || /not allowed by the user agent/i.test(raw)) {
+    return "The passkey prompt was cancelled or blocked. Try again when you’re ready.";
+  }
   if (/rp\s?id.*invalid.*domain|relying party.*domain/i.test(raw)) {
     return "This passkey is configured for a different domain. Open Disband at https://www.disband.dev to add it. Localhost testing needs a separate Auth project with its passkey domain set to localhost.";
   }
@@ -106,8 +112,22 @@ async function authedApi<T>(
   return { data: payload as T, error: null, status: response.status };
 }
 
+/** Where the desktop app sends people to add a passkey. */
+export const PASSKEY_BROWSER_URL = "https://www.disband.dev/app?settings=account";
+
+/**
+ * The desktop app's pages come from tauri://localhost (or tauri.localhost on
+ * Windows), and a passkey can only be made for the site that asks for it.
+ * WebKit refuses before any prompt appears, so passkeys have to be handled
+ * on disband.dev in the browser.
+ */
+export function passkeysNeedBrowser(): boolean {
+  return isTauri();
+}
+
 export function passkeysSupported(): boolean {
   return (
+    !passkeysNeedBrowser() &&
     typeof window !== "undefined" &&
     window.isSecureContext &&
     typeof window.PublicKeyCredential !== "undefined"
@@ -265,6 +285,9 @@ async function deletePasskeyQuietly(passkeyId: string): Promise<void> {
  * cannot be created, so an account can never be left half-configured.
  */
 export async function registerPasskeyMfa(): Promise<string | null> {
+  if (passkeysNeedBrowser()) {
+    return "Passkeys can’t be added inside the desktop app. Add one at disband.dev in your browser, and it works there and on this account everywhere.";
+  }
   if (!passkeysSupported()) {
     return "Passkeys need a secure browser window. Open Disband in your browser to add one.";
   }
@@ -378,6 +401,9 @@ export async function verifyTotpChallenge(factorId: string, code: string): Promi
  * untouched. The server then checks both sessions and returns an AAL2 session.
  */
 export async function verifyPasskeyChallenge(): Promise<string | null> {
+  if (passkeysNeedBrowser()) {
+    return "Passkeys don’t work inside the desktop app yet. Use your authenticator app here, or sign in at disband.dev in your browser.";
+  }
   if (!passkeysSupported()) {
     return "Passkeys need a secure browser window. Open Disband in your browser and try again.";
   }

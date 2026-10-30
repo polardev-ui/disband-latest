@@ -7,7 +7,9 @@ import {
   getPasskeyMfaStatus,
   listAllMfaFactors,
   listUserPasskeys,
+  passkeysNeedBrowser,
   passkeysSupported,
+  PASSKEY_BROWSER_URL,
   registerPasskeyMfa,
   removePasskey,
   startTotpEnrollment,
@@ -79,6 +81,19 @@ export function MfaSettingsPanel() {
     setTotpSetup(result.data);
     setTotpCode("");
     void reload();
+  }
+
+  const needsBrowser = passkeysNeedBrowser();
+
+  async function openPasskeyInBrowser() {
+    setError(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("plugin:opener|open_url", { url: PASSKEY_BROWSER_URL });
+      setMessage("Opened Disband in your browser. Add the passkey there.");
+    } catch {
+      window.open(PASSKEY_BROWSER_URL, "_blank", "noopener,noreferrer");
+    }
   }
 
   async function addPasskey() {
@@ -297,21 +312,34 @@ export function MfaSettingsPanel() {
               >
                 {enabled ? "Add Authenticator App" : "Set Up Authenticator App"}
               </button>
-              <button
-                type="button"
-                disabled={busy || loading || !passkeySupported}
-                onClick={() => void addPasskey()}
-                className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}
-              >
-                Add a Passkey
-              </button>
+              {needsBrowser ? (
+                <button
+                  type="button"
+                  disabled={busy || loading}
+                  onClick={() => void openPasskeyInBrowser()}
+                  className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}
+                >
+                  Add a Passkey in Browser
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy || loading || !passkeySupported}
+                  onClick={() => void addPasskey()}
+                  className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}
+                >
+                  Add a Passkey
+                </button>
+              )}
             </div>
           )}
           {!totpSetup && (
             <p className="mt-2 text-[12px] leading-4 text-text-muted">
-              {passkeySupported
-                ? "A passkey uses Face ID, Touch ID, Windows Hello, or a hardware security key. You still sign in with your password first."
-                : "Passkeys need a secure browser window. Open Disband in your browser to add one."}
+              {needsBrowser
+                ? "Passkeys are added on disband.dev, so this opens your browser. Sign in there, then choose Add a Passkey."
+                : passkeySupported
+                  ? "A passkey uses Face ID, Touch ID, Windows Hello, or a hardware security key. You still sign in with your password first."
+                  : "Passkeys need a secure browser window. Open Disband in your browser to add one."}
             </p>
           )}
         </div>
