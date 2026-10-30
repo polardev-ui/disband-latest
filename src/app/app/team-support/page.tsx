@@ -497,7 +497,7 @@ export default function TeamSupportPage() {
               ["tickets", "Tickets", tickets.length],
               ["bans", "Bans", bans.length],
               ["appeals", "Appeals", appeals.filter((a) => a.status === "pending").length],
-              ["flags", "Flags", flags.filter((f) => f.status === "pending").length],
+              ["flags", "Flags", flags.length],
               ["servers", "Servers", servers.length],
             ] as const).map(([id, label, count]) => (
               <button
@@ -848,7 +848,7 @@ export default function TeamSupportPage() {
                         </p>
                       )}
                     </div>
-                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{flag.status}</span>
+                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{flag.status.replace("_", " ")}</span>
                   </div>
                   {flag.details && <p className="mt-2 text-sm text-text-muted">{flag.details}</p>}
                   {flag.snapshot && (
@@ -857,7 +857,7 @@ export default function TeamSupportPage() {
                       <pre className="mt-2 max-h-40 overflow-auto rounded-[3px] bg-bg-primary p-3 text-xs text-text-muted">{JSON.stringify(flag.snapshot, null, 2)}</pre>
                     </details>
                   )}
-                  {flag.status === "pending" && (
+                  {flag.status !== "actioned" && flag.status !== "dismissed" && (
                     <div className="mt-3 flex gap-2">
                       {flag.reported_user_id && (
                         <button
