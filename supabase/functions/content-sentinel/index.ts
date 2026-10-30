@@ -7,8 +7,9 @@
 //
 // User reports run on their own hourly schedule (migration 0146). Open
 // `content_flags` are re-checked at the end of the Eastern day (migration
-// 0148): the function settles every flag it can and emails the operator the
-// ones that genuinely need a person, then closes them as `escalated`.
+// 0148). Tether, the AI reviewer, makes the final call on every flag and
+// report; nothing waits for a person. Its reasoning is stored on the row
+// (`content_flags.resolution`, `message_reports.last_error`).
 //
 //   POST /content-sentinel
 //   Authorization: Bearer <SENTINEL_KEY>
@@ -262,9 +263,10 @@ async function sweepText(
       // committing it.
       const judgement = await judgeText(row.body as string, `matched rule ${top.rule.id}`);
       if (judgement.decision !== "act") {
-        if (!dryRun) {
+        // A failed call leaves the flag open; the nightly flags pass retries it.
+        if (!dryRun && judgement.decision === "dismiss") {
           await supabase.from("content_flags").update({
-            state: judgement.decision === "dismiss" ? "dismissed" : "escalated",
+            state: "dismissed",
             resolution: describe(judgement).slice(0, 1000),
             resolved_at: new Date().toISOString(),
           }).eq("src_table", row.src_table).eq("src_column", row.src_column)
@@ -533,15 +535,16 @@ interface ConfirmedViolation {
 }
 
 interface ReportOutcome {
-  status: "actioned" | "needs_review" | "dismissed";
+  // "retry" means a check could not run (an API failure); the report goes
+  // back in the queue rather than being decided on half the evidence.
+  status: "actioned" | "dismissed" | "retry";
   held?: boolean;
   finding?: Finding;
   detail?: string;
+  // Set when the review acted without sentinel_apply_report_decision (which
+  // records its own outcome), so the sweep must close the report itself.
+  record?: string;
 }
-
-const HUMAN_REVIEW_REASONS = new Set([
-  "harassment", "spam", "self_harm", "impersonation", "other",
-]);
 
 function isTrustedMediaUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
@@ -666,9 +669,12 @@ function mediaVerdictViolation(
       : null;
   }
   if (verdict.category === "illegal") {
-    // A general vision model saying "illegal" is enough to summon a human,
-    // never enough to auto-suspend an account.
-    return null;
+    // A general vision model saying "illegal" removes the content and
+    // restricts the account, but never bans outright: only a hash match or a
+    // dedicated classifier's block does that.
+    return verdict.action === "block" || verdict.score >= 0.85
+      ? { ...shared, category: "illegal_content", restrictionDays: 30, platformBan: false }
+      : null;
   }
   if (verdict.category === "gore") {
     return verdict.action === "block" || verdict.score >= 0.8
@@ -761,10 +767,8 @@ async function reviewReport(
 
   const snapshot = report.snapshot ?? {};
   let best: ConfirmedViolation | null = null;
-  let needsReview: string | null = null;
-  let unscannable = false;
-  let mediaSeen = 0;
-  let mediaClean = 0;
+  // Tether's working notes: what each check found, stored with the decision.
+  const notes: string[] = [];
 
   const textFields = reportTextFields(snapshot);
   let textJudged = false;
@@ -776,35 +780,34 @@ async function reviewReport(
     // offence or someone talking about one.
     textJudged = true;
     const judgement = await judgeText(field.value ?? "", `reported as ${report.reason}; matched rule ${hit.rule.id}`);
+    if (judgement.decision === "retry") return { status: "retry", detail: describe(judgement) };
     if (judgement.decision === "act") {
       best = stronger(best, aiViolation(judgement, field.field ?? "content", hit.rule.id));
-    } else if (judgement.decision === "escalate") {
-      needsReview = `Possible ${hit.rule.id} in ${field.field}. ${describe(judgement)}`;
     }
+    notes.push(`${field.field} (rule ${hit.rule.id}): ${describe(judgement)}`);
   }
 
   for (const item of reportMedia(snapshot)) {
-    mediaSeen++;
     const isVideo = item.kind === "video" || item.kind === "file";
 
     if (isVideo) {
-      // No video-frame extractor is available in the edge runtime. The hash
-      // denylist still settles known material; anything new needs a person.
+      // No video-frame extractor is available in the edge runtime, so the
+      // hash denylist is the only check; the text decides the rest.
       const fetched = await fetchForHash(item.url);
       const banned = fetched ? await bannedHash(supabase, fetched.sha256) : null;
       const candidate = banned ? hashViolation(banned.category, fetched!.sha256) : null;
       if (candidate) {
         best = stronger(best, { ...candidate, mediaUrl: item.url });
-        mediaClean++;
+        notes.push(`${item.field}: matched known ${banned!.category} material`);
       } else {
-        unscannable = true;
+        notes.push(`${item.field}: ${fetched ? "video not on the known-material list" : "video no longer available"}`);
       }
       continue;
     }
 
     const image = await fetchVisionImage(item.url);
     if (!image) {
-      unscannable = true;
+      notes.push(`${item.field}: image no longer available`);
       continue;
     }
 
@@ -814,40 +817,28 @@ async function reviewReport(
       : null;
 
     if (!verdict) verdict = await classifyReportImage(item.url, image.dataUrl);
-    if (!verdict) {
-      unscannable = true;
-      continue;
-    }
+    if (!verdict) return { status: "retry", detail: `Tether: image check for ${item.field} is unavailable` };
 
     const candidate = mediaVerdictViolation(verdict, item.url, image.sha256);
-    if (candidate) {
-      best = stronger(best, candidate);
-      mediaClean++;
-      continue;
-    }
-
-    if (verdict.category === "clean") {
-      mediaClean++;
-    } else {
-      needsReview = `Possible ${verdict.category} (${verdict.score.toFixed(2)}) in ${item.field}`;
-    }
+    if (candidate) best = stronger(best, candidate);
+    notes.push(verdict.category === "clean"
+      ? `${item.field}: image check clean`
+      : `${item.field}: image check ${verdict.category} (${Math.round(verdict.score * 100)}%)${candidate ? "" : ", below the action threshold"}`);
   }
 
-  // Reports nothing matched (harassment, spam, "other"...) used to wait for a
-  // person every time. The AI reads them now; only the ones it can't settle
-  // still go to staff. Reports with media we couldn't check stay human.
-  if (!best && !needsReview && !unscannable && !textJudged && textFields.length
-      && (HUMAN_REVIEW_REASONS.has(report.reason) || (report.reason === "illegal_content" && mediaSeen === 0))) {
+  // Whatever the reason, Tether reads the reported text as a whole and has
+  // the final say. Nothing waits for a person.
+  if (!best && !textJudged && textFields.length) {
     const text = textFields.map((f) => `${f.field}: ${f.value}`).join("\n");
-    const context = `reported as ${report.reason}${report.details ? `; reporter said: ${String(report.details).slice(0, 300)}` : ""}`;
+    const context = `reported as ${report.reason}` +
+      (report.details ? `; reporter said: ${String(report.details).slice(0, 300)}` : "") +
+      (notes.length ? `; attachments: ${notes.join("; ")}` : "");
     const judgement = await judgeText(text, context);
+    if (judgement.decision === "retry") return { status: "retry", detail: describe(judgement) };
     if (judgement.decision === "act") {
       best = aiViolation(judgement, textFields[0].field ?? "content", `report:${report.reason}`);
-    } else if (judgement.decision === "dismiss") {
-      return { status: "dismissed", detail: describe(judgement) };
-    } else {
-      return { status: "needs_review", detail: describe(judgement) };
     }
+    notes.unshift(describe(judgement));
   }
 
   if (best) {
@@ -873,7 +864,7 @@ async function reviewReport(
     const { data, error } = await supabase.rpc("sentinel_apply_report_decision", {
       p_report_id: report.id,
       p_category: best.category,
-      p_reason: `Reported ${report.reason}: ${best.rule}`,
+      p_reason: `Reported ${report.reason}: ${best.rule}`.slice(0, 500),
       p_text_field: best.textField ?? null,
       p_restriction_days: best.restrictionDays,
       p_platform_ban: best.platformBan,
@@ -892,6 +883,7 @@ async function reviewReport(
     return {
       status: "actioned",
       held: result.suspended === true,
+      detail: notes.join(" | ") || undefined,
       finding: {
         kind: "report",
         category: best.category,
@@ -907,39 +899,9 @@ async function reviewReport(
     };
   }
 
-  if (unscannable) {
-    return {
-      status: "needs_review",
-      detail: needsReview ?? "Reported media could not be classified automatically.",
-    };
-  }
-
-  if (needsReview) return { status: "needs_review", detail: needsReview };
-
-  if (HUMAN_REVIEW_REASONS.has(report.reason)) {
-    return {
-      status: "needs_review",
-      detail: `Reported as ${report.reason}; this needs a person.`,
-    };
-  }
-
-  if (report.reason === "illegal_content" && mediaSeen === 0) {
-    return {
-      status: "needs_review",
-      detail: "Illegal-content report has no automatically scannable media.",
-    };
-  }
-
-  if (mediaSeen > 0 && mediaClean !== mediaSeen) {
-    return {
-      status: "needs_review",
-      detail: "Some reported media could not be checked automatically.",
-    };
-  }
-
   return {
     status: "dismissed",
-    detail: "No rule or classifier match.",
+    detail: notes.length ? notes.join(" | ") : "Tether: nothing in the report to check; no violation.",
   };
 }
 
@@ -952,7 +914,7 @@ async function sweepReports(
   const { data, error } = await supabase
     .from("message_reports")
     .select("id, target_type, target_surface, target_table, target_id, reported_user_id, reason, details, snapshot, review_attempts")
-    .or("status.in.(pending,reviewing),and(status.eq.needs_review,decision.eq.needs_review,review_attempts.lt.3)")
+    .in("status", ["pending", "reviewing"])
     .order("created_at", { ascending: true })
     .limit(Math.max(1, Math.min(limit, 100)));
   if (error) throw new Error(`report queue: ${error.message}`);
@@ -981,48 +943,54 @@ async function sweepReports(
         if (!dryRun) {
           actions++;
           if (outcome.held) held++;
+          // Tether's notes sit beside the action the decision RPC recorded.
+          if (outcome.record) {
+            await supabase.from("message_reports").update({
+              status: "actioned",
+              decision: "violation",
+              action: outcome.record,
+              reviewed_at: new Date().toISOString(),
+              last_error: outcome.detail ? outcome.detail.slice(0, 500) : null,
+            }).eq("id", row.id);
+          } else if (outcome.detail) {
+            await supabase.from("message_reports").update({ last_error: outcome.detail.slice(0, 500) }).eq("id", row.id);
+          }
         }
+      } else if (outcome.status === "retry") {
+        flags++;
+        if (!dryRun) await requeueReport(supabase, row.id, attempts, outcome.detail ?? "Tether could not finish the check");
       } else {
         flags++;
         if (!dryRun) {
-          const needsReview = outcome.status === "needs_review";
           await supabase.from("message_reports").update({
-            status: outcome.status,
-            // "ai_escalated" keeps it out of the queue above once the AI has
-            // had its go; it still shows in the Flags tab for staff.
-            decision: needsReview ? "ai_escalated" : "no_violation",
-            action: needsReview ? null : (outcome.detail?.startsWith("AI review") ? "Dismissed by AI review" : "Dismissed — no rule match"),
-            reviewed_at: needsReview ? null : new Date().toISOString(),
+            status: "dismissed",
+            decision: "no_violation",
+            action: "Dismissed by Tether",
+            reviewed_at: new Date().toISOString(),
             last_error: outcome.detail ? outcome.detail.slice(0, 500) : null,
           }).eq("id", row.id);
-        }
-        if (outcome.status === "needs_review") {
-          findings.push({
-            kind: "report",
-            category: "review",
-            rule: "report-queue",
-            where: `message_reports#${row.id}`,
-            owner: row.reported_user_id,
-            action: "needs human review",
-            detail: outcome.detail,
-          });
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[sentinel] report failed", row.id, message);
-      if (!dryRun) {
-        await supabase.from("message_reports").update({
-          status: attempts >= 3 ? "needs_review" : "pending",
-          review_attempts: attempts,
-          last_error: message.slice(0, 500),
-        }).eq("id", row.id);
-      }
+      if (!dryRun) await requeueReport(supabase, row.id, attempts, message);
       flags++;
     }
   }
 
   return { scanned, flags, actions, held };
+}
+
+// A check that couldn't run goes back in the queue. After the third try the
+// report is marked failed (not handed to a person); the digest lists it and
+// resetting it to pending retries it.
+async function requeueReport(supabase: SupabaseClient, id: string, attempts: number, why: string) {
+  await supabase.from("message_reports").update({
+    status: attempts >= 3 ? "failed" : "pending",
+    review_attempts: attempts,
+    last_error: why.slice(0, 500),
+  }).eq("id", id);
 }
 
 /* ------------------------------------------------------------------ flags */
@@ -1041,7 +1009,8 @@ interface FlagRow {
 }
 
 interface FlagOutcome {
-  state: "actioned" | "dismissed" | "escalated";
+  // "retry": a check could not run, so the flag stays open for the next pass.
+  state: "actioned" | "dismissed" | "retry";
   action: string;
   detail?: string;
   finding?: Finding;
@@ -1108,9 +1077,9 @@ async function reviewMediaFlag(
   const url = flag.src_id;
   if (!isTrustedMediaUrl(url)) {
     return {
-      state: "escalated",
-      action: "source is not a trusted CDN URL",
-      detail: "The flag does not point at a scannable media object.",
+      state: "dismissed",
+      action: "Tether: no violation",
+      detail: "The flag does not point at Disband media, so there is nothing to remove.",
     };
   }
 
@@ -1132,11 +1101,7 @@ async function reviewMediaFlag(
       ? { category: banned.category as Verdict["category"], score: 1, action: "block" }
       : await classifyReportImage(url, image.dataUrl);
     if (!verdict) {
-      return {
-        state: "escalated",
-        action: "image classifier unavailable",
-        detail: "The image could not be classified automatically.",
-      };
+      return { state: "retry", action: "Tether: not reviewed yet", detail: "The image check is unavailable; trying again next pass." };
     }
 
     const violation = banned
@@ -1144,27 +1109,27 @@ async function reviewMediaFlag(
       : mediaVerdictViolation(verdict, url, image.sha256);
     if (violation) return await applyMediaFlag(supabase, flag, url, violation, dryRun);
     if (verdict.category === "clean") {
-      return { state: "dismissed", action: "image reviewed clean" };
+      return { state: "dismissed", action: "Tether: no violation", detail: "Image check came back clean." };
     }
     return {
-      state: "escalated",
-      action: "ambiguous image verdict",
-      detail: `Classifier said ${verdict.category} (${verdict.score.toFixed(2)}).`,
+      state: "dismissed",
+      action: "Tether: no violation",
+      detail: `Image check said ${verdict.category} at ${Math.round(verdict.score * 100)}%, below the action threshold.`,
     };
   }
 
   const fetched = await fetchForHash(url);
   if (!fetched) {
-    return { state: "dismissed", action: "media is no longer available" };
+    return { state: "dismissed", action: "Tether: no violation", detail: "The media is no longer available." };
   }
   const banned = await bannedHash(supabase, fetched.sha256);
   const violation = banned ? hashViolation(banned.category, fetched.sha256) : null;
   if (violation) return await applyMediaFlag(supabase, flag, url, violation, dryRun);
 
   return {
-    state: "escalated",
-    action: "video needs human review",
-    detail: "No frame extractor is available; the video did not match a banned hash.",
+    state: "dismissed",
+    action: "Tether: no violation",
+    detail: "The video does not match any known banned material (frames can't be checked yet).",
   };
 }
 
@@ -1182,26 +1147,26 @@ async function reviewTextFlag(
     .maybeSingle();
 
   if (!source) {
-    return { state: "dismissed", action: "source no longer exists" };
+    return { state: "dismissed", action: "Tether: no violation", detail: "The flagged content no longer exists." };
   }
   const body = typeof source.body === "string" ? source.body : "";
   if (!body.trim()) {
-    return { state: "dismissed", action: "source is empty" };
+    return { state: "dismissed", action: "Tether: no violation", detail: "The flagged content is now empty." };
   }
 
   const hits = scanText(body);
   const hit = hits.find((h) => !h.demoted) ?? hits[0];
-  if (!hit) return { state: "dismissed", action: "no current rule match" };
+  if (!hit) return { state: "dismissed", action: "Tether: no violation", detail: "The content no longer matches any rule." };
 
   const judgement = await judgeText(
     body,
     `matched rule ${hit.rule.id}${hit.demoted ? " (wording looks like quoting or reporting)" : ""}`,
   );
   if (judgement.decision === "dismiss") {
-    return { state: "dismissed", action: "AI: not a violation", detail: describe(judgement) };
+    return { state: "dismissed", action: "dismissed", detail: describe(judgement) };
   }
-  if (judgement.decision === "escalate") {
-    return { state: "escalated", action: "needs a person", detail: describe(judgement) };
+  if (judgement.decision === "retry") {
+    return { state: "retry", action: "not reviewed yet", detail: describe(judgement) };
   }
 
   const category = hit.rule.category;
@@ -1264,7 +1229,7 @@ async function sweepFlags(
   if (error) throw new Error(`flag queue: ${error.message}`);
 
   const deadline = Date.now() + FLAG_TIME_BUDGET_MS;
-  let reviewed = 0, actions = 0, held = 0, escalated = 0;
+  let reviewed = 0, actions = 0, held = 0, retried = 0;
 
   for (const flag of (data ?? []) as unknown as FlagRow[]) {
     if (Date.now() > deadline) break;
@@ -1276,42 +1241,28 @@ async function sweepFlags(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[sentinel] flag review failed", flag.id, message);
-      outcome = {
-        state: "escalated",
-        action: "automatic review failed",
-        detail: message.slice(0, 500),
-      };
+      outcome = { state: "retry", action: "Tether: not reviewed yet", detail: message.slice(0, 500) };
     }
 
     if (!dryRun) {
-      const resolution = [outcome.action, outcome.detail].filter(Boolean).join(" — ");
-      await supabase.from("content_flags").update({
-        state: outcome.state,
-        resolution: resolution.slice(0, 1000),
-        resolved_at: new Date().toISOString(),
-      }).eq("id", flag.id);
+      const resolution = [outcome.action, outcome.detail].filter(Boolean).join(" — ").slice(0, 1000);
+      // A retry keeps the flag open but still records why, so the row never
+      // looks untouched.
+      await supabase.from("content_flags").update(outcome.state === "retry"
+        ? { resolution }
+        : { state: outcome.state, resolution, resolved_at: new Date().toISOString() },
+      ).eq("id", flag.id);
     }
 
     if (outcome.state === "actioned") actions++;
     if (outcome.held) held++;
-    if (outcome.state === "escalated") {
-      escalated++;
-      findings.push({
-        kind: "flag",
-        category: flag.category,
-        rule: flag.rule_id,
-        where: `content_flags#${flag.id} (${flag.src_table}.${flag.src_column}#${flag.src_id})`,
-        owner: flag.owner_id,
-        action: "escalated for manual review",
-        detail: [outcome.detail, flag.excerpt ? `excerpt: ${flag.excerpt}` : null]
-          .filter(Boolean).join(" — "),
-      });
-    } else if (outcome.finding) {
-      findings.push(outcome.finding);
-    }
+    if (outcome.state === "retry") retried++;
+    else if (outcome.finding) findings.push(outcome.finding);
   }
 
-  return { reviewed, actions, held, escalated };
+  // `escalated` is the safety_runs column name; it now counts flags left open
+  // for a retry.
+  return { reviewed, actions, held, escalated: retried };
 }
 
 /* --------------------------------------------------------------- providers */
@@ -1334,8 +1285,8 @@ async function classifyReportImage(url: string, dataUrl: string): Promise<Verdic
 }
 
 // A conservative fallback for installations with no dedicated moderation
-// provider. The model is asked for a category only, never a description, and
-// an "illegal" answer is always routed to a human rather than acted on.
+// provider. The model is asked for a category only, never a description. An
+// "illegal" answer restricts the account but never bans it outright.
 async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
   try {
     const response = await fetch(`${DEEPSEEK_URL}/chat/completions`, {
@@ -1346,7 +1297,8 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
       },
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
-        max_tokens: 220,
+        // Room for a reasoning model to think before it answers.
+        max_tokens: 1500,
         temperature: 0,
         messages: [
           {
@@ -1383,7 +1335,8 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
     }
 
     const payload = await response.json();
-    const raw = payload?.choices?.[0]?.message?.content;
+    const message = payload?.choices?.[0]?.message;
+    const raw = [message?.content, message?.reasoning_content].find((v) => typeof v === "string" && v.includes("{"));
     if (typeof raw !== "string") return null;
     const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const start = jsonText.indexOf("{");
@@ -1490,9 +1443,8 @@ async function sendReport(
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) return null;
 
-  // Quiet runs don't need mail; a failure, an action, or a flag that needs a
-  // person always does.
-  if (!failure && totals.actions === 0 && totals.flags === 0 && totals.flagEscalations === 0) {
+  // Quiet runs don't need mail; a failure or an action always does.
+  if (!failure && totals.actions === 0 && totals.flags === 0) {
     return null;
   }
 
@@ -1508,9 +1460,7 @@ async function sendReport(
 
   const subject = failure
     ? "Disband Safety — run FAILED"
-    : totals.flagEscalations > 0
-      ? `Disband Safety — ${totals.flagEscalations} flag${totals.flagEscalations === 1 ? "" : "s"} need review`
-      : `Disband Safety — ${totals.actions} action${totals.actions === 1 ? "" : "s"}, ${totals.held} account${totals.held === 1 ? "" : "s"} held`;
+    : `Disband Safety — ${totals.actions} action${totals.actions === 1 ? "" : "s"}, ${totals.held} account${totals.held === 1 ? "" : "s"} held`;
 
   // Ids, hashes and counts only. Never the material itself.
   const html = `
@@ -1524,7 +1474,7 @@ async function sendReport(
         Reports reviewed: <b>${totals.reports}</b> &middot;
         Flags opened: <b>${totals.flags}</b> &middot;
         Flags reviewed: <b>${totals.flagReviews}</b> &middot;
-        Flags escalated: <b>${totals.flagEscalations}</b> &middot;
+        Flags left open to retry: <b>${totals.flagEscalations}</b> &middot;
         Enforcement actions: <b>${totals.actions}</b> &middot;
         Accounts held: <b>${totals.held}</b>
       </p>
@@ -1535,11 +1485,10 @@ async function sendReport(
           <th style="padding:6px 10px">Owner</th><th style="padding:6px 10px">Action</th>
         </tr>${rows}
       </table>` : "<p>No enforcement actions this run.</p>"}
-      ${totals.flagEscalations > 0 ? `<p style="margin-top:16px;padding:12px;background:#eef2ff;border-radius:8px;font-size:13px">
-        The escalated rows are closed in <code>content_flags</code> with
-        <code>state = 'escalated'</code>. Review them with:<br>
-        <code>select * from public.content_flags where state = 'escalated' order by resolved_at desc;</code>
-      </p>` : ""}
+      <p style="margin-top:16px;padding:12px;background:#eef2ff;border-radius:8px;font-size:13px">
+        Tether's reasoning for every decision is in <code>content_flags.resolution</code>
+        and <code>message_reports.last_error</code>.
+      </p>
       <p style="margin-top:20px;padding:12px;background:#fff8e1;border-radius:8px;font-size:13px">
         <b>CSAM findings require a CyberTipline report to NCMEC within 24 hours</b>
         (18 U.S.C. § 2258A). Quarantined material is preserved for 90 days and
@@ -1575,9 +1524,8 @@ function json(body: unknown, status = 200): Response {
 /* ------------------------------------------------------------------ spaces */
 
 // A space is judged as a whole: its name, description, channel names and a
-// sample of recent messages. Only a confident child-safety verdict closes a
-// space automatically (suspension, never deletion), and even then the report
-// stays in the staff queue so a person confirms it and runs the member review.
+// sample of recent messages. A confirmed violation suspends the space (never
+// deletes it); staff can lift a suspension.
 const SPACE_CONTEXT =
   "This is a whole community space (name, description, channel names and a sample of " +
   "recent messages), not one message. Decide whether the space itself is organised around " +
@@ -1637,37 +1585,39 @@ async function reviewServerReport(
   const context = `${SPACE_CONTEXT} It was reported as ${report.reason}` +
     (report.details ? `; the reporter said: ${String(report.details).slice(0, 300)}` : "") + ".";
   const judgement = text ? await judgeText(text, context) : null;
+  if (judgement?.decision === "retry") return { status: "retry", detail: describe(judgement) };
   const media = await spaceMediaVerdict(supabase, reportMedia(snapshot));
+  const mediaViolation = media ? mediaVerdictViolation(media, "", "") : null;
 
-  const childSafety = (judgement?.decision === "act" && judgement.category === "illegal_content")
-    || (media?.category === "illegal" || media?.category === "csam");
-  const notes = [judgement ? describe(judgement) : null, media ? `Image check: ${media.category} (${media.score.toFixed(2)})` : null]
-    .filter(Boolean).join(" · ");
+  const notes = [
+    judgement ? describe(judgement) : null,
+    media ? `Image check: ${media.category} (${Math.round(media.score * 100)}%)` : "Image check: clean or no images",
+  ].filter(Boolean).join(" · ");
 
-  if (childSafety) {
+  // Tether's call is final. A confirmed problem with a space's name,
+  // description or artwork suspends the space; staff can lift it.
+  const category = judgement?.decision === "act" ? judgement.category : mediaViolation?.category ?? null;
+  if (category) {
+    const childSafety = category === "illegal_content" || mediaViolation?.category === "illegal_content";
+    const label = childSafety ? "child safety" : category.replace(/_/g, " ");
     if (!dryRun) {
       await supabase.rpc("sentinel_suspend_server", {
         p_server: report.target_id,
-        p_reason: "Suspended by Disband Safety pending review (child safety).",
+        p_reason: `Suspended by Disband Safety (${label}).`,
       });
     }
     return {
-      status: "needs_review",
-      detail: `Space suspended automatically pending staff confirmation. ${notes}`,
+      status: "actioned",
+      detail: notes,
+      record: `Space suspended by Tether (${label})`,
       finding: {
-        kind: "report", category: "illegal_content", rule: "space-ai",
+        kind: "report", category: childSafety ? "illegal_content" : category, rule: "space-ai",
         where: `servers#${report.target_id}`, owner: report.reported_user_id,
-        action: dryRun ? "would suspend space" : "space suspended (needs confirmation)", detail: notes,
+        action: dryRun ? "would suspend space" : "space suspended", detail: notes,
       },
     };
   }
-  if (judgement?.decision === "act" || (media && media.category !== "clean")) {
-    return { status: "needs_review", detail: `Possible problem with this space. ${notes}` };
-  }
-  if (judgement?.decision === "dismiss" && !media) {
-    return { status: "dismissed", detail: notes || "AI review: no problem found" };
-  }
-  return { status: "needs_review", detail: notes || "Space could not be checked automatically." };
+  return { status: "dismissed", detail: notes };
 }
 
 async function sweepSpaces(
@@ -1697,33 +1647,25 @@ async function sweepSpaces(
     if (!dryRun) {
       await supabase.from("servers").update({ ai_checked_at: new Date().toISOString() }).eq("id", server.id);
     }
-    // Only confident problems are filed. "Unsure" on a routine check of a
-    // space nobody complained about would bury staff in noise.
+    // Tether acts on a confident violation and leaves everything else.
     if (judgement?.decision !== "act") continue;
 
     const childSafety = judgement.category === "illegal_content";
+    const label = childSafety ? "child safety" : (judgement.category ?? "other").replace(/_/g, " ");
     flagged++;
     findings.push({
       kind: "report", category: judgement.category ?? "other", rule: "space-ai-routine",
       where: `servers#${server.id}`, owner: server.owner_id,
-      action: childSafety ? (dryRun ? "would suspend space" : "space suspended (needs confirmation)") : "filed for review",
+      action: dryRun ? "would suspend space" : "space suspended",
       detail: describe(judgement),
     });
     if (dryRun) continue;
 
-    if (childSafety) {
-      const { data: done } = await supabase.rpc("sentinel_suspend_server", {
-        p_server: server.id,
-        p_reason: "Suspended by Disband Safety pending review (child safety).",
-      });
-      if (done) suspended++;
-    }
-
-    const { count } = await supabase.from("message_reports")
-      .select("id", { count: "exact", head: true })
-      .eq("target_id", server.id).is("reporter_id", null)
-      .in("status", ["pending", "reviewing", "needs_review"]);
-    if ((count ?? 0) > 0) continue;
+    const { data: done } = await supabase.rpc("sentinel_suspend_server", {
+      p_server: server.id,
+      p_reason: `Suspended by Disband Safety (${label}).`,
+    });
+    if (done) suspended++;
 
     await supabase.from("message_reports").insert({
       reporter_id: null,
@@ -1733,11 +1675,14 @@ async function sweepSpaces(
       target_id: server.id,
       reported_user_id: server.owner_id,
       reason: childSafety ? "illegal_content" : "other",
-      details: "Filed by Sentinel's routine space check.",
+      details: "Filed by Tether's routine space check.",
       snapshot: { version: 1, target_type: "server", surface: "server", context: { space_name: server.name }, ...snapshot },
-      status: "needs_review",
-      decision: "ai_escalated",
-      last_error: (childSafety ? "Space suspended automatically pending staff confirmation. " : "") + describe(judgement),
+      status: "actioned",
+      decision: "violation",
+      action: `Space suspended by Tether (${label})`,
+      reviewed_at: new Date().toISOString(),
+      review_attempts: 1,
+      last_error: describe(judgement),
     });
   }
 
@@ -1793,16 +1738,15 @@ async function sendDigest(supabase: SupabaseClient) {
     String(r.created_at).slice(0, 16).replace("T", " "), String(r.target_type), String(r.reason), user(r as never), String(r.last_error ?? ""),
   ]);
   const spaceRows = (suspended.data ?? []).map((s: Record<string, string | null>) => [
-    s.name ?? "", s.id ?? "", s.suspended_by ? "staff" : "Sentinel", s.suspended_reason ?? "",
+    s.name ?? "", s.id ?? "", s.suspended_by ? "staff" : "Tether", s.suspended_reason ?? "",
   ]);
   const violationRows = (violations.data ?? []).map((v: Record<string, string | null>) => [
     v.user_id ?? "", v.category ?? "", v.severity ?? "", v.reason ?? "",
   ]);
 
-  const needsYou = waitingRows.length + spaceRows.filter((r) => r[2] === "Sentinel").length;
   const subject = failedRuns.length
     ? `Disband Safety daily — ${failedRuns.length} run${failedRuns.length === 1 ? "" : "s"} failed`
-    : `Disband Safety daily — ${actionRows.length} action${actionRows.length === 1 ? "" : "s"}, ${needsYou} waiting on staff`;
+    : `Disband Safety daily — ${actionRows.length} action${actionRows.length === 1 ? "" : "s"}, ${waitingRows.length} still queued`;
 
   const html = `
     <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111;max-width:900px">
@@ -1813,15 +1757,15 @@ async function sendDigest(supabase: SupabaseClient) {
       <p style="line-height:1.7">
         Runs: <b>${runRows.length}</b> &middot; Text rows scanned: <b>${sum("text_scanned")}</b> &middot;
         Media scanned: <b>${sum("media_scanned")}</b> &middot; Reports reviewed: <b>${sum("reports_scanned")}</b><br>
-        Flags actioned: <b>${count("actioned")}</b> &middot; dismissed by AI or staff: <b>${count("dismissed")}</b> &middot;
-        escalated to staff: <b>${count("escalated")}</b> &middot; Accounts held: <b>${sum("accounts_held")}</b>
+        Flags actioned by Tether: <b>${count("actioned")}</b> &middot; dismissed by Tether: <b>${count("dismissed")}</b> &middot;
+        left open to retry: <b>${sum("flags_escalated")}</b> &middot; Accounts held: <b>${sum("accounts_held")}</b>
       </p>
       ${section(`Content removed (${actionRows.length})`, table(["Time (UTC)", "Action", "Category", "Where", "Owner", "Reason"], actionRows))}
       ${section(`Spaces suspended (${spaceRows.length})`, table(["Space", "Id", "By", "Reason"], spaceRows))}
       ${section(`Strikes given (${violationRows.length})`, table(["User", "Category", "Severity", "Reason"], violationRows))}
-      ${section(`Reports closed (${decidedRows.length})`, table(["Outcome", "Type", "Reason", "Reported", "Action", "AI / notes"], decidedRows))}
-      ${section(`Waiting on staff (${waitingRows.length})`, table(["Filed (UTC)", "Type", "Reason", "Reported", "AI / notes"], waitingRows))}
-      <p style="margin-top:16px">Review these in <a href="https://www.disband.dev/app/team-support">Team Support → Flags</a>.</p>
+      ${section(`Reports closed by Tether (${decidedRows.length})`, table(["Outcome", "Type", "Reason", "Reported", "Action", "Tether's notes"], decidedRows))}
+      ${section(`Still in Tether's queue (${waitingRows.length})`, table(["Filed (UTC)", "Type", "Reason", "Reported", "Last note"], waitingRows))}
+      <p style="margin-top:16px">Every decision and Tether's reasoning is in <a href="https://www.disband.dev/app/team-support">Team Support → Flags</a>.</p>
       <p style="margin-top:20px;padding:12px;background:#fff8e1;border-radius:8px;font-size:13px">
         <b>Confirmed CSAM must be reported to NCMEC's CyberTipline within 24 hours</b>
         (18 U.S.C. § 2258A). This email contains identifiers only, never the material.
