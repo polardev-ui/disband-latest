@@ -22,6 +22,11 @@
 // is saved (migration 0196), so a file is judged seconds after it is sent
 // rather than at the next 5-hourly sweep.
 //
+// `quarantine` is the operator's manual takedown: every file in `urls` (at
+// most 100) is preserved in quarantine and removed everywhere it is used,
+// with `category` and `reason` recorded as evidence. Nothing is judged; the
+// caller has already decided. It does not hold accounts (ban them first).
+//
 // `full` ignores the incremental cursor and re-reads every row — use it for
 // the first pass over existing content, and after changing the rules.
 //
@@ -155,6 +160,34 @@ Deno.serve(async (req) => {
         const result = await scanMediaUrl(supabase, url, await mediaOwner(supabase, url), dryRun, findings, true);
         totals.media += 1; totals.flags += result.flags;
         totals.actions += result.actions; totals.held += result.held;
+      }
+    }
+    if (mode === "quarantine") {
+      const urls = (Array.isArray(body.urls) ? body.urls : []).filter(isTrustedMediaUrl).slice(0, 100);
+      const category = typeof body.category === "string" ? body.category : "illegal_content";
+      const reason = typeof body.reason === "string" ? body.reason.slice(0, 500) : "Manual takedown";
+      for (const url of [...new Set(urls)]) {
+        totals.media += 1;
+        const meta = await mediaOwner(supabase, url);
+        // Preserve first: without a quarantined copy nothing is removed.
+        const preserved = dryRun ? null : await preserve(url, null);
+        if (!preserved) {
+          findings.push({ kind: "media", category, rule: "manual", where: meta.where, owner: meta.owner,
+            action: dryRun ? "would quarantine" : "NOT quarantined (could not preserve)" });
+          continue;
+        }
+        const { error: qError } = await supabase.rpc("sentinel_quarantine_media", {
+          p_url: url, p_category: category, p_reason: reason,
+          p_sha256: preserved.sha256, p_quarantine_key: preserved.key, p_suspend: false,
+        });
+        if (qError) {
+          findings.push({ kind: "media", category, rule: "manual", where: meta.where, owner: meta.owner,
+            action: `preserved but not removed: ${qError.message}`.slice(0, 200) });
+          continue;
+        }
+        totals.actions += 1;
+        findings.push({ kind: "media", category, rule: "manual", where: meta.where, owner: meta.owner,
+          action: "quarantined", detail: preserved.sha256.slice(0, 16) });
       }
     }
     if (mode === "reports") {
