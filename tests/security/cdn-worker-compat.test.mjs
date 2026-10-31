@@ -136,12 +136,21 @@ test('CDN Worker retains quotas and user keys while registering and quarantining
     assert.equal((await worker.fetch(new Request(url), state.env)).status, 404);
     assert.equal((await worker.fetch(new Request(`${BASE}/v1/images/quarantine/${sha256}`), state.env)).status, 400);
 
+    // Without a hash the worker fingerprints the object itself.
+    const derived = await worker.fetch(new Request(`${BASE}/v1/admin/quarantine`, {
+      method: 'POST', headers: { 'x-admin-secret': state.env.ADMIN_SECRET },
+      body: JSON.stringify({ key: flatKey }),
+    }), state.env);
+    assert.equal(derived.status, 200);
+    assert.equal((await derived.json()).sha256, createHash('sha256').update(PNG).digest('hex'));
+    assert.equal(state.objects.has(flatKey), false);
+
     state.blocked.add(sha256);
     const rejected = await worker.fetch(uploadRequest(), state.env);
     assert.equal(rejected.status, 451);
     assert.equal(state.usage.objects, 1);
     assert.equal(state.records.length, 1);
-    assert.equal(state.objects.size, 2);
+    assert.equal(state.objects.size, 1);
   } finally {
     globalThis.fetch = oldFetch;
     if (oldDigest === undefined) delete globalThis.crypto.DigestStream;

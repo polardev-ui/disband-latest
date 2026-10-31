@@ -13,9 +13,14 @@
 //
 //   POST /content-sentinel
 //   Authorization: Bearer <SENTINEL_KEY>
-//   { "mode": "sweep" | "text" | "media" | "reports" | "flags",
+//   { "mode": "sweep" | "text" | "media" | "reports" | "flags" | "scan",
 //     "limit": 250, "dryRun": false, "full": false, "offset": 0,
 //     "maxRows": 8000 }
+//
+// `scan` checks just the files in `urls` (at most 10) and acts at once. The
+// database calls it the moment a message, avatar or space image with media
+// is saved (migration 0196), so a file is judged seconds after it is sent
+// rather than at the next 5-hourly sweep.
 //
 // `full` ignores the incremental cursor and re-reads every row — use it for
 // the first pass over existing content, and after changing the rules.
@@ -140,6 +145,14 @@ Deno.serve(async (req) => {
       const m = await sweepMedia(supabase, mediaLimit, dryRun, findings);
       totals.media += m.scanned; totals.flags += m.flags;
       totals.actions += m.actions; totals.held += m.held;
+    }
+    if (mode === "scan") {
+      const urls = (Array.isArray(body.urls) ? body.urls : []).filter(isTrustedMediaUrl).slice(0, 10);
+      for (const url of [...new Set(urls)]) {
+        const result = await scanMediaUrl(supabase, url, await mediaOwner(supabase, url), dryRun, findings, true);
+        totals.media += 1; totals.flags += result.flags;
+        totals.actions += result.actions; totals.held += result.held;
+      }
     }
     if (mode === "reports") {
       const r = await sweepReports(supabase, mediaLimit, dryRun, findings);
@@ -358,89 +371,133 @@ async function sweepMedia(
 
   for (const [url, meta] of queue) {
     scanned++;
-    try {
-      const fetched = await fetchForHash(url);
-      if (!fetched) {
-        await mark(supabase, url, meta.owner, "skipped", null, null, null);
-        continue;
-      }
-
-      // 1. Known material: settled without any classifier.
-      const { data: banned } = await supabase
-        .from("banned_media_hashes")
-        .select("sha256, category")
-        .eq("sha256", fetched.sha256)
-        .maybeSingle();
-
-      let verdict: Verdict | null = banned
-        ? { category: (banned.category as Verdict["category"]) ?? "csam", score: 1, action: "block" }
-        : null;
-
-      // 2. Otherwise ask the classifier, if one is configured.
-      if (!verdict && PROVIDER !== "none") {
-        verdict = await classify(url);
-      }
-
-      if (!verdict || verdict.action === "none") {
-        await mark(supabase, url, meta.owner, verdict ? "clean" : "pending",
-                   fetched.sha256, fetched.bytes, verdict);
-        continue;
-      }
-
-      if (verdict.action === "review") {
-        await mark(supabase, url, meta.owner, "flagged", fetched.sha256, fetched.bytes, verdict);
-        await supabase.from("content_flags").upsert({
-          src_table: "media", src_column: "url", src_id: url, owner_id: meta.owner,
-          category: verdict.category, severity: "review",
-          rule_id: `${PROVIDER}.${verdict.category}`,
-          excerpt: `score ${verdict.score.toFixed(2)}`,
-        }, { onConflict: "src_table,src_column,src_id,rule_id", ignoreDuplicates: true });
-        flags++;
-        continue;
-      }
-
-      if (dryRun) {
-        findings.push({
-          kind: "media", category: verdict.category, rule: banned ? "hash-denylist" : PROVIDER,
-          where: meta.where, owner: meta.owner, action: "would quarantine",
-          detail: fetched.sha256.slice(0, 16),
-        });
-        continue;
-      }
-
-      // 3. Preserve first, then remove. Losing the bytes before the copy would
-      //    destroy evidence we are legally required to keep.
-      const quarantineKey = await preserve(url, fetched.sha256);
-
-      const suspend = verdict.category === "gore" ? SUSPEND_ON_GORE : true;
-      const { data: result, error: actionError } = await supabase.rpc("sentinel_quarantine_media", {
-        p_url: url,
-        p_category: verdict.category,
-        p_reason: banned ? "known hash" : `${PROVIDER} ${verdict.category} ${verdict.score.toFixed(2)}`,
-        p_sha256: fetched.sha256,
-        p_quarantine_key: quarantineKey,
-        p_suspend: suspend,
-      });
-      if (actionError) { console.error("[sentinel] quarantine failed", actionError.message); continue; }
-
-      actions++;
-      held += Number((result as { accounts_held?: number })?.accounts_held ?? 0);
-      findings.push({
-        kind: "media", category: verdict.category,
-        rule: banned ? "hash-denylist" : `${PROVIDER} ${verdict.score.toFixed(2)}`,
-        where: meta.where, owner: meta.owner,
-        action: suspend ? "quarantined + account held" : "quarantined",
-        detail: fetched.sha256.slice(0, 16),
-      });
-    } catch (error) {
-      console.error("[sentinel] media error", url, error);
-      await supabase.from("media_assets").upsert({
-        url, owner_id: meta.owner, scan_state: "error", scanned_at: new Date().toISOString(),
-      }, { onConflict: "url" });
-    }
+    const result = await scanMediaUrl(supabase, url, meta, dryRun, findings, false);
+    flags += result.flags; actions += result.actions; held += result.held;
   }
 
   return { scanned, flags, actions, held };
+}
+
+async function mediaOwner(
+  supabase: SupabaseClient,
+  url: string,
+): Promise<{ owner: string | null; where: string }> {
+  const { data } = await supabase
+    .from("safety_media_refs")
+    .select("owner_id, src_table, src_id")
+    .eq("url", url)
+    .limit(1)
+    .maybeSingle();
+  return data
+    ? { owner: data.owner_id as string | null, where: `${data.src_table}#${data.src_id}` }
+    : { owner: null, where: `media#${url}` };
+}
+
+const VIDEO_PATH = /\.(mp4|webm|mov|m4v)$/i;
+
+/**
+ * Judge one file and act on it. `instant` is the seconds-after-sending
+ * check: there, anything the scanner suspects involves a child is removed
+ * straight away instead of waiting in the review queue.
+ */
+async function scanMediaUrl(
+  supabase: SupabaseClient,
+  url: string,
+  meta: { owner: string | null; where: string },
+  dryRun: boolean,
+  findings: Finding[],
+  instant: boolean,
+): Promise<{ flags: number; actions: number; held: number }> {
+  const none = { flags: 0, actions: 0, held: 0 };
+  try {
+    const head = await fetch(url, { method: "HEAD" });
+    if (!head.ok) {
+      await mark(supabase, url, meta.owner, "skipped", null, null, null);
+      return none;
+    }
+    const type = (head.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const isVideo = type.startsWith("video/") || VIDEO_PATH.test(new URL(url).pathname);
+    const size = Number(head.headers.get("content-length") ?? 0);
+
+    // Files too large to hash here are still judged; the CDN fingerprints
+    // them itself if they have to be quarantined.
+    const fetched = size <= MAX_FULL_HASH_BYTES ? await fetchForHash(url) : null;
+    const sha256 = fetched?.sha256 ?? null;
+
+    // 1. Known material: settled without any classifier.
+    const banned = sha256 ? await bannedHash(supabase, sha256) : null;
+    let verdict: Verdict | null = banned
+      ? { category: (banned.category as Verdict["category"]) ?? "csam", score: 1, action: "block" }
+      : null;
+
+    // 2. Otherwise ask the classifier, if one is configured.
+    if (!verdict && PROVIDER !== "none") {
+      verdict = await classify(url, isVideo);
+    }
+    if (instant && verdict?.category === "csam" && verdict.action === "review") {
+      verdict = { ...verdict, action: "block" };
+    }
+
+    if (!verdict || verdict.action === "none") {
+      await mark(supabase, url, meta.owner, verdict ? "clean" : "pending",
+                 sha256, fetched?.bytes ?? (size || null), verdict);
+      return none;
+    }
+
+    if (verdict.action === "review") {
+      await mark(supabase, url, meta.owner, "flagged", sha256, fetched?.bytes ?? (size || null), verdict);
+      await supabase.from("content_flags").upsert({
+        src_table: "media", src_column: "url", src_id: url, owner_id: meta.owner,
+        category: verdict.category, severity: "review",
+        rule_id: `${PROVIDER}.${verdict.category}`,
+        excerpt: `score ${verdict.score.toFixed(2)}`,
+      }, { onConflict: "src_table,src_column,src_id,rule_id", ignoreDuplicates: true });
+      return { ...none, flags: 1 };
+    }
+
+    if (dryRun) {
+      findings.push({
+        kind: "media", category: verdict.category, rule: banned ? "hash-denylist" : PROVIDER,
+        where: meta.where, owner: meta.owner, action: "would quarantine",
+        detail: sha256?.slice(0, 16),
+      });
+      return none;
+    }
+
+    // 3. Preserve first, then remove. Losing the bytes before the copy would
+    //    destroy evidence we are legally required to keep.
+    const preserved = await preserve(url, sha256);
+
+    const suspend = verdict.category === "gore" ? SUSPEND_ON_GORE : true;
+    const { data: result, error: actionError } = await supabase.rpc("sentinel_quarantine_media", {
+      p_url: url,
+      p_category: verdict.category,
+      p_reason: banned ? "known hash" : `${PROVIDER} ${verdict.category} ${verdict.score.toFixed(2)}`,
+      p_sha256: preserved?.sha256 ?? sha256,
+      p_quarantine_key: preserved?.key ?? null,
+      p_suspend: suspend,
+    });
+    if (actionError) {
+      console.error("[sentinel] quarantine failed", actionError.message);
+      return none;
+    }
+
+    const held = Number((result as { accounts_held?: number })?.accounts_held ?? 0);
+    findings.push({
+      kind: "media", category: verdict.category,
+      rule: banned ? "hash-denylist" : `${PROVIDER} ${verdict.score.toFixed(2)}`,
+      where: meta.where, owner: meta.owner,
+      action: suspend ? "quarantined + account held" : "quarantined",
+      detail: (preserved?.sha256 ?? sha256 ?? "").slice(0, 16),
+    });
+    return { flags: 0, actions: 1, held };
+  } catch (error) {
+    console.error("[sentinel] media error", url, error);
+    await supabase.from("media_assets").upsert({
+      url, owner_id: meta.owner, scan_state: "error", scanned_at: new Date().toISOString(),
+    }, { onConflict: "url" });
+    return none;
+  }
 }
 
 async function mark(
@@ -469,8 +526,14 @@ async function fetchForHash(url: string): Promise<{ sha256: string; bytes: numbe
   return { sha256, bytes: buffer.byteLength };
 }
 
-/** Copy the object out of public reach, keeping the bytes. */
-async function preserve(url: string, sha256: string): Promise<string | null> {
+/**
+ * Copy the object out of public reach, keeping the bytes. Without a hash the
+ * CDN works it out, so large videos never have to be downloaded here.
+ */
+async function preserve(
+  url: string,
+  sha256?: string | null,
+): Promise<{ key: string; sha256: string } | null> {
   const base = Deno.env.get("CDN_ADMIN_URL");
   const secret = Deno.env.get("CDN_ADMIN_SECRET");
   if (!base || !secret) return null;
@@ -480,13 +543,15 @@ async function preserve(url: string, sha256: string): Promise<string | null> {
   const response = await fetch(`${base}/v1/admin/quarantine`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Admin-Secret": secret },
-    body: JSON.stringify({ key: decodeURIComponent(key), sha256 }),
+    body: JSON.stringify({ key: decodeURIComponent(key), ...(sha256 ? { sha256 } : {}) }),
   });
   if (!response.ok) {
     console.error("[sentinel] preserve failed", response.status, await response.text());
     return null;
   }
-  return (await response.json().catch(() => ({})) as { quarantineKey?: string }).quarantineKey ?? null;
+  const out = await response.json().catch(() => ({})) as { quarantineKey?: string; sha256?: string };
+  if (!out.quarantineKey) return null;
+  return { key: out.quarantineKey, sha256: out.sha256 ?? sha256 ?? "" };
 }
 
 /* --------------------------------------------------------------- reports */
@@ -819,9 +884,16 @@ async function reviewReport(
       const fetched = await fetchForHash(item.url);
       const banned = fetched ? await bannedHash(supabase, fetched.sha256) : null;
       const candidate = banned ? hashViolation(banned.category, fetched!.sha256) : null;
+      const scanned = !candidate && PROVIDER !== "none" ? await classify(item.url, true) : null;
+      const scannedViolation = scanned
+        ? mediaVerdictViolation(scanned, item.url, fetched?.sha256 ?? "")
+        : null;
       if (candidate) {
         best = stronger(best, { ...candidate, mediaUrl: item.url });
         notes.push(`${item.field}: matched known ${banned!.category} material`);
+      } else if (scanned) {
+        if (scannedViolation) best = stronger(best, scannedViolation);
+        notes.push(`${item.field}: video check ${scanned.category} (${Math.round(scanned.score * 100)}%)`);
       } else {
         notes.push(`${item.field}: ${fetched ? "video not on the known-material list" : "video no longer available"}`);
       }
@@ -880,8 +952,8 @@ async function reviewReport(
       };
     }
 
-    const quarantineKey = best.mediaUrl
-      ? await preserve(best.mediaUrl, best.sha256 ?? "")
+    const preserved = best.mediaUrl
+      ? await preserve(best.mediaUrl, best.sha256 || null)
       : null;
 
     const { data, error } = await supabase.rpc("sentinel_apply_report_decision", {
@@ -892,8 +964,8 @@ async function reviewReport(
       p_restriction_days: best.restrictionDays,
       p_platform_ban: best.platformBan,
       p_media_url: best.mediaUrl ?? null,
-      p_sha256: best.sha256 ?? null,
-      p_quarantine_key: quarantineKey,
+      p_sha256: preserved?.sha256 || best.sha256 || null,
+      p_quarantine_key: preserved?.key ?? null,
     });
     if (error) throw new Error(`report decision: ${error.message}`);
 
@@ -1062,16 +1134,14 @@ async function applyMediaFlag(
     };
   }
 
-  const quarantineKey = violation.sha256
-    ? await preserve(url, violation.sha256)
-    : null;
+  const preserved = await preserve(url, violation.sha256 || null);
   const suspend = violation.category === "violence_gore" ? SUSPEND_ON_GORE : true;
   const { data, error } = await supabase.rpc("sentinel_quarantine_media", {
     p_url: url,
     p_category: violation.category,
     p_reason: `Flag review: ${violation.rule}`,
-    p_sha256: violation.sha256 ?? null,
-    p_quarantine_key: quarantineKey,
+    p_sha256: preserved?.sha256 || violation.sha256 || null,
+    p_quarantine_key: preserved?.key ?? null,
     p_suspend: suspend,
   });
   if (error) throw new Error(`flag quarantine: ${error.message}`);
@@ -1300,10 +1370,13 @@ async function sweepFlags(
 
 /* --------------------------------------------------------------- providers */
 
-async function classify(url: string): Promise<Verdict | null> {
+async function classify(url: string, isVideo = false): Promise<Verdict | null> {
   try {
-    if (PROVIDER === "sightengine") return await classifySightengine(url);
-    if (PROVIDER === "hive") return await classifyHive(url);
+    if (PROVIDER === "sightengine") {
+      return isVideo ? await classifySightengineVideo(url) : await classifySightengine(url);
+    }
+    // Hive's sync task takes images; videos are left to the hash list.
+    if (PROVIDER === "hive" && !isVideo) return await classifyHive(url);
   } catch (error) {
     console.error("[sentinel] classifier error", error);
   }
@@ -1394,42 +1467,95 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
   }
 }
 
-// https://sightengine.com/docs — nudity-2.1 carries a minor/child signal and
-// gore-2.0 a graphic-violence one.
+// https://sightengine.com/docs — nudity-2.1 scores how sexual an image is,
+// face-age gives each face a probability of being under 18
+// (faces[].attributes.age.minor), and gore-2.0 scores graphic violence.
+// nudity-2.1 itself has no minor signal: reading one from it (as this used
+// to) meant child abuse could never be detected.
+const SIGHTENGINE_MODELS = "nudity-2.1,face-age,gore-2.0";
+
+interface SightengineFrame {
+  nudity?: Record<string, unknown>;
+  faces?: { attributes?: { age?: { minor?: number } } }[];
+  gore?: { prob?: number };
+}
+
+/** One verdict from an image's result, or from every frame of a video. */
+function sightengineVerdict(frames: SightengineFrame[], raw: unknown): Verdict {
+  let sexual = 0, minor = 0, gore = 0;
+  for (const frame of frames) {
+    const n = frame.nudity ?? {};
+    const frameSexual = Math.max(
+      Number(n.sexual_activity ?? 0),
+      Number(n.sexual_display ?? 0),
+      Number(n.erotica ?? 0),
+    );
+    const frameMinor = Math.max(0, ...(frame.faces ?? []).map((f) => Number(f.attributes?.age?.minor ?? 0)));
+    // The pairing has to be in the same frame: a child in one shot and an
+    // adult scene in another is not the same thing.
+    if (frameSexual >= 0.3) minor = Math.max(minor, frameMinor);
+    sexual = Math.max(sexual, frameSexual);
+    gore = Math.max(gore, Number(frame.gore?.prob ?? 0));
+  }
+
+  // Sexual content plus a minor signal is the combination that matters.
+  if (sexual >= 0.5 && minor >= 0.5) {
+    return { category: "csam", score: Math.min(sexual, minor), action: "block", raw };
+  }
+  if (minor >= 0.75 && sexual >= 0.3) {
+    return { category: "csam", score: minor, action: "review", raw };
+  }
+  if (gore >= 0.8) return { category: "gore", score: gore, action: "block", raw };
+  if (gore >= 0.5) return { category: "gore", score: gore, action: "review", raw };
+  if (sexual >= 0.8) return { category: "adult", score: sexual, action: "review", raw };
+  return { category: "clean", score: 0, action: "none", raw };
+}
+
 async function classifySightengine(url: string): Promise<Verdict | null> {
   const user = Deno.env.get("SIGHTENGINE_USER");
   const secret = Deno.env.get("SIGHTENGINE_SECRET");
   if (!user || !secret) return null;
 
   const endpoint = new URL("https://api.sightengine.com/1.0/check.json");
-  endpoint.searchParams.set("models", "nudity-2.1,gore-2.0,offensive");
+  endpoint.searchParams.set("models", SIGHTENGINE_MODELS);
   endpoint.searchParams.set("url", url);
   endpoint.searchParams.set("api_user", user);
   endpoint.searchParams.set("api_secret", secret);
 
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, { signal: AbortSignal.timeout(20_000) });
   const data = await response.json();
-  if (data.status !== "success") return null;
-
-  const sexual = Math.max(
-    data.nudity?.sexual_activity ?? 0,
-    data.nudity?.sexual_display ?? 0,
-    data.nudity?.erotica ?? 0,
-  );
-  const minor = data.nudity?.context?.minor ?? data.minor?.prob ?? 0;
-  const gore = data.gore?.prob ?? 0;
-
-  // Sexual content plus a minor signal is the combination that matters.
-  if (sexual >= 0.5 && minor >= 0.5) {
-    return { category: "csam", score: Math.min(sexual, minor), action: "block", raw: data };
+  if (data.status !== "success") {
+    console.error("[sentinel] sightengine", JSON.stringify(data.error ?? data).slice(0, 300));
+    return null;
   }
-  if (minor >= 0.75 && sexual >= 0.3) {
-    return { category: "csam", score: minor, action: "review", raw: data };
+  return sightengineVerdict([data], data);
+}
+
+// Short videos (up to a minute) are checked frame by frame in one call.
+// Longer ones fail here and fall back to "pending" / the review queue.
+async function classifySightengineVideo(url: string): Promise<Verdict | null> {
+  const user = Deno.env.get("SIGHTENGINE_USER");
+  const secret = Deno.env.get("SIGHTENGINE_SECRET");
+  if (!user || !secret) return null;
+
+  const form = new FormData();
+  form.set("stream_url", url);
+  form.set("models", SIGHTENGINE_MODELS);
+  form.set("api_user", user);
+  form.set("api_secret", secret);
+
+  const response = await fetch("https://api.sightengine.com/1.0/video/check-sync.json", {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(60_000),
+  });
+  const data = await response.json();
+  if (data.status !== "success") {
+    console.error("[sentinel] sightengine video", JSON.stringify(data.error ?? data).slice(0, 300));
+    return null;
   }
-  if (gore >= 0.8) return { category: "gore", score: gore, action: "block", raw: data };
-  if (gore >= 0.5) return { category: "gore", score: gore, action: "review", raw: data };
-  if (sexual >= 0.8) return { category: "adult", score: sexual, action: "review", raw: data };
-  return { category: "clean", score: 0, action: "none", raw: data };
+  const frames = (data.data?.frames ?? []) as SightengineFrame[];
+  return sightengineVerdict(frames, { frames: frames.length });
 }
 
 // https://docs.thehive.ai — visual moderation returns per-class scores.

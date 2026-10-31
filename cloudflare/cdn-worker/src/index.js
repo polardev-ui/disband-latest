@@ -539,11 +539,27 @@ async function quarantine(request, env) {
   if (!env.ADMIN_SECRET || !secret || !constantTimeEqual(secret, env.ADMIN_SECRET)) {
     return json({ error: "Unauthorized" }, 401, env);
   }
-  const { key, sha256 } = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => ({}));
+  const key = body.key;
+  let sha256 = body.sha256;
   const mediaKey = /^[0-9a-f-]{36}(?:\/[0-9a-f-]{36})?\.[a-z0-9]+$/i;
-  if (typeof key !== "string" || !mediaKey.test(key) || typeof sha256 !== "string" || !/^[0-9a-f]{64}$/i.test(sha256)) {
+  if (typeof key !== "string" || !mediaKey.test(key)
+      || (sha256 !== undefined && (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/i.test(sha256)))) {
     return json({ error: "Invalid key or sha256" }, 400, env);
   }
+
+  // No hash given: work it out here. Large videos are too big for the caller
+  // to download, and suspected abuse material should never have to leave
+  // Cloudflare just to be fingerprinted. The digest streams, so size is no
+  // problem; the object is then read again for the copy.
+  if (sha256 === undefined) {
+    const source = await env.MEDIA.get(key);
+    if (!source) return json({ error: "Not found", quarantineKey: null }, 404, env);
+    const digest = new crypto.DigestStream("SHA-256");
+    await source.body.pipeTo(digest);
+    sha256 = [...new Uint8Array(await digest.digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  sha256 = sha256.toLowerCase();
 
   const object = await env.MEDIA.get(key);
   if (!object) return json({ error: "Not found", quarantineKey: null }, 404, env);
@@ -560,7 +576,7 @@ async function quarantine(request, env) {
   });
   await env.MEDIA.delete(key);
 
-  return json({ ok: true, quarantineKey }, 200, env);
+  return json({ ok: true, quarantineKey, sha256 }, 200, env);
 }
 
 async function sniffInlineType(file) {
