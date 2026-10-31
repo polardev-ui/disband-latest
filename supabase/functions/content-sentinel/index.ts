@@ -37,8 +37,7 @@
 // Optional:
 //   SAFETY_REPORT_TO      default beluga7133@gmail.com
 //   SAFETY_REPORT_FROM    default safety@disband.dev
-//   MODERATION_PROVIDER   "sightengine" | "hive" | "none" (default none)
-//   SIGHTENGINE_USER, SIGHTENGINE_SECRET
+//   MODERATION_PROVIDER   "hive" | "none" (default none)
 //   HIVE_API_KEY
 //   CDN_ADMIN_URL, CDN_ADMIN_SECRET   to move objects into quarantine
 //   SUSPEND_ON_GORE       "false" to remove gore without holding the account
@@ -1410,9 +1409,6 @@ async function sweepFlags(
 
 async function classify(url: string, isVideo = false): Promise<Verdict | null> {
   try {
-    if (PROVIDER === "sightengine") {
-      return isVideo ? await classifySightengineVideo(url) : await classifySightengine(url);
-    }
     // Hive's sync task takes images; videos are left to the hash list.
     if (PROVIDER === "hive" && !isVideo) return await classifyHive(url);
   } catch (error) {
@@ -1503,127 +1499,6 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
     console.error("[sentinel] deepseek error", error);
     return null;
   }
-}
-
-// https://sightengine.com/docs — nudity-2.1 scores how sexual an image is,
-// face-age gives each face a probability of being under 18
-// (faces[].attributes.age.minor), and gore-2.0 scores graphic violence.
-// nudity-2.1 itself has no minor signal: reading one from it (as this used
-// to) meant child abuse could never be detected.
-//
-// Every model costs an operation per image (and per video frame), so the
-// first call asks only nudity and gore. Face age is asked in a second call
-// only when something sexual turned up, which is rare.
-const SIGHTENGINE_FIRST_PASS = "nudity-2.1,gore-2.0";
-const SIGHTENGINE_MODELS = "nudity-2.1,face-age,gore-2.0";
-const AGE_CHECK_FROM = 0.3;
-
-interface SightengineFrame {
-  nudity?: Record<string, unknown>;
-  faces?: { attributes?: { age?: { minor?: number } } }[];
-  gore?: { prob?: number };
-}
-
-/** One verdict from an image's result, or from every frame of a video. */
-function sightengineVerdict(frames: SightengineFrame[], raw: unknown): Verdict {
-  let sexual = 0, minor = 0, gore = 0;
-  for (const frame of frames) {
-    const n = frame.nudity ?? {};
-    const frameSexual = Math.max(
-      Number(n.sexual_activity ?? 0),
-      Number(n.sexual_display ?? 0),
-      Number(n.erotica ?? 0),
-    );
-    const frameMinor = Math.max(0, ...(frame.faces ?? []).map((f) => Number(f.attributes?.age?.minor ?? 0)));
-    // The pairing has to be in the same frame: a child in one shot and an
-    // adult scene in another is not the same thing.
-    if (frameSexual >= AGE_CHECK_FROM) minor = Math.max(minor, frameMinor);
-    sexual = Math.max(sexual, frameSexual);
-    gore = Math.max(gore, Number(frame.gore?.prob ?? 0));
-  }
-
-  // Sexual content plus a minor signal is the combination that matters.
-  if (sexual >= 0.5 && minor >= 0.5) {
-    return { category: "csam", score: Math.min(sexual, minor), action: "block", raw };
-  }
-  if (minor >= 0.75 && sexual >= 0.3) {
-    return { category: "csam", score: minor, action: "review", raw };
-  }
-  if (gore >= 0.8) return { category: "gore", score: gore, action: "block", raw };
-  if (gore >= 0.5) return { category: "gore", score: gore, action: "review", raw };
-  if (sexual >= 0.8) return { category: "adult", score: sexual, action: "review", raw };
-  return { category: "clean", score: 0, action: "none", raw };
-}
-
-async function classifySightengine(url: string): Promise<Verdict | null> {
-  const first = await sightengineImage(url, SIGHTENGINE_FIRST_PASS);
-  if (!first) return null;
-  if (!needsAgeCheck([first])) return sightengineVerdict([first], first);
-  const full = await sightengineImage(url, SIGHTENGINE_MODELS);
-  return full ? sightengineVerdict([full], full) : sightengineVerdict([first], first);
-}
-
-function needsAgeCheck(frames: SightengineFrame[]): boolean {
-  return frames.some((f) => {
-    const n = f.nudity ?? {};
-    return Math.max(Number(n.sexual_activity ?? 0), Number(n.sexual_display ?? 0), Number(n.erotica ?? 0))
-      >= AGE_CHECK_FROM;
-  });
-}
-
-async function sightengineImage(url: string, models: string): Promise<SightengineFrame | null> {
-  const user = Deno.env.get("SIGHTENGINE_USER");
-  const secret = Deno.env.get("SIGHTENGINE_SECRET");
-  if (!user || !secret) return null;
-
-  const endpoint = new URL("https://api.sightengine.com/1.0/check.json");
-  endpoint.searchParams.set("models", models);
-  endpoint.searchParams.set("url", url);
-  endpoint.searchParams.set("api_user", user);
-  endpoint.searchParams.set("api_secret", secret);
-
-  const response = await fetch(endpoint, { signal: AbortSignal.timeout(20_000) });
-  const data = await response.json();
-  if (data.status !== "success") {
-    console.error("[sentinel] sightengine", JSON.stringify(data.error ?? data).slice(0, 300));
-    return null;
-  }
-  return data as SightengineFrame;
-}
-
-// Short videos (up to a minute) are checked frame by frame in one call.
-// Longer ones fail here and fall back to "pending" / the review queue.
-async function classifySightengineVideo(url: string): Promise<Verdict | null> {
-  const first = await sightengineVideo(url, SIGHTENGINE_FIRST_PASS);
-  if (!first) return null;
-  if (!needsAgeCheck(first)) return sightengineVerdict(first, { frames: first.length });
-  const full = await sightengineVideo(url, SIGHTENGINE_MODELS);
-  const frames = full ?? first;
-  return sightengineVerdict(frames, { frames: frames.length });
-}
-
-async function sightengineVideo(url: string, models: string): Promise<SightengineFrame[] | null> {
-  const user = Deno.env.get("SIGHTENGINE_USER");
-  const secret = Deno.env.get("SIGHTENGINE_SECRET");
-  if (!user || !secret) return null;
-
-  const form = new FormData();
-  form.set("stream_url", url);
-  form.set("models", models);
-  form.set("api_user", user);
-  form.set("api_secret", secret);
-
-  const response = await fetch("https://api.sightengine.com/1.0/video/check-sync.json", {
-    method: "POST",
-    body: form,
-    signal: AbortSignal.timeout(60_000),
-  });
-  const data = await response.json();
-  if (data.status !== "success") {
-    console.error("[sentinel] sightengine video", JSON.stringify(data.error ?? data).slice(0, 300));
-    return null;
-  }
-  return (data.data?.frames ?? []) as SightengineFrame[];
 }
 
 // https://docs.thehive.ai — visual moderation returns per-class scores.

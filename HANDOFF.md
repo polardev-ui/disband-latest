@@ -166,7 +166,7 @@ Stripe has an MCP available in some sessions — check for a yearly price id.
 ### (c) Close the detection gap
 
 `MODERATION_PROVIDER=none`, so **new imagery is not detected** — only hash
-matches. Adapters for Sightengine and Hive are already written in `index.ts`.
+matches. A Hive adapter is written in `index.ts` (Sightengine was removed).
 Add a key, then backfill media (see §5). Also recommend Cloudflare's free
 **CSAM Scanning Tool** on the `cdn.disband.dev` zone.
 

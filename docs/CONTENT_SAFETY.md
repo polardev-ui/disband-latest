@@ -62,40 +62,28 @@ Right now media is hashed and checked against `banned_media_hashes`, which
 catches *known* material and anything you have seen before. It cannot
 recognise **new** imagery — that needs a classifier.
 
+For now the classifier is off (`MODERATION_PROVIDER=none`). Sightengine was
+tried and removed: its free allowance ran out within minutes and its sync
+video check stops at 60 seconds. Hive is the remaining adapter:
+
 ```bash
-supabase secrets set --project-ref mjqbrcabargylrimlafw \
-  MODERATION_PROVIDER=sightengine \
-  SIGHTENGINE_USER=... SIGHTENGINE_SECRET=...
-# or
 supabase secrets set --project-ref mjqbrcabargylrimlafw \
   MODERATION_PROVIDER=hive HIVE_API_KEY=...
 ```
 
-Adapters for both are in `index.ts` (`classifySightengine`,
-`classifySightengineVideo`, `classifyHive`). Thresholds live there too.
-
-Sightengine is called with `nudity-2.1,face-age,gore-2.0`. The minor signal
-comes from **face-age** (`faces[].attributes.age.minor`); nudity-2.1 has no
-minor field, and an earlier version that read one could never detect child
-abuse. Images use `check.json`; videos up to 60 s use `video/check-sync.json`
-and are judged frame by frame (sexual content and a minor in the *same*
-frame). Longer videos fail the sync call and stay `pending`.
-
 Hive has an explicit CSAM class but its sync task here only takes images.
+Thresholds live in `index.ts` (`classifyHive`).
 
-Also worth doing, and free: Cloudflare's **CSAM Scanning Tool**, enabled in the
-Cloudflare dashboard for the zone serving `cdn.disband.dev`. It hash-matches
-known material only (no new imagery, no video), so it is a backstop, not a
-replacement.
-
-Each model costs one operation per image or video frame, so the first call
-asks only nudity and gore; face-age is a second call made only when something
-sexual turned up.
+The stopgap is Cloudflare's free **CSAM Scanning Tool** (dashboard → zone
+`disband.dev` → Caching → Configuration → CSAM Scanning Tool). It fuzzy-hashes
+images that pass through Cloudflare's cache against NCMEC's list, blocks a
+match with a 451 and emails the operator. It catches *known* material only,
+does not look at video, and only sees what Cloudflare caches, so the CDN
+worker must send cacheable responses for it to help.
 
 The 5-hourly sweep only *hashes* the existing library. Sending it to the
 classifier is opt-in (`"mode": "media", "classifyBacklog": true`), a batch at
-a time: on the first night it ran by default it spent Sightengine's free daily
-allowance in two minutes.
+a time, so a paid provider's allowance is not spent on old files.
 
 ### Seconds after sending (migration 0196)
 
