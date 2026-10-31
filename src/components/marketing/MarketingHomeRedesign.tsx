@@ -10,7 +10,7 @@ const AUDIENCES = ["people", "friends", "team", "raid crew", "study group", "com
 
 const FEATURES = [
   { cmd: "spaces", text: "channels, roles, invites and moderation tools" },
-  { cmd: "messages", text: "replies, reactions, 50 MB uploads and private notes" },
+  { cmd: "messages", text: "replies, reactions, uploads up to 500 MB and private notes" },
   { cmd: "calls", text: "voice and video, one-to-one or group, with screen share" },
   { cmd: "everywhere", text: "windows · macos · linux · ios · android · web" },
 ];
@@ -197,10 +197,10 @@ function Reveal({ children, delay = 0, as: Tag = "div", className = "" }: {
 }
 
 /**
- * Eases mouse-wheel scrolling on the homepage: each wheel tick moves a target
- * and the page glides toward it. Trackpads and touch already scroll smoothly
- * (pixel deltas), so only line/notched-wheel input is taken over. Off for
- * reduced motion, and anchor links glide via CSS scroll-behavior.
+ * Eases wheel and trackpad scrolling on the homepage: each wheel event moves
+ * a target and the page glides toward it, slowing as it arrives. Touch
+ * screens keep native scrolling. Off for reduced motion; anchor links glide
+ * via CSS scroll-behavior.
  */
 function useSmoothScroll() {
   useEffect(() => {
@@ -220,13 +220,11 @@ function useSmoothScroll() {
         frame = 0;
         return;
       }
-      window.scrollTo({ top: y + d * 0.12, behavior: "instant" });
+      window.scrollTo({ top: y + d * 0.08, behavior: "instant" });
       frame = requestAnimationFrame(step);
     };
     const onWheel = (e: WheelEvent) => {
-      // Pixel-mode deltas under ~50 are trackpads; leave them native.
-      const notched = e.deltaMode !== 0 || Math.abs(e.deltaY) >= 50;
-      if (!notched || e.ctrlKey || e.deltaX !== 0 || e.defaultPrevented) return;
+      if (e.ctrlKey || e.defaultPrevented || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if ((e.target as HTMLElement | null)?.closest("[data-native-scroll]")) return;
       e.preventDefault();
       if (!frame) target = window.scrollY;
