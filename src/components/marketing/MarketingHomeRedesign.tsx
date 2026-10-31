@@ -21,6 +21,7 @@ const FEATURES = [
  * edges so the field reads as depth, not noise behind the text.
  */
 export function MarketingHomeRedesign() {
+  useSmoothScroll();
   return (
     <div className="relative min-h-screen bg-[#0e0f13] text-[#dbdee1]">
       <AsciiField />
@@ -193,4 +194,51 @@ function Reveal({ children, delay = 0, as: Tag = "div", className = "" }: {
       {children}
     </Tag>
   );
+}
+
+/**
+ * Eases mouse-wheel scrolling on the homepage: each wheel tick moves a target
+ * and the page glides toward it. Trackpads and touch already scroll smoothly
+ * (pixel deltas), so only line/notched-wheel input is taken over. Off for
+ * reduced motion, and anchor links glide via CSS scroll-behavior.
+ */
+function useSmoothScroll() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const prev = root.style.scrollBehavior;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    root.style.scrollBehavior = "smooth";
+
+    let target = window.scrollY;
+    let frame = 0;
+    const max = () => root.scrollHeight - window.innerHeight;
+    const step = () => {
+      const y = window.scrollY;
+      const d = target - y;
+      if (Math.abs(d) < 0.5) {
+        window.scrollTo({ top: target, behavior: "instant" });
+        frame = 0;
+        return;
+      }
+      window.scrollTo({ top: y + d * 0.12, behavior: "instant" });
+      frame = requestAnimationFrame(step);
+    };
+    const onWheel = (e: WheelEvent) => {
+      // Pixel-mode deltas under ~50 are trackpads; leave them native.
+      const notched = e.deltaMode !== 0 || Math.abs(e.deltaY) >= 50;
+      if (!notched || e.ctrlKey || e.deltaX !== 0 || e.defaultPrevented) return;
+      if ((e.target as HTMLElement | null)?.closest("[data-native-scroll]")) return;
+      e.preventDefault();
+      if (!frame) target = window.scrollY;
+      const delta = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+      target = Math.max(0, Math.min(max(), target + delta));
+      if (!frame) frame = requestAnimationFrame(step);
+    };
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      cancelAnimationFrame(frame);
+      root.style.scrollBehavior = prev;
+    };
+  }, []);
 }
