@@ -1,4 +1,4 @@
-import { getNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { getAutoGainControl, getInputVolume, getNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
 import { AI_NOISE_SAMPLE_RATE, createAiDenoiser, type AiDenoiser } from "@/lib/noise-suppression";
 
 export interface VoiceMixerOptions {
@@ -38,7 +38,8 @@ function openContext(rawMicTrack: MediaStreamTrack | null): { context: AudioCont
  * outbound MediaStreamTrack. WebRTC senders can keep the same track while
  * soundboard clips connect and disconnect underneath.
  *
- * Mic path: source → [AI denoiser] → rumble high-pass → gain → destination.
+ * Mic path: source → [AI denoiser] → rumble high-pass → input volume →
+ * limiter → destination.
  */
 export class VoiceMixer {
   readonly context: AudioContext;
@@ -48,7 +49,10 @@ export class VoiceMixer {
 
   private micSource: MediaStreamAudioSourceNode | null = null;
   private micGain: GainNode;
+  private limiter: DynamicsCompressorNode;
   private rumbleFilter: BiquadFilterNode;
+  private inputVolume = getInputVolume();
+  private micEnabled: boolean;
   private rawMicTrack: MediaStreamTrack | null = null;
   private soundNodes = new Set<AudioNode>();
   private noiseMode: NoiseSuppressionMode;
@@ -67,19 +71,30 @@ export class VoiceMixer {
     this.destination = this.context.createMediaStreamDestination();
     this.stream = this.destination.stream;
     this.audioTrack = this.stream.getAudioTracks()[0];
-    this.audioTrack.enabled = !(options.micMuted ?? false);
+    this.micEnabled = !(options.micMuted ?? false);
+    this.audioTrack.enabled = this.micEnabled;
     // Tell the encoder this is speech, not music.
     try { this.audioTrack.contentHint = "speech"; } catch { }
 
     this.micGain = this.context.createGain();
-    this.micGain.gain.value = 1;
+    this.micGain.gain.value = this.micEnabled ? this.inputVolume / 100 : 0;
+
+    // Catches peaks only, so a mic boosted past 100% doesn't clip on loud
+    // words. Speech below the threshold passes through untouched.
+    this.limiter = this.context.createDynamicsCompressor();
+    this.limiter.threshold.value = -3;
+    this.limiter.knee.value = 3;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.002;
+    this.limiter.release.value = 0.15;
 
     // Only trims desk thumps and hum below the voice band.
     this.rumbleFilter = this.context.createBiquadFilter();
     this.rumbleFilter.type = "highpass";
     this.rumbleFilter.Q.value = 0.5;
     this.rumbleFilter.connect(this.micGain);
-    this.micGain.connect(this.destination);
+    this.micGain.connect(this.limiter);
+    this.limiter.connect(this.destination);
 
     this.noiseMode = options.noiseMode ?? getNoiseSuppressionMode();
 
@@ -133,15 +148,38 @@ export class VoiceMixer {
     const track = this.rawMicTrack;
     if (!track || track.readyState !== "live") return;
     try {
-      await track.applyConstraints({ ...track.getConstraints(), noiseSuppression: enabled, echoCancellation: true, autoGainControl: true });
+      await track.applyConstraints({
+        ...track.getConstraints(),
+        noiseSuppression: enabled,
+        echoCancellation: true,
+        autoGainControl: getAutoGainControl(),
+      });
     } catch {
       // Some devices refuse live constraint changes; the next call picks it up.
     }
   }
 
   setMicrophoneEnabled(enabled: boolean) {
+    this.micEnabled = enabled;
     this.audioTrack.enabled = enabled;
-    this.micGain.gain.value = enabled ? 1 : 0;
+    this.micGain.gain.value = enabled ? this.inputVolume / 100 : 0;
+  }
+
+  /** 0–200 (%). Applies straight away, even mid-call. */
+  setInputVolume(volume: number) {
+    this.inputVolume = volume;
+    if (this.micEnabled) this.micGain.gain.setTargetAtTime(volume / 100, this.context.currentTime, 0.02);
+  }
+
+  /** Turns the browser's gain control on or off for the live mic. */
+  async setAutoGainControl(enabled: boolean) {
+    const track = this.rawMicTrack;
+    if (!track || track.readyState !== "live") return;
+    try {
+      await track.applyConstraints({ ...track.getConstraints(), autoGainControl: enabled });
+    } catch {
+      // Some devices refuse live constraint changes; the next call picks it up.
+    }
   }
 
   playSound(url: string, volume = 1): HTMLAudioElement | null {
@@ -186,6 +224,7 @@ export class VoiceMixer {
     this.denoiser?.destroy();
     this.denoiser = null;
     this.micGain.disconnect();
+    this.limiter.disconnect();
     this.rumbleFilter.disconnect();
     this.destination.disconnect();
     try { this.rawMicTrack?.stop(); } catch {} 
@@ -219,6 +258,14 @@ export function playVoiceSoundboardSound(url: string, volume = 1): HTMLAudioElem
 
 export function setVoiceMixerMicrophoneEnabled(enabled: boolean) {
   activeVoiceMixer?.setMicrophoneEnabled(enabled);
+}
+
+export function setVoiceMixerInputVolume(volume: number) {
+  activeVoiceMixer?.setInputVolume(volume);
+}
+
+export function setVoiceMixerAutoGainControl(enabled: boolean) {
+  void activeVoiceMixer?.setAutoGainControl(enabled);
 }
 
 /** Applies a new noise suppression choice to the call in progress, if any. */

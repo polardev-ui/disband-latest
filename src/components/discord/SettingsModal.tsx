@@ -23,8 +23,17 @@ import { MicTest } from "./settings/MicTest";
 import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { MyAccountPanel } from "./settings/MyAccountPanel";
-import { getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
-import { setVoiceMixerNoiseMode } from "@/lib/voice-mixer";
+import {
+  getAutoGainControl,
+  getInputVolume,
+  getNoiseSuppressionMode,
+  MAX_INPUT_VOLUME,
+  setAutoGainControl,
+  setInputVolume,
+  setNoiseSuppressionMode,
+  type NoiseSuppressionMode,
+} from "@/lib/audio-settings";
+import { setVoiceMixerAutoGainControl, setVoiceMixerInputVolume, setVoiceMixerNoiseMode } from "@/lib/voice-mixer";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import {
@@ -350,6 +359,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
   const [audioInput, setAudioInput] = useState("");
   const [noiseMode, setNoiseModeState] = useState<NoiseSuppressionMode>(getNoiseSuppressionMode());
+  const [inputVolume, setInputVolumeState] = useState(getInputVolume);
+  const [autoGain, setAutoGainState] = useState(getAutoGainControl);
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
@@ -1816,6 +1827,48 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         ))}
                       </select>
                     </SettingRow>
+                    <SettingRow
+                      label="Input volume"
+                      description="If people say you're quiet, turn this up. Above 100% boosts your mic."
+                      stacked
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={0}
+                          max={MAX_INPUT_VOLUME}
+                          step={1}
+                          value={inputVolume}
+                          onChange={(e) => {
+                            const next = Number.parseInt(e.target.value, 10);
+                            setInputVolumeState(next);
+                            setInputVolume(next);
+                            setVoiceMixerInputVolume(next);
+                          }}
+                          className="flex-1 accent-brand"
+                          aria-label="Input volume"
+                        />
+                        <span className="w-12 shrink-0 text-right text-[14px] tabular-nums text-text-muted">
+                          {inputVolume}%
+                        </span>
+                      </div>
+                    </SettingRow>
+                    <SettingRow
+                      label="Automatic gain control"
+                      description="Evens out how loud you are. If you still sound quiet, try turning this off: on Windows it can lower your microphone level in system settings."
+                      htmlFor="voice-auto-gain"
+                    >
+                      <Toggle
+                        id="voice-auto-gain"
+                        label="Automatic gain control"
+                        checked={autoGain}
+                        onChange={(next) => {
+                          setAutoGainState(next);
+                          setAutoGainControl(next);
+                          setVoiceMixerAutoGainControl(next);
+                        }}
+                      />
+                    </SettingRow>
                     <SettingRow label="Output device" stacked>
                       <select
                         value={audioOutput}
@@ -1890,7 +1943,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       description="Speak and watch the meter move."
                       stacked
                     >
-                      <MicTest deviceId={audioInput} noiseMode={noiseMode} />
+                      <MicTest deviceId={audioInput} noiseMode={noiseMode} inputVolume={inputVolume} autoGain={autoGain} />
                     </SettingRow>
                   </SettingsSection>
 

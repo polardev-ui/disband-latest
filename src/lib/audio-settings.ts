@@ -56,14 +56,15 @@ export async function applyAudioOutputToElement(
 
 export function buildAudioConstraints(): MediaTrackConstraints {
   const deviceId = getPreferredAudioInputId();
-  // Echo cancellation and gain control stay on in every mode: without them
-  // speakers feed back into the call and quiet mics are barely audible.
+  // Echo cancellation stays on in every mode: without it speakers feed back
+  // into the call. Gain control is on unless turned off in Voice & Video;
+  // the input volume slider (VoiceMixer) is the manual alternative.
   // The browser's own suppressor only runs in Standard; the AI filter does
   // the work in AI mode and stacking both muffles voices.
   return {
     ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
     echoCancellation: true,
-    autoGainControl: true,
+    autoGainControl: getAutoGainControl(),
     noiseSuppression: getNoiseSuppressionMode() === "standard",
     channelCount: { ideal: 1 },
     sampleRate: { ideal: 48_000 },
@@ -116,6 +117,56 @@ export function setNoiseSuppressionMode(mode: NoiseSuppressionMode) {
   try {
     localStorage.setItem(NOISE_MODE_KEY, mode);
     localStorage.setItem(NOISE_CANCELLATION_KEY, mode !== "off" ? "true" : "false");
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+const INPUT_VOLUME_KEY = "disband:input-volume";
+const AUTO_GAIN_KEY = "disband:auto-gain-control";
+
+export const MAX_INPUT_VOLUME = 200;
+
+/** Microphone volume, 0–200 (%), applied in VoiceMixer before sending. */
+export function getInputVolume(): number {
+  if (typeof window === "undefined") return 100;
+  try {
+    const value = Number(localStorage.getItem(INPUT_VOLUME_KEY));
+    if (localStorage.getItem(INPUT_VOLUME_KEY) !== null && Number.isFinite(value)) {
+      return Math.min(MAX_INPUT_VOLUME, Math.max(0, value));
+    }
+  } catch {
+    // Storage blocked: fall through to the default.
+  }
+  return 100;
+}
+
+export function setInputVolume(volume: number) {
+  try {
+    localStorage.setItem(INPUT_VOLUME_KEY, String(Math.round(Math.min(MAX_INPUT_VOLUME, Math.max(0, volume)))));
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+/**
+ * The browser's automatic gain control. On Windows, Chromium (and so the
+ * desktop app's WebView2) does it partly by moving the system microphone
+ * level, which can leave a mic far too quiet; turning it off keeps the level
+ * where it's set and leaves loudness to the input volume slider.
+ */
+export function getAutoGainControl(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(AUTO_GAIN_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+export function setAutoGainControl(enabled: boolean) {
+  try {
+    localStorage.setItem(AUTO_GAIN_KEY, enabled ? "true" : "false");
   } catch {
     // Ignore storage errors.
   }
