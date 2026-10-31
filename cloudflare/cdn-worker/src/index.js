@@ -22,6 +22,54 @@ function maxUploadBytes(env) {
   return (Number.isFinite(mb) && mb > 0 ? mb : 100) * 1024 * 1024;
 }
 
+const MB = 1024 * 1024;
+
+/**
+ * What each plan may upload, matching ENTITLEMENTS in src/lib/subscription.ts.
+ * A file bigger than one request allows (`maxUploadBytes`) goes up in parts
+ * through /v1/uploads, so Aero's 500 MB is real even though Cloudflare caps a
+ * single request body at 100 MB.
+ */
+const PLAN_LIMITS = {
+  free: { uploadBytes: 50 * MB, storageBytes: 1024 * MB, objects: 500 },
+  lite: { uploadBytes: 100 * MB, storageBytes: 5 * 1024 * MB, objects: 2000 },
+  aero: { uploadBytes: 500 * MB, storageBytes: 20 * 1024 * MB, objects: 5000 },
+};
+
+// Every part but the last must be the same size (an R2 rule).
+const PART_BYTES = 50 * MB;
+const MAX_PARTS = Math.ceil(PLAN_LIMITS.aero.uploadBytes / PART_BYTES);
+
+/** The caller's plan, asked of Supabase with their own token. Free on any doubt. */
+async function planLimitsFor(env, token) {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/get_entitlement`, {
+      method: "POST",
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY,
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    if (!res.ok) return PLAN_LIMITS.free;
+    const plan = (await res.json())?.plan;
+    return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  } catch {
+    return PLAN_LIMITS.free;
+  }
+}
+
+function tooLarge(limits, env) {
+  const mb = Math.round(limits.uploadBytes / MB);
+  const upsell = limits === PLAN_LIMITS.aero ? "" : " Aero raises it to 500 MB.";
+  return json({ error: `That file is too large. The maximum is ${mb} MB.${upsell}` }, 413, env);
+}
+
+function reserveBody(bytes, limits) {
+  return JSON.stringify({ bytes, maxBytes: limits.storageBytes, maxObjects: limits.objects });
+}
+
 /**
  * Types a browser may be handed back as-is.
  *
@@ -94,6 +142,12 @@ export default {
     // off someone's site) straight into R2 so the app stores its own copy
     // instead of hotlinking a host it doesn't control. Same auth, rate
     // limit, quota, hash-ban, and asset-registration contract as `upload`.
+    // Uploads bigger than one request allows: start, send parts, finish.
+    if (request.method === "POST" && pathname === "/v1/uploads") return createMultipart(request, env);
+    if (request.method === "PUT" && pathname === "/v1/uploads/part") return uploadPart(request, env, url);
+    if (request.method === "POST" && pathname === "/v1/uploads/complete") return completeMultipart(request, env);
+    if (request.method === "POST" && pathname === "/v1/uploads/abort") return abortMultipart(request, env);
+
     if (request.method === "POST" && pathname === "/v1/images/import") {
       return importFromUrl(request, env);
     }
@@ -157,8 +211,14 @@ export class MediaQuota {
       return Response.json({ ok: true });
     }
 
-    const maxBytes = Math.max(1, Number(this.env.MAX_USER_STORAGE_MB ?? 1024)) * 1024 * 1024;
-    const maxObjects = Math.max(1, Number(this.env.MAX_USER_OBJECTS ?? 500));
+    // The caller passes the uploader's plan caps; the env values are the
+    // fallback for callers that don't (imports, older code paths).
+    const maxBytes = Number.isSafeInteger(body?.maxBytes) && body.maxBytes > 0
+      ? body.maxBytes
+      : Math.max(1, Number(this.env.MAX_USER_STORAGE_MB ?? 1024)) * 1024 * 1024;
+    const maxObjects = Number.isSafeInteger(body?.maxObjects) && body.maxObjects > 0
+      ? body.maxObjects
+      : Math.max(1, Number(this.env.MAX_USER_OBJECTS ?? 500));
     let allowed = false;
     await this.ctx.storage.transaction(async (txn) => {
       const usage = (await txn.get("usage")) ?? { bytes: 0, objects: 0 };
@@ -180,8 +240,14 @@ async function upload(request, env) {
   const uploadLimit = await env.UPLOAD_RATE_LIMITER.limit({ key: auth.userId });
   if (!uploadLimit.success) return json({ error: "Too many uploads. Try again shortly." }, 429, env);
 
-  const limit = maxUploadBytes(env);
+  const limits = await planLimitsFor(env, auth.token);
+  // One request can't carry more than the platform body cap; bigger files on
+  // a bigger plan come through /v1/uploads in parts.
+  const limit = Math.min(limits.uploadBytes, maxUploadBytes(env));
   const limitMb = Math.round(limit / (1024 * 1024));
+  const overLimit = () => limit < limits.uploadBytes
+    ? json({ error: `Files over ${limitMb} MB upload in parts. Update Disband and try again.` }, 413, env)
+    : tooLarge(limits, env);
 
   const contentLength = request.headers.get("content-length");
   if (!contentLength) {
@@ -192,7 +258,7 @@ async function upload(request, env) {
     return json({ error: "Invalid Content-Length header." }, 400, env);
   }
   if (declared > limit) {
-    return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
+    return overLimit();
   }
 
   let form;
@@ -207,14 +273,14 @@ async function upload(request, env) {
     return json({ error: "No file field in the form." }, 400, env);
   }
   if (file.size > limit) {
-    return json({ error: `That file is too large. The maximum is ${limitMb} MB.` }, 413, env);
+    return overLimit();
   }
 
   const quotaId = env.MEDIA_QUOTA.idFromName(auth.userId);
   const quota = env.MEDIA_QUOTA.get(quotaId);
   const reservation = await quota.fetch("https://quota/reserve", {
     method: "POST",
-    body: JSON.stringify({ bytes: file.size }),
+    body: reserveBody(file.size, limits),
   });
   if (!reservation.ok) {
     return json({ error: "Your media storage quota has been reached." }, 429, env);
@@ -271,6 +337,164 @@ async function upload(request, env) {
     }
     throw error;
   }
+}
+
+/* ------------------------------------------------------- uploads in parts */
+
+/**
+ * Large uploads. The client starts one (POST /v1/uploads with name, type and
+ * size), sends PART_BYTES pieces in order (PUT /v1/uploads/part), then
+ * finishes (POST /v1/uploads/complete). Finishing applies every check a
+ * single upload gets: the plan limit on the real size, the type sniff, the
+ * storage quota, the banned-hash list, and asset registration for scanning.
+ *
+ * Nothing is reserved until the end, so an abandoned upload never holds
+ * quota; R2 discards unfinished uploads after a week on its own.
+ */
+function ownsKey(auth, key) {
+  return typeof key === "string"
+    && key.startsWith(`${auth.userId}/`)
+    && /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.[a-z0-9]+$/i.test(key);
+}
+
+async function createMultipart(request, env) {
+  const auth = await requireUser(request, env);
+  if (auth.error) return json({ error: auth.error }, auth.status, env);
+  const rate = await env.UPLOAD_RATE_LIMITER.limit({ key: auth.userId });
+  if (!rate.success) return json({ error: "Too many uploads. Try again shortly." }, 429, env);
+
+  const body = await request.json().catch(() => ({}));
+  const size = Number(body.size);
+  if (!Number.isSafeInteger(size) || size <= 0) return json({ error: "Invalid file size." }, 400, env);
+  const limits = await planLimitsFor(env, auth.token);
+  if (size > limits.uploadBytes) return tooLarge(limits, env);
+
+  const type = String(body.type || "application/octet-stream").toLowerCase().slice(0, 100);
+  const name = String(body.name ?? "").slice(0, 200);
+  const key = `${auth.userId}/${crypto.randomUUID()}.${extensionOf(name, type)}`;
+  const upload = await env.MEDIA.createMultipartUpload(key, {
+    httpMetadata: {
+      contentType: storageTypeFor(type),
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+    customMetadata: {
+      uploadedBy: auth.userId,
+      uploadedAt: new Date().toISOString(),
+      originalName: name,
+      declaredType: type,
+    },
+  });
+  return json({ key, uploadId: upload.uploadId, partBytes: PART_BYTES }, 200, env);
+}
+
+async function uploadPart(request, env, url) {
+  const auth = await requireUser(request, env);
+  if (auth.error) return json({ error: auth.error }, auth.status, env);
+
+  const key = url.searchParams.get("key");
+  const uploadId = url.searchParams.get("uploadId");
+  const partNumber = Number(url.searchParams.get("part"));
+  if (!ownsKey(auth, key) || !uploadId) return json({ error: "Unknown upload." }, 404, env);
+  if (!Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > MAX_PARTS) {
+    return json({ error: "Invalid part number." }, 400, env);
+  }
+  const length = Number(request.headers.get("content-length"));
+  if (!Number.isSafeInteger(length) || length <= 0 || length > PART_BYTES) {
+    return json({ error: "Invalid part size." }, 400, env);
+  }
+
+  try {
+    const part = await env.MEDIA.resumeMultipartUpload(key, uploadId).uploadPart(partNumber, request.body);
+    return json({ partNumber: part.partNumber, etag: part.etag }, 200, env);
+  } catch {
+    return json({ error: "That upload has expired. Try again." }, 404, env);
+  }
+}
+
+async function completeMultipart(request, env) {
+  const auth = await requireUser(request, env);
+  if (auth.error) return json({ error: auth.error }, auth.status, env);
+
+  const body = await request.json().catch(() => ({}));
+  const { key, uploadId } = body;
+  const parts = Array.isArray(body.parts) ? body.parts : [];
+  if (!ownsKey(auth, key) || typeof uploadId !== "string") return json({ error: "Unknown upload." }, 404, env);
+  if (parts.length === 0 || parts.length > MAX_PARTS
+      || !parts.every((p) => Number.isSafeInteger(p?.partNumber) && typeof p?.etag === "string")) {
+    return json({ error: "Invalid parts." }, 400, env);
+  }
+
+  let stored;
+  try {
+    stored = await env.MEDIA.resumeMultipartUpload(key, uploadId).complete(
+      parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
+    );
+  } catch {
+    return json({ error: "That upload couldn't be finished. Try again." }, 400, env);
+  }
+
+  const limits = await planLimitsFor(env, auth.token);
+  const size = stored.size;
+  if (size > limits.uploadBytes) {
+    await env.MEDIA.delete(key);
+    return tooLarge(limits, env);
+  }
+
+  // The type was only declared at the start; trust the bytes, as `upload`
+  // does. A mismatch is kept as a plain download under a fresh key.
+  let finalKey = key;
+  const head = await env.MEDIA.get(key, { range: { offset: 0, length: 16 } });
+  const declaredType = stored.customMetadata?.declaredType ?? "application/octet-stream";
+  const sniffed = head ? sniffBytes(new Uint8Array(await new Response(head.body).arrayBuffer())) : null;
+  let contentType = stored.httpMetadata?.contentType ?? "application/octet-stream";
+  if (sniffed !== declaredType && contentType !== "application/octet-stream") {
+    finalKey = `${auth.userId}/${crypto.randomUUID()}.${extensionOf(stored.customMetadata?.originalName ?? "", "application/octet-stream")}`;
+    const source = await env.MEDIA.get(key);
+    await env.MEDIA.put(finalKey, source.body, {
+      httpMetadata: { contentType: "application/octet-stream", cacheControl: "public, max-age=31536000, immutable" },
+      customMetadata: stored.customMetadata,
+    });
+    await env.MEDIA.delete(key);
+    contentType = "application/octet-stream";
+  }
+
+  const quota = env.MEDIA_QUOTA.get(env.MEDIA_QUOTA.idFromName(auth.userId));
+  const reservation = await quota.fetch("https://quota/reserve", { method: "POST", body: reserveBody(size, limits) });
+  if (!reservation.ok) {
+    await env.MEDIA.delete(finalKey);
+    return json({ error: "Your media storage quota has been reached." }, 429, env);
+  }
+
+  try {
+    const object = await env.MEDIA.get(finalKey);
+    const digest = new crypto.DigestStream("SHA-256");
+    await object.body.pipeTo(digest);
+    const sha256 = hex(await digest.digest);
+    if (await isHashBanned(env, sha256)) {
+      await env.MEDIA.delete(finalKey);
+      await quota.fetch("https://quota/rollback", { method: "POST", body: JSON.stringify({ bytes: size }) })
+        .catch(() => undefined);
+      await recordBlockedUpload(env, sha256, auth.userId);
+      return json({ error: "That file can't be uploaded. If you believe this is a mistake, contact support." }, 451, env);
+    }
+    const url = `${env.PUBLIC_BASE}/v1/images/${finalKey}`;
+    await registerAsset(env, { url, key: finalKey, sha256, bytes: size, contentType, userId: auth.userId });
+    return json({ url, key: finalKey }, 200, env);
+  } catch (error) {
+    await env.MEDIA.delete(finalKey).catch(() => undefined);
+    await quota.fetch("https://quota/rollback", { method: "POST", body: JSON.stringify({ bytes: size }) })
+      .catch(() => undefined);
+    throw error;
+  }
+}
+
+async function abortMultipart(request, env) {
+  const auth = await requireUser(request, env);
+  if (auth.error) return json({ error: auth.error }, auth.status, env);
+  const { key, uploadId } = await request.json().catch(() => ({}));
+  if (!ownsKey(auth, key) || typeof uploadId !== "string") return json({ error: "Unknown upload." }, 404, env);
+  await env.MEDIA.resumeMultipartUpload(key, uploadId).abort().catch(() => undefined);
+  return json({ ok: true }, 200, env);
 }
 
 function hex(buffer) {
@@ -580,7 +804,10 @@ async function quarantine(request, env) {
 }
 
 async function sniffInlineType(file) {
-  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  return sniffBytes(new Uint8Array(await file.slice(0, 16).arrayBuffer()));
+}
+
+function sniffBytes(bytes) {
   const ascii = String.fromCharCode(...bytes);
   if (bytes[0] === 0x89 && ascii.slice(1, 4) === "PNG") return "image/png";
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
@@ -1146,7 +1373,7 @@ async function requireUser(request, env) {
     if (!res.ok) return { error: "Session expired — sign in again.", status: 401 };
     const user = await res.json();
     if (!user?.id) return { error: "Invalid session.", status: 401 };
-    return { userId: user.id };
+    return { userId: user.id, token };
   } catch {
     return { error: "Could not verify your session.", status: 503 };
   }
@@ -1166,7 +1393,7 @@ function constantTimeEqual(left, right) {
 function corsHeaders(env) {
   return {
     "access-control-allow-origin": env.ALLOWED_ORIGIN ?? "*",
-    "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
+    "access-control-allow-methods": "GET, HEAD, POST, PUT, OPTIONS",
     "access-control-allow-headers": "authorization, content-type, x-migration-secret",
     "access-control-max-age": "86400",
   };

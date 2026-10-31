@@ -25,20 +25,23 @@ class DigestStream extends WritableStream {
 
 function fixture() {
   const objects = new Map();
+  const uploads = new Map();
   const records = [];
   const blocked = new Set();
   const usage = { bytes: 0, objects: 0 };
+  const lastReserve = {};
   const media = {
     async put(key, body, options = {}) {
       const bytes = typeof body === 'string' ? Buffer.from(body) :
         Buffer.from(await new Response(body).arrayBuffer());
       objects.set(key, { bytes, options });
     },
-    async get(key) {
+    async get(key, options = {}) {
       const found = objects.get(key);
       if (!found) return null;
+      const range = options.range?.length ? found.bytes.subarray(options.range.offset, options.range.offset + options.range.length) : found.bytes;
       return {
-        body: new Blob([found.bytes]).stream(),
+        body: new Blob([range]).stream(),
         size: found.bytes.length,
         httpEtag: '"test-etag"',
         customMetadata: found.options.customMetadata ?? {},
@@ -49,12 +52,35 @@ function fixture() {
       };
     },
     async delete(key) { objects.delete(key); },
+    async createMultipartUpload(key, options = {}) {
+      const id = `mpu-${uploads.size + 1}`;
+      uploads.set(id, { key, options, parts: new Map() });
+      return { uploadId: id };
+    },
+    resumeMultipartUpload(key, uploadId) {
+      const upload = uploads.get(uploadId);
+      if (!upload || upload.key !== key) throw new Error('no such upload');
+      return {
+        async uploadPart(partNumber, body) {
+          upload.parts.set(partNumber, Buffer.from(await new Response(body).arrayBuffer()));
+          return { partNumber, etag: `etag-${partNumber}` };
+        },
+        async complete(parts) {
+          const bytes = Buffer.concat(parts.map((p) => upload.parts.get(p.partNumber)));
+          objects.set(key, { bytes, options: upload.options });
+          uploads.delete(uploadId);
+          return { size: bytes.length, customMetadata: upload.options.customMetadata, httpMetadata: upload.options.httpMetadata };
+        },
+        async abort() { uploads.delete(uploadId); },
+      };
+    },
     async head(key) { return objects.has(key) ? {} : null; },
   };
   const quota = {
     idFromName(name) { assert.equal(name, USER); return name; },
     get() { return { async fetch(request, init) {
-      const { bytes } = JSON.parse(init.body);
+      const { bytes, maxBytes } = JSON.parse(init.body);
+      lastReserve.maxBytes = maxBytes;
       if (new URL(request).pathname === '/rollback') {
         usage.bytes -= bytes;
         usage.objects -= 1;
@@ -74,7 +100,7 @@ function fixture() {
     ADMIN_SECRET: 'unit-admin-secret', MAX_UPLOAD_MB: '50', MAX_USER_STORAGE_MB: '1024',
     MAX_USER_OBJECTS: '500', ALLOWED_ORIGIN: '*',
   };
-  return { env, objects, records, blocked, usage };
+  return { env, objects, uploads, records, blocked, usage, lastReserve };
 }
 
 function uploadRequest(bytes = PNG) {
@@ -151,6 +177,77 @@ test('CDN Worker retains quotas and user keys while registering and quarantining
     assert.equal(state.usage.objects, 1);
     assert.equal(state.records.length, 1);
     assert.equal(state.objects.size, 1);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldDigest === undefined) delete globalThis.crypto.DigestStream;
+    else globalThis.crypto.DigestStream = oldDigest;
+  }
+});
+
+test('CDN Worker applies plan limits and accepts large uploads in parts', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldDigest = globalThis.crypto.DigestStream;
+  globalThis.crypto.DigestStream = DigestStream;
+  const state = fixture();
+  let plan = 'free';
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) return Response.json({ id: USER });
+    if (url.endsWith('/rest/v1/rpc/get_entitlement')) return Response.json({ plan });
+    if (url.includes('/rest/v1/banned_media_hashes')) return Response.json([]);
+    if (url.includes('/rest/v1/media_assets')) {
+      state.records.push(JSON.parse(init.body));
+      return new Response(null, { status: 201 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const auth = { authorization: 'Bearer test-token' };
+  const start = (size) => worker.fetch(new Request(`${BASE}/v1/uploads`, {
+    method: 'POST', headers: auth, body: JSON.stringify({ name: 'clip.mp4', type: 'video/mp4', size }),
+  }), state.env);
+  try {
+    // Free stops at 50 MB and says how to get more.
+    const refused = await start(60 * 1024 * 1024);
+    assert.equal(refused.status, 413);
+    assert.match((await refused.json()).error, /maximum is 50 MB\. Aero raises it to 500 MB/);
+
+    // Aero may start a 300 MB upload.
+    plan = 'aero';
+    const started = await start(300 * 1024 * 1024);
+    assert.equal(started.status, 200);
+    const { key, uploadId, partBytes } = await started.json();
+    assert.equal(partBytes, 50 * 1024 * 1024);
+    assert.ok(key.startsWith(`${USER}/`));
+
+    // Someone else's key is refused.
+    const foreign = await worker.fetch(new Request(
+      `${BASE}/v1/uploads/part?key=${encodeURIComponent('ffffffff-ffff-4fff-8fff-ffffffffffff/x.mp4')}&uploadId=${uploadId}&part=1`,
+      { method: 'PUT', headers: { ...auth, 'content-length': '4' }, body: 'abcd' },
+    ), state.env);
+    assert.equal(foreign.status, 404);
+
+    // Two small parts stand in for the real 50 MB ones.
+    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(20, 1)]);
+    const pieces = [mp4.subarray(0, 16), mp4.subarray(16)];
+    const parts = [];
+    for (let i = 0; i < pieces.length; i++) {
+      const res = await worker.fetch(new Request(
+        `${BASE}/v1/uploads/part?key=${encodeURIComponent(key)}&uploadId=${uploadId}&part=${i + 1}`,
+        { method: 'PUT', headers: { ...auth, 'content-length': String(pieces[i].length) }, body: pieces[i] },
+      ), state.env);
+      assert.equal(res.status, 200);
+      parts.push(await res.json());
+    }
+    const done = await worker.fetch(new Request(`${BASE}/v1/uploads/complete`, {
+      method: 'POST', headers: auth, body: JSON.stringify({ key, uploadId, parts }),
+    }), state.env);
+    assert.equal(done.status, 200);
+    const out = await done.json();
+    assert.equal(out.key, key);
+    assert.deepEqual(state.objects.get(key).bytes, mp4);
+    assert.equal(state.records.at(-1).sha256, createHash('sha256').update(mp4).digest('hex'));
+    // Aero's storage cap travels with the reservation.
+    assert.equal(state.lastReserve.maxBytes, 20 * 1024 * 1024 * 1024);
   } finally {
     globalThis.fetch = oldFetch;
     if (oldDigest === undefined) delete globalThis.crypto.DigestStream;
