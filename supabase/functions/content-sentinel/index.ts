@@ -91,6 +91,9 @@ Deno.serve(async (req) => {
   const mode = (body.mode as string) ?? "sweep";
   const dryRun = body.dryRun === true;
   const mediaLimit = Number(body.limit ?? DEFAULT_MEDIA_BATCH);
+  // The scheduled sweep only hashes the backlog; sending ~20,000 old files to
+  // the paid classifier is opt-in, a batch at a time.
+  const classifyBacklog = body.classifyBacklog === true;
   const full = body.full === true;
   // A backfill over every historical row is more than one invocation's CPU
   // budget, so it is driven in chunks: each call scans `maxRows` starting at
@@ -142,7 +145,7 @@ Deno.serve(async (req) => {
       nextOffset = t.nextOffset;
     }
     if (mode === "sweep" || mode === "media") {
-      const m = await sweepMedia(supabase, mediaLimit, dryRun, findings);
+      const m = await sweepMedia(supabase, mediaLimit, dryRun, findings, classifyBacklog);
       totals.media += m.scanned; totals.flags += m.flags;
       totals.actions += m.actions; totals.held += m.held;
     }
@@ -331,6 +334,7 @@ async function sweepMedia(
   limit: number,
   dryRun: boolean,
   findings: Finding[],
+  classifyBacklog: boolean,
 ) {
   // Everything referenced anywhere that we have not settled yet. `media_assets`
   // remembers verdicts, so each file is fetched once no matter how many
@@ -371,7 +375,7 @@ async function sweepMedia(
 
   for (const [url, meta] of queue) {
     scanned++;
-    const result = await scanMediaUrl(supabase, url, meta, dryRun, findings, false);
+    const result = await scanMediaUrl(supabase, url, meta, dryRun, findings, false, classifyBacklog);
     flags += result.flags; actions += result.actions; held += result.held;
   }
 
@@ -407,6 +411,7 @@ async function scanMediaUrl(
   dryRun: boolean,
   findings: Finding[],
   instant: boolean,
+  useClassifier = true,
 ): Promise<{ flags: number; actions: number; held: number }> {
   const none = { flags: 0, actions: 0, held: 0 };
   try {
@@ -431,7 +436,7 @@ async function scanMediaUrl(
       : null;
 
     // 2. Otherwise ask the classifier, if one is configured.
-    if (!verdict && PROVIDER !== "none") {
+    if (!verdict && PROVIDER !== "none" && useClassifier) {
       verdict = await classify(url, isVideo);
     }
     if (instant && verdict?.category === "csam" && verdict.action === "review") {
@@ -1472,7 +1477,13 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
 // (faces[].attributes.age.minor), and gore-2.0 scores graphic violence.
 // nudity-2.1 itself has no minor signal: reading one from it (as this used
 // to) meant child abuse could never be detected.
+//
+// Every model costs an operation per image (and per video frame), so the
+// first call asks only nudity and gore. Face age is asked in a second call
+// only when something sexual turned up, which is rare.
+const SIGHTENGINE_FIRST_PASS = "nudity-2.1,gore-2.0";
 const SIGHTENGINE_MODELS = "nudity-2.1,face-age,gore-2.0";
+const AGE_CHECK_FROM = 0.3;
 
 interface SightengineFrame {
   nudity?: Record<string, unknown>;
@@ -1493,7 +1504,7 @@ function sightengineVerdict(frames: SightengineFrame[], raw: unknown): Verdict {
     const frameMinor = Math.max(0, ...(frame.faces ?? []).map((f) => Number(f.attributes?.age?.minor ?? 0)));
     // The pairing has to be in the same frame: a child in one shot and an
     // adult scene in another is not the same thing.
-    if (frameSexual >= 0.3) minor = Math.max(minor, frameMinor);
+    if (frameSexual >= AGE_CHECK_FROM) minor = Math.max(minor, frameMinor);
     sexual = Math.max(sexual, frameSexual);
     gore = Math.max(gore, Number(frame.gore?.prob ?? 0));
   }
@@ -1512,12 +1523,28 @@ function sightengineVerdict(frames: SightengineFrame[], raw: unknown): Verdict {
 }
 
 async function classifySightengine(url: string): Promise<Verdict | null> {
+  const first = await sightengineImage(url, SIGHTENGINE_FIRST_PASS);
+  if (!first) return null;
+  if (!needsAgeCheck([first])) return sightengineVerdict([first], first);
+  const full = await sightengineImage(url, SIGHTENGINE_MODELS);
+  return full ? sightengineVerdict([full], full) : sightengineVerdict([first], first);
+}
+
+function needsAgeCheck(frames: SightengineFrame[]): boolean {
+  return frames.some((f) => {
+    const n = f.nudity ?? {};
+    return Math.max(Number(n.sexual_activity ?? 0), Number(n.sexual_display ?? 0), Number(n.erotica ?? 0))
+      >= AGE_CHECK_FROM;
+  });
+}
+
+async function sightengineImage(url: string, models: string): Promise<SightengineFrame | null> {
   const user = Deno.env.get("SIGHTENGINE_USER");
   const secret = Deno.env.get("SIGHTENGINE_SECRET");
   if (!user || !secret) return null;
 
   const endpoint = new URL("https://api.sightengine.com/1.0/check.json");
-  endpoint.searchParams.set("models", SIGHTENGINE_MODELS);
+  endpoint.searchParams.set("models", models);
   endpoint.searchParams.set("url", url);
   endpoint.searchParams.set("api_user", user);
   endpoint.searchParams.set("api_secret", secret);
@@ -1528,19 +1555,28 @@ async function classifySightengine(url: string): Promise<Verdict | null> {
     console.error("[sentinel] sightengine", JSON.stringify(data.error ?? data).slice(0, 300));
     return null;
   }
-  return sightengineVerdict([data], data);
+  return data as SightengineFrame;
 }
 
 // Short videos (up to a minute) are checked frame by frame in one call.
 // Longer ones fail here and fall back to "pending" / the review queue.
 async function classifySightengineVideo(url: string): Promise<Verdict | null> {
+  const first = await sightengineVideo(url, SIGHTENGINE_FIRST_PASS);
+  if (!first) return null;
+  if (!needsAgeCheck(first)) return sightengineVerdict(first, { frames: first.length });
+  const full = await sightengineVideo(url, SIGHTENGINE_MODELS);
+  const frames = full ?? first;
+  return sightengineVerdict(frames, { frames: frames.length });
+}
+
+async function sightengineVideo(url: string, models: string): Promise<SightengineFrame[] | null> {
   const user = Deno.env.get("SIGHTENGINE_USER");
   const secret = Deno.env.get("SIGHTENGINE_SECRET");
   if (!user || !secret) return null;
 
   const form = new FormData();
   form.set("stream_url", url);
-  form.set("models", SIGHTENGINE_MODELS);
+  form.set("models", models);
   form.set("api_user", user);
   form.set("api_secret", secret);
 
@@ -1554,8 +1590,7 @@ async function classifySightengineVideo(url: string): Promise<Verdict | null> {
     console.error("[sentinel] sightengine video", JSON.stringify(data.error ?? data).slice(0, 300));
     return null;
   }
-  const frames = (data.data?.frames ?? []) as SightengineFrame[];
-  return sightengineVerdict(frames, { frames: frames.length });
+  return (data.data?.frames ?? []) as SightengineFrame[];
 }
 
 // https://docs.thehive.ai — visual moderation returns per-class scores.

@@ -88,8 +88,14 @@ Cloudflare dashboard for the zone serving `cdn.disband.dev`. It hash-matches
 known material only (no new imagery, no video), so it is a backstop, not a
 replacement.
 
-After adding a key the 5-hourly sweep starts classifying the existing library
-(250 files a run). Mind the provider's quota.
+Each model costs one operation per image or video frame, so the first call
+asks only nudity and gore; face-age is a second call made only when something
+sexual turned up.
+
+The 5-hourly sweep only *hashes* the existing library. Sending it to the
+classifier is opt-in (`"mode": "media", "classifyBacklog": true`), a batch at
+a time: on the first night it ran by default it spent Sightengine's free daily
+allowance in two minutes.
 
 ### Seconds after sending (migration 0196)
 
