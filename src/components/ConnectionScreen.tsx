@@ -111,14 +111,17 @@ export function ConnectionScreen() {
           <span aria-hidden className="connection-pulse h-2 w-2 rounded-full bg-text-muted" />
           {checking ? "Checking…" : "Reconnecting automatically"}
         </p>
-        <button
-          type="button"
-          onClick={() => void retry()}
-          disabled={checking}
-          className="mt-4 rounded-[4px] border border-divider px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
-        >
-          Try again
-        </button>
+        {/* A restart ends on its own; only a lost connection is worth retrying by hand. */}
+        {shown === "offline" && (
+          <button
+            type="button"
+            onClick={() => void retry()}
+            disabled={checking}
+            className="mt-4 rounded-[4px] border border-divider px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
+          >
+            Try again
+          </button>
+        )}
       </div>
     </div>,
     document.body,
