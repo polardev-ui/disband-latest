@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import { TOS_VERSION } from "@/lib/legal";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { exchangeRefreshToken, getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetRefreshState, resetSupabaseClient } from "@/lib/supabase/client";
 import { fetchIceServers } from "@/lib/ice-servers";
@@ -4201,6 +4202,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           ...(birthdate ? { birthdate } : {}),
           ...(referralCode ? { referral_code: referralCode } : {}),
+          // Sign-up can't complete without agreeing, so the consent popup
+          // has nothing to ask a brand-new account.
+          tos_version: TOS_VERSION,
         },
       },
     });

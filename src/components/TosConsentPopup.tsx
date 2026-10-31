@@ -3,22 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { isTauri } from "@/lib/platform";
-
-const TOS_VERSION = "2026-10-28";
-
-async function openExternal(url: string) {
-  if (isTauri()) {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("plugin:opener|open_url", { url });
-      return;
-    } catch {
-      // Fall through to browser open.
-    }
-  }
-  window.open(url, "_blank", "noopener,noreferrer");
-}
+import { TOS_VERSION, openLegalPage } from "@/lib/legal";
 
 export function TosConsentPopup() {
   const { ready, session, user } = useApp();
@@ -55,14 +40,14 @@ export function TosConsentPopup() {
       <div className="mt-3 flex items-center gap-3 text-[13px]">
         <button
           type="button"
-          onClick={() => void openExternal(`${window.location.origin}/terms`)}
+          onClick={() => void openLegalPage("/terms")}
           className="text-brand hover:underline"
         >
           Terms
         </button>
         <button
           type="button"
-          onClick={() => void openExternal(`${window.location.origin}/privacy`)}
+          onClick={() => void openLegalPage("/privacy")}
           className="text-brand hover:underline"
         >
           Privacy

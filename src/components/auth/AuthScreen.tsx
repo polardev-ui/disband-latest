@@ -8,6 +8,8 @@ import { ResendResetLink } from "@/components/auth/ResendResetLink";
 import { EMAIL_NOT_CONFIRMED, TURNSTILE_REQUIRED } from "@/lib/authErrors";
 import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { openLegalPage } from "@/lib/legal";
+import { Toggle } from "@/components/discord/settings/SettingsPrimitives";
 import { Logo } from "@/components/ui/Logo";
 import { Turnstile } from "@/components/ui/Turnstile";
 import { Avatar } from "@/components/ui/Avatar";
@@ -55,6 +57,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
   const [birthdate, setBirthdate] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState<string | null>(() => (overlay ? addAccountPrefill?.notice ?? null : null));
 
   const needsConfirmation = error === EMAIL_NOT_CONFIRMED;
@@ -153,7 +156,9 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         }
 
         const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-        if (sanitized.length < 2) {
+        if (!agreedToTerms) {
+          setError("Agree to the Terms of Service and Privacy Policy to create an account.");
+        } else if (sanitized.length < 2) {
           setError("Username must be at least 2 characters (letters, numbers, and underscores).");
         } else if (password !== confirmPassword) {
           setError("Passwords don't match. Re-enter them and try again.");
@@ -497,6 +502,23 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 </Field>
               )}
 
+              {mode === "signup" && (
+                <div className="flex items-center gap-3">
+                  <Toggle
+                    id="signup-agree-terms"
+                    checked={agreedToTerms}
+                    onChange={setAgreedToTerms}
+                    label="I agree to the Terms of Service and Privacy Policy"
+                  />
+                  {/* The words toggle the switch too; the two links open the documents instead. */}
+                  <label htmlFor="signup-agree-terms" className="cursor-pointer select-none text-[13px] leading-snug text-text-muted">
+                    I agree to the{" "}
+                    <LegalLink path="/terms">Terms of Service</LegalLink> and{" "}
+                    <LegalLink path="/privacy">Privacy Policy</LegalLink>
+                  </label>
+                </div>
+              )}
+
               {/* Rendered on web *and* desktop: a flagged network answers
                   TURNSTILE_REQUIRED on sign-in (see login-check), and the
                   Turnstile widget allow-lists `tauri.localhost`/`localhost`, so
@@ -638,5 +660,22 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         )}
       </div>
     </div>
+  );
+}
+
+function LegalLink({ path, children }: { path: "/terms" | "/privacy"; children: React.ReactNode }) {
+  return (
+    <a
+      href={path}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => {
+        e.preventDefault();
+        void openLegalPage(path);
+      }}
+      className="font-medium text-brand hover:underline"
+    >
+      {children}
+    </a>
   );
 }
