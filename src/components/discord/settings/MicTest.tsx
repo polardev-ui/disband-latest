@@ -7,7 +7,12 @@ import { VoiceMixer } from "@/lib/voice-mixer";
 
 /** Plays your mic back through the same pipeline a call uses, so the
  *  noise suppression choice can be heard before joining. */
-export function MicTest({ deviceId, noiseMode }: { deviceId: string; noiseMode: NoiseSuppressionMode }) {
+export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
+  deviceId: string;
+  noiseMode: NoiseSuppressionMode;
+  inputVolume: number;
+  autoGain: boolean;
+}) {
   const [running, setRunning] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +40,14 @@ export function MicTest({ deviceId, noiseMode }: { deviceId: string; noiseMode: 
   useEffect(() => {
     void mixerRef.current?.setNoiseMode(noiseMode);
   }, [noiseMode]);
+
+  useEffect(() => {
+    mixerRef.current?.setInputVolume(inputVolume);
+  }, [inputVolume]);
+
+  useEffect(() => {
+    void mixerRef.current?.setAutoGainControl(autoGain);
+  }, [autoGain]);
 
   useEffect(() => {
     if (running) stop();
