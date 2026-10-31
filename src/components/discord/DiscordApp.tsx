@@ -314,7 +314,6 @@ export function DiscordApp() {
   const dmChatRef = useRef<ChatCanvasHandle>(null);
   const groupChatRef = useRef<ChatCanvasHandle>(null);
   const notesChatRef = useRef<ChatCanvasHandle>(null);
-  const [online, setOnline] = useState(true);
   const isMobile = useIsMobile();
   const [zoom, setZoom] = useZoom();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -360,18 +359,6 @@ export function DiscordApp() {
     app.activeDmThreadId,
     app.activeGroupChatId,
   ]);
-
-  useEffect(() => {
-    setOnline(navigator.onLine);
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
 
   const call = useCallManager(
     app.user?.id ?? null,
@@ -1753,11 +1740,6 @@ export function DiscordApp() {
         </div>
       )}
 
-      {!online && (
-        <div className="fixed left-0 right-0 top-0 z-[100] bg-status-dnd px-4 py-2 text-center text-sm font-medium text-white">
-          You are offline. Messages will send when your connection returns.
-        </div>
-      )}
       {checkoutSuccess && (
         <div className="fixed left-0 right-0 top-0 z-[100] bg-[#57f287] px-4 py-2 text-center text-sm font-medium text-black">
           Subscription activated successfully!

@@ -3,6 +3,7 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { saveSwitchRefreshToken } from "@/lib/switch-refresh-tokens";
+import { trackedFetch } from "@/lib/connection-status";
 
 let browserClient: SupabaseClient | null = null;
 
@@ -122,6 +123,8 @@ function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClie
       experimental: { passkey: true },
       storage: typeof window !== "undefined" ? window.localStorage : undefined,
     },
+    // Lets the "Disband is restarting" / "You're offline" screen notice outages.
+    global: { fetch: trackedFetch },
   });
   /*
    Keep each account's saved refresh token current, whoever caused the refresh.

@@ -18,6 +18,7 @@ import { AgePrompt } from "@/components/AgePrompt";
 import { CookieConsent } from "@/components/CookieConsent";
 import { TosConsentPopup } from "@/components/TosConsentPopup";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { ConnectionScreen } from "@/components/ConnectionScreen";
 import { useEffect, useRef } from "react";
 import { alertDialog } from "@/lib/dialogs";
 
@@ -111,6 +112,7 @@ export function DisbandRoot() {
             </div>
           </div>
           <AddAccountOverlay />
+          <ConnectionScreen />
           <CookieConsent />
           <TosConsentPopup />
         </ContextMenuProvider>
