@@ -575,8 +575,8 @@ All pushed to main; release chain (push → tag → desktop) verified working.
 ## 9. Voice through Cloudflare Realtime (SFU), 2026-11-01
 
 Voice channels send through Cloudflare Realtime when the web app has
-`CLOUDFLARE_REALTIME_APP_ID` and `CLOUDFLARE_REALTIME_APP_TOKEN` (Worker
-secrets on the `disband` Worker, not Vercel). Without them,
+`CLOUDFLARE_REALTIME_APP_ID` and `CLOUDFLARE_REALTIME_APP_TOKEN` (Vercel
+environment variables; the site is served by Vercel, wrangler.jsonc is unused). Without them,
 `GET /api/voice/sfu` says `enabled: false` and everyone stays on the old mesh.
 
 - `src/lib/voice-sfu.ts`: one RTCPeerConnection per seat; every SDP exchange runs
