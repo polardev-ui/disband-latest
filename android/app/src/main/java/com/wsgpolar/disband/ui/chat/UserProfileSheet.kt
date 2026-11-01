@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import com.wsgpolar.disband.ui.AvatarDecoration
 import com.wsgpolar.disband.ui.AvatarImage
 import com.wsgpolar.disband.ui.components.GuildTagView
+import com.wsgpolar.disband.ui.components.ProfileBadges
 import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
 
 /**
@@ -90,6 +91,7 @@ fun UserProfileSheet(initial: Profile, onDismiss: () -> Unit) {
                 Text(sub, color = palette.textMuted, fontSize = 14.sp)
                 Spacer(Modifier.height(6.dp))
                 GuildTagView(userId = profile.id, size = GuildTagBadgeSize.Medium)
+                ProfileBadges(profile.id, Modifier.padding(top = 8.dp))
 
                 profile.activeStatusNote?.let {
                     Spacer(Modifier.height(12.dp))
@@ -113,7 +115,13 @@ fun UserProfileSheet(initial: Profile, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     Text("MEMBER SINCE", color = palette.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text(TimeFormat.short(joined), color = palette.textPrimary, fontSize = 15.sp)
+                    // A date, not "Mon 10:30 PM": when someone joined is about the day.
+                    val since = TimeFormat.parse(joined)?.atZone(java.time.ZoneId.systemDefault())?.toLocalDate()
+                    Text(
+                        since?.let { TimeFormat.dayHeader(it) } ?: "",
+                        color = palette.textPrimary,
+                        fontSize = 15.sp,
+                    )
                 }
             }
         }

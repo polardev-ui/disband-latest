@@ -132,6 +132,8 @@ data class ChatRow(
     /** Replies to you and @mentions of you, which the row tints. */
     val pingsYou: Boolean = false,
     val reactions: List<ReactionSummaryRow> = emptyList(),
+    val embeds: List<com.wsgpolar.disband.data.Embed> = emptyList(),
+    val webhook: com.wsgpolar.disband.data.MessageWebhook? = null,
 ) {
     /** The array when there is one, otherwise a set of one from the legacy
      *  columns — see `resolveAttachments`. */
@@ -207,6 +209,8 @@ fun ChatScaffold(
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
+    var profileFor by remember { mutableStateOf<Profile?>(null) }
+    profileFor?.let { UserProfileSheet(initial = it, onDismiss = { profileFor = null }) }
 
     val scope = rememberCoroutineScope()
     BackHandler(onBack = onBack)
@@ -287,6 +291,9 @@ fun ChatScaffold(
                     onToggleReaction = onToggleReaction,
                     onOpenAttachment = onOpenAttachment,
                     onLongPress = onMessageLongPress,
+                    onAuthorClick = { row ->
+                        (row.author ?: row.authorId?.let { Profile(id = it) })?.let { profileFor = it }
+                    },
                     hasOlder = hasOlder,
                     loadingOlder = loadingOlder,
                     onLoadOlder = onLoadOlder,
@@ -416,6 +423,7 @@ private fun MessageList(
     onToggleReaction: (String, String) -> Unit = { _, _ -> },
     onOpenAttachment: (StoredAttachment) -> Unit = {},
     onLongPress: (ChatRow) -> Unit = {},
+    onAuthorClick: (ChatRow) -> Unit = {},
     hasOlder: Boolean,
     loadingOlder: Boolean,
     onLoadOlder: () -> Unit,
@@ -451,7 +459,7 @@ private fun MessageList(
                 val label = when (day) {
                     today -> "Today"
                     today.minusDays(1) -> "Yesterday"
-                    else -> day.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                    else -> TimeFormat.dayHeader(day)
                 }
                 Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                     Text(label, color = palette.textMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium,
@@ -471,6 +479,7 @@ private fun MessageList(
                 onToggleReaction = { emoji -> onToggleReaction(row.id, emoji) },
                 onOpenAttachment = onOpenAttachment,
                 onLongPress = { onLongPress(row) },
+                onAuthorClick = { onAuthorClick(row) },
             )
             }
         }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -25,11 +26,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +50,11 @@ import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.Radii
 import com.wsgpolar.disband.core.seeded
+import com.wsgpolar.disband.data.RailLayout
 import com.wsgpolar.disband.data.Server
+import com.wsgpolar.disband.data.ServerFolder
+import com.wsgpolar.disband.data.ServerFolders
+import com.wsgpolar.disband.data.ServerListState
 import com.wsgpolar.disband.data.UserStatus
 import com.wsgpolar.disband.ui.AvatarImage
 
@@ -125,28 +134,65 @@ fun ServerRail(
                 .background(palette.divider),
         )
 
-        servers.forEach { server ->
+        // Folders and order come from the account, so they match the web and
+        // desktop. Until they load (or if they can't), spaces show as before.
+        var saved by remember { mutableStateOf<Pair<List<ServerFolder>, List<ServerListState>>?>(null) }
+        LaunchedEffect(servers.map { it.id }) {
+            runCatching { ServerFolders.load() }.getOrNull()?.let { saved = it }
+        }
+        val layout = remember(servers, saved) {
+            saved?.let { (folders, states) -> ServerFolders.layout(servers, folders, states) } ?: RailLayout(servers, emptyList())
+        }
+        var expanded by remember { mutableStateOf(setOf<String>()) }
+
+        val spaceButton: @Composable (Server) -> Unit = { server ->
             RailButton(
                 selected = server.id == selectedServerId,
                 label = server.name,
                 badge = unreadForServer(server.id),
                 onClick = { onServerSelected(server) },
             ) {
-                if (server.iconUrl != null) {
-                    AvatarImage(url = server.iconUrl, name = server.name, size = ICON_SIZE)
-                } else {
+                ServerIcon(server, ICON_SIZE)
+            }
+        }
+
+        layout.top.forEach { spaceButton(it) }
+
+        layout.folders.forEach { (folder, members) ->
+            val open = folder.id in expanded
+            val tint = runCatching { Color(android.graphics.Color.parseColor(folder.color)) }.getOrDefault(palette.accent)
+            Column(
+                Modifier
+                    .clip(RoundedCornerShape(Radii.railSquircle))
+                    .background(if (open) tint.copy(alpha = 0.18f) else Color.Transparent),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                RailButton(
+                    selected = !open && members.any { it.id == selectedServerId },
+                    label = if (open) "Close ${folder.name}" else "Open ${folder.name}",
+                    badge = if (open) 0 else members.sumOf { unreadForServer(it.id) },
+                    onClick = { expanded = if (open) expanded - folder.id else expanded + folder.id },
+                ) {
                     Box(
-                        Modifier.size(ICON_SIZE).background(Color.seeded(server.id)),
+                        Modifier.size(ICON_SIZE).background(tint.copy(alpha = if (open) 0.9f else 0.35f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            initials(server.name),
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        if (open) {
+                            Icon(Icons.Filled.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        } else {
+                            // Up to four of its spaces, two by two, like the web.
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                members.take(4).chunked(2).forEach { pair ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        pair.forEach { ServerIcon(it, 17.dp) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+                if (open) members.forEach { spaceButton(it) }
             }
         }
 
@@ -291,6 +337,25 @@ private fun BoxScope.RailBadge(count: Int, strokeColor: Color) {
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
+    }
+}
+
+@Composable
+private fun ServerIcon(server: Server, size: androidx.compose.ui.unit.Dp) {
+    if (server.iconUrl != null) {
+        AvatarImage(url = server.iconUrl, name = server.name, size = size)
+    } else {
+        Box(
+            Modifier.size(size).clip(CircleShape).background(Color.seeded(server.id)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                initials(server.name),
+                color = Color.White,
+                fontSize = if (size < 30.dp) 7.sp else 15.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 

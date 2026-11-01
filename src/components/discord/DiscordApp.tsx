@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { isThemeId } from "@/lib/theme/themes";
 import { useProfileMember } from "@/hooks/useProfileMember";
 import { usePresence } from "@/hooks/usePresence";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
@@ -96,6 +98,18 @@ import { UserProfilePopout } from "./UserProfilePopout";
 export function DiscordApp() {
   const app = useApp();
   const { openMenu } = useContextMenu();
+  const { theme, setTheme } = useTheme();
+
+  // The theme is saved to the account, and phones already follow it. The web
+  // only kept its own copy, so a theme picked elsewhere never showed up here.
+  // Adopt the account's theme once per sign-in; picking one here saves it back.
+  const adoptedThemeFor = useRef<string | null>(null);
+  useEffect(() => {
+    const profile = app.profile;
+    if (!profile || adoptedThemeFor.current === profile.id) return;
+    adoptedThemeFor.current = profile.id;
+    if (isThemeId(profile.theme) && profile.theme !== theme) setTheme(profile.theme);
+  }, [app.profile, theme, setTheme]);
   const [timeoutTarget, setTimeoutTarget] = useState<{ userId: string; profile: Profile } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("popular");

@@ -310,6 +310,48 @@ data class Message(
     @SerialName("created_at") val createdAt: String,
     @SerialName("edited_at") var editedAt: String? = null,
     var author: Profile? = null,
+    /** Rich cards from webhooks and bots (GitHub pushes, bot replies). */
+    var embeds: List<Embed>? = null,
+    /** Set when a webhook sent this: the name and picture it posts under. */
+    var webhook: MessageWebhook? = null,
+)
+
+/*
+ Rich embeds, in Discord's shape, as the web stores them in messages.embeds.
+ Every field is optional so one odd embed can't fail the whole message.
+*/
+@Serializable
+data class Embed(
+    val title: String? = null,
+    val description: String? = null,
+    val url: String? = null,
+    /** 0xRRGGBB as an integer. */
+    val color: Long? = null,
+    val timestamp: String? = null,
+    val footer: EmbedFooter? = null,
+    val image: EmbedMedia? = null,
+    val thumbnail: EmbedMedia? = null,
+    val author: EmbedAuthor? = null,
+    val fields: List<EmbedField>? = null,
+)
+
+@Serializable
+data class EmbedFooter(val text: String = "", @SerialName("icon_url") val iconUrl: String? = null)
+
+@Serializable
+data class EmbedMedia(val url: String = "", val width: Int? = null, val height: Int? = null)
+
+@Serializable
+data class EmbedAuthor(val name: String = "", val url: String? = null, @SerialName("icon_url") val iconUrl: String? = null)
+
+@Serializable
+data class EmbedField(val name: String = "", val value: String = "", val inline: Boolean = false)
+
+@Serializable
+data class MessageWebhook(
+    val id: String? = null,
+    val name: String = "Webhook",
+    @SerialName("avatar_url") val avatarUrl: String? = null,
 )
 
 // MARK: - Direct messages
