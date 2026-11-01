@@ -91,6 +91,13 @@ android {
 }
 
 dependencies {
+    // A library still pulls in androidx.fragment 1.1.0, which Play flags as
+    // outdated on every release. Lift it to a current version.
+    constraints {
+        implementation("androidx.fragment:fragment:1.8.5") {
+            because("Play Console reports fragment 1.1.0 as outdated")
+        }
+    }
     testImplementation("junit:junit:4.13.2")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
