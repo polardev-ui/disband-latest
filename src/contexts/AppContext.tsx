@@ -3282,26 +3282,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void ch.unsubscribe(); };
   }, [userId, configured, servers.map((s) => s.id).join(","), refreshCatalysts]);
 
-  const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
-  useEffect(() => {
-    if (!userId || !configured || friendIdsKey === "") return;
-    const sub = getSupabaseClient().channel(`profiles:friends:${userId}`);
-    // Realtime rejects an `in` filter over 100 values, and the rejection
-    // took the whole subscription down for anyone with 101+ friends.
-    const ids = friendIdsKey.split(",");
-    for (let i = 0; i < ids.length; i += 100) {
-      sub.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
-        () => void loadFriendships(userId),
-      );
-    }
-    sub.subscribe();
-    return () => {
-      void sub.unsubscribe();
-    };
-  }, [userId, configured, friendIdsKey, loadFriendships]);
-
   useEffect(() => {
     if (!activeChannelId || !configured || !userId) return;
     liveFeedDownRef.current = false;
@@ -3773,66 +3753,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { void sub.unsubscribe(); };
   }, [userId, configured, patchProfileInState]);
 
-  useEffect(() => {
-    if (!userId || !configured || friends.length === 0) return;
-    const supabase = getSupabaseClient();
-    const channel = supabase.channel(`friend-profiles:${userId}`);
-    for (const friend of friends) {
-      channel.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${friend.id}` },
-        (payload) => patchProfileInState(payload.new as Profile),
-      );
-    }
-    channel.subscribe();
-    return () => { void channel.unsubscribe(); };
-  }, [userId, configured, friends.map((f) => f.id).sort().join(","), patchProfileInState]);
-
-  useEffect(() => {
-    if (!configured || !activeServerId || members.length === 0) return;
-    const supabase = getSupabaseClient();
-    const ids = [...new Set(members.map((m) => m.user_id))].filter((id) => id !== userId);
-    if (ids.length === 0) return;
-    const channel = supabase.channel(`member-profiles:${activeServerId}`);
-    for (const id of ids) {
-      channel.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${id}` },
-        (payload) => patchProfileInState(payload.new as Profile),
-      );
-    }
-    channel.subscribe();
-    return () => { void channel.unsubscribe(); };
-  }, [configured, activeServerId, userId, members.map((m) => m.user_id).sort().join(","), patchProfileInState]);
-
-  useEffect(() => {
-    if (!userId || !configured || groupChats.length === 0) return;
+  // Everyone whose profile is on screen: friends, the open space's members and
+  // group-chat members. One `id=eq` binding per person used to cost Realtime a
+  // subscription row each (~75 per user), and checking every profile write
+  // against thousands of them timed its database pool out.
+  const watchedProfileIdsKey = (() => {
     const ids = new Set<string>();
-    for (const group of groupChats) {
-      for (const member of group.members) ids.add(member.id);
-    }
-    ids.delete(userId);
-    if (ids.size === 0) return;
-    const supabase = getSupabaseClient();
-    const channel = supabase.channel(`group-profiles:${userId}`);
-    for (const id of ids) {
+    for (const f of friends) ids.add(f.id);
+    for (const m of members) ids.add(m.user_id);
+    for (const g of groupChats) for (const m of g.members ?? []) ids.add(m.id);
+    if (userId) ids.delete(userId);
+    return [...ids].sort().join(",");
+  })();
+  useEffect(() => {
+    if (!userId || !configured || watchedProfileIdsKey === "") return;
+    const channel = getSupabaseClient().channel(`watched-profiles:${userId}`);
+    // Realtime rejects an `in` filter over 100 values.
+    const ids = watchedProfileIdsKey.split(",");
+    for (let i = 0; i < ids.length; i += 100) {
       channel.on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${id}` },
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
         (payload) => patchProfileInState(payload.new as Profile),
       );
     }
     channel.subscribe();
     return () => { void channel.unsubscribe(); };
-  }, [
-    userId,
-    configured,
-    groupChats
-      .map((g) => `${g.id}:${g.members.map((m) => m.id).sort().join(",")}`)
-      .sort()
-      .join("|"),
-    patchProfileInState,
-  ]);
+  }, [userId, configured, watchedProfileIdsKey, patchProfileInState]);
 
   useEffect(() => {
     if (!profile) return;
