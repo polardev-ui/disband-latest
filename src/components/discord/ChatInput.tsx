@@ -29,6 +29,7 @@ import { ComposerMarkdown } from "./ComposerMarkdown";
 import { GiftModal } from "@/components/gift/GiftModal";
 import { giftUrl } from "@/lib/gifts";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { mentionsTether, TETHER_AERO_NUDGE } from "@/lib/tether-client";
 
 interface SavedDraft { text: string; spans: MentionSpan[] }
@@ -104,6 +105,7 @@ interface MentionItem {
 }
 
 function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: string) => void }) {
+  const { t } = useI18n();
   const type = entry.file.type.startsWith("video/") ? "video" : entry.file.type.startsWith("image/") ? "image" : "file";
   const pct = entry.progress ? Math.max(0, Math.min(100, Math.round(entry.progress.percent))) : null;
 
@@ -133,14 +135,14 @@ function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: 
       ) : null}
       {failed ? (
         <span className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-[10px] font-bold text-white">
-          FAILED
+          {t("FAILED")}
         </span>
       ) : null}
       <button
         type="button"
         onClick={() => onRemove(entry.id)}
         className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-status-dnd text-white opacity-90 hover:opacity-100"
-        aria-label="Remove attachment"
+        aria-label={t("Remove attachment")}
       >
         <IconClose size={12} />
       </button>
@@ -216,6 +218,7 @@ export function ChatInput({
   const { entries, add, remove, clear } = useMediaUpload();
 
   const { subscriptionPlan, tetherProfile, serverPermissions } = useApp();
+  const { t } = useI18n();
 
   /**
    Every text change goes through here so picked mentions stay atomic and
@@ -502,7 +505,7 @@ export function ChatInput({
               id: "everyone",
               kind: "member" as const,
               label: "everyone",
-              sublabel: "Notify everyone in this server",
+              sublabel: t("Notify everyone in this server"),
               insert: "@everyone",
             },
           ]
@@ -529,14 +532,14 @@ export function ChatInput({
             id: r.id,
             kind: "role" as const,
             label: r.name,
-            sublabel: "Role",
+            sublabel: t("Role"),
             insert: `@&${roleMentionSlug(r.name)}`,
             color: r.color,
           }))
           .filter((item) => item.insert.length > 2)
       : [];
     return [...tetherItems, ...everyoneItems, ...memberItems, ...roleItems].slice(0, 8);
-  }, [mentionCtx, memberMatches, roles, tetherEnabled, tetherProfile, serverId, serverPermissions]);
+  }, [mentionCtx, memberMatches, roles, tetherEnabled, tetherProfile, serverId, serverPermissions, t]);
 
   // Validate at pick time so an oversize file never looks stageable only to
   // fail at send (uploadMedia enforces the same limit as a backstop).
@@ -777,7 +780,7 @@ export function ChatInput({
       onClearReply?.();
       onActivityCreated?.(activity.id);
     } catch (err) {
-      setActivityError(err instanceof Error ? err.message : "Couldn't start that activity.");
+      setActivityError(err instanceof Error ? err.message : t("Couldn't start that activity."));
     } finally {
       setActivityBusy(null);
     }
@@ -890,9 +893,9 @@ export function ChatInput({
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/15 text-brand">
                 <IconPlus size={30} />
               </span>
-              <p className="text-lg font-semibold text-text-normal">Drop to attach</p>
+              <p className="text-lg font-semibold text-text-normal">{t("Drop to attach")}</p>
               <p className="text-sm text-text-muted">
-                Anything you drop here is added to your message before you send it.
+                {t("Anything you drop here is added to your message before you send it.")}
               </p>
             </div>
           </div>,
@@ -903,13 +906,13 @@ export function ChatInput({
         <div role="status" className="view-enter mb-2 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">
           <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-online text-[10px] font-bold text-white">✓</span>
           <span className="min-w-0 flex-1">{commandNotice}</span>
-          <span className="shrink-0 text-[12px] text-text-muted">Only you can see this</span>
+          <span className="shrink-0 text-[12px] text-text-muted">{t("Only you can see this")}</span>
         </div>
       )}
 
       {showSlash && (
-        <div role="listbox" aria-label="Commands" className={AUTOCOMPLETE}>
-          <p className={AUTOCOMPLETE_HEADER}>Commands</p>
+        <div role="listbox" aria-label={t("Commands")} className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>{t("Commands")}</p>
           {slashCommands.map((entry, i) => {
             const c = entry.def;
             return (
@@ -953,14 +956,14 @@ export function ChatInput({
       )}
 
       {showMentions && mentionItems.length > 0 && (
-        <div role="listbox" aria-label="Mentions" className={AUTOCOMPLETE}>
+        <div role="listbox" aria-label={t("Mentions")} className={AUTOCOMPLETE}>
           {(() => {
             let idx = 0;
             const membersList = mentionItems.filter((m) => m.kind === "member");
             const rolesList = mentionItems.filter((m) => m.kind === "role");
             return (
               <>
-                {membersList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>Members</p>}
+                {membersList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>{t("Members")}</p>}
                 {membersList.map((item) => {
                   const myIdx = idx++;
                   return (
@@ -987,7 +990,7 @@ export function ChatInput({
                     </button>
                   );
                 })}
-                {rolesList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>Roles</p>}
+                {rolesList.length > 0 && <p className={AUTOCOMPLETE_HEADER}>{t("Roles")}</p>}
                 {rolesList.map((item) => {
                   const myIdx = idx++;
                   return (
@@ -1013,8 +1016,8 @@ export function ChatInput({
       )}
 
       {showChannels && channelItems.length > 0 && (
-        <div role="listbox" aria-label="Channels" className={AUTOCOMPLETE}>
-          <p className={AUTOCOMPLETE_HEADER}>Text Channels</p>
+        <div role="listbox" aria-label={t("Channels")} className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>{t("Text Channels")}</p>
           {channelItems.map((c, i) => (
             <button
               key={c.id}
@@ -1037,8 +1040,8 @@ export function ChatInput({
       )}
 
       {showEmoji && emojiItems.length > 0 && (
-        <div role="listbox" aria-label="Emoji" className={AUTOCOMPLETE}>
-          <p className={AUTOCOMPLETE_HEADER}>Emoji matching :{emojiCtx?.query}</p>
+        <div role="listbox" aria-label={t("Emoji")} className={AUTOCOMPLETE}>
+          <p className={AUTOCOMPLETE_HEADER}>{t("Emoji matching")} :{emojiCtx?.query}</p>
           {emojiItems.map((item, i) => (
             <button
               key={`e-${item.shortcode}`}
@@ -1112,12 +1115,12 @@ export function ChatInput({
         <div className="flex h-[34px] items-center gap-2 rounded-t-lg bg-bg-secondary pl-4 pr-2 text-[14px]">
           <p className="min-w-0 flex-1 truncate text-header-secondary">
             {editingMessageId ? (
-              "Editing message — escape to cancel"
+              t("Editing message — escape to cancel")
             ) : (
               <>
-                Replying to{" "}
+                {t("Replying to")}{" "}
                 <span className="font-semibold text-header-primary">
-                  {replyTo?.author ? displayName(replyTo.author as Profile) : "message"}
+                  {replyTo?.author ? displayName(replyTo.author as Profile) : t("message")}
                 </span>
               </>
             )}
@@ -1126,7 +1129,7 @@ export function ChatInput({
             type="button"
             onClick={() => { onClearReply?.(); onCancelEdit?.(); clearText(); }}
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-interactive-normal hover:text-interactive-active"
-            aria-label="Cancel"
+            aria-label={t("Cancel")}
           >
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-interactive-normal text-bg-secondary hover:bg-interactive-active">
               <IconClose size={11} strokeWidth={3} />
@@ -1158,12 +1161,12 @@ export function ChatInput({
           <div ref={plusMenuRef} className="relative shrink-0">
             <button
               type="button"
-              aria-label="Upload file"
+              aria-label={t("Upload file")}
               aria-expanded={plusMenuOpen}
               aria-haspopup={allowPolls ? "menu" : undefined}
               ref={plusButtonRef}
               disabled={!!editingMessageId}
-              title={editingMessageId ? "Finish editing before adding files" : "Upload file"}
+              title={editingMessageId ? t("Finish editing before adding files") : t("Upload file")}
               onClick={() => {
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
@@ -1179,7 +1182,7 @@ export function ChatInput({
             {allowPolls && plusMounted && (
               <div
                 role="menu"
-                aria-label="Add to message"
+                aria-label={t("Add to message")}
                 onKeyDown={(e) => {
                   // Arrow keys move between items; Escape closes and returns focus.
                   const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
@@ -1199,16 +1202,16 @@ export function ChatInput({
                   {
                     id: "upload",
                     icon: <IconAttach size={18} />,
-                    label: "Upload files",
-                    hint: "Photos, videos or any file",
+                    label: t("Upload files"),
+                    hint: t("Photos, videos or any file"),
                     disabled: false,
                     onSelect: () => fileRef.current?.click(),
                   },
                   {
                     id: "poll",
                     icon: <IconPoll size={18} />,
-                    label: "Create a poll",
-                    hint: editingMessageId ? "Finish editing first" : "Ask the channel to vote",
+                    label: t("Create a poll"),
+                    hint: editingMessageId ? t("Finish editing first") : t("Ask the channel to vote"),
                     disabled: !!editingMessageId,
                     onSelect: () => setPollOpen(true),
                   },
@@ -1303,7 +1306,7 @@ export function ChatInput({
             onClick={(e) => setCursor(e.currentTarget.selectionStart)}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
-            placeholder={editingMessageId ? "Edit your message…" : placeholder}
+            placeholder={editingMessageId ? t("Edit your message…") : placeholder}
             rows={1}
             enterKeyHint="send"
             className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal placeholder:text-[#6d6f78] focus:outline-none"
@@ -1323,8 +1326,8 @@ export function ChatInput({
           {allowGifts && (
             <button
               type="button"
-              aria-label="Send a gift"
-              title={editingMessageId ? "Finish editing before sending a gift" : "Send a gift"}
+              aria-label={t("Send a gift")}
+              title={editingMessageId ? t("Finish editing before sending a gift") : t("Send a gift")}
               disabled={!!editingMessageId}
               onClick={() => setGiftOpen(true)}
               className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -1348,10 +1351,10 @@ export function ChatInput({
           {activityScope && !editingMessageId && (
             <button
               type="button"
-              aria-label="Start an activity"
+              aria-label={t("Start an activity")}
               aria-expanded={activityOpen}
               aria-haspopup="dialog"
-              title="Start an activity"
+              title={t("Start an activity")}
               onClick={() => {
                 setActivityError(null);
                 setActivityOpen((value) => !value);
@@ -1388,8 +1391,8 @@ export function ChatInput({
           {(text.trim() || entries.length > 0) && (
             <button
               type="submit"
-              aria-label={editingMessageId ? "Save edit" : "Send message"}
-              title={editingMessageId ? "Save edit" : "Send message"}
+              aria-label={editingMessageId ? t("Save edit") : t("Send message")}
+              title={editingMessageId ? t("Save edit") : t("Send message")}
               className="ml-1 mt-[6px] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover [@media(pointer:coarse)]:flex"
             >
               <IconSend size={16} />

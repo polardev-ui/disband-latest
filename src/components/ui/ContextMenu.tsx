@@ -18,6 +18,7 @@ import {
 } from "@/lib/overlay";
 import { isTauri } from "@/lib/platform";
 import { usePresence } from "@/hooks/usePresence";
+import { useI18n } from "@/contexts/I18nContext";
 
 export interface ContextMenuItem {
   id: string;
@@ -192,6 +193,10 @@ function buildDesktopMenuItems(target: HTMLElement): ContextMenuItem[] {
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [mounted, setMounted] = useState(false);
+  // Labels are written in English and translated as the menu draws them, so
+  // every menu in the app follows the chosen language without each caller
+  // having to. A label with no translation (a name, say) shows as written.
+  const { t } = useI18n();
   const menuId = useId();
   const firstItemRef = useRef<HTMLButtonElement>(null);
   // Set the instant an app component opens a menu, so the desktop fallback
@@ -321,7 +326,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                       : "text-interactive-normal hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white"
                   }`}
                 >
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
                   {item.icon && <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px]">{item.icon}</span>}
                 </button>
               ),

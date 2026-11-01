@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "@/contexts/I18nContext";
 import { Soundboard } from "./Soundboard";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
@@ -87,12 +88,13 @@ function CallButton({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <Tooltip label={label} side="top">
       <button
         type="button"
         onClick={onClick}
-        aria-label={label}
+        aria-label={t(label)}
         aria-pressed={on || warn || undefined}
         className={`flex h-14 w-14 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 active:scale-95 ${
           danger
@@ -113,6 +115,7 @@ function CallButton({
 export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }: {
   callerName: string; profile?: Profile; onAccept: () => void; onReject: () => void;
 }) {
+  const { t } = useI18n();
   // The classic incoming-call card: a small dark panel with the caller's
   // avatar ringing, and accept/decline buttons underneath.
   return (
@@ -129,15 +132,15 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
           )}
         </div>
         <h2 className="max-w-full truncate text-[20px] font-semibold leading-6 text-header-primary">{callerName}</h2>
-        <p className="mt-1 text-[14px] text-header-secondary">Incoming Call…</p>
+        <p className="mt-1 text-[14px] text-header-secondary">{t("Incoming Call…")}</p>
         <div className="mt-8 flex gap-12">
-          <Tooltip label="Decline" side="top">
-            <button type="button" onClick={onReject} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white transition-colors hover:bg-button-danger-hover" aria-label="Decline">
+          <Tooltip label={t("Decline")} side="top">
+            <button type="button" onClick={onReject} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd text-white transition-colors hover:bg-button-danger-hover" aria-label={t("Decline")}>
               <IconPhoneOff size={24} />
             </button>
           </Tooltip>
-          <Tooltip label="Accept" side="top">
-            <button type="button" onClick={onAccept} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white transition-colors hover:bg-button-green" aria-label="Accept">
+          <Tooltip label={t("Accept")} side="top">
+            <button type="button" onClick={onAccept} className="flex h-14 w-14 items-center justify-center rounded-full bg-status-online text-white transition-colors hover:bg-button-green" aria-label={t("Accept")}>
               <IconPhone size={24} />
             </button>
           </Tooltip>
@@ -150,14 +153,15 @@ export function IncomingCallOverlay({ callerName, profile, onAccept, onReject }:
 export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
   groupName: string; onJoin: () => void; onDismiss: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="call-enter fixed bottom-4 left-4 right-4 z-[100] rounded-lg bg-bg-floating p-4 shadow-[var(--elevation-high)] sm:left-auto sm:w-80">
-      <p className="text-[12px] font-bold uppercase leading-4 text-status-online">Incoming Group Call</p>
+      <p className="text-[12px] font-bold uppercase leading-4 text-status-online">{t("Incoming Group Call")}</p>
       <p className="mt-1 text-[16px] font-semibold text-header-primary">{groupName}</p>
-      <p className="text-[14px] text-header-secondary">Someone started a call in this group</p>
+      <p className="text-[14px] text-header-secondary">{t("Someone started a call in this group")}</p>
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onJoin} className="h-[38px] flex-1 rounded-[3px] bg-button-green text-[14px] font-medium text-white hover:bg-button-green-hover">Join Call</button>
-        <button type="button" onClick={onDismiss} className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">Ignore</button>
+        <button type="button" onClick={onJoin} className="h-[38px] flex-1 rounded-[3px] bg-button-green text-[14px] font-medium text-white hover:bg-button-green-hover">{t("Join Call")}</button>
+        <button type="button" onClick={onDismiss} className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">{t("Ignore")}</button>
       </div>
     </div>
   );
@@ -180,6 +184,7 @@ export function VoiceStatus({
   label?: string;
   className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <span
       role="status"
@@ -200,7 +205,7 @@ export function VoiceStatus({
           {elapsed !== null && elapsed >= 0 ? ` · ${formatElapsed(elapsed)}` : ""}
         </span>
       ) : (
-        <span className="truncate">Connecting…</span>
+        <span className="truncate">{t("Connecting…")}</span>
       )}
     </span>
   );
@@ -247,6 +252,7 @@ export function CallPanel({
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd, onOpenSettings,
 }: CallPanelProps) {
+  const { t } = useI18n();
   const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
   // While a share or camera is focused the panel takes most of the window,
   // without overwriting the height you dragged it to.
@@ -269,7 +275,7 @@ export function CallPanel({
           <span className="truncate text-[14px] font-semibold text-header-primary">{title}</span>
           <span className="ml-auto flex items-center gap-1.5 text-[12px] font-medium leading-4 text-header-secondary">
             <span aria-hidden className="h-2 w-2 rounded-full bg-status-idle animate-pulse" />
-            Calling…
+            {t("Calling…")}
           </span>
         </div>
 
@@ -283,7 +289,7 @@ export function CallPanel({
             deafened={deafened}
             screens={[]}
             members={[
-              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: t("You"), stream: localStream, mirrored: true, muted: micMuted }] : []),
               ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), ringing: true }] : []),
             ]}
           />
@@ -321,13 +327,13 @@ export function CallPanel({
             deafened={deafened}
             onFocusChange={setFocused}
             screens={[
-              ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: "Your screen", stream: localScreen, local: true }] : []),
+              ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: t("Your screen"), stream: localScreen, local: true }] : []),
               ...(remoteScreen && peer
                 ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
                 : []),
             ]}
             members={[
-              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: "You", stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: t("You"), stream: localStream, mirrored: true, muted: micMuted }] : []),
               ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
             ]}
           />
@@ -349,12 +355,13 @@ export function CallPanel({
 }
 
 export function HeaderCallButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      title="Start voice call"
+      title={t("Start voice call")}
       className="flex h-6 w-6 shrink-0 items-center justify-center text-status-online transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
     >
       <IconPhone size={22} />

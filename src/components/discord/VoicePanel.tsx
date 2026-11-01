@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { CallStage, type StageMember, type StageScreen } from "./CallStage";
 import { CallControls, VoiceStatus } from "./CallUI";
@@ -25,6 +26,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     setMicMuted,
     setDeafened,
   } = useApp();
+  const { t } = useI18n();
 
   const session = useVoiceSession();
   const inThisChannel = session.connectedChannelId === channelId;
@@ -76,7 +78,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     return {
       id: p.user_id,
       profile: p.profile,
-      label: p.profile ? displayName(p.profile) + (isSelf ? " (you)" : "") : isSelf ? "You" : "Member",
+      label: p.profile ? displayName(p.profile) + (isSelf ? ` ${t("(you)")}` : "") : isSelf ? t("You") : t("Member"),
       stream: inThisChannel
         ? (isSelf ? session.localStream : session.remoteStreams.get(p.user_id)) ?? null
         : null,
@@ -136,7 +138,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
               <IconSpeaker size={34} />
             </span>
             <h2 className="text-[20px] font-bold leading-6 text-header-primary">{channelName}</h2>
-            <p className="mt-1.5 text-[14px] text-header-secondary">No one is currently in voice</p>
+            <p className="mt-1.5 text-[14px] text-header-secondary">{t("No one is currently in voice")}</p>
           </div>
         ) : (
           <div className="flex min-h-0 w-full max-w-5xl flex-1 flex-col py-4">
@@ -170,7 +172,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
                 className="flex h-12 items-center gap-2 rounded-full bg-button-green px-6 text-[15px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
               >
                 <IconPhone size={20} />
-                {joining ? "Joining…" : "Join Voice"}
+                {joining ? t("Joining…") : t("Join Voice")}
               </button>
             </>
           ) : (

@@ -20,6 +20,7 @@ import { IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
 import { TypingIndicator } from "./TypingIndicator";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { toReplyAuthor, type MessageSendOptions, type MessageContext, type MessageReaction, type ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
@@ -37,14 +38,15 @@ import {
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 
 function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
+  const { t } = useI18n();
   return (
     <div
       className={`${animate ? "divider-in " : ""}relative mx-4 mb-2 mt-6 flex h-0 items-center border-t border-status-dnd`}
       role="separator"
-      aria-label="New messages"
+      aria-label={t("New messages")}
     >
       <span className="absolute -top-[9px] right-0 rounded-[8px] rounded-l-none bg-status-dnd py-px pl-1 pr-1.5 text-[10px] font-bold uppercase leading-[13px] text-white before:absolute before:-left-[5px] before:top-0 before:h-full before:w-[6px] before:bg-status-dnd before:[clip-path:polygon(100%_0,100%_100%,0_50%)]">
-        New
+        {t("New")}
       </span>
     </div>
   );
@@ -68,8 +70,8 @@ function DayDivider({ label }: { label: string }) {
   );
 }
 
-function dayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+function dayLabel(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" });
 }
 
 const REPLY_AUTHOR_COLUMNS = "id, username, display_name, avatar_url, accent_color, accent_color_2, avatar_crop, equipped_ring_effect";
@@ -544,6 +546,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     loadDmContextWindow,
     loadGroupContextWindow,
   } = useApp();
+  const { t, language } = useI18n();
   const replyPreviews = useReplyPreviews(messages, messageContext, currentProfile);
   // Tether is a mentionable entity but never a real server member: append its
   // profile to the render list so "@tether" tokenizes as a blue mention chip
@@ -584,11 +587,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     let prev = "";
     for (let i = 0; i < enriched.length; i += 1) {
       const d = new Date(enriched[i].created_at).toDateString();
-      out[i] = d !== prev ? dayLabel(enriched[i].created_at) : null;
+      out[i] = d !== prev ? dayLabel(enriched[i].created_at, language) : null;
       prev = d;
     }
     return out;
-  }, [enriched]);
+  }, [enriched, language]);
 
   // Per-message reaction lookup. The old code ran `reactions.filter(...)`
   // per row (O(rows × reactions)) on every render; one grouped pass is O(n).
@@ -1055,7 +1058,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     onClick={() => void requestLoadMore()}
                     className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                   >
-                    Load earlier messages
+                    {t("Load earlier messages")}
                   </button>
                 </div>
               )}
@@ -1137,7 +1140,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
               onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
               className="pointer-events-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
             >
-              New messages
+              {t("New messages")}
             </button>
           )}
           {showScrollDown && (
@@ -1145,7 +1148,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
               type="button"
               onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
               className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-bg-secondary text-text-normal shadow-lg transition-transform hover:scale-105"
-              aria-label="Scroll to bottom"
+              aria-label={t("Scroll to bottom")}
             >
               ↓
             </button>
@@ -1162,7 +1165,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           </div>
         ) : (
         <ChatInput
-          placeholder={placeholder ?? (messageContext === "dm" ? `Message @${channelName}` : messageContext === "channel" ? `Message #${channelName}` : `Message ${channelName}`)}
+          placeholder={placeholder ?? (messageContext === "dm" ? t("Message @{name}", { name: channelName }) : messageContext === "channel" ? t("Message #{name}", { name: channelName }) : t("Message {name}", { name: channelName }))}
           members={members}
           roles={roles}
           channels={channels}

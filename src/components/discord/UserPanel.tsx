@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { usePresence } from "@/hooks/usePresence";
 import { SubscriptionBadge } from "@/components/ui/SubscriptionBadge";
@@ -35,6 +36,7 @@ interface UserPanelProps {
 
 export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: UserPanelProps) {
   const { profile, user, micMuted, deafened, setMicMuted, setDeafened, presenceMap, voiceJoinedChannelId } = useApp();
+  const { t } = useI18n();
   const { plan } = useSubscription(profile?.id);
   const [popupOpen, setPopupOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -70,7 +72,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
       <button
         type="button"
         onClick={handleAvatarClick}
-        aria-label="Open your profile"
+        aria-label={t("Open your profile")}
         className="-ml-0.5 mr-1 flex min-w-[120px] flex-1 items-center gap-2 rounded-[4px] py-1 pl-0.5 pr-2 text-left transition-colors duration-100 hover:bg-interactive-selected"
       >
         <div className="relative shrink-0">
@@ -134,11 +136,12 @@ function PanelIconButton({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <Tooltip label={label} side="top">
       <button
         type="button"
-        aria-label={label}
+        aria-label={t(label)}
         aria-pressed={pressed}
         onClick={onClick}
         className={`group flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] transition-colors duration-100 hover:bg-interactive-selected ${

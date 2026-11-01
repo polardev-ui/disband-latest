@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "@/contexts/I18nContext";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "./Tooltip";
@@ -117,6 +118,7 @@ export function ChannelList({
   bannerUrl,
   onOpenServerMenu,
 }: ChannelListProps) {
+  const { t } = useI18n();
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => getCollapsedCategories());
 
@@ -346,20 +348,20 @@ export function ChannelList({
   const renderAddChannelComposer = () => (
     <div className="mb-1 rounded-md bg-bg-accent/50 px-1.5 py-1.5">
       <div className="mb-1 flex items-center gap-1">
-        {(["text", "voice"] as const).map((t) => (
+        {(["text", "voice"] as const).map((kind) => (
           <button
-            key={t}
+            key={kind}
             type="button"
-            onClick={() => setAddChannelType(t)}
-            title={t === "text" ? "Text channel" : "Voice channel"}
+            onClick={() => setAddChannelType(kind)}
+            title={kind === "text" ? t("Text channel") : t("Voice channel")}
             className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
-              addChannelType === t
+              addChannelType === kind
                 ? "bg-brand/15 text-text-normal"
                 : "text-text-muted hover:text-text-normal"
             }`}
           >
-            {t === "text" ? <IconHash size={12} /> : <IconSpeaker size={12} />}
-            {t === "text" ? "Text" : "Voice"}
+            {kind === "text" ? <IconHash size={12} /> : <IconSpeaker size={12} />}
+            {kind === "text" ? t("Text") : t("Voice")}
           </button>
         ))}
       </div>
@@ -372,7 +374,7 @@ export function ChannelList({
             if (e.key === "Enter") void submitAddChannel();
             if (e.key === "Escape") setAddChannelTarget(null);
           }}
-          placeholder={addChannelType === "text" ? "New channel" : "New voice channel"}
+          placeholder={addChannelType === "text" ? t("New channel") : t("New voice channel")}
           className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
         />
         <button
@@ -381,7 +383,7 @@ export function ChannelList({
           disabled={busy}
           className="shrink-0 text-xs font-medium text-brand hover:underline"
         >
-          Create
+          {t("Create")}
         </button>
       </div>
     </div>
@@ -436,7 +438,7 @@ export function ChannelList({
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
           {ch.type === "voice" && ch.locked && (
-            <span className="shrink-0 text-channels-default" title="Locked" aria-label="Locked">
+            <span className="shrink-0 text-channels-default" title={t("Locked")} aria-label={t("Locked")}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M17 9V7A5 5 0 0 0 7 7v2a3 3 0 0 0-3 3v7a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-7a3 3 0 0 0-3-3ZM9 7a3 3 0 0 1 6 0v2H9V7Z" />
               </svg>
@@ -444,7 +446,7 @@ export function ChannelList({
           )}
           {ch.type === "voice" && ch.user_limit ? (
             <span
-              title={participants.length >= ch.user_limit ? "Full" : `${participants.length} of ${ch.user_limit}`}
+              title={participants.length >= ch.user_limit ? t("Full") : t("{count} of {limit}", { count: participants.length, limit: ch.user_limit })}
               className={`shrink-0 rounded-[3px] px-1 text-[11px] font-semibold tabular-nums leading-4 ${
                 participants.length >= ch.user_limit ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-tertiary text-channels-default"
               }`}
@@ -471,8 +473,8 @@ export function ChannelList({
               <span
                 role="button"
                 tabIndex={-1}
-                aria-label={`Edit ${ch.name}`}
-                title="Edit Channel"
+                aria-label={t("Edit {name}", { name: ch.name })}
+                title={t("Edit Channel")}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -492,7 +494,7 @@ export function ChannelList({
             {participants.map((vp) => (
               <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default hover:bg-interactive-hover hover:text-text-normal">
                 <MiniAvatar profile={vp.profile} />
-                <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : "Unknown"}</span>
+                <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : t("Unknown")}</span>
                 {vp.muted && <IconMicOff size={16} className="shrink-0 text-interactive-normal" />}
                 {vp.deafened && <IconHeadphonesOff size={16} className="shrink-0 text-interactive-normal" />}
               </span>
@@ -535,8 +537,8 @@ export function ChannelList({
           <button
             type="button"
             onClick={() => startAddChannel(cat.id)}
-            aria-label={`Add channel to ${cat.name}`}
-            title="Create Channel"
+            aria-label={t("Add channel to {name}", { name: cat.name })}
+            title={t("Create Channel")}
             className="mt-3 shrink-0 text-interactive-normal hover:text-interactive-active"
           >
             <IconPlus size={18} />
@@ -609,7 +611,12 @@ export function ChannelList({
             <path fill="currentColor" d="M12 2 5 7v10l7 5 7-5V7l-7-5Zm0 3.2 4.5 3.2v7.2L12 18.8l-4.5-3.2V8.4L12 5.2Z" />
           </svg>
           <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-header-secondary">
-            {(catalystCount ?? 0) > 0 ? `Level ${(catalystCount ?? 0) >= 6 ? 3 : (catalystCount ?? 0) >= 3 ? 2 : 1} · ${catalystCount} ${(catalystCount ?? 0) === 1 ? "Boost" : "Boosts"}` : "Boost this space"}
+            {(catalystCount ?? 0) > 0
+              ? t((catalystCount ?? 0) === 1 ? "Level {level} · {count} Boost" : "Level {level} · {count} Boosts", {
+                  level: (catalystCount ?? 0) >= 6 ? 3 : (catalystCount ?? 0) >= 3 ? 2 : 1,
+                  count: catalystCount ?? 0,
+                })
+              : t("Boost this space")}
           </span>
           <IconChevron size={12} className="-rotate-90 shrink-0 text-interactive-normal" />
         </button>
@@ -629,11 +636,11 @@ export function ChannelList({
                   setNewCategoryName("");
                 }
               }}
-              placeholder="Category name"
+              placeholder={t("Category name")}
               className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
             />
             <button type="button" onClick={() => void submitAddCategory()} disabled={busy} className="text-xs text-brand">
-              Add
+              {t("Add")}
             </button>
             <button type="button" onClick={() => setAddingCategory(false)} className="text-text-muted">
               <IconClose size={14} />
@@ -675,14 +682,14 @@ export function ChannelList({
                     collapsed[UNCATEGORIZED_KEY] ? "-rotate-90" : ""
                   }`}
                 />
-                <span className="truncate">Uncategorized</span>
+                <span className="truncate">{t("Uncategorized")}</span>
               </button>
               {canManageChannels && (
                 <button
                   type="button"
                   onClick={() => startAddChannel(null)}
-                  aria-label="Add uncategorized channel"
-                  title="Create Channel"
+                  aria-label={t("Add uncategorized channel")}
+                  title={t("Create Channel")}
                   className="mt-3 shrink-0 text-interactive-normal hover:text-interactive-active"
                 >
                   <IconPlus size={18} />

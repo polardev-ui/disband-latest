@@ -7,6 +7,7 @@ import { useProfileMember } from "@/hooks/useProfileMember";
 import { usePresence } from "@/hooks/usePresence";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useZoom, ZOOM_STEP } from "@/hooks/useZoom";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
@@ -97,6 +98,7 @@ import { UserProfilePopout } from "./UserProfilePopout";
 
 export function DiscordApp() {
   const app = useApp();
+  const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const { theme, setTheme } = useTheme();
 
@@ -682,7 +684,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "unfolder",
-                label: `Remove from ${inFolder.name}`,
+                label: t("Remove from {name}", { name: inFolder.name }),
                 icon: <IconFolderMinus size={16} />,
                 onClick: () => {
                   const state = app.serverListState.find((s) => s.server_id === server.id);
@@ -695,7 +697,7 @@ export function DiscordApp() {
           .filter((f) => f.id !== inFolder?.id)
           .map((f) => ({
             id: `move-folder-${f.id}`,
-            label: `Move to ${f.name}`,
+            label: t("Move to {name}", { name: f.name }),
             icon: <IconFolder size={16} />,
             onClick: () => {
               const members = app.serverListState.filter((s) => s.folder_id === f.id);
@@ -1154,7 +1156,7 @@ export function DiscordApp() {
       if (isOwner && member.id !== app.user?.id && member.id !== activeGroup.owner_id) {
         items.push({
           id: "remove",
-          label: `Remove ${displayName(member)}`,
+          label: t("Remove {name}", { name: displayName(member) }),
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
@@ -1333,7 +1335,7 @@ export function DiscordApp() {
             const remaining = mins >= 1440 ? `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h` : mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
             items.push({
               id: "timeout-info",
-              label: `Timed out · ${remaining} left`,
+              label: t("Timed out · {remaining} left", { remaining }),
               icon: <IconTimer size={16} />,
               disabled: true,
               onClick: () => {},
