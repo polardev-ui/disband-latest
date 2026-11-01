@@ -22,6 +22,11 @@ export async function POST(request: NextRequest) {
       bannerUrl?: string | null;
       bio?: string | null;
       scopes?: string[];
+      description?: string | null;
+      tags?: string[];
+      termsUrl?: string | null;
+      privacyUrl?: string | null;
+      isPublic?: boolean;
     };
 
     if (!body.botId) {
@@ -64,6 +69,34 @@ export async function POST(request: NextRequest) {
       }
       updates.scopes = body.scopes;
     }
+
+    if (body.description !== undefined) {
+      const d = body.description?.trim() || null;
+      if (d && d.length > 400) return NextResponse.json({ error: "Description can be up to 400 characters." }, { status: 400 });
+      updates.description = d;
+    }
+
+    if (body.tags !== undefined) {
+      const tags = Array.isArray(body.tags)
+        ? [...new Set(body.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean))]
+        : [];
+      if (tags.length > 5 || tags.some((t) => t.length > 20 || t.includes(","))) {
+        return NextResponse.json({ error: "Up to 5 tags, each up to 20 characters." }, { status: 400 });
+      }
+      updates.tags = tags;
+    }
+
+    for (const [key, column] of [["termsUrl", "terms_url"], ["privacyUrl", "privacy_url"]] as const) {
+      const raw = body[key];
+      if (raw === undefined) continue;
+      const v = raw?.trim() || null;
+      if (v && (!/^https:\/\/\S+$/.test(v) || v.length > 500)) {
+        return NextResponse.json({ error: "Links must start with https://" }, { status: 400 });
+      }
+      updates[column] = v;
+    }
+
+    if (typeof body.isPublic === "boolean") updates.is_public = body.isPublic;
 
     if (Object.keys(updates).length > 0) {
       const { error } = await service.from("bots").update(updates).eq("id", body.botId);
