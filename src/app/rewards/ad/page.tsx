@@ -56,7 +56,10 @@ export default function RewardedAdPage() {
         adStatusCallbackFn: (status) => {
           if (status.type === "started") setState("playing");
           else if (status.type === "complete") setState("done");
-          else if (status.type === "skipped" || status.type === "manuallyEnded") {
+          else if (status.type === "consentDeclined") {
+            setState("error");
+            setMessage("Ads need your agreement to play. You can still earn Glimmers by chatting.");
+          } else if (status.type === "skipped" || status.type === "manuallyEnded") {
             setState("error");
             setMessage("The ad was closed early, so it doesn't count.");
           } else if (status.type === "allAdsCompleted") {
