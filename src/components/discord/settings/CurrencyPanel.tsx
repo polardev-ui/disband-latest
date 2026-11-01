@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
-import { CURRENCY, EARN_RULES, LEDGER_LABELS, REWARDS, adReward, formatCurrency } from "@/lib/currency";
+import { CURRENCY, EARN_RULES, LEDGER_LABELS, REWARDS, AD_DAILY_CAP, AD_REWARD, formatCurrency } from "@/lib/currency";
 import { decorationItems } from "@/lib/shop";
 import { confirmDialog } from "@/lib/dialogs";
 import { SettingsSection } from "./SettingsPrimitives";
@@ -155,7 +155,7 @@ export function CurrencyPanel() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Watch an ad" description={`Video ads you choose to watch. The longer the ad, the more you earn: 35 seconds pays ${adReward(35)}, a minute pays ${adReward(60)}.`}>
+      <SettingsSection title="Watch an ad" description={`Video ads you choose to watch. Each one you finish pays ${AD_REWARD}, up to ${AD_DAILY_CAP} a day.`}>
         <div className="px-5 py-4">
           {adsReady ? (
             <a href="/rewards/ad" className={btn.primary}>Watch an ad</a>

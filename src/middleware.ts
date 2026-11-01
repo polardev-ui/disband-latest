@@ -17,6 +17,10 @@ const csp = [
   "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com https:",
 ].join("; ");
 
+// The ad page loads AppLixir's player, which pulls ad scripts from whichever
+// network fills the slot, so its scripts can come from any https origin.
+const adCsp = csp.replace("script-src 'self'", "script-src 'self' https:");
+
 const ALLOWED_ORIGINS = new Set([
   "tauri://localhost",
   "https://tauri.localhost",
@@ -92,7 +96,7 @@ function middlewareForPages(_request: NextRequest) {
   const requestHeaders = new Headers(_request.headers);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 
-  response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("Content-Security-Policy", _request.nextUrl.pathname === "/rewards/ad" ? adCsp : csp);
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

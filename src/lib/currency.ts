@@ -24,6 +24,10 @@ export interface EarnRule {
   limit: string;
 }
 
+/** Every completed ad pays the same, up to AD_DAILY_CAP a day. */
+export const AD_REWARD = 40;
+export const AD_DAILY_CAP = 400;
+
 export const EARN_RULES: EarnRule[] = [
   { id: "chat", label: "Chat: every 18 messages", amount: 10, limit: "Up to 400 a day" },
   { id: "create_server", label: "Create a space", amount: 85, limit: "Twice a day" },
@@ -31,7 +35,7 @@ export const EARN_RULES: EarnRule[] = [
   { id: "join_official", label: "Join the Disband Official space", amount: 30, limit: "Once" },
   { id: "avatar", label: "Change your profile picture", amount: 10, limit: "Once a day" },
   { id: "banner", label: "Change your banner", amount: 10, limit: "Once a day" },
-  { id: "ad", label: "Watch a video ad", amount: 240, limit: "35s pays 240, 60s pays 480, longer pays more" },
+  { id: "ad", label: "Watch a video ad", amount: AD_REWARD, limit: `Up to ${AD_DAILY_CAP} a day` },
 ];
 
 export interface Reward {
@@ -59,7 +63,3 @@ export const LEDGER_LABELS: Record<string, string> = {
   redeem_decoration: "Redeemed a decoration",
 };
 
-/** Same curve as the database's ad_reward_for. */
-export function adReward(seconds: number): number {
-  return Math.max(0, Math.min(1600, Math.round(9.6 * Math.min(seconds, 180) - 96)));
-}

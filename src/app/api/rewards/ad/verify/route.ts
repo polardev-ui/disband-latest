@@ -1,41 +1,46 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { adReward } from "@/lib/currency";
+import { AD_DAILY_CAP, AD_REWARD } from "@/lib/currency";
 
 /**
- * Server-side verification callback from the ad network, once a rewarded
- * view completes. Signed with REWARDED_AD_SECRET:
- *   sig = hex(HMAC-SHA256(secret, `${view_id}:${seconds}`))
- * Pays once per view (the ledger's unique reference), for the seconds the
- * network says were watched.
+ * AppLixir's server callback, once a rewarded view completes (mode
+ * md5AndTid). The userId is the ad_views id the page passed in, and
+ *   signature = md5(gameApiKey + gameId + userId + tid + secret)
+ * Pays once per view. AppLixir does not retry, so answer 2xx quickly.
  */
 export async function GET(req: Request) {
-  const secret = process.env.REWARDED_AD_SECRET;
+  const secret = process.env.APPLIXIR_CALLBACK_SECRET;
   const supabase = getServiceSupabase();
   if (!secret || !supabase) return NextResponse.json({ ok: false }, { status: 503 });
 
-  const url = new URL(req.url);
-  const viewId = url.searchParams.get("view_id") ?? "";
-  const seconds = Number(url.searchParams.get("seconds"));
-  const sig = url.searchParams.get("sig") ?? "";
-  if (!/^[0-9a-f-]{36}$/i.test(viewId) || !Number.isFinite(seconds) || seconds <= 0 || !/^[0-9a-f]{64}$/i.test(sig)) {
+  const q = new URL(req.url).searchParams;
+  const gameApiKey = q.get("gameApiKey") ?? "";
+  const gameId = q.get("gameId") ?? "";
+  const viewId = q.get("userId") ?? "";
+  const tid = q.get("tid") ?? "";
+  const signature = q.get("signature") ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(viewId) || !tid || !/^[0-9a-f]{32}$/i.test(signature)) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
-  const expected = createHmac("sha256", secret).update(`${viewId}:${Math.floor(seconds)}`).digest();
-  if (!timingSafeEqual(expected, Buffer.from(sig, "hex"))) return NextResponse.json({ ok: false }, { status: 401 });
+  if (process.env.APPLIXIR_API_KEY && gameApiKey !== process.env.APPLIXIR_API_KEY) {
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
+  const expected = createHash("md5").update(gameApiKey + gameId + viewId + tid + secret).digest();
+  if (!timingSafeEqual(expected, Buffer.from(signature, "hex"))) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const { data: view } = await supabase.from("ad_views").select("id, user_id, started_at, verified_at").eq("id", viewId).maybeSingle();
+  const { data: view } = await supabase.from("ad_views").select("id, user_id, verified_at").eq("id", viewId).maybeSingle();
   if (!view) return NextResponse.json({ ok: false }, { status: 404 });
   if (view.verified_at) return NextResponse.json({ ok: true, already: true });
-  // A view can't have run longer than the time since it started.
-  const elapsed = (Date.now() - Date.parse(view.started_at)) / 1000;
-  const watched = Math.min(Math.floor(seconds), Math.floor(elapsed));
-  const reward = adReward(watched);
 
-  await supabase.from("ad_views").update({ verified_at: new Date().toISOString(), seconds: watched, reward }).eq("id", viewId).is("verified_at", null);
-  if (reward > 0) {
-    await supabase.rpc("wallet_apply", { p_user: view.user_id, p_amount: reward, p_reason: "ad", p_ref: viewId, p_daily_cap: 8000 });
-  }
-  return NextResponse.json({ ok: true, reward });
+  const { data: claimed } = await supabase.from("ad_views")
+    .update({ verified_at: new Date().toISOString(), reward: AD_REWARD })
+    .eq("id", viewId).is("verified_at", null).select("id");
+  if (!claimed?.length) return NextResponse.json({ ok: true, already: true });
+  const { data: paid } = await supabase.rpc("wallet_apply", {
+    p_user: view.user_id, p_amount: AD_REWARD, p_reason: "ad", p_ref: viewId, p_daily_cap: AD_DAILY_CAP,
+  });
+  // Over the daily cap: the view still counts, it just pays nothing.
+  if (!paid) await supabase.from("ad_views").update({ reward: 0 }).eq("id", viewId);
+  return NextResponse.json({ ok: true, reward: paid ? AD_REWARD : 0 });
 }
