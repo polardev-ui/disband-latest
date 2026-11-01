@@ -1453,6 +1453,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let lastKey: string | null = null;
     let lastPublished: Listening | null = null;
     let timer: number | null = null;
+    // Nothing linked: the server said so. Polling every few seconds to hear
+    // "not connected" again was most of this endpoint's traffic, so check
+    // rarely until something is linked (a connection made in another app
+    // still shows up within a few minutes, or on the next reload).
+    let disconnected = false;
+    let lastTickAt = 0;
     const supabase = getSupabaseClient();
 
     const publish = (listening: Listening | null) => {
@@ -1485,6 +1491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const tick = async () => {
       if (!alive || inFlight) return;
       inFlight = true;
+      lastTickAt = Date.now();
       try {
         const lastfmUser = readLastfmUsername(userId);
         let next: Listening | null = null;
@@ -1505,6 +1512,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Last.fm fallback). A provider error, on the other hand, keeps the
           // last known track until the next tick.
           if (failed) return;
+          disconnected = true;
           if (lastKey !== "disconnected") {
             lastKey = "disconnected";
             lastPublished = null;
@@ -1512,6 +1520,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
+        disconnected = false;
         if (!next && lastfmUser) {
           try {
             next = await fetchLastfmNowPlaying(lastfmUser);
@@ -1548,11 +1557,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timer = window.setTimeout(async () => {
         await tick();
         schedule();
-      }, hidden ? 30_000 : 5_000);
+      }, disconnected ? 300_000 : hidden ? 30_000 : 5_000);
     };
 
     const wake = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // Focus fires often (every click back into the window); with nothing
+      // linked it shouldn't each cost a request.
+      if (disconnected && Date.now() - lastTickAt < 60_000) return;
       void tick();
     };
 
