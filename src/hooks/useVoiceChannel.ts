@@ -781,7 +781,11 @@ export function useVoiceChannel(
           onState: () => {},
         });
         try {
-          await seat.start(rawMic ? localStreamRef.current.getAudioTracks()[0] : null);
+          // Never let the voice server hold the join: after 8 seconds, go direct.
+          await Promise.race([
+            seat.start(rawMic ? localStreamRef.current.getAudioTracks()[0] : null),
+            new Promise((_, reject) => window.setTimeout(() => reject(new Error("Voice server took too long")), 8_000)),
+          ]);
           sfuRef.current = seat;
           publishSfuTracks(["audio"]);
         } catch (sfuError) {

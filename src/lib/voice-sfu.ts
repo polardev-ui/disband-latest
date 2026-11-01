@@ -96,6 +96,7 @@ export class SfuSeat {
   start(mic: MediaStreamTrack | null): Promise<void> {
     return this.run(async () => {
       await this.api("session");
+      console.info("[voice] SFU session open");
       const pc = new RTCPeerConnection({ iceServers: await fetchIceServersQuick(), bundlePolicy: "max-bundle" });
       this.pc = pc;
       pc.ontrack = (ev) => {
@@ -105,6 +106,7 @@ export class SfuSeat {
       };
       pc.onconnectionstatechange = () => this.cb.onState(pc.connectionState);
       if (mic) await this.pushNow("audio", mic);
+      console.info("[voice] SFU mic sending");
     });
   }
 
@@ -136,6 +138,7 @@ export class SfuSeat {
       offer: { type: "offer", sdp: pc.localDescription?.sdp },
       tracks: [{ mid: transceiver.mid, trackName: name }],
     });
+    console.info("[voice] SFU push answered", name, !!res.sessionDescription);
     if (res.sessionDescription) await pc.setRemoteDescription(res.sessionDescription);
     this.sending.add(name);
   }
