@@ -126,7 +126,9 @@ export function useVoiceChannel(
       .from("voice_presence")
       .update({ muted: micMuted, deafened })
       .eq("channel_id", channelId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      // A Supabase query is only sent once something awaits it; `void` alone sent nothing.
+      .then(() => {}, () => {});
   }, [channelId, userId, joined, micMuted, deafened]);
 
   const prevPresenceRef = useRef<Set<string>>(new Set());
@@ -653,7 +655,8 @@ export function useVoiceChannel(
       .from("voice_presence")
       .update({ sfu_tracks: tracks })
       .eq("channel_id", channelId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .then(() => {}, () => {});
   }, [channelId, userId]);
 
   const cleanup = useCallback(async () => {
@@ -699,7 +702,9 @@ export function useVoiceChannel(
     if (!joined || !channelId || !userId) return;
     const supabase = getSupabaseClient();
     const beat = () => {
-      void supabase.rpc("touch_voice_presence", { p_channel: channelId });
+      // Must be awaited or .then'd to actually send: this heartbeat never ran
+      // before, so the prune job dropped everyone after two minutes in a room.
+      void supabase.rpc("touch_voice_presence", { p_channel: channelId }).then(() => {}, () => {});
     };
     beat();
     const timer = window.setInterval(beat, 30_000);
