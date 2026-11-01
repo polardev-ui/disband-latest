@@ -20,15 +20,21 @@ export function useServerVoicePresence(serverId: string | null) {
       return;
     }
     let active = true;
+    // The space's voice channel ids barely change; reading them on every
+    // presence event doubled each update's round trips.
+    let voiceIds: string[] | null = null;
+    let timer: number | undefined;
 
     const load = async () => {
       const supabase = getSupabaseClient();
-      const { data: chs } = await supabase
-        .from("channels")
-        .select("id")
-        .eq("server_id", serverId)
-        .eq("type", "voice");
-      const voiceIds = ((chs as { id: string }[] | null) ?? []).map((c) => c.id);
+      if (!voiceIds) {
+        const { data: chs } = await supabase
+          .from("channels")
+          .select("id")
+          .eq("server_id", serverId)
+          .eq("type", "voice");
+        voiceIds = ((chs as { id: string }[] | null) ?? []).map((c) => c.id);
+      }
       if (!active) return;
       if (voiceIds.length === 0) {
         setByChannel(new Map());
@@ -50,13 +56,29 @@ export function useServerVoicePresence(serverId: string | null) {
 
     void load();
 
+    // One burst of changes (a join writes, then heartbeats) is one reload.
+    // Changes in other spaces' channels are ignored.
+    const schedule = (channelId?: string) => {
+      if (channelId && voiceIds && !voiceIds.includes(channelId)) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void load(), 120);
+    };
+
     const sub = getSupabaseClient()
       .channel(`server-voice:${serverId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "voice_presence" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "voice_presence" }, (change) => {
+        const row = (change.new && "channel_id" in change.new ? change.new : change.old) as { channel_id?: string };
+        schedule(row?.channel_id);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${serverId}` }, () => {
+        voiceIds = null;
+        schedule();
+      })
       .subscribe();
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
       void sub.unsubscribe();
     };
   }, [serverId]);

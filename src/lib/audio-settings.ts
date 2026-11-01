@@ -97,7 +97,7 @@ export const NOISE_MODE_KEY = "disband:noise-suppression-mode";
 export type NoiseSuppressionMode = "off" | "standard" | "ai";
 
 export function getNoiseSuppressionMode(): NoiseSuppressionMode {
-  if (typeof window === "undefined") return "ai";
+  if (typeof window === "undefined") return "standard";
   try {
     const value = localStorage.getItem(NOISE_MODE_KEY);
     if (value === "ai" || value === "standard" || value === "off") return value;
@@ -110,7 +110,10 @@ export function getNoiseSuppressionMode(): NoiseSuppressionMode {
   } catch {
     // Storage blocked: fall through to the default.
   }
-  return "ai";
+  // The AI filter is opt-in: on slower machines its model can't keep up with
+  // the audio clock, which comes out as crackle and static for everyone in
+  // the call. The browser's suppressor is cheap and steady.
+  return "standard";
 }
 
 export function setNoiseSuppressionMode(mode: NoiseSuppressionMode) {

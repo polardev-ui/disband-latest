@@ -51,6 +51,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const channel = channelProp ?? lastChannelRef.current;
   const [name, setName] = useState("");
   const [readOnly, setReadOnly] = useState(false);
+  const [userLimit, setUserLimit] = useState(0);
+  const [locked, setLocked] = useState(false);
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
@@ -80,6 +82,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     if (!channel) return;
     setName(channel.name);
     setReadOnly(!!channel.read_only);
+    setUserLimit(channel.user_limit ?? 0);
+    setLocked(!!channel.locked);
     setRows(null);
     setDraft({});
     setSaved(false);
@@ -147,6 +151,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const dirty =
     name.trim() !== channel.name ||
     readOnly !== !!channel.read_only ||
+    userLimit !== (channel.user_limit ?? 0) ||
+    locked !== !!channel.locked ||
     (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key]));
 
   const save = async () => {
@@ -163,6 +169,13 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       if (readOnly !== !!channel.read_only) {
         const err = await app.setChannelReadOnly(channel.id, readOnly);
         if (err) throw new Error(err);
+      }
+      if (userLimit !== (channel.user_limit ?? 0) || locked !== !!channel.locked) {
+        const { error: limitErr } = await supabase
+          .from("channels")
+          .update({ user_limit: userLimit > 0 ? userLimit : null, locked })
+          .eq("id", channel.id);
+        if (limitErr) throw new Error(limitErr.message);
       }
       for (const row of rows ?? []) {
         const cell = draft[row.role_id] ?? { can_view: null, can_post: null, can_react: null, can_attach: null };
@@ -185,6 +198,28 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       setSaving(false);
     }
   };
+
+  const lockSwitch = (
+    <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-divider/60 py-4">
+      <span>
+        <span className="block text-[16px] font-medium text-header-primary">Lock channel</span>
+        <span className="mt-1 block text-[14px] text-text-muted">
+          Nobody new can join. People already in stay, and admins can still join.
+        </span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={locked}
+        onClick={() => setLocked(!locked)}
+        className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${locked ? "bg-status-online" : "bg-[#80848e]"}`}
+      >
+        <span
+          className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-all ${locked ? "left-[19px]" : "left-[3px]"}`}
+        />
+      </button>
+    </label>
+  );
 
   return (
     <SettingsLayer
@@ -250,7 +285,32 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 </div>
               </label>
 
-              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-divider/60 py-4">
+{channel.type === "voice" ? (
+                <>
+                  <div className="border-y border-divider/60 py-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-[16px] font-medium text-header-primary">User limit</span>
+                      <span className="text-[14px] font-semibold text-text-normal">
+                        {userLimit > 0 ? `${userLimit} ${userLimit === 1 ? "person" : "people"}` : "No limit"}
+                      </span>
+                    </div>
+                    <span className="mt-1 block text-[14px] text-text-muted">
+                      Once this many people are in, nobody else can join. Admins can always join.
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={99}
+                      value={userLimit}
+                      onChange={(e) => setUserLimit(Number(e.target.value))}
+                      aria-label="User limit"
+                      className="mt-3 w-full accent-brand"
+                    />
+                  </div>
+                  {lockSwitch}
+                </>
+              ) : (
+                              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-divider/60 py-4">
                 <span>
                   <span className="block text-[16px] font-medium text-header-primary">Announcement Channel</span>
                   <span className="mt-1 block text-[14px] text-text-muted">
@@ -269,6 +329,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   />
                 </button>
               </label>
+              )}
             </div>
           </section>
 

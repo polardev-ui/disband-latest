@@ -1911,9 +1911,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       label="Noise suppression"
                       description={
                         noiseMode === "ai"
-                          ? "AI noise suppression runs a speech model on your device and keeps only your voice. Changes apply straight away, even mid-call."
+                          ? "AI noise suppression runs a speech model on your device and keeps only your voice. It needs a fast computer: if people say you sound crackly, switch back to Standard."
                           : noiseMode === "standard"
-                            ? "Your browser's built-in filter. Lighter on the CPU, but lets more noise through."
+                            ? "Your browser's built-in filter. Steady on any computer; very loud noise can still get through."
                             : "No filtering. Best for music or a studio mic in a quiet room."
                       }
                     >
@@ -1927,8 +1927,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                         className={settingsInputClass}
                       >
-                        <option value="ai">AI noise suppression (recommended)</option>
-                        <option value="standard">Standard</option>
+                        <option value="standard">Standard (recommended)</option>
+                        <option value="ai">AI noise suppression</option>
                         <option value="off">None</option>
                       </select>
                     </SettingRow>

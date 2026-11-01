@@ -225,6 +225,10 @@ export interface Channel {
   position: number;
 
   read_only?: boolean;
+  /** Voice only: most people allowed in at once; null for no limit. */
+  user_limit?: number | null;
+  /** Voice only: nobody new can join. */
+  locked?: boolean;
   created_at: string;
 }
 

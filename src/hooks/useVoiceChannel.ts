@@ -17,6 +17,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
 import { fetchIceServers, fetchIceServersQuick } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
+import { PUBLIC_ENV } from "@/lib/public-env";
 
 interface SignalPayload {
   type: "offer" | "answer" | "ice" | "leave" | "screen" | "hello";
@@ -576,6 +577,9 @@ export function useVoiceChannel(
         }
       } else if (payload.type === "leave") {
         dropPeer(payload.from);
+        // Their presence row is deleted right behind this; show it now
+        // rather than waiting for the change feed.
+        void loadPresence();
       }
     },
     [createPeer, dropPeer, flushQueuedIce, loadPresence, userId],
@@ -629,6 +633,30 @@ export function useVoiceChannel(
     return () => window.clearInterval(timer);
   }, [joined, channelId, userId]);
 
+  // Closing the tab or app skips cleanup(), so the row used to linger until
+  // it aged out of voice_presence_live (90 seconds) and the room showed a
+  // ghost. A keepalive request survives the page unloading.
+  useEffect(() => {
+    if (!joined || !channelId || !userId) return;
+    const onPageHide = () => {
+      void signalRef.current?.send({
+        type: "broadcast",
+        event: "signal",
+        payload: { type: "leave", from: userId } satisfies SignalPayload,
+      });
+      void getSupabaseClient().auth.getSession().then(({ data }) => {
+        const token = data.session?.access_token;
+        if (!token) return;
+        void fetch(
+          `${PUBLIC_ENV.supabaseUrl}/rest/v1/voice_presence?channel_id=eq.${channelId}&user_id=eq.${userId}`,
+          { method: "DELETE", keepalive: true, headers: { apikey: PUBLIC_ENV.supabaseAnonKey, Authorization: `Bearer ${token}` } },
+        ).catch(() => {});
+      });
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [joined, channelId, userId]);
+
   const join = useCallback(async () => {
     if (!channelId || !userId) return;
     setError(null);
@@ -661,12 +689,14 @@ export function useVoiceChannel(
       // first join often sat in "Connecting…" with no media.
       await waitForSubscribed(ch);
 
-      await supabase.from("voice_presence").upsert({
+      const { error: presenceError } = await supabase.from("voice_presence").upsert({
         channel_id: channelId,
         user_id: userId,
         muted: micMuted,
         deafened,
       });
+      // A full or locked channel refuses the row (0197); say why.
+      if (presenceError) throw new Error(presenceError.message || "Could not join the voice channel");
       void ch.send({
         type: "broadcast",
         event: "signal",
@@ -781,6 +811,17 @@ export function useVoiceChannel(
         "postgres_changes",
         { event: "*", schema: "public", table: "voice_presence", filter: `channel_id=eq.${channelId}` },
         () => void loadPresence(),
+      )
+      // Realtime cannot filter DELETE events, so the filtered listener above
+      // never heard anyone leave; the room only caught up on the 20-second
+      // poll. The old row carries the key, so match the channel here.
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "voice_presence" },
+        (change) => {
+          const old = change.old as { channel_id?: string };
+          if (!old.channel_id || old.channel_id === channelId) void loadPresence();
+        },
       )
       .subscribe();
     return () => {

@@ -435,6 +435,23 @@ export function ChannelList({
             )}
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
+          {ch.type === "voice" && ch.locked && (
+            <span className="shrink-0 text-channels-default" title="Locked" aria-label="Locked">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M17 9V7A5 5 0 0 0 7 7v2a3 3 0 0 0-3 3v7a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-7a3 3 0 0 0-3-3ZM9 7a3 3 0 0 1 6 0v2H9V7Z" />
+              </svg>
+            </span>
+          )}
+          {ch.type === "voice" && ch.user_limit ? (
+            <span
+              title={participants.length >= ch.user_limit ? "Full" : `${participants.length} of ${ch.user_limit}`}
+              className={`shrink-0 rounded-[3px] px-1 text-[11px] font-semibold tabular-nums leading-4 ${
+                participants.length >= ch.user_limit ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-tertiary text-channels-default"
+              }`}
+            >
+              {String(participants.length).padStart(2, "0")}/{String(ch.user_limit).padStart(2, "0")}
+            </span>
+          ) : null}
           {mentions > 0 && (
             <span className="ml-1 flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white">
               {mentions > 99 ? "99+" : mentions}
