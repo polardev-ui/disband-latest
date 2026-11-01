@@ -180,4 +180,4 @@ $$;
 revoke all on function public.process_mention_fanout(integer, integer) from public, anon, authenticated;
 
 select cron.unschedule('mention-fanout') where exists (select 1 from cron.job where jobname = 'mention-fanout');
-select cron.schedule('mention-fanout', '10 seconds', 'select public.process_mention_fanout(2000, 10);');
+select cron.schedule('mention-fanout', '10 seconds', 'select public.process_mention_fanout(2000, 3);');
