@@ -172,6 +172,62 @@ async function reconcileIncident(result: ProbeResult) {
   return { opened: false, resolved: false };
 }
 
+/*
+ This function is started by pg_cron and writes to the same database, so a
+ database outage stops the checks instead of failing them, and used to leave
+ no trace on the status page. The first run after a gap records it: if the
+ newest check is more than a few minutes old, Disband was down for that span.
+*/
+const GAP_MS = 4 * 60_000;
+
+async function recordMissedChecks() {
+  const { data: last } = await supabase
+    .from("status_checks")
+    .select("checked_at")
+    .order("checked_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!last) return;
+  const from = Date.parse(last.checked_at);
+  const to = Date.now();
+  if (!Number.isFinite(from) || to - from < GAP_MS) return;
+
+  const minutes = Math.round((to - from) / 60_000);
+  const startedAt = new Date(from).toISOString();
+  const resolvedAt = new Date(to).toISOString();
+  const { data: incident, error } = await supabase
+    .from("status_incidents")
+    .insert({
+      title: "Disband wasn't loading",
+      kind: "incident",
+      impact: "critical",
+      status: "resolved",
+      auto: true,
+      created_at: startedAt,
+      resolved_at: resolvedAt,
+    })
+    .select("id")
+    .single();
+  if (error || !incident) {
+    console.error("[status-probe] record gap", error?.message);
+    return;
+  }
+  await supabase.from("status_incident_updates").insert([
+    {
+      incident_id: incident.id,
+      status: "investigating",
+      body: "Our database stopped responding, so messages, spaces and sign-in didn't load.",
+      created_at: startedAt,
+    },
+    {
+      incident_id: incident.id,
+      status: "resolved",
+      body: `Back to normal after about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+      created_at: resolvedAt,
+    },
+  ]);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST" && req.method !== "GET") return json({ error: "method not allowed" }, 405);
   if (!(await authorised(req))) return json({ error: "unauthorized" }, 401);
@@ -187,6 +243,8 @@ Deno.serve(async (req) => {
     console.error("[status-probe] monitors", error.message);
     return json({ ok: false, error: "could not load monitors" }, 500);
   }
+
+  await recordMissedChecks();
 
   const monitors = (rows ?? []) as Monitor[];
   // Each probe has its own timeout. Run in parallel so one slow endpoint does
