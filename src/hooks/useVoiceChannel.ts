@@ -5,7 +5,7 @@ import { buildScreenConstraints } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import {
   attachRemoteTrack, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus,
-  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
+  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO, receivingVideo,
 } from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
 import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
@@ -321,18 +321,21 @@ export function useVoiceChannel(
               // A sendrecv m-line with no sender track still exposes a
               // receiver track. It is live but muted, and used to draw a
               // phantom "sharing" tile before the person ever shared. Only
-              // show it while media is actually flowing; unmute re-adds it.
-              const carrying = track.readyState === "live" && !track.muted;
-              setRemoteScreens((prev) => {
-                if (carrying) {
-                  const next = new Map(prev);
-                  next.set(remoteId, new MediaStream([track]));
-                  return next;
-                }
+              // show it once real frames decode: bandwidth probes unmute the
+              // track too, which put a "sharing" tile on everyone.
+              const hide = () => setRemoteScreens((prev) => {
                 if (!prev.has(remoteId)) return prev;
                 const next = new Map(prev);
                 next.delete(remoteId);
                 return next;
+              });
+              if (track.readyState !== "live" || track.muted) {
+                hide();
+                return;
+              }
+              void receivingVideo(ev.receiver).then((real) => {
+                if (!real || track.readyState !== "live" || track.muted) return;
+                setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
               });
               return;
             }

@@ -8,7 +8,7 @@ export function mapProfileError(message: string, code?: string): string {
 
   if (lower.includes("username is already taken")) return "That username is already taken.";
   if (lower.includes("username is not allowed")) return "That username is not allowed.";
-  if (lower.includes("bio cannot exceed")) return "Bio cannot exceed 190 characters.";
+  if (lower.includes("bio cannot exceed")) return "Your bio is longer than your plan allows.";
   if (lower.includes("cannot exceed")) return "Messages cannot exceed 4000 characters.";
   if (lower.includes("username 10 times")) return "You can only change your username 10 times per day.";
   if (lower.includes("username is required")) return "Enter a username.";

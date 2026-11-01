@@ -320,3 +320,29 @@ export function bindLaneStream(
     track.removeEventListener("unmute", sync);
   };
 }
+
+/**
+ * Whether a receiver is getting real video, not just bandwidth probes.
+ *
+ * Chrome probes bandwidth with padding packets on video m-lines that have no
+ * track behind them. Those packets unmute the remote track, so "unmuted"
+ * alone drew a "sharing" tile for everyone in the call. Decoded frames only
+ * come from a real share. Checks for up to `waitMs`.
+ */
+export async function receivingVideo(receiver: RTCRtpReceiver, waitMs = 4_000): Promise<boolean> {
+  const until = Date.now() + waitMs;
+  for (;;) {
+    try {
+      const stats = await receiver.getStats();
+      let decoded = false;
+      stats.forEach((s: { type?: string; kind?: string; framesDecoded?: number; frameWidth?: number }) => {
+        if (s.type === "inbound-rtp" && (s.framesDecoded ?? 0) > 0 && (s.frameWidth ?? 0) > 0) decoded = true;
+      });
+      if (decoded) return true;
+    } catch {
+      return false;
+    }
+    if (Date.now() >= until) return false;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}

@@ -31,6 +31,39 @@ import { giftUrl } from "@/lib/gifts";
 import { useApp } from "@/contexts/AppContext";
 import { mentionsTether, TETHER_AERO_NUDGE } from "@/lib/tether-client";
 
+interface SavedDraft { text: string; spans: MentionSpan[] }
+const drafts = new Map<string, SavedDraft>();
+const DRAFT_PREFIX = "disband:draft:";
+
+function readDraft(key: string): SavedDraft | null {
+  const inMemory = drafts.get(key);
+  if (inMemory) return inMemory;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedDraft;
+    if (typeof parsed?.text !== "string") return null;
+    const draft = { text: parsed.text, spans: Array.isArray(parsed.spans) ? parsed.spans : [] };
+    drafts.set(key, draft);
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(key: string, text: string, spans: MentionSpan[]) {
+  const empty = text.trim().length === 0;
+  if (empty) drafts.delete(key);
+  else drafts.set(key, { text, spans });
+  try {
+    if (empty) sessionStorage.removeItem(DRAFT_PREFIX + key);
+    else sessionStorage.setItem(DRAFT_PREFIX + key, JSON.stringify({ text, spans }));
+  } catch {
+    // Storage blocked or full: the in-memory draft still covers this session.
+  }
+}
+
+
 interface ChatInputProps {
   placeholder: string;
   members?: Profile[];
@@ -204,6 +237,30 @@ export function ChatInput({
     setText("");
     setSpans([]);
   }, []);
+
+  // Unsent text stays with its channel or DM: switch away and back and it's
+  // still there. Kept for the session in memory, and in sessionStorage so a
+  // reload doesn't lose it either.
+  const draftKey = activityScope ? `${activityScope.kind}:${activityScope.id}` : null;
+  const draftKeyRef = useRef<string | null>(null);
+  const skipDraftWriteRef = useRef(false);
+  useEffect(() => {
+    draftKeyRef.current = draftKey;
+    // This render still holds the previous channel's text; don't file it here.
+    skipDraftWriteRef.current = true;
+    const saved = draftKey ? readDraft(draftKey) : null;
+    setText(saved?.text ?? "");
+    setSpans(saved?.spans ?? []);
+  }, [draftKey]);
+  useEffect(() => {
+    const key = draftKeyRef.current;
+    if (skipDraftWriteRef.current) {
+      skipDraftWriteRef.current = false;
+      return;
+    }
+    if (!key || key !== draftKey || editingMessageId) return;
+    writeDraft(key, text, spans);
+  }, [draftKey, text, spans, editingMessageId]);
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
