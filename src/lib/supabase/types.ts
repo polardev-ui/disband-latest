@@ -390,6 +390,11 @@ export interface DbVoicePresence {
   joined_at: string;
   muted: boolean;
   deafened: boolean;
+  /** "sfu" for apps that send through Cloudflare Realtime; older apps are "mesh". */
+  transport?: "sfu" | "mesh";
+  sfu_session_id?: string | null;
+  /** What they are sending through the SFU right now. */
+  sfu_tracks?: string[];
 }
 
 export interface VoicePresence extends DbVoicePresence {
@@ -617,8 +622,8 @@ export interface Database {
       };
       voice_presence: {
         Row: DbVoicePresence;
-        Insert: { channel_id: string; user_id: string; muted?: boolean; deafened?: boolean };
-        Update: { muted?: boolean; deafened?: boolean; last_seen_at?: string };
+        Insert: { channel_id: string; user_id: string; muted?: boolean; deafened?: boolean; transport?: "sfu" | "mesh"; sfu_tracks?: string[] };
+        Update: { muted?: boolean; deafened?: boolean; last_seen_at?: string; transport?: "sfu" | "mesh"; sfu_tracks?: string[] };
         Relationships: [];
       };
 

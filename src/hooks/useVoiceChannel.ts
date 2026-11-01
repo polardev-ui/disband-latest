@@ -18,6 +18,7 @@ import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
 import { fetchIceServers, fetchIceServersQuick } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { SfuSeat, sfuAvailable, type SfuTrackName } from "@/lib/voice-sfu";
 
 interface SignalPayload {
   type: "offer" | "answer" | "ice" | "leave" | "screen" | "hello";
@@ -106,6 +107,10 @@ export function useVoiceChannel(
   const signalRef = useRef<RealtimeChannel | null>(null);
   const audioRefsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const presenceLoadRef = useRef(0);
+  // Set while this seat sends and receives through Cloudflare Realtime. People
+  // on older apps ("mesh" transport) still get a direct connection.
+  const sfuRef = useRef<SfuSeat | null>(null);
+  const transportsRef = useRef<Map<string, "sfu" | "mesh">>(new Map());
 
   useEffect(() => {
     localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
@@ -176,6 +181,7 @@ export function useVoiceChannel(
     // Update the signal allowlist now, not after the next render, so an
     // offer that arrives right behind this read is accepted.
     participantIdsRef.current = new Set(loaded.map((p) => p.user_id));
+    transportsRef.current = new Map(loaded.map((p) => [p.user_id, p.transport ?? "mesh"]));
     setParticipants((prev) => {
       const profiles = new Map(prev.map((p) => [p.user_id, p.profile]));
       return loaded.map((p) => ({ ...p, profile: profiles.get(p.user_id) }));
@@ -193,6 +199,11 @@ export function useVoiceChannel(
 
     return loaded;
   }, [channelId]);
+
+  /** Both of us are on the SFU, so no direct connection is needed. */
+  const viaSfu = useCallback((remoteId: string) => (
+    !!sfuRef.current && transportsRef.current.get(remoteId) === "sfu"
+  ), []);
 
   const dropPeer = useCallback((remoteId: string) => {
     const pc = peersRef.current.get(remoteId);
@@ -501,6 +512,8 @@ export function useVoiceChannel(
         setRemoteScreenAudio(drop);
       }
 
+      if ((payload.type === "offer" || payload.type === "answer" || payload.type === "ice") && viaSfu(payload.from)) return;
+
       let pc = peersRef.current.get(payload.from);
       if (!pc && (payload.type === "offer" || payload.type === "answer")) {
         pc = await createPeer(payload.from, false) ?? peersRef.current.get(payload.from);
@@ -582,10 +595,70 @@ export function useVoiceChannel(
         void loadPresence();
       }
     },
-    [createPeer, dropPeer, flushQueuedIce, loadPresence, userId],
+    [createPeer, dropPeer, flushQueuedIce, loadPresence, userId, viaSfu],
   );
 
+  /** A track arrived from someone through the SFU: show or play it like a mesh one. */
+  const applySfuTrack = useCallback((remoteId: string, name: SfuTrackName, track: MediaStreamTrack | null) => {
+    const setOne = (prev: Map<string, MediaStream>) => {
+      const next = new Map(prev);
+      if (track && track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+      else next.delete(remoteId);
+      return next;
+    };
+    if (name === "screen") {
+      setRemoteScreens(setOne);
+      return;
+    }
+    if (name === "screenaudio") {
+      setRemoteScreenAudio(setOne);
+      return;
+    }
+    if (track) {
+      setRemoteStreams((prev) => attachRemoteTrack(prev, remoteId, track, undefined));
+      if (name === "audio") {
+        setConnectedPeerIds((prev) => (prev.has(remoteId) ? prev : new Set(prev).add(remoteId)));
+        if (!connectedSoundRef.current) {
+          connectedSoundRef.current = true;
+          playCallConnected();
+        }
+      }
+      return;
+    }
+    // Gone: keep their other track (mic without camera, or the reverse).
+    const kind = name === "audio" ? "audio" : "video";
+    setRemoteStreams((prev) => {
+      const stream = prev.get(remoteId);
+      if (!stream) return prev;
+      const next = new Map(prev);
+      const rest = stream.getTracks().filter((t) => t.kind !== kind);
+      if (rest.length) next.set(remoteId, new MediaStream(rest));
+      else next.delete(remoteId);
+      return next;
+    });
+    if (name === "audio") {
+      setConnectedPeerIds((prev) => {
+        if (!prev.has(remoteId)) return prev;
+        const next = new Set(prev);
+        next.delete(remoteId);
+        return next;
+      });
+    }
+  }, []);
+
+  /** Tell the room what I'm sending through the SFU, so they pull exactly that. */
+  const publishSfuTracks = useCallback((tracks: SfuTrackName[]) => {
+    if (!channelId || !userId) return;
+    void getSupabaseClient()
+      .from("voice_presence")
+      .update({ sfu_tracks: tracks })
+      .eq("channel_id", channelId)
+      .eq("user_id", userId);
+  }, [channelId, userId]);
+
   const cleanup = useCallback(async () => {
+    sfuRef.current?.close();
+    sfuRef.current = null;
     [...peersRef.current.keys()].forEach(dropPeer);
     // Also cancel peers that are still waiting on TURN credentials.
     [...peerPromisesRef.current.keys()].forEach(dropPeer);
@@ -689,14 +762,36 @@ export function useVoiceChannel(
       // first join often sat in "Connecting…" with no media.
       await waitForSubscribed(ch);
 
+      const useSfu = await sfuAvailable();
       const { error: presenceError } = await supabase.from("voice_presence").upsert({
         channel_id: channelId,
         user_id: userId,
         muted: micMuted,
         deafened,
+        transport: useSfu ? "sfu" : "mesh",
+        sfu_tracks: [],
       });
       // A full or locked channel refuses the row (0197); say why.
       if (presenceError) throw new Error(presenceError.message || "Could not join the voice channel");
+
+      if (useSfu) {
+        const seat = new SfuSeat(channelId, {
+          onTrack: (id, name, track) => applySfuTrack(id, name, track),
+          onTrackGone: (id, name) => applySfuTrack(id, name, null),
+          onState: () => {},
+        });
+        try {
+          await seat.start(rawMic ? localStreamRef.current.getAudioTracks()[0] : null);
+          sfuRef.current = seat;
+          publishSfuTracks(["audio"]);
+        } catch (sfuError) {
+          // Cloudflare unreachable: carry on with direct connections.
+          console.warn("Voice server unavailable, using direct connections", sfuError);
+          seat.close();
+          await supabase.from("voice_presence").update({ transport: "mesh" })
+            .eq("channel_id", channelId).eq("user_id", userId);
+        }
+      }
       void ch.send({
         type: "broadcast",
         event: "signal",
@@ -718,7 +813,7 @@ export function useVoiceChannel(
       setError((e as Error).message || "Could not access microphone");
       await cleanup();
     }
-  }, [channelId, userId, cleanup, handleSignal, loadPresence, micMuted, deafened]);
+  }, [channelId, userId, cleanup, handleSignal, loadPresence, micMuted, deafened, applySfuTrack, publishSfuTracks]);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraTrackRef.current;
@@ -726,6 +821,7 @@ export function useVoiceChannel(
       cameraTrackRef.current?.stop();
       cameraTrackRef.current = null;
       for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_CAMERA, null);
+      if (sfuRef.current) publishSfuTracks(await sfuRef.current.setTrack("camera", null));
       setCameraEnabled(false);
       return;
     }
@@ -734,11 +830,12 @@ export function useVoiceChannel(
       const track = cam.getVideoTracks()[0];
       cameraTrackRef.current = track;
       for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_CAMERA, track);
+      if (sfuRef.current) publishSfuTracks(await sfuRef.current.setTrack("camera", track));
       setCameraEnabled(true);
     } catch {
       setCameraEnabled(false);
     }
-  }, []);
+  }, [publishSfuTracks]);
 
   const announceSharing = useCallback((sharing: boolean) => {
     if (!userId) return;
@@ -760,6 +857,10 @@ export function useVoiceChannel(
         await setLaneTrack(pc, LANE_SCREEN, null);
         await setLaneTrack(pc, LANE_SCREEN_AUDIO, null);
       }
+      if (sfuRef.current) {
+        await sfuRef.current.setTrack("screen", null);
+        publishSfuTracks(await sfuRef.current.setTrack("screenaudio", null));
+      }
       setLocalScreen(null);
       setScreenEnabled(false);
       announceSharing(false);
@@ -777,13 +878,17 @@ export function useVoiceChannel(
         await setLaneTrack(pc, LANE_SCREEN, track);
         await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
       }
+      if (sfuRef.current) {
+        await sfuRef.current.setTrack("screen", track);
+        publishSfuTracks(await sfuRef.current.setTrack("screenaudio", screenAudioTrackRef.current));
+      }
       setLocalScreen(new MediaStream([track]));
       setScreenEnabled(true);
       announceSharing(true);
     } catch {
       setScreenEnabled(false);
     }
-  }, [announceSharing]);
+  }, [announceSharing, publishSfuTracks]);
 
   const leave = useCallback(async () => {
     if (userId && signalRef.current) {
@@ -848,11 +953,24 @@ export function useVoiceChannel(
     }
 
     for (const id of active) {
+      if (viaSfu(id)) {
+        if (peersRef.current.has(id) || peerPromisesRef.current.has(id)) dropPeer(id);
+        continue;
+      }
       if (!peersRef.current.has(id) && !peerPromisesRef.current.has(id)) {
         void createPeer(id, userId < id);
       }
     }
-  }, [participants, joined, userId, createPeer, dropPeer]);
+
+    // Everyone else on the SFU: pull what each of them is sending.
+    const seat = sfuRef.current;
+    if (seat) {
+      void seat.sync(participants
+        .filter((p) => p.user_id !== userId && p.transport === "sfu" && p.sfu_session_id)
+        .map((p) => ({ userId: p.user_id, sessionId: p.sfu_session_id as string, tracks: p.sfu_tracks ?? [] })))
+        .catch(() => {});
+    }
+  }, [participants, joined, userId, createPeer, dropPeer, viaSfu]);
 
   // Realtime presence can silently stop delivering on a sleeping laptop or a
   // dropped websocket. Poll while joined so a dead peer is eventually
