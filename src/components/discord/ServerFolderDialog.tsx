@@ -3,6 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 
 import { useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 
 export const FOLDER_COLORS = [
   "#5865f2",
@@ -26,6 +27,7 @@ interface ServerFolderDialogProps {
 }
 
 export function ServerFolderDialog({ title, initialName = "", initialColor = FOLDER_COLORS[0], onClose, onSave, exiting }: ServerFolderDialogProps) {
+  const { t } = useI18n();
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor);
   const [saving, setSaving] = useState(false);
@@ -37,7 +39,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
 
   const save = async () => {
     if (!name.trim()) {
-      setError("Give the folder a name.");
+      setError(t("Give the folder a name."));
       return;
     }
     setSaving(true);
@@ -46,7 +48,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
       await onSave(name.trim().slice(0, 32), color);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the folder.");
+      setError(e instanceof Error ? e.message : t("Could not save the folder."));
     } finally {
       setSaving(false);
     }
@@ -63,7 +65,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
       >
         <h2 className="text-base font-bold text-text-normal">{title}</h2>
         <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-text-muted">
-          Folder name
+          {t("Folder name")}
           <input
             autoFocus
             value={name}
@@ -72,17 +74,17 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
               if (e.key === "Enter") void save();
             }}
             maxLength={32}
-            placeholder="My folder"
+            placeholder={t("My folder")}
             className="mt-1.5 w-full rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-sm font-normal normal-case tracking-normal text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
         </label>
-        <p className="mb-1.5 mt-4 text-xs font-bold uppercase tracking-wide text-text-muted">Folder color</p>
+        <p className="mb-1.5 mt-4 text-xs font-bold uppercase tracking-wide text-text-muted">{t("Folder color")}</p>
         <div className="flex flex-wrap gap-2">
           {FOLDER_COLORS.map((c) => (
             <button
               key={c}
               type="button"
-              aria-label={`Use color ${c}`}
+              aria-label={t("Use color {c}", { c })}
               onClick={() => setColor(c)}
               style={{ backgroundColor: c }}
               className={`h-8 w-8 rounded-full transition-transform hover:scale-110 ${
@@ -98,7 +100,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
             onClick={onClose}
             className="flex-1 rounded-md border border-divider py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="button"
@@ -106,7 +108,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
             onClick={() => void save()}
             className="flex-1 rounded-md bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("Saving…") : t("Save")}
           </button>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { displayName } from "@/lib/utils";
 import { IconChevron, IconCopy, IconLink, IconPlus, IconTrash, IconUpload } from "@/components/icons";
 import { ConfirmDialog, EmptyState, FilePickButton, InlineError, SettingsSection, btn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const IMAGE_TYPES = "image/png,image/jpeg,image/webp,image/gif";
 
@@ -51,6 +52,7 @@ function createdOn(iso: string): string {
 }
 
 export function WebhooksSection({ server }: SectionProps) {
+  const { t } = useI18n();
   const { channels } = useApp();
   const { upload } = useMediaUpload();
   const [hooks, setHooks] = useState<Webhook[]>([]);
@@ -129,7 +131,7 @@ export function WebhooksSection({ server }: SectionProps) {
     const draft = drafts[hook.id] ?? initialDraft(hook);
     const name = draft.name.trim();
     if (!name) {
-      setError("Give the webhook a name.");
+      setError(t("Give the webhook a name."));
       return;
     }
     setBusy(`save:${hook.id}`);
@@ -141,17 +143,17 @@ export function WebhooksSection({ server }: SectionProps) {
   async function setAvatar(hook: Webhook, file: File | null) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setError("That file isn't an image.");
+      setError(t("That file isn't an image."));
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      setError("Images can be up to 8 MB.");
+      setError(t("Images can be up to 8 MB."));
       return;
     }
     setBusy(`avatar:${hook.id}`);
     setError(null);
     const result = await upload(file);
-    if (!result) setError("The upload didn't go through. Try again.");
+    if (!result) setError(t("The upload didn't go through. Try again."));
     else await patch(hook.id, { avatar_url: result.url });
     setBusy(null);
   }
@@ -162,7 +164,7 @@ export function WebhooksSection({ server }: SectionProps) {
     try {
       res = await apiFetch(`/api/server-webhooks/${hook.id}`, { method: "DELETE" });
     } catch {
-      setError("Couldn't reach the space. Check your connection and try again.");
+      setError(t("Couldn't reach the space. Check your connection and try again."));
       return;
     }
     if (!res.ok) {
@@ -186,23 +188,22 @@ export function WebhooksSection({ server }: SectionProps) {
       setCopied(hook.id);
       window.setTimeout(() => setCopied((current) => (current === hook.id ? null : current)), 1600);
     } catch {
-      setError("Couldn't copy the URL. Select it and copy it manually.");
+      setError(t("Couldn't copy the URL. Select it and copy it manually."));
     }
   }
 
   return (
     <div className="pb-10">
       <p className="mb-5 text-[14px] leading-5 text-text-normal">
-        Webhooks post messages into a channel from outside Disband. Give the URL to a service such as
-        GitHub, or use it from a script. Treat a webhook URL like a password — anyone with it can post.
+        {t("Webhooks post messages into a channel from outside Disband. Give the URL to a service such as GitHub, or use it from a script. Treat a webhook URL like a password — anyone with it can post.")}
       </p>
 
       <SettingsSection
-        title="Webhooks"
-        description={hooks.length > 0 ? `${hooks.length} in this space` : "None yet"}
+        title={t("Webhooks")}
+        description={hooks.length > 0 ? t("{length} in this space", { length: hooks.length }) : t("None yet")}
         action={
           <button type="button" onClick={() => void create()} disabled={busy === "create" || textChannels.length === 0} className={btn.primary}>
-            <IconPlus size={15} /> {busy === "create" ? "Creating…" : "New Webhook"}
+            <IconPlus size={15} /> {busy === "create" ? t("Creating…") : t("New Webhook")}
           </button>
         }
       >
@@ -218,7 +219,7 @@ export function WebhooksSection({ server }: SectionProps) {
         ) : hooks.length === 0 ? (
           <EmptyState
             icon={<IconLink size={20} />}
-            title="No webhooks yet"
+            title={t("No webhooks yet")}
             body={textChannels.length === 0 ? "Create a text channel before adding a webhook." : "Create one to post messages from another service."}
           />
         ) : (
@@ -250,7 +251,7 @@ export function WebhooksSection({ server }: SectionProps) {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-semibold text-header-primary">{hook.name}</p>
                       <p className="mt-0.5 truncate text-[13px] text-text-muted">
-                        Created on {createdOn(hook.created_at)}
+                        {t("Created on")}{" "}{createdOn(hook.created_at)}
                         {hook.created_by ? ` by ${displayName(hook.created_by)}` : ""}
                       </p>
                     </div>
@@ -275,7 +276,7 @@ export function WebhooksSection({ server }: SectionProps) {
                             onPick={(file) => void setAvatar(hook, file)}
                             className="text-[13px] font-medium text-[#00a8fc] hover:underline disabled:opacity-50"
                           >
-                            <IconUpload size={13} /> Change avatar
+                            <IconUpload size={13} /> {t("Change avatar")}
                           </FilePickButton>
                           {hook.avatar_url && (
                             <button
@@ -283,8 +284,8 @@ export function WebhooksSection({ server }: SectionProps) {
                               onClick={() => void patch(hook.id, { avatar_url: null })}
                               disabled={busy !== null}
                               className={iconBtnDanger}
-                              title="Remove avatar"
-                              aria-label="Remove avatar"
+                              title={t("Remove avatar")}
+                              aria-label={t("Remove avatar")}
                             >
                               <IconTrash size={14} />
                             </button>
@@ -294,7 +295,7 @@ export function WebhooksSection({ server }: SectionProps) {
                         <div className="min-w-0 flex-1 space-y-4">
                           <label className="block">
                             <span className="mb-1.5 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
-                              Name
+                              {t("Name")}
                             </span>
                             <input
                               value={draft.name}
@@ -311,7 +312,7 @@ export function WebhooksSection({ server }: SectionProps) {
 
                           <label className="block">
                             <span className="mb-1.5 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
-                              Channel
+                              {t("Channel")}
                             </span>
                             <select
                               value={draft.channelId}
@@ -333,17 +334,17 @@ export function WebhooksSection({ server }: SectionProps) {
 
                           <div className="flex flex-wrap items-center gap-2">
                             <button type="button" onClick={() => void copy(hook)} className={btn.secondary}>
-                              <IconCopy size={15} /> {copied === hook.id ? "Copied" : "Copy Webhook URL"}
+                              <IconCopy size={15} /> {copied === hook.id ? t("Copied") : t("Copy Webhook URL")}
                             </button>
                             <button type="button" onClick={() => setResetting(hook)} className={btn.secondary}>
-                              Reset URL
+                              {t("Reset URL")}
                             </button>
                             <button
                               type="button"
                               onClick={() => setDeleting(hook)}
                               className="ml-auto text-[14px] font-medium text-status-dnd hover:underline"
                             >
-                              Delete Webhook
+                              {t("Delete Webhook")}
                             </button>
                           </div>
 
@@ -352,7 +353,7 @@ export function WebhooksSection({ server }: SectionProps) {
                           </p>
                           {hook.last_used_at && (
                             <p className="text-[12px] text-text-muted">
-                              Last used {new Date(hook.last_used_at).toLocaleString()}.
+                              {t("Last used")}{" "}{new Date(hook.last_used_at).toLocaleString()}.
                             </p>
                           )}
                         </div>
@@ -360,7 +361,7 @@ export function WebhooksSection({ server }: SectionProps) {
 
                       {dirty && (
                         <div className="view-enter mt-5 flex items-center justify-between gap-3 border-t border-divider pt-4">
-                          <p className="text-[14px] text-text-muted">Careful — you have unsaved changes!</p>
+                          <p className="text-[14px] text-text-muted">{t("Careful — you have unsaved changes!")}</p>
                           <div className="flex gap-2">
                             <button
                               type="button"
@@ -373,7 +374,7 @@ export function WebhooksSection({ server }: SectionProps) {
                               }
                               className={btn.ghost}
                             >
-                              Reset
+                              {t("Reset")}
                             </button>
                             <button
                               type="button"
@@ -381,7 +382,7 @@ export function WebhooksSection({ server }: SectionProps) {
                               disabled={busy === `save:${hook.id}`}
                               className={btn.primary}
                             >
-                              {busy === `save:${hook.id}` ? "Saving…" : "Save changes"}
+                              {busy === `save:${hook.id}` ? t("Saving…") : t("Save changes")}
                             </button>
                           </div>
                         </div>
@@ -399,14 +400,14 @@ export function WebhooksSection({ server }: SectionProps) {
 
       <ConfirmDialog
         open={!!deleting}
-        title="Delete webhook?"
+        title={t("Delete webhook?")}
         body={
           <>
             <strong className="font-semibold text-header-primary">{deleting?.name}</strong> will stop working
             immediately. Messages it already posted stay in the channel.
           </>
         }
-        confirmLabel="Delete webhook"
+        confirmLabel={t("Delete webhook")}
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) await remove(deleting);
@@ -415,9 +416,9 @@ export function WebhooksSection({ server }: SectionProps) {
       />
       <ConfirmDialog
         open={!!resetting}
-        title="Reset webhook URL?"
+        title={t("Reset webhook URL?")}
         body="The old URL stops working immediately. Any service using it will need the new one."
-        confirmLabel="Reset URL"
+        confirmLabel={t("Reset URL")}
         tone="primary"
         onCancel={() => setResetting(null)}
         onConfirm={async () => {

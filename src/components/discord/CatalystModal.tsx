@@ -21,6 +21,7 @@ import {
   nextCatalystLevel,
 } from "@/lib/catalysts";
 import type { Server } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface CatalystModalProps {
   server: Server | null;
@@ -49,6 +50,7 @@ function Check({ locked }: { locked?: boolean }) {
 }
 
 export function CatalystModal({ server: serverProp, open, onClose }: CatalystModalProps) {
+  const { t } = useI18n();
   const { mounted, exiting } = usePresence(open);
   const lastServerRef = useRef<Server | null>(null);
   if (serverProp) lastServerRef.current = serverProp;
@@ -163,12 +165,12 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
       });
       const data = (await res.json()) as { clientSecret?: string; error?: string };
       if (!res.ok || !data.clientSecret) {
-        setBuyError(data.error ?? "Couldn't start checkout.");
+        setBuyError(data.error ?? t("Couldn't start checkout."));
       } else {
         setBuySecret(data.clientSecret);
       }
     } catch {
-      setBuyError("Couldn't start checkout.");
+      setBuyError(t("Couldn't start checkout."));
     } finally {
       buyingRef.current = false;
       setBuying(false);
@@ -198,28 +200,28 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
         className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
         role="dialog"
         aria-modal="true"
-        aria-label="Server catalysts"
+        aria-label={t("Server catalysts")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-1">
-          <h2 className="text-[20px] font-semibold text-header-primary">Space Catalysts</h2>
+          <h2 className="text-[20px] font-semibold text-header-primary">{t("Space Catalysts")}</h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="rounded-[3px] p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={18} />
           </button>
         </div>
         <p className="px-5 text-sm text-text-muted">
-          Boost <span className="font-semibold text-text-normal">{server.name}</span> to unlock
+          {t("Boost")}{" "}<span className="font-semibold text-text-normal">{server.name}</span> to unlock
           perks for everyone in it.
         </p>
 
         <div className="px-5 pt-4">
           <p className="text-2xl font-bold text-text-normal">
-            {count} {count === 1 ? "Catalyst" : "Catalysts"}
+            {count} {count === 1 ? "Catalyst" : t("Catalysts")}
           </p>
           <p className="mt-1 inline-block rounded-full bg-brand/20 px-2.5 py-0.5 text-xs font-bold text-brand">
             {level.name}
@@ -241,7 +243,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
 
         <div className="px-5 pt-4">
           <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-text-muted">
-            Perks at every level
+            {t("Perks at every level")}
           </p>
           <div className="space-y-2">
             {CATALYST_LEVELS.filter((l) => l.level > 0).map((l) => {
@@ -273,13 +275,13 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
 
         <div className="mt-4 border-t border-bg-tertiary px-5 py-4">
           <p className="text-sm font-bold">
-            Monthly credits
+            {t("Monthly credits")}
           </p>
           <p className="mt-0.5 text-[14px] text-text-muted">
             {grant > 0 ? (
-              <>Put a free monthly Catalyst on <span className="font-semibold text-text-normal">{server.name}</span> — {balance} of {grant} left</>
+              <>{t("Put a free monthly Catalyst on")}{" "}<span className="font-semibold text-text-normal">{server.name}</span> — {balance} of {grant} left</>
             ) : (
-              <>Paid plans include free Catalysts every month — Aero gets {MONTHLY_GRANT}, Lite gets {LITE_MONTHLY_GRANT}.</>
+              <>{t("Paid plans include free Catalysts every month — Aero gets")}{" "}{MONTHLY_GRANT}, Lite gets {LITE_MONTHLY_GRANT}.</>
             )}
           </p>
           {error && <p className="mt-2 text-[14px] text-status-dnd">{error}</p>}
@@ -288,10 +290,10 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
               type="button"
               disabled={busy || balance <= 0}
               onClick={() => void doAllocate()}
-              title={grant === 0 ? "A paid plan includes monthly credits" : balance <= 0 ? "No credits left this month" : "Spend a monthly credit"}
+              title={grant === 0 ? t("A paid plan includes monthly credits") : balance <= 0 ? t("No credits left this month") : t("Spend a monthly credit")}
               className="flex-1 rounded-[3px] bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "Working…" : "Boost this space"}
+              {busy ? t("Working…") : t("Boost this space")}
             </button>
             {myHere > 0 && (
               <button
@@ -300,7 +302,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                 onClick={() => void doWithdraw()}
                 className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
               >
-                Withdraw
+                {t("Withdraw")}
               </button>
             )}
           </div>
@@ -308,9 +310,9 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
 
         {mine.length > 0 && (
           <div className="border-t border-bg-tertiary px-5 py-4">
-            <p className="text-sm font-bold">Your Catalysts</p>
+            <p className="text-sm font-bold">{t("Your Catalysts")}</p>
             <p className="mt-0.5 text-[14px] text-text-muted">
-              Each lasts a month. Move one to another space once it has been on its current space for a week.
+              {t("Each lasts a month. Move one to another space once it has been on its current space for a week.")}
             </p>
             {moveError && <p className="mt-2 text-[14px] text-status-dnd">{moveError}</p>}
             <ul className="mt-3 space-y-1.5">
@@ -323,23 +325,23 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                   <li key={c.id} className="rounded-[4px] bg-bg-secondary px-3 py-2">
                     <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[14px] font-semibold text-text-normal">{here?.name ?? "A space you left"}</span>
+                        <span className="block truncate text-[14px] font-semibold text-text-normal">{here?.name ?? t("A space you left")}</span>
                         <span className="block text-[12px] text-text-muted">
-                          {c.expires_at ? `Expires ${shortDate(c.expires_at)}` : "No expiry"}
+                          {c.expires_at ? t("Expires {value}", { value: shortDate(c.expires_at) }) : t("No expiry")}
                           {c.source === "purchase" ? " · Bought" : c.source === "grant" ? " · Plan credit" : ""}
                         </span>
                       </span>
                       {moving === c.id ? (
-                        <button type="button" onClick={() => { setMoving(null); setMoveError(null); }} className="text-[13px] text-text-muted hover:text-text-normal">Cancel</button>
+                        <button type="button" onClick={() => { setMoving(null); setMoveError(null); }} className="text-[13px] text-text-muted hover:text-text-normal">{t("Cancel")}</button>
                       ) : (
                         <button
                           type="button"
                           disabled={!canMove || targets.length === 0 || busy}
-                          title={!canMove && movableAt ? `You can move this from ${shortDate(new Date(movableAt).toISOString())}` : undefined}
+                          title={!canMove && movableAt ? t("You can move this from {value}", { value: shortDate(new Date(movableAt).toISOString()) }) : undefined}
                           onClick={() => { setMoving(c.id!); setMoveTo(targets[0]?.id ?? ""); setMoveError(null); }}
                           className="h-7 rounded-[3px] bg-button-secondary px-3 text-[13px] font-medium text-white hover:bg-button-secondary-hover disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          {canMove || !movableAt ? "Move" : `Move from ${shortDate(new Date(movableAt).toISOString())}`}
+                          {canMove || !movableAt ? t("Move") : t("Move from {value}", { value: shortDate(new Date(movableAt).toISOString()) })}
                         </button>
                       )}
                     </div>
@@ -348,7 +350,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                         <select
                           value={moveTo}
                           onChange={(e) => setMoveTo(e.target.value)}
-                          aria-label="Move to"
+                          aria-label={t("Move to")}
                           className="min-w-0 flex-1 rounded-[3px] bg-bg-tertiary px-2 text-[14px] text-text-normal"
                         >
                           {targets.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -359,7 +361,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                           onClick={() => void doMove(c.id!)}
                           className="h-8 rounded-[3px] bg-brand px-3 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
                         >
-                          {busy ? "Moving…" : "Move here"}
+                          {busy ? t("Moving…") : t("Move here")}
                         </button>
                       </div>
                     )}
@@ -371,9 +373,9 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
         )}
 
         <div className="bg-bg-secondary px-5 py-4">
-          <p className="text-sm font-bold">Buy Catalysts</p>
+          <p className="text-sm font-bold">{t("Buy Catalysts")}</p>
           <p className="mt-0.5 text-[14px] text-text-muted">
-            Each lasts a month from purchase · {formatCents(unitCents)} each
+            {t("Each lasts a month from purchase ·")}{" "}{formatCents(unitCents)} each
           </p>
             {buySecret ? (
             <div className="mt-3">
@@ -390,7 +392,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                 <div className="flex items-center rounded-[3px] bg-bg-tertiary">
                   <button
                     type="button"
-                    aria-label="Fewer"
+                    aria-label={t("Fewer")}
                     onClick={() => setQty((q) => Math.max(1, q - 1))}
                     className="px-2.5 py-1.5 text-lg leading-none text-text-muted hover:text-text-normal"
                   >
@@ -399,7 +401,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                   <span className="w-8 text-center text-sm font-bold">{qty}</span>
                   <button
                     type="button"
-                    aria-label="More"
+                    aria-label={t("More")}
                     onClick={() => setQty((q) => Math.min(99, q + 1))}
                     className="px-2.5 py-1.5 text-lg leading-none text-text-muted hover:text-text-normal"
                   >
@@ -412,7 +414,7 @@ export function CatalystModal({ server: serverProp, open, onClose }: CatalystMod
                   onClick={() => void startBuy()}
                   className="h-[38px] flex-1 rounded-[3px] bg-brand py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {buying ? "Starting…" : `Buy ${qty} · ${formatCents(unitCents * qty)}`}
+                  {buying ? t("Starting…") : t("Buy {qty} · {value}", { qty, value: formatCents(unitCents * qty) })}
                 </button>
               </div>
             </>

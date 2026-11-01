@@ -3,6 +3,7 @@
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { createPortal } from "react-dom";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface DangerousDownloadModalProps {
   open: boolean;
@@ -17,6 +18,7 @@ export function DangerousDownloadModal({
   onClose,
   onContinue,
 }: DangerousDownloadModalProps) {
+  const { t } = useI18n();
   useOverlayDismiss(onClose, open);
   const { mounted, exiting } = usePresence(open);
 
@@ -28,7 +30,7 @@ export function DangerousDownloadModal({
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pb-6 pt-40 sm:pt-48">
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t("Close")}
         className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`}
         onClick={onClose}
       />
@@ -53,7 +55,7 @@ export function DangerousDownloadModal({
           className="relative z-10 rounded-[4px] border border-divider bg-bg-secondary p-5 shadow-[var(--elevation-high)]"
         >
           <h2 id="download-warning-title" className="text-[18px] font-semibold leading-6 text-header-primary">
-            This file might be unsafe
+            {t("This file might be unsafe")}
           </h2>
           <p id="download-warning-body" className="mt-2.5 text-[14px] leading-[20px] text-text-muted">
             <span className="break-all font-medium text-text-normal">{fileName}</span> was sent in chat.
@@ -66,14 +68,14 @@ export function DangerousDownloadModal({
               onClick={onClose}
               className="rounded-[3px] px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
             >
-              Cancel
+              {t("Cancel")}
             </button>
             <button
               type="button"
               onClick={onContinue}
               className="rounded-[3px] bg-brand px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
             >
-              Continue
+              {t("Continue")}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 
 /**
  * "Send it again" for the password-reset screen.
@@ -27,6 +28,7 @@ export function ResendResetLink({
   /** Returns an error message, or null when the request was accepted. */
   onResend: (email: string) => Promise<string | null>;
 }) {
+  const { t } = useI18n();
   const [remaining, setRemaining] = useState(COOLDOWN_SECONDS);
   const [state, setState] = useState<"idle" | "sending">("idle");
   const [note, setNote] = useState<string | null>(null);
@@ -71,10 +73,10 @@ export function ResendResetLink({
         className="w-full rounded-md border border-divider py-2.5 text-[15px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-divider disabled:hover:bg-transparent"
       >
         {state === "sending"
-          ? "Sending…"
+          ? t("Sending…")
           : remaining > 0
-            ? `Send it again in ${remaining}s`
-            : "Send it again"}
+            ? t("Send it again in {remaining}s", { remaining })
+            : t("Send it again")}
       </button>
 
       {note && (
@@ -89,8 +91,7 @@ export function ResendResetLink({
       )}
 
       <p className="text-[13px] leading-relaxed text-text-muted">
-        Nothing after a couple of minutes? Check your spam folder, and make
-        sure <span className="text-text-normal">{email}</span> is the address
+        {t("Nothing after a couple of minutes? Check your spam folder, and make sure")}{" "}<span className="text-text-normal">{email}</span> is the address
         on the account — we can&apos;t say whether an address has one.
       </p>
     </div>

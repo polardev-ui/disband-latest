@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface ForwardModalProps {
   open: boolean;
@@ -22,6 +23,7 @@ export interface ForwardDestination {
 }
 
 export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
+  const { t } = useI18n();
   const app = useApp();
   const [search, setSearch] = useState("");
   const q = search.trim().toLowerCase();
@@ -54,22 +56,22 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
 
   const content = (
     <div className={`fixed inset-0 z-[90] flex items-end justify-center p-2 sm:items-center sm:p-4 overlay-fade${exiting ? " overlay-fade-out" : ""}`}>
-      <button type="button" aria-label="Close" className="absolute inset-0 cursor-default bg-black/85" onClick={onClose} />
+      <button type="button" aria-label={t("Close")} className="absolute inset-0 cursor-default bg-black/85" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Forward message"
+        aria-label={t("Forward message")}
         className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[min(640px,calc(100dvh-32px))] w-full max-w-[440px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
       >
         <div className="px-4 pt-4">
-          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Forward To</h2>
-          <p className="mt-1 text-[14px] text-header-secondary">Select where you want to share this message.</p>
+          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{t("Forward To")}</h2>
+          <p className="mt-1 text-[14px] text-header-secondary">{t("Select where you want to share this message.")}</p>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
-            aria-label="Search friends and groups"
+            placeholder={t("Search")}
+            aria-label={t("Search friends and groups")}
             autoFocus
             className="mt-4 h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
@@ -78,7 +80,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
         <div className="channel-scroll mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {destinations.length === 0 ? (
             <p className="py-8 text-center text-[14px] text-header-secondary">
-              {q ? "No results found." : "No conversations yet."}
+              {q ? t("No results found.") : t("No conversations yet.")}
             </p>
           ) : (
             destinations.map((dest) => (
@@ -99,9 +101,9 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
                   />
                 )}
                 <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-header-primary">{dest.label}</span>
-                <span className="shrink-0 text-[12px] text-header-secondary">{dest.kind === "dm" ? "Direct Message" : "Group DM"}</span>
+                <span className="shrink-0 text-[12px] text-header-secondary">{dest.kind === "dm" ? t("Direct Message") : t("Group DM")}</span>
                 <span className="ml-2 hidden h-8 shrink-0 items-center rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white group-hover:flex">
-                  Send
+                  {t("Send")}
                 </span>
               </button>
             ))
@@ -109,7 +111,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
         </div>
         <div className="flex justify-end bg-bg-secondary p-4">
           <button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] font-medium text-white hover:underline">
-            Cancel
+            {t("Cancel")}
           </button>
         </div>
       </div>

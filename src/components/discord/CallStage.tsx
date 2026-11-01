@@ -10,6 +10,7 @@ import { getParticipantControls, setParticipantControl, applyParticipantAudioCon
 import { playScreenShareJingle } from "@/lib/ringtone";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { CallGrid } from "./CallTile";
+import { useI18n } from "@/contexts/I18nContext";
 
 /**
  * The middle of every call — DM and group — laid out the way Discord does it:
@@ -181,18 +182,20 @@ function MemberAvatar({ member, speaking }: { member: StageMember; speaking: boo
 
 /** Voice-only: just the circle and the name. */
 function MemberCircle({ member }: { member: StageMember }) {
+  const { t } = useI18n();
   const speaking = useSpeaking(member.ringing ? null : member.stream);
   return (
     <div className="flex w-28 flex-col items-center gap-2">
       <MemberAvatar member={member} speaking={speaking} />
       <span className="max-w-full truncate text-sm font-medium text-header-primary">{member.label}</span>
-      {member.ringing && <span className="-mt-1.5 text-[11px] text-header-secondary">Ringing…</span>}
+      {member.ringing && <span className="-mt-1.5 text-[11px] text-header-secondary">{t("Ringing…")}</span>}
     </div>
   );
 }
 
 /** Video mode: a tile with their camera, or their circle centred in the tile. */
 function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => void }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLVideoElement>(null);
   const hasVideo = useLiveVideoStream(member.stream);
   const speaking = useSpeaking(member.ringing ? null : member.stream);
@@ -258,7 +261,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
         <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
           {member.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
           <span className="truncate">{member.label}</span>
-          {member.ringing && <span className="shrink-0 text-[11px] text-white/50">Ringing…</span>}
+          {member.ringing && <span className="shrink-0 text-[11px] text-white/50">{t("Ringing…")}</span>}
         </span>
       </div>
       {menu && (
@@ -268,9 +271,9 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
             className="fixed z-[140] min-w-60 rounded-lg bg-bg-secondary p-3 shadow-[var(--elevation-high)]"
             style={{ left: Math.min(menu.x, window.innerWidth - 260), top: Math.min(menu.y, window.innerHeight - 240) }}
           >
-            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">Participant</div>
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">{t("Participant")}</div>
             <label className="block rounded-lg bg-bg-tertiary p-2">
-              <span className="mb-1 block text-xs font-medium text-text-normal">How loud their mic is</span>
+              <span className="mb-1 block text-xs font-medium text-text-normal">{t("How loud their mic is")}</span>
               <input
                 type="range"
                 min={0}
@@ -282,9 +285,9 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
             </label>
             <div className="mt-2 space-y-1">
               {[
-                { key: "micMuted" as const, label: "Mute their microphone" },
-                { key: "soundboardMuted" as const, label: "Mute their soundboard" },
-                { key: "cameraDisabled" as const, label: "Disable their camera (for you)" },
+                { key: "micMuted" as const, label: t("Mute their microphone") },
+                { key: "soundboardMuted" as const, label: t("Mute their soundboard") },
+                { key: "cameraDisabled" as const, label: t("Disable their camera (for you)") },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -294,14 +297,14 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
                 >
                   <span>{item.label}</span>
                   <span className={controls[item.key] ? "font-semibold text-status-dnd" : "text-text-muted"}>
-                    {controls[item.key] ? "On" : "Off"}
+                    {controls[item.key] ? t("On") : t("Off")}
                   </span>
                 </button>
               ))}
             </div>
             <div className="mt-2 border-t border-divider pt-2">
               <p className="text-[11px] text-text-muted">
-                These settings are saved locally and remain even after leaving the call or closing the app.
+                {t("These settings are saved locally and remain even after leaving the call or closing the app.")}
               </p>
             </div>
           </div>
@@ -324,6 +327,7 @@ function ScreenTile({
   compact?: boolean;
   onFocus?: () => void;
 }) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [soundOff, setSoundOff] = useState(false);
@@ -364,7 +368,7 @@ function ScreenTile({
         watching && onFocus ? "cursor-pointer" : ""
       }`}
       onClick={watching ? onFocus : undefined}
-      title={watching && onFocus ? (focused ? "Click to shrink" : "Click to focus") : undefined}
+      title={watching && onFocus ? (focused ? t("Click to shrink") : t("Click to focus")) : undefined}
     >
       {watching ? (
         <video ref={videoRef} autoPlay playsInline muted className="h-full w-full bg-black object-contain" />
@@ -382,7 +386,7 @@ function ScreenTile({
             }}
             className="rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-black transition-transform hover:scale-105"
           >
-            Watch Stream
+            {t("Watch Stream")}
           </button>
         </div>
       )}
@@ -392,7 +396,7 @@ function ScreenTile({
       <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
         <span className="truncate">{screen.label}</span>
         <span className="shrink-0 rounded bg-status-dnd px-1 text-[10px] font-bold uppercase tracking-wide text-white">
-          Live
+          {t("Live")}
         </span>
       </span>
 
@@ -405,7 +409,7 @@ function ScreenTile({
             <button
               type="button"
               onClick={() => setSoundOff((v) => !v)}
-              title={soundOff ? "Unmute stream" : "Mute stream"}
+              title={soundOff ? t("Unmute stream") : t("Mute stream")}
               className="flex h-8 w-8 items-center justify-center rounded-md bg-black/70 text-white hover:bg-black/90"
             >
               {soundOff ? <IconSpeakerOff size={16} /> : <IconSpeaker size={16} />}
@@ -414,7 +418,7 @@ function ScreenTile({
           <button
             type="button"
             onClick={() => void toggleFullscreen()}
-            title="Full screen"
+            title={t("Full screen")}
             className="flex h-8 w-8 items-center justify-center rounded-md bg-black/70 text-white hover:bg-black/90"
           >
             <IconMaximize size={16} />
@@ -428,7 +432,7 @@ function ScreenTile({
               }}
               className="rounded-md bg-black/70 px-2.5 text-xs font-semibold text-white hover:bg-black/90"
             >
-              Stop watching
+              {t("Stop watching")}
             </button>
           )}
         </div>

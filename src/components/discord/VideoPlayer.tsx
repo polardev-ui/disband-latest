@@ -14,6 +14,7 @@ import {
   formatTime,
   useMediaClock,
 } from "./media/MediaKit";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface VideoPlayerProps {
   src: string;
@@ -32,6 +33,7 @@ interface VideoPlayerProps {
  10s), ↑/↓ volume, M mute, F fullscreen. Double-click toggles fullscreen.
 */
 export function VideoPlayer({ src, className = "", onLoad, fileName = "video", size }: VideoPlayerProps) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [started, setStarted] = useState(false);
@@ -158,10 +160,10 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     openMenu(e.clientX, e.clientY, [
-      { id: "play", label: playing ? "Pause" : "Play", onClick: togglePlay },
-      { id: "save", label: "Save video", onClick: () => void saveMedia(src, fileName) },
-      { id: "copy-link", label: "Copy link", onClick: () => void navigator.clipboard.writeText(src) },
-      { id: "open", label: "Open original", onClick: () => safeWindowOpen(src) },
+      { id: "play", label: playing ? t("Pause") : t("Play"), onClick: togglePlay },
+      { id: "save", label: t("Save video"), onClick: () => void saveMedia(src, fileName) },
+      { id: "copy-link", label: t("Copy link"), onClick: () => void navigator.clipboard.writeText(src) },
+      { id: "open", label: t("Open original"), onClick: () => safeWindowOpen(src) },
     ]);
   };
 
@@ -174,7 +176,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
     <div
       ref={containerRef}
       tabIndex={0}
-      aria-label="Video player"
+      aria-label={t("Video player")}
       onKeyDown={onKeyDown}
       onContextMenu={onContextMenu}
       className={`group/video outline-none focus-visible:ring-1 focus-visible:ring-brand ${
@@ -218,8 +220,8 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
             event.stopPropagation();
             void saveMedia(src, fileName);
           }}
-          aria-label="Download video"
-          title="Download"
+          aria-label={t("Download video")}
+          title={t("Download")}
           className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-[2px] border border-white/15 bg-[#202225]/90 text-white/85 opacity-0 transition-opacity hover:bg-[#202225] hover:text-white focus-visible:opacity-100 group-hover/video:opacity-100"
         >
           <Download size={15} />
@@ -230,7 +232,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
           <button
             type="button"
             onClick={togglePlay}
-            aria-label={ended ? "Replay" : "Play"}
+            aria-label={ended ? t("Replay") : t("Play")}
             className="absolute left-1/2 top-1/2 flex h-12 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[2px] border border-white/25 bg-black/65 text-white transition-colors hover:bg-black/80"
           >
             {ended ? <RotateCcw size={21} strokeWidth={2.2} /> : <Play size={21} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />}
@@ -238,7 +240,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
         )}
         {waiting && playing && (
           <span
-            aria-label="Loading"
+            aria-label={t("Loading")}
             className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-[3px] border-white/25 border-t-white"
           />
         )}
@@ -258,10 +260,10 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
           >
             <SeekBar current={current} duration={duration} buffered={bufferedFraction(video)} onSeek={seek} />
             <div className="mt-0.5 flex items-center gap-0.5 text-white">
-              <button type="button" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} className={iconBtn}>
+              <button type="button" onClick={togglePlay} aria-label={playing ? t("Pause") : t("Play")} className={iconBtn}>
                 {playing ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" strokeWidth={0} />}
               </button>
-              <button type="button" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} className={iconBtn}>
+              <button type="button" onClick={toggleMute} aria-label={muted ? t("Unmute") : t("Mute")} className={iconBtn}>
                 <VolumeIcon size={16} />
               </button>
 
@@ -274,7 +276,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
               <button
                 type="button"
                 onClick={cycleRate}
-                title="Playback speed"
+                title={t("Playback speed")}
                 className="h-7 min-w-[36px] rounded-[2px] px-1 text-[11px] font-medium tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
               >
                 {rate}×
@@ -282,7 +284,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                aria-label={fullscreen ? t("Exit fullscreen") : t("Fullscreen")}
                 className={iconBtn}
               >
                 {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}

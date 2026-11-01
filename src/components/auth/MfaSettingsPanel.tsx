@@ -19,6 +19,7 @@ import {
   type TotpEnrollment,
 } from "@/lib/mfa";
 import type { PasskeySummary } from "@/lib/passkey-mfa-shared";
+import { useI18n } from "@/contexts/I18nContext";
 
 function passkeyDate(value: string): string {
   const date = new Date(value);
@@ -27,6 +28,7 @@ function passkeyDate(value: string): string {
 }
 
 export function MfaSettingsPanel() {
+  const { t } = useI18n();
   const [factors, setFactors] = useState<MfaFactor[]>([]);
   const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
   const [secretConfigured, setSecretConfigured] = useState(false);
@@ -56,7 +58,7 @@ export function MfaSettingsPanel() {
       const loadError = factorResult.error ?? passkeyResult.error ?? statusResult.error;
       if (loadError) setError(loadError);
     } catch {
-      setError("Could not load your security methods. Close settings and try again.");
+      setError(t("Could not load your security methods. Close settings and try again."));
     } finally {
       clearTimeout(timeout);
       setLoading(false);
@@ -90,7 +92,7 @@ export function MfaSettingsPanel() {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("plugin:opener|open_url", { url: PASSKEY_BROWSER_URL });
-      setMessage("Opened Disband in your browser. Add the passkey there.");
+      setMessage(t("Opened Disband in your browser. Add the passkey there."));
     } catch {
       window.open(PASSKEY_BROWSER_URL, "_blank", "noopener,noreferrer");
     }
@@ -107,7 +109,7 @@ export function MfaSettingsPanel() {
       void reload();
       return;
     }
-    setMessage("Passkey added.");
+    setMessage(t("Passkey added."));
     void reload();
   }
 
@@ -124,7 +126,7 @@ export function MfaSettingsPanel() {
     }
     setTotpSetup(null);
     setTotpCode("");
-    setMessage("Authenticator app enabled.");
+    setMessage(t("Authenticator app enabled."));
     void reload();
   }
 
@@ -148,7 +150,7 @@ export function MfaSettingsPanel() {
       setError(err);
       return;
     }
-    setMessage("Security method removed.");
+    setMessage(t("Security method removed."));
     void reload();
   }
 
@@ -160,7 +162,7 @@ export function MfaSettingsPanel() {
 
     if (confirmingPasskeyId !== passkeyId) {
       if (secretConfigured && isLastPasskey && !hasVisibleTotp) {
-        setError("Add an authenticator app before removing your last passkey, or you could be locked out.");
+        setError(t("Add an authenticator app before removing your last passkey, or you could be locked out."));
         setMessage(null);
         return;
       }
@@ -177,7 +179,7 @@ export function MfaSettingsPanel() {
     const err = await removePasskey(passkeyId);
     setBusy(false);
     if (err) setError(err);
-    else setMessage("Passkey removed.");
+    else setMessage(t("Passkey removed."));
     void reload();
   }
 
@@ -188,7 +190,7 @@ export function MfaSettingsPanel() {
       setCopiedKey(true);
       window.setTimeout(() => setCopiedKey(false), 2000);
     } catch {
-      setError("Couldn’t copy the key — select and copy it manually.");
+      setError(t("Couldn’t copy the key — select and copy it manually."));
     }
   }
 
@@ -202,17 +204,17 @@ export function MfaSettingsPanel() {
 
   return (
     <div>
-      <h3 className={`${HEADING} mb-2`}>{enabled ? "Two-Factor Authentication Enabled" : "Two-Factor Authentication"}</h3>
+      <h3 className={`${HEADING} mb-2`}>{enabled ? t("Two-Factor Authentication Enabled") : t("Two-Factor Authentication")}</h3>
       <div className="flex items-start gap-6">
         <div className="min-w-0 flex-1">
           <p className="text-[14px] leading-5 text-header-secondary">
             {enabled
-              ? "Your account is protected by an extra layer of security. Signing in needs your password plus a code from your authenticator app or a passkey."
-              : "Protect your Disband account with an extra layer of security. Add an authenticator app or a passkey, then sign in with your password plus that second factor."}
+              ? t("Your account is protected by an extra layer of security. Signing in needs your password plus a code from your authenticator app or a passkey.")
+              : t("Protect your Disband account with an extra layer of security. Add an authenticator app or a passkey, then sign in with your password plus that second factor.")}
           </p>
 
           {loading ? (
-            <p className="mt-4 text-[14px] text-text-muted">Loading security methods…</p>
+            <p className="mt-4 text-[14px] text-text-muted">{t("Loading security methods…")}</p>
           ) : (
             <>
               {[...verified, ...pending].length > 0 && (
@@ -226,32 +228,32 @@ export function MfaSettingsPanel() {
                           <p className="truncate text-[16px] font-medium text-header-primary">{factorLabel(factor)}</p>
                           <p className="text-[12px] text-header-secondary">
                             {factor.factor_type === "totp"
-                              ? "Authenticator app"
+                              ? t("Authenticator app")
                               : factor.factor_type === "webauthn"
-                                ? "Passkey"
+                                ? t("Passkey")
                                 : factor.factor_type}
                             {factor.status !== "verified" ? " · setup incomplete" : ""}
                           </p>
                         </div>
                         {isLastVerified ? (
                           <span
-                            title="Your last verified method can't be removed — add another one first."
+                            title={t("Your last verified method can't be removed — add another one first.")}
                             className="shrink-0 cursor-not-allowed text-[14px] text-text-muted/60"
                           >
-                            Remove
+                            {t("Remove")}
                           </span>
                         ) : confirming ? (
                           <span className="flex shrink-0 items-center gap-2">
                             <button type="button" disabled={busy} onClick={() => setConfirmingId(null)} className="px-2 text-[14px] font-medium text-white hover:underline disabled:opacity-50">
-                              Keep
+                              {t("Keep")}
                             </button>
                             <button type="button" disabled={busy} onClick={() => void removeFactor(factor.id)} className={`${BTN} bg-button-danger hover:bg-button-danger-hover`}>
-                              Remove
+                              {t("Remove")}
                             </button>
                           </span>
                         ) : (
                           <button type="button" disabled={busy} onClick={() => void removeFactor(factor.id)} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
-                            Remove
+                            {t("Remove")}
                           </button>
                         )}
                       </div>
@@ -268,24 +270,24 @@ export function MfaSettingsPanel() {
                       <div key={passkey.id} className="flex items-center justify-between gap-3 border-b border-bg-tertiary px-4 py-3 last:border-b-0">
                         <div className="min-w-0">
                           <p className="truncate text-[16px] font-medium text-header-primary">
-                            {passkey.friendly_name?.trim() || "Passkey"}
+                            {passkey.friendly_name?.trim() || t("Passkey")}
                           </p>
                           <p className="text-[12px] text-header-secondary">
-                            Passkey{passkey.created_at ? ` · added ${passkeyDate(passkey.created_at)}` : ""}
+                            {t("Passkey")}{passkey.created_at ? t(" · added {value}", { value: passkeyDate(passkey.created_at) }) : ""}
                           </p>
                         </div>
                         {confirming ? (
                           <span className="flex shrink-0 items-center gap-2">
                             <button type="button" disabled={busy} onClick={() => setConfirmingPasskeyId(null)} className="px-2 text-[14px] font-medium text-white hover:underline disabled:opacity-50">
-                              Keep
+                              {t("Keep")}
                             </button>
                             <button type="button" disabled={busy} onClick={() => void removePasskeyRow(passkey.id)} className={`${BTN} bg-button-danger hover:bg-button-danger-hover`}>
-                              Remove
+                              {t("Remove")}
                             </button>
                           </span>
                         ) : (
                           <button type="button" disabled={busy} onClick={() => void removePasskeyRow(passkey.id)} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
-                            Remove
+                            {t("Remove")}
                           </button>
                         )}
                       </div>
@@ -296,7 +298,7 @@ export function MfaSettingsPanel() {
 
               {passkeys.length > 0 && !secretConfigured && (
                 <p className="mt-2 text-[12px] leading-4 text-status-dnd">
-                  Passkey sign-in isn’t fully set up for this account. Remove the passkey and add it again.
+                  {t("Passkey sign-in isn’t fully set up for this account. Remove the passkey and add it again.")}
                 </p>
               )}
             </>
@@ -310,7 +312,7 @@ export function MfaSettingsPanel() {
                 onClick={() => void beginTotpSetup()}
                 className={`${BTN} bg-brand hover:bg-brand-hover`}
               >
-                {enabled ? "Add Authenticator App" : "Set Up Authenticator App"}
+                {enabled ? t("Add Authenticator App") : t("Set Up Authenticator App")}
               </button>
               {needsBrowser ? (
                 <button
@@ -319,7 +321,7 @@ export function MfaSettingsPanel() {
                   onClick={() => void openPasskeyInBrowser()}
                   className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}
                 >
-                  Add a Passkey in Browser
+                  {t("Add a Passkey in Browser")}
                 </button>
               ) : (
                 <button
@@ -328,7 +330,7 @@ export function MfaSettingsPanel() {
                   onClick={() => void addPasskey()}
                   className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}
                 >
-                  Add a Passkey
+                  {t("Add a Passkey")}
                 </button>
               )}
             </div>
@@ -336,10 +338,10 @@ export function MfaSettingsPanel() {
           {!totpSetup && (
             <p className="mt-2 text-[12px] leading-4 text-text-muted">
               {needsBrowser
-                ? "Passkeys are added on disband.dev, so this opens your browser. Sign in there, then choose Add a Passkey."
+                ? t("Passkeys are added on disband.dev, so this opens your browser. Sign in there, then choose Add a Passkey.")
                 : passkeySupported
-                  ? "A passkey uses Face ID, Touch ID, Windows Hello, or a hardware security key. You still sign in with your password first."
-                  : "Passkeys need a secure browser window. Open Disband in your browser to add one."}
+                  ? t("A passkey uses Face ID, Touch ID, Windows Hello, or a hardware security key. You still sign in with your password first.")
+                  : t("Passkeys need a secure browser window. Open Disband in your browser to add one.")}
             </p>
           )}
         </div>
@@ -348,33 +350,33 @@ export function MfaSettingsPanel() {
 
       {totpSetup && (
         <form onSubmit={confirmTotpSetup} className="mt-5 rounded-lg bg-bg-secondary p-4">
-          <h4 className="text-[16px] font-semibold text-header-primary">Set up an authenticator app</h4>
+          <h4 className="text-[16px] font-semibold text-header-primary">{t("Set up an authenticator app")}</h4>
           <div className="mt-4 flex flex-wrap gap-5">
             <div className="shrink-0 rounded-[4px] bg-white p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={totpQrSrc(totpSetup.qrCode)} alt="Authenticator QR code" className="h-36 w-36" />
+              <img src={totpQrSrc(totpSetup.qrCode)} alt={t("Authenticator QR code")} className="h-36 w-36" />
             </div>
             <div className="min-w-[220px] flex-1 space-y-4">
               <p className="text-[14px] leading-5 text-header-secondary">
-                Scan the QR code with Google Authenticator, 1Password, Authy or another authenticator app, then enter the 6-digit code it shows.
+                {t("Scan the QR code with Google Authenticator, 1Password, Authy or another authenticator app, then enter the 6-digit code it shows.")}
               </p>
               <div>
-                <span className={`${HEADING} mb-2 block`}>Or enter this key</span>
+                <span className={`${HEADING} mb-2 block`}>{t("Or enter this key")}</span>
                 <span className="flex items-center gap-2">
                   <input
                     readOnly
                     value={totpSetup.secret}
-                    aria-label="Manual entry key"
+                    aria-label={t("Manual entry key")}
                     onFocus={(e) => e.target.select()}
                     className="h-8 min-w-0 flex-1 rounded-[3px] bg-bg-tertiary px-2.5 font-mono text-[12px] text-text-normal outline-none"
                   />
                   <button type="button" onClick={() => void copyManualKey()} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
-                    {copiedKey ? "Copied" : "Copy"}
+                    {copiedKey ? t("Copied") : t("Copy")}
                   </button>
                 </span>
               </div>
               <label className="block">
-                <span className={`${HEADING} mb-2 block`}>6-digit code</span>
+                <span className={`${HEADING} mb-2 block`}>{t("6-digit code")}</span>
                 <input
                   required
                   inputMode="numeric"
@@ -389,10 +391,10 @@ export function MfaSettingsPanel() {
               </label>
               <div className="flex gap-2">
                 <button type="submit" disabled={busy || totpCode.length !== 6} className={`${BTN} bg-brand hover:bg-brand-hover`}>
-                  Activate
+                  {t("Activate")}
                 </button>
                 <button type="button" disabled={busy} onClick={() => setTotpSetup(null)} className="px-3 text-[14px] font-medium text-white hover:underline">
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </div>

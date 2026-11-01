@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconLock, IconSearch, IconUpload } from "@/components/icons";
 import { pushEscapeHandler, handleTopmostEscape } from "@/lib/overlay";
+import { useI18n } from "@/contexts/I18nContext";
 
 export { SettingsSection, SettingRow, Toggle, settingsInputClass, Hint } from "@/components/discord/settings/SettingsPrimitives";
 
@@ -98,6 +99,7 @@ export function InlineError({ children }: { children: ReactNode }) {
 
 /** A usage bar: emoji slots, soundboard sounds. */
 export function SlotMeter({ used, limit, label }: { used: number; limit: number | null; label: string }) {
+  const { t } = useI18n();
   const pct = limit ? Math.min(100, (used / limit) * 100) : 0;
   const full = limit !== null && used >= limit;
   return (
@@ -105,7 +107,7 @@ export function SlotMeter({ used, limit, label }: { used: number; limit: number 
       <div className="flex items-baseline justify-between text-[13px]">
         <span className="font-medium text-text-normal">{label}</span>
         <span className={`tabular-nums ${full ? "text-status-dnd" : "text-text-muted"}`}>
-          {limit === null ? `${used} · Unlimited` : `${used} / ${limit}`}
+          {limit === null ? t("{used} · Unlimited", { used }) : `${used} / ${limit}`}
         </span>
       </div>
       {limit !== null && (
@@ -135,6 +137,7 @@ export function LevelLock({
   perk: string;
   onBoost?: () => void;
 }) {
+  const { t } = useI18n();
   const needed = level === 1 ? 1 : level === 2 ? 3 : 6;
   const remaining = Math.max(0, needed - count);
   return (
@@ -145,7 +148,7 @@ export function LevelLock({
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-medium text-text-normal">{perk} unlock at Level {level}</p>
         <p className="mt-0.5 text-[13px] text-text-muted">
-          {remaining === 1 ? "1 more Catalyst" : `${remaining} more Catalysts`} to go · {count}/{needed}
+          {remaining === 1 ? t("1 more Catalyst") : t("{remaining} more Catalysts", { remaining })} to go · {count}/{needed}
         </p>
         <div className="mt-2 h-1 max-w-[220px] overflow-hidden rounded-full bg-bg-accent">
           <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${Math.min(100, (count / needed) * 100)}%` }} />
@@ -153,7 +156,7 @@ export function LevelLock({
       </div>
       {onBoost && (
         <button type="button" onClick={onBoost} className={btn.secondary}>
-          Boost
+          {t("Boost")}
         </button>
       )}
     </div>
@@ -174,6 +177,7 @@ export function FilePickButton({
   disabled?: boolean;
   className?: string;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -191,7 +195,7 @@ export function FilePickButton({
       <button type="button" disabled={disabled} onClick={() => ref.current?.click()} className={className}>
         {children ?? (
           <>
-            <IconUpload size={15} /> Choose file
+            <IconUpload size={15} /> {t("Choose file")}
           </>
         )}
       </button>
@@ -323,6 +327,7 @@ export function ConfirmDialog({
   onConfirm: (inputValue: string) => void | Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [typed, setTyped] = useState("");
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -346,7 +351,7 @@ export function ConfirmDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
-      <button type="button" aria-label="Cancel" className="overlay-fade absolute inset-0 bg-overlay-scrim-strong" onClick={onCancel} />
+      <button type="button" aria-label={t("Cancel")} className="overlay-fade absolute inset-0 bg-overlay-scrim-strong" onClick={onCancel} />
       <div
         role="alertdialog"
         aria-modal="true"
@@ -373,7 +378,7 @@ export function ConfirmDialog({
           {requireText && (
             <div className="mt-4">
               <FieldLabel htmlFor="confirm-type">
-                Type <span className="font-semibold text-text-normal">{requireText}</span> to confirm
+                {t("Type")}{" "}<span className="font-semibold text-text-normal">{requireText}</span> to confirm
               </FieldLabel>
               <input
                 id="confirm-type"
@@ -387,7 +392,7 @@ export function ConfirmDialog({
         </div>
         <div className="flex justify-end gap-2 bg-bg-secondary p-4">
           <button type="button" onClick={onCancel} className={btn.ghost}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="button"
@@ -402,7 +407,7 @@ export function ConfirmDialog({
             }}
             className={tone === "danger" ? btn.danger : btn.primary}
           >
-            {busy ? "Working…" : confirmLabel}
+            {busy ? t("Working…") : confirmLabel}
           </button>
         </div>
       </div>

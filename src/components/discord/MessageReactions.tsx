@@ -14,6 +14,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useProfiles } from "@/lib/profile-store";
 import { displayName } from "@/lib/utils";
 import { IconClose } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface MessageReactionsProps {
   reactions: ReactionSummary[];
@@ -128,6 +129,7 @@ function ReactionListDialog({
   onClose: () => void;
   exiting?: boolean;
 }) {
+  const { t } = useI18n();
   const [active, setActive] = useState(initialEmoji);
   const current = reactions.find((r) => r.emoji === active) ?? reactions[0];
   const profiles = useProfiles(current?.userIds ?? []);
@@ -141,14 +143,14 @@ function ReactionListDialog({
     <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t("Close")}
         onClick={onClose}
         className={`absolute inset-0 bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""}`}
       />
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Reactions"
+        aria-label={t("Reactions")}
         className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
       >
         {}
@@ -178,7 +180,7 @@ function ReactionListDialog({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t("Close")}
               className="text-text-muted hover:text-text-normal"
             >
               <IconClose size={16} />
@@ -194,7 +196,7 @@ function ReactionListDialog({
                     : <span className="h-8 w-8 shrink-0 rounded-full bg-bg-accent" />}
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-text-normal">
-                      {p ? displayName(p) : "Unknown user"}
+                      {p ? displayName(p) : t("Unknown user")}
                     </span>
                     {p?.username && (
                       <span className="block truncate text-xs text-text-muted">@{p.username}</span>
@@ -212,6 +214,7 @@ function ReactionListDialog({
 }
 
 export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageReactionsProps) {
+  const { t } = useI18n();
   const [hovered, setHovered] = useState<{ emoji: string; el: HTMLElement } | null>(null);
   const [listFor, setListFor] = useState<string | null>(null);
   const { mounted: listMounted, exiting: listExiting } = usePresence(!!listFor);
@@ -270,7 +273,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
           type="button"
           onClick={onOpenPicker}
           className="inline-flex h-6 w-8 items-center justify-center rounded-[8px] border border-transparent bg-bg-secondary text-base text-interactive-normal opacity-0 transition-opacity hover:border-[#4e5058] group-hover:opacity-100"
-          aria-label="Add reaction"
+          aria-label={t("Add reaction")}
         >
           +
         </button>
@@ -307,6 +310,7 @@ export function ReactionPicker({
   onSelect: (emoji: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const q = search.trim().toLowerCase();
   const searched = useMemo(() => (q ? searchEmojis(q, 60) : []), [q]);
@@ -324,15 +328,15 @@ export function ReactionPicker({
 
   return (
     <>
-      <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
+      <button type="button" className="fixed inset-0 z-40" aria-label={t("Close")} onClick={onClose} />
 
-      <div role="dialog" aria-modal="true" aria-label="Pick a reaction" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-[var(--elevation-high)] sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg`}>
+      <div role="dialog" aria-modal="true" aria-label={t("Pick a reaction")} className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-xl border border-divider bg-bg-secondary shadow-[var(--elevation-high)] sm:inset-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg`}>
         <div className="border-b border-divider px-4 py-3">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search emoji..."
+            placeholder={t("Search emoji...")}
             autoFocus
             className="w-full rounded bg-bg-primary px-3 py-2 text-sm text-text-normal placeholder:text-text-muted outline-none"
           />
@@ -353,7 +357,7 @@ export function ReactionPicker({
                 </button>
               ))}
               {searched.length === 0 && (
-                <p className="col-span-10 py-8 text-center text-xs text-text-muted">No emoji found</p>
+                <p className="col-span-10 py-8 text-center text-xs text-text-muted">{t("No emoji found")}</p>
               )}
             </div>
           ) : (

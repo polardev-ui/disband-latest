@@ -280,7 +280,7 @@ export function ChannelList({
           const result = await onMoveCategory?.(d.id, targetIndex);
           if (result) void alertDialog(result);
         } catch (err) {
-          void alertDialog(err instanceof Error ? err.message : "Couldn't move that category.");
+          void alertDialog(err instanceof Error ? err.message : t("Couldn't move that category."));
         }
       }
       clearDragState();

@@ -193,6 +193,7 @@ function ServerButton({
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }) {
+  const { t } = useI18n();
   // Member counts are fetched lazily on first hover (one cheap RPC, cached
   // per server) so the rail never pays for servers you only glance past.
   const [counts, setCounts] = useState<{ total: number; online: number } | null>(() => {
@@ -295,8 +296,8 @@ function ServerButton({
           )}
           {mentionCount > 0 && (
             <span
-              aria-label={`${mentionCount} unread ${mentionCount === 1 ? "mention" : "mentions"}`}
-              title={`${mentionCount} unread ${mentionCount === 1 ? "mention" : "mentions"}`}
+              aria-label={t(mentionCount === 1 ? "{count} unread mention" : "{count} unread mentions", { count: mentionCount })}
+              title={t(mentionCount === 1 ? "{count} unread mention" : "{count} unread mentions", { count: mentionCount })}
               className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-bg-tertiary bg-status-dnd px-1 text-[11px] font-bold leading-none text-white"
             >
               {mentionCount > 99 ? "99+" : mentionCount}

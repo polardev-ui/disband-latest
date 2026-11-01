@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { FieldLabel, InlineError, SettingRow, SettingsSection, Toggle, btn, settingsInputClass } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const NAME_MAX = 100;
 const DESCRIPTION_MAX = 300;
 
 export function OverviewSection({ server, isOwner }: SectionProps) {
+  const { t } = useI18n();
   const { updateServer } = useApp();
   const [name, setName] = useState(server.name);
   const [description, setDescription] = useState(server.description ?? "");
@@ -30,7 +32,7 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
 
   async function save() {
     if (!name.trim()) {
-      setError("Your space needs a name.");
+      setError(t("Your space needs a name."));
       return;
     }
     setSaving(true);
@@ -57,10 +59,10 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
 
   return (
     <div className="pb-20">
-      <SettingsSection title="Identity" description="Shown in the sidebar, on invite previews and in Discover.">
+      <SettingsSection title={t("Identity")} description={t("Shown in the sidebar, on invite previews and in Discover.")}>
         <div className="space-y-4 px-5 py-4">
           <div>
-            <FieldLabel htmlFor="space-name" aside={`${name.length}/${NAME_MAX}`}>Space name</FieldLabel>
+            <FieldLabel htmlFor="space-name" aside={`${name.length}/${NAME_MAX}`}>{t("Space name")}</FieldLabel>
             <input
               id="space-name"
               value={name}
@@ -70,30 +72,30 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
             />
           </div>
           <div>
-            <FieldLabel htmlFor="space-description" aside={`${description.length}/${DESCRIPTION_MAX}`}>Description</FieldLabel>
+            <FieldLabel htmlFor="space-description" aside={`${description.length}/${DESCRIPTION_MAX}`}>{t("Description")}</FieldLabel>
             <textarea
               id="space-description"
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, DESCRIPTION_MAX))}
               disabled={!isOwner}
               rows={4}
-              placeholder="What's this space about? Who's it for?"
+              placeholder={t("What's this space about? Who's it for?")}
               className={`${settingsInputClass} resize-none leading-relaxed disabled:opacity-60`}
             />
           </div>
-          {!isOwner && <p className="text-[13px] text-text-muted">Only the owner can change these.</p>}
+          {!isOwner && <p className="text-[13px] text-text-muted">{t("Only the owner can change these.")}</p>}
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Discovery">
+      <SettingsSection title={t("Discovery")}>
         <SettingRow
-          label="List in Discover"
+          label={t("List in Discover")}
           htmlFor="space-discoverable"
-          description="Anyone can find this space by name and join without an invite. It shows under Popular by member count and under New by age."
+          description={t("Anyone can find this space by name and join without an invite. It shows under Popular by member count and under New by age.")}
         >
           <Toggle
             id="space-discoverable"
-            label="List this space in Discover"
+            label={t("List this space in Discover")}
             checked={discoverable}
             disabled={!isOwner}
             onChange={(next) => void toggleDiscovery(next)}
@@ -106,7 +108,7 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
 
       {isOwner && (dirty || saving || savedFlash) && (
         <div className="view-enter sticky bottom-0 -mx-8 mt-8 flex items-center justify-between gap-3 border-t border-divider bg-overlay-panel px-8 py-3">
-          <p className="text-[14px] text-text-muted">{savedFlash ? "Saved." : "You have unsaved changes."}</p>
+          <p className="text-[14px] text-text-muted">{savedFlash ? t("Saved.") : t("You have unsaved changes.")}</p>
           <div className="flex gap-2">
             {dirty && (
               <button
@@ -118,11 +120,11 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
                 }}
                 className={btn.ghost}
               >
-                Reset
+                {t("Reset")}
               </button>
             )}
             <button type="button" onClick={() => void save()} disabled={saving || !dirty} className={btn.primary}>
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? t("Saving…") : t("Save changes")}
             </button>
           </div>
         </div>

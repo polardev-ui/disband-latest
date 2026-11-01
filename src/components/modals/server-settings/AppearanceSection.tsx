@@ -9,10 +9,12 @@ import { serverInitials } from "@/lib/utils";
 import { IconTrash, IconUpload } from "@/components/icons";
 import { FilePickButton, InlineError, SettingsSection, btn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const IMAGE_TYPES = "image/png,image/jpeg,image/webp,image/gif";
 
 export function AppearanceSection({ server, isOwner }: SectionProps) {
+  const { t } = useI18n();
   const { updateServer, members } = useApp();
   const { upload } = useMediaUpload();
   const [busy, setBusy] = useState<"icon" | "banner" | null>(null);
@@ -44,11 +46,11 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
   async function setImage(kind: "icon" | "banner", file: File | null) {
     if (!isOwner) return;
     if (file && !file.type.startsWith("image/")) {
-      setError("That file isn't an image.");
+      setError(t("That file isn't an image."));
       return;
     }
     if (file && file.size > 8 * 1024 * 1024) {
-      setError("Images can be up to 8 MB.");
+      setError(t("Images can be up to 8 MB."));
       return;
     }
     setBusy(kind);
@@ -58,7 +60,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
       if (file) {
         const res = await upload(file);
         if (!res) {
-          setError("The upload didn't go through. Try again.");
+          setError(t("The upload didn't go through. Try again."));
           return;
         }
         url = res.url;
@@ -73,7 +75,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
   return (
     <div className="pb-10">
       {/* A live invite card, so changes are judged where people see them. */}
-      <SettingsSection title="Preview" description="How your space looks on an invite.">
+      <SettingsSection title={t("Preview")} description={t("How your space looks on an invite.")}>
         <div className="p-5">
           <div className="mx-auto max-w-[400px] overflow-hidden rounded-[14px] border border-divider bg-bg-primary">
             <div className="relative h-[120px] bg-bg-accent">
@@ -95,26 +97,26 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
                   {shownCount} {shownCount === 1 ? "member" : "members"}
                 </p>
               </div>
-              <span className="ml-auto rounded-[3px] bg-status-online px-3 py-1.5 text-[13px] font-semibold text-white">Join</span>
+              <span className="ml-auto rounded-[3px] bg-status-online px-3 py-1.5 text-[13px] font-semibold text-white">{t("Join")}</span>
             </div>
           </div>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Space icon" description="Square images work best. At least 512 × 512.">
+      <SettingsSection title={t("Space icon")} description={t("Square images work best. At least 512 × 512.")}>
         <div className="flex items-center gap-4 px-5 py-4">
           <div className={busy === "icon" ? "animate-pulse" : ""}>
             <SpaceIcon url={icon} name={server.name} size={72} />
           </div>
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <FilePickButton accept={IMAGE_TYPES} disabled={!isOwner || busy !== null} onPick={(f) => void setImage("icon", f)}>
-              <IconUpload size={15} /> {busy === "icon" ? "Uploading…" : icon ? "Change icon" : "Upload icon"}
+              <IconUpload size={15} /> {busy === "icon" ? t("Uploading…") : icon ? t("Change icon") : t("Upload icon")}
             </FilePickButton>
             {icon && (
               <button
                 type="button"
-                aria-label="Remove icon"
-                title="Remove icon"
+                aria-label={t("Remove icon")}
+                title={t("Remove icon")}
                 disabled={!isOwner || busy !== null}
                 onClick={() => void setImage("icon", null)}
                 className={iconBtnDanger}
@@ -126,19 +128,19 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Banner" description="Wide images work best, around 960 × 540. Shown on invites and in Discover.">
+      <SettingsSection title={t("Banner")} description={t("Wide images work best, around 960 × 540. Shown on invites and in Discover.")}>
         <div className="space-y-3 px-5 py-4">
           <div className={`relative aspect-[16/6] overflow-hidden rounded-lg bg-bg-tertiary ${busy === "banner" ? "animate-pulse" : ""}`}>
             {banner ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={banner} alt="" className="view-enter h-full w-full object-cover" key={banner} />
             ) : (
-              <div className="flex h-full items-center justify-center text-[13px] text-text-muted">No banner yet</div>
+              <div className="flex h-full items-center justify-center text-[13px] text-text-muted">{t("No banner yet")}</div>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <FilePickButton accept={IMAGE_TYPES} disabled={!isOwner || busy !== null} onPick={(f) => void setImage("banner", f)}>
-              <IconUpload size={15} /> {busy === "banner" ? "Uploading…" : banner ? "Change banner" : "Upload banner"}
+              <IconUpload size={15} /> {busy === "banner" ? t("Uploading…") : banner ? t("Change banner") : t("Upload banner")}
             </FilePickButton>
             {banner && (
               <button
@@ -147,7 +149,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
                 onClick={() => void setImage("banner", null)}
                 className={btn.ghost}
               >
-                Remove
+                {t("Remove")}
               </button>
             )}
           </div>

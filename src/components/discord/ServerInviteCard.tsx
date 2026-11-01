@@ -7,6 +7,7 @@ import { getInviteUrl } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { Tooltip } from "./Tooltip";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface ServerInviteCardProps {
   code: string;
@@ -14,6 +15,7 @@ interface ServerInviteCardProps {
 }
 
 export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
+  const { t } = useI18n();
   const { joinServerByInvite, selectServer, servers, user } = useApp();
   const [info, setInfo] = useState<{
     id: string;
@@ -49,7 +51,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           verified?: boolean;
           partner?: boolean;
         };
-        if (!cancelled && !res.ok) setError(json?.error ?? "Could not load invite.");
+        if (!cancelled && !res.ok) setError(json?.error ?? t("Could not load invite."));
         if (!cancelled && res.ok && json?.id) {
           setInfo({
             id: json.id,
@@ -63,7 +65,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           });
         }
       } catch {
-        if (!cancelled) setError("Could not load invite.");
+        if (!cancelled) setError(t("Could not load invite."));
       }
       if (!cancelled) setLoading(false);
     })();
@@ -88,7 +90,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
     if (s) await selectServer(s.id);
   }
 
-  if (loading) return <div className="mt-1 max-w-sm rounded-lg border border-divider bg-bg-secondary p-3 text-xs text-text-muted">Loading invite…</div>;
+  if (loading) return <div className="mt-1 max-w-sm rounded-lg border border-divider bg-bg-secondary p-3 text-xs text-text-muted">{t("Loading invite…")}</div>;
   if (!info) return null;
 
   return (
@@ -107,7 +109,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase text-text-muted">Space Invite</p>
+          <p className="text-xs font-bold uppercase text-text-muted">{t("Space Invite")}</p>
           {}
           <div className="flex min-w-0 items-center gap-1 font-semibold">
             {(() => {
@@ -127,11 +129,11 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
       <div className="border-t border-divider px-3 py-2">
         {isMember ? (
           <button type="button" onClick={() => void handleGo()} className="w-full rounded bg-interactive-hover py-1.5 text-sm font-semibold text-text-normal hover:bg-interactive-selected">
-            Go to Space
+            {t("Go to Space")}
           </button>
         ) : (
           <button type="button" disabled={joining || !user} onClick={() => void handleJoin()} className="w-full rounded bg-brand py-1.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
-            {joining ? "Joining…" : "Join Space"}
+            {joining ? t("Joining…") : t("Join Space")}
           </button>
         )}
         {error && <p className="mt-1 text-xs text-status-dnd">{error}</p>}

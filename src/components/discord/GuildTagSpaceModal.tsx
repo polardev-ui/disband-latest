@@ -13,6 +13,7 @@ import {
   useGuildTagSpaceServerId,
   type GuildTagSpace,
 } from "@/lib/guild-tags";
+import { useI18n } from "@/contexts/I18nContext";
 
 /**
  * The card behind a guild tag. A tag is a small piece of a space's identity,
@@ -21,6 +22,7 @@ import {
  * their profile but no door; a private tag shows nothing at all.
  */
 export function GuildTagSpaceModal() {
+  const { t } = useI18n();
   const serverId = useGuildTagSpaceServerId();
   const { servers, joinServerById, selectServer } = useApp();
   const [space, setSpace] = useState<GuildTagSpace | null>(null);
@@ -95,16 +97,16 @@ export function GuildTagSpaceModal() {
       footer={
         <>
           <button type="button" onClick={hideGuildTagSpace} className={`${classicBtn.grey} ${classicBtn.md}`}>
-            Close
+            {t("Close")}
           </button>
           {joined && (
             <button type="button" onClick={() => void open()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              Open Space
+              {t("Open Space")}
             </button>
           )}
           {canJoin && (
             <button type="button" disabled={joining} onClick={() => void join()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              {joining ? "Joining…" : "Join Space"}
+              {joining ? t("Joining…") : t("Join Space")}
             </button>
           )}
         </>
@@ -127,7 +129,7 @@ export function GuildTagSpaceModal() {
             <IconLock size={24} />
           </span>
           <p className="mt-4 max-w-[320px] text-[14px] leading-5 text-text-muted">
-            This space keeps its identity private. The tag is real, but the people wearing it have chosen not to reveal where it comes from.
+            {t("This space keeps its identity private. The tag is real, but the people wearing it have chosen not to reveal where it comes from.")}
           </p>
         </div>
       ) : space ? (
@@ -158,7 +160,7 @@ export function GuildTagSpaceModal() {
               <span className="truncate">{space.name}</span>
             </p>
             <p className="mt-1 min-h-[40px] text-[14px] leading-5 text-header-secondary">
-              {space.description || "No description yet."}
+              {space.description || t("No description yet.")}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-text-muted">
               <span className="inline-flex items-center gap-1.5">
@@ -172,7 +174,7 @@ export function GuildTagSpaceModal() {
             </div>
             {!space.discoverable && !joined && (
               <p className="mt-3 rounded-[4px] bg-bg-tertiary px-3 py-2 text-[12px] leading-4 text-text-muted">
-                This space isn&apos;t discoverable. Ask someone inside for an invite to join.
+                {t("This space isn’t discoverable. Ask someone inside for an invite to join.")}
               </p>
             )}
             {joinError && (

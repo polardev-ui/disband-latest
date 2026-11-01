@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/link-preview";
 import { IconLink } from "@/components/icons";
 import { safeImageUrl } from "@/lib/safe-url";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface LinkPreviewCardProps {
   url: string;
@@ -18,6 +19,7 @@ interface LinkPreviewCardProps {
  description never pushes the picture off the card.
 */
 export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
+  const { t } = useI18n();
   const [preview, setPreview] = useState<LinkPreview | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
@@ -52,7 +54,7 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
   if (preview === undefined) {
     return (
       <div
-        aria-label="Loading preview"
+        aria-label={t("Loading preview")}
         className="mt-1 w-full max-w-[432px] animate-pulse overflow-hidden rounded-[4px] border border-divider border-l-4 border-l-brand bg-bg-secondary"
       >
         <div className="space-y-2 p-3">

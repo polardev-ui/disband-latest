@@ -6,12 +6,14 @@ import type { ChannelType } from "@/lib/supabase/types";
 import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker, IconTrash } from "@/components/icons";
 import { ConfirmDialog, EmptyState, InlineError, Segmented, btn, enterStyle, iconBtn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 type ChannelLite = { id: string; name: string; type: string; category_id?: string | null; read_only?: boolean };
 
 export function ChannelsSection({ onEditChannel }: SectionProps & {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
 }) {
+  const { t } = useI18n();
   const { channels, categories, createChannel, renameChannel, deleteChannel, createCategory } = useApp();
   const [name, setName] = useState("");
   const [categoryName, setCategoryName] = useState("");
@@ -70,22 +72,22 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
       <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
         <div className="flex flex-wrap items-center gap-3 px-5 py-4">
           <Segmented
-            label="Channel type"
+            label={t("Channel type")}
             value={type}
             onChange={setType}
             options={[
-              { value: "text", label: <><IconHash size={14} /> Text</> },
-              { value: "voice", label: <><IconSpeaker size={14} /> Voice</> },
+              { value: "text", label: <><IconHash size={14} /> {t("Text")}</> },
+              { value: "voice", label: <><IconSpeaker size={14} /> {t("Voice")}</> },
             ]}
           />
           {categories.length > 0 && (
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              aria-label="Category"
+              aria-label={t("Category")}
               className="h-9 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
             >
-              <option value="">No category</option>
+              <option value="">{t("No category")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -103,20 +105,20 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void create();
               }}
-              placeholder={type === "text" ? "new-channel" : "Lounge"}
-              aria-label="New channel name"
+              placeholder={type === "text" ? "new-channel" : t("Lounge")}
+              aria-label={t("New channel name")}
               className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
             />
           </label>
           <button type="button" onClick={() => void create()} disabled={creating || !name.trim()} className={`${btn.primary} h-10`}>
-            <IconPlus size={15} /> {creating ? "Creating…" : "Create"}
+            <IconPlus size={15} /> {creating ? t("Creating…") : t("Create")}
           </button>
         </div>
       </section>
 
       <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
         <div className="px-5 py-4">
-          <h3 className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Categories</h3>
+          <h3 className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{t("Categories")}</h3>
           <div className="mt-3 flex gap-2">
             <input
               value={categoryName}
@@ -124,8 +126,8 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void createCategoryNow();
               }}
-              placeholder="New category"
-              aria-label="New category name"
+              placeholder={t("New category")}
+              aria-label={t("New category name")}
               className="h-10 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
             />
             <button
@@ -134,7 +136,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               disabled={creatingCategory || !categoryName.trim()}
               className={`${btn.primary} h-10`}
             >
-              <IconPlus size={15} /> {creatingCategory ? "Creating…" : "Create"}
+              <IconPlus size={15} /> {creatingCategory ? t("Creating…") : t("Create")}
             </button>
           </div>
           {categories.length > 0 && (
@@ -150,7 +152,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
 
       {groups.length === 0 ? (
         <div className="rounded-lg bg-bg-secondary">
-          <EmptyState icon={<IconHash size={20} />} title="No channels yet" body="Create the first one above." />
+          <EmptyState icon={<IconHash size={20} />} title={t("No channels yet")} body="Create the first one above." />
         </div>
       ) : (
         groups.map((group) => (
@@ -180,7 +182,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
                             setRenamingId(null);
                           }
                         }}
-                        aria-label={`Rename ${c.name}`}
+                        aria-label={t("Rename {name}", { name: c.name })}
                         className="h-8 min-w-0 flex-1 rounded-[8px] border border-brand bg-bg-accent px-2.5 text-[14px] text-text-normal outline-none"
                       />
                     ) : (
@@ -188,7 +190,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
                     )}
                     <div className="flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
                       {onEditChannel && (
-                        <button type="button" onClick={() => onEditChannel(c)} className={iconBtn} aria-label={`Permissions for ${c.name}`} title="Permissions">
+                        <button type="button" onClick={() => onEditChannel(c)} className={iconBtn} aria-label={t("Permissions for {name}", { name: c.name })} title={t("Permissions")}>
                           <IconSettings size={16} />
                         </button>
                       )}
@@ -199,12 +201,12 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
                           setRenameValue(c.name);
                         }}
                         className={iconBtn}
-                        aria-label={`Rename ${c.name}`}
-                        title="Rename"
+                        aria-label={t("Rename {name}", { name: c.name })}
+                        title={t("Rename")}
                       >
                         <IconEdit size={16} />
                       </button>
-                      <button type="button" onClick={() => setDeleting(c)} className={iconBtnDanger} aria-label={`Delete ${c.name}`} title="Delete">
+                      <button type="button" onClick={() => setDeleting(c)} className={iconBtnDanger} aria-label={t("Delete {name}", { name: c.name })} title={t("Delete")}>
                         <IconTrash size={16} />
                       </button>
                     </div>
@@ -218,9 +220,9 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
 
       <ConfirmDialog
         open={!!deleting}
-        title={deleting ? `Delete ${deleting.type === "voice" ? "" : "#"}${deleting.name}?` : ""}
+        title={deleting ? t("Delete {name}?", { name: `${deleting.type === "voice" ? "" : "#"}${deleting.name}` }) : ""}
         body="Every message in it is removed for good. This can't be undone."
-        confirmLabel="Delete channel"
+        confirmLabel={t("Delete channel")}
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (!deleting) return;

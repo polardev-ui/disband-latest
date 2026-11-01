@@ -19,6 +19,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { IconClose } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The composer while a slash command is being filled in, after Discord:
@@ -44,6 +45,7 @@ interface Props {
 }
 
 export function SlashCommandComposer({ command, members, serverId, initial = {}, onExit, onDone }: Props) {
+  const { t } = useI18n();
   const { banMember, kickMember, timeoutMember, presenceMap, user } = useApp();
   // Optional options start shown only when they arrive prefilled.
   const [shown, setShown] = useState<string[]>(() =>
@@ -272,11 +274,11 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
       {pickerCount > 0 && !busy && (
         <div
           role="listbox"
-          aria-label={option.kind === "user" ? "Members" : "Durations"}
+          aria-label={option.kind === "user" ? t("Members") : t("Durations")}
           className="menu-pop absolute bottom-full left-4 right-4 z-20 mb-2 max-h-[340px] overflow-y-auto rounded-lg bg-bg-secondary pb-2 shadow-[var(--elevation-high)]"
         >
           <p className="px-3 pb-1 pt-3 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
-            {option.kind === "user" ? "Members" : "Durations"}
+            {option.kind === "user" ? t("Members") : t("Durations")}
           </p>
           {option.kind === "user"
             ? memberResults.map((p, i) => (
@@ -330,7 +332,7 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
       <div className="flex min-h-[40px] items-center gap-2 rounded-t-lg border-b border-bg-tertiary bg-bg-secondary pl-4 pr-2 text-[14px]">
         <p className="min-w-0 flex-1 truncate">
           {busy ? (
-            <span className="text-header-secondary">Running /{command.name}…</span>
+            <span className="text-header-secondary">{t("Running /")}{command.name}…</span>
           ) : bar ? (
             <span className="text-status-dnd">{bar.text}</span>
           ) : (
@@ -343,7 +345,7 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
         <button
           type="button"
           onClick={() => onExit("")}
-          aria-label="Cancel command"
+          aria-label={t("Cancel command")}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
         >
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-interactive-normal text-bg-secondary hover:bg-interactive-active">

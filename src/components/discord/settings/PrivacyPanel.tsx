@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { SettingRow, SettingsSection, Toggle } from "./SettingsPrimitives";
+import { useI18n } from "@/contexts/I18nContext";
 
 /** Who can reach you. Message requests are migration 0193. */
 export function PrivacyPanel() {
+  const { t } = useI18n();
   const { profile, updateProfile } = useApp();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,17 +24,17 @@ export function PrivacyPanel() {
   return (
     <div>
       <SettingsSection
-        title="Direct Messages"
-        description="Friends can always message you. This controls everyone else."
+        title={t("Direct Messages")}
+        description={t("Friends can always message you. This controls everyone else.")}
       >
         <SettingRow
-          label="Allow message requests"
-          description="People who share a space with you can send you a message. It lands in Message Requests, not your DMs, until you reply or accept. The official Disband space doesn't count as a shared space."
+          label={t("Allow message requests")}
+          description={t("People who share a space with you can send you a message. It lands in Message Requests, not your DMs, until you reply or accept. The official Disband space doesn't count as a shared space.")}
           htmlFor="privacy-message-requests"
         >
           <Toggle
             id="privacy-message-requests"
-            label="Allow message requests"
+            label={t("Allow message requests")}
             checked={allowRequests}
             disabled={saving || !profile}
             onChange={(next) => void setAllowRequests(next)}

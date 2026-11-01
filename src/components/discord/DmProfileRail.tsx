@@ -14,6 +14,7 @@ import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presenc
 import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface DmProfileRailProps {
   friend: Profile;
@@ -28,6 +29,7 @@ interface DmProfileRailProps {
  * what they're listening to, and mutual spaces and friends.
  */
 export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps) {
+  const { t } = useI18n();
   const { presenceMap, listeningMap, loadMutuals, servers, friends, selectServer, openDmWithFriend } = useApp();
   const [bannerFailed, setBannerFailed] = useState(false);
   const [mutuals, setMutuals] = useState<{ serverIds: string[]; friendIds: string[] } | null>(null);
@@ -60,7 +62,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
 
   return (
     <aside
-      aria-label={`${displayName(friend)}'s profile`}
+      aria-label={t("{name}'s profile", { name: displayName(friend) })}
       className={`channel-scroll flex min-h-0 w-[340px] shrink-0 flex-col overflow-y-auto ${theme ? "" : "bg-bg-secondary-alt"}`}
       style={theme?.style}
     >
@@ -85,14 +87,14 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         <button
           type="button"
           onClick={onOpenFullProfile}
-          aria-label="View full profile"
+          aria-label={t("View full profile")}
           className={`group/avatar absolute left-4 top-[76px] rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
           style={theme ? { backgroundColor: theme.avatarRing } : undefined}
         >
           <span className="relative block">
             <Avatar profile={friend} size="xl" className="!h-20 !w-20 !text-2xl" />
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
-              View Profile
+              {t("View Profile")}
             </span>
             <StatusDot status={live} size={16} ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"} className="absolute -bottom-0.5 -right-0.5" />
           </span>
@@ -125,13 +127,13 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
 
         {friend.bio?.trim() && (
           <section className="mb-3">
-            <h3 className="mb-1.5 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">About Me</h3>
+            <h3 className="mb-1.5 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">{t("About Me")}</h3>
             <p className="whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">{friend.bio.trim()}</p>
           </section>
         )}
 
         <section className="mb-3">
-          <h3 className="mb-1.5 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">Member Since</h3>
+          <h3 className="mb-1.5 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">{t("Member Since")}</h3>
           <p className="text-[14px] leading-[18px] text-text-normal">
             {new Date(friend.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
           </p>
@@ -147,11 +149,11 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
       {/* Mutuals, as expandable rows — the classic DM sidebar's bottom half. */}
       <div className="mx-4 mb-4 overflow-hidden rounded-lg bg-bg-floating">
         <MutualRow
-          label={`Mutual Servers — ${mutuals?.serverIds.length ?? "…"}`}
+          label={t("Mutual Spaces — {count}", { count: mutuals?.serverIds.length ?? "…" })}
           open={open === "servers"}
           onToggle={() => setOpen((v) => (v === "servers" ? null : "servers"))}
         >
-          {mutuals && mutualServers.length === 0 && <p className="px-2 py-1 text-[14px] text-text-muted">No servers in common.</p>}
+          {mutuals && mutualServers.length === 0 && <p className="px-2 py-1 text-[14px] text-text-muted">{t("No servers in common.")}</p>}
           {mutualServers.map((s) => (
             <button
               key={s.id}
@@ -171,11 +173,11 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         </MutualRow>
         <div className="mx-3 h-px bg-bg-secondary" />
         <MutualRow
-          label={`Mutual Friends — ${mutuals?.friendIds.length ?? "…"}`}
+          label={t("Mutual Friends — {count}", { count: mutuals?.friendIds.length ?? "…" })}
           open={open === "friends"}
           onToggle={() => setOpen((v) => (v === "friends" ? null : "friends"))}
         >
-          {mutuals && mutualFriends.length === 0 && <p className="px-2 py-1 text-[14px] text-text-muted">No friends in common.</p>}
+          {mutuals && mutualFriends.length === 0 && <p className="px-2 py-1 text-[14px] text-text-muted">{t("No friends in common.")}</p>}
           {mutualFriends.map((f) => (
             <button
               key={f.id}
@@ -195,7 +197,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         onClick={onOpenFullProfile}
         className="mx-4 mb-4 mt-auto h-8 rounded-[3px] text-[14px] font-medium text-header-secondary transition-colors hover:bg-interactive-hover hover:text-header-primary"
       >
-        View Full Profile
+        {t("View Full Profile")}
       </button>
     </aside>
   );

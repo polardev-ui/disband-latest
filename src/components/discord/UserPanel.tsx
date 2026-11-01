@@ -94,7 +94,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
       </button>
 
       <PanelIconButton
-        label={micMuted ? "Unmute" : "Mute"}
+        label={micMuted ? t("Unmute") : t("Mute")}
         pressed={micMuted}
         danger={micMuted}
         onClick={() => setMicMuted(!micMuted)}
@@ -102,7 +102,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         {micMuted ? <IconMicOff size={20} /> : <IconMic size={20} />}
       </PanelIconButton>
       <PanelIconButton
-        label={deafened ? "Undeafen" : "Deafen"}
+        label={deafened ? t("Undeafen") : t("Deafen")}
         pressed={deafened}
         danger={deafened}
         onClick={() => {
@@ -113,7 +113,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
       >
         {deafened ? <IconHeadphonesOff size={20} /> : <IconHeadphones size={20} />}
       </PanelIconButton>
-      <PanelIconButton label="User Settings" onClick={onOpenSettings} spin>
+      <PanelIconButton label={t("User Settings")} onClick={onOpenSettings} spin>
         <IconSettings size={20} />
       </PanelIconButton>
     </div>

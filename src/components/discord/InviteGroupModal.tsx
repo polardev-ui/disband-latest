@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import { IconClose } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface InviteGroupModalProps {
   open: boolean;
@@ -18,6 +19,7 @@ interface InviteGroupModalProps {
 }
 
 export function InviteGroupModal({ open, groupId, members, onClose }: InviteGroupModalProps) {
+  const { t } = useI18n();
   const { friends, inviteToGroup } = useApp();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -60,9 +62,9 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
 
   return (
     <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}>
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Invite to group" className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-[var(--elevation-high)]`}>
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label={t("Invite to group")} className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-md rounded-lg bg-bg-secondary p-6 shadow-[var(--elevation-high)]`}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Invite friends</h2>
+          <h2 className="text-lg font-bold">{t("Invite friends")}</h2>
           <button type="button" onClick={onClose}><IconClose size={20} /></button>
         </div>
         <p className="mb-3 text-xs text-text-muted">{members.length}/10 members · pick friends to add</p>
@@ -74,7 +76,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
               <span className="text-sm">{displayName(f)}</span>
             </label>
           ))}
-          {available.length === 0 && <p className="text-sm text-text-muted">All friends are already in this group</p>}
+          {available.length === 0 && <p className="text-sm text-text-muted">{t("All friends are already in this group")}</p>}
         </div>
         {error && <p className="mb-2 text-sm text-status-dnd">{error}</p>}
         <button
@@ -82,7 +84,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
           disabled={loading || selected.size === 0}
           className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {loading ? "Inviting…" : `Invite ${selected.size || ""} friend${selected.size === 1 ? "" : "s"}`}
+          {loading ? t("Inviting…") : (selected.size === 0 ? t("Invite friends") : t(selected.size === 1 ? "Invite {count} friend" : "Invite {count} friends", { count: selected.size }))}
         </button>
       </form>
     </div>

@@ -1070,14 +1070,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     {messageContext === "channel" ? <IconHash size={42} /> : (channelIcon ?? <IconHash size={42} />)}
                   </span>
                   <h3 className="my-2 text-[32px] font-bold leading-10 text-header-primary">
-                    {messageContext === "channel" ? `Welcome to #${channelName}!` : channelName}
+                    {messageContext === "channel" ? t("Welcome to #{channelName}!", { channelName }) : channelName}
                   </h3>
                   <p className="text-[16px] leading-5 text-header-secondary">
                     {introText ?? (messageContext === "channel"
-                      ? `This is the start of the #${channelName} channel.`
+                      ? t("This is the start of the #{channelName} channel.", { channelName })
                       : messageContext === "dm"
-                        ? `This is the beginning of your direct message history with ${channelName}.`
-                        : `Welcome to the beginning of ${channelName}.`)}
+                        ? t("This is the beginning of your direct message history with {channelName}.", { channelName })
+                        : t("Welcome to the beginning of {channelName}.", { channelName }))}
                   </p>
                 </div>
               )}

@@ -8,8 +8,10 @@ import { IconCheck, IconCopy } from "@/components/icons";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
 import { FieldLabel, InlineError, LevelLock, SettingsSection, btn } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function InvitesSection({ server, isOwner, catalystCount, onBoost }: SectionProps) {
+  const { t } = useI18n();
   const { updateServer } = useApp();
   const level = catalystLevel(catalystCount).level;
   const code = server.vanity_code || server.invite_code || null;
@@ -17,9 +19,9 @@ export function InvitesSection({ server, isOwner, catalystCount, onBoost }: Sect
 
   return (
     <div className="pb-10">
-      <SettingsSection title="Invite link" description="Anyone with this link can join. Paste it in chat for a preview card with a Join button.">
+      <SettingsSection title={t("Invite link")} description={t("Anyone with this link can join. Paste it in chat for a preview card with a Join button.")}>
         <div className="px-5 py-4">
-          {inviteUrl ? <CopyField value={inviteUrl} /> : <p className="text-[14px] text-text-muted">This space doesn&apos;t have an invite link yet.</p>}
+          {inviteUrl ? <CopyField value={inviteUrl} /> : <p className="text-[14px] text-text-muted">{t("This space doesn’t have an invite link yet.")}</p>}
         </div>
       </SettingsSection>
 
@@ -35,7 +37,7 @@ export function InvitesSection({ server, isOwner, catalystCount, onBoost }: Sect
       />
 
       {inviteUrl && (
-        <SettingsSection title="Send to friends" description="Drops the invite into a DM, no copy and paste.">
+        <SettingsSection title={t("Send to friends")} description={t("Drops the invite into a DM, no copy and paste.")}>
           <SendInvitePanel inviteUrl={inviteUrl} serverName={server.name} />
         </SettingsSection>
       )}
@@ -44,6 +46,7 @@ export function InvitesSection({ server, isOwner, catalystCount, onBoost }: Sect
 }
 
 export function CopyField({ value }: { value: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
@@ -62,11 +65,11 @@ export function CopyField({ value }: { value: string }) {
       >
         {copied ? (
           <span className="view-enter flex items-center gap-1.5 text-status-online">
-            <IconCheck size={15} /> Copied
+            <IconCheck size={15} /> {t("Copied")}
           </span>
         ) : (
           <span className="flex items-center gap-1.5">
-            <IconCopy size={15} /> Copy
+            <IconCopy size={15} /> {t("Copy")}
           </span>
         )}
       </button>
@@ -90,6 +93,7 @@ function VanityCard({
   onBoost?: () => void;
   save: (next: string | null) => Promise<string | null>;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(current ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +118,7 @@ function VanityCard({
     const err = await save(next);
     setSaving(false);
     if (err) {
-      setError(/duplicate|unique/i.test(err) ? "Someone already has that link." : err);
+      setError(/duplicate|unique/i.test(err) ? t("Someone already has that link.") : err);
       return;
     }
     setValue(next ?? "");
@@ -126,16 +130,16 @@ function VanityCard({
   // working, and its owner can still release it.
   if (!unlocked) {
     return (
-      <SettingsSection title="Custom invite link" description="A short, memorable link that's yours as long as the space stays at Level 2.">
+      <SettingsSection title={t("Custom invite link")} description={t("A short, memorable link that's yours as long as the space stays at Level 2.")}>
         <LevelLock level={2} count={catalystCount} perk="Custom invite links" onBoost={onBoost} />
         {current && (
           <div className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3.5">
             <p className="min-w-0 text-[13px] text-text-muted">
-              Your current link <span className="font-mono text-text-normal">{current}</span> still works.
+              {t("Your current link")}{" "}<span className="font-mono text-text-normal">{current}</span> still works.
             </p>
             {isOwner && (
               <button type="button" disabled={saving} onClick={() => void submit(null)} className={btn.ghost}>
-                Release it
+                {t("Release it")}
               </button>
             )}
           </div>
@@ -146,10 +150,10 @@ function VanityCard({
   }
 
   return (
-    <SettingsSection title="Custom invite link" description="Letters, numbers and hyphens, 3 to 24 characters.">
+    <SettingsSection title={t("Custom invite link")} description={t("Letters, numbers and hyphens, 3 to 24 characters.")}>
       <div className="space-y-3 px-5 py-4">
         <div>
-          <FieldLabel htmlFor="vanity" aside={`${value.length}/24`}>Your link</FieldLabel>
+          <FieldLabel htmlFor="vanity" aside={`${value.length}/24`}>{t("Your link")}</FieldLabel>
           <div className="flex gap-2">
             <input
               id="vanity"
@@ -166,7 +170,7 @@ function VanityCard({
             />
             {isOwner && (
               <button type="button" onClick={() => void submit(clean || null)} disabled={saving || !dirty} className={`${btn.primary} h-10`}>
-                {saving ? "Saving…" : saved ? "Saved" : !clean && current ? "Release" : "Claim"}
+                {saving ? t("Saving…") : saved ? t("Saved") : !clean && current ? t("Release") : t("Claim")}
               </button>
             )}
           </div>

@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface AuditRow {
   id: number;
@@ -58,6 +59,7 @@ function formatDuration(seconds: number): string {
 
 /** The last 100 moderation actions in a space. */
 export function AuditLogPanel({ serverId }: { serverId: string }) {
+  const { t } = useI18n();
   const { members } = useApp();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +122,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg bg-bg-secondary">
-        <EmptyState icon={<IconNotes size={20} />} title="Nothing logged yet" body="Kicks, bans, timeouts and deleted messages will show up here." />
+        <EmptyState icon={<IconNotes size={20} />} title={t("Nothing logged yet")} body="Kicks, bans, timeouts and deleted messages will show up here." />
       </div>
     );
   }
@@ -156,7 +158,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[14px] leading-snug text-text-muted">
-                <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? "Someone" : "Disband"}</span>{" "}
+                <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? t("Someone") : "Disband"}</span>{" "}
                 {badgeLabel}
                 {row.target_type === "user" && (
                   <>

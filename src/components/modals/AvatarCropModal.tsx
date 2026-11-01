@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { IconClose } from "@/components/icons";
 import type { AvatarCrop } from "@/lib/utils";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface AvatarCropModalProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface AvatarCropModalProps {
 }
 
 export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropModalProps) {
+  const { t } = useI18n();
   const [zoom, setZoom] = useState(1);
   const [posX, setPosX] = useState(0);
   const [posY, setPosY] = useState(0);
@@ -35,33 +37,33 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-overlay-scrim-strong overlay-fade" onClick={onClose} aria-label="Close" />
-      <div role="dialog" aria-modal="true" aria-label="Adjust profile picture" className="modal-pop relative w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
+      <button type="button" className="absolute inset-0 bg-overlay-scrim-strong overlay-fade" onClick={onClose} aria-label={t("Close")} />
+      <div role="dialog" aria-modal="true" aria-label={t("Adjust profile picture")} className="modal-pop relative w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
         <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted">
           <IconClose size={24} />
         </button>
-        <h2 className="text-lg font-bold">Adjust profile picture</h2>
+        <h2 className="text-lg font-bold">{t("Adjust profile picture")}</h2>
         <div className="relative mx-auto mt-4 h-48 w-48 overflow-hidden rounded-full border-4 border-brand bg-bg-accent">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
-            alt="Crop preview"
+            alt={t("Crop preview")}
             className="h-full w-full"
             style={previewStyle}
           />
         </div>
-        <label className="mt-4 block text-xs font-bold uppercase text-text-muted">Zoom</label>
+        <label className="mt-4 block text-xs font-bold uppercase text-text-muted">{t("Zoom")}</label>
         <input type="range" min={1} max={3} step={0.05} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="w-full" />
-        <label className="mt-2 block text-xs font-bold uppercase text-text-muted">Horizontal</label>
+        <label className="mt-2 block text-xs font-bold uppercase text-text-muted">{t("Horizontal")}</label>
         <input type="range" min={-50} max={50} value={posX} onChange={(e) => setPosX(Number(e.target.value))} className="w-full" />
-        <label className="mt-2 block text-xs font-bold uppercase text-text-muted">Vertical</label>
+        <label className="mt-2 block text-xs font-bold uppercase text-text-muted">{t("Vertical")}</label>
         <input type="range" min={-50} max={50} value={posY} onChange={(e) => setPosY(Number(e.target.value))} className="w-full" />
         <button
           type="button"
           onClick={() => onSave({ zoom, x: posX, y: posY })}
           className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
         >
-          Save
+          {t("Save")}
         </button>
       </div>
     </div>,

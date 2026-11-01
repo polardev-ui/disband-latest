@@ -41,28 +41,29 @@ export function CallControls({
   onToggleMic, onToggleDeafen, onToggleCamera, onToggleScreenShare,
   onEnd,
 }: CallControlsProps) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-4">
       {onToggleCamera && (
-        <CallButton label={cameraEnabled ? "Turn Off Camera" : "Turn On Camera"} on={!!cameraEnabled} onClick={onToggleCamera}>
+        <CallButton label={cameraEnabled ? t("Turn Off Camera") : t("Turn On Camera")} on={!!cameraEnabled} onClick={onToggleCamera}>
           {cameraEnabled ? <IconVideo size={24} /> : <IconVideoOff size={24} />}
         </CallButton>
       )}
       {onToggleScreenShare && (
-        <CallButton label={screenShareEnabled ? "Stop Streaming" : "Share Your Screen"} on={!!screenShareEnabled} onClick={onToggleScreenShare}>
+        <CallButton label={screenShareEnabled ? t("Stop Streaming") : t("Share Your Screen")} on={!!screenShareEnabled} onClick={onToggleScreenShare}>
           {screenShareEnabled ? <IconScreenShareOff size={24} /> : <IconScreenShare size={24} />}
         </CallButton>
       )}
       <Soundboard compact />
-      <CallButton label={micMuted ? "Unmute" : "Mute"} warn={micMuted} onClick={onToggleMic}>
+      <CallButton label={micMuted ? t("Unmute") : t("Mute")} warn={micMuted} onClick={onToggleMic}>
         {micMuted ? <IconMicOff size={24} /> : <IconMic size={24} />}
       </CallButton>
       {onToggleDeafen && (
-        <CallButton label={deafened ? "Undeafen" : "Deafen"} warn={deafened} onClick={onToggleDeafen}>
+        <CallButton label={deafened ? t("Undeafen") : t("Deafen")} warn={deafened} onClick={onToggleDeafen}>
           {deafened ? <IconHeadphonesOff size={24} /> : <IconHeadphones size={24} />}
         </CallButton>
       )}
-      <CallButton label="Disconnect" danger onClick={onEnd}>
+      <CallButton label={t("Disconnect")} danger onClick={onEnd}>
         <IconPhoneOff size={24} />
       </CallButton>
     </div>
@@ -294,7 +295,7 @@ export function CallPanel({
             ]}
           />
         </div>
-        <p className="mb-8 text-center text-[14px] text-header-secondary">{subtitle || "Ringing…"}</p>
+        <p className="mb-8 text-center text-[14px] text-header-secondary">{subtitle || t("Ringing…")}</p>
         <div className="flex justify-center pb-6">
           <CallControls
             micMuted={micMuted} deafened={deafened}
@@ -329,7 +330,7 @@ export function CallPanel({
             screens={[
               ...(localScreen ? [{ id: "screen:self", profile: selfProfile ?? undefined, label: t("Your screen"), stream: localScreen, local: true }] : []),
               ...(remoteScreen && peer
-                ? [{ id: `screen:${peer.id}`, profile: peer, label: `${displayName(peer)}'s screen`, stream: remoteScreen, audio: remoteScreenAudio }]
+                ? [{ id: `screen:${peer.id}`, profile: peer, label: t("{name}'s screen", { name: displayName(peer) }), stream: remoteScreen, audio: remoteScreenAudio }]
                 : []),
             ]}
             members={[

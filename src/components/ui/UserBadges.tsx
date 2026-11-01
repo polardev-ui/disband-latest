@@ -10,6 +10,7 @@ import { useEntitlement } from "@/lib/entitlement-store";
 import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components/gift/SubscriptionMedallion";
 import { SubscriptionBadgeModal } from "@/components/subscription/SubscriptionBadgeModal";
 import type { SubscriptionPlan } from "@/lib/subscription";
+import { useI18n } from "@/contexts/I18nContext";
 
 const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "manager", "partner", "og"]);
 
@@ -32,6 +33,7 @@ export function UserBadges({
   userId, plan, tenureMonths, subscribedSince,
   size = 13, className = "", interactive = true, variant = "inline",
 }: UserBadgesProps) {
+  const { t } = useI18n();
 
   const all = useBadges(userId, { fresh: variant === "full" });
   const full = variant === "full";
@@ -71,9 +73,9 @@ export function UserBadges({
             disabled={tiersOpen}
             label={
               <span className="block text-center">
-                <span className="block">Disband {effectivePlan === "lite" ? "Lite" : "Aero"}</span>
+                <span className="block">Disband {effectivePlan === "lite" ? t("Lite") : "Aero"}</span>
                 <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
-                  {tier.label} · {interactive ? "click for details" : `${months} months`}
+                  {tier.label} · {interactive ? "click for details" : t("{months} months", { months })}
                 </span>
               </span>
             }

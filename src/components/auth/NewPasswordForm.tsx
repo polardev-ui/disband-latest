@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface NewPasswordFormProps {
   onSubmit: (password: string) => Promise<string | null>;
@@ -14,6 +15,7 @@ export function NewPasswordForm({
   submitLabel = "Update password",
   onSuccess,
 }: NewPasswordFormProps) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +30,11 @@ export function NewPasswordForm({
     setSuccess(null);
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError(t("Password must be at least 6 characters."));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setError(t("Passwords do not match."));
       return;
     }
 
@@ -44,7 +46,7 @@ export function NewPasswordForm({
       return;
     }
 
-    setSuccess("Password updated.");
+    setSuccess(t("Password updated."));
     // Clear the fields but stay usable: the old version disabled the form
     // after success, so an expired-link retry left the user stuck.
     setPassword("");
@@ -76,11 +78,11 @@ export function NewPasswordForm({
           <button
             type="button"
             onClick={() => setShow(!show)}
-            aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+            aria-label={show ? t("Hide {value}", { value: label.toLowerCase() }) : t("Show {value}", { value: label.toLowerCase() })}
             aria-pressed={show}
             className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[13px] font-medium text-text-muted transition-colors hover:text-text-normal"
           >
-            {show ? "Hide" : "Show"}
+            {show ? t("Hide") : t("Show")}
           </button>
         </span>
       </label>
@@ -98,7 +100,7 @@ export function NewPasswordForm({
         disabled={loading}
         className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
       >
-        {loading ? "Updating…" : submitLabel}
+        {loading ? t("Updating…") : submitLabel}
       </button>
     </form>
   );

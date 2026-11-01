@@ -6,6 +6,7 @@ import { handleTopmostEscape, pushEscapeHandler, OVERLAY_Z } from "@/lib/overlay
 import { IconPlus } from "@/components/icons";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import type { ServerRole } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface RolePickerProps {
   roles: ServerRole[];
@@ -27,6 +28,7 @@ const PANEL_MAX_H = 320;
  scrolling container (a profile card, a settings page) can never clip it.
 */
 export function RolePicker({ roles, selected, onToggle, disabled, align = "left", compact = false }: RolePickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -95,7 +97,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
           <div
             ref={panelRef}
             role="dialog"
-            aria-label="Roles"
+            aria-label={t("Roles")}
             className="menu-pop fixed flex flex-col overflow-hidden rounded-[4px] bg-bg-floating shadow-[var(--elevation-high)]"
             style={{
               zIndex: OVERLAY_Z.contextMenu,
@@ -124,16 +126,16 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
                     onToggle(visible[active].id);
                   }
                 }}
-                placeholder="Role"
-                aria-label="Search roles"
+                placeholder={t("Role")}
+                aria-label={t("Search roles")}
                 className="h-[30px] w-full rounded-[4px] bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted"
               />
             </div>
             <div role="listbox" aria-multiselectable className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
               {roles.length === 0 ? (
-                <p className="px-2 py-3 text-center text-[14px] text-header-secondary">No roles to give yet. Create some in Server Settings › Roles.</p>
+                <p className="px-2 py-3 text-center text-[14px] text-header-secondary">{t("No roles to give yet. Create some in Server Settings › Roles.")}</p>
               ) : visible.length === 0 ? (
-                <p className="px-2 py-3 text-center text-[14px] text-header-secondary">No roles match “{query.trim()}”.</p>
+                <p className="px-2 py-3 text-center text-[14px] text-header-secondary">{t("No roles match “")}{query.trim()}”.</p>
               ) : (
                 visible.map((role, i) => {
                   const checked = selectedSet.has(role.id);
@@ -182,8 +184,8 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="Add role"
-        title={compact ? "Add role" : undefined}
+        aria-label={t("Add role")}
+        title={compact ? t("Add role") : undefined}
         className={
           compact
             ? `flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-50 ${open ? "text-interactive-active" : ""}`
@@ -191,7 +193,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
         }
       >
         <IconPlus size={compact ? 14 : 16} />
-        {!compact && "Add Role"}
+        {!compact && t("Add Role")}
       </button>
       {panel}
     </>

@@ -10,6 +10,7 @@ import { BOT_SCOPE_LABELS, BOT_SCOPE_ORDER } from "@/lib/bot-scopes";
 import type { BotScope } from "@/lib/bot-auth";
 import { apiFetch } from "@/lib/api";
 import { confirmDialog } from "@/lib/dialogs";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface ManagedBot {
   id: string;
@@ -48,6 +49,7 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
 }
 
 export function BotsPanel() {
+  const { t } = useI18n();
   const { servers, profile } = useApp();
   const isAnonymous = profile?.account_type === "anonymous";
   const [bots, setBots] = useState<ManagedBot[]>([]);
@@ -82,7 +84,7 @@ export function BotsPanel() {
       if (!res.ok) throw new Error(data.error ?? "Could not load bots.");
       setBots(data.bots ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load bots.");
+      setError(err instanceof Error ? err.message : t("Could not load bots."));
     } finally {
       setLoading(false);
     }
@@ -105,11 +107,11 @@ export function BotsPanel() {
     setError(null);
     const name = newName.trim();
     if (!name) {
-      setError("Give your bot a name.");
+      setError(t("Give your bot a name."));
       return;
     }
     if (newScopes.length === 0) {
-      setError("Pick at least one scope.");
+      setError(t("Pick at least one scope."));
       return;
     }
     setCreating(true);
@@ -120,7 +122,7 @@ export function BotsPanel() {
       setNewName("");
       await loadBots();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the bot.");
+      setError(err instanceof Error ? err.message : t("Could not create the bot."));
     } finally {
       setCreating(false);
     }
@@ -128,9 +130,9 @@ export function BotsPanel() {
 
   async function revokeBot(bot: ManagedBot) {
     if (!(await confirmDialog({
-      title: `Revoke ${bot.name}`,
-      body: "Its token stops working immediately and can't be recovered.",
-      confirmLabel: "Revoke Bot",
+      title: t("Revoke {name}", { name: bot.name }),
+      body: t("Its token stops working immediately and can't be recovered."),
+      confirmLabel: t("Revoke Bot"),
     }))) return;
     setError(null);
     try {
@@ -138,7 +140,7 @@ export function BotsPanel() {
       if (!ok) throw new Error(data.error ?? "Could not revoke the bot.");
       await loadBots();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not revoke the bot.");
+      setError(err instanceof Error ? err.message : t("Could not revoke the bot."));
     }
   }
 
@@ -178,7 +180,7 @@ export function BotsPanel() {
       setEditingBot(null);
       await loadBots();
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Could not update the bot.");
+      setEditError(err instanceof Error ? err.message : t("Could not update the bot."));
     } finally {
       setEditSaving(false);
     }
@@ -203,11 +205,11 @@ export function BotsPanel() {
   async function generateInvite() {
     if (!invitingBot) return;
     if (!inviteGeneral && !inviteServerId) {
-      setInviteError("Pick a space for the bot to join, or enable general invite.");
+      setInviteError(t("Pick a space for the bot to join, or enable general invite."));
       return;
     }
     if (inviteScopes.length === 0) {
-      setInviteError("Pick at least one scope to grant.");
+      setInviteError(t("Pick at least one scope to grant."));
       return;
     }
     setInviteLoading(true);
@@ -222,7 +224,7 @@ export function BotsPanel() {
       if (!ok) throw new Error(data.error ?? "Could not create the invite.");
       setInviteUrl(data.invite_url);
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : "Could not create the invite.");
+      setInviteError(err instanceof Error ? err.message : t("Could not create the invite."));
     } finally {
       setInviteLoading(false);
     }
@@ -234,18 +236,18 @@ export function BotsPanel() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError("Could not copy to the clipboard.");
+      setError(t("Could not copy to the clipboard."));
     }
   }
 
   return (
     <div className="pb-20">
       <SettingsSection
-        title="Your bots"
+        title={t("Your bots")}
         description={
           activeBots.length >= 5
-            ? "You've reached the 5-bot limit. Revoke one to make room."
-            : "Bots are self-hosted: you run the client code, and Disband relays messages to and from it. Create one and grab its token."
+            ? t("You've reached the 5-bot limit. Revoke one to make room.")
+            : t("Bots are self-hosted: you run the client code, and Disband relays messages to and from it. Create one and grab its token.")
         }
         action={
           isAnonymous ? undefined : (
@@ -254,7 +256,7 @@ export function BotsPanel() {
               onClick={() => setCreatedToken(null)}
               className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
             >
-              New bot
+              {t("New bot")}
             </button>
           )
         }
@@ -262,8 +264,7 @@ export function BotsPanel() {
         {isAnonymous && (
           <div className="border-b border-divider px-4 py-4">
             <p className="text-[14px] leading-relaxed text-text-muted">
-              Anonymous accounts can&apos;t create bots. Bots you were invited to can still be managed
-              here.
+              {t("Anonymous accounts can’t create bots. Bots you were invited to can still be managed here.")}
             </p>
           </div>
         )}
@@ -273,7 +274,7 @@ export function BotsPanel() {
               {createdToken.name} created — this is your token:
             </p>
             <p className="mt-1 text-[13px] leading-relaxed text-status-dnd">
-              Copy it now. It's only shown once and can't be retrieved later.
+              {t("Copy it now. It's only shown once and can't be retrieved later.")}
             </p>
             <div className="mt-3 flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal">
@@ -284,11 +285,11 @@ export function BotsPanel() {
                 onClick={() => void copyText(createdToken.token, setTokenCopied)}
                 className="shrink-0 rounded-[3px] border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
               >
-                {tokenCopied ? "Copied" : "Copy"}
+                {tokenCopied ? t("Copied") : t("Copy")}
               </button>
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-text-muted">
-              Use it to connect the client:{" "}
+              {t("Use it to connect the client:")}{" "}
               <code className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[11.5px]">new Client(&#123; token: "…" &#125;)</code>.
               See the{" "}
               <a
@@ -306,14 +307,14 @@ export function BotsPanel() {
 
         {!createdToken && !isAnonymous && (
           <div className="border-b border-divider px-4 py-4">
-            <SettingRow label="Name" stacked htmlFor="bot-new-name">
+            <SettingRow label={t("Name")} stacked htmlFor="bot-new-name">
               <div className="flex items-start gap-2">
                 <input
                   id="bot-new-name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value.slice(0, 25))}
                   maxLength={25}
-                  placeholder="Deploy Bot"
+                  placeholder={t("Deploy Bot")}
                   className={settingsInputClass}
                 />
                 <button
@@ -322,12 +323,12 @@ export function BotsPanel() {
                   disabled={creating}
                   className="shrink-0 rounded-[3px] bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                 >
-                  {creating ? "Creating…" : "Create"}
+                  {creating ? t("Creating…") : t("Create")}
                 </button>
               </div>
             </SettingRow>
             <div className="mt-1">
-              <div className="mb-1.5 text-[13px] text-text-muted">Scopes</div>
+              <div className="mb-1.5 text-[13px] text-text-muted">{t("Scopes")}</div>
               <div className="flex flex-wrap gap-2">
                 {ALL_SCOPES.map((scope) => (
                   <button
@@ -347,18 +348,17 @@ export function BotsPanel() {
                 ))}
               </div>
               <p className="mt-2 text-[11.5px] leading-relaxed text-text-muted">
-                A bot's reach in a space is the intersection of these scopes and what the space
-                owner approves when they accept the invite.
+                {t("A bot's reach in a space is the intersection of these scopes and what the space owner approves when they accept the invite.")}
               </p>
             </div>
           </div>
         )}
 
         {loading ? (
-          <div className="px-4 py-6 text-center text-[13px] text-text-muted">Loading…</div>
+          <div className="px-4 py-6 text-center text-[13px] text-text-muted">{t("Loading…")}</div>
         ) : bots.length === 0 ? (
           <div className="px-4 py-6 text-center text-[13px] text-text-muted">
-            {isAnonymous ? "No bots here." : "No bots yet. Create your first one above."}
+            {isAnonymous ? t("No bots here.") : t("No bots yet. Create your first one above.")}
           </div>
         ) : (
           <>
@@ -367,41 +367,41 @@ export function BotsPanel() {
                 <div className="flex items-center gap-2">
                   <BotTag profile={{ is_bot: true }} size="sm" />
                   <span className="truncate text-[14px] font-semibold text-text-normal">{bot.name}</span>
-                  <Hint>Token {bot.token_prefix}</Hint>
-                  {bot.last_seen_at && <Hint>Last seen {fmtDate(bot.last_seen_at)}</Hint>}
+                  <Hint>{t("Token")}{" "}{bot.token_prefix}</Hint>
+                  {bot.last_seen_at && <Hint>{t("Last seen")}{" "}{fmtDate(bot.last_seen_at)}</Hint>}
                   <div className="ml-auto flex shrink-0 items-center gap-2">
                     <button
                       type="button"
                       onClick={() => openEdit(bot)}
                       className="rounded-[3px] border border-divider px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
-                      Edit
+                      {t("Edit")}
                     </button>
                     <button
                       type="button"
                       onClick={() => openInvite(bot)}
                       className="rounded-[3px] border border-divider px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
-                      Invite
+                      {t("Invite")}
                     </button>
                     <button
                       type="button"
                       onClick={() => void revokeBot(bot)}
                       className="rounded-[3px] border border-status-dnd/40 px-2.5 py-1 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
                     >
-                      Revoke
+                      {t("Revoke")}
                     </button>
                   </div>
                 </div>
                 <p className="mt-1 text-[13px] text-text-muted">
-                  {bot.scopes.length > 0 ? bot.scopes.join(" · ") : "No scopes"} · created {fmtDate(bot.created_at)}
+                  {bot.scopes.length > 0 ? bot.scopes.join(" · ") : t("No scopes")} · created {fmtDate(bot.created_at)}
                 </p>
               </div>
             ))}
             {revokedBots.length > 0 && (
               <div className="px-4 py-2">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                  Revoked
+                  {t("Revoked")}
                 </p>
                 {revokedBots.map((bot) => (
                   <div key={bot.id} className="flex items-center gap-2 py-1.5">
@@ -418,7 +418,7 @@ export function BotsPanel() {
 
       {profile?.is_bot && (
         <p className="text-[13px] text-text-muted">
-          You're signed in as a bot account, so bot management is disabled here.
+          {t("You're signed in as a bot account, so bot management is disabled here.")}
         </p>
       )}
 
@@ -426,7 +426,7 @@ export function BotsPanel() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t("Close")}
             className={`absolute inset-0 bg-overlay-scrim overlay-fade${inviteExiting ? " overlay-fade-out" : ""}`}
             onClick={() => setInvitingBot(null)}
           />
@@ -434,18 +434,17 @@ export function BotsPanel() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[16px] font-semibold text-text-normal">
-                  Invite {shownInvitingBot.name}
+                  {t("Invite")}{" "}{shownInvitingBot.name}
                 </h3>
                 <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
-                  Generate a link and send it to the space's owner. They decide whether the bot
-                  joins.
+                  {t("Generate a link and send it to the space's owner. They decide whether the bot joins.")}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setInvitingBot(null)}
                 className="text-text-muted hover:text-text-normal"
-                aria-label="Close"
+                aria-label={t("Close")}
               >
                 <IconClose size={20} />
               </button>
@@ -460,17 +459,17 @@ export function BotsPanel() {
                     onChange={(e) => setInviteGeneral(e.target.checked)}
                     className="h-4 w-4 rounded border-divider"
                   />
-                  General invite (recipient picks the space)
+                  {t("General invite (recipient picks the space)")}
                 </label>
                 <p className="mb-2 text-[11.5px] text-text-muted">
-                  Anyone with the link can sign in and add the bot to a space they manage.
+                  {t("Anyone with the link can sign in and add the bot to a space they manage.")}
                 </p>
               </div>
 
               {!inviteGeneral && (
                 <div>
                   <label className="mb-1.5 block text-[13px] font-medium text-text-normal" htmlFor="bot-invite-space">
-                    Space
+                    {t("Space")}
                   </label>
                   <select
                     id="bot-invite-space"
@@ -478,7 +477,7 @@ export function BotsPanel() {
                     onChange={(e) => setInviteServerId(e.target.value)}
                     className={settingsInputClass}
                   >
-                    {servers.length === 0 && <option value="">No spaces — join one first</option>}
+                    {servers.length === 0 && <option value="">{t("No spaces — join one first")}</option>}
                     {servers.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -488,7 +487,7 @@ export function BotsPanel() {
 
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-text-normal">
-                  Scopes the owner will be asked to grant
+                  {t("Scopes the owner will be asked to grant")}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {shownInvitingBot.scopes.map((scope) => (
@@ -522,7 +521,7 @@ export function BotsPanel() {
               {inviteUrl && (
                 <div>
                   <label className="mb-1.5 block text-[13px] font-medium text-text-normal">
-                    Invite link
+                    {t("Invite link")}
                   </label>
                   <div className="flex items-center gap-2">
                     <code className="min-w-0 flex-1 truncate rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-[12px] text-text-normal">
@@ -534,11 +533,11 @@ export function BotsPanel() {
                       className="flex shrink-0 items-center gap-1.5 rounded-[3px] border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
                       <IconCopy size={14} />
-                      {inviteCopied ? "Copied" : "Copy"}
+                      {inviteCopied ? t("Copied") : t("Copy")}
                     </button>
                   </div>
                   <p className="mt-1.5 text-[11.5px] leading-relaxed text-text-muted">
-                    Expires in 7 days or once approved/declined.
+                    {t("Expires in 7 days or once approved/declined.")}
                   </p>
                 </div>
               )}
@@ -551,7 +550,7 @@ export function BotsPanel() {
                   onClick={() => setInvitingBot(null)}
                   className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                 >
-                  Close
+                  {t("Close")}
                 </button>
                 {!inviteUrl && (
                   <button
@@ -560,7 +559,7 @@ export function BotsPanel() {
                     disabled={inviteLoading}
                     className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                   >
-                    {inviteLoading ? "Generating…" : "Generate invite link"}
+                    {inviteLoading ? t("Generating…") : t("Generate invite link")}
                   </button>
                 )}
               </div>
@@ -573,30 +572,30 @@ export function BotsPanel() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-text-normal">Edit bot</h3>
-              <button type="button" onClick={() => setEditingBot(null)} className="text-text-muted hover:text-text-normal" aria-label="Close">
+              <h3 className="text-lg font-bold text-text-normal">{t("Edit bot")}</h3>
+              <button type="button" onClick={() => setEditingBot(null)} className="text-text-muted hover:text-text-normal" aria-label={t("Close")}>
                 <IconClose size={20} />
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[13px] font-medium text-text-normal">Name</label>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">{t("Name")}</label>
                 <input value={editName} onChange={(e) => setEditName(e.target.value)} className={settingsInputClass} maxLength={25} />
               </div>
               <div>
-                <label className="mb-1 block text-[13px] font-medium text-text-normal">Avatar URL</label>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">{t("Avatar URL")}</label>
                 <input value={editAvatarUrl} onChange={(e) => setEditAvatarUrl(e.target.value)} className={settingsInputClass} placeholder="https://..." />
               </div>
               <div>
-                <label className="mb-1 block text-[13px] font-medium text-text-normal">Banner URL</label>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">{t("Banner URL")}</label>
                 <input value={editBannerUrl} onChange={(e) => setEditBannerUrl(e.target.value)} className={settingsInputClass} placeholder="https://..." />
               </div>
               <div>
-                <label className="mb-1 block text-[13px] font-medium text-text-normal">Bio</label>
+                <label className="mb-1 block text-[13px] font-medium text-text-normal">{t("Bio")}</label>
                 <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} className={settingsInputClass} rows={3} maxLength={200} />
               </div>
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-text-normal">Scopes</label>
+                <label className="mb-1.5 block text-[13px] font-medium text-text-normal">{t("Scopes")}</label>
                 <div className="flex flex-wrap gap-2">
                   {ALL_SCOPES.map((scope) => (
                     <button
@@ -620,7 +619,7 @@ export function BotsPanel() {
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setEditingBot(null)} className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover">
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 type="button"
@@ -628,7 +627,7 @@ export function BotsPanel() {
                 disabled={editSaving || !editName.trim() || editScopes.length === 0}
                 className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
               >
-                {editSaving ? "Saving…" : "Save"}
+                {editSaving ? t("Saving…") : t("Save")}
               </button>
             </div>
           </div>

@@ -2,6 +2,7 @@
 
 import { fileExtension, formatFileSize, type AttachmentType } from "@/lib/messages";
 import { IconMusic } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function AttachmentUploadCard({
   name, size, type, progress, localUrl,
@@ -14,6 +15,7 @@ export function AttachmentUploadCard({
 
   localUrl?: string | null;
 }) {
+  const { t } = useI18n();
   const pct = Math.max(0, Math.min(100, Math.round(progress)));
   const sizeLabel = formatFileSize(size);
   const showsThumb = !!localUrl && (type === "image" || type === "video");
@@ -38,7 +40,7 @@ export function AttachmentUploadCard({
           <p className="truncate text-sm font-medium text-text-normal">{name}</p>
           <p className="text-xs text-text-muted">
             {sizeLabel ? `${sizeLabel} · ` : ""}
-            {pct < 100 ? `Uploading… ${pct}%` : "Finishing up…"}
+            {pct < 100 ? t("Uploading… {pct}%", { pct }) : t("Finishing up…")}
           </p>
         </div>
       </div>
@@ -48,7 +50,7 @@ export function AttachmentUploadCard({
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`Uploading ${name}`}
+        aria-label={t("Uploading {name}", { name })}
         className="h-1 w-full bg-bg-accent"
       >
         <div

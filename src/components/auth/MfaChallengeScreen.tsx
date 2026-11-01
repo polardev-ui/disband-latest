@@ -11,8 +11,10 @@ import {
   verifyTotpChallenge,
   type MfaFactor,
 } from "@/lib/mfa";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function MfaChallengeScreen() {
+  const { t } = useI18n();
   const { refreshMfaStatus, signOut } = useApp();
   const [factors, setFactors] = useState<MfaFactor[]>([]);
   const [selectedFactorId, setSelectedFactorId] = useState<string>("");
@@ -39,7 +41,7 @@ export function MfaChallengeScreen() {
         setPasskeyReady(Boolean(passkeyStatus.data?.ready));
         setSelectedFactorId(list.find((f) => f.factor_type === "totp")?.id ?? list[0]?.id ?? "");
       } catch {
-        if (!cancelled) setLoadError("Couldn’t load your security methods.");
+        if (!cancelled) setLoadError(t("Couldn’t load your security methods."));
       } finally {
         if (!cancelled) setLoadingFactors(false);
       }
@@ -80,7 +82,7 @@ export function MfaChallengeScreen() {
   if (loadingFactors) {
     return (
       <div className="flex app-screen items-center justify-center bg-bg-tertiary text-text-muted">
-        Loading your security methods…
+        {t("Loading your security methods…")}
       </div>
     );
   }
@@ -89,21 +91,21 @@ export function MfaChallengeScreen() {
     return (
       <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
         <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 text-center shadow-[var(--elevation-high)]">
-          <h1 className="text-xl font-bold text-text-normal">Something went wrong</h1>
+          <h1 className="text-xl font-bold text-text-normal">{t("Something went wrong")}</h1>
           <p className="mt-2 text-sm text-text-muted">{loadError}</p>
           <button
             type="button"
             onClick={() => setAttempt((a) => a + 1)}
             className="mt-4 w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
           >
-            Try again
+            {t("Try again")}
           </button>
           <button
             type="button"
             onClick={() => void signOut()}
             className="mt-3 w-full text-sm text-text-link hover:underline"
           >
-            Sign out
+            {t("Sign out")}
           </button>
         </div>
       </div>
@@ -117,9 +119,9 @@ export function MfaChallengeScreen() {
           <div className="mx-auto mb-3 flex justify-center">
             <Logo adaptive size={56} className="h-14 w-14" priority />
           </div>
-          <h1 className="text-2xl font-bold text-text-normal">Two-factor authentication</h1>
+          <h1 className="text-2xl font-bold text-text-normal">{t("Two-factor authentication")}</h1>
           <p className="mt-1 text-sm text-text-muted">
-            Verify it&apos;s you with your passkey or authenticator app.
+            {t("Verify it’s you with your passkey or authenticator app.")}
           </p>
         </div>
 
@@ -127,7 +129,7 @@ export function MfaChallengeScreen() {
           <form onSubmit={submitTotp} className="space-y-4">
             {totpFactors.length > 1 && (
               <label className="block">
-                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Authenticator</span>
+                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Authenticator")}</span>
                 <select
                   value={selectedFactorId}
                   onChange={(e) => setSelectedFactorId(e.target.value)}
@@ -142,7 +144,7 @@ export function MfaChallengeScreen() {
               </label>
             )}
             <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Authentication code</span>
+              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Authentication code")}</span>
               <input
                 required
                 inputMode="numeric"
@@ -160,7 +162,7 @@ export function MfaChallengeScreen() {
               disabled={loading || code.length !== 6}
               className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
             >
-              {loading ? "Verifying…" : "Verify code"}
+              {loading ? t("Verifying…") : t("Verify code")}
             </button>
           </form>
         )}
@@ -176,17 +178,17 @@ export function MfaChallengeScreen() {
               onClick={() => void usePasskey()}
               className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
             >
-              {loading ? "Verifying…" : "Use a passkey"}
+              {loading ? t("Verifying…") : t("Use a passkey")}
             </button>
             <p className="text-center text-xs leading-4 text-text-muted">
-              Face ID, Touch ID, Windows Hello or a security key
+              {t("Face ID, Touch ID, Windows Hello or a security key")}
             </p>
           </div>
         )}
 
         {totpFactors.length === 0 && !passkeyReady && (
           <p className="text-sm text-text-muted">
-            No verified security methods were found. Sign out and contact support if this keeps happening.
+            {t("No verified security methods were found. Sign out and contact support if this keeps happening.")}
           </p>
         )}
 
@@ -197,7 +199,7 @@ export function MfaChallengeScreen() {
           onClick={() => void signOut()}
           className="mt-4 w-full text-sm text-text-link hover:underline"
         >
-          Sign out
+          {t("Sign out")}
         </button>
       </div>
     </div>

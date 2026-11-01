@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface GroupMemberListProps {
   members: Profile[];
@@ -21,10 +22,12 @@ export function GroupMemberList({
   onMemberClick,
   onMemberContext,
 }: GroupMemberListProps) {
+  const { t } = useI18n();
   const inCall = members.filter((m) => inCallUserIds?.has(m.id));
   const notInCall = members.filter((m) => !inCallUserIds?.has(m.id));
 
   function Row({ m }: { m: Profile }) {
+  const { t } = useI18n();
     const inVoice = inCallUserIds?.has(m.id);
     return (
       <button
@@ -47,7 +50,7 @@ export function GroupMemberList({
           {m.id === ownerId && <span className="ml-1 text-[10px] text-text-muted">owner</span>}
           {m.id === currentUserId && <span className="ml-1 text-[10px] text-brand">you</span>}
         </span>
-        {inVoice && <span className="ml-auto text-[10px] font-semibold text-status-online">In call</span>}
+        {inVoice && <span className="ml-auto text-[10px] font-semibold text-status-online">{t("In call")}</span>}
       </button>
     );
   }
@@ -59,14 +62,14 @@ export function GroupMemberList({
         {inCall.length > 0 && (
           <section className="mb-4">
             <p className="mb-1 px-2 text-xs font-bold uppercase text-status-online">
-              In Voice — {inCall.length}
+              {t("In Voice —")}{" "}{inCall.length}
             </p>
             {inCall.map((m) => <Row key={m.id} m={m} />)}
           </section>
         )}
         <section>
           <p className="mb-1 px-2 text-xs font-bold uppercase text-text-muted">
-            Members — {members.length}
+            {t("Members —")}{" "}{members.length}
           </p>
           {notInCall.map((m) => <Row key={m.id} m={m} />)}
         </section>

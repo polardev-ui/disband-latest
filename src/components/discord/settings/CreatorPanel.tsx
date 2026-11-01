@@ -8,6 +8,7 @@ import { isTauri } from "@/lib/platform";
 import { BadgeGlyph } from "@/lib/badge-icons";
 import { SettingsSection } from "./SettingsPrimitives";
 import { btn } from "@/components/modals/server-settings/ui";
+import { useI18n } from "@/contexts/I18nContext";
 
 type Platform = "youtube" | "tiktok" | "twitch";
 interface Connection { platform: Platform; handle: string | null; followers: number; refreshed_at: string }
@@ -25,6 +26,7 @@ export function compactCount(n: number): string {
 
 /** Creator Program: connect platforms, see where you stand against the threshold. */
 export function CreatorPanel() {
+  const { t } = useI18n();
   const { user } = useApp();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [available, setAvailable] = useState<Record<Platform, boolean> | null>(null);
@@ -83,17 +85,17 @@ export function CreatorPanel() {
       <div className="flex items-center gap-5 rounded-xl bg-gradient-to-br from-[#ff4f6d] to-[#7b2ff7] p-6 text-white">
         <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15"><BadgeGlyph badgeKey="creator" size={40} /></span>
         <div>
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-white/80">Creator Program</p>
-          <p className="text-[22px] font-extrabold leading-tight">{verified ? "You're a verified creator" : "For creators with a following"}</p>
+          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-white/80">{t("Creator Program")}</p>
+          <p className="text-[22px] font-extrabold leading-tight">{verified ? t("You're a verified creator") : t("For creators with a following")}</p>
           <p className="mt-1 text-[14px] text-white/85">
-            Connect your channel. Pass {THRESHOLD.toLocaleString("en-GB")} followers on any platform and the Content Creator badge appears on your profile, showing your count on hover.
+            {t("Connect your channel. Pass")}{" "}{THRESHOLD.toLocaleString("en-GB")} followers on any platform and the Content Creator badge appears on your profile, showing your count on hover.
           </p>
         </div>
       </div>
 
       {note && <p role="status" className="rounded-md bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">{note}</p>}
 
-      <SettingsSection title="Your platforms" description="We only read your public follower count and handle. You can disconnect at any time.">
+      <SettingsSection title={t("Your platforms")} description={t("We only read your public follower count and handle. You can disconnect at any time.")}>
         <ul className="divide-y divide-divider">
           {(Object.keys(META) as Platform[]).map((p) => {
             const c = connections.find((x) => x.platform === p);
@@ -112,14 +114,14 @@ export function CreatorPanel() {
                       </div>
                     </>
                   ) : (
-                    <p className="text-[13px] text-text-muted">{ready === false ? "Not available yet" : "Not connected"}</p>
+                    <p className="text-[13px] text-text-muted">{ready === false ? t("Not available yet") : t("Not connected")}</p>
                   )}
                 </div>
                 {c ? (
-                  <button type="button" disabled={busy === p} onClick={() => void disconnect(p)} className={btn.secondary}>Disconnect</button>
+                  <button type="button" disabled={busy === p} onClick={() => void disconnect(p)} className={btn.secondary}>{t("Disconnect")}</button>
                 ) : (
                   <button type="button" disabled={busy === p || ready === false} onClick={() => void connect(p)} className={btn.primary}>
-                    {busy === p ? "Opening…" : "Connect"}
+                    {busy === p ? t("Opening…") : t("Connect")}
                   </button>
                 )}
               </li>

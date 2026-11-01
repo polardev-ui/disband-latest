@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { safeWindowOpen } from "@/lib/safe-url";
 import type { ActionRow, ButtonStyle, MessageInteractionInfo } from "@/lib/bot-commands";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  A bot message's buttons, and the "@kai used /weather" line above a bot's
@@ -69,11 +70,12 @@ export function MessageComponents({ messageId, rows }: { messageId: string; rows
 }
 
 export function InteractionHeader({ interaction }: { interaction?: MessageInteractionInfo | null }) {
+  const { t } = useI18n();
   if (!interaction || interaction.type !== "command" || !interaction.name) return null;
   return (
     <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px] text-text-muted">
       <span aria-hidden className="mr-0.5">↳</span>
-      <span className="truncate font-medium text-header-secondary">{interaction.display_name ?? interaction.username ?? "Someone"}</span>
+      <span className="truncate font-medium text-header-secondary">{interaction.display_name ?? interaction.username ?? t("Someone")}</span>
       <span className="shrink-0">used</span>
       <span className="shrink-0 font-medium text-[#00a8fc]">/{interaction.name}</span>
     </div>

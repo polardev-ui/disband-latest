@@ -25,6 +25,7 @@ import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presenc
 import { OVERLAY_Z } from "@/lib/overlay";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
+import { useI18n } from "@/contexts/I18nContext";
 
 const WIDTH = 340;
 const GAP = 12;
@@ -82,6 +83,7 @@ export function UserProfilePopout({
   selfAssignableRoles = [],
   onSetSelfRoles,
 }: UserProfilePopoutProps) {
+  const { t } = useI18n();
   const { presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage } = useApp();
   const open = !!profile && !!anchor;
   const { mounted, exiting } = usePresence(open);
@@ -163,11 +165,11 @@ export function UserProfilePopout({
 
   return createPortal(
     <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.contextMenu - 1 }}>
-      <button type="button" aria-label="Close profile" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <button type="button" aria-label={t("Close profile")} className="absolute inset-0 cursor-default" onClick={onClose} />
       <div
         ref={ref}
         role="dialog"
-        aria-label={`${displayName(p)}'s profile`}
+        aria-label={t("{name}'s profile", { name: displayName(p) })}
         data-side={pos?.side ?? "right"}
         className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
         style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
@@ -187,14 +189,14 @@ export function UserProfilePopout({
         <button
           type="button"
           onClick={onOpenFullProfile}
-          aria-label="View full profile"
+          aria-label={t("View full profile")}
           className={`group/avatar absolute left-4 rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
           style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
         >
           <span className="relative block">
             <Avatar profile={p} size="xl" className="!h-20 !w-20 !text-2xl" />
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
-              View Profile
+              {t("View Profile")}
             </span>
             <StatusDot
               status={live}
@@ -238,12 +240,12 @@ export function UserProfilePopout({
           <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-[#2e2f34]"}`} />
 
           {p.bio?.trim() && (
-            <Section title="About Me">
+            <Section title={t("About Me")}>
               <p className="line-clamp-6 whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">{p.bio.trim()}</p>
             </Section>
           )}
 
-          <Section title="Member Since">
+          <Section title={t("Member Since")}>
             <div className="flex items-center gap-2 text-[14px] leading-[18px] text-text-normal">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="" className="h-4 w-4 object-contain opacity-80" title="Disband" />
@@ -269,14 +271,14 @@ export function UserProfilePopout({
           {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
           {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
-            <Section title={roles.length === 1 ? "Role" : "Roles"}>
+            <Section title={roles.length === 1 ? t("Role") : t("Roles")}>
               <div className="flex flex-wrap gap-1">
                 {roles.map((r) => (
                   <span key={r.id} className="group/role inline-flex h-[22px] items-center gap-1 rounded-[4px] bg-bg-secondary px-1.5 text-[12px] font-medium text-text-normal">
                     {canManageRoles && onSetRoles ? (
                       <button
                         type="button"
-                        aria-label={`Remove ${r.name}`}
+                        aria-label={t("Remove {name}", { name: r.name })}
                         onClick={() => onSetRoles(memberRoleIds.filter((id) => id !== r.id))}
                         className="relative flex h-3 w-3 items-center justify-center rounded-full"
                         style={{ backgroundColor: r.color }}
@@ -319,14 +321,14 @@ export function UserProfilePopout({
           )}
 
           {!isSelf && note.state !== "unavailable" && (
-            <Section title="Note">
+            <Section title={t("Note")}>
               <textarea
                 value={note.note}
                 onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
                 onBlur={() => void note.save()}
                 disabled={note.state === "loading"}
                 rows={1}
-                placeholder="Click to add a note"
+                placeholder={t("Click to add a note")}
                 className="-mx-1 block min-h-[30px] w-[calc(100%+8px)] resize-none rounded-[3px] bg-transparent px-1 py-1.5 text-[12px] leading-4 text-text-normal outline-none placeholder:text-text-muted focus:bg-bg-tertiary"
               />
             </Section>
@@ -344,7 +346,7 @@ export function UserProfilePopout({
               }`}
               style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
             >
-              <IconEdit size={16} /> Edit Profile
+              <IconEdit size={16} /> {t("Edit Profile")}
             </button>
           ) : (
             <input
@@ -356,8 +358,8 @@ export function UserProfilePopout({
                   void sendQuickMessage();
                 }
               }}
-              placeholder={`Message @${p.username ?? displayName(p)}`}
-              aria-label={`Message ${displayName(p)}`}
+              placeholder={t("Message @{value}", { value: p.username ?? displayName(p) })}
+              aria-label={t("Message {name}", { name: displayName(p) })}
               className="mt-1 h-10 w-full rounded-[3px] border border-bg-tertiary bg-transparent px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
             />
           )}

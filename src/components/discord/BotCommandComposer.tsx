@@ -13,6 +13,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { IconClose } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The composer while a bot's slash command is being filled in. It looks and
@@ -41,6 +42,7 @@ interface PickItem {
 }
 
 export function BotCommandComposer({ command, members, channels, serverId, channelId, initial = {}, onExit, onDone }: Props) {
+  const { t } = useI18n();
   const { presenceMap } = useApp();
   const opts = command.options;
   const [shown, setShown] = useState<string[]>(() =>
@@ -80,8 +82,8 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
     }
     if (option.type === "boolean") {
       return [
-        { key: "true", label: "True" },
-        { key: "false", label: "False" },
+        { key: "true", label: t("True") },
+        { key: "false", label: t("False") },
       ].filter((b) => !q || b.key.startsWith(q));
     }
     if (option.type === "user" && !picked[option.name]) {
@@ -296,7 +298,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
       <div className="flex min-h-[40px] items-center gap-2 rounded-t-lg border-b border-bg-tertiary bg-bg-secondary pl-4 pr-2 text-[14px]">
         <p className="min-w-0 flex-1 truncate">
           {busy ? (
-            <span className="text-header-secondary">Sending /{command.name}…</span>
+            <span className="text-header-secondary">{t("Sending /")}{command.name}…</span>
           ) : error ? (
             <span className="text-status-dnd">{error.text}</span>
           ) : option ? (
@@ -308,7 +310,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
             <span className="text-header-secondary">{command.description} · Press Enter to send.</span>
           )}
         </p>
-        <button type="button" onClick={() => onExit("")} aria-label="Cancel command" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
+        <button type="button" onClick={() => onExit("")} aria-label={t("Cancel command")} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-interactive-normal text-bg-secondary hover:bg-interactive-active">
             <IconClose size={11} strokeWidth={3} />
           </span>

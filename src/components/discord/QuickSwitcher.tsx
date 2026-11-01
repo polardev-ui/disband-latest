@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { IconGroup, IconHash, IconSpeaker } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
+import { useI18n } from "@/contexts/I18nContext";
 
 type Result =
   | { kind: "dm"; id: string; label: string; sub: string; profileId: string }
@@ -21,6 +22,7 @@ type Result =
  * space or channel. Prefix with @ for people, # for channels, * for spaces.
  */
 export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
   const app = useApp();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -77,11 +79,11 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
 
   return createPortal(
     <div className="fixed inset-0 z-[160] flex items-start justify-center px-4 pt-[18vh]">
-      <button type="button" aria-label="Close" className={`overlay-fade${exiting ? " overlay-fade-out" : ""} absolute inset-0 bg-overlay-scrim-strong`} onClick={onClose} />
+      <button type="button" aria-label={t("Close")} className={`overlay-fade${exiting ? " overlay-fade-out" : ""} absolute inset-0 bg-overlay-scrim-strong`} onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Quick Switcher"
+        aria-label={t("Quick Switcher")}
         className={`classic-modal${exiting ? " classic-modal-out" : ""} relative w-full max-w-[570px] rounded-lg bg-bg-primary px-8 pb-4 pt-5 shadow-[var(--elevation-high)]`}
       >
         <input
@@ -100,13 +102,13 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
               go(results[index]);
             }
           }}
-          placeholder="Where would you like to go?"
-          aria-label="Search for spaces, channels or DMs"
+          placeholder={t("Where would you like to go?")}
+          aria-label={t("Search for spaces, channels or DMs")}
           className="h-[70px] w-full rounded-[4px] bg-bg-tertiary px-4 text-[20px] text-text-normal outline-none placeholder:text-text-muted"
         />
         <div className="mt-2 max-h-[300px] overflow-y-auto" role="listbox">
           {results.length === 0 ? (
-            <p className="py-6 text-center text-[14px] text-text-muted">Can&apos;t find what you&apos;re looking for?</p>
+            <p className="py-6 text-center text-[14px] text-text-muted">{t("Can’t find what you’re looking for?")}</p>
           ) : (
             results.map((r, i) => {
               const active = i === index;
@@ -138,14 +140,14 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
                   )}
                   <span className="truncate text-[16px] font-medium">{r.label}</span>
                   {r.sub && <span className="ml-1 truncate text-[12px] text-text-muted">{r.sub}</span>}
-                  {r.kind === "server" && <span className="ml-auto shrink-0 text-[12px] font-semibold uppercase text-text-muted">Space</span>}
+                  {r.kind === "server" && <span className="ml-auto shrink-0 text-[12px] font-semibold uppercase text-text-muted">{t("Space")}</span>}
                 </button>
               );
             })
           )}
         </div>
         <p className="mt-3 text-[12px] font-semibold uppercase leading-4 text-[#23a55a]">
-          Protip: <span className="font-medium normal-case text-text-muted">Start searches with @ for people, # for channels or * for spaces.</span>
+          Protip: <span className="font-medium normal-case text-text-muted">{t("Start searches with @ for people, # for channels or * for spaces.")}</span>
         </p>
       </div>
     </div>,

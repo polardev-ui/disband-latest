@@ -18,10 +18,12 @@ import { invalidateAllGuildTags } from "@/lib/guild-tag-store";
 import { GuildTagBadge, PixelGuildIcon } from "@/components/ui/GuildTag";
 import { FieldLabel, InlineError, LevelLock, SettingsSection, SettingRow, Toggle, btn, settingsInputClass } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const DEFAULT_COLOR = "#5865f2";
 
 export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: SectionProps) {
+  const { t } = useI18n();
   const { serverPermissions } = useApp();
   const canEdit = isOwner || !!serverPermissions.manage_server;
   const unlocked = catalystCount >= 6;
@@ -66,7 +68,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
   if (!canEdit) {
     return (
       <p className="text-[14px] leading-5 text-text-muted">
-        Only people with Manage Space can change this space&apos;s guild tag.
+        {t("Only people with Manage Space can change this space’s guild tag.")}
       </p>
     );
   }
@@ -75,8 +77,8 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
     return (
       <div className="pb-10">
         <SettingsSection
-          title="Guild tag"
-          description="A short label, a pixel icon and a colour members can wear next to their name."
+          title={t("Guild tag")}
+          description={t("A short label, a pixel icon and a colour members can wear next to their name.")}
         >
           <LevelLock
             level={3}
@@ -86,7 +88,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
           />
           <div className="border-t border-divider/60 px-5 py-4">
             <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
-              Eight icons, any colour
+              {t("Eight icons, any colour")}
             </p>
             <div className="flex flex-wrap gap-2 text-text-muted/70">
               {GUILD_TAG_ICONS.map((item) => (
@@ -100,7 +102,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
               ))}
             </div>
             <p className="mt-3 text-[13px] leading-5 text-text-muted">
-              Once the tag exists, anyone in {server.name} can wear it. Wearing a tag never needs a Catalyst.
+              {t("Once the tag exists, anyone in")}{" "}{server.name} can wear it. Wearing a tag never needs a Catalyst.
             </p>
           </div>
         </SettingsSection>
@@ -158,7 +160,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
     const result = await saveServerGuildTag(server.id, { tag, icon, color: normalizedColor, isPrivate });
     setSaving(false);
     if (result.error || !result.tag) {
-      setError(result.error ?? "Could not save the guild tag.");
+      setError(result.error ?? t("Could not save the guild tag."));
       return;
     }
     setExisting(result.tag);
@@ -194,8 +196,8 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
   return (
     <div className="pb-10">
       <SettingsSection
-        title="Tag design"
-        description="A 1–4 character label, one of eight pixel icons, and a colour. Members can wear it next to their name everywhere."
+        title={t("Tag design")}
+        description={t("A 1–4 character label, one of eight pixel icons, and a colour. Members can wear it next to their name everywhere.")}
       >
         {loading ? (
           <div className="space-y-4 p-5" aria-hidden>
@@ -208,7 +210,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
             <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div>
                 <FieldLabel htmlFor="guild-tag-text" aside={`${tag.length}/4`}>
-                  Tag
+                  {t("Tag")}
                 </FieldLabel>
                 <input
                   id="guild-tag-text"
@@ -222,11 +224,11 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                   className={`${settingsInputClass} uppercase tracking-[0.08em]`}
                 />
                 <p id="guild-tag-text-help" className="mt-1.5 text-[12px] leading-4 text-text-muted">
-                  Letters, numbers, dots, underscores or hyphens.
+                  {t("Letters, numbers, dots, underscores or hyphens.")}
                 </p>
               </div>
               <div>
-                <FieldLabel>Preview</FieldLabel>
+                <FieldLabel>{t("Preview")}</FieldLabel>
                 <div className="flex h-[46px] items-center gap-2 rounded-[3px] bg-bg-tertiary px-3">
                   <span className="text-[16px] font-medium text-header-primary">polar</span>
                   <GuildTagBadge tag={preview} />
@@ -235,7 +237,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
             </div>
 
             <div>
-              <FieldLabel>Icon</FieldLabel>
+              <FieldLabel>{t("Icon")}</FieldLabel>
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
                 {GUILD_TAG_ICONS.map((item) => (
                   <button
@@ -259,14 +261,14 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
             </div>
 
             <div>
-              <FieldLabel aside={normalizedColor.toUpperCase()}>Colour</FieldLabel>
+              <FieldLabel aside={normalizedColor.toUpperCase()}>{t("Colour")}</FieldLabel>
               <div className="flex flex-wrap items-center gap-2">
                 {GUILD_TAG_COLORS.map((choice) => (
                   <button
                     key={choice}
                     type="button"
                     onClick={() => changeColor(choice)}
-                    aria-label={`Use ${choice}`}
+                    aria-label={t("Use {choice}", { choice })}
                     aria-pressed={normalizedColor === choice}
                     title={choice}
                     className={`h-8 w-8 rounded-full border-2 transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
@@ -277,14 +279,14 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                 ))}
                 <label
                   className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-divider bg-bg-tertiary text-[17px] font-medium text-text-muted transition-colors hover:bg-interactive-hover"
-                  title="Pick any colour"
+                  title={t("Pick any colour")}
                 >
                   +
                   <input
                     type="color"
                     value={normalizedColor}
                     onChange={(e) => changeColor(e.target.value)}
-                    aria-label="Pick a custom guild tag colour"
+                    aria-label={t("Pick a custom guild tag colour")}
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   />
                 </label>
@@ -293,11 +295,11 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
 
             <div className="rounded-[4px] border border-divider/70 bg-bg-tertiary/60">
               <SettingRow
-                label="Private tag"
-                description={`People can still wear the ${sanitizeGuildTag(tag) || "TAG"} tag, but clicking it says this space is private instead of showing the space's profile.`}
+                label={t("Private tag")}
+                description={t("People can still wear the {tag} tag, but clicking it says this space is private instead of showing the space’s profile.", { tag: sanitizeGuildTag(tag) || "TAG" })}
                 htmlFor="guild-tag-private"
               >
-                <Toggle id="guild-tag-private" checked={isPrivate} onChange={changePrivate} label="Private tag" />
+                <Toggle id="guild-tag-private" checked={isPrivate} onChange={changePrivate} label={t("Private tag")} />
               </SettingRow>
             </div>
 
@@ -305,8 +307,8 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
             {notice && (
               <p role="status" className="rounded-[4px] border border-status-online/25 bg-status-online/8 px-3.5 py-2.5 text-[13px] text-status-online">
                 {notice === "removed"
-                  ? "Removed. It no longer appears on anyone's profile."
-                  : `Saved. Anyone in ${server.name} can wear it from Profile settings.`}
+                  ? t("Removed. It no longer appears on anyone's profile.")
+                  : t("Saved. Anyone in {name} can wear it from Profile settings.", { name: server.name })}
               </p>
             )}
 
@@ -319,7 +321,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                     disabled={saving}
                     className={btn.dangerGhost}
                   >
-                    {removeArmed ? "Click again to remove" : "Remove tag"}
+                    {removeArmed ? t("Click again to remove") : t("Remove tag")}
                   </button>
                 )}
               </div>
@@ -329,7 +331,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                 disabled={saving || !dirty || !!tagProblem}
                 className={btn.primary}
               >
-                {saving ? "Saving…" : existing ? "Save changes" : "Create tag"}
+                {saving ? t("Saving…") : existing ? t("Save changes") : t("Create tag")}
               </button>
             </div>
           </div>
@@ -337,15 +339,15 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
       </SettingsSection>
 
       <SettingsSection
-        title="Who can wear it"
-        description="Wearing a guild tag is a profile choice, not a role or a Catalyst perk."
+        title={t("Who can wear it")}
+        description={t("Wearing a guild tag is a profile choice, not a role or a Catalyst perk.")}
       >
         <div className="space-y-2 px-5 py-4 text-[14px] leading-5 text-text-muted">
           <p>
-            Anyone who is a member of {server.name} can wear this tag. Only one tag can be worn at a time.
+            {t("Anyone who is a member of")}{" "}{server.name} can wear this tag. Only one tag can be worn at a time.
           </p>
           <p>
-            If you change the tag, icon or colour later, everyone wearing it will need to put it on again.
+            {t("If you change the tag, icon or colour later, everyone wearing it will need to put it on again.")}
           </p>
         </div>
       </SettingsSection>

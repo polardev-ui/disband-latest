@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisbandUserMedia } from "@/lib/media";
 import { buildAudioConstraints, type NoiseSuppressionMode } from "@/lib/audio-settings";
 import { VoiceMixer } from "@/lib/voice-mixer";
+import { useI18n } from "@/contexts/I18nContext";
 
 /** Plays your mic back through the same pipeline a call uses, so the
  *  noise suppression choice can be heard before joining. */
@@ -13,6 +14,7 @@ export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
   inputVolume: number;
   autoGain: boolean;
 }) {
+  const { t } = useI18n();
   const [running, setRunning] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
       tick();
       setRunning(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open the microphone.");
+      setError(err instanceof Error ? err.message : t("Could not open the microphone."));
       stop();
     }
     // noiseMode changes are applied live by the effect above.
@@ -106,12 +108,12 @@ export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
           onClick={() => (running ? stop() : void start())}
           className="shrink-0 rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
         >
-          {running ? "Stop test" : "Test mic"}
+          {running ? t("Stop test") : t("Test mic")}
         </button>
         <div
           className="h-2 flex-1 overflow-hidden rounded-full bg-bg-tertiary"
           role="meter"
-          aria-label="Microphone input level"
+          aria-label={t("Microphone input level")}
           aria-valuenow={Math.round(level * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -126,7 +128,7 @@ export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
         </div>
       </div>
       {running && (
-        <p className="mt-1.5 text-[12px] text-text-muted">Say something — the bar should move, and you should hear yourself at low volume.</p>
+        <p className="mt-1.5 text-[12px] text-text-muted">{t("Say something — the bar should move, and you should hear yourself at low volume.")}</p>
       )}
       {error && <p className="mt-1.5 text-[12px] text-status-dnd">{error}</p>}
     </div>

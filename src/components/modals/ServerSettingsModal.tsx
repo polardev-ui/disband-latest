@@ -41,6 +41,7 @@ import { EmojiSection } from "./server-settings/EmojiSection";
 import { SoundboardSection } from "./server-settings/SoundboardSection";
 import { GuildTagSection } from "./server-settings/GuildTagSection";
 import { DangerSection } from "./server-settings/DangerSection";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface ServerSettingsModalProps {
   open: boolean;
@@ -108,6 +109,7 @@ const DANGER: NavItem = {
 const GROUPS: Group[] = ["Space", "People", "Content", "Moderation"];
 
 export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCatalysts }: ServerSettingsModalProps) {
+  const { t } = useI18n();
   const { activeServer, user, serverPermissions, catalystCounts } = useApp();
   const [section, setSection] = useState<Section>("overview");
 
@@ -148,7 +150,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
 
   return (
     <SettingsLayer
-      label={`${activeServer.name} settings`}
+      label={t("{name} settings", { name: activeServer.name })}
       exiting={exiting}
       onClose={onClose}
       contentKey={`${activeServer.id}:${current.id}`}
@@ -157,11 +159,11 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
         <select
           value={current.id}
           onChange={(e) => setSection(e.target.value as Section)}
-          aria-label="Space settings section"
+          aria-label={t("Space settings section")}
           className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
         >
           {allItems.map((n) => (
-            <option key={n.id} value={n.id}>{n.label}</option>
+            <option key={n.id} value={n.id}>{t(n.label)}</option>
           ))}
         </select>
       }
@@ -188,11 +190,11 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
                     onClick={() => setSection(n.id)}
                     trailing={
                       n.id === "catalysts" && level > 0 ? (
-                        <span className="text-[12px] font-semibold text-[#ff73fa]">Lvl {level}</span>
+                        <span className="text-[12px] font-semibold text-[#ff73fa]">{t("Lvl")}{" "}{level}</span>
                       ) : undefined
                     }
                   >
-                    {n.label}
+                    {t(n.label)}
                   </SettingsNavItem>
                 ))}
               </div>
@@ -202,15 +204,15 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
             <>
               <SettingsNavSeparator />
               <SettingsNavItem danger active={section === "danger"} onClick={() => setSection("danger")} trailing={<IconTrash size={16} />}>
-                Delete Space
+                {t("Delete Space")}
               </SettingsNavItem>
             </>
           )}
         </>
       }
     >
-      <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{current.label}</h2>
-      <p className="mb-5 mt-1 text-[14px] leading-5 text-text-muted">{current.description}</p>
+      <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{t(current.label)}</h2>
+      <p className="mb-5 mt-1 text-[14px] leading-5 text-text-muted">{t(current.description)}</p>
       {current.id === "overview" && <OverviewSection {...shared} />}
       {current.id === "appearance" && <AppearanceSection {...shared} />}
       {current.id === "guild" && <GuildTagSection {...shared} />}

@@ -10,6 +10,7 @@ import {
 import type { ServerSound } from "@/lib/supabase/types";
 import { IconMusic } from "@/components/icons";
 import { playVoiceSoundboardSound } from "@/lib/voice-mixer";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface SoundboardProps {
   compact?: boolean;
@@ -18,6 +19,7 @@ interface SoundboardProps {
 }
 
 export function Soundboard({ compact = false, variant = "round" }: SoundboardProps) {
+  const { t } = useI18n();
   const { servers, activeServer, user } = useApp();
   const userId = user?.id ?? null;
 
@@ -142,7 +144,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           aria-haspopup="dialog"
-          aria-label="Open soundboard"
+          aria-label={t("Open soundboard")}
           className={`flex h-8 flex-1 items-center justify-center rounded-[4px] transition-colors ${
             open ? "bg-interactive-selected text-interactive-active" : "bg-bg-secondary text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
           }`}
@@ -160,7 +162,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
             ? `h-14 w-14 ${open ? "bg-white text-[#313338]" : "bg-[#2b2d31] text-white hover:bg-[#404249]"}`
             : "h-9 w-9 bg-bg-tertiary text-text-normal hover:bg-interactive-hover"
         }`}
-        title="Soundboard"
+        title={t("Soundboard")}
       >
         <IconMusic size={compact ? 24 : 16} />
         {sounds.length > 0 && (
@@ -174,7 +176,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
       {visible && (
         <div
           role="dialog"
-          aria-label="Soundboard"
+          aria-label={t("Soundboard")}
           className={`absolute z-[150] w-[340px] max-w-[calc(100vw-2rem)] rounded-lg bg-bg-secondary p-3 shadow-[0_8px_16px_rgba(0,0,0,0.24)] transition duration-150 ease-out ${
             variant === "panel" ? "bottom-10 left-0 origin-bottom-left" : "bottom-12 right-0 origin-bottom-right"
           } ${
@@ -183,18 +185,18 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-text-normal">Soundboard</h3>
+              <h3 className="text-sm font-semibold text-text-normal">{t("Soundboard")}</h3>
               <p className="text-xs text-text-muted">
                 {tab === "server"
-                  ? `${activeServerName} · ${serverSounds.length} sounds`
-                  : `Favourited sounds (${favoriteSounds.length})`}
+                  ? t("{activeServerName} · {length} sounds", { activeServerName, length: serverSounds.length })
+                  : t("Favourited sounds ({length})", { length: favoriteSounds.length })}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-bg-tertiary hover:text-text-normal"
-              aria-label="Close soundboard"
+              aria-label={t("Close soundboard")}
             >
               ×
             </button>
@@ -212,7 +214,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                     : "text-text-muted hover:bg-bg-secondary hover:text-text-normal"
                 }`}
               >
-                {value === "server" ? "Sounds" : "Favourites"}
+                {value === "server" ? t("Sounds") : t("Favourites")}
               </button>
             ))}
           </div>
@@ -232,7 +234,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
           )}
 
           {loading ? (
-            <p className="py-8 text-center text-xs text-text-muted">Loading sounds…</p>
+            <p className="py-8 text-center text-xs text-text-muted">{t("Loading sounds…")}</p>
           ) : (
             <div className="scrollbar-thin max-h-72 overflow-y-auto">
               {tab === "server" ? (
@@ -261,8 +263,8 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                                 ? "bg-brand/20 text-brand"
                                 : "bg-black/20 text-white/70 opacity-0 group-hover:opacity-100"
                             }`}
-                            title={favorite ? "Remove favourite" : "Add favourite"}
-                            aria-label={favorite ? "Remove favourite" : "Add favourite"}
+                            title={favorite ? t("Remove favourite") : t("Add favourite")}
+                            aria-label={favorite ? t("Remove favourite") : t("Add favourite")}
                           >
                             {toggling === sound.id ? "…" : favorite ? "★" : "☆"}
                           </button>
@@ -273,11 +275,11 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                 ) : (
                   <div className="py-8 text-center">
                     <p className="text-xs text-text-muted">
-                      No sounds for this server yet.
+                      {t("No sounds for this server yet.")}
                     </p>
                     {!userId && (
                       <p className="mt-1 text-xs text-text-muted">
-                        Log in to favourite sounds.
+                        {t("Log in to favourite sounds.")}
                       </p>
                     )}
                   </div>
@@ -296,7 +298,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                         {sound.name}
                       </span>
                       <span className="max-w-full truncate text-[10px] text-text-muted">
-                        {servers.find((s) => s.id === sound.server_id)?.name ?? "Server sound"}
+                        {servers.find((s) => s.id === sound.server_id)?.name ?? t("Server sound")}
                       </span>
                     </button>
                   ))}
@@ -304,10 +306,10 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
               ) : (
                 <div className="py-8 text-center">
                   <p className="text-xs text-text-muted">
-                    No favourite sounds yet.
+                    {t("No favourite sounds yet.")}
                   </p>
                   <p className="mt-1 text-xs text-text-muted">
-                    Star sounds from the Sounds tab to reach them from every device.
+                    {t("Star sounds from the Sounds tab to reach them from every device.")}
                   </p>
                 </div>
             )}

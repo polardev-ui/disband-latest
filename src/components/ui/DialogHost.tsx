@@ -11,6 +11,7 @@ import {
   type DialogRequest,
 } from "@/lib/dialogs";
 import { handleTopmostEscape, pushEscapeHandler } from "@/lib/overlay";
+import { useI18n } from "@/contexts/I18nContext";
 
 /**
  * Draws the dialogs from `@/lib/dialogs` (confirm, prompt, alert), one at a
@@ -24,6 +25,7 @@ export function DialogHost() {
 }
 
 function DialogCard({ request }: { request: DialogRequest }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(request.kind === "prompt" ? request.defaultValue : "");
   const confirmRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +73,7 @@ function DialogCard({ request }: { request: DialogRequest }) {
     <div className="fixed inset-0 z-[230] flex items-center justify-center p-4">
       <button
         type="button"
-        aria-label="Cancel"
+        aria-label={t("Cancel")}
         tabIndex={-1}
         className="overlay-fade absolute inset-0 bg-overlay-scrim-strong"
         onClick={cancel}
@@ -110,7 +112,7 @@ function DialogCard({ request }: { request: DialogRequest }) {
         <div className="flex justify-end gap-2 bg-bg-secondary p-4">
           {request.kind !== "alert" && (
             <button type="button" onClick={cancel} className={btn.ghost}>
-              Cancel
+              {t("Cancel")}
             </button>
           )}
           <button ref={confirmRef} type="submit" disabled={blocked} className={primaryClass}>

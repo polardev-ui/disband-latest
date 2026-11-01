@@ -97,8 +97,8 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
       id: `screen:${p.user_id}`,
       profile: p.profile,
       label: isSelf
-        ? "Your screen"
-        : p.profile ? `${displayName(p.profile)}'s screen` : "Screen",
+        ? t("Your screen")
+        : p.profile ? t("{name}'s screen", { name: displayName(p.profile) }) : t("Screen"),
       stream,
       audio: isSelf ? null : session.remoteScreenAudio.get(p.user_id) ?? null,
       local: isSelf,
@@ -189,11 +189,11 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
               }}
               onToggleCamera={() => {
                 setActionError(null);
-                void session.toggleCamera().catch(() => setActionError("Couldn't access the camera."));
+                void session.toggleCamera().catch(() => setActionError(t("Couldn't access the camera.")));
               }}
               onToggleScreenShare={() => {
                 setActionError(null);
-                void session.toggleScreenShare().catch(() => setActionError("Couldn't start screen sharing."));
+                void session.toggleScreenShare().catch(() => setActionError(t("Couldn't start screen sharing.")));
               }}
               onEnd={() => void voice.leave()}
               onOpenSettings={onOpenSettings}

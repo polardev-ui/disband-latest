@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { apiFetch } from "@/lib/api";
 import { Logo } from "@/components/ui/Logo";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function PlatformBanScreen() {
+  const { t } = useI18n();
   const { platformBan, signOut } = useApp();
   const [appealOpen, setAppealOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -25,14 +27,14 @@ export function PlatformBanScreen() {
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok) {
-        setError(json.error ?? "Could not submit appeal.");
+        setError(json.error ?? t("Could not submit appeal."));
         return;
       }
-      setStatus("Appeal submitted. Our team will review it.");
+      setStatus(t("Appeal submitted. Our team will review it."));
       setReason("");
       setAppealOpen(false);
     } catch {
-      setError("Could not reach Disband. Check your connection and try again.");
+      setError(t("Could not reach Disband. Check your connection and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -44,17 +46,17 @@ export function PlatformBanScreen() {
         <div className="mb-4 flex justify-center">
           <Logo adaptive size={48} />
         </div>
-        <h1 className="text-xl font-bold text-status-danger">You have been banned from Disband</h1>
+        <h1 className="text-xl font-bold text-status-danger">{t("You have been banned from Disband")}</h1>
         <p className="mt-3 text-sm text-text-muted">
-          {platformBan?.reason ?? "Your account no longer has access to Disband."}
+          {platformBan?.reason ?? t("Your account no longer has access to Disband.")}
         </p>
         {platformBan?.vpnBlocked && (
           <p className="mt-2 text-xs text-text-muted">
-            VPN or proxy connections are not allowed while banned. Disable your VPN to appeal access checks.
+            {t("VPN or proxy connections are not allowed while banned. Disable your VPN to appeal access checks.")}
           </p>
         )}
         <p className="mt-4 text-xs text-text-muted">
-          You cannot use Disband until a platform owner removes this ban. Creating a new account with the same email is also blocked.
+          {t("You cannot use Disband until a platform owner removes this ban. Creating a new account with the same email is also blocked.")}
         </p>
 
         {!appealOpen ? (
@@ -63,7 +65,7 @@ export function PlatformBanScreen() {
             onClick={() => setAppealOpen(true)}
             className="mt-6 rounded bg-interactive-normal px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
           >
-            Appeal Ban
+            {t("Appeal Ban")}
           </button>
         ) : (
           <div className="mt-6 space-y-3 text-left">
@@ -72,7 +74,7 @@ export function PlatformBanScreen() {
               onChange={(e) => setReason(e.target.value)}
               rows={4}
               maxLength={2000}
-              placeholder="Explain why this ban should be lifted…"
+              placeholder={t("Explain why this ban should be lifted…")}
               className="w-full resize-y rounded-[3px] border border-divider bg-bg-tertiary p-3 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
             />
             <div className="flex gap-2">
@@ -82,14 +84,14 @@ export function PlatformBanScreen() {
                 onClick={() => void submitAppeal()}
                 className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
-                {submitting ? "Submitting…" : "Submit appeal"}
+                {submitting ? t("Submitting…") : t("Submit appeal")}
               </button>
               <button
                 type="button"
                 onClick={() => { setAppealOpen(false); setReason(""); setError(null); }}
                 className="rounded border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
               >
-                Cancel
+                {t("Cancel")}
               </button>
             </div>
           </div>
@@ -103,7 +105,7 @@ export function PlatformBanScreen() {
           onClick={() => void signOut()}
           className="mt-6 rounded border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
         >
-          Sign out
+          {t("Sign out")}
         </button>
       </div>
     </div>

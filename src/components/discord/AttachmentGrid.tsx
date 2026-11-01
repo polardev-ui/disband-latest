@@ -7,6 +7,7 @@ import { ImageLightbox } from "./ImageLightbox";
 import { MessageAttachment as MessageAttachmentView } from "./MessageAttachment";
 import type { AttachmentType } from "@/lib/messages";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 export interface MessageAttachment {
   url: string;
@@ -184,6 +185,7 @@ function GridTile({ attachment, index, className, onOpen }: {
   className: string;
   onOpen: (a: MessageAttachment, index: number) => void;
 }) {
+  const { t } = useI18n();
   const [hover, setHover] = useState(false);
   const src = safeImageUrl(attachment.url);
   if (!src) return null;
@@ -198,7 +200,7 @@ function GridTile({ attachment, index, className, onOpen }: {
         type="button"
         onClick={() => onOpen(attachment, index)}
         className="block h-full w-full transition-opacity hover:opacity-90"
-        aria-label={attachment.name ? `Open ${attachment.name}` : "Open image"}
+        aria-label={attachment.name ? t("Open {name}", { name: attachment.name }) : t("Open image")}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

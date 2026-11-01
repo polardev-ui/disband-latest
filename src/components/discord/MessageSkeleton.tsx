@@ -1,11 +1,13 @@
+import { useI18n } from "@/contexts/I18nContext";
 "use client";
 
 export function MessageSkeleton() {
+  const { t } = useI18n();
 
   const widths = [72, 45, 88, 55, 94, 38, 68, 82, 48, 91, 58, 76, 42, 85, 62, 96];
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4" aria-busy="true" aria-label="Loading messages">
+    <div className="flex flex-col gap-4 px-4 py-4" aria-busy="true" aria-label={t("Loading messages")}>
       {widths.map((w, i) => (
         <div key={i} className="flex items-start gap-3">
           {}

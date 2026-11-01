@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconClose } from "@/components/icons";
 import { handleTopmostEscape, pushEscapeHandler } from "@/lib/overlay";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The classic Discord modal: a near-black scrim, a #313338 card that pops in
@@ -35,6 +36,7 @@ export function ClassicModal({
   /** Full-bleed artwork above the title. */
   banner?: ReactNode;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
     const release = pushEscapeHandler(onClose);
@@ -50,7 +52,7 @@ export function ClassicModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="overlay-fade absolute inset-0 bg-black/85" onClick={onClose} />
+      <button type="button" aria-label={t("Close")} className="overlay-fade absolute inset-0 bg-black/85" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
@@ -61,7 +63,7 @@ export function ClassicModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("Close")}
           className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded text-interactive-normal transition-colors hover:text-interactive-active"
         >
           <IconClose size={22} />

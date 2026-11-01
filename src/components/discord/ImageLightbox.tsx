@@ -22,6 +22,7 @@ import { OVERLAY_Z } from "@/lib/overlay";
 import { copyImageToClipboard, saveMedia } from "@/lib/media-actions";
 import { getUsernameStyle } from "@/lib/profileColor";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const ZOOM_STEPS = [1, 1.5, 2, 3, 4];
 
@@ -67,6 +68,7 @@ export function ImageLightbox({
   onPrev,
   onNext,
 }: ImageLightboxProps) {
+  const { t } = useI18n();
   const [zoomIndex, setZoomIndex] = useState(0);
   // Where on the image a click-zoom was aimed, as % of the image box.
   const [origin, setOrigin] = useState("50% 50%");
@@ -130,15 +132,15 @@ export function ImageLightbox({
     if (!url) return;
     openMenu(e.clientX, e.clientY, [
       ...(!animated
-        ? [{ id: "copy-image", label: "Copy image", onClick: () => run(() => copyImageToClipboard(url), "Image copied", "Couldn't copy the image") }]
+        ? [{ id: "copy-image", label: t("Copy image"), onClick: () => run(() => copyImageToClipboard(url), "Image copied", "Couldn't copy the image") }]
         : []),
-      { id: "save", label: animated ? "Save" : "Save image", onClick: () => run(() => saveMedia(url, fileName), "Saved", "Couldn't save it") },
+      { id: "save", label: animated ? t("Save") : t("Save image"), onClick: () => run(() => saveMedia(url, fileName), "Saved", "Couldn't save it") },
       {
         id: "copy-link",
-        label: "Copy link",
+        label: t("Copy link"),
         onClick: () => run(() => navigator.clipboard.writeText(url), "Link copied", "Couldn't copy the link"),
       },
-      { id: "open", label: "Open original", onClick: () => safeWindowOpen(url) },
+      { id: "open", label: t("Open original"), onClick: () => safeWindowOpen(url) },
     ]);
   };
 
@@ -155,12 +157,12 @@ export function ImageLightbox({
   const mediaStyle = { transform: `scale(${zoom})`, transformOrigin: origin };
 
   return createPortal(
-    <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.lightbox }} role="dialog" aria-modal="true" aria-label="Image viewer">
+    <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.lightbox }} role="dialog" aria-modal="true" aria-label={t("Image viewer")}>
       <button
         type="button"
         className={`overlay-fade${exiting ? " overlay-fade-out" : ""} absolute inset-0 bg-black/90`}
         onClick={onClose}
-        aria-label="Close viewer"
+        aria-label={t("Close viewer")}
       />
 
       {/* Top bar: who posted it on the left, tools on the right. */}
@@ -174,7 +176,7 @@ export function ImageLightbox({
                   <span className="truncate" style={nameStyle}>{displayName(author)}</span>
                   {isOwn && (
                     <span className="rounded border border-white/15 px-1 text-[10px] font-semibold uppercase tracking-wide text-white/60">
-                      You
+                      {t("You")}
                     </span>
                   )}
                   <PlatformBadge userId={author?.id} />
@@ -193,29 +195,29 @@ export function ImageLightbox({
         </div>
 
         <div className="pointer-events-auto flex shrink-0 items-center gap-1 ml-auto rounded-[4px] bg-bg-floating p-1">
-          <ToolbarButton label="Zoom out (−)" onClick={zoomOut} disabled={zoomIndex === 0}>
+          <ToolbarButton label={t("Zoom out (−)")} onClick={zoomOut} disabled={zoomIndex === 0}>
             <IconZoomOut size={18} />
           </ToolbarButton>
           <button
             type="button"
             onClick={() => setZoomIndex(0)}
-            title="Reset zoom (0)"
+            title={t("Reset zoom (0)")}
             className="h-8 w-12 rounded-[3px] text-[12px] tabular-nums text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
             {Math.round(zoom * 100)}%
           </button>
-          <ToolbarButton label="Zoom in (+)" onClick={zoomIn} disabled={zoomIndex === ZOOM_STEPS.length - 1}>
+          <ToolbarButton label={t("Zoom in (+)")} onClick={zoomIn} disabled={zoomIndex === ZOOM_STEPS.length - 1}>
             <IconZoomIn size={18} />
           </ToolbarButton>
           <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
-          <ToolbarButton label="Download" onClick={() => run(() => saveMedia(src, fileName), "Saved", "Couldn't save it")}>
+          <ToolbarButton label={t("Download")} onClick={() => run(() => saveMedia(src, fileName), "Saved", "Couldn't save it")}>
             <IconDownload size={18} />
           </ToolbarButton>
-          <ToolbarButton label="Open original" onClick={() => safeWindowOpen(src)}>
+          <ToolbarButton label={t("Open original")} onClick={() => safeWindowOpen(src)}>
             <IconExternalLink size={18} />
           </ToolbarButton>
           <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
-          <ToolbarButton label="Close (Esc)" onClick={onClose}>
+          <ToolbarButton label={t("Close (Esc)")} onClick={onClose}>
             <IconClose size={18} />
           </ToolbarButton>
         </div>
@@ -224,7 +226,7 @@ export function ImageLightbox({
       {/* Stage. Clicks on the empty area fall through to the backdrop and close. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-12 top-16 flex items-center justify-center overflow-hidden">
         {!resolved ? (
-          <p className="text-[14px] text-white/60">Couldn&apos;t load this image.</p>
+          <p className="text-[14px] text-white/60">{t("Couldn’t load this image.")}</p>
         ) : (
           // The entrance animation lives on this wrapper: it ends holding a
           // transform of its own, which on the media itself overrode the zoom.
@@ -253,18 +255,18 @@ export function ImageLightbox({
             style={mediaStyle}
           />
           )}
-          <button type="button" onClick={() => safeWindowOpen(src)} className="pointer-events-auto mt-2 text-[14px] text-white/70 hover:text-white hover:underline">Open in Browser</button>
+          <button type="button" onClick={() => safeWindowOpen(src)} className="pointer-events-auto mt-2 text-[14px] text-white/70 hover:text-white hover:underline">{t("Open in Browser")}</button>
           </div>
         )}
       </div>
 
       {hasPrev && (
-        <SideButton side="left" label="Previous image (←)" onClick={onPrev!}>
+        <SideButton side="left" label={t("Previous image (←)")} onClick={onPrev!}>
           <IconChevronLeft size={22} />
         </SideButton>
       )}
       {hasNext && (
-        <SideButton side="right" label="Next image (→)" onClick={onNext!}>
+        <SideButton side="right" label={t("Next image (→)")} onClick={onNext!}>
           <IconChevronRight size={22} />
         </SideButton>
       )}

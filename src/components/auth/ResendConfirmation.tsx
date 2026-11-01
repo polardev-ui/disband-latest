@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { mapAuthError } from "@/lib/authErrors";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function ResendConfirmation({
   defaultEmail = "",
@@ -12,6 +13,7 @@ export function ResendConfirmation({
   defaultEmail?: string;
   lockEmail?: boolean;
 }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState(defaultEmail);
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function ResendConfirmation({
         role="status"
         className="rounded-md border border-status-online/30 bg-status-online/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-online"
       >
-        If that address needs confirming, a new link is on its way to{" "}
+        {t("If that address needs confirming, a new link is on its way to")}{" "}
         <span className="font-medium">{email.trim()}</span>. It is good for 24 hours —
         check your spam folder if it does not arrive.
       </p>
@@ -66,7 +68,7 @@ export function ResendConfirmation({
     <form onSubmit={send} className="space-y-2 text-left">
       {!lockEmail && (
         <label className="block">
-          <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Email</span>
+          <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Email")}</span>
           <input
             type="email"
             required
@@ -83,7 +85,7 @@ export function ResendConfirmation({
         disabled={state === "sending" || !email.trim()}
         className="w-full rounded-md border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {state === "sending" ? "Sending…" : "Send a new confirmation email"}
+        {state === "sending" ? t("Sending…") : t("Send a new confirmation email")}
       </button>
 
       {error && <p className="text-[13px] text-status-dnd">{error}</p>}

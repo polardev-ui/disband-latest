@@ -161,11 +161,11 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
       // The exact offline count, as positions; rows fill in page by page.
       const n = windowed.offlineCount ?? 0;
       if (n > 0) {
-        out.push({ kind: "header", key: "h:offline", label: "Offline", count: n });
+        out.push({ kind: "header", key: "h:offline", label: t("Offline"), count: n });
         for (let i = 0; i < n; i++) out.push({ kind: "slot", key: `o:${i}`, index: i });
       }
     } else if (offline.length > 0) {
-      out.push({ kind: "header", key: "h:offline", label: "Offline", count: offline.length });
+      out.push({ kind: "header", key: "h:offline", label: t("Offline"), count: offline.length });
       for (const m of offline.sort(byName)) out.push({ kind: "member", key: m.user_id, member: m });
     }
     return out;

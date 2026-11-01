@@ -4,6 +4,7 @@ import { CATALYST_LEVELS, catalystLevel, nextCatalystLevel } from "@/lib/catalys
 import { IconCheck, IconLock, IconSparkle } from "@/components/icons";
 import { SettingsSection, btn } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 /** What each level adds on top of the one before. */
 const NEW_AT: Record<1 | 2 | 3, { title: string; body: string }[]> = {
@@ -16,6 +17,7 @@ const NEW_AT: Record<1 | 2 | 3, { title: string; body: string }[]> = {
 };
 
 export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
+  const { t } = useI18n();
   const current = catalystLevel(catalystCount);
   const next = nextCatalystLevel(catalystCount);
   const floor = current.min;
@@ -29,24 +31,24 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
             <IconSparkle size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">Current level</p>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">{t("Current level")}</p>
             <p className="text-[22px] font-semibold text-text-normal">
-              {current.level === 0 ? "No level yet" : current.name}
+              {current.level === 0 ? t("No level yet") : current.name}
             </p>
           </div>
           {onBoost && (
             <button type="button" onClick={onBoost} className={btn.primary}>
-              Boost this space
+              {t("Boost this space")}
             </button>
           )}
         </div>
         <div className="border-t border-divider px-5 py-4">
           <div className="flex items-baseline justify-between text-[13px]">
             <span className="text-text-muted">
-              {catalystCount} {catalystCount === 1 ? "Catalyst" : "Catalysts"}
+              {catalystCount} {catalystCount === 1 ? "Catalyst" : t("Catalysts")}
             </span>
             <span className="text-text-muted">
-              {next ? `${next.min - catalystCount} to ${next.name}` : "Every perk unlocked"}
+              {next ? `${next.min - catalystCount} to ${next.name}` : t("Every perk unlocked")}
             </span>
           </div>
           <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-bg-accent">
@@ -55,7 +57,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
         </div>
       </section>
 
-      <SettingsSection title="Perks" description="Each level keeps everything below it. Perks lock again if the space drops a level.">
+      <SettingsSection title={t("Perks")} description={t("Each level keeps everything below it. Perks lock again if the space drops a level.")}>
         {CATALYST_LEVELS.filter((l) => l.level > 0).map((l, i) => {
           const unlocked = current.level >= l.level;
           const lvl = l.level as 1 | 2 | 3;
@@ -63,7 +65,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
             <div key={l.level} className="view-enter flex gap-4 border-b border-divider px-5 py-4 last:border-b-0" style={{ animationDelay: `${i * 50}ms` }}>
               <div className="flex w-[84px] shrink-0 flex-col">
                 <span className={`text-[14px] font-semibold ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{l.name}</span>
-                <span className="text-[12px] text-text-muted">{l.min} {l.min === 1 ? "Catalyst" : "Catalysts"}</span>
+                <span className="text-[12px] text-text-muted">{l.min} {l.min === 1 ? "Catalyst" : t("Catalysts")}</span>
               </div>
               <ul className="min-w-0 flex-1 space-y-2.5">
                 {NEW_AT[lvl].map((perk) => (
@@ -76,7 +78,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
                       {unlocked ? <IconCheck size={12} /> : <IconLock size={11} />}
                     </span>
                     <span className="min-w-0">
-                      <span className={`block text-[14px] font-medium ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{perk.title}</span>
+                      <span className={`block text-[14px] font-medium ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{t(perk.title)}</span>
                       <span className="block text-[13px] text-text-muted">{perk.body}</span>
                     </span>
                   </li>

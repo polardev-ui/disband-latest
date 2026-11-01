@@ -509,7 +509,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       setSpotifyNote("Spotify connected. What you're playing now shows on your profile.");
     } catch {
       setSpotifyPasteError(
-        "That code didn't work — codes expire after a few minutes. Hit Connect Spotify to try again.",
+        t("That code didn't work — codes expire after a few minutes. Hit Connect Spotify to try again."),
       );
     } finally {
       setSpotifyPasteBusy(false);
@@ -776,17 +776,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   async function saveProfile() {
     setError(null);
     if (!useDefaultAccent && (!accent1.trim() || !accent2.trim())) {
-      setError("Pick both profile colours, or use the default style.");
+      setError(t("Pick both profile colours, or use the default style."));
       return;
     }
     const sanitizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
     const usernameChanged = sanitizedUsername !== (profile?.username ?? "").trim().toLowerCase();
     if (usernameChanged && sanitizedUsername.length < 2) {
-      setError("Username must be at least 2 characters (letters, numbers, and underscores).");
+      setError(t("Username must be at least 2 characters (letters, numbers, and underscores)."));
       return;
     }
     if (!displayName.trim()) {
-      setError("Enter a display name.");
+      setError(t("Enter a display name."));
       return;
     }
     setSaving(true);
@@ -796,8 +796,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         const res = await upload(pendingAvatarFile);
         if (!res) {
           console.error("[saveProfile] avatar upload returned null");
-          setError("Couldn't upload your profile picture. Please try again.");
-          void alertDialog("Couldn't upload your profile picture. Please try again.");
+          setError(t("Couldn't upload your profile picture. Please try again."));
+          void alertDialog(t("Couldn't upload your profile picture. Please try again."));
           return;
         }
         avatarUrl = res.url;
@@ -807,8 +807,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
         const res = await upload(pendingBannerFile);
         if (!res) {
           console.error("[saveProfile] banner upload returned null");
-          setError("Couldn't upload your banner. Please try again.");
-          void alertDialog("Couldn't upload your banner. Please try again.");
+          setError(t("Couldn't upload your banner. Please try again."));
+          void alertDialog(t("Couldn't upload your banner. Please try again."));
           return;
         }
         bannerUrl = res.url;
@@ -869,13 +869,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       }
       if (err) {
         setError(err);
-        void alertDialog(err, "Couldn't save your profile");
+        void alertDialog(err, t("Couldn't save your profile"));
       } else {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save your profile.");
+      setError(err instanceof Error ? err.message : t("Couldn't save your profile."));
     } finally {
       setSaving(false);
     }
@@ -976,10 +976,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     try {
       const stream = await getDisbandUserMedia({ audio: true, video: true });
       stream.getTracks().forEach((track) => track.stop());
-      setMediaTestMessage("Microphone and camera access granted.");
+      setMediaTestMessage(t("Microphone and camera access granted."));
       await refreshDevices();
     } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : "Could not access microphone or camera.");
+      setSettingsError(err instanceof Error ? err.message : t("Could not access microphone or camera."));
     }
   }
 
@@ -1110,10 +1110,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 <div className="grid grid-cols-1 gap-6 pb-20 lg:grid-cols-[1fr_320px]">
                   <div className="min-w-0 space-y-6">
                     <SettingsSection
-                      title="Identity"
-                    description="How your name appears across Disband."
+                      title={t("Identity")}
+                    description={t("How your name appears across Disband.")}
                   >
-                    <SettingRow label="Display name" htmlFor="settings-display-name" stacked>
+                    <SettingRow label={t("Display name")} htmlFor="settings-display-name" stacked>
                       <input
                         id="settings-display-name"
                         value={displayName}
@@ -1124,8 +1124,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </SettingRow>
 
                     <SettingRow
-                      label="Username"
-                      description="Lowercase letters, numbers, and underscores. Others use this to add you."
+                      label={t("Username")}
+                      description={t("Lowercase letters, numbers, and underscores. Others use this to add you.")}
                       stacked
                     >
                       <UsernameAvailabilityInput
@@ -1136,8 +1136,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </SettingRow>
 
                     <SettingRow
-                      label="About me"
-                      description="Line breaks are allowed."
+                      label={t("About me")}
+                      description={t("Line breaks are allowed.")}
                       htmlFor="settings-bio"
                       stacked
                     >
@@ -1147,7 +1147,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         onChange={(e) => setBio(e.target.value.slice(0, entitlements.maxBioLength))}
                         rows={3}
                         maxLength={entitlements.maxBioLength}
-                        placeholder="Tell people about yourself."
+                        placeholder={t("Tell people about yourself.")}
                         className={`${settingsInputClass} resize-none`}
                       />
                       <p className="mt-1 text-right text-[12px] text-text-muted">
@@ -1167,7 +1167,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       </p>
                     </SettingRow>
 
-                    <SettingRow label="Pronouns" stacked htmlFor="settings-pronouns">
+                    <SettingRow label={t("Pronouns")} stacked htmlFor="settings-pronouns">
                       <input
                         id="settings-pronouns"
                         value={pronouns}
@@ -1179,8 +1179,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </SettingRow>
 
                     <SettingRow
-                      label="Status note"
-                      description="Shown under your profile picture — e.g. a tiny note about what you're up to."
+                      label={t("Status note")}
+                      description={t("Shown under your profile picture — e.g. a tiny note about what you're up to.")}
                       stacked
                       htmlFor="settings-status-note"
                     >
@@ -1193,8 +1193,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         placeholder="e.g. low-key lurking"
                         className={`${settingsInputClass} resize-none`}
                       />
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Clear status after">
-                        <span className="mr-1 text-[12px] text-text-muted">Clear after:</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={t("Clear status after")}>
+                        <span className="mr-1 text-[12px] text-text-muted">{t("Clear after:")}</span>
                         {STATUS_DURATION_PRESETS.map((preset) => (
                           <button
                             key={preset.id}
@@ -1207,7 +1207,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                             }`}
                           >
-                            {preset.label}
+                            {t(preset.label)}
                           </button>
                         ))}
                       </div>
@@ -1215,10 +1215,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   </SettingsSection>
 
                   <SettingsSection
-                    title="Name style (beta)"
-                    description="Customize the font of your display name. Colour customization requires Disband Aero."
+                    title={t("Name style (beta)")}
+                    description={t("Customize the font of your display name. Colour customization requires Disband Aero.")}
                   >
-                    <SettingRow label="Name font" description="Choose a font for your display name. Spooky is available during Halloween." stacked>
+                    <SettingRow label={t("Name font")} description={t("Choose a font for your display name. Spooky is available during Halloween.")} stacked>
                       <div className="flex flex-wrap gap-2">
                         {NAME_FONT_OPTIONS.filter((f) => isNameFontAvailable(f.id)).map((f) => (
                           <button
@@ -1231,7 +1231,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                             }`}
                           >
-                            {f.label}
+                            {t(f.label)}
                             {f.beta && <span className="ml-1 text-[10px] opacity-70">beta</span>}
                             {f.limited && <span className="ml-1 text-[10px] opacity-70">limited</span>}
                           </button>
@@ -1240,14 +1240,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </SettingRow>
 
                     <SettingRow
-                      label="Name colour"
-                      description={subPlan === "aero" ? "Pick a colour for your display name." : "Requires Disband Aero."}
+                      label={t("Name colour")}
+                      description={subPlan === "aero" ? t("Pick a colour for your display name.") : t("Requires Disband Aero.")}
                       stacked
                     >
                       {subPlan === "aero" ? (
                         <div className="flex flex-wrap items-center gap-3">
                           <label className="flex flex-col gap-1 text-[12px] text-text-muted">
-                            <span>Start colour</span>
+                            <span>{t("Start colour")}</span>
                             <input
                               type="color"
                               value={nameColor || "#ffffff"}
@@ -1256,7 +1256,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             />
                           </label>
                           <label className="flex flex-col gap-1 text-[12px] text-text-muted">
-                            <span>End colour (gradient)</span>
+                            <span>{t("End colour (gradient)")}</span>
                             <input
                               type="color"
                               value={nameColor2 || nameColor || "#ffffff"}
@@ -1269,42 +1269,42 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             onClick={() => setNameColor2("")}
                             className="text-[12px] text-text-muted hover:text-text-normal"
                           >
-                            Clear gradient
+                            {t("Clear gradient")}
                           </button>
                           <label className="flex flex-col gap-1 text-[12px] text-text-muted">
-                            <span>Gradient direction</span>
+                            <span>{t("Gradient direction")}</span>
                             <select
                               value={nameGradientDir}
                               onChange={(e) => setNameGradientDir(e.target.value)}
                               className="h-10 rounded border border-divider bg-bg-tertiary px-2 text-text-normal"
                             >
-                              <option value="90deg">Left to right</option>
-                              <option value="180deg">Top to bottom</option>
-                              <option value="270deg">Right to left</option>
-                              <option value="0deg">Bottom to top</option>
-                              <option value="45deg">Bottom-left to top-right</option>
-                              <option value="135deg">Top-left to bottom-right</option>
-                              <option value="225deg">Top-right to bottom-left</option>
-                              <option value="315deg">Bottom-right to top-left</option>
+                              <option value="90deg">{t("Left to right")}</option>
+                              <option value="180deg">{t("Top to bottom")}</option>
+                              <option value="270deg">{t("Right to left")}</option>
+                              <option value="0deg">{t("Bottom to top")}</option>
+                              <option value="45deg">{t("Bottom-left to top-right")}</option>
+                              <option value="135deg">{t("Top-left to bottom-right")}</option>
+                              <option value="225deg">{t("Top-right to bottom-left")}</option>
+                              <option value="315deg">{t("Bottom-right to top-left")}</option>
                             </select>
                           </label>
                         </div>
                       ) : (
-                        <p className="text-[12px] text-text-muted">Upgrade to Aero to customize your name colour.</p>
+                        <p className="text-[12px] text-text-muted">{t("Upgrade to Aero to customize your name colour.")}</p>
                       )}
                     </SettingRow>
                   </SettingsSection>
 
                   <p className="mb-6 -mt-2 text-[12px] text-text-muted">
-                    Hover your avatar or banner in the preview to change them.{" "}
+                    {t("Hover your avatar or banner in the preview to change them.")}{" "}
                     {subPlan === "free"
-                      ? "Animated avatars need a paid plan."
-                      : "GIFs are supported for animated avatars on your plan."}
+                      ? t("Animated avatars need a paid plan.")
+                      : t("GIFs are supported for animated avatars on your plan.")}
                   </p>
 
                   <SettingsSection
-                    title="Profile colour"
-                    description="Pick a preset, or set two colours yourself — the same colour twice gives a solid, two different colours give a gradient."
+                    title={t("Profile colour")}
+                    description={t("Pick a preset, or set two colours yourself — the same colour twice gives a solid, two different colours give a gradient.")}
                     action={
                       !useDefaultAccent ? (
                         <button
@@ -1312,12 +1312,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           onClick={() => setUseDefaultAccent(true)}
                           className="rounded-md border border-divider px-2.5 py-1 text-[12px] transition-colors hover:bg-interactive-hover"
                         >
-                          Reset to default
+                          {t("Reset to default")}
                         </button>
                       ) : undefined
                     }
                   >
-                    <SettingRow label="Presets" stacked>
+                    <SettingRow label={t("Presets")} stacked>
                       <AccentPresetGrid
                         active={useDefaultAccent ? null : { from: accent1, to: accent2 }}
                         onPick={(from, to) => {
@@ -1329,19 +1329,19 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </SettingRow>
 
                     <SettingRow
-                      label="Custom colours"
+                      label={t("Custom colours")}
                       description={
                         useDefaultAccent
-                          ? "Currently using the default style."
+                          ? t("Currently using the default style.")
                           : isProfileGradient(previewAccent)
-                            ? "Gradient"
-                            : "Solid colour"
+                            ? t("Gradient")
+                            : t("Solid colour")
                       }
                     >
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
-                          aria-label="Colour 1"
+                          aria-label={t("Colour 1")}
                           value={accent1}
                           onChange={(e) => {
                             setUseDefaultAccent(false);
@@ -1351,7 +1351,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         />
                         <input
                           type="color"
-                          aria-label="Colour 2"
+                          aria-label={t("Colour 2")}
                           value={accent2}
                           onChange={(e) => {
                             setUseDefaultAccent(false);
@@ -1362,7 +1362,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       </div>
                     </SettingRow>
 
-                    <SettingRow label="Sidebar preview" stacked>
+                    <SettingRow label={t("Sidebar preview")} stacked>
                       <div
                         className="overflow-hidden rounded-lg p-3"
                         style={getProfilePanelStyle(previewAccent)}
@@ -1376,7 +1376,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           </div>
                           <div className="min-w-0">
                             <p className="truncate text-[15px] font-semibold leading-tight">
-                              {displayName.trim() || username || "Display name"}
+                              {displayName.trim() || username || t("Display name")}
                             </p>
                             {username && (
                               <p
@@ -1395,10 +1395,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   {profile && <GuildTagPicker userId={profile.id} />}
 
                   <SettingsSection
-                    title="Status"
-                    description="Sets how you appear to everyone else."
+                    title={t("Status")}
+                    description={t("Sets how you appear to everyone else.")}
                   >
-                    <SettingRow label="Online status" stacked>
+                    <SettingRow label={t("Online status")} stacked>
                       <div className="flex flex-wrap gap-2">
                         {STATUSES.map((s) => (
                           <button
@@ -1412,7 +1412,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 : "bg-bg-tertiary text-text-muted hover:text-text-normal"
                             }`}
                           >
-                            {s.label}
+                            {t(s.label)}
                           </button>
                         ))}
                       </div>
@@ -1421,8 +1421,8 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
                   {myAllBadges.length > 0 && (
                     <SettingsSection
-                      title="Badges"
-                      description="Choose which of your badges show on your profile. Hidden badges stay on your account, so you can turn them back on any time."
+                      title={t("Badges")}
+                      description={t("Choose which of your badges show on your profile. Hidden badges stay on your account, so you can turn them back on any time.")}
                     >
                       {myAllBadges.map((badge) => (
                         <div
@@ -1439,12 +1439,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           <label htmlFor={`badge-${badge.key}`} className="min-w-0 flex-1 cursor-pointer">
                             <span className="block text-[14px] font-medium text-text-normal">{badge.name}</span>
                             <span className="block truncate text-[13px] text-text-muted">
-                              {badge.visible ? badge.description : "Hidden from your profile"}
+                              {badge.visible ? badge.description : t("Hidden from your profile")}
                             </span>
                           </label>
                           <Toggle
                             id={`badge-${badge.key}`}
-                            label={`Show ${badge.name} on your profile`}
+                            label={t("Show {name} on your profile", { name: badge.name })}
                             checked={badge.visible}
                             onChange={async () => {
                               if (!profile?.id) return;
@@ -1480,7 +1480,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         disabled={!profileDirty || saving}
                         className="rounded-md border border-divider px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Revert
+                        {t("Revert")}
                       </button>
                       <button
                         type="button"
@@ -1488,7 +1488,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         disabled={saving || !profileDirty}
                         className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {saving ? "Saving…" : profileDirty ? "Save Changes" : "Saved!"}
+                        {saving ? t("Saving…") : profileDirty ? t("Save Changes") : t("Saved!")}
                       </button>
                     </div>
                   )}
@@ -1497,7 +1497,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 {profile && (
                   <div className="hidden lg:block">
                     <div className="sticky top-4">
-                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Preview</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">{t("Preview")}</p>
                       <ProfilePreview
                         profile={{
                           ...profile,
@@ -1534,7 +1534,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           }}
                           className={`${classicBtn.grey} ${classicBtn.sm}`}
                         >
-                          Remove avatar
+                          {t("Remove avatar")}
                         </button>
                         <button
                           type="button"
@@ -1547,7 +1547,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           }}
                           className={`${classicBtn.grey} ${classicBtn.sm}`}
                         >
-                          Remove banner
+                          {t("Remove banner")}
                         </button>
                       </div>
                     </div>
@@ -1572,13 +1572,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
               {tab === "appearance" && (
                 <div>
-                  <SettingsSection title="Interface zoom" description="Scales the whole app. Ctrl/Cmd + and − work anywhere, and Ctrl/Cmd 0 resets.">
+                  <SettingsSection title={t("Interface zoom")} description={t("Scales the whole app. Ctrl/Cmd + and − work anywhere, and Ctrl/Cmd 0 resets.")}>
                     <div className="flex items-center gap-3 px-5 py-4">
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.1))}
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
-                        aria-label="Zoom out"
+                        aria-label={t("Zoom out")}
                       >
                         −
                       </button>
@@ -1590,13 +1590,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         value={zoom}
                         onChange={(e) => setZoom(Number.parseFloat(e.target.value))}
                         className="flex-1 accent-brand"
-                        aria-label="Interface zoom"
+                        aria-label={t("Interface zoom")}
                       />
                       <button
                         type="button"
                         onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.1))}
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-divider text-lg text-text-normal transition-colors hover:bg-interactive-hover"
-                        aria-label="Zoom in"
+                        aria-label={t("Zoom in")}
                       >
                         +
                       </button>
@@ -1606,20 +1606,20 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     </div>
                   </SettingsSection>
 
-                  <SettingsSection title="Motion" description="Message arrivals, view transitions, badges and ambient effects.">
+                  <SettingsSection title={t("Motion")} description={t("Message arrivals, view transitions, badges and ambient effects.")}>
                     <div className="px-5 py-4">
-                      <div className="flex gap-1 rounded-[12px] border border-divider bg-bg-accent p-1" role="group" aria-label="Animation preference">
+                      <div className="flex gap-1 rounded-[12px] border border-divider bg-bg-accent p-1" role="group" aria-label={t("Animation preference")}>
                         {(
                           [
-                            { id: "system", label: "System", hint: "Follow your OS setting" },
-                            { id: "full", label: "Full", hint: "Always animate" },
-                            { id: "reduced", label: "Reduced", hint: "Calm interface" },
+                            { id: "system", label: t("System"), hint: t("Follow your OS setting") },
+                            { id: "full", label: t("Full"), hint: t("Always animate") },
+                            { id: "reduced", label: t("Reduced"), hint: t("Calm interface") },
                           ] as const
                         ).map((opt) => (
                           <button
                             key={opt.id}
                             type="button"
-                            title={opt.hint}
+                            title={t(opt.hint)}
                             aria-pressed={motion === opt.id}
                             onClick={() => {
                               setMotion(opt.id);
@@ -1631,7 +1631,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 : "text-text-muted hover:text-text-normal"
                             }`}
                           >
-                            {opt.label}
+                            {t(opt.label)}
                           </button>
                         ))}
                       </div>
@@ -1640,25 +1640,25 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
                   <section>
                     <div className="mb-3">
-                      <h3 className="text-[14.5px] font-semibold text-text-normal">Theme</h3>
+                      <h3 className="text-[14.5px] font-semibold text-text-normal">{t("Theme")}</h3>
                       <p className="mt-0.5 text-[13px] leading-relaxed text-text-muted">
-                        Applies instantly and syncs to your account.
+                        {t("Applies instantly and syncs to your account.")}
                       </p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {themes.map((t) => {
-                        const isLocked = !!t.plan && subPlan === "free";
-                        const selected = theme === t.id;
+                      {themes.map((option) => {
+                        const isLocked = !!option.plan && subPlan === "free";
+                        const selected = theme === option.id;
                         return (
                           <button
-                            key={t.id}
+                            key={option.id}
                             type="button"
                             disabled={isLocked}
                             aria-pressed={selected}
                             onClick={() => {
                               if (isLocked) return;
-                              setTheme(t.id);
-                              void savePreference({ theme: t.id });
+                              setTheme(option.id);
+                              void savePreference({ theme: option.id });
                             }}
                             className={`overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-150 ${
                               selected
@@ -1667,21 +1667,21 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             } ${isLocked ? "cursor-not-allowed opacity-50" : ""}`}
                           >
                             <div className="flex h-14">
-                              {t.swatch.map((c, i) => (
+                              {option.swatch.map((c, i) => (
                                 <div key={i} className="flex-1" style={{ backgroundColor: c }} />
                               ))}
                             </div>
                             <div className="border-t border-divider bg-bg-secondary px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <p className="text-[14px] font-medium">{t.label}</p>
-                                {t.plan && <SubscriptionBadge plan={t.plan} />}
+                                <p className="text-[14px] font-medium">{t(option.label)}</p>
+                                {option.plan && <SubscriptionBadge plan={option.plan} />}
                                 {isLocked ? (
-                                  <span className="ml-auto text-[12px] text-text-muted">Locked</span>
+                                  <span className="ml-auto text-[12px] text-text-muted">{t("Locked")}</span>
                                 ) : selected ? (
-                                  <span className="ml-auto text-[12px] font-medium text-brand">Active</span>
+                                  <span className="ml-auto text-[12px] font-medium text-brand">{t("Active")}</span>
                                 ) : null}
                               </div>
-                              <p className="mt-0.5 text-[13px] text-text-muted">{t.description}</p>
+                              <p className="mt-0.5 text-[13px] text-text-muted">{t(option.description)}</p>
                             </div>
                           </button>
                         );
@@ -1752,10 +1752,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
               {tab === "notifications" && (
                 <div>
-                  <SettingsSection title="Alerts" description="Sounds and desktop alerts for when you're away from Disband.">
+                  <SettingsSection title={t("Alerts")} description={t("Sounds and desktop alerts for when you're away from Disband.")}>
                   <SettingRow
-                    label="Message sounds"
-                    description="Play a ping for @mentions and incoming DMs when the app is in the background."
+                    label={t("Message sounds")}
+                    description={t("Play a ping for @mentions and incoming DMs when the app is in the background.")}
                   >
                     <Toggle
                       checked={soundEnabled}
@@ -1763,12 +1763,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         setSoundEnabled(next);
                         void savePreference({ sound_enabled: next });
                       }}
-                      label="Message sounds"
+                      label={t("Message sounds")}
                     />
                   </SettingRow>
                   <SettingRow
-                    label="Desktop notifications"
-                    description="Show OS notifications for mentions, messages, and calls when Disband is not focused."
+                    label={t("Desktop notifications")}
+                    description={t("Show OS notifications for mentions, messages, and calls when Disband is not focused.")}
                   >
                     <Toggle
                       checked={desktopNotifications}
@@ -1776,16 +1776,16 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         setDesktopNotifications(next);
                         void savePreference({ desktop_notifications_enabled: next });
                       }}
-                      label="Desktop notifications"
+                      label={t("Desktop notifications")}
                     />
                   </SettingRow>
                   {notifPermission !== "granted" && notifPermission !== "unsupported" && (
                     <SettingRow
-                      label="Browser permission"
+                      label={t("Browser permission")}
                       description={
                         notifPermission === "denied"
-                          ? "Blocked in your browser. Allow notifications in this site's settings, then come back."
-                          : "Your browser needs to allow Disband to show alerts."
+                          ? t("Blocked in your browser. Allow notifications in this site's settings, then come back.")
+                          : t("Your browser needs to allow Disband to show alerts.")
                       }
                     >
                       {notifPermission !== "denied" && (
@@ -1795,7 +1795,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           className="inline-flex h-9 items-center gap-2 rounded-[3px] bg-brand px-3.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
                         >
                           <IconBell size={15} />
-                          Allow
+                          {t("Allow")}
                         </button>
                       )}
                     </SettingRow>
@@ -1808,10 +1808,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               {tab === "voice" && (
                 <div className="space-y-6">
                   <SettingsSection
-                    title="Devices"
-                    description="Choose your microphone, speaker, and camera for voice channels and calls. Device lists populate after permission is granted."
+                    title={t("Devices")}
+                    description={t("Choose your microphone, speaker, and camera for voice channels and calls. Device lists populate after permission is granted.")}
                   >
-                    <SettingRow label="Input device" stacked>
+                    <SettingRow label={t("Input device")} stacked>
                       <select
                         value={audioInput}
                         disabled={devicesLoading}
@@ -1821,15 +1821,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                         className={settingsInputClass}
                       >
-                        <option value="">System default</option>
+                        <option value="">{t("System default")}</option>
                         {inputs.map((device) => (
                           <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
                         ))}
                       </select>
                     </SettingRow>
                     <SettingRow
-                      label="Input volume"
-                      description="If people say you're quiet, turn this up. Above 100% boosts your mic."
+                      label={t("Input volume")}
+                      description={t("If people say you're quiet, turn this up. Above 100% boosts your mic.")}
                       stacked
                     >
                       <div className="flex items-center gap-3">
@@ -1846,7 +1846,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             setVoiceMixerInputVolume(next);
                           }}
                           className="flex-1 accent-brand"
-                          aria-label="Input volume"
+                          aria-label={t("Input volume")}
                         />
                         <span className="w-12 shrink-0 text-right text-[14px] tabular-nums text-text-muted">
                           {inputVolume}%
@@ -1854,13 +1854,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       </div>
                     </SettingRow>
                     <SettingRow
-                      label="Automatic gain control"
-                      description="Evens out how loud you are. If you still sound quiet, try turning this off: on Windows it can lower your microphone level in system settings."
+                      label={t("Automatic gain control")}
+                      description={t("Evens out how loud you are. If you still sound quiet, try turning this off: on Windows it can lower your microphone level in system settings.")}
                       htmlFor="voice-auto-gain"
                     >
                       <Toggle
                         id="voice-auto-gain"
-                        label="Automatic gain control"
+                        label={t("Automatic gain control")}
                         checked={autoGain}
                         onChange={(next) => {
                           setAutoGainState(next);
@@ -1869,7 +1869,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                       />
                     </SettingRow>
-                    <SettingRow label="Output device" stacked>
+                    <SettingRow label={t("Output device")} stacked>
                       <select
                         value={audioOutput}
                         disabled={devicesLoading}
@@ -1879,13 +1879,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                         className={settingsInputClass}
                       >
-                        <option value="">System default</option>
+                        <option value="">{t("System default")}</option>
                         {outputs.map((device) => (
                           <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
                         ))}
                       </select>
                     </SettingRow>
-                    <SettingRow label="Camera" stacked>
+                    <SettingRow label={t("Camera")} stacked>
                       <select
                         value={videoInput}
                         disabled={devicesLoading}
@@ -1895,7 +1895,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                         className={settingsInputClass}
                       >
-                        <option value="">System default</option>
+                        <option value="">{t("System default")}</option>
                         {cameras.map((device) => (
                           <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
                         ))}
@@ -1904,17 +1904,17 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   </SettingsSection>
 
                   <SettingsSection
-                    title="Noise suppression"
-                    description="Remove background noise like keyboards, fans, dogs and traffic before your voice reaches anyone else."
+                    title={t("Noise suppression")}
+                    description={t("Remove background noise like keyboards, fans, dogs and traffic before your voice reaches anyone else.")}
                   >
                     <SettingRow
-                      label="Noise suppression"
+                      label={t("Noise suppression")}
                       description={
                         noiseMode === "ai"
-                          ? "AI noise suppression runs a speech model on your device and keeps only your voice. It needs a fast computer: if people say you sound crackly, switch back to Standard."
+                          ? t("AI noise suppression runs a speech model on your device and keeps only your voice. It needs a fast computer: if people say you sound crackly, switch back to Standard.")
                           : noiseMode === "standard"
                             ? "Your browser's built-in filter. Steady on any computer; very loud noise can still get through."
-                            : "No filtering. Best for music or a studio mic in a quiet room."
+                            : t("No filtering. Best for music or a studio mic in a quiet room.")
                       }
                     >
                       <select
@@ -1927,20 +1927,20 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                         className={settingsInputClass}
                       >
-                        <option value="standard">Standard (recommended)</option>
-                        <option value="ai">AI noise suppression</option>
-                        <option value="off">None</option>
+                        <option value="standard">{t("Standard (recommended)")}</option>
+                        <option value="ai">{t("AI noise suppression")}</option>
+                        <option value="off">{t("None")}</option>
                       </select>
                     </SettingRow>
                   </SettingsSection>
 
                   <SettingsSection
-                    title="Microphone test"
-                    description="Hear yourself through the same noise suppression a call uses."
+                    title={t("Microphone test")}
+                    description={t("Hear yourself through the same noise suppression a call uses.")}
                   >
                     <SettingRow
-                      label="Live input level"
-                      description="Speak and watch the meter move."
+                      label={t("Live input level")}
+                      description={t("Speak and watch the meter move.")}
                       stacked
                     >
                       <MicTest deviceId={audioInput} noiseMode={noiseMode} inputVolume={inputVolume} autoGain={autoGain} />
@@ -1948,16 +1948,16 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   </SettingsSection>
 
                   <SettingsSection
-                    title="Access"
-                    description="Grant permission once so devices can be listed and tested."
+                    title={t("Access")}
+                    description={t("Grant permission once so devices can be listed and tested.")}
                   >
-                    <SettingRow label="Microphone & camera access">
+                    <SettingRow label={t("Microphone & camera access")}>
                       <button
                         type="button"
                         onClick={() => void testMediaAccess()}
                         className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
                       >
-                        Allow microphone & camera
+                        {t("Allow microphone & camera")}
                       </button>
                     </SettingRow>
                   </SettingsSection>
@@ -1970,13 +1970,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               {tab === "subscriptions" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">
-                    Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.
+                    {t("Upgrade your plan for larger uploads, higher quality video, exclusive themes, and more.")}
                   </p>
 
                   <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Current plan</p>
+                        <p className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{t("Current plan")}</p>
                         <div className="flex items-center gap-2">
                           <span className="text-[16px] font-semibold capitalize text-header-primary">{subPlan}</span>
                           <SubscriptionBadge plan={subPlan} />
@@ -1985,19 +1985,19 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           <div className="space-y-0.5 pt-1">
                             {subscription.current_period_end && (
                               <p className="text-[12px] text-text-muted">
-                                {cancellationScheduled ? "Cancels" : "Renews"} {billingPeriodEndLabel}
+                                {cancellationScheduled ? t("Cancels") : t("Renews")} {billingPeriodEndLabel}
                               </p>
                             )}
                             <Hint tone={cancellationScheduled ? "super" : "online"}>
-                              {cancellationScheduled ? "Cancellation scheduled" : "Active"}
+                              {cancellationScheduled ? t("Cancellation scheduled") : t("Active")}
                             </Hint>
                           </div>
                         )}
                         {subscription?.status === "past_due" && (
-                          <p className="text-[12px] text-status-dnd">Payment failed</p>
+                          <p className="text-[12px] text-status-dnd">{t("Payment failed")}</p>
                         )}
                         {subscription?.status === "canceled" && (
-                          <p className="text-[12px] text-text-muted">Cancelled</p>
+                          <p className="text-[12px] text-text-muted">{t("Cancelled")}</p>
                         )}
                       </div>
                       <div className="flex flex-col gap-2">
@@ -2006,7 +2006,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           onClick={() => setShowSubscription(true)}
                           className="h-8 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                         >
-                          {subPlan === "free" ? "Upgrade" : "Manage"}
+                          {subPlan === "free" ? t("Upgrade") : t("Manage")}
                         </button>
                       </div>
                     </div>
@@ -2016,10 +2016,10 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 space-y-1">
-                          <p className="text-[16px] font-medium leading-6 text-header-primary">Billing</p>
+                          <p className="text-[16px] font-medium leading-6 text-header-primary">{t("Billing")}</p>
                           <p className="text-[13px] leading-5 text-text-muted">
                             {cancellationScheduled
-                              ? `Cancellation scheduled. Your plan stays active until ${billingPeriodEndLabel}. No refund is issued for the current period.`
+                              ? t("Cancellation scheduled. Your plan stays active until {billingPeriodEndLabel}. No refund is issued for the current period.", { billingPeriodEndLabel })
                               : `Cancel future renewals. You'll keep your plan until ${billingPeriodEndLabel}; payments already made are non-refundable.`}
                           </p>
                           {billingError && <p className="text-[13px] text-status-dnd">{billingError}</p>}
@@ -2034,7 +2034,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                             ? "h-8 shrink-0 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                             : "h-8 shrink-0 rounded-[3px] border border-status-dnd/40 px-3 text-[14px] font-medium text-status-dnd transition-colors hover:bg-status-dnd/10"}
                         >
-                          {cancellationScheduled ? "Resume" : "Cancel subscription"}
+                          {cancellationScheduled ? t("Resume") : t("Cancel subscription")}
                         </button>
                       </div>
                     </div>
@@ -2042,7 +2042,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
                   {subscription?.provider === "apple" && (
                     <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
-                      <p className="text-[16px] font-medium leading-6 text-header-primary">App Store billing</p>
+                      <p className="text-[16px] font-medium leading-6 text-header-primary">{t("App Store billing")}</p>
                       <p className="mt-1 text-[13px] leading-5 text-text-muted">
                         This subscription is managed by Apple. Cancel or change it in your Apple Account
                         settings; Apple handles any refund requests.
@@ -2053,7 +2053,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         rel="noreferrer"
                         className="mt-2 inline-block text-[13px] font-medium text-brand hover:underline"
                       >
-                        Manage Apple subscription
+                        {t("Manage Apple subscription")}
                       </a>
                     </div>
                   )}
@@ -2061,9 +2061,9 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-[16px] font-medium leading-6 text-header-primary">Gift a subscription</p>
+                        <p className="text-[16px] font-medium leading-6 text-header-primary">{t("Gift a subscription")}</p>
                         <p className="text-[13px] leading-5 text-text-muted">
-                          Pay once for Aero or Lite. Send the link in a DM or a channel — first to claim it gets it.
+                          {t("Pay once for Aero or Lite. Send the link in a DM or a channel — first to claim it gets it.")}
                         </p>
                         {giftLink && (
                           <div className="flex items-center gap-2 pt-1">
@@ -2081,7 +2081,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               }}
                               className="shrink-0 rounded-[3px] border border-divider px-2 py-1 text-[12px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                             >
-                              {giftCopied ? "Copied" : "Copy"}
+                              {giftCopied ? t("Copied") : t("Copy")}
                             </button>
                           </div>
                         )}
@@ -2091,15 +2091,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         onClick={() => { setGiftCopied(false); setGifting(true); }}
                         className="h-8 shrink-0 rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
                       >
-                        Gift
+                        {t("Gift")}
                       </button>
                     </div>
                   </div>
                   {myGifts && (myGifts.sent.length > 0 || myGifts.received.length > 0) && (
                     <div className="rounded-[8px] border border-divider/60 bg-bg-secondary p-4">
-                      <p className="text-[16px] font-medium leading-6 text-header-primary">Your gifts</p>
+                      <p className="text-[16px] font-medium leading-6 text-header-primary">{t("Your gifts")}</p>
                       <p className="text-[13px] leading-5 text-text-muted">
-                        Everything you&apos;ve bought or claimed. The link stays here until someone uses it.
+                        {t("Everything you’ve bought or claimed. The link stays here until someone uses it.")}
                       </p>
                       <div className="mt-3 space-y-2">
                         {myGifts.sent.map((g) => (
@@ -2127,7 +2127,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 }}
                                 className="shrink-0 rounded-[3px] border border-divider px-2 py-1 text-[12px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                               >
-                                {copiedGiftCode === g.code ? "Copied" : "Copy link"}
+                                {copiedGiftCode === g.code ? t("Copied") : t("Copy link")}
                               </button>
                             )}
                           </div>
@@ -2150,26 +2150,26 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     onClick={() => void reloadSubscription()}
                     className="text-xs text-text-muted hover:text-text-normal underline underline-offset-2"
                   >
-                    Refresh subscription
+                    {t("Refresh subscription")}
                   </button>
 
                   <SettingsSection
-                    title="What your plan includes"
-                    description="Limits that apply to your account right now."
+                    title={t("What your plan includes")}
+                    description={t("Limits that apply to your account right now.")}
                   >
-                    <SettingRow label="Max file upload">
+                    <SettingRow label={t("Max file upload")}>
                       <span className="text-[13px] font-semibold text-text-normal">
                         {formatBytes(entitlements.maxUploadBytes)}
                       </span>
                     </SettingRow>
-                    <SettingRow label="Video quality">
+                    <SettingRow label={t("Video quality")}>
                       <span className="text-[13px] font-semibold text-text-normal">
                         {entitlements.videoQuality}
                       </span>
                     </SettingRow>
-                    <SettingRow label="Animated avatar">
+                    <SettingRow label={t("Animated avatar")}>
                       <span className="text-[13px] font-semibold text-text-normal">
-                        {entitlements.animatedAvatar ? "Included" : "—"}
+                        {entitlements.animatedAvatar ? t("Included") : "—"}
                       </span>
                     </SettingRow>
                   </SettingsSection>
@@ -2181,7 +2181,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       className="flex w-full items-center justify-center gap-2 rounded-lg bg-bg-secondary p-4 text-sm text-text-muted hover:bg-bg-accent disabled:opacity-50"
                     >
                       <IconDownload size={16} />
-                      {exporting ? "Exporting..." : "Export Message History (JSON)"}
+                      {exporting ? t("Exporting...") : t("Export Message History (JSON)")}
                     </button>
                   )}
                 </div>
@@ -2196,22 +2196,21 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               {tab === "referrals" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-muted">
-                    Share your code and earn when friends join with it.
+                    {t("Share your code and earn when friends join with it.")}
                   </p>
                   <MyReferralCard />
                   <div className="flex flex-col gap-1.5 rounded-lg bg-bg-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-[13px] font-medium text-text-normal">Live leaderboard</p>
+                      <p className="text-[13px] font-medium text-text-normal">{t("Live leaderboard")}</p>
                       <p className="mt-0.5 text-[12px] text-text-muted">
-                        See who's verified the most referrals — the December winner takes home a $100
-                        Visa card.
+                        {t("See who's verified the most referrals — the December winner takes home a $100 Visa card.")}
                       </p>
                     </div>
                     <Link
                       href="/leaderboards/referrals"
                       className="inline-flex shrink-0 items-center justify-center rounded-md bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
                     >
-                      View leaderboard
+                      {t("View leaderboard")}
                     </Link>
                   </div>
                 </div>
@@ -2223,20 +2222,20 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 <div className="pb-20">
                   {/* Discord's "Add accounts to your profile" strip */}
                   <div className="mb-8 rounded-lg bg-bg-secondary p-4">
-                    <h3 className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Add accounts to your profile</h3>
-                    <p className="mt-1 text-[14px] text-header-secondary">This information won&apos;t be shared outside of Disband without your permission.</p>
+                    <h3 className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">{t("Add accounts to your profile")}</h3>
+                    <p className="mt-1 text-[14px] text-header-secondary">{t("This information won’t be shared outside of Disband without your permission.")}</p>
                     <div className="mt-4 flex flex-wrap gap-3">
                       {[
                         { id: "spotify", label: "Spotify", icon: <SpotifyMark />, onClick: handleSpotifyConnect, done: spotifyConnected },
-                        { id: "lastfm", label: "Last.fm", icon: <LastfmMark />, onClick: () => { scrollToLastfm(); void handleLastfmConnect(); }, done: !!lastfmUser.trim() && lastfmSaved },
-                        { id: "soundcloud", label: "SoundCloud (via Last.fm)", icon: <SoundcloudMark />, onClick: handleSoundCloudConnect, done: !!lastfmUser.trim() && lastfmSaved },
-                        { id: "ytmusic", label: "YouTube Music (via Last.fm)", icon: <YoutubeMusicMark />, onClick: () => document.getElementById("conn-ytmusic")?.scrollIntoView({ behavior: "smooth", block: "center" }), done: false },
+                        { id: "lastfm", label: t("Last.fm"), icon: <LastfmMark />, onClick: () => { scrollToLastfm(); void handleLastfmConnect(); }, done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "soundcloud", label: t("SoundCloud (via Last.fm)"), icon: <SoundcloudMark />, onClick: handleSoundCloudConnect, done: !!lastfmUser.trim() && lastfmSaved },
+                        { id: "ytmusic", label: t("YouTube Music (via Last.fm)"), icon: <YoutubeMusicMark />, onClick: () => document.getElementById("conn-ytmusic")?.scrollIntoView({ behavior: "smooth", block: "center" }), done: false },
                       ].map((svc) => (
-                        <Tooltip key={svc.id} label={svc.done ? `${svc.label} · connected` : svc.label} side="top">
+                        <Tooltip key={svc.id} label={svc.done ? t("{label} · connected", { label: svc.label }) : svc.label} side="top">
                           <button
                             type="button"
                             onClick={svc.onClick}
-                            aria-label={`Connect ${svc.label}`}
+                            aria-label={t("Connect {label}", { label: svc.label })}
                             className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-tertiary transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-interactive-hover"
                           >
                             {svc.icon}
@@ -2260,7 +2259,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     actions={
                       spotifyChecking ? null : spotifyConnected ? (
                         <button type="button" onClick={() => void handleSpotifyDisconnect()} className="h-8 rounded-[3px] px-3 text-[14px] font-medium text-white hover:underline">
-                          Disconnect
+                          {t("Disconnect")}
                         </button>
                       ) : (
                         <>
@@ -2269,14 +2268,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               type="button"
                               disabled={legacySpotifyBusy}
                               onClick={() => void handleImportLegacySpotify()}
-                              title="Older Disband builds kept this connection in this browser only."
+                              title={t("Older Disband builds kept this connection in this browser only.")}
                               className="h-8 rounded-[3px] bg-button-secondary px-3 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50"
                             >
-                              {legacySpotifyBusy ? "Importing…" : "Import old connection"}
+                              {legacySpotifyBusy ? t("Importing…") : t("Import old connection")}
                             </button>
                           )}
                           <button type="button" onClick={handleSpotifyConnect} className="h-8 rounded-[3px] bg-[#1db954] px-4 text-[14px] font-medium text-white hover:brightness-95">
-                            Connect
+                            {t("Connect")}
                           </button>
                         </>
                       )
@@ -2284,15 +2283,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   >
                     <p className="text-[14px] text-header-secondary">
                       {spotifyConnected
-                        ? "Checked every few seconds while Disband is open. On desktop it keeps working from the tray."
+                        ? t("Checked every few seconds while Disband is open. On desktop it keeps working from the tray.")
                         : "Read-only: we only see the track you're playing. Nothing else is touched."}
                     </p>
                     {spotifyNote && <p className="mt-2 text-[14px] text-header-secondary">{spotifyNote}</p>}
                         {spotifyPasteOpen && !spotifyConnected && (
                           <div className="mt-2 w-full space-y-2">
                             <p className="text-[14px] text-text-muted">
-                              Spotify opened in your browser. Approve access there, copy the code
-                              Spotify shows, and paste it here.
+                              {t("Spotify opened in your browser. Approve access there, copy the code Spotify shows, and paste it here.")}
                             </p>
                             <div className="flex flex-wrap items-center gap-2">
                               <input
@@ -2307,7 +2305,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 onClick={() => void finishSpotifyPaste()}
                                 className="rounded-[3px] bg-brand px-3.5 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                               >
-                                {spotifyPasteBusy ? "Connecting…" : "Connect"}
+                                {spotifyPasteBusy ? t("Connecting…") : t("Connect")}
                               </button>
                             </div>
                             {spotifyPasteError && (
@@ -2331,7 +2329,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           onClick={handleLastfmDisconnect}
                           className="h-8 rounded-[3px] px-3 text-[14px] font-medium text-white hover:underline"
                         >
-                          Disconnect
+                          {t("Disconnect")}
                         </button>
                       ) : (
                         <button
@@ -2340,13 +2338,13 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           disabled={!lastfmConfigured()}
                           className="h-8 rounded-[3px] bg-[#d51007] px-4 text-[14px] font-medium text-white hover:brightness-95 disabled:opacity-40"
                         >
-                          Connect
+                          {t("Connect")}
                         </button>
                       )
                     }
                   >
                     <p className="text-[14px] text-header-secondary">
-                      SoundCloud doesn&apos;t let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud › Settings › Connections), then connect Last.fm here. What you play appears on your profile within a minute, even from another device.
+                      {t("SoundCloud doesn’t let apps read playback directly. Link SoundCloud to Last.fm once (SoundCloud › Settings › Connections), then connect Last.fm here. What you play appears on your profile within a minute, even from another device.")}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <input
@@ -2355,7 +2353,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           setLastfmUser(e.target.value);
                           setLastfmSaved(false);
                         }}
-                        placeholder="Or type your Last.fm username"
+                        placeholder={t("Or type your Last.fm username")}
                         disabled={!lastfmConfigured()}
                         className="h-9 w-64 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc] disabled:opacity-50"
                       />
@@ -2365,11 +2363,11 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         disabled={!lastfmConfigured()}
                         className="h-9 rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-40"
                       >
-                        Save
+                        {t("Save")}
                       </button>
-                      {lastfmSaved && <span className="text-[14px] text-status-online">Saved.</span>}
+                      {lastfmSaved && <span className="text-[14px] text-status-online">{t("Saved.")}</span>}
                     </div>
-                    {!lastfmConfigured() && <p className="mt-2 text-[14px] text-header-secondary">Not configured on this build yet.</p>}
+                    {!lastfmConfigured() && <p className="mt-2 text-[14px] text-header-secondary">{t("Not configured on this build yet.")}</p>}
                     {lastfmNote && <p className="mt-2 text-[14px] text-header-secondary">{lastfmNote}</p>}
                   </ConnectionCard>
 
@@ -2387,36 +2385,36 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                           rel="noreferrer noopener"
                           className="flex h-8 items-center rounded-[3px] bg-[#ff0000] px-4 text-[14px] font-medium text-white hover:brightness-95"
                         >
-                          Get the scrobbler
+                          {t("Get the scrobbler")}
                         </a>
                       }
                     >
                       <p className="text-[14px] text-header-secondary">
-                        YouTube Music doesn&apos;t let apps see what you&apos;re playing, so it comes through Last.fm:
+                        {t("YouTube Music doesn’t let apps see what you’re playing, so it comes through Last.fm:")}
                       </p>
                       <ol className="mt-2 list-decimal space-y-1 pl-5 text-[14px] text-text-normal">
-                        <li>Connect Last.fm above.</li>
+                        <li>{t("Connect Last.fm above.")}</li>
                         <li>
-                          On a computer, install <span className="font-medium">Web Scrobbler</span> for your browser and sign it in to Last.fm. On Android,{" "}
-                          <span className="font-medium">Pano Scrobbler</span> does the same for the app.
+                          {t("On a computer, install")}{" "}<span className="font-medium">{t("Web Scrobbler")}</span> for your browser and sign it in to Last.fm. On Android,{" "}
+                          <span className="font-medium">{t("Pano Scrobbler")}</span> does the same for the app.
                         </li>
-                        <li>Play something on YouTube Music. It shows on your profile within a minute.</li>
+                        <li>{t("Play something on YouTube Music. It shows on your profile within a minute.")}</li>
                       </ol>
                     </ConnectionCard>
                   </div>
 
                   <p className="mt-6 text-[14px] text-header-secondary">
-                    Your listening card (artwork, track and artist) shows on your profile to everyone who can see it. Disconnect an account to hide it instantly.
+                    {t("Your listening card (artwork, track and artist) shows on your profile to everyone who can see it. Disconnect an account to hide it instantly.")}
                   </p>
                 </div>
               )}
 
               {tab === "textMedia" && (
                 <div>
-                  <SettingsSection title="Links" description="How links appear in conversations.">
+                  <SettingsSection title={t("Links")} description={t("How links appear in conversations.")}>
                   <SettingRow
-                    label="Link previews"
-                    description="Show rich embeds with title, description, and image for URLs in messages."
+                    label={t("Link previews")}
+                    description={t("Show rich embeds with title, description, and image for URLs in messages.")}
                   >
                     <Toggle
                       checked={linkPreviews}
@@ -2424,7 +2422,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         setLinkPreviews(next);
                         void savePreference({ link_previews_enabled: next });
                       }}
-                      label="Link previews"
+                      label={t("Link previews")}
                     />
                   </SettingRow>
                   </SettingsSection>
@@ -2441,15 +2439,15 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
 
       <ConfirmDialog
         open={billingDialog !== null}
-        title={billingDialog === "resume" ? "Resume subscription?" : "Cancel subscription?"}
+        title={billingDialog === "resume" ? t("Resume subscription?") : t("Cancel subscription?")}
         tone={billingDialog === "resume" ? "primary" : "danger"}
-        confirmLabel={billingDialog === "resume" ? "Resume" : "Cancel subscription"}
+        confirmLabel={billingDialog === "resume" ? t("Resume") : t("Cancel subscription")}
         body={
           <div className="space-y-2">
             <p>
               {billingDialog === "resume"
-                ? `Renewal will restart. Your plan will continue after ${billingPeriodEndLabel}.`
-                : `You'll keep your plan until ${billingPeriodEndLabel}. Renewal stops after that, and payments already made are non-refundable.`}
+                ? t("Renewal will restart. Your plan will continue after {billingPeriodEndLabel}.", { billingPeriodEndLabel })
+                : t("You'll keep your plan until {billingPeriodEndLabel}. Renewal stops after that, and payments already made are non-refundable.", { billingPeriodEndLabel })}
             </p>
             {billingError && <p className="text-status-dnd">{billingError}</p>}
           </div>
@@ -2485,12 +2483,12 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
       <ClassicModal
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}
-        title="Delete Account"
+        title={t("Delete Account")}
         centered={false}
         footer={
           <>
             <button type="button" onClick={() => setDeleteOpen(false)} className={`${classicBtn.link} ${classicBtn.md}`}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button
               type="button"
@@ -2505,7 +2503,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                   if (res.instant) {
                     await signOut();
                   } else {
-                    setDeleteSuccess("Deletion scheduled. Log in within 24 hours to cancel.");
+                    setDeleteSuccess(t("Deletion scheduled. Log in within 24 hours to cancel."));
                   }
                 } finally {
                   setDeletingAccount(false);
@@ -2513,14 +2511,14 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               }}
               className={`${classicBtn.danger} ${classicBtn.md}`}
             >
-              {deletingAccount ? "Deleting…" : "Delete Account"}
+              {deletingAccount ? t("Deleting…") : t("Delete Account")}
             </button>
           </>
         }
       >
         <div className="rounded-[3px] bg-[#f0b232] p-2.5 text-[14px] leading-[18px] text-white">
           {isAnonymous
-            ? "Your profile and all data are removed immediately. This can't be undone."
+            ? t("Your profile and all data are removed immediately. This can't be undone.")
             : "Your username, avatar, banner and bio are anonymised. You can cancel within 24 hours by logging back in; after 14 days the account is purged for good."}
         </div>
         {deleteError && <p className="mt-3 text-[14px] text-status-dnd">{deleteError}</p>}

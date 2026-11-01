@@ -489,7 +489,7 @@ export function ChatInput({
               id: tetherProfile?.id ?? "tether",
               kind: "member" as const,
               label: tetherProfile?.display_name ?? "Tether",
-              sublabel: "@tether",
+              sublabel: t("@tether"),
               insert: "@tether",
               profile: tetherProfile ?? undefined,
             },
@@ -548,11 +548,11 @@ export function ChatInput({
     const maxMb = Math.round(maxUploadBytes / (1024 * 1024));
     for (const file of Array.from(files)) {
       if (file.size > maxUploadBytes) {
-        setError(`${file.name} is too large (max ${maxMb} MB).`);
+        setError(t("{name} is too large (max {maxMb} MB).", { name: file.name, maxMb }));
         continue;
       }
       if (file.size === 0) {
-        setError(`${file.name} is empty.`);
+        setError(t("{name} is empty.", { name: file.name }));
         continue;
       }
       add(file);
@@ -981,7 +981,7 @@ export function ChatInput({
                       ) : (
                         <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center text-[18px] font-medium text-header-secondary">@</span>
                       )}
-                      <span className="min-w-0 truncate text-[16px] font-medium text-header-primary">{item.id === "everyone" ? "@everyone" : item.label}</span>
+                      <span className="min-w-0 truncate text-[16px] font-medium text-header-primary">{item.id === "everyone" ? t("@everyone") : item.label}</span>
                       {item.sublabel && (
                         <span className="ml-auto shrink-0 truncate pl-3 text-[14px] text-header-secondary">
                           {item.sublabel.startsWith("@") ? item.sublabel.slice(1) : item.sublabel}

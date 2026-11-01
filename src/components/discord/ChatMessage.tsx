@@ -42,6 +42,7 @@ import { Twemoji } from "@/components/ui/Twemoji";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { MessageReaction, ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
+import { useI18n } from "@/contexts/I18nContext";
 
 export interface ChatMessageData {
   id: string;
@@ -459,6 +460,7 @@ function ReplyQuote({
   reply: ReplyPreview;
   onJump?: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const label = reply.author ? displayName(reply.author as Profile) : "Unknown";
   // The spine curls from the avatar column up into the quoted line.
   const spine = (
@@ -470,10 +472,10 @@ function ReplyQuote({
   // real delete nulls reply_to_id in the database.
   if (reply.pending) {
     return (
-      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Loading original message">
+      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label={t("Loading original message")}>
         {spine}
         <span className="h-4 w-4 shrink-0 rounded-full bg-button-secondary" />
-        <span className="truncate italic text-text-muted">Original message</span>
+        <span className="truncate italic text-text-muted">{t("Original message")}</span>
       </div>
     );
   }
@@ -482,10 +484,10 @@ function ReplyQuote({
   // ordinary outside-the-window case renders the fetched quote instead.
   if (reply.deleted) {
     return (
-      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message unavailable">
+      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label={t("Original message unavailable")}>
         {spine}
         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
-        <span className="truncate italic text-text-muted">Original message unavailable</span>
+        <span className="truncate italic text-text-muted">{t("Original message unavailable")}</span>
       </div>
     );
   }
@@ -539,6 +541,7 @@ function ChatMessageImpl({
   customEmoji,
   roles,
 }: ChatMessageProps & { members?: Profile[] }) {
+  const { t } = useI18n();
   const author = message.author;
   const webhook = message.webhook ?? null;
   // Webhooks post as a backing bot profile. Show the webhook's own name and
@@ -651,9 +654,9 @@ function ChatMessageImpl({
   ) : message.reply_to ? (
     <ReplyQuote reply={message.reply_to} onJump={onJumpToReply} />
   ) : message.reply_to_deleted ? (
-    <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message was deleted">
+    <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label={t("Original message was deleted")}>
       <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
-      <span className="truncate italic text-text-muted">Original message was deleted</span>
+      <span className="truncate italic text-text-muted">{t("Original message was deleted")}</span>
     </div>
   ) : null;
 
@@ -677,7 +680,7 @@ function ChatMessageImpl({
   ) : null;
 
   const editedTag = message.edited_at ? (
-    <span className="ml-1 select-none text-[10px] leading-none text-text-muted" title={new Date(message.edited_at).toLocaleString()}>(edited)</span>
+    <span className="ml-1 select-none text-[10px] leading-none text-text-muted" title={new Date(message.edited_at).toLocaleString()}>{t("(edited)")}</span>
   ) : null;
 
   const highlightClass = highlight ? "!bg-brand/10 shadow-[inset_2px_0_0_0_var(--brand)]" : "";
@@ -743,7 +746,7 @@ function ChatMessageImpl({
             <span className="text-[15px] font-semibold text-text-normal">Disband</span>
             <IconVerified size={15} className="shrink-0 text-sky-400" />
             <span className="rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand">
-              Official
+              {t("Official")}
             </span>
             <time className="ml-auto shrink-0 text-xs text-text-muted">
               {formatMessageTime(message.created_at).split(" at ").pop()}
@@ -825,7 +828,7 @@ function ChatMessageImpl({
           type="button"
           onClick={openAuthor}
           onContextMenu={authorContextMenu}
-          aria-label={`Open ${displayName(shownAuthor ?? {})}'s profile`}
+          aria-label={t("Open {name}'s profile", { name: displayName(shownAuthor ?? {}) })}
           className={`absolute left-4 ${avatarTop} mt-0.5 rounded-full transition-transform active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
         >
           <Avatar profile={shownAuthor ?? { display_name: "?" }} size="md" />

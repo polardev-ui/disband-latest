@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { CURRENCY } from "@/lib/currency";
 import { SpookyBanner } from "./SpookyBanner";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  What's new in this version, once per person per version.
@@ -46,6 +47,7 @@ const SECTIONS: { heading: string; colour: string; items: [string, string][] }[]
 ];
 
 export function WhatsNewModal() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -68,9 +70,9 @@ export function WhatsNewModal() {
       width={480}
       centered={false}
       banner={<SpookyBanner />}
-      title="What's new"
-      subtitle={`Version ${WHATS_NEW_VERSION} · Spooky season`}
-      footer={<button type="button" onClick={close} className={`${classicBtn.brand} ${classicBtn.md}`}>Got it</button>}
+      title={t("What's new")}
+      subtitle={t("Version {WHATS_NEW_VERSION} · Spooky season", { WHATS_NEW_VERSION })}
+      footer={<button type="button" onClick={close} className={`${classicBtn.brand} ${classicBtn.md}`}>{t("Got it")}</button>}
     >
       <div className="channel-scroll -mx-4 max-h-[42vh] overflow-y-auto px-4">
         {SECTIONS.map((section) => (

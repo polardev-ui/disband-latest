@@ -509,7 +509,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                   {managing && (
                     <button
                       type="button"
-                      aria-label={`Remove ${display}`}
+                      aria-label={t("Remove {display}", { display })}
                       title={t("Remove this account")}
                       onClick={() => removeSavedAccount(acct.user_id)}
                       className="shrink-0 rounded-full p-1 text-status-dnd transition-colors hover:bg-status-dnd/15"

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { SettingsSection } from "./SettingsPrimitives";
+import { useI18n } from "@/contexts/I18nContext";
 
 type Tier = "good" | "strike" | "at_risk" | "high_risk" | "suspended";
 
@@ -31,6 +32,7 @@ const RESTRICTION_LABELS: Record<string, string> = {
 
 /** Account Standing: where you are, why, and what each tier means. */
 export function StandingPanel() {
+  const { t } = useI18n();
   const [standing, setStanding] = useState<Standing | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -41,7 +43,7 @@ export function StandingPanel() {
     });
   }, []);
 
-  if (failed) return <p className="text-[14px] text-text-muted">Account standing isn&apos;t available right now.</p>;
+  if (failed) return <p className="text-[14px] text-text-muted">{t("Account standing isn’t available right now.")}</p>;
   if (!standing) return <div className="h-40 animate-pulse rounded-lg bg-bg-secondary" />;
 
   const index = TIERS.findIndex((t) => t.id === standing.tier);
@@ -50,27 +52,27 @@ export function StandingPanel() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl bg-bg-secondary p-6">
-        <p className="text-[12px] font-bold uppercase tracking-[0.06em] text-text-muted">Your account standing</p>
-        <p className="mt-1 text-[28px] font-extrabold" style={{ color: tier.colour }}>{tier.label}</p>
+        <p className="text-[12px] font-bold uppercase tracking-[0.06em] text-text-muted">{t("Your account standing")}</p>
+        <p className="mt-1 text-[28px] font-extrabold" style={{ color: tier.colour }}>{t(tier.label)}</p>
         <p className="mt-1 max-w-lg text-[14px] text-text-normal">{tier.meaning}</p>
-        <div className="mt-5 grid grid-cols-5 gap-1.5" role="img" aria-label={`Standing ${index + 1} of 5: ${tier.label}`}>
-          {TIERS.map((t, i) => (
-            <div key={t.id}>
-              <div className="h-2.5 rounded-full transition-colors" style={{ background: i <= index ? t.colour : "var(--color-bg-tertiary, #1e1f22)" }} />
-              <p className={`mt-1.5 text-center text-[11px] ${i === index ? "font-bold text-header-primary" : "text-text-muted"}`}>{t.label}</p>
+        <div className="mt-5 grid grid-cols-5 gap-1.5" role="img" aria-label={t("Standing {value} of 5: {label}", { value: index + 1, label: tier.label })}>
+          {TIERS.map((tier, i) => (
+            <div key={tier.id}>
+              <div className="h-2.5 rounded-full transition-colors" style={{ background: i <= index ? tier.colour : "var(--color-bg-tertiary, #1e1f22)" }} />
+              <p className={`mt-1.5 text-center text-[11px] ${i === index ? "font-bold text-header-primary" : "text-text-muted"}`}>{t(tier.label)}</p>
             </div>
           ))}
         </div>
       </div>
 
       {standing.restrictions.length > 0 && (
-        <SettingsSection title="Active limits" description="What you can't do right now, and until when.">
+        <SettingsSection title={t("Active limits")} description={t("What you can't do right now, and until when.")}>
           <ul className="divide-y divide-divider">
             {standing.restrictions.map((r) => (
               <li key={r.restriction} className="px-5 py-3">
                 <p className="font-semibold text-status-dnd">{RESTRICTION_LABELS[r.restriction] ?? r.restriction}</p>
                 <p className="text-[13px] text-text-muted">
-                  {r.reason ?? "No reason given."} · {r.expires_at ? `Until ${new Date(r.expires_at).toLocaleString()}` : "No end date"}
+                  {r.reason ?? t("No reason given.")} · {r.expires_at ? t("Until {value}", { value: new Date(r.expires_at).toLocaleString() }) : t("No end date")}
                 </p>
               </li>
             ))}
@@ -78,9 +80,9 @@ export function StandingPanel() {
         </SettingsSection>
       )}
 
-      <SettingsSection title="Strikes" description="Strikes expire. Your standing improves as they do.">
+      <SettingsSection title={t("Strikes")} description={t("Strikes expire. Your standing improves as they do.")}>
         {standing.strikes.length === 0 ? (
-          <p className="px-5 py-4 text-[14px] text-text-muted">No strikes. Keep it up.</p>
+          <p className="px-5 py-4 text-[14px] text-text-muted">{t("No strikes. Keep it up.")}</p>
         ) : (
           <ul className="divide-y divide-divider">
             {standing.strikes.map((s) => (
@@ -91,8 +93,8 @@ export function StandingPanel() {
                 <div className="min-w-0">
                   <p className="text-[15px] text-text-normal">{s.reason}</p>
                   <p className="text-[12px] text-text-muted">
-                    {s.source === "sentinel" ? "Found by Sentinel" : "Issued by Disband staff"} · {new Date(s.created_at).toLocaleDateString()}
-                    {s.active ? (s.expires_at ? ` · expires ${new Date(s.expires_at).toLocaleDateString()}` : "") : " · expired"}
+                    {s.source === "sentinel" ? t("Found by Sentinel") : t("Issued by Disband staff")} · {new Date(s.created_at).toLocaleDateString()}
+                    {s.active ? (s.expires_at ? t(" · expires {value}", { value: new Date(s.expires_at).toLocaleDateString() }) : "") : " · expired"}
                   </p>
                 </div>
               </li>
@@ -101,14 +103,14 @@ export function StandingPanel() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="How standing works">
+      <SettingsSection title={t("How standing works")}>
         <ul className="divide-y divide-divider">
-          {TIERS.map((t) => (
-            <li key={t.id} className="flex gap-3 px-5 py-3">
-              <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.colour }} />
+          {TIERS.map((tier) => (
+            <li key={tier.id} className="flex gap-3 px-5 py-3">
+              <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tier.colour }} />
               <div>
-                <p className="font-semibold text-header-primary">{t.label}</p>
-                <p className="text-[13px] text-text-muted">{t.meaning}</p>
+                <p className="font-semibold text-header-primary">{t(tier.label)}</p>
+                <p className="text-[13px] text-text-muted">{tier.meaning}</p>
               </div>
             </li>
           ))}

@@ -6,6 +6,7 @@ import { GifFavStar } from "./GifFavStar";
 import { ImageLightbox } from "./ImageLightbox";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { VideoPlayer } from "./VideoPlayer";
+import { useI18n } from "@/contexts/I18nContext";
 
 // Re-exported so chat code keeps one import site; the logic lives in a pure
 // module (src/lib/link-kind.ts) so it can be tested without React.
@@ -26,6 +27,7 @@ function hostnameOf(url: string): string {
  * message with nothing where its link used to be.
  */
 export function GifLinkEmbed({ url, onLoad }: { url: string; onLoad?: () => void }) {
+  const { t } = useI18n();
   const [hover, setHover] = useState(false);
   const [failed, setFailed] = useState(false);
   const [lightbox, setLightbox] = useState(false);
@@ -42,7 +44,7 @@ export function GifLinkEmbed({ url, onLoad }: { url: string; onLoad?: () => void
         type="button"
         onClick={() => setLightbox(true)}
         className="block w-full cursor-zoom-in bg-bg-secondary text-left"
-        title="Open GIF"
+        title={t("Open GIF")}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -77,6 +79,7 @@ export function LinkedMedia({ url, kind, onLoad }: {
   kind: "video" | "image";
   onLoad?: () => void;
 }) {
+  const { t } = useI18n();
   const [failed, setFailed] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const src = safeImageUrl(url);
@@ -98,7 +101,7 @@ export function LinkedMedia({ url, kind, onLoad }: {
         type="button"
         onClick={() => setLightbox(true)}
         className="block w-full cursor-zoom-in text-left"
-        title="Open image"
+        title={t("Open image")}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

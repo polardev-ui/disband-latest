@@ -3,6 +3,7 @@
 import { Children, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function CallTile({
   profile, label, stream, kind = "camera", speaking = false, muted = false,
@@ -18,6 +19,7 @@ export function CallTile({
   self?: boolean;
   onClick?: () => void;
 }) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export function CallTile({
         <span className="truncate">{label}</span>
         {kind === "screen" && (
           <span className="shrink-0 rounded-[4px] bg-status-dnd px-1 text-[10px] font-bold uppercase leading-[14px] text-white">
-            Live
+            {t("Live")}
           </span>
         )}
       </span>

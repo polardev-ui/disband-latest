@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconClose } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The classic full-screen settings layer, shared by User Settings, Space
@@ -38,6 +39,7 @@ export function SettingsLayer({
   /** Shown above the page on narrow screens, where the sidebar is hidden. */
   mobileNav?: ReactNode;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (exiting) {
       document.body.classList.remove("layer-open");
@@ -57,7 +59,7 @@ export function SettingsLayer({
       className={`settings-layer${exiting ? " settings-layer-out" : ""} fixed inset-0 z-[70] flex bg-bg-primary`}
     >
       <div className="hidden flex-[1_0_240px] justify-end bg-bg-secondary md:flex">
-        <nav aria-label={`${label} sections`} className="settings-sidebar w-[240px] overflow-y-auto py-[60px] pl-5 pr-1.5">
+        <nav aria-label={t("{label} sections", { label })} className="settings-sidebar w-[240px] overflow-y-auto py-[60px] pl-5 pr-1.5">
           {sidebar}
         </nav>
       </div>
@@ -73,7 +75,7 @@ export function SettingsLayer({
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="Close"
+                  aria-label={t("Close")}
                   className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-interactive-normal text-interactive-normal transition-colors hover:border-interactive-active hover:bg-interactive-hover hover:text-interactive-active active:translate-y-px"
                 >
                   <IconClose size={18} />

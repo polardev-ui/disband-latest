@@ -8,6 +8,7 @@ import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/li
 import { DisplayName } from "@/components/ui/DisplayName";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const STATUS_BG: Record<UserStatus, string> = {
   online: "bg-status-online",
@@ -53,6 +54,7 @@ export function ProfilePreview({
 
   onChangeBanner?: (file: File) => void;
 }) {
+  const { t } = useI18n();
   const name = displayName.trim() || username.trim() || "Your name";
   const banner = safeImageUrl(profile.banner_url);
   const pronouns = profile.pronouns?.trim();
@@ -67,7 +69,7 @@ export function ProfilePreview({
       className={`overflow-hidden rounded-lg border border-divider ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
       style={theme?.style}
     >
-      <label className="group relative block cursor-pointer" title={onChangeBanner ? "Change banner" : undefined}>
+      <label className="group relative block cursor-pointer" title={onChangeBanner ? t("Change banner") : undefined}>
         <div className="relative h-[136px] w-full overflow-hidden" style={{ background: bannerBg }}>
           {banner && (
             <>
@@ -82,7 +84,7 @@ export function ProfilePreview({
         {onChangeBanner && (
           <>
             <span className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/55 text-[13px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-              <IconUpload size={16} /> Change banner
+              <IconUpload size={16} /> {t("Change banner")}
             </span>
             <input
               type="file"
@@ -103,13 +105,13 @@ export function ProfilePreview({
           className={`relative -mt-[46px] w-fit rounded-full p-[5px] ${theme ? "" : "bg-overlay-panel"}`}
           style={theme ? { backgroundColor: theme.avatarRing } : undefined}
         >
-          <label className="group relative block cursor-pointer rounded-full" title={onChangeAvatar ? "Change avatar" : undefined}>
+          <label className="group relative block cursor-pointer rounded-full" title={onChangeAvatar ? t("Change avatar") : undefined}>
             <Avatar profile={profile} size="lg" />
             {onChangeAvatar && (
               <>
                 <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
                   <IconUpload size={16} />
-                  <span className="text-[10px] font-semibold leading-none">Change</span>
+                  <span className="text-[10px] font-semibold leading-none">{t("Change")}</span>
                 </span>
                 <input
                   type="file"
@@ -162,9 +164,9 @@ export function ProfilePreview({
         )}
 
         <div className="mt-4 border-t border-divider pt-3.5">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">About me</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">{t("About me")}</p>
           <p className={`mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed ${bio.trim() ? "" : "text-text-muted"}`}>
-            {bio.trim() || "Your bio will appear here."}
+            {bio.trim() || t("Your bio will appear here.")}
           </p>
         </div>
       </div>
@@ -190,6 +192,7 @@ export function AccentPresetGrid({
   active: { from: string; to: string } | null;
   onPick: (from: string, to: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-wrap gap-2">
       {ACCENT_PRESETS.map((p) => {
@@ -202,7 +205,7 @@ export function AccentPresetGrid({
             key={p.name}
             type="button"
             title={p.name}
-            aria-label={`${p.name} accent`}
+            aria-label={t("{name} accent", { name: p.name })}
             aria-pressed={!!selected}
             onClick={() => onPick(p.from, p.to)}
             className={`h-8 w-8 rounded-full transition-transform hover:scale-110 ${
