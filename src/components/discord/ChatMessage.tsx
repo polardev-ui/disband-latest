@@ -37,6 +37,7 @@ import { MessageAttachment } from "./MessageAttachment";
 import { AttachmentUploadCard } from "./AttachmentUploadCard";
 import { MessageReactions } from "./MessageReactions";
 import { MessageActionBar } from "./MessageActionBar";
+import { InteractionHeader, MessageComponents } from "./MessageComponents";
 import { Twemoji } from "@/components/ui/Twemoji";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { MessageReaction, ReplyPreview } from "@/lib/messages";
@@ -57,6 +58,8 @@ export interface ChatMessageData {
   reply_to?: ReplyPreview | null;
   embeds?: Embed[] | null;
   webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
+  components?: import("@/lib/bot-commands").ActionRow[] | null;
+  interaction?: import("@/lib/bot-commands").MessageInteractionInfo | null;
   edited_at?: string | null;
   created_at: string;
   mentions?: string[];
@@ -643,7 +646,9 @@ function ChatMessageImpl({
     />
   ) : null;
 
-  const replyBlock = message.reply_to ? (
+  const replyBlock = message.interaction?.type === "command" ? (
+    <InteractionHeader interaction={message.interaction} />
+  ) : message.reply_to ? (
     <ReplyQuote reply={message.reply_to} onJump={onJumpToReply} />
   ) : message.reply_to_deleted ? (
     <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message was deleted">
@@ -653,6 +658,7 @@ function ChatMessageImpl({
   ) : null;
 
   const embedBlock = (
+    <>
     <MessageEmbeds
       embeds={message.embeds}
       members={renderMembers}
@@ -662,6 +668,8 @@ function ChatMessageImpl({
       onContentResize={onContentResize}
       roles={roles}
     />
+    {!message.sending && <MessageComponents messageId={message.id} rows={message.components} />}
+    </>
   );
 
   const reactionBlock = onToggleReaction ? (
@@ -891,7 +899,7 @@ export function shouldGroupMessages(
   ) {
     return false;
   }
-  if (msg.reply_to_id) return false;
+  if (msg.reply_to_id || msg.interaction) return false;
   // Grouped rows hide the header (avatar, name, full timestamp), so anything
   // that changes how the row reads starts a new group instead.
   if (new Date(prev.created_at).toDateString() !== new Date(msg.created_at).toDateString()) return false;

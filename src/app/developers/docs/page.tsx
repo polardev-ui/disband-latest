@@ -171,6 +171,101 @@ await client.connect();`}</pre>
               </div>
             </section>
 
+            {/* Slash commands */}
+            <section id="commands">
+              <h2 className="text-xl font-bold mb-4">Slash Commands, Interactions and Buttons</h2>
+              <p className="text-sm text-text-muted mb-4">
+                Register commands once and they appear in the <code>/</code> list in every space your bot is in.
+                When someone runs one (or presses one of your bot&apos;s buttons) you receive an{" "}
+                <code>interactionCreate</code> event and answer it within 15 minutes. Answering doesn&apos;t
+                need <code>messages.write</code> or <code>messages.read</code>. Every request uses{" "}
+                <code>Authorization: Bot YOUR_TOKEN</code> against <code>https://www.disband.dev/api/v1</code>.
+              </p>
+
+              <h3 className="text-lg font-semibold mt-6 mb-2">1. Register commands</h3>
+              <p className="text-sm text-text-muted mb-2">
+                <code>PUT /commands</code> replaces all of your commands with the list you send. <code>POST /commands</code>{" "}
+                creates or updates one, <code>GET /commands</code> lists them and <code>DELETE /commands?name=weather</code>{" "}
+                removes one. Up to 100 commands with 25 options each. Names are 1–32 lowercase letters, digits,{" "}
+                <code>_</code> or <code>-</code>. Option types are <code>string</code>, <code>integer</code>,{" "}
+                <code>number</code>, <code>boolean</code>, <code>user</code> and <code>channel</code>. Required
+                options come first, and string or number options can list up to 25 <code>choices</code>.
+              </p>
+              <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                <pre className="text-sm overflow-x-auto whitespace-pre-wrap">{`curl -X PUT https://www.disband.dev/api/v1/commands \\
+  -H "Authorization: Bot $DISBAND_BOT_TOKEN" -H "Content-Type: application/json" \\
+  -d '[
+    { "name": "weather", "description": "Today\\u2019s weather",
+      "options": [
+        { "name": "city", "description": "Which city", "type": "string", "required": true },
+        { "name": "units", "description": "C or F", "type": "string",
+          "choices": [{ "name": "Celsius", "value": "c" }, { "name": "Fahrenheit", "value": "f" }] }
+      ] },
+    { "name": "poll", "description": "Start a yes/no poll" }
+  ]'`}</pre>
+              </div>
+
+              <h3 className="text-lg font-semibold mt-6 mb-2">2. Receive the interaction</h3>
+              <p className="text-sm text-text-muted mb-2">
+                It arrives through the gateway (<code>GET /gateway</code>) like any other event. <code>user</code> and{" "}
+                <code>channel</code> options arrive as IDs.
+              </p>
+              <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                <pre className="text-sm overflow-x-auto whitespace-pre-wrap">{`{ "type": "interactionCreate",
+  "payload": {
+    "id": "6f1c…", "type": "command",            // or "component" for a button
+    "server_id": "…", "channel_id": "…",
+    "user": { "id": "…", "username": "kai", "display_name": "Kai", "avatar_url": null },
+    "command": { "name": "weather", "options": { "city": "London", "units": "c" } },
+    "component": null,                            // { "custom_id", "message_id" } for a button
+    "expires_at": "2026-11-01T12:15:00Z" } }`}</pre>
+              </div>
+
+              <h3 className="text-lg font-semibold mt-6 mb-2">3. Answer it</h3>
+              <p className="text-sm text-text-muted mb-2">
+                <code>POST /interactions/&#123;id&#125;/callback</code> with <code>content</code>, <code>embeds</code> and{" "}
+                <code>components</code>. The reply shows &ldquo;Kai used /weather&rdquo; above it. You can answer up to
+                5 times (follow-ups). For a button press, send <code>&quot;update&quot;: true</code> to edit the message
+                the button is on instead, for pages, counters or disabling a button once it&apos;s used.
+              </p>
+              <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                <pre className="text-sm overflow-x-auto whitespace-pre-wrap">{`const base = "https://www.disband.dev/api/v1";
+const headers = { Authorization: \`Bot \${process.env.DISBAND_BOT_TOKEN}\`, "Content-Type": "application/json" };
+
+for (;;) {
+  const { events } = await fetch(\`\${base}/gateway\`, { headers }).then((r) => r.json());
+  for (const { type, payload: i } of events ?? []) {
+    if (type !== "interactionCreate") continue;
+    const reply = (body) =>
+      fetch(\`\${base}/interactions/\${i.id}/callback\`, { method: "POST", headers, body: JSON.stringify(body) });
+
+    if (i.command?.name === "poll") {
+      await reply({
+        content: "Do you like pizza?",
+        components: [{ type: "action_row", components: [
+          { type: "button", style: "success", label: "Yes", custom_id: "poll:yes" },
+          { type: "button", style: "danger", label: "No", custom_id: "poll:no" },
+          { type: "button", style: "link", label: "Docs", url: "https://www.disband.dev/developers/docs" },
+        ] }],
+      });
+    } else if (i.component?.custom_id?.startsWith("poll:")) {
+      await reply({ update: true, content: \`\${i.user.display_name} voted \${i.component.custom_id.slice(5)}.\`, components: [] });
+    }
+  }
+}`}</pre>
+              </div>
+
+              <h3 className="text-lg font-semibold mt-6 mb-2">Buttons</h3>
+              <p className="text-sm text-text-muted">
+                Any message your bot sends (<code>POST /channels/&#123;id&#125;/messages</code>) or any answer can carry up
+                to 5 <code>action_row</code>s of up to 5 buttons. Styles are <code>primary</code>, <code>secondary</code>,{" "}
+                <code>success</code>, <code>danger</code> and <code>link</code> (Discord&apos;s numbers 1–5 work too). A
+                link button needs an <code>https</code> <code>url</code>; every other button needs a unique{" "}
+                <code>custom_id</code> of up to 100 characters. Labels are up to 80 characters, and a button can have an
+                emoji or be <code>disabled</code>.
+              </p>
+            </section>
+
             {/* Events */}
             <section>
               <h2 className="text-xl font-bold mb-4">Events</h2>
@@ -188,6 +283,7 @@ await client.connect();`}</pre>
                       ["messageCreate", "A new message was posted."],
                       ["messageUpdate", "A message was edited."],
                       ["messageDelete", "A message was deleted."],
+                      ["interactionCreate", "Someone ran one of your slash commands or pressed one of your bot's buttons."],
                       ["error", "An error occurred."],
                     ].map(([ev, desc]) => (
                       <tr key={ev} className="border-t border-divider">

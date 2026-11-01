@@ -12,6 +12,9 @@ import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/co
 import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
 import { useMemberSearch } from "@/hooks/useMemberSearch";
 import { SlashCommandComposer } from "./SlashCommandComposer";
+import { BotCommandComposer } from "./BotCommandComposer";
+import { useSpaceBotCommands } from "@/hooks/useSpaceBotCommands";
+import type { SpaceBotCommand } from "@/lib/bot-commands";
 import { SolidGiftIcon } from "@/components/icons/SolidIcons";
 import { formatFileSize, type MessageSendOptions, type ReplyPreview } from "@/lib/messages";
 import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shortcodes";
@@ -112,6 +115,9 @@ function PreviewThumb({ entry, onRemove }: { entry: UploadEntry; onRemove: (id: 
   );
 }
 
+/** A row in the "/" list: one of Disband's own commands, or a bot's. */
+type SlashEntry = { kind: "builtin"; def: SlashCommand } | { kind: "bot"; def: SpaceBotCommand };
+
 /** The classic autocomplete popup above the composer, and its parts. */
 const AUTOCOMPLETE =
   "menu-pop absolute bottom-full left-4 right-4 z-20 mb-2 max-h-[490px] overflow-y-auto rounded-lg bg-bg-secondary pb-2 shadow-[var(--elevation-high)]";
@@ -158,6 +164,7 @@ export function ChatInput({
   spansRef.current = spans;
   const [slashIdx, setSlashIdx] = useState(0);
   const [command, setCommand] = useState<{ def: SlashCommand; initial: Record<string, string> } | null>(null);
+  const [botCommand, setBotCommand] = useState<{ def: SpaceBotCommand; initial: Record<string, string> } | null>(null);
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const { mounted: plusMounted, exiting: plusExiting } = usePresence(plusMenuOpen);
@@ -286,10 +293,17 @@ export function ChatInput({
     () => (serverId ? SLASH_COMMANDS.filter((c) => serverPermissions?.[c.permission]) : []),
     [serverId, serverPermissions],
   );
-  const slashCommands = useMemo(
-    () => (slashCtx ? allowedCommands.filter((c) => c.name.startsWith(slashCtx.query)) : []),
-    [allowedCommands, slashCtx],
-  );
+  // Bots' commands need a channel to answer in.
+  const commandChannelId = activityScope?.kind === "channel" ? activityScope.id : null;
+  const spaceBotCommands = useSpaceBotCommands(commandChannelId ? serverId : null);
+  const slashCommands = useMemo((): SlashEntry[] => {
+    if (!slashCtx) return [];
+    const q = slashCtx.query;
+    return [
+      ...allowedCommands.filter((c) => c.name.startsWith(q)).map((def) => ({ kind: "builtin" as const, def })),
+      ...spaceBotCommands.filter((c) => c.name.startsWith(q)).map((def) => ({ kind: "bot" as const, def })),
+    ].slice(0, 25);
+  }, [allowedCommands, spaceBotCommands, slashCtx]);
   const showSlash = !!slashCtx && slashCommands.length > 0;
 
   function enterCommand(def: SlashCommand, initial: Record<string, string> = {}) {
@@ -298,6 +312,26 @@ export function ChatInput({
     setError(null);
     setCommandNotice(null);
     setCommand({ def, initial });
+  }
+
+  function enterBotCommand(def: SpaceBotCommand, initial: Record<string, string> = {}) {
+    clearText();
+    setSlashIdx(0);
+    setError(null);
+    setCommandNotice(null);
+    setBotCommand({ def, initial });
+  }
+
+  function enterEntry(entry: SlashEntry) {
+    if (entry.kind === "builtin") enterCommand(entry.def);
+    else enterBotCommand(entry.def);
+  }
+
+  /** A bot command typed by name, when no built-in one has that name. */
+  function findBotCommand(name: string): SpaceBotCommand | undefined {
+    const n = name.toLowerCase();
+    if (allowedCommands.some((c) => c.name === n)) return undefined;
+    return spaceBotCommands.find((c) => c.name === n);
   }
 
   useEffect(() => {
@@ -614,6 +648,14 @@ export function ChatInput({
       enterCommand(typedDef, initial);
       return;
     }
+    const typedBot = typedCmd ? findBotCommand(typedCmd[1]) : undefined;
+    if (typedCmd && typedBot) {
+      // The rest of the line fills the first option, the way it would be typed.
+      const rest = (typedCmd[2] ?? "").trim();
+      const first = typedBot.options[0];
+      enterBotCommand(typedBot, rest && first ? { [first.name]: rest } : {});
+      return;
+    }
 
     setError(null);
     const replyToId = replyTo?.id;
@@ -721,7 +763,7 @@ export function ChatInput({
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        enterCommand(slashCommands[slashIdx] ?? slashCommands[0]);
+        enterEntry(slashCommands[slashIdx] ?? slashCommands[0]);
         return;
       }
     }
@@ -800,7 +842,7 @@ export function ChatInput({
           document.body,
         )}
 
-      {commandNotice && !command && (
+      {commandNotice && !command && !botCommand && (
         <div role="status" className="view-enter mb-2 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">
           <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-online text-[10px] font-bold text-white">✓</span>
           <span className="min-w-0 flex-1">{commandNotice}</span>
@@ -811,24 +853,30 @@ export function ChatInput({
       {showSlash && (
         <div role="listbox" aria-label="Commands" className={AUTOCOMPLETE}>
           <p className={AUTOCOMPLETE_HEADER}>Commands</p>
-          {slashCommands.map((c, i) => (
+          {slashCommands.map((entry, i) => {
+            const c = entry.def;
+            return (
             <button
-              key={c.name}
+              key={entry.kind === "bot" ? `${entry.def.bot_id}:${c.name}` : c.name}
               type="button"
               role="option"
               aria-selected={slashIdx === i}
               onMouseEnter={() => setSlashIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
-                enterCommand(c);
+                enterEntry(entry);
               }}
               className={`${AUTOCOMPLETE_ROW} h-auto py-2 ${slashIdx === i ? "bg-interactive-hover" : ""}`}
             >
-              <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M15.5 3 8.5 21" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-              </span>
+              {entry.kind === "bot" ? (
+                <Avatar profile={{ display_name: entry.def.bot_name, avatar_url: entry.def.bot_avatar_url }} size="sm" className="!h-8 !w-8 shrink-0" />
+              ) : (
+                <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M15.5 3 8.5 21" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                </span>
+              )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] leading-5">
                   <span className="font-semibold text-header-primary">/{c.name}</span>
@@ -838,9 +886,12 @@ export function ChatInput({
                 </span>
                 <span className="block truncate text-[14px] leading-[18px] text-header-secondary">{c.description}</span>
               </span>
-              <span className="shrink-0 text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">Disband</span>
+              <span className="max-w-[140px] shrink-0 truncate text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">
+                {entry.kind === "bot" ? entry.def.bot_name : "Disband"}
+              </span>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -948,7 +999,33 @@ export function ChatInput({
         </div>
       )}
 
-      {command ? (
+      {botCommand && commandChannelId ? (
+        <BotCommandComposer
+          key={`${botCommand.def.bot_id}:${botCommand.def.name}`}
+          command={botCommand.def}
+          initial={botCommand.initial}
+          members={members}
+          channels={channels}
+          serverId={serverId}
+          channelId={commandChannelId}
+          onExit={(restore) => {
+            setBotCommand(null);
+            setText(restore);
+            setSpans([]);
+            requestAnimationFrame(() => {
+              const el = textareaRef.current;
+              if (!el) return;
+              el.focus();
+              el.setSelectionRange(restore.length, restore.length);
+            });
+          }}
+          onDone={(message) => {
+            setBotCommand(null);
+            setCommandNotice(message);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
+        />
+      ) : command ? (
         <SlashCommandComposer
           key={command.def.name}
           command={command.def}
@@ -1145,6 +1222,11 @@ export function ChatInput({
               const def = typed ? allowedCommands.find((c) => c.name === typed[1].toLowerCase()) : undefined;
               if (def) {
                 enterCommand(def);
+                return;
+              }
+              const botDef = typed ? findBotCommand(typed[1]) : undefined;
+              if (botDef) {
+                enterBotCommand(botDef);
                 return;
               }
               const token = getCompletedEmojiToken(next, selStart);

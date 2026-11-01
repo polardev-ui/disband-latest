@@ -1,4 +1,5 @@
 import type { Embed, MessageWebhookInfo } from "@/lib/embeds";
+import type { ActionRow, MessageInteractionInfo } from "@/lib/bot-commands";
 
 export type ThemePreference = "light" | "dark" | "midnight" | "sunset" | string;
 export type UserStatus = "online" | "idle" | "dnd" | "offline";
@@ -251,6 +252,10 @@ export interface DbMessage {
   embeds?: Embed[] | null;
   /** Present when the message was posted by a webhook. */
   webhook?: MessageWebhookInfo | null;
+  /** Rows of buttons on a bot's message. */
+  components?: ActionRow[] | null;
+  /** Set on a bot's answer to a slash command or button press. */
+  interaction?: MessageInteractionInfo | null;
   created_at: string;
   edited_at: string | null;
   display_id: number;
