@@ -18,8 +18,10 @@ const csp = [
 ].join("; ");
 
 // The ad page loads AppLixir's player, which pulls ad scripts from whichever
-// network fills the slot, so its scripts can come from any https origin.
-const adCsp = csp.replace("script-src 'self'", "script-src 'self' https:");
+// network fills the slot, so its scripts and styles can come from any https origin.
+const adCsp = csp
+  .replace("script-src 'self'", "script-src 'self' https:")
+  .replace("style-src 'self'", "style-src 'self' https:");
 
 const ALLOWED_ORIGINS = new Set([
   "tauri://localhost",
