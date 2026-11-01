@@ -6,6 +6,9 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
 import { CURRENCY, EARN_RULES, LEDGER_LABELS, REWARDS, AD_DAILY_CAP, AD_REWARD, formatCurrency } from "@/lib/currency";
 import { decorationItems } from "@/lib/shop";
+import { isTauri } from "@/lib/platform";
+import { PUBLIC_ENV } from "@/lib/public-env";
+import { safeWindowOpen } from "@/lib/safe-url";
 import { confirmDialog } from "@/lib/dialogs";
 import { SettingsSection } from "./SettingsPrimitives";
 import { btn } from "@/components/modals/server-settings/ui";
@@ -158,7 +161,14 @@ export function CurrencyPanel() {
       <SettingsSection title="Watch an ad" description={`Video ads you choose to watch. Each one you finish pays ${AD_REWARD}, up to ${AD_DAILY_CAP} a day.`}>
         <div className="px-5 py-4">
           {adsReady ? (
-            <a href="/rewards/ad" className={btn.primary}>Watch an ad</a>
+            isTauri() ? (
+              // Ad networks' scripts never run inside the desktop app; the ad plays in the browser.
+              <button type="button" onClick={() => safeWindowOpen(`${PUBLIC_ENV.webAppUrl.replace(/\/$/, "")}/rewards/ad`)} className={btn.primary}>
+                Watch an ad in your browser
+              </button>
+            ) : (
+              <a href="/rewards/ad" className={btn.primary}>Watch an ad</a>
+            )
           ) : (
             <p className="text-[14px] text-text-muted">{adsReady === null ? "Checking for ads…" : "Video ads are coming soon."}</p>
           )}

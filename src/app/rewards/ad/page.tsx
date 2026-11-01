@@ -47,6 +47,7 @@ export default function RewardedAdPage() {
     try {
       const res = await apiFetch("/api/rewards/ad/start", { method: "POST" });
       const json = (await res.json()) as { viewId?: string; apiKey?: string; error?: string };
+      if (res.status === 401) throw new Error("Sign in to Disband in this browser first, then come back to this page.");
       if (!res.ok || !json.viewId || !json.apiKey) throw new Error(json.error ?? "No ad is available right now.");
       await loadSdk();
       window.initializeAndOpenPlayer!({
