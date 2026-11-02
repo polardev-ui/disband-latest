@@ -18,6 +18,7 @@ import { AgePrompt } from "@/components/AgePrompt";
 import { CookieConsent } from "@/components/CookieConsent";
 import { TosConsentPopup } from "@/components/TosConsentPopup";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { AppSkeleton } from "@/components/ui/AppSkeleton";
 import { ConnectionScreen } from "@/components/ConnectionScreen";
 import { useEffect, useRef } from "react";
 import { alertDialog } from "@/lib/dialogs";
@@ -79,7 +80,8 @@ function AppShell() {
   if (mfaRequired) return <MfaChallengeScreen />;
   if (platformBan?.banned) return <PlatformBanScreen />;
 
-  if (!hydrated) return <LoadingScreen />;
+  // Signed in: show the app's shape while spaces and messages load.
+  if (!hydrated) return <AppSkeleton />;
 
   return (
     <>

@@ -745,6 +745,78 @@ img.twemoji {
   }
 }
 
+/* App loading skeleton: the gradient is pinned to the viewport, so every
+   block shows a slice of the same band and it reads as one wave of light
+   crossing the whole screen instead of each bar shimmering on its own. */
+@keyframes skeleton-sweep {
+  0% {
+    background-position: 150vw 0;
+  }
+  100% {
+    background-position: -50vw 0;
+  }
+}
+
+.skeleton-sweep {
+  background-color: var(--color-bg-accent);
+  background-image: linear-gradient(
+    105deg,
+    transparent 40%,
+    color-mix(in srgb, var(--color-interactive-hover) 70%, transparent) 50%,
+    transparent 60%
+  );
+  background-size: 100vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: skeleton-sweep 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* The rail sits on the darkest surface, where bg-accent can vanish; match
+   the idle server icons instead. */
+.skeleton-sweep.skeleton-rail {
+  background-color: var(--bg-primary);
+}
+
+@keyframes skeleton-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.skeleton-rise {
+  opacity: 0;
+  animation: skeleton-rise 0.4s ease-out forwards;
+}
+
+@keyframes skeleton-logo {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.88);
+  }
+}
+
+.skeleton-logo {
+  animation: skeleton-logo 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-sweep,
+  .skeleton-logo {
+    animation: none;
+  }
+  .skeleton-rise {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* Now-listening marquee: hold at the start, slide left to reveal the rest,
    hold at the end, slide back, hold 3s at the start, loop. Distance and
    duration come from `--marquee-dist` / `animation-duration` set inline by
