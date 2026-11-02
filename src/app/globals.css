@@ -793,6 +793,155 @@ img.twemoji {
   animation: skeleton-rise 0.4s ease-out forwards;
 }
 
+/* Checkout ------------------------------------------------------------- */
+
+/* Sections settle in one after another once Stripe's fields are ready. */
+.checkout-rise {
+  opacity: 0;
+  animation: skeleton-rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Small pieces that appear on their own (applied coupon, error banner). */
+@keyframes checkout-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.checkout-pop {
+  animation: checkout-pop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Height animation without measuring: a one-row grid going 0fr -> 1fr. */
+.checkout-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, margin 0.3s ease;
+}
+.checkout-collapse > * {
+  overflow: hidden;
+}
+.checkout-collapse-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* A declined card nudges the whole form sideways. */
+@keyframes checkout-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
+}
+.checkout-shake {
+  animation: checkout-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* Pay button: idle, processing (a light band sweeps across) and success
+   (turns green and the tick draws itself). The three labels are stacked and
+   swapped with a slide, so the button never changes size. */
+.checkout-pay {
+  background: var(--brand);
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--brand) 80%, transparent);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease, opacity 0.2s ease;
+}
+.checkout-pay[data-state="idle"]:not(:disabled):hover {
+  background: var(--brand-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--brand) 85%, transparent);
+}
+.checkout-pay[data-state="idle"]:not(:disabled):active {
+  transform: translateY(0) scale(0.99);
+}
+.checkout-pay:disabled[data-state="idle"] {
+  opacity: 0.5;
+  box-shadow: none;
+}
+.checkout-pay[data-state="processing"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: checkout-pay-sweep 1.2s linear infinite;
+}
+@keyframes checkout-pay-sweep {
+  from { background-position: 150% 0; }
+  to { background-position: -100% 0; }
+}
+.checkout-pay[data-state="success"] {
+  background: var(--status-online);
+  box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--status-online) 85%, transparent);
+}
+.checkout-pay-label,
+.checkout-pay-busy,
+.checkout-pay-done {
+  transition: opacity 0.22s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.checkout-pay-busy,
+.checkout-pay-done {
+  opacity: 0;
+  transform: translateY(70%);
+}
+.checkout-pay[data-state="processing"] .checkout-pay-label,
+.checkout-pay[data-state="success"] .checkout-pay-label,
+.checkout-pay[data-state="success"] .checkout-pay-busy {
+  opacity: 0;
+  transform: translateY(-70%);
+}
+.checkout-pay[data-state="processing"] .checkout-pay-busy,
+.checkout-pay[data-state="success"] .checkout-pay-done {
+  opacity: 1;
+  transform: none;
+}
+
+/* Ticks draw themselves. */
+.checkout-check-path {
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+  animation: checkout-check 0.4s 0.12s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes checkout-check {
+  to { stroke-dashoffset: 0; }
+}
+
+/* A ring breaks out from the button when the payment goes through. */
+.checkout-success-ring {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-online) 55%, transparent);
+  animation: checkout-ring 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes checkout-ring {
+  to { box-shadow: 0 0 0 16px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-rise,
+  .checkout-pop,
+  .checkout-shake,
+  .checkout-success-ring,
+  .checkout-pay[data-state="processing"]::after {
+    animation: none;
+    opacity: 1;
+  }
+  .checkout-check-path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .checkout-collapse,
+  .checkout-pay,
+  .checkout-pay-label,
+  .checkout-pay-busy,
+  .checkout-pay-done {
+    transition: none;
+  }
+}
+
 @keyframes skeleton-logo {
   0%, 100% {
     transform: scale(1);
