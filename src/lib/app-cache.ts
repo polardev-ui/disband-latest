@@ -1,4 +1,5 @@
-const CACHE_PREFIX = "disband:cache:";
+import { CACHE_PREFIX, pruneCaches, setItemWithRoom } from "@/lib/local-storage";
+
 const CACHE_TTL = 5 * 60 * 1000;
 
 interface CacheEntry<T> {
@@ -15,13 +16,22 @@ function store(): Map<string, CacheEntry<unknown>> {
   return g[key] as Map<string, CacheEntry<unknown>>;
 }
 
+let pruned = false;
+
 function persist(key: string, data: unknown): void {
   try {
+    // Entries are only read back for their own key, so ones for spaces
+    // that are never opened again would sit there for good. Clear out the
+    // expired ones once a session.
+    if (!pruned) {
+      pruned = true;
+      pruneCaches(true);
+    }
     const raw = JSON.stringify(data);
     const bytes = new TextEncoder().encode(raw);
     let binary = "";
     for (const byte of bytes) binary += String.fromCharCode(byte);
-    localStorage.setItem(CACHE_PREFIX + key, btoa(binary));
+    setItemWithRoom(CACHE_PREFIX + key, btoa(binary));
   } catch {
 
   }

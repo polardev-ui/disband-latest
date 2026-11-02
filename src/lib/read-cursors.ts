@@ -1,3 +1,5 @@
+import { setItemWithRoom } from "@/lib/local-storage";
+
 export type ReadCursorScope =
   | { kind: "channel"; id: string }
   | { kind: "dm"; id: string }
@@ -23,21 +25,16 @@ export function setReadCursor(
   scope: ReadCursorScope,
   messages: { id: string; created_at: string }[],
 ) {
-  if (typeof localStorage === "undefined") return;
   const last = messages[messages.length - 1];
   if (!last) return;
-  localStorage.setItem(
+  setItemWithRoom(
     storageKey(scope),
     JSON.stringify({ at: last.created_at, messageId: last.id }),
   );
 }
 
 export function markChatReadNow(scope: ReadCursorScope) {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(
-    storageKey(scope),
-    JSON.stringify({ at: new Date().toISOString() }),
-  );
+  setItemWithRoom(storageKey(scope), JSON.stringify({ at: new Date().toISOString() }));
 }
 
 export function findNewMessagesDividerId(
