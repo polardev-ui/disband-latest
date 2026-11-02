@@ -43,6 +43,12 @@ export function listeningFor(
   if (!stale) return null;
   const started = Date.parse(stale.started_at);
   if (Number.isFinite(started) && now - started > 6 * 60 * 60 * 1000) return null;
+  // The row is only rewritten while one of their apps is polling, and the
+  // phone apps stop when they go to the background without clearing it (that
+  // would wipe what their desktop app wrote). A track whose length has run
+  // out, plus slack for a pause, is over.
+  const duration = stale.duration_ms ?? 0;
+  if (Number.isFinite(started) && duration > 0 && now - started > duration + 90_000) return null;
   return stale;
 }
 
@@ -54,7 +60,12 @@ export function flattenPresenceListening(
   for (const key of Object.keys(state)) {
     for (const entry of state[key] ?? []) {
       if (entry && typeof entry.userId === "string") {
-        map.set(entry.userId, (entry.listening as Listening | null | undefined) ?? null);
+        // Someone can be online in several places, and only some of them
+        // know what's playing (the phone apps don't see desktop games, an
+        // older build sends no listening at all). A session that is playing
+        // wins over one that says nothing, whichever was listed last.
+        const value = (entry.listening as Listening | null | undefined) ?? null;
+        if (value || !map.has(entry.userId)) map.set(entry.userId, value);
       }
     }
   }

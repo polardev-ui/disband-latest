@@ -161,7 +161,10 @@ export function flattenPresenceActivity(
   for (const key of Object.keys(state)) {
     for (const entry of state[key] ?? []) {
       if (entry && typeof entry.userId === "string") {
-        map.set(entry.userId, (entry.activity as Activity | null | undefined) ?? null);
+        // A session that is playing wins over one that isn't (a phone can't
+        // see the game running on the same person's desktop).
+        const value = (entry.activity as Activity | null | undefined) ?? null;
+        if (value || !map.has(entry.userId)) map.set(entry.userId, value);
       }
     }
   }
