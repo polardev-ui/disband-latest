@@ -63,6 +63,8 @@ interface Row {
  */
 const spaceCache = new Map<string, { total: number | null; onlineById: Map<string, WindowMember> }>();
 const SPACE_CACHE_LIMIT = 12;
+/** How often the offline section re-reads who to leave out. */
+const OFFLINE_REFRESH_MS = 15_000;
 
 function toMember(r: Row): WindowMember | null {
   if (!r.profile) return null;
@@ -291,8 +293,36 @@ export function useMemberWindow(
   }, [resolvedOnlineIds, settledOnline]);
 
   // The offline pages exclude the online ids, so a change in who's online
-  // shifts every offset: drop the cached pages and let the list ask again.
-  const excludeKey = onlineMemberIds.join(",");
+  // shifts every offset and costs every viewer a refetch. In a big space
+  // presence never stops changing, and that refetch loop was the heaviest
+  // load on the database. Take a new snapshot at most every
+  // OFFLINE_REFRESH_MS; for those seconds someone who just came online can
+  // also still be listed under Offline. A new list, or the first resolved
+  // roster, applies straight away.
+  const liveOnlineKey = onlineMemberIds.join(",");
+  const [excludeIds, setExcludeIds] = useState<string[]>(onlineMemberIds);
+  const excludeApplied = useRef<{ list: string | null; ready: boolean; at: number }>({
+    list: null,
+    ready: false,
+    at: 0,
+  });
+  useEffect(() => {
+    const last = excludeApplied.current;
+    const apply = () => {
+      excludeApplied.current = { list: listKey, ready: onlineReady, at: Date.now() };
+      setExcludeIds(onlineMemberIds);
+    };
+    const wait = last.at + OFFLINE_REFRESH_MS - Date.now();
+    if (last.list !== listKey || (onlineReady && !last.ready) || wait <= 0) {
+      apply();
+      return;
+    }
+    const t = window.setTimeout(apply, wait);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveOnlineKey, listKey, onlineReady]);
+
+  const excludeKey = excludeIds.join(",");
   useEffect(() => {
     pageGeneration.current += 1;
     setPages(new Map());
@@ -303,7 +333,7 @@ export function useMemberWindow(
   // actually members. Otherwise an online person can flash in Offline and
   // then jump into Online, which is what made the order look unstable.
   const offlineCount =
-    total === null || !onlineReady ? null : Math.max(0, total - onlineMemberIds.length);
+    total === null || !onlineReady ? null : Math.max(0, total - excludeIds.length);
 
   /**
    * Ask for the offline rows [from, to) to be loaded; drop pages far away.
@@ -316,7 +346,7 @@ export function useMemberWindow(
       const lastPage = Math.max(firstPage, Math.floor(Math.max(from, to - 1) / MEMBER_WINDOW_PAGE));
       const gen = generation.current;
       const pageGen = pageGeneration.current;
-      const exclude = onlineMemberIds;
+      const exclude = excludeIds;
 
       // Release pages well outside the window.
       setPages((prev) => {
@@ -359,7 +389,7 @@ export function useMemberWindow(
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [listKey, version, mode, offlineCount, onlineMemberIds],
+    [listKey, version, mode, offlineCount, excludeIds],
   );
 
   const offlineAt = useCallback(

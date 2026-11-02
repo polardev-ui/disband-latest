@@ -6,7 +6,14 @@ import Supabase
 enum DatabaseService {
     private static var client: SupabaseClient { SupabaseManager.client }
 
-    private static let authorEmbed = "*, author:profiles(*)"
+    /// Exactly the columns `Profile` decodes. `profiles(*)` sent every column
+    /// of the author's row with every message, about two thirds of a page.
+    static let profileColumns = "id,username,display_name,avatar_url,bio,pronouns,status_note,"
+        + "status_expires_at,status,preferred_status,banner_url,accent_color,accent_color_2,theme,"
+        + "show_owner_badge,show_staff_badge,show_og_badge,show_bounty_badge,sound_enabled,"
+        + "desktop_notifications_enabled,link_previews_enabled,created_at,is_bot,"
+        + "allow_message_requests,equipped_ring_effect"
+    private static let authorEmbed = "*, author:profiles(\(profileColumns))"
 
     // MARK: - Servers
 
