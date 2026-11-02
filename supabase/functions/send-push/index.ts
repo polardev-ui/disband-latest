@@ -146,6 +146,21 @@ async function sendFcm(
   return { status: res.status, unregistered };
 }
 
+/** The first Android version that shows a "quiet" push silently. */
+const QUIET_ANDROID = "1.9.1";
+
+/** Whether a "1.9.1"-style version is at least `min`. Unknown counts as old. */
+function atLeast(version: string | null | undefined, min: string): boolean {
+  if (!version) return false;
+  const a = version.split(/[^0-9]+/).filter(Boolean).map(Number);
+  const b = min.split(".").map(Number);
+  for (let i = 0; i < b.length; i++) {
+    const x = a[i] ?? 0;
+    if (x !== b[i]) return x > b[i];
+  }
+  return true;
+}
+
 Deno.serve(async (req) => {
   // Shared-secret check (the trigger sends this header).
   if (req.headers.get("x-webhook-secret") !== Deno.env.get("WEBHOOK_SECRET")) {
@@ -161,20 +176,18 @@ Deno.serve(async (req) => {
   const { data: iosTokens } = await supabase
     .from("device_tokens").select("token").eq("user_id", user_id).eq("platform", "ios");
   const { data: androidTokens } = await supabase
-    .from("device_tokens").select("token").eq("user_id", user_id).eq("platform", "android");
+    .from("device_tokens").select("token, app_version").eq("user_id", user_id).eq("platform", "android");
   const registered = (iosTokens?.length ?? 0) + (androidTokens?.length ?? 0);
   if (!registered) return new Response(JSON.stringify({ sent: 0, registered: 0 }), { status: 200 });
 
   // Do Not Disturb is a user-level mute, not a per-device one: a DND user
-  // must not be woken by a sound (or a banner) on any phone. The badge is
-  // still maintained by the client on its next open, so nothing is lost.
+  // must not be woken by a sound (or a banner) on any phone. It used to drop
+  // the push entirely, so anyone on DND — often without realising, since the
+  // iOS app showed them as Online — never heard about a message at all. Now
+  // it is delivered silently: in the notification list, no sound, no banner.
   const { data: recipient } = await supabase
     .from("profiles").select("status, preferred_status").eq("id", user_id).maybeSingle();
-  if (recipient?.status === "dnd" || recipient?.preferred_status === "dnd") {
-    return new Response(JSON.stringify({ sent: 0, registered, suppressed: "dnd" }), {
-      status: 200, headers: { "Content-Type": "application/json" },
-    });
-  }
+  const quiet = recipient?.status === "dnd" || recipient?.preferred_status === "dnd";
 
   let sent = 0;
 
@@ -193,7 +206,9 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({
       aps: {
         alert: { title: title ?? "Disband", body },
-        sound: "notificationpop.caf",
+        // Passive: straight to the notification list, without lighting the
+        // screen or making a sound.
+        ...(quiet ? { "interruption-level": "passive" } : { sound: "notificationpop.caf" }),
         // Omitted, not zeroed, when unknown: `badge: 0` clears the icon, so a
         // failed count would wipe a legitimate number off the user's home
         // screen.
@@ -215,7 +230,7 @@ Deno.serve(async (req) => {
           "authorization": `bearer ${jwt}`,
           "apns-topic": topic,
           "apns-push-type": "alert",
-          "apns-priority": "10",
+          "apns-priority": quiet ? "5" : "10",
         },
         body: payload,
       });
@@ -236,9 +251,13 @@ Deno.serve(async (req) => {
       body,
       link: link ?? "",
       source: source ?? "",
+      ...(quiet ? { quiet: "1" } : {}),
     };
-    for (const { token } of androidTokens ?? []) {
+    for (const { token, app_version } of androidTokens ?? []) {
       if (!cfg) continue;
+      // Older Android apps ignore "quiet" and would ring, so on DND they get
+      // nothing, as before, until they update.
+      if (quiet && !atLeast(app_version, QUIET_ANDROID)) continue;
       const { status, unregistered } = await sendFcm(cfg, token, {
         token,
         data,
@@ -251,7 +270,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ sent, registered }), {
+  return new Response(JSON.stringify({ sent, registered, ...(quiet ? { quiet: true } : {}) }), {
     status: 200, headers: { "Content-Type": "application/json" },
   });
 });
