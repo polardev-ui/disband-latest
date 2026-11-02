@@ -13,11 +13,13 @@ struct DisbandiOSApp: App {
     @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
     @State private var voice: VoiceSession
+    @State private var music = MusicPresenceService()
     @State private var showReviewPrompt = false
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         CallAudioSession.prepare()
+        NameFont.registerAll()
 
         let appState = AppState()
         let presence = PresenceService()
@@ -47,6 +49,7 @@ struct DisbandiOSApp: App {
                 .environment(directMessages)
                 .environment(themeManager)
                 .environment(voice)
+                .environment(music)
                 .preferredColorScheme(themeManager.palette.colorScheme)
                 .tint(themeManager.palette.accent)
                 .task(id: appState.currentUserId) {
@@ -55,6 +58,9 @@ struct DisbandiOSApp: App {
                 .task(id: appState.currentUserId) {
                     await presence.start(userId: appState.currentUserId,
                                          status: appState.profile?.status ?? .online)
+                    // Spotify "listening to", while the app is in front.
+                    music.start(userId: scenePhase == .active ? appState.currentUserId : nil,
+                                presence: presence)
                 }
                 .onChange(of: appState.profile) { _, profile in
                     PushManager.shared.doNotDisturb =
@@ -95,7 +101,11 @@ struct DisbandiOSApp: App {
                     await refreshMentionBadge(uid)
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    // iOS suspends the app in the background anyway; stopping
+                    // first means no half-finished poll lands after it wakes.
+                    if phase == .background { music.stop() }
                     guard phase == .active, let uid = appState.currentUserId else { return }
+                    music.start(userId: uid, presence: presence)
                     Task { await refreshMentionBadge(uid) }
                     // Review prompt: recorded on every activation, shown only
                     // when every gate in ReviewPrompter passes (signed in,

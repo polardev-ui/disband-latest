@@ -139,11 +139,19 @@ struct MessageRow: View {
 
                 if !grouped {
                     HStack(spacing: 6) {
-                        Text(authorName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
-                            .lineLimit(1)
-                            .onTapGesture { tapAuthor() }
+                        Group {
+                            // Webhooks post under their own name, with no style.
+                            if message.webhook == nil, let author = message.author {
+                                StyledName(author, size: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
+                                           fallbackColor: isOwn ? Brand.accent : Brand.textPrimary)
+                            } else {
+                                Text(authorName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
+                            }
+                        }
+                        .lineLimit(1)
+                        .onTapGesture { tapAuthor() }
                         if message.webhook == nil {
                             GuildTagView(userId: message.authorId, size: .small)
                         }

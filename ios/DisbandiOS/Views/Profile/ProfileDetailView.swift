@@ -18,6 +18,13 @@ struct ProfileDetailView: View {
     /// The DM opened from here when no presenter handles it (e.g. a profile
     /// opened from a space's chat), shown inside this sheet's stack.
     @State private var openedDm: ChatSource?
+    /// The whole profile row. Whoever opened this sheet usually holds a
+    /// trimmed copy (a chat author has no music or game fields), so the full
+    /// one is fetched, and refreshed while the sheet is open so a track
+    /// change shows up.
+    @State private var full: Profile?
+
+    private var shown: Profile { full ?? profile }
 
     private var isSelf: Bool { profile.id == app.currentUserId }
 
@@ -37,6 +44,12 @@ struct ProfileDetailView: View {
                     banner
                     VStack(alignment: .leading, spacing: 16) {
                         header
+                        if let activity = shown.activity, activity.isLive() {
+                            GameActivityCard(activity: activity)
+                        }
+                        if let listening = shown.listening, listening.isCurrent() {
+                            ListeningCard(listening: listening)
+                        }
                         if let bio = profile.bio, !bio.isEmpty {
                             section("About Me", body: bio)
                         }
@@ -61,6 +74,12 @@ struct ProfileDetailView: View {
         }
         .presentationDetents([.large])
         .task { await loadRelation() }
+        .task(id: profile.id) {
+            while !Task.isCancelled {
+                if let fresh = try? await DatabaseService.profile(id: profile.id) { full = fresh }
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+            }
+        }
     }
 
     private var banner: some View {
@@ -88,7 +107,7 @@ struct ProfileDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(profile.name).font(.title2.bold()).foregroundStyle(Brand.textPrimary)
+            StyledName(shown, size: 22, weight: .bold)
             HStack(spacing: 6) {
                 Text("@\(profile.handle)")
                 if let pronouns = profile.pronouns, !pronouns.isEmpty {

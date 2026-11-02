@@ -14,6 +14,8 @@ struct ConversationRow: View {
     var preview: String? = nil
     var time: String? = nil
     var unread: Int = 0
+    /// The person's name style, for one-to-one DMs.
+    var nameStyle: NameStyle? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -28,11 +30,20 @@ struct ConversationRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(name)
-                        .font(.subheadline)
-                        .fontWeight(unread > 0 ? .semibold : .regular)
-                        .foregroundStyle(unread > 0 ? Brand.textPrimary : Brand.textSecondary)
-                        .lineLimit(1)
+                    Group {
+                        if let nameStyle, nameStyle != NameStyle() {
+                            StyledName(text: name, style: nameStyle,
+                                       size: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
+                                       weight: unread > 0 ? .semibold : .regular,
+                                       fallbackColor: unread > 0 ? Brand.textPrimary : Brand.textSecondary)
+                        } else {
+                            Text(name)
+                                .font(.subheadline)
+                                .fontWeight(unread > 0 ? .semibold : .regular)
+                                .foregroundStyle(unread > 0 ? Brand.textPrimary : Brand.textSecondary)
+                        }
+                    }
+                    .lineLimit(1)
                     GuildTagView(userId: userId, size: .small)
                     Spacer(minLength: 6)
                     if let time, !time.isEmpty {

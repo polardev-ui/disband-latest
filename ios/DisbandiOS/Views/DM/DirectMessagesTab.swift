@@ -88,7 +88,8 @@ struct DirectMessagesTab: View {
                                     status: liveStatus(thread.friend),
                                     preview: DirectMessagesViewModel.preview(for: thread),
                                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
-                                    unread: unreadStore.count(for: thread.id)
+                                    unread: unreadStore.count(for: thread.id),
+                                    nameStyle: thread.friend.map { NameStyle($0) }
                                 )
                             }
                         }
@@ -134,7 +135,8 @@ struct DirectMessagesTab: View {
                                     status: liveStatus(thread.friend),
                                     preview: DirectMessagesViewModel.preview(for: thread),
                                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
-                                    unread: unreadStore.count(for: thread.id)
+                                    unread: unreadStore.count(for: thread.id),
+                                    nameStyle: thread.friend.map { NameStyle($0) }
                                 )
                             }
                             // Hold a row to close it (web parity: hover X on

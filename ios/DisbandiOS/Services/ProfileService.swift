@@ -62,6 +62,21 @@ enum ProfileService {
             .execute()
     }
 
+    /// Font for anyone; colours only for Aero, as on the web, which clears
+    /// them when someone without Aero saves.
+    static func updateNameStyle(_ style: NameStyle, aero: Bool) async throws {
+        guard let uid = currentUserId else { return }
+        let hasColor = aero && (style.color != nil || style.color2 != nil)
+        try await client.from("profiles")
+            .update(NameStyleUpdate(
+                font: style.font == .standard ? nil : style.font.rawValue,
+                color: hasColor ? (style.color ?? "#ffffff") : nil,
+                color2: aero ? style.color2 : nil,
+                direction: hasColor ? (style.direction ?? "135deg") : nil))
+            .eq("id", value: uid)
+            .execute()
+    }
+
     static func updateStatus(_ status: UserStatus) async throws {
         guard let uid = currentUserId else { return }
         try await client.from("profiles")
@@ -106,6 +121,33 @@ private struct AccentUpdate: Encodable {
     enum CodingKeys: String, CodingKey {
         case accentColor = "accent_color"
         case accentColor2 = "accent_color_2"
+    }
+    // nil has to reach the database as null: "Reset to default" sends nils,
+    // and the synthesised encoder left them out, so the old colours stayed.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(accentColor, forKey: .accentColor)
+        try c.encode(accentColor2, forKey: .accentColor2)
+    }
+}
+
+private struct NameStyleUpdate: Encodable {
+    let font: String?
+    let color: String?
+    let color2: String?
+    let direction: String?
+    enum CodingKeys: String, CodingKey {
+        case font = "name_font"
+        case color = "name_color"
+        case color2 = "name_color_2"
+        case direction = "name_gradient_dir"
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(font, forKey: .font)
+        try c.encode(color, forKey: .color)
+        try c.encode(color2, forKey: .color2)
+        try c.encode(direction, forKey: .direction)
     }
 }
 

@@ -9,15 +9,27 @@ import Supabase
 struct PresencePayload: Codable, Sendable {
     let userId: String
     let status: UserStatus
+    /// What this device says is playing, from `MusicPresenceService`. Sent as
+    /// null when nothing is, which web reads as "present, not playing".
+    var listening: Listening? = nil
 
-    init(userId: String, status: UserStatus) {
+    init(userId: String, status: UserStatus, listening: Listening? = nil) {
         self.userId = userId
         self.status = status
+        self.listening = listening
     }
 
     private enum CodingKeys: String, CodingKey {
         case userId
         case status
+        case listening
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(status, forKey: .status)
+        try container.encode(listening, forKey: .listening)
     }
 
     /// Web treats a missing status as online, and an unknown future status must
@@ -29,6 +41,7 @@ struct PresencePayload: Codable, Sendable {
         userId = try container.decode(String.self, forKey: .userId)
         let raw = try container.decodeIfPresent(String.self, forKey: .status)
         status = raw.flatMap(UserStatus.init(rawValue:)) ?? .online
+        listening = try? container.decodeIfPresent(Listening.self, forKey: .listening)
     }
 }
 
@@ -57,6 +70,7 @@ final class PresenceService {
     private var listenTask: Task<Void, Never>?
     private var ownUserId: String?
     private var ownStatus: UserStatus?
+    private var ownListening: Listening?
 
     /// Join the shared channel and publish our own status. Call on sign-in with the
     /// current user id and their existing (or default) status.
@@ -78,7 +92,7 @@ final class PresenceService {
         }
 
         await channel.subscribe()
-        try? await channel.track(PresencePayload(userId: userId, status: status))
+        try? await channel.track(PresencePayload(userId: userId, status: status, listening: ownListening))
     }
 
     /// Publish a new status for the current user (e.g. from the status picker, or a
@@ -88,7 +102,14 @@ final class PresenceService {
         guard let ownUserId else { return }
         ownStatus = status
         statuses[ownUserId] = status
-        try? await channel?.track(PresencePayload(userId: ownUserId, status: status))
+        try? await channel?.track(PresencePayload(userId: ownUserId, status: status, listening: ownListening))
+    }
+
+    /// Publish what this device's Spotify connection says is playing.
+    func updateListening(_ listening: Listening?) async {
+        ownListening = listening
+        guard let ownUserId, let ownStatus else { return }
+        try? await channel?.track(PresencePayload(userId: ownUserId, status: ownStatus, listening: listening))
     }
 
     /// How a given user is currently showing. Returns `fallback` (default `.offline`)
@@ -150,6 +171,7 @@ final class PresenceService {
         }
         presenceRefs = [:]
         ownStatus = nil
+        ownListening = nil
         statuses = [:]
     }
 }

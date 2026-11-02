@@ -12,7 +12,7 @@ enum DatabaseService {
         + "status_expires_at,status,preferred_status,banner_url,accent_color,accent_color_2,theme,"
         + "show_owner_badge,show_staff_badge,show_og_badge,show_bounty_badge,sound_enabled,"
         + "desktop_notifications_enabled,link_previews_enabled,created_at,is_bot,"
-        + "allow_message_requests,equipped_ring_effect"
+        + "allow_message_requests,equipped_ring_effect,name_font,name_color,name_color_2,name_gradient_dir"
     private static let authorEmbed = "*, author:profiles(\(profileColumns))"
 
     // MARK: - Servers

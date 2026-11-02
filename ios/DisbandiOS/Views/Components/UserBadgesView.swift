@@ -39,6 +39,9 @@ struct UserBadgesView: View {
             badges = await BadgeService.shared.badges(for: profile.id)
             entitlement = await EntitlementService.shared.entitlement(for: profile.id)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .ownBadgesChanged)) { _ in
+            Task { badges = await BadgeService.shared.badges(for: profile.id) }
+        }
         .sheet(isPresented: $showTiers) {
             if let ent = entitlement, ent.plan != "free" {
                 SubscriptionTiersSheet(plan: ent.plan, months: ent.months, since: ent.since)

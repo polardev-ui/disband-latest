@@ -78,6 +78,16 @@ struct Profile: Codable, Identifiable, Hashable {
     /// The avatar decoration they wear (a shop item id such as
     /// "ring-angelic"). Drawn by `AvatarView` from the web's exported art.
     var equippedRingEffect: String? = nil
+    /// Display-name style, as on the web (`DisplayName.tsx`): a font id from
+    /// `NameFont`, and for Aero a colour or two-colour gradient.
+    var nameFont: String? = nil
+    var nameColor: String? = nil
+    var nameColor2: String? = nil
+    var nameGradientDir: String? = nil
+    /// Live music and game presence. Only loaded where a full profile is
+    /// fetched (the profile sheet), not on every chat author.
+    var listening: Listening? = nil
+    var activity: ProfileActivity? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio, status, theme, pronouns
@@ -100,6 +110,11 @@ struct Profile: Codable, Identifiable, Hashable {
         case isBot = "is_bot"
         case allowMessageRequests = "allow_message_requests"
         case equippedRingEffect = "equipped_ring_effect"
+        case nameFont = "name_font"
+        case nameColor = "name_color"
+        case nameColor2 = "name_color_2"
+        case nameGradientDir = "name_gradient_dir"
+        case listening, activity
     }
 
     /// Display name, else username. A name made only of invisible

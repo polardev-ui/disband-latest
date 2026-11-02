@@ -7,6 +7,7 @@ import UIKit
 struct SettingsView: View {
     @Environment(AppState.self) private var app
     @Environment(SubscriptionService.self) private var subscriptions
+    @Environment(MusicPresenceService.self) private var music
     @Environment(\.openURL) private var openURL
 
     @State private var sound = true
@@ -21,6 +22,9 @@ struct SettingsView: View {
     @State private var billingBusy = false
     @State private var billingError: String?
     @State private var billingNote: String?
+    @State private var spotifyBusy = false
+    @State private var spotifyError: String?
+    @State private var confirmSpotifyDisconnect = false
 
     private enum BillingPrompt: String, Identifiable {
         case cancel, resume
@@ -122,6 +126,37 @@ struct SettingsView: View {
                                       title: "Link previews", isOn: $linkPreviews)
                 }
 
+                SectionCaption("Connections")
+                SettingsGroup {
+                    Button {
+                        if music.connected == true {
+                            confirmSpotifyDisconnect = true
+                        } else {
+                            Task {
+                                spotifyBusy = true
+                                spotifyError = await music.connect()
+                                spotifyBusy = false
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            SettingsRowLabel(symbol: "music.note", tint: Color(hex: 0x1DB954),
+                                             title: "Spotify",
+                                             detail: music.connected == true ? "Connected" : "Connect",
+                                             showsChevron: false)
+                            if spotifyBusy { ProgressView().controlSize(.small).padding(.trailing, 14) }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(spotifyBusy)
+                }
+                Text(spotifyError ?? "Shows what you're playing on your profile while Disband is open. One connection works on all your devices.")
+                    .font(.footnote)
+                    .foregroundStyle(spotifyError == nil ? Brand.textMuted : Brand.dnd)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 SectionCaption("Privacy & Safety")
                 SettingsGroup {
                     SettingsToggleRow(symbol: "tray.fill", tint: Color(hex: 0x5865F2),
@@ -192,6 +227,18 @@ struct SettingsView: View {
                     ? "Renewal will restart. Your plan will continue after \(billingPeriodEndLabel)."
                     : "You'll keep your plan until \(billingPeriodEndLabel). Renewal stops after that, and payments already made are non-refundable."
             )
+        }
+        .confirmationDialog("Disconnect Spotify?", isPresented: $confirmSpotifyDisconnect,
+                            titleVisibility: .visible) {
+            Button("Disconnect", role: .destructive) {
+                Task {
+                    spotifyBusy = true
+                    spotifyError = await music.disconnect() ? nil : "Couldn't disconnect Spotify. Try again."
+                    spotifyBusy = false
+                }
+            }
+        } message: {
+            Text("This removes it from every device. You can connect it again any time.")
         }
         .alert("Delete Account?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) { }

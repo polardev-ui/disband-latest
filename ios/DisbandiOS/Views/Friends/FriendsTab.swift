@@ -352,10 +352,14 @@ struct FriendRow: View {
             AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 44, status: status)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(profile?.name ?? "Unknown")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Brand.textPrimary)
-                        .lineLimit(1)
+                    Group {
+                        if let profile {
+                            StyledName(profile, size: UIFont.preferredFont(forTextStyle: .body).pointSize)
+                        } else {
+                            Text("Unknown").font(.body.weight(.semibold)).foregroundStyle(Brand.textPrimary)
+                        }
+                    }
+                    .lineLimit(1)
                     GuildTagView(userId: profile?.id, size: .small)
                     if let pronouns = profile?.pronouns, !pronouns.isEmpty {
                         Text(pronouns)

@@ -145,7 +145,8 @@ struct InboxPanel: View {
                     status: thread.friend.map { presence.status(for: $0.id) },
                     preview: DirectMessagesViewModel.preview(for: thread),
                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
-                    unread: unreadStore.count(for: thread.id)
+                    unread: unreadStore.count(for: thread.id),
+                                    nameStyle: thread.friend.map { NameStyle($0) }
                 )
                 .padding(.horizontal, 8)
                 .contentShape(RoundedRectangle(cornerRadius: 14))
