@@ -1703,7 +1703,10 @@
     "Total due today": "Total due today",
     "−{amount} applied": "−{amount} applied",
     "−{amount} applied for {months} months": "−{amount} applied for {months} months",
-    "−{amount} applied forever": "−{amount} applied forever"
+    "−{amount} applied forever": "−{amount} applied forever",
+    "Disband has updated": "Disband has updated",
+    "Reload to get the latest version.": "Reload to get the latest version.",
+    "Reload": "Reload"
   },
   "es": {
     "My Account": "Mi cuenta",
@@ -3410,7 +3413,10 @@
     "Total due today": "Total a pagar hoy",
     "−{amount} applied": "−{amount} aplicado",
     "−{amount} applied for {months} months": "−{amount} aplicado durante {months} meses",
-    "−{amount} applied forever": "−{amount} aplicado para siempre"
+    "−{amount} applied forever": "−{amount} aplicado para siempre",
+    "Disband has updated": "Disband se ha actualizado",
+    "Reload to get the latest version.": "Recarga para obtener la última versión.",
+    "Reload": "Recargar"
   },
   "fr": {
     "My Account": "Mon compte",
@@ -5117,7 +5123,10 @@
     "Total due today": "Total à payer aujourd'hui",
     "−{amount} applied": "−{amount} appliqué",
     "−{amount} applied for {months} months": "−{amount} appliqué pendant {months} mois",
-    "−{amount} applied forever": "−{amount} appliqué à vie"
+    "−{amount} applied forever": "−{amount} appliqué à vie",
+    "Disband has updated": "Disband a été mis à jour",
+    "Reload to get the latest version.": "Rechargez pour obtenir la dernière version.",
+    "Reload": "Recharger"
   },
   "de": {
     "My Account": "Mein Konto",
@@ -6824,7 +6833,10 @@
     "Total due today": "Heute fällig",
     "−{amount} applied": "−{amount} angewendet",
     "−{amount} applied for {months} months": "−{amount} für {months} Monate angewendet",
-    "−{amount} applied forever": "−{amount} dauerhaft angewendet"
+    "−{amount} applied forever": "−{amount} dauerhaft angewendet",
+    "Disband has updated": "Disband wurde aktualisiert",
+    "Reload to get the latest version.": "Neu laden, um die neueste Version zu erhalten.",
+    "Reload": "Neu laden"
   },
   "pt-BR": {
     "My Account": "Minha conta",
@@ -8531,7 +8543,10 @@
     "Total due today": "Total a pagar hoje",
     "−{amount} applied": "−{amount} aplicado",
     "−{amount} applied for {months} months": "−{amount} aplicado por {months} meses",
-    "−{amount} applied forever": "−{amount} aplicado para sempre"
+    "−{amount} applied forever": "−{amount} aplicado para sempre",
+    "Disband has updated": "O Disband foi atualizado",
+    "Reload to get the latest version.": "Recarregue para obter a versão mais recente.",
+    "Reload": "Recarregar"
   },
   "ja": {
     "My Account": "私のアカウント",
@@ -10238,7 +10253,10 @@
     "Total due today": "本日のお支払い合計",
     "−{amount} applied": "−{amount}を適用",
     "−{amount} applied for {months} months": "{months}か月間 −{amount}を適用",
-    "−{amount} applied forever": "−{amount}を永久に適用"
+    "−{amount} applied forever": "−{amount}を永久に適用",
+    "Disband has updated": "Disbandが更新されました",
+    "Reload to get the latest version.": "再読み込みして最新バージョンを取得してください。",
+    "Reload": "再読み込み"
   },
   "ko": {
     "My Account": "내 계정",
@@ -11945,7 +11963,10 @@
     "Total due today": "오늘 결제할 금액",
     "−{amount} applied": "−{amount} 적용됨",
     "−{amount} applied for {months} months": "{months}개월 동안 −{amount} 적용",
-    "−{amount} applied forever": "−{amount} 영구 적용"
+    "−{amount} applied forever": "−{amount} 영구 적용",
+    "Disband has updated": "Disband가 업데이트되었습니다",
+    "Reload to get the latest version.": "새로고침하여 최신 버전을 받으세요.",
+    "Reload": "새로고침"
   },
   "zh-CN": {
     "My Account": "我的账户",
@@ -13652,6 +13673,9 @@
     "Total due today": "今日应付总额",
     "−{amount} applied": "已减 {amount}",
     "−{amount} applied for {months} months": "{months} 个月内每月减 {amount}",
-    "−{amount} applied forever": "永久减 {amount}"
+    "−{amount} applied forever": "永久减 {amount}",
+    "Disband has updated": "Disband 已更新",
+    "Reload to get the latest version.": "重新加载以获取最新版本。",
+    "Reload": "重新加载"
   }
 }

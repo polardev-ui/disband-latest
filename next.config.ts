@@ -53,6 +53,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["localhost", "127.0.0.1"],
   distDir: isProd ? ".next" : ".next-dev",
   poweredByHeader: false,
+  // Baked into the client so WebUpdateWatcher can tell when a tab is running
+  // an older deployment than the server.
+  env: { NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA ?? "" },
   agentRules: false,
   // The repository is nested under a larger Projects directory. Pinning the
   // Turbopack root prevents workspace inference from looking above the app

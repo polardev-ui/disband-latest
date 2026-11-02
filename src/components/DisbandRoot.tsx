@@ -11,6 +11,7 @@ import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
 import { UpdateToast } from "@/components/desktop/UpdateToast";
+import { WebUpdateWatcher } from "@/components/WebUpdateWatcher";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { SelfXssWarning } from "@/components/SelfXssWarning";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
@@ -102,6 +103,7 @@ export function DisbandRoot() {
         <SkinBoundary>
         <ContextMenuProvider>
           <UpdateToast />
+          <WebUpdateWatcher />
           <SelfXssWarning />
           {}
           <MobileAppPromo />
