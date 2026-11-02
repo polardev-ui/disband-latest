@@ -64,14 +64,16 @@ function linkFor(url: string): string {
  */
 function Spoiler({ children }: { children: ReactNode }) {
   const [revealed, setRevealed] = useState(false);
-  const reveal = () => setRevealed(true);
+  // Click again to hide it, e.g. before someone looks over your shoulder.
+  const reveal = () => setRevealed((r) => !r);
 
   return (
     <span
       role="button"
       tabIndex={0}
-      aria-label={revealed ? "Spoiler revealed" : "Spoiler, click to reveal"}
-      title={revealed ? undefined : "Click to reveal spoiler"}
+      aria-label={revealed ? "Spoiler revealed, click to hide" : "Spoiler, click to reveal"}
+      aria-pressed={revealed}
+      title={revealed ? "Click to hide spoiler" : "Click to reveal spoiler"}
       onClick={(e) => {
         e.stopPropagation();
         reveal();
