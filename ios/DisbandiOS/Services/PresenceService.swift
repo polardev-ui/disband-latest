@@ -69,7 +69,7 @@ final class PresenceService {
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
     private var ownUserId: String?
-    private var ownStatus: UserStatus?
+    private(set) var ownStatus: UserStatus?
     private var ownListening: Listening?
 
     /// Join the shared channel and publish our own status. Call on sign-in with the

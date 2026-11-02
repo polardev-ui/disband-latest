@@ -11,11 +11,13 @@ struct MessageComposer: View {
     var onPhoto: () -> Void = {}
     /// "Message #general", "Message @name": says where this will go.
     var placeholder: String = "Message"
+    /// Photos or videos are waiting to go, so send works with no text.
+    var hasAttachments: Bool = false
 
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        hasAttachments || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {

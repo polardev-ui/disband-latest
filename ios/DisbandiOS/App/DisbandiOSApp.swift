@@ -57,7 +57,7 @@ struct DisbandiOSApp: App {
                 }
                 .task(id: appState.currentUserId) {
                     await presence.start(userId: appState.currentUserId,
-                                         status: appState.profile?.status ?? .online)
+                                         status: appState.profile?.chosenStatus ?? .online)
                     // Spotify "listening to", while the app is in front.
                     music.start(userId: scenePhase == .active ? appState.currentUserId : nil,
                                 presence: presence)
@@ -65,6 +65,14 @@ struct DisbandiOSApp: App {
                 .onChange(of: appState.profile) { _, profile in
                     PushManager.shared.doNotDisturb =
                         profile?.status == .dnd || profile?.preferredStatus == .dnd
+                    // Presence starts as soon as the account is known, often
+                    // before the profile has loaded, so it went out as Online
+                    // even when the saved status was Do Not Disturb. The app
+                    // then showed Online while every push was muted as DND.
+                    if let chosen = profile?.chosenStatus, presence.ownStatus != nil,
+                       presence.ownStatus != chosen {
+                        Task { await presence.update(chosen) }
+                    }
                 }
                 .task(id: appState.currentUserId) {
                     await call.start(userId: appState.currentUserId)

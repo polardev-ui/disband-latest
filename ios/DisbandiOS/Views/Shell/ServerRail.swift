@@ -6,12 +6,23 @@ enum SpaceSelection: Hashable {
     case server(String)
 }
 
+/// A DM or group with unread messages, shown on the rail like the desktop.
+struct RailConversation: Identifiable {
+    let id: String
+    let name: String
+    let avatarUrl: String?
+    let unread: Int
+    let open: () -> Void
+}
+
 /// The vertical strip of spaces on Home's left edge — the same model as the
 /// desktop rail. Inbox on top, then servers, then create / discover.
 struct ServerRail: View {
     let servers: [Server]
     @Binding var selection: SpaceSelection
     var inboxUnread: Int
+    /// Conversations with new messages, under the inbox button.
+    var unreadConversations: [RailConversation] = []
     /// The server whose voice channel you're connected to, if any.
     var voiceServerId: String?
     var onJoin: () -> Void
@@ -35,6 +46,26 @@ struct ServerRail: View {
                     }
                 } badge: {
                     UnreadDot(count: inboxUnread)
+                }
+
+                // Each conversation with something new, as its own picture,
+                // one tap from opening it — as on desktop.
+                ForEach(unreadConversations) { convo in
+                    railButton(selected: false, label: "\(convo.name), \(convo.unread) unread") {
+                        convo.open()
+                    } icon: {
+                        RemoteImage(url: convo.avatarUrl, contentMode: .fill) {
+                            ZStack {
+                                Color(seed: convo.id)
+                                Text(Self.initials(convo.name))
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    } badge: {
+                        UnreadDot(count: convo.unread)
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
 
                 Capsule()
@@ -87,6 +118,7 @@ struct ServerRail: View {
                     .accessibilityLabel("Discover spaces")
             }
             .padding(.vertical, 12)
+            .animation(.snappy, value: unreadConversations.map(\.id))
             // Room for the floating dock to sit over the end of the list.
             .padding(.bottom, 90)
         }

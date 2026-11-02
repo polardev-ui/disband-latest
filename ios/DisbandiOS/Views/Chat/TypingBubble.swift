@@ -36,15 +36,17 @@ struct TypingBubble: View {
                     .shadow(color: .black.opacity(0.28), radius: 10, y: 3)
             )
             .overlay(Capsule().stroke(Brand.divider.opacity(0.6), lineWidth: 0.5))
-            .padding(.leading, 16)
+            // Bottom right, clear of the avatars and names down the left,
+            // which it used to sit on top of.
+            .padding(.trailing, 16)
             .padding(.bottom, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             // In and out from below, so it reads as rising off the composer
             // rather than appearing from nowhere.
             .transition(
                 .move(edge: .bottom)
                     .combined(with: .opacity)
-                    .combined(with: .scale(scale: 0.92, anchor: .bottomLeading))
+                    .combined(with: .scale(scale: 0.92, anchor: .bottomTrailing))
             )
             .allowsHitTesting(false)
         }

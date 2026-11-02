@@ -27,6 +27,7 @@ struct SpacesView: View {
                     servers: servers,
                     selection: $selection,
                     inboxUnread: inboxUnread,
+                    unreadConversations: unreadConversations,
                     voiceServerId: voiceServerId,
                     onJoin: { showJoin = true },
                     onCreate: { showCreate = true },
@@ -92,6 +93,28 @@ struct SpacesView: View {
     private var inboxUnread: Int {
         vm.threads.reduce(0) { $0 + unreadStore.count(for: $1.id) }
             + vm.groups.reduce(0) { $0 + unreadStore.countGroup(for: $1.id) }
+    }
+
+    private var unreadConversations: [RailConversation] {
+        let dms = vm.threads.compactMap { thread -> RailConversation? in
+            let count = unreadStore.count(for: thread.id)
+            guard count > 0, let friend = thread.friend else { return nil }
+            return RailConversation(id: thread.id, name: friend.name, avatarUrl: friend.avatarUrl, unread: count) {
+                path = NavigationPath()
+                path.append(SpacesRoute.chat(.dm(threadId: thread.id, title: friend.name),
+                                             callPeer: friend, canModerate: false))
+            }
+        }
+        let groups = vm.groups.compactMap { group -> RailConversation? in
+            let count = unreadStore.countGroup(for: group.id)
+            guard count > 0 else { return nil }
+            return RailConversation(id: group.id, name: group.name, avatarUrl: group.iconUrl, unread: count) {
+                path = NavigationPath()
+                path.append(SpacesRoute.chat(.group(id: group.id, name: group.name),
+                                             callPeer: nil, canModerate: false))
+            }
+        }
+        return Array((dms + groups).prefix(8))
     }
 
     private var voiceServerId: String? {

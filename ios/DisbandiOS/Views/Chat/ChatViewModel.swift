@@ -598,7 +598,13 @@ final class ChatViewModel {
              the row becomes the real row here, and the echo (if it arrives)
              dedupes against that id instead of guessing from the text.
              */
-            if let index = messages.firstIndex(where: { $0.id == optimistic.id }) {
+            if messages.contains(where: { $0.id == messageId }) {
+                // The echo got here first and, not matching the text exactly
+                // (the server trims and tidies it), was added as a new row.
+                // Keep that one; two rows with one id was the duplicate.
+                messages.removeAll { $0.id == optimistic.id }
+                cacheNow()
+            } else if let index = messages.firstIndex(where: { $0.id == optimistic.id }) {
                 messages[index].id = messageId
                 messages[index].pending = false
                 cacheNow()
@@ -820,6 +826,16 @@ final class ChatViewModel {
         }
 
         let author = await resolveProfile(row.authorId)
+        // The send may have promoted its own row while the profile loaded.
+        if row.authorId == currentUserId, messages.contains(where: { $0.id == row.id }) == false,
+           let idx = messages.firstIndex(where: {
+               $0.pending && $0.authorId == row.authorId
+                   && $0.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                       == (row.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+           }) {
+            messages[idx].id = row.id
+            messages[idx].pending = false
+        }
         var message = DisplayMessage(
             id: row.id, authorId: row.authorId, author: author,
             content: row.content ?? "", attachmentUrl: row.attachmentUrl,

@@ -59,6 +59,12 @@ struct Profile: Codable, Identifiable, Hashable {
     var statusExpiresAt: String?
     var status: UserStatus
     var preferredStatus: UserStatus?
+    /// The status they picked. `status` reads offline once every app has
+    /// closed, so the choice itself lives in `preferred_status`.
+    var chosenStatus: UserStatus {
+        if let preferredStatus { return preferredStatus }
+        return status == .offline ? .online : status
+    }
     var bannerUrl: String?
     var accentColor: String?
     var accentColor2: String?
