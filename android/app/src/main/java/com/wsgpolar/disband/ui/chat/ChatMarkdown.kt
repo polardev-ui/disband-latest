@@ -49,30 +49,30 @@ object ChatMarkdown {
      * Fenced code is lifted out first because nothing inside it is markdown —
      * a `**` in a code sample is two asterisks, not the start of bold.
      */
-    fun blocks(raw: String, palette: Palette, baseSize: TextUnit = 15.sp): List<Block> {
+    fun blocks(raw: String, palette: Palette, baseSize: TextUnit = 15.sp, reveal: Boolean = false): List<Block> {
         val out = mutableListOf<Block>()
         var cursor = 0
 
         for (match in FENCE.findAll(raw)) {
             val before = raw.substring(cursor, match.range.first)
-            if (before.isNotBlank()) out += lines(before, palette, baseSize)
+            if (before.isNotBlank()) out += lines(before, palette, baseSize, reveal)
             val language = match.groupValues[1].takeIf { it.isNotBlank() }
             out += Block.Code(language, match.groupValues[2].trimEnd('\n'))
             cursor = match.range.last + 1
         }
         val rest = raw.substring(cursor)
-        if (rest.isNotBlank() || out.isEmpty()) out += lines(rest, palette, baseSize)
+        if (rest.isNotBlank() || out.isEmpty()) out += lines(rest, palette, baseSize, reveal)
         return out
     }
 
     /** Line-level constructs: quotes, headings, small text. */
-    private fun lines(chunk: String, palette: Palette, baseSize: TextUnit): List<Block> {
+    private fun lines(chunk: String, palette: Palette, baseSize: TextUnit, reveal: Boolean): List<Block> {
         val out = mutableListOf<Block>()
         val pending = StringBuilder()
 
         fun flush() {
             if (pending.isNotEmpty()) {
-                out += Block.Text(inline(pending.toString().trimEnd('\n'), palette, baseSize))
+                out += Block.Text(inline(pending.toString().trimEnd('\n'), palette, baseSize, reveal))
                 pending.clear()
             }
         }
@@ -82,14 +82,14 @@ object ChatMarkdown {
                 line.startsWith(">>> ") || line.startsWith("> ") -> {
                     flush()
                     val body = line.removePrefix(">>> ").removePrefix("> ")
-                    out += Block.Quote(inline(body, palette, baseSize))
+                    out += Block.Quote(inline(body, palette, baseSize, reveal))
                 }
                 line.startsWith("-# ") -> {
                     flush()
                     out += Block.Text(
                         buildAnnotatedString {
                             pushStyle(SpanStyle(color = palette.textMuted, fontSize = baseSize * 0.82f))
-                            append(inline(line.removePrefix("-# "), palette, baseSize))
+                            append(inline(line.removePrefix("-# "), palette, baseSize, reveal))
                             pop()
                         }
                     )
@@ -108,7 +108,7 @@ object ChatMarkdown {
                                     color = palette.textPrimary,
                                 )
                             )
-                            append(inline(line.drop(hashes + 1), palette, baseSize))
+                            append(inline(line.drop(hashes + 1), palette, baseSize, reveal))
                             pop()
                         }
                     )
@@ -132,7 +132,7 @@ object ChatMarkdown {
         Rule("**", SpanStyle(fontWeight = FontWeight.Bold)),
         Rule("__", SpanStyle(textDecoration = TextDecoration.Underline)),
         Rule("~~", SpanStyle(textDecoration = TextDecoration.LineThrough)),
-        Rule("||", SpanStyle(background = palette.textMuted.copy(alpha = 0.35f), color = Color.Transparent)),
+        Rule("||", SpanStyle()), // styled in `inline`, which knows whether it is open
         Rule("*", SpanStyle(fontStyle = FontStyle.Italic)),
         Rule("_", SpanStyle(fontStyle = FontStyle.Italic)),
     )
@@ -146,7 +146,10 @@ object ChatMarkdown {
      * backticks stays literal, and mentions are applied last so a name inside
      * emphasis still reads as a mention.
      */
-    fun inline(text: String, palette: Palette, baseSize: TextUnit = 15.sp): AnnotatedString =
+    /** Whether the text has a ||spoiler|| to tap open. */
+    fun hasSpoiler(raw: String): Boolean = Regex("\\|\\|[\\s\\S]+?\\|\\|").containsMatchIn(raw)
+
+    fun inline(text: String, palette: Palette, baseSize: TextUnit = 15.sp, reveal: Boolean = false): AnnotatedString =
         buildAnnotatedString {
             var rest = text
             val ruleSet = rules(palette)
@@ -188,9 +191,20 @@ object ChatMarkdown {
                     rest = rest.substring(code.range.last + 1)
                 } else {
                     val match = bestMatch!!
-                    pushStyle(bestRule!!.style)
-                    // Recursive: `**a *b* c**` keeps both.
-                    append(inline(match.groupValues[1], palette, baseSize))
+                    val inner = inline(match.groupValues[1], palette, baseSize, reveal)
+                    if (bestRule!!.marker == "||" && !reveal) {
+                        // Hidden: a dark bar the width of the text. Plain text,
+                        // so a mention's own colour can't show through.
+                        pushStyle(SpanStyle(background = Color(0xFF202225), color = Color.Transparent))
+                        append(inner.text)
+                    } else if (bestRule.marker == "||") {
+                        pushStyle(SpanStyle(background = palette.textPrimary.copy(alpha = 0.1f)))
+                        append(inner)
+                    } else {
+                        pushStyle(bestRule.style)
+                        // Recursive: `**a *b* c**` keeps both.
+                        append(inner)
+                    }
                     pop()
                     rest = rest.substring(match.range.last + 1)
                 }

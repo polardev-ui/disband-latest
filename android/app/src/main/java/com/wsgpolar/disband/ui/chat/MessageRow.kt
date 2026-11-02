@@ -33,6 +33,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -320,8 +322,14 @@ private fun EmbedCard(embed: com.wsgpolar.disband.data.Embed, palette: Palette) 
 /** The message body, block by block, so code keeps its own background. */
 @Composable
 private fun MarkdownBody(content: String, palette: Palette) {
-    val blocks = remember(content, palette) { ChatMarkdown.blocks(content, palette) }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Tap a message with ||spoilers|| to show them, and again to hide them.
+    val hasSpoiler = remember(content) { ChatMarkdown.hasSpoiler(content) }
+    var reveal by remember(content) { mutableStateOf(false) }
+    val blocks = remember(content, palette, reveal) { ChatMarkdown.blocks(content, palette, reveal = reveal) }
+    val tap = if (hasSpoiler) {
+        Modifier.clickable(onClickLabel = if (reveal) "Hide spoiler" else "Show spoiler") { reveal = !reveal }
+    } else Modifier
+    Column(tap, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         blocks.forEach { block ->
             when (block) {
                 is ChatMarkdown.Block.Text ->
