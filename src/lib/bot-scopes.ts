@@ -45,6 +45,10 @@ export const BOT_SCOPE_LABELS: Record<BotScope, { label: string; description: st
     label: "Manage webhooks",
     description: "Create, edit, and delete webhooks.",
   },
+  "roles.manage": {
+    label: "Manage roles",
+    description: "Create, edit and delete roles, give and take members' roles, and set which roles see each channel. Only roles below its own.",
+  },
 };
 
 export const BOT_SCOPE_ORDER: BotScope[] = [
@@ -59,4 +63,5 @@ export const BOT_SCOPE_ORDER: BotScope[] = [
   "channels.read",
   "channels.manage",
   "webhooks.manage",
+  "roles.manage",
 ];

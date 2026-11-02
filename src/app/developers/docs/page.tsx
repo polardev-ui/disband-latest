@@ -109,6 +109,7 @@ await client.connect();`}</pre>
                       ["channels.read", "List channels and categories."],
                       ["channels.manage", "Create, rename, and delete channels."],
                       ["webhooks.manage", "Create, edit, and delete webhooks."],
+                      ["roles.manage", "Create, edit and delete roles, give and take members' roles, and set channel permissions for roles."],
                     ].map(([scope, desc]) => (
                       <tr key={scope} className="border-t border-divider">
                         <td className="px-4 py-2 font-mono text-xs">{scope}</td>
@@ -117,6 +118,64 @@ await client.connect();`}</pre>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </section>
+
+            {/* Roles */}
+            <section id="roles">
+              <h2 className="text-xl font-bold mb-4">Roles and Permissions</h2>
+              <p className="text-sm text-text-muted mb-4">
+                With <code>roles.manage</code> and a role that has <strong>Manage Roles</strong>, a bot can create, edit,
+                reorder and delete roles and give or take members&apos; roles. Like people, it only manages roles below its
+                own highest role, only changes members below it, never the space owner, and can only switch on permissions
+                it has itself. So give your bot a role and drag it above the roles it should look after.
+              </p>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full text-sm border border-divider rounded-lg">
+                  <thead>
+                    <tr className="bg-bg-secondary">
+                      <th className="px-4 py-2 text-left font-semibold">Request</th>
+                      <th className="px-4 py-2 text-left font-semibold">What it does</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ["GET /servers/{id}/permissions", "The bot's own permissions, roles, scopes and highest_role_position."],
+                      ["GET /servers/{id}/roles", "Every role, highest first. manageable is true for roles below the bot."],
+                      ["POST /servers/{id}/roles", "Create a role: name, color, permissions, self_assignable, position."],
+                      ["PATCH /servers/{id}/roles/{roleId}", "Edit a role. Only the fields you send change."],
+                      ["DELETE /servers/{id}/roles/{roleId}", "Delete a role."],
+                      ["PUT /servers/{id}/members/{userId}/roles/{roleId}", "Give a member a role."],
+                      ["DELETE /servers/{id}/members/{userId}/roles/{roleId}", "Take a role from a member."],
+                      ["GET /channels/{id}/permissions", "The channel's role overrides."],
+                      ["PUT /channels/{id}/permissions/{roleId}", "Set can_view, can_post, can_react and can_attach: true, false or null (inherit)."],
+                      ["DELETE /channels/{id}/permissions/{roleId}", "Remove a role's override."],
+                    ].map(([req, desc]) => (
+                      <tr key={req} className="border-t border-divider">
+                        <td className="px-4 py-2 font-mono text-xs">{req}</td>
+                        <td className="px-4 py-2 text-text-muted">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm text-text-muted mb-2">
+                Channel permissions need <strong>Manage Channels</strong> and <code>channels.manage</code> or{" "}
+                <code>roles.manage</code>. Setting <code>@everyone</code> to <code>can_view: false</code> and a Verified role to{" "}
+                <code>can_view: true</code> hides a channel until someone is verified. Members from{" "}
+                <code>GET /servers/&#123;id&#125;/members</code> list their <code>roles</code>.
+              </p>
+              <div className="rounded-lg border border-divider bg-bg-secondary p-4">
+                <pre className="text-sm overflow-x-auto whitespace-pre-wrap">{`curl -X POST https://www.disband.dev/api/v1/servers/$SERVER/roles \\
+  -H "Authorization: Bot $DISBAND_BOT_TOKEN" -H "Content-Type: application/json" \\
+  -d '{ "name": "Verified", "color": "#3ba55c", "permissions": { "send_messages": true } }'
+
+curl -X PUT https://www.disband.dev/api/v1/servers/$SERVER/members/$USER/roles/$VERIFIED \\
+  -H "Authorization: Bot $DISBAND_BOT_TOKEN"
+
+curl -X PUT https://www.disband.dev/api/v1/channels/$CHANNEL/permissions/$EVERYONE \\
+  -H "Authorization: Bot $DISBAND_BOT_TOKEN" -H "Content-Type: application/json" \\
+  -d '{ "can_view": false }'`}</pre>
               </div>
             </section>
 
@@ -283,6 +342,9 @@ for (;;) {
                       ["messageCreate", "A new message was posted."],
                       ["messageUpdate", "A message was edited."],
                       ["messageDelete", "A message was deleted."],
+                      ["memberJoin", "Someone joined a space (members.read)."],
+                      ["memberLeave", "Someone left or was removed from a space (members.read)."],
+                      ["memberUpdate", "A member's roles changed; carries their roles now (members.read)."],
                       ["interactionCreate", "Someone ran one of your slash commands or pressed one of your bot's buttons."],
                       ["error", "An error occurred."],
                     ].map(([ev, desc]) => (

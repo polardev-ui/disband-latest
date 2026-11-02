@@ -61,6 +61,7 @@ const GROUPS: { label: string; scopes: BotScope[] }[] = [
   { label: "Messages", scopes: ["messages.read", "messages.write", "messages.delete", "messages.react"] },
   { label: "Members", scopes: ["members.read", "members.kick", "members.ban", "members.timeout"] },
   { label: "Channels", scopes: ["channels.read", "channels.manage", "webhooks.manage"] },
+  { label: "Roles", scopes: ["roles.manage"] },
 ];
 
 const INPUT = "w-full rounded-[3px] bg-bg-tertiary px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-[#00a8fc]";

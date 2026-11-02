@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-export type BotScope = "messages.read" | "messages.write" | "messages.delete" | "messages.react" | "members.read" | "members.kick" | "members.ban" | "members.timeout" | "channels.read" | "channels.manage" | "webhooks.manage";
+export type BotScope = "messages.read" | "messages.write" | "messages.delete" | "messages.react" | "members.read" | "members.kick" | "members.ban" | "members.timeout" | "channels.read" | "channels.manage" | "webhooks.manage" | "roles.manage";
 
-export const BOT_SCOPES: BotScope[] = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "members.kick", "members.ban", "members.timeout", "channels.read", "channels.manage", "webhooks.manage"];
+export const BOT_SCOPES: BotScope[] = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "members.kick", "members.ban", "members.timeout", "channels.read", "channels.manage", "webhooks.manage", "roles.manage"];
 
 export interface BotActor {
   botId: string;
@@ -57,6 +57,8 @@ export async function authenticateBot(request: NextRequest): Promise<BotActor | 
 
 export function botJsonError(error: { message?: string } | null | undefined): number {
   const msg = error?.message ?? "";
+  if (/^Invalid|is required|too many/.test(msg)) return 400;
+  if (/highest role|cannot give it|cannot change|cannot edit|cannot delete|cannot be given/.test(msg)) return 403;
   if (/revoked|not a member|does not have|permission|read-only|restricted|Only the/.test(msg)) return 403;
   if (/not found|content is required|too long|invalid|expired|already been used|Reply target/.test(msg)) return 400;
   if (/too quickly|rate limit/.test(msg)) return 429;
