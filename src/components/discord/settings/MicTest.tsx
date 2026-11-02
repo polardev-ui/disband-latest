@@ -8,11 +8,12 @@ import { useI18n } from "@/contexts/I18nContext";
 
 /** Plays your mic back through the same pipeline a call uses, so the
  *  noise suppression choice can be heard before joining. */
-export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
+export function MicTest({ deviceId, noiseMode, inputVolume, autoGain, echoCancellation }: {
   deviceId: string;
   noiseMode: NoiseSuppressionMode;
   inputVolume: number;
   autoGain: boolean;
+  echoCancellation: boolean;
 }) {
   const { t } = useI18n();
   const [running, setRunning] = useState(false);
@@ -50,6 +51,10 @@ export function MicTest({ deviceId, noiseMode, inputVolume, autoGain }: {
   useEffect(() => {
     void mixerRef.current?.setAutoGainControl(autoGain);
   }, [autoGain]);
+
+  useEffect(() => {
+    void mixerRef.current?.setEchoCancellation(echoCancellation);
+  }, [echoCancellation]);
 
   useEffect(() => {
     if (running) stop();

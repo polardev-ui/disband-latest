@@ -25,15 +25,18 @@ import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { MyAccountPanel } from "./settings/MyAccountPanel";
 import {
   getAutoGainControl,
+  getEchoCancellation,
   getInputVolume,
+  isAppleWebKit,
   getNoiseSuppressionMode,
   MAX_INPUT_VOLUME,
   setAutoGainControl,
+  setEchoCancellation,
   setInputVolume,
   setNoiseSuppressionMode,
   type NoiseSuppressionMode,
 } from "@/lib/audio-settings";
-import { setVoiceMixerAutoGainControl, setVoiceMixerInputVolume, setVoiceMixerNoiseMode } from "@/lib/voice-mixer";
+import { setVoiceMixerAutoGainControl, setVoiceMixerEchoCancellation, setVoiceMixerInputVolume, setVoiceMixerNoiseMode } from "@/lib/voice-mixer";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import {
@@ -361,6 +364,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [noiseMode, setNoiseModeState] = useState<NoiseSuppressionMode>(getNoiseSuppressionMode());
   const [inputVolume, setInputVolumeState] = useState(getInputVolume);
   const [autoGain, setAutoGainState] = useState(getAutoGainControl);
+  const [echoCancellation, setEchoCancellationState] = useState(getEchoCancellation);
   const [audioOutput, setAudioOutput] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
@@ -1869,6 +1873,24 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         }}
                       />
                     </SettingRow>
+                    <SettingRow
+                      label={t("Echo cancellation")}
+                      description={isAppleWebKit()
+                        ? t("Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.")
+                        : t("Stops your speakers echoing back into the call. Only turn it off if you wear headphones.")}
+                      htmlFor="voice-echo-cancellation"
+                    >
+                      <Toggle
+                        id="voice-echo-cancellation"
+                        label={t("Echo cancellation")}
+                        checked={echoCancellation}
+                        onChange={(next) => {
+                          setEchoCancellationState(next);
+                          setEchoCancellation(next);
+                          setVoiceMixerEchoCancellation(next);
+                        }}
+                      />
+                    </SettingRow>
                     <SettingRow label={t("Output device")} stacked>
                       <select
                         value={audioOutput}
@@ -1943,7 +1965,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                       description={t("Speak and watch the meter move.")}
                       stacked
                     >
-                      <MicTest deviceId={audioInput} noiseMode={noiseMode} inputVolume={inputVolume} autoGain={autoGain} />
+                      <MicTest deviceId={audioInput} noiseMode={noiseMode} inputVolume={inputVolume} autoGain={autoGain} echoCancellation={echoCancellation} />
                     </SettingRow>
                   </SettingsSection>
 

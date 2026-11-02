@@ -1,4 +1,4 @@
-import { getAutoGainControl, getInputVolume, getNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { getAutoGainControl, getEchoCancellation, getInputVolume, getNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
 import { AI_NOISE_SAMPLE_RATE, createAiDenoiser, type AiDenoiser } from "@/lib/noise-suppression";
 
 export interface VoiceMixerOptions {
@@ -151,7 +151,7 @@ export class VoiceMixer {
       await track.applyConstraints({
         ...track.getConstraints(),
         noiseSuppression: enabled,
-        echoCancellation: true,
+        echoCancellation: getEchoCancellation(),
         autoGainControl: getAutoGainControl(),
       });
     } catch {
@@ -177,6 +177,17 @@ export class VoiceMixer {
     if (!track || track.readyState !== "live") return;
     try {
       await track.applyConstraints({ ...track.getConstraints(), autoGainControl: enabled });
+    } catch {
+      // Some devices refuse live constraint changes; the next call picks it up.
+    }
+  }
+
+  /** Turns echo cancellation on or off for the live mic. */
+  async setEchoCancellation(enabled: boolean) {
+    const track = this.rawMicTrack;
+    if (!track || track.readyState !== "live") return;
+    try {
+      await track.applyConstraints({ ...track.getConstraints(), echoCancellation: enabled });
     } catch {
       // Some devices refuse live constraint changes; the next call picks it up.
     }
@@ -266,6 +277,10 @@ export function setVoiceMixerInputVolume(volume: number) {
 
 export function setVoiceMixerAutoGainControl(enabled: boolean) {
   void activeVoiceMixer?.setAutoGainControl(enabled);
+}
+
+export function setVoiceMixerEchoCancellation(enabled: boolean) {
+  void activeVoiceMixer?.setEchoCancellation(enabled);
 }
 
 /** Applies a new noise suppression choice to the call in progress, if any. */

@@ -1710,7 +1710,10 @@
     "Transfer ownership": "Transfer ownership",
     "Transfer ownership to {name}": "Transfer ownership to {name}",
     "Transfer ownership to {name}?": "Transfer ownership to {name}?",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you."
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.",
+    "Echo cancellation": "Echo cancellation",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Stops your speakers echoing back into the call. Only turn it off if you wear headphones."
   },
   "es": {
     "My Account": "Mi cuenta",
@@ -3424,7 +3427,10 @@
     "Transfer ownership": "Transferir propiedad",
     "Transfer ownership to {name}": "Transferir la propiedad a {name}",
     "Transfer ownership to {name}?": "¿Transferir la propiedad a {name}?",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Será propietario del espacio y podrá eliminarlo. Seguirás como miembro con tus roles, pero no podrás recuperar la propiedad a menos que te la devuelva."
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Será propietario del espacio y podrá eliminarlo. Seguirás como miembro con tus roles, pero no podrás recuperar la propiedad a menos que te la devuelva.",
+    "Echo cancellation": "Cancelación de eco",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Evita que tus altavoces hagan eco en la llamada. En un Mac también corta tu micrófono cuando hablas bajo o a la vez que otra persona, aunque el control de ganancia y la supresión de ruido estén desactivados. ¿Usas auriculares? Desactívala.",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Evita que tus altavoces hagan eco en la llamada. Desactívala solo si usas auriculares."
   },
   "fr": {
     "My Account": "Mon compte",
@@ -5138,7 +5144,10 @@
     "Transfer ownership": "Transférer la propriété",
     "Transfer ownership to {name}": "Transférer la propriété à {name}",
     "Transfer ownership to {name}?": "Transférer la propriété à {name} ?",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Cette personne possédera l'espace et pourra le supprimer. Vous resterez membre avec vos rôles, mais vous ne pourrez récupérer la propriété que si elle vous la rend."
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Cette personne possédera l'espace et pourra le supprimer. Vous resterez membre avec vos rôles, mais vous ne pourrez récupérer la propriété que si elle vous la rend.",
+    "Echo cancellation": "Annulation de l'écho",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Empêche vos haut-parleurs de renvoyer l'écho dans l'appel. Sur Mac, elle coupe aussi votre micro quand vous parlez doucement ou en même temps que quelqu'un, même avec le contrôle du gain et la suppression du bruit désactivés. Vous portez un casque ? Désactivez-la.",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Empêche vos haut-parleurs de renvoyer l'écho dans l'appel. Ne la désactivez que si vous portez un casque."
   },
   "de": {
     "My Account": "Mein Konto",
@@ -6852,7 +6861,10 @@
     "Transfer ownership": "Besitz übertragen",
     "Transfer ownership to {name}": "Besitz an {name} übertragen",
     "Transfer ownership to {name}?": "Besitz an {name} übertragen?",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Die Person besitzt dann den Space und kann ihn löschen. Du bleibst Mitglied mit deinen Rollen, bekommst den Besitz aber nur zurück, wenn sie ihn dir überträgt."
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Die Person besitzt dann den Space und kann ihn löschen. Du bleibst Mitglied mit deinen Rollen, bekommst den Besitz aber nur zurück, wenn sie ihn dir überträgt.",
+    "Echo cancellation": "Echounterdrückung",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Verhindert, dass deine Lautsprecher als Echo im Anruf landen. Auf einem Mac schaltet sie außerdem dein Mikrofon stumm, wenn du leise oder gleichzeitig mit jemandem sprichst, selbst wenn Verstärkungsregelung und Rauschunterdrückung aus sind. Du trägst Kopfhörer? Schalte sie aus.",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Verhindert, dass deine Lautsprecher als Echo im Anruf landen. Schalte sie nur aus, wenn du Kopfhörer trägst."
   },
   "pt-BR": {
     "My Account": "Minha conta",
@@ -8566,7 +8578,10 @@
     "Transfer ownership": "Transferir propriedade",
     "Transfer ownership to {name}": "Transferir a propriedade para {name}",
     "Transfer ownership to {name}?": "Transferir a propriedade para {name}?",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Essa pessoa será dona do espaço e poderá excluí-lo. Você continuará como membro com seus cargos, mas só recuperará a propriedade se ela a devolver."
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Essa pessoa será dona do espaço e poderá excluí-lo. Você continuará como membro com seus cargos, mas só recuperará a propriedade se ela a devolver.",
+    "Echo cancellation": "Cancelamento de eco",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Impede que seus alto-falantes ecoem na chamada. No Mac, também corta seu microfone quando você fala baixo ou junto com alguém, mesmo com o controle de ganho e a supressão de ruído desligados. Usa fones de ouvido? Desligue.",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Impede que seus alto-falantes ecoem na chamada. Só desligue se usar fones de ouvido."
   },
   "ja": {
     "My Account": "私のアカウント",
@@ -10280,7 +10295,10 @@
     "Transfer ownership": "オーナー権を譲渡",
     "Transfer ownership to {name}": "{name}にオーナー権を譲渡",
     "Transfer ownership to {name}?": "{name}にオーナー権を譲渡しますか？",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "相手がスペースのオーナーになり、削除もできるようになります。あなたはロールを保ったままメンバーとして残りますが、相手が譲り返さない限りオーナー権は戻りません。"
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "相手がスペースのオーナーになり、削除もできるようになります。あなたはロールを保ったままメンバーとして残りますが、相手が譲り返さない限りオーナー権は戻りません。",
+    "Echo cancellation": "エコーキャンセル",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "スピーカーの音が通話に戻るのを防ぎます。Mac では、ゲイン調整とノイズ抑制をオフにしていても、小声で話したときや誰かと同時に話したときにマイクが途切れることがあります。ヘッドホンを使っているならオフにしてください。",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "スピーカーの音が通話に戻るのを防ぎます。ヘッドホンを使う場合のみオフにしてください。"
   },
   "ko": {
     "My Account": "내 계정",
@@ -11994,7 +12012,10 @@
     "Transfer ownership": "소유권 이전",
     "Transfer ownership to {name}": "{name}님에게 소유권 이전",
     "Transfer ownership to {name}?": "{name}님에게 소유권을 이전할까요?",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "상대가 스페이스의 소유자가 되어 삭제할 수도 있습니다. 내 역할은 유지된 채 멤버로 남지만, 상대가 다시 넘겨주지 않으면 소유권을 되찾을 수 없습니다."
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "상대가 스페이스의 소유자가 되어 삭제할 수도 있습니다. 내 역할은 유지된 채 멤버로 남지만, 상대가 다시 넘겨주지 않으면 소유권을 되찾을 수 없습니다.",
+    "Echo cancellation": "에코 제거",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "스피커 소리가 통화로 다시 들어가는 것을 막아요. Mac에서는 게인 조절과 소음 억제를 꺼도 작게 말하거나 다른 사람과 동시에 말할 때 마이크가 끊길 수 있어요. 헤드폰을 쓰고 있다면 끄세요.",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "스피커 소리가 통화로 다시 들어가는 것을 막아요. 헤드폰을 쓸 때만 끄세요."
   },
   "zh-CN": {
     "My Account": "我的账户",
@@ -13708,6 +13729,9 @@
     "Transfer ownership": "转让所有权",
     "Transfer ownership to {name}": "将所有权转让给 {name}",
     "Transfer ownership to {name}?": "要将所有权转让给 {name} 吗？",
-    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "对方将拥有此空间并可以删除它。你会保留身份组并作为成员留下，但除非对方转让回来，否则无法收回所有权。"
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "对方将拥有此空间并可以删除它。你会保留身份组并作为成员留下，但除非对方转让回来，否则无法收回所有权。",
+    "Echo cancellation": "回声消除",
+    "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "防止扬声器的声音回传到通话中。在 Mac 上，即使关闭了增益控制和降噪，小声说话或与他人同时说话时也会切断你的麦克风。戴着耳机？请关闭它。",
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "防止扬声器的声音回传到通话中。仅在戴耳机时关闭。"
   }
 }

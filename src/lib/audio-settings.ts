@@ -56,14 +56,14 @@ export async function applyAudioOutputToElement(
 
 export function buildAudioConstraints(): MediaTrackConstraints {
   const deviceId = getPreferredAudioInputId();
-  // Echo cancellation stays on in every mode: without it speakers feed back
-  // into the call. Gain control is on unless turned off in Voice & Video;
-  // the input volume slider (VoiceMixer) is the manual alternative.
-  // The browser's own suppressor only runs in Standard; the AI filter does
-  // the work in AI mode and stacking both muffles voices.
+  // Echo cancellation is on unless turned off in Voice & Video (headphones
+  // only: without it speakers feed back into the call). Gain control is on
+  // unless turned off; the input volume slider (VoiceMixer) is the manual
+  // alternative. The browser's own suppressor only runs in Standard; the AI
+  // filter does the work in AI mode and stacking both muffles voices.
   return {
     ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
-    echoCancellation: true,
+    echoCancellation: getEchoCancellation(),
     autoGainControl: getAutoGainControl(),
     noiseSuppression: getNoiseSuppressionMode() === "standard",
     channelCount: { ideal: 1 },
@@ -173,4 +173,37 @@ export function setAutoGainControl(enabled: boolean) {
   } catch {
     // Ignore storage errors.
   }
+}
+
+const ECHO_CANCELLATION_KEY = "disband:echo-cancellation";
+
+/**
+ * Echo cancellation. On macOS, Safari and the desktop app (WebKit) do it with
+ * Apple's voice processing, which also gates and levels the mic on its own
+ * whatever the gain and noise settings say: talking over someone, or quietly,
+ * cuts you out. With headphones it can be turned off, which turns all of that
+ * off too.
+ */
+export function getEchoCancellation(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(ECHO_CANCELLATION_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+export function setEchoCancellation(enabled: boolean) {
+  try {
+    localStorage.setItem(ECHO_CANCELLATION_KEY, enabled ? "true" : "false");
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+/** Safari or the macOS desktop app, where voice processing is Apple's. */
+export function isAppleWebKit(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Macintosh|Mac OS X/.test(ua) && /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua);
 }
