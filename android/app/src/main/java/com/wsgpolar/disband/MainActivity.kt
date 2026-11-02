@@ -41,6 +41,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        (application as DisbandApp).container.music.setForeground(true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Spotify is only shared while Disband is on screen, as on iOS.
+        (application as DisbandApp).container.music.setForeground(false)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -54,6 +65,11 @@ class MainActivity : ComponentActivity() {
         if (intent.getStringExtra(CallForegroundService.EXTRA_CALL_ACTION) == CallForegroundService.CALL_ACTION_ANSWER) {
             intent.removeExtra(CallForegroundService.EXTRA_CALL_ACTION)
             (application as DisbandApp).container.calls.requestAnswer()
+            return
+        }
+        // Spotify sign-in coming back from the browser.
+        intent.data?.takeIf { it.scheme == "disband" && it.host == "spotify-callback" }?.let { uri ->
+            (application as DisbandApp).container.music.finishConnect(uri)
             return
         }
         // 1) Deep link URI (https://www.disband.dev/server/CODE or disband://invite/CODE)

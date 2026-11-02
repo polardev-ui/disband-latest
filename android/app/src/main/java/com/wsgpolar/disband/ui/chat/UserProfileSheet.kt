@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import com.wsgpolar.disband.ui.AvatarDecoration
 import com.wsgpolar.disband.ui.AvatarImage
 import com.wsgpolar.disband.ui.components.GuildTagView
+import com.wsgpolar.disband.ui.components.ProfileActivityCards
 import com.wsgpolar.disband.ui.components.ProfileBadges
 import com.wsgpolar.disband.ui.components.GuildTagBadgeSize
 
@@ -55,7 +56,11 @@ fun UserProfileSheet(initial: Profile, onDismiss: () -> Unit) {
     val palette = LocalPalette.current
     var profile by remember(initial.id) { mutableStateOf(initial) }
     LaunchedEffect(initial.id) {
-        runCatching { Database.profile(initial.id) }.getOrNull()?.let { profile = it }
+        // Kept fresh while open, so a song or game change shows up.
+        while (true) {
+            runCatching { Database.profile(initial.id) }.getOrNull()?.let { profile = it }
+            kotlinx.coroutines.delay(20_000)
+        }
     }
 
     ModalBottomSheet(
@@ -103,6 +108,8 @@ fun UserProfileSheet(initial: Profile, onDismiss: () -> Unit) {
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
+
+                ProfileActivityCards(profile.listening, profile.activity, Modifier.padding(top = 12.dp))
 
                 profile.bio?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(16.dp))

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Mood
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
@@ -130,6 +131,9 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     var showNotificationInbox by remember { mutableStateOf(false) }
     var showNotificationSettings by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
+    val spotifyConnected by app.music.connected.collectAsStateValue()
+    val spotifyError by app.music.connectError.collectAsStateValue()
+    var confirmSpotifyDisconnect by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(palette.background)) {
         ScreenHeader(
@@ -261,6 +265,46 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
             )
             Spacer(Modifier.height(12.dp))
 
+            // Connections — Spotify, shared while the app is open.
+            SectionCaption("Connections", modifier = Modifier.padding(start = 8.dp))
+            SettingsGroupCard(
+                rows = listOf(
+                    SettingsRow(
+                        Icons.Filled.MusicNote, "Spotify",
+                        detail = spotifyError ?: when (spotifyConnected) {
+                            true -> "Connected"
+                            false -> "Show what you're listening to"
+                            null -> null
+                        },
+                        tint = Color(0xFF1DB954), palette = palette,
+                        trailing = when (spotifyConnected) {
+                            true -> "Disconnect"
+                            false -> "Connect"
+                            null -> null
+                        },
+                    ) {
+                        if (spotifyConnected == true) {
+                            confirmSpotifyDisconnect = true
+                        } else {
+                            app.music.clearConnectError()
+                            scope.launch {
+                                app.music.beginConnect(context)?.let { error ->
+                                    android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    },
+                ),
+                palette = palette,
+            )
+            Text(
+                "Your song shows on your profile while Disband is open on this phone, or on the desktop app.",
+                color = palette.textMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+
             // About group.
             SectionCaption("About", modifier = Modifier.padding(start = 8.dp))
             SettingsGroupCard(
@@ -324,6 +368,26 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     }
     if (showNotificationSettings) {
         NotificationsSheet(app) { showNotificationSettings = false }
+    }
+    if (confirmSpotifyDisconnect) {
+        AlertDialog(
+            onDismissRequest = { confirmSpotifyDisconnect = false },
+            title = { Text("Disconnect Spotify?") },
+            text = { Text("Your music will stop showing on every device until you connect it again.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSpotifyDisconnect = false
+                    scope.launch {
+                        if (!app.music.disconnect()) {
+                            android.widget.Toast.makeText(context, "Couldn't disconnect Spotify. Try again.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }) { Text("Disconnect", color = Brand.dnd) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSpotifyDisconnect = false }) { Text("Cancel") }
+            },
+        )
     }
     if (confirmSignOut) {
         AlertDialog(
@@ -539,6 +603,13 @@ private fun ProfileHeroCard(
                     Spacer(Modifier.height(10.dp))
                     Text(bio, color = palette.textSecondary, fontSize = 14.sp)
                 }
+                // What this phone is sharing, else what another device last wrote.
+                val playing by app.music.current.collectAsStateValue()
+                com.wsgpolar.disband.ui.components.ProfileActivityCards(
+                    listening = playing ?: profile.listening,
+                    activity = profile.activity,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
         }
     }

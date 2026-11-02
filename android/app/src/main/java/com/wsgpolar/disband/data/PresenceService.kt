@@ -23,6 +23,8 @@ import kotlinx.serialization.Serializable
 data class PresencePayload(
     val userId: String,
     val status: UserStatus,
+    /** No default, so a cleared track is sent as null rather than left out. */
+    val listening: Listening?,
 )
 
 /** Where to build the current user's live presence entry. */
@@ -48,6 +50,7 @@ class PresenceService(private val scope: CoroutineScope) {
     /** Live clients by presence ref. One person can have several (web + phone). */
     private val sessions = mutableMapOf<String, Pair<String, UserStatus>>()
     private var ownStatus: UserStatus? = null
+    private var ownListening: Listening? = null
 
     /** Same leniency as the web's flattenPresenceState: a missing status means online. */
     private fun entryOf(state: kotlinx.serialization.json.JsonObject): Pair<String, UserStatus>? {
@@ -94,7 +97,7 @@ class PresenceService(private val scope: CoroutineScope) {
             try {
                 channel.subscribe()
                 try {
-                    channel.track(PresencePayload(userId = userId, status = status))
+                    channel.track(PresencePayload(userId = userId, status = status, listening = ownListening))
                 } catch (_: Exception) {
                 }
             } catch (_: Exception) {
@@ -108,7 +111,20 @@ class PresenceService(private val scope: CoroutineScope) {
         publish()
         scope.launch {
             try {
-                channel?.track(PresencePayload(userId = uid, status = status))
+                channel?.track(PresencePayload(userId = uid, status = status, listening = ownListening))
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Share (or clear) what this phone is playing, keeping the current status. */
+    fun updateListening(listening: Listening?) {
+        ownListening = listening
+        val uid = ownUserId ?: return
+        val status = ownStatus ?: return
+        scope.launch {
+            try {
+                channel?.track(PresencePayload(userId = uid, status = status, listening = listening))
             } catch (_: Exception) {
             }
         }
@@ -131,6 +147,7 @@ class PresenceService(private val scope: CoroutineScope) {
         }
         sessions.clear()
         ownStatus = null
+        ownListening = null
         _statuses.value = emptyMap()
     }
 }

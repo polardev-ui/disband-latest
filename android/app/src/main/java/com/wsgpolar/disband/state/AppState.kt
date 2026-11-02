@@ -48,6 +48,7 @@ class AppState(
     val notes: NotesService,
     val turnService: com.wsgpolar.disband.data.TurnService,
     val calls: com.wsgpolar.disband.call.CallManager,
+    val music: com.wsgpolar.disband.data.MusicPresenceService,
     val subscriptions: com.wsgpolar.disband.data.SubscriptionService =
         com.wsgpolar.disband.data.SubscriptionService(),
 ) {
@@ -104,6 +105,7 @@ class AppState(
                         _profile.value = null
                         _phase.value = AuthPhase.SignedOut
                         presence.stop()
+                        music.setUser(null)
                         notes.stop()
                         calls.stop()
                     }
@@ -141,6 +143,7 @@ class AppState(
             _profile.value = null
             _phase.value = AuthPhase.SignedOut
             presence.stop()
+            music.setUser(null)
             notes.stop()
             calls.stop()
             return
@@ -155,6 +158,7 @@ class AppState(
         loadProfile()
         _phase.value = AuthPhase.SignedIn
         presence.start(currentUserId, _profile.value?.status ?: UserStatus.Offline)
+        music.setUser(currentUserId)
         themeManager.adopt(_profile.value?.theme)
         registerPush()
         startCallListeners()
@@ -174,6 +178,7 @@ class AppState(
         loadProfile()
         _phase.value = AuthPhase.SignedIn
         presence.start(currentUserId, _profile.value?.status ?: UserStatus.Offline)
+        music.setUser(currentUserId)
         themeManager.adopt(_profile.value?.theme)
         registerPush()
         startCallListeners()
