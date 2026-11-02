@@ -15,7 +15,7 @@ import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import type { Profile, VoicePresence } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
-import { fetchIceServers, fetchIceServersQuick } from "@/lib/ice-servers";
+import { fetchIceServers, fetchIceServersQuick, refreshIceServers } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { SfuSeat, sfuAvailable, type SfuTrackName } from "@/lib/voice-sfu";
@@ -57,6 +57,13 @@ function waitForSubscribed(channel: RealtimeChannel): Promise<void> {
       }
     });
   });
+}
+
+/** Everyone else on the SFU, and what each of them is sending. */
+function sfuRemotes(list: VoicePresence[], selfId: string | null) {
+  return list
+    .filter((p) => p.user_id !== selfId && p.transport === "sfu" && p.sfu_session_id)
+    .map((p) => ({ userId: p.user_id, sessionId: p.sfu_session_id as string, tracks: p.sfu_tracks ?? [] }));
 }
 
 export function useVoiceChannel(
@@ -137,8 +144,10 @@ export function useVoiceChannel(
   // verified member of this server — unlike the raw `from` field, which any
   // holder of the anon key can forge.
   const participantIdsRef = useRef<Set<string>>(new Set());
+  const participantsRef = useRef(participants);
   useEffect(() => {
     participantIdsRef.current = new Set(participants.map((p) => p.user_id));
+    participantsRef.current = participants;
   }, [participants]);
   useEffect(() => {
     if (!joined) {
@@ -662,7 +671,95 @@ export function useVoiceChannel(
       .then(() => {}, () => {});
   }, [channelId, userId]);
 
+  /*
+   The link to the voice server can drop: a network change, a laptop
+   waking, or a relay whose credentials ran out mid-call. Nothing used to
+   notice, so audio stopped both ways until people rejoined, about every
+   half hour for anyone on a relay. Now a failed link (or one disconnected
+   for 5 seconds) is rebuilt with fresh credentials: a new session, my
+   tracks sent again, everyone pulled again.
+  */
+  const sfuWatchTimerRef = useRef<number | null>(null);
+  const sfuRebuildingRef = useRef(false);
+  const rebuildSfuRef = useRef<(failed: SfuSeat) => void>(() => {});
+
+  const watchSfu = useCallback((seat: SfuSeat, state: RTCPeerConnectionState) => {
+    if (sfuRef.current !== seat) return;
+    if (sfuWatchTimerRef.current !== null) {
+      window.clearTimeout(sfuWatchTimerRef.current);
+      sfuWatchTimerRef.current = null;
+    }
+    if (state === "failed") {
+      rebuildSfuRef.current(seat);
+    } else if (state === "disconnected") {
+      sfuWatchTimerRef.current = window.setTimeout(() => {
+        sfuWatchTimerRef.current = null;
+        const now = seat.connectionState;
+        if (sfuRef.current === seat && (now === "disconnected" || now === "failed")) rebuildSfuRef.current(seat);
+      }, 5_000);
+    }
+  }, []);
+
+  const newSfuSeat = useCallback((id: string) => {
+    const seat: SfuSeat = new SfuSeat(id, {
+      onTrack: (remoteId, name, track) => applySfuTrack(remoteId, name, track),
+      onTrackGone: (remoteId, name) => applySfuTrack(remoteId, name, null),
+      onState: (state) => watchSfu(seat, state),
+    });
+    return seat;
+  }, [applySfuTrack, watchSfu]);
+
+  useEffect(() => {
+    rebuildSfuRef.current = (failed: SfuSeat) => {
+      if (!channelId || sfuRebuildingRef.current || sfuRef.current !== failed) return;
+      sfuRebuildingRef.current = true;
+      console.warn("[voice] SFU link lost, reconnecting");
+      // The old seat stays in sfuRef (closed) until the new one is ready, so
+      // nobody on the SFU gets a direct connection in the meantime.
+      failed.close();
+      void (async () => {
+        const seat = newSfuSeat(channelId);
+        try {
+          await refreshIceServers();
+          await Promise.race([
+            seat.start(localStreamRef.current?.getAudioTracks()[0] ?? null),
+            new Promise((_, reject) => window.setTimeout(() => reject(new Error("Voice server took too long")), 10_000)),
+          ]);
+          let tracks: SfuTrackName[] = ["audio"];
+          if (cameraTrackRef.current) tracks = await seat.setTrack("camera", cameraTrackRef.current);
+          if (screenTrackRef.current) {
+            await seat.setTrack("screen", screenTrackRef.current);
+            tracks = await seat.setTrack("screenaudio", screenAudioTrackRef.current);
+          }
+          if (sfuRef.current !== failed) {
+            seat.close();  // left the channel while reconnecting
+            return;
+          }
+          sfuRef.current = seat;
+          publishSfuTracks(tracks);
+          void seat.sync(sfuRemotes(participantsRef.current, userId)).catch(() => {});
+          console.info("[voice] SFU reconnected");
+        } catch (e) {
+          console.warn("[voice] SFU reconnect failed, trying again", e);
+          seat.close();
+          if (sfuRef.current === failed) {
+            sfuWatchTimerRef.current = window.setTimeout(() => {
+              sfuWatchTimerRef.current = null;
+              rebuildSfuRef.current(failed);
+            }, 5_000);
+          }
+        } finally {
+          sfuRebuildingRef.current = false;
+        }
+      })();
+    };
+  });
+
   const cleanup = useCallback(async () => {
+    if (sfuWatchTimerRef.current !== null) {
+      window.clearTimeout(sfuWatchTimerRef.current);
+      sfuWatchTimerRef.current = null;
+    }
     sfuRef.current?.close();
     sfuRef.current = null;
     [...peersRef.current.keys()].forEach(dropPeer);
@@ -783,11 +880,7 @@ export function useVoiceChannel(
       if (presenceError) throw new Error(presenceError.message || "Could not join the voice channel");
 
       if (useSfu) {
-        const seat = new SfuSeat(channelId, {
-          onTrack: (id, name, track) => applySfuTrack(id, name, track),
-          onTrackGone: (id, name) => applySfuTrack(id, name, null),
-          onState: () => {},
-        });
+        const seat = newSfuSeat(channelId);
         try {
           // Never let the voice server hold the join: after 8 seconds, go direct.
           await Promise.race([
@@ -825,7 +918,7 @@ export function useVoiceChannel(
       setError((e as Error).message || "Could not access microphone");
       await cleanup();
     }
-  }, [channelId, userId, cleanup, handleSignal, loadPresence, micMuted, deafened, applySfuTrack, publishSfuTracks]);
+  }, [channelId, userId, cleanup, handleSignal, loadPresence, micMuted, deafened, newSfuSeat, publishSfuTracks]);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraTrackRef.current;
@@ -976,12 +1069,7 @@ export function useVoiceChannel(
 
     // Everyone else on the SFU: pull what each of them is sending.
     const seat = sfuRef.current;
-    if (seat) {
-      void seat.sync(participants
-        .filter((p) => p.user_id !== userId && p.transport === "sfu" && p.sfu_session_id)
-        .map((p) => ({ userId: p.user_id, sessionId: p.sfu_session_id as string, tracks: p.sfu_tracks ?? [] })))
-        .catch(() => {});
-    }
+    if (seat) void seat.sync(sfuRemotes(participants, userId)).catch(() => {});
   }, [participants, joined, userId, createPeer, dropPeer, viaSfu]);
 
   // Realtime presence can silently stop delivering on a sleeping laptop or a

@@ -75,6 +75,10 @@ export class SfuSeat {
 
   constructor(private channelId: string, private cb: Callbacks) {}
 
+  get connectionState(): RTCPeerConnectionState | "closed" {
+    return this.pc?.connectionState ?? "closed";
+  }
+
   private run<T>(task: () => Promise<T>): Promise<T> {
     const next = this.queue.then(task, task);
     this.queue = next.catch(() => {});

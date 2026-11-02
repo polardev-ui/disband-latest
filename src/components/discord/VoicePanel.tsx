@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
@@ -61,12 +61,18 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     }
   }, [voice.joined, voice.error]);
 
+  // Counts from when the call first connected. A blip ("Connecting…" while
+  // someone's audio reconnects) used to restart it from zero.
+  const startedRef = useRef<{ channelId: string; at: number } | null>(null);
   useEffect(() => {
-    if (!voice.joined || connecting) {
+    if (!voice.joined) {
+      startedRef.current = null;
       setElapsed(0);
       return;
     }
-    const started = Date.now();
+    if (connecting) return;
+    if (startedRef.current?.channelId !== channelId) startedRef.current = { channelId, at: Date.now() };
+    const started = startedRef.current.at;
     const tick = () => setElapsed(Math.max(0, Date.now() - started));
     tick();
     const id = window.setInterval(tick, 1000);
