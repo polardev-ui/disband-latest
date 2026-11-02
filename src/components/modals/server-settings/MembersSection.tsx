@@ -17,11 +17,12 @@ type Pending = { kind: "kick" | "ban"; userId: string; name: string } | null;
 
 export function MembersSection({ isOwner }: SectionProps) {
   const { t } = useI18n();
-  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, loadAllMembers, user, myTopRolePosition, canModerateMember } = useApp();
+  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, transferOwnership, loadAllMembers, user, myTopRolePosition, canModerateMember, activeServer } = useApp();
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+  const [transferTo, setTransferTo] = useState<{ userId: string; name: string } | null>(null);
 
   // The member rail loads one page at a time; moderating the whole space
   // (search, role assignment, kicks) needs every page.
@@ -137,6 +138,17 @@ export function MembersSection({ isOwner }: SectionProps) {
                           compact
                         />
                       )}
+                      {isOwner && !isSelf && !m.profile?.is_bot && (
+                        <button
+                          type="button"
+                          onClick={() => setTransferTo({ userId: m.user_id, name })}
+                          className={iconBtnDanger}
+                          aria-label={t("Transfer ownership to {name}", { name })}
+                          title={t("Transfer ownership")}
+                        >
+                          <IconCrown size={15} />
+                        </button>
+                      )}
                       {canKick && (
                         <button
                           type="button"
@@ -185,6 +197,22 @@ export function MembersSection({ isOwner }: SectionProps) {
           const err = pending.kind === "kick" ? await kickMember(pending.userId) : await banMember(pending.userId, reason || undefined);
           if (err) setError(err);
           setPending(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!transferTo}
+        title={transferTo ? t("Transfer ownership to {name}?", { name: transferTo.name }) : ""}
+        body={t("They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.")}
+        requireText={activeServer?.name}
+        confirmLabel={t("Transfer ownership")}
+        onCancel={() => setTransferTo(null)}
+        onConfirm={async () => {
+          if (!transferTo) return;
+          setError(null);
+          const err = await transferOwnership(transferTo.userId);
+          if (err) setError(err);
+          setTransferTo(null);
         }}
       />
     </div>

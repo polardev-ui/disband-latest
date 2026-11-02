@@ -6,7 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
+import { IconCrown, IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 import type { Profile } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
@@ -36,6 +36,7 @@ const ACTIONS: Record<string, { label: string; icon: ComponentType<{ size?: numb
   "webhook.delete": { label: "deleted", icon: IconLink, tone: "danger" },
   "space.partner_set": { label: "updated the Partner badge on", icon: IconStar, tone: "muted" },
   "space.verified_set": { label: "updated the Verified badge on", icon: IconVerified, tone: "muted" },
+  "space.owner_transfer": { label: "handed ownership of the space to", icon: IconCrown, tone: "muted" },
 };
 
 function timeAgo(iso: string): string {

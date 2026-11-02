@@ -1706,7 +1706,11 @@
     "−{amount} applied forever": "−{amount} applied forever",
     "Disband has updated": "Disband has updated",
     "Reload to get the latest version.": "Reload to get the latest version.",
-    "Reload": "Reload"
+    "Reload": "Reload",
+    "Transfer ownership": "Transfer ownership",
+    "Transfer ownership to {name}": "Transfer ownership to {name}",
+    "Transfer ownership to {name}?": "Transfer ownership to {name}?",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you."
   },
   "es": {
     "My Account": "Mi cuenta",
@@ -3416,7 +3420,11 @@
     "−{amount} applied forever": "−{amount} aplicado para siempre",
     "Disband has updated": "Disband se ha actualizado",
     "Reload to get the latest version.": "Recarga para obtener la última versión.",
-    "Reload": "Recargar"
+    "Reload": "Recargar",
+    "Transfer ownership": "Transferir propiedad",
+    "Transfer ownership to {name}": "Transferir la propiedad a {name}",
+    "Transfer ownership to {name}?": "¿Transferir la propiedad a {name}?",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Será propietario del espacio y podrá eliminarlo. Seguirás como miembro con tus roles, pero no podrás recuperar la propiedad a menos que te la devuelva."
   },
   "fr": {
     "My Account": "Mon compte",
@@ -5126,7 +5134,11 @@
     "−{amount} applied forever": "−{amount} appliqué à vie",
     "Disband has updated": "Disband a été mis à jour",
     "Reload to get the latest version.": "Rechargez pour obtenir la dernière version.",
-    "Reload": "Recharger"
+    "Reload": "Recharger",
+    "Transfer ownership": "Transférer la propriété",
+    "Transfer ownership to {name}": "Transférer la propriété à {name}",
+    "Transfer ownership to {name}?": "Transférer la propriété à {name} ?",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Cette personne possédera l'espace et pourra le supprimer. Vous resterez membre avec vos rôles, mais vous ne pourrez récupérer la propriété que si elle vous la rend."
   },
   "de": {
     "My Account": "Mein Konto",
@@ -6836,7 +6848,11 @@
     "−{amount} applied forever": "−{amount} dauerhaft angewendet",
     "Disband has updated": "Disband wurde aktualisiert",
     "Reload to get the latest version.": "Neu laden, um die neueste Version zu erhalten.",
-    "Reload": "Neu laden"
+    "Reload": "Neu laden",
+    "Transfer ownership": "Besitz übertragen",
+    "Transfer ownership to {name}": "Besitz an {name} übertragen",
+    "Transfer ownership to {name}?": "Besitz an {name} übertragen?",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Die Person besitzt dann den Space und kann ihn löschen. Du bleibst Mitglied mit deinen Rollen, bekommst den Besitz aber nur zurück, wenn sie ihn dir überträgt."
   },
   "pt-BR": {
     "My Account": "Minha conta",
@@ -8546,7 +8562,11 @@
     "−{amount} applied forever": "−{amount} aplicado para sempre",
     "Disband has updated": "O Disband foi atualizado",
     "Reload to get the latest version.": "Recarregue para obter a versão mais recente.",
-    "Reload": "Recarregar"
+    "Reload": "Recarregar",
+    "Transfer ownership": "Transferir propriedade",
+    "Transfer ownership to {name}": "Transferir a propriedade para {name}",
+    "Transfer ownership to {name}?": "Transferir a propriedade para {name}?",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Essa pessoa será dona do espaço e poderá excluí-lo. Você continuará como membro com seus cargos, mas só recuperará a propriedade se ela a devolver."
   },
   "ja": {
     "My Account": "私のアカウント",
@@ -10256,7 +10276,11 @@
     "−{amount} applied forever": "−{amount}を永久に適用",
     "Disband has updated": "Disbandが更新されました",
     "Reload to get the latest version.": "再読み込みして最新バージョンを取得してください。",
-    "Reload": "再読み込み"
+    "Reload": "再読み込み",
+    "Transfer ownership": "オーナー権を譲渡",
+    "Transfer ownership to {name}": "{name}にオーナー権を譲渡",
+    "Transfer ownership to {name}?": "{name}にオーナー権を譲渡しますか？",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "相手がスペースのオーナーになり、削除もできるようになります。あなたはロールを保ったままメンバーとして残りますが、相手が譲り返さない限りオーナー権は戻りません。"
   },
   "ko": {
     "My Account": "내 계정",
@@ -11966,7 +11990,11 @@
     "−{amount} applied forever": "−{amount} 영구 적용",
     "Disband has updated": "Disband가 업데이트되었습니다",
     "Reload to get the latest version.": "새로고침하여 최신 버전을 받으세요.",
-    "Reload": "새로고침"
+    "Reload": "새로고침",
+    "Transfer ownership": "소유권 이전",
+    "Transfer ownership to {name}": "{name}님에게 소유권 이전",
+    "Transfer ownership to {name}?": "{name}님에게 소유권을 이전할까요?",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "상대가 스페이스의 소유자가 되어 삭제할 수도 있습니다. 내 역할은 유지된 채 멤버로 남지만, 상대가 다시 넘겨주지 않으면 소유권을 되찾을 수 없습니다."
   },
   "zh-CN": {
     "My Account": "我的账户",
@@ -13676,6 +13704,10 @@
     "−{amount} applied forever": "永久减 {amount}",
     "Disband has updated": "Disband 已更新",
     "Reload to get the latest version.": "重新加载以获取最新版本。",
-    "Reload": "重新加载"
+    "Reload": "重新加载",
+    "Transfer ownership": "转让所有权",
+    "Transfer ownership to {name}": "将所有权转让给 {name}",
+    "Transfer ownership to {name}?": "要将所有权转让给 {name} 吗？",
+    "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "对方将拥有此空间并可以删除它。你会保留身份组并作为成员留下，但除非对方转让回来，否则无法收回所有权。"
   }
 }

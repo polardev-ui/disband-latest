@@ -234,6 +234,7 @@ interface AppContextValue {
   joinServerByInvite: (code: string) => Promise<string | null>;
   joinServerById: (serverId: string) => Promise<string | null>;
   kickMember: (userId: string) => Promise<string | null>;
+  transferOwnership: (userId: string) => Promise<string | null>;
   banMember: (userId: string, reason?: string) => Promise<string | null>;
   unbanMember: (userId: string) => Promise<string | null>;
   timeoutMember: (userId: string, seconds: number, reason?: string) => Promise<string | null>;
@@ -5246,6 +5247,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [activeServerId, loadServerDetails]);
 
+  const transferOwnership = useCallback(async (targetUserId: string) => {
+    if (!activeServerId || !userId) return "No space selected";
+    await ensureFreshSession();
+    const { error } = await getSupabaseClient().rpc("transfer_server_ownership", {
+      p_server_id: activeServerId,
+      p_new_owner_id: targetUserId,
+    });
+    if (error) return error.message;
+    await Promise.all([
+      loadServers(userId),
+      loadServerDetails(activeServerId, { refreshMembers: true }),
+    ]);
+    return null;
+  }, [activeServerId, userId, loadServers, loadServerDetails]);
+
   const banMember = useCallback(async (targetUserId: string, reason?: string) => {
     if (!activeServerId) return "No space selected";
     await ensureFreshSession();
@@ -6884,6 +6900,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     joinServerByInvite,
     joinServerById,
     kickMember,
+    transferOwnership,
     banMember,
     unbanMember,
     timeoutMember,
