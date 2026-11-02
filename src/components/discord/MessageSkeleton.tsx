@@ -1,5 +1,6 @@
-import { useI18n } from "@/contexts/I18nContext";
 "use client";
+
+import { useI18n } from "@/contexts/I18nContext";
 
 export function MessageSkeleton() {
   const { t } = useI18n();
