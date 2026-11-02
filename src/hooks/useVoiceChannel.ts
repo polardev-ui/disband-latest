@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildScreenConstraints } from "@/lib/stream-quality";
+import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import {
   attachRemoteTrack, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus,
@@ -92,6 +92,9 @@ export function useVoiceChannel(
   const [remoteScreenAudio, setRemoteScreenAudio] = useState<Map<string, MediaStream>>(new Map());
   const [localScreen, setLocalScreen] = useState<MediaStream | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  // My mic plus my camera while it's on, for my own tile. The mic-only
+  // stream left my tile on my avatar with the camera running.
+  const [localView, setLocalView] = useState<MediaStream | null>(null);
   const [screenEnabled, setScreenEnabled] = useState(false);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -403,6 +406,7 @@ export function useVoiceChannel(
               connectedSoundRef.current = true;
               playCallConnected();
             }
+            void tuneActiveScreenShare();
           } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
             dropPeer(remoteId);
             reconnectLater(1_200);
@@ -738,6 +742,7 @@ export function useVoiceChannel(
           sfuRef.current = seat;
           publishSfuTracks(tracks);
           void seat.sync(sfuRemotes(participantsRef.current, userId)).catch(() => {});
+          void tuneActiveScreenShare();
           console.info("[voice] SFU reconnected");
         } catch (e) {
           console.warn("[voice] SFU reconnect failed, trying again", e);
@@ -756,6 +761,7 @@ export function useVoiceChannel(
   });
 
   const cleanup = useCallback(async () => {
+    clearActiveScreenShare(screenTrackRef.current);
     if (sfuWatchTimerRef.current !== null) {
       window.clearTimeout(sfuWatchTimerRef.current);
       sfuWatchTimerRef.current = null;
@@ -774,6 +780,16 @@ export function useVoiceChannel(
     reconnectTimersRef.current.clear();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    // Leaving ends my camera and screen share too; they used to keep running
+    // (camera light on) and carry over into the next channel.
+    for (const ref of [cameraTrackRef, screenTrackRef, screenAudioTrackRef]) {
+      ref.current?.stop();
+      ref.current = null;
+    }
+    setCameraEnabled(false);
+    setScreenEnabled(false);
+    setLocalView(null);
+    setLocalScreen(null);
     setActiveVoiceMixer(null);
     setRemoteStreams(new Map());
     setRemoteScreens(new Map());
@@ -928,6 +944,7 @@ export function useVoiceChannel(
       for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_CAMERA, null);
       if (sfuRef.current) publishSfuTracks(await sfuRef.current.setTrack("camera", null));
       setCameraEnabled(false);
+      setLocalView(null);
       return;
     }
     try {
@@ -937,6 +954,7 @@ export function useVoiceChannel(
       for (const pc of peersRef.current.values()) await setLaneTrack(pc, LANE_CAMERA, track);
       if (sfuRef.current) publishSfuTracks(await sfuRef.current.setTrack("camera", track));
       setCameraEnabled(true);
+      setLocalView(new MediaStream([...(localStreamRef.current?.getAudioTracks() ?? []), track]));
     } catch {
       setCameraEnabled(false);
     }
@@ -962,6 +980,7 @@ export function useVoiceChannel(
         await setLaneTrack(pc, LANE_SCREEN, null);
         await setLaneTrack(pc, LANE_SCREEN_AUDIO, null);
       }
+      clearActiveScreenShare(null);
       if (sfuRef.current) {
         await sfuRef.current.setTrack("screen", null);
         publishSfuTracks(await sfuRef.current.setTrack("screenaudio", null));
@@ -987,6 +1006,11 @@ export function useVoiceChannel(
         await sfuRef.current.setTrack("screen", track);
         publishSfuTracks(await sfuRef.current.setTrack("screenaudio", screenAudioTrackRef.current));
       }
+      setActiveScreenShare({
+        track,
+        plan: (planRef.current ?? "free") as SubscriptionPlan,
+        connections: () => [...peersRef.current.values(), sfuRef.current?.peerConnection],
+      });
       setLocalScreen(new MediaStream([track]));
       setScreenEnabled(true);
       announceSharing(true);
@@ -1102,7 +1126,7 @@ export function useVoiceChannel(
     error,
     join,
     leave,
-    localStream: localStreamRef.current,
+    localStream: localView ?? localStreamRef.current,
     profile,
   };
 }

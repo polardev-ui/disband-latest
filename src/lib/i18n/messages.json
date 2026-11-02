@@ -1713,7 +1713,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.",
     "Echo cancellation": "Echo cancellation",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Stops your speakers echoing back into the call. Only turn it off if you wear headphones."
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.",
+    "Stream options": "Stream options",
+    "Change Stream": "Change Stream",
+    "Frame Rate": "Frame Rate",
+    "Resolution": "Resolution",
+    "Source": "Source",
+    "LIVE": "LIVE",
+    "Camera on": "Camera on"
   },
   "es": {
     "My Account": "Mi cuenta",
@@ -3430,7 +3437,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Será propietario del espacio y podrá eliminarlo. Seguirás como miembro con tus roles, pero no podrás recuperar la propiedad a menos que te la devuelva.",
     "Echo cancellation": "Cancelación de eco",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Evita que tus altavoces hagan eco en la llamada. En un Mac también corta tu micrófono cuando hablas bajo o a la vez que otra persona, aunque el control de ganancia y la supresión de ruido estén desactivados. ¿Usas auriculares? Desactívala.",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Evita que tus altavoces hagan eco en la llamada. Desactívala solo si usas auriculares."
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Evita que tus altavoces hagan eco en la llamada. Desactívala solo si usas auriculares.",
+    "Stream options": "Opciones de transmisión",
+    "Change Stream": "Cambiar transmisión",
+    "Frame Rate": "Fotogramas por segundo",
+    "Resolution": "Resolución",
+    "Source": "Original",
+    "LIVE": "EN VIVO",
+    "Camera on": "Cámara encendida"
   },
   "fr": {
     "My Account": "Mon compte",
@@ -5147,7 +5161,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Cette personne possédera l'espace et pourra le supprimer. Vous resterez membre avec vos rôles, mais vous ne pourrez récupérer la propriété que si elle vous la rend.",
     "Echo cancellation": "Annulation de l'écho",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Empêche vos haut-parleurs de renvoyer l'écho dans l'appel. Sur Mac, elle coupe aussi votre micro quand vous parlez doucement ou en même temps que quelqu'un, même avec le contrôle du gain et la suppression du bruit désactivés. Vous portez un casque ? Désactivez-la.",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Empêche vos haut-parleurs de renvoyer l'écho dans l'appel. Ne la désactivez que si vous portez un casque."
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Empêche vos haut-parleurs de renvoyer l'écho dans l'appel. Ne la désactivez que si vous portez un casque.",
+    "Stream options": "Options du stream",
+    "Change Stream": "Changer de stream",
+    "Frame Rate": "Images par seconde",
+    "Resolution": "Résolution",
+    "Source": "Source",
+    "LIVE": "EN DIRECT",
+    "Camera on": "Caméra activée"
   },
   "de": {
     "My Account": "Mein Konto",
@@ -6864,7 +6885,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Die Person besitzt dann den Space und kann ihn löschen. Du bleibst Mitglied mit deinen Rollen, bekommst den Besitz aber nur zurück, wenn sie ihn dir überträgt.",
     "Echo cancellation": "Echounterdrückung",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Verhindert, dass deine Lautsprecher als Echo im Anruf landen. Auf einem Mac schaltet sie außerdem dein Mikrofon stumm, wenn du leise oder gleichzeitig mit jemandem sprichst, selbst wenn Verstärkungsregelung und Rauschunterdrückung aus sind. Du trägst Kopfhörer? Schalte sie aus.",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Verhindert, dass deine Lautsprecher als Echo im Anruf landen. Schalte sie nur aus, wenn du Kopfhörer trägst."
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Verhindert, dass deine Lautsprecher als Echo im Anruf landen. Schalte sie nur aus, wenn du Kopfhörer trägst.",
+    "Stream options": "Stream-Optionen",
+    "Change Stream": "Stream wechseln",
+    "Frame Rate": "Bildrate",
+    "Resolution": "Auflösung",
+    "Source": "Original",
+    "LIVE": "LIVE",
+    "Camera on": "Kamera an"
   },
   "pt-BR": {
     "My Account": "Minha conta",
@@ -8581,7 +8609,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "Essa pessoa será dona do espaço e poderá excluí-lo. Você continuará como membro com seus cargos, mas só recuperará a propriedade se ela a devolver.",
     "Echo cancellation": "Cancelamento de eco",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "Impede que seus alto-falantes ecoem na chamada. No Mac, também corta seu microfone quando você fala baixo ou junto com alguém, mesmo com o controle de ganho e a supressão de ruído desligados. Usa fones de ouvido? Desligue.",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Impede que seus alto-falantes ecoem na chamada. Só desligue se usar fones de ouvido."
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "Impede que seus alto-falantes ecoem na chamada. Só desligue se usar fones de ouvido.",
+    "Stream options": "Opções de transmissão",
+    "Change Stream": "Mudar transmissão",
+    "Frame Rate": "Taxa de quadros",
+    "Resolution": "Resolução",
+    "Source": "Original",
+    "LIVE": "AO VIVO",
+    "Camera on": "Câmera ligada"
   },
   "ja": {
     "My Account": "私のアカウント",
@@ -10298,7 +10333,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "相手がスペースのオーナーになり、削除もできるようになります。あなたはロールを保ったままメンバーとして残りますが、相手が譲り返さない限りオーナー権は戻りません。",
     "Echo cancellation": "エコーキャンセル",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "スピーカーの音が通話に戻るのを防ぎます。Mac では、ゲイン調整とノイズ抑制をオフにしていても、小声で話したときや誰かと同時に話したときにマイクが途切れることがあります。ヘッドホンを使っているならオフにしてください。",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "スピーカーの音が通話に戻るのを防ぎます。ヘッドホンを使う場合のみオフにしてください。"
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "スピーカーの音が通話に戻るのを防ぎます。ヘッドホンを使う場合のみオフにしてください。",
+    "Stream options": "配信オプション",
+    "Change Stream": "配信を変更",
+    "Frame Rate": "フレームレート",
+    "Resolution": "解像度",
+    "Source": "ソース",
+    "LIVE": "ライブ",
+    "Camera on": "カメラオン"
   },
   "ko": {
     "My Account": "내 계정",
@@ -12015,7 +12057,14 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "상대가 스페이스의 소유자가 되어 삭제할 수도 있습니다. 내 역할은 유지된 채 멤버로 남지만, 상대가 다시 넘겨주지 않으면 소유권을 되찾을 수 없습니다.",
     "Echo cancellation": "에코 제거",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "스피커 소리가 통화로 다시 들어가는 것을 막아요. Mac에서는 게인 조절과 소음 억제를 꺼도 작게 말하거나 다른 사람과 동시에 말할 때 마이크가 끊길 수 있어요. 헤드폰을 쓰고 있다면 끄세요.",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "스피커 소리가 통화로 다시 들어가는 것을 막아요. 헤드폰을 쓸 때만 끄세요."
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "스피커 소리가 통화로 다시 들어가는 것을 막아요. 헤드폰을 쓸 때만 끄세요.",
+    "Stream options": "방송 옵션",
+    "Change Stream": "방송 변경",
+    "Frame Rate": "프레임 레이트",
+    "Resolution": "해상도",
+    "Source": "원본",
+    "LIVE": "LIVE",
+    "Camera on": "카메라 켜짐"
   },
   "zh-CN": {
     "My Account": "我的账户",
@@ -13732,6 +13781,13 @@
     "They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.": "对方将拥有此空间并可以删除它。你会保留身份组并作为成员留下，但除非对方转让回来，否则无法收回所有权。",
     "Echo cancellation": "回声消除",
     "Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.": "防止扬声器的声音回传到通话中。在 Mac 上，即使关闭了增益控制和降噪，小声说话或与他人同时说话时也会切断你的麦克风。戴着耳机？请关闭它。",
-    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "防止扬声器的声音回传到通话中。仅在戴耳机时关闭。"
+    "Stops your speakers echoing back into the call. Only turn it off if you wear headphones.": "防止扬声器的声音回传到通话中。仅在戴耳机时关闭。",
+    "Stream options": "直播选项",
+    "Change Stream": "更改直播",
+    "Frame Rate": "帧率",
+    "Resolution": "分辨率",
+    "Source": "原始",
+    "LIVE": "直播",
+    "Camera on": "摄像头已开启"
   }
 }

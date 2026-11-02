@@ -5,7 +5,6 @@ import { useApp } from "@/contexts/AppContext";
 import { applyParticipantAudioControls } from "@/lib/call-participant-settings";
 import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import type { Profile } from "@/lib/supabase/types";
-import type { SubscriptionPlan } from "@/lib/subscription";
 
 interface VoiceSession {
 
@@ -42,7 +41,7 @@ export function useVoiceSession(): VoiceSession {
 
 export function VoiceSessionProvider({ children }: { children: React.ReactNode }) {
   const {
-    profile, user, micMuted, deafened, setVoiceJoinedChannelId, loadVoicePresence,
+    profile, user, micMuted, deafened, setVoiceJoinedChannelId, loadVoicePresence, subscriptionPlan,
   } = useApp();
 
   const [connectedChannelId, setConnectedChannelId] = useState<string | null>(null);
@@ -54,7 +53,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     profile as Profile | null,
     micMuted,
     deafened,
-    (profile?.subscription_plan as SubscriptionPlan) ?? "free",
+    // The real plan (subscription or gift). profile.subscription_plan isn't
+    // a column, so voice channels capped every share at the free 720p/30.
+    subscriptionPlan,
   );
 
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());

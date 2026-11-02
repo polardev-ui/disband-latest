@@ -14,7 +14,7 @@ import {
   bindRemoteTrack, bindLaneStream, streamWithoutEndedTracks,
   ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
-import { buildScreenConstraints } from "@/lib/stream-quality";
+import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -122,6 +122,7 @@ export function useCallManager(
   const cleanupRtc = useCallback(async () => {
     trackCleanupsRef.current.forEach((cleanup) => cleanup());
     trackCleanupsRef.current = [];
+    clearActiveScreenShare(screenTrackRef.current);
     pcRef.current?.close();
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
@@ -357,7 +358,7 @@ export function useCallManager(
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
         if (state === "connected") {
-
+          void tuneActiveScreenShare();
           clearDisconnectTimer();
           iceRetryRef.current = 0;
           setRtcConnected(true);
@@ -595,6 +596,7 @@ export function useCallManager(
     if (!pc || phaseRef.current !== "active") return;
 
     if (!next) {
+      clearActiveScreenShare(screenTrackRef.current);
       screenTrackRef.current?.stop();
       screenTrackRef.current = null;
       screenAudioTrackRef.current?.stop();
@@ -627,6 +629,11 @@ export function useCallManager(
       screenAudioTrackRef.current = display.getAudioTracks()[0] ?? null;
       await setLaneTrack(pc, LANE_SCREEN, track);
       await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
+      setActiveScreenShare({
+        track,
+        plan: (planRef.current ?? "free") as SubscriptionPlan,
+        connections: () => [pcRef.current],
+      });
       setLocalScreen(new MediaStream([track]));
       setScreenShareEnabled(true);
       screenShareRef.current = true;

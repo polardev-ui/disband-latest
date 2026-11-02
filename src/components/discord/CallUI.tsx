@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { CallResizeHandle, useCallHeight } from "./CallResizer";
 import { CallStage } from "./CallStage";
 import { Tooltip } from "./Tooltip";
+import { StreamMenuButton } from "./StreamMenu";
 
 interface CallControlsProps {
   micMuted: boolean;
@@ -50,9 +51,12 @@ export function CallControls({
         </CallButton>
       )}
       {onToggleScreenShare && (
-        <CallButton label={screenShareEnabled ? t("Stop Streaming") : t("Share Your Screen")} on={!!screenShareEnabled} onClick={onToggleScreenShare}>
-          {screenShareEnabled ? <IconScreenShareOff size={24} /> : <IconScreenShare size={24} />}
-        </CallButton>
+        <div className="flex items-center gap-1">
+          <CallButton label={screenShareEnabled ? t("Stop Streaming") : t("Share Your Screen")} on={!!screenShareEnabled} onClick={onToggleScreenShare}>
+            {screenShareEnabled ? <IconScreenShareOff size={24} /> : <IconScreenShare size={24} />}
+          </CallButton>
+          <StreamMenuButton sharing={!!screenShareEnabled} onToggle={onToggleScreenShare} />
+        </div>
       )}
       <Soundboard compact />
       <CallButton label={micMuted ? t("Unmute") : t("Mute")} warn={micMuted} onClick={onToggleMic}>

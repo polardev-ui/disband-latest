@@ -11,6 +11,7 @@ import {
   IconHeadphonesOff,
   IconMegaphone,
   IconMicOff,
+  IconVideo,
   IconPlus,
   IconSpeaker,
 } from "@/components/icons";
@@ -495,6 +496,12 @@ export function ChannelList({
               <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default hover:bg-interactive-hover hover:text-text-normal">
                 <MiniAvatar profile={vp.profile} />
                 <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : t("Unknown")}</span>
+                {vp.sfu_tracks?.includes("screen") && (
+                  <span className="shrink-0 rounded-[4px] bg-status-dnd px-1 text-[10px] font-bold leading-[16px] text-white">{t("LIVE")}</span>
+                )}
+                {vp.sfu_tracks?.includes("camera") && (
+                  <IconVideo size={16} className="shrink-0 text-interactive-normal" aria-label={t("Camera on")} />
+                )}
                 {vp.muted && <IconMicOff size={16} className="shrink-0 text-interactive-normal" />}
                 {vp.deafened && <IconHeadphonesOff size={16} className="shrink-0 text-interactive-normal" />}
               </span>

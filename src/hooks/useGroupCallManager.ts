@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildScreenConstraints } from "@/lib/stream-quality";
+import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
@@ -158,6 +158,7 @@ export function useGroupCallManager(
   const cleanupMedia = useCallback(async () => {
     offerTimersRef.current.forEach((t) => window.clearTimeout(t));
     offerTimersRef.current.clear();
+    clearActiveScreenShare(screenTrackRef.current);
     peersRef.current.forEach((pc) => pc.close());
     peersRef.current.clear();
     iceQueueRef.current.clear();
@@ -267,6 +268,7 @@ export function useGroupCallManager(
       };
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "connected") {
+          void tuneActiveScreenShare();
           setConnectedPeerIds((prev) => {
             if (prev.has(remoteId)) return prev;
             const next = new Set(prev);
@@ -706,6 +708,7 @@ export function useGroupCallManager(
 
     if (!next) {
       const track = screenTrackRef.current;
+      clearActiveScreenShare(track);
       if (track) {
         track.stop();
         screenTrackRef.current = null;
@@ -736,6 +739,11 @@ export function useGroupCallManager(
         await setLaneTrack(pc, LANE_SCREEN, track);
         await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
       }
+      setActiveScreenShare({
+        track,
+        plan: (planRef.current ?? "free") as SubscriptionPlan,
+        connections: () => [...peersRef.current.values()],
+      });
       setLocalScreen(new MediaStream([track]));
       setScreenShareEnabled(true);
       screenShareRef.current = true;

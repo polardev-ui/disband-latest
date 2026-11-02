@@ -75,6 +75,10 @@ export class SfuSeat {
 
   constructor(private channelId: string, private cb: Callbacks) {}
 
+  get peerConnection(): RTCPeerConnection | null {
+    return this.pc;
+  }
+
   get connectionState(): RTCPeerConnectionState | "closed" {
     return this.pc?.connectionState ?? "closed";
   }
