@@ -230,6 +230,13 @@ export interface Channel {
   user_limit?: number | null;
   /** Voice only: nobody new can join. */
   locked?: boolean;
+  /** Voice only: a stage, where speakers talk and the audience listens. */
+  is_stage?: boolean;
+  /** Set while the stage is open. */
+  stage_topic?: string | null;
+  stage_started_at?: string | null;
+  /** Whether the audience can raise their hands. */
+  stage_requests_enabled?: boolean;
   created_at: string;
 }
 
@@ -395,6 +402,10 @@ export interface DbVoicePresence {
   sfu_session_id?: string | null;
   /** What they are sending through the SFU right now. */
   sfu_tracks?: string[];
+  /** Stages: on stage (heard), invited up, or asking to speak. */
+  stage_speaker?: boolean;
+  stage_invited?: boolean;
+  stage_hand_raised_at?: string | null;
 }
 
 export interface VoicePresence extends DbVoicePresence {

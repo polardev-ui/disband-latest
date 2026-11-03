@@ -17,7 +17,8 @@ import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
  Every call checks that the caller is live in that voice channel, and pulls
  only reach people live in the same channel, so a session ID alone gets
- nobody's audio.
+ nobody's audio. In a stage, only speakers' tracks can be pulled: the
+ audience can't be heard, whatever their app sends.
 */
 
 const API = "https://rtc.live.cloudflare.com/v1/apps";
@@ -115,12 +116,22 @@ export async function POST(request: NextRequest) {
   if (body.action === "pull") {
     const wanted = (body.tracks ?? []).filter((t) => typeof t.userId === "string" && TRACK_NAMES.has(t.trackName ?? ""));
     if (wanted.length === 0 || wanted.length > 64) return NextResponse.json({ error: "Pick 1–64 tracks." }, { status: 400 });
-    const { data: others } = await service
-      .from("voice_presence_live")
-      .select("user_id, sfu_session_id")
-      .eq("channel_id", channelId)
-      .in("user_id", [...new Set(wanted.map((t) => t.userId!))]);
-    const sessions = new Map((others ?? []).filter((o) => o.sfu_session_id).map((o) => [o.user_id as string, o.sfu_session_id as string]));
+    const [{ data: others }, { data: channel }] = await Promise.all([
+      service
+        .from("voice_presence_live")
+        // "*" rather than naming stage_speaker: deployed ahead of the stage
+        // migration, a missing column would have failed every pull.
+        .select("*")
+        .eq("channel_id", channelId)
+        .in("user_id", [...new Set(wanted.map((t) => t.userId!))]),
+      service.from("channels").select("is_stage").eq("id", channelId).maybeSingle(),
+    ]);
+    const stage = !!(channel as { is_stage?: boolean } | null)?.is_stage;
+    const sessions = new Map(
+      (others ?? [])
+        .filter((o) => o.sfu_session_id && (!stage || o.stage_speaker))
+        .map((o) => [o.user_id as string, o.sfu_session_id as string]),
+    );
     const tracks = wanted
       .filter((t) => sessions.has(t.userId!) && t.userId !== user.id)
       .map((t) => ({ location: "remote", sessionId: sessions.get(t.userId!), trackName: t.trackName }));

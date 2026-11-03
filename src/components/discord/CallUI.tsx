@@ -73,7 +73,7 @@ export function CallControls({
  * The classic 56px call button: dark at rest, white when a feature is on,
  * white with a red glyph when you're muted or deafened, red to hang up.
  */
-function CallButton({
+export function CallButton({
   label,
   on,
   warn,

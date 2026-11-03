@@ -35,6 +35,8 @@ export interface StageMember {
   mirrored?: boolean;
   ringing?: boolean;
   muted?: boolean;
+  /** Extra right-click actions (a stage's Move to Audience, say). */
+  menuExtras?: { label: string; danger?: boolean; onSelect: () => void }[];
 }
 
 export interface StageScreen {
@@ -275,7 +277,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
  * are, and muting their mic, soundboard or camera just for you. Drawn on the
  * page itself (a portal), so a call layout's animation can't shift or clip it.
  */
-function ParticipantMenu({ member, at, onClose }: { member: StageMember; at: { x: number; y: number }; onClose: () => void }) {
+export function ParticipantMenu({ member, at, onClose }: { member: StageMember; at: { x: number; y: number }; onClose: () => void }) {
   const { t } = useI18n();
   const { user, deafened } = useApp();
   const self = member.id === "self" || member.id === user?.id;
@@ -335,6 +337,18 @@ function ParticipantMenu({ member, at, onClose }: { member: StageMember; at: { x
             onClick={() => act(() => window.dispatchEvent(new CustomEvent("disband:open-dm", { detail: member.id })))}>
             {t("Message")}
           </button>
+        )}
+        {!!member.menuExtras?.length && (
+          <>
+            <div className="mx-1.5 my-1.5 h-px bg-divider" />
+            {member.menuExtras.map((item) => (
+              <button key={item.label} type="button" role="menuitem"
+                className={item.danger ? row.replace("text-text-normal hover:bg-brand", "text-status-dnd hover:bg-status-dnd") : row}
+                onClick={() => act(item.onSelect)}>
+                {item.label}
+              </button>
+            ))}
+          </>
         )}
         {!self && (
           <>

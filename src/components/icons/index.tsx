@@ -81,6 +81,9 @@ import {
   Trophy,
   Languages,
   CircleHelp,
+  RadioTower,
+  Hand,
+  ArrowDownToLine,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -191,6 +194,9 @@ export const IconFolder = icon(Folder);
 export const IconFolderPlus = icon(FolderPlus);
 export const IconFolderMinus = icon(FolderMinus);
 export const IconTimer = icon(Timer);
+export const IconStage = icon(RadioTower);
+export const IconHand = icon(Hand);
+export const IconMoveDown = icon(ArrowDownToLine);
 
 export const IconVerified = function IconVerified({ size = 16, className }: IconProps) {
   return (

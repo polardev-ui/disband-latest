@@ -8,8 +8,12 @@ export interface PresenceMember extends VoicePresence {
   profile?: Profile;
 }
 
+/** An open stage's topic, by channel: the sidebar shows it live. */
+export type StageTopics = Map<string, string>;
+
 export function useServerVoicePresence(serverId: string | null) {
   const [byChannel, setByChannel] = useState<Map<string, PresenceMember[]>>(new Map());
+  const [stageTopics, setStageTopics] = useState<StageTopics>(new Map());
 
   const [startTimes, setStartTimes] = useState<Map<string, number>>(new Map());
 
@@ -17,6 +21,7 @@ export function useServerVoicePresence(serverId: string | null) {
     if (!serverId) {
       setByChannel(new Map());
       setStartTimes(new Map());
+      setStageTopics(new Map());
       return;
     }
     let active = true;
@@ -30,10 +35,15 @@ export function useServerVoicePresence(serverId: string | null) {
       if (!voiceIds) {
         const { data: chs } = await supabase
           .from("channels")
-          .select("id")
+          // "*" so a missing stage column (before its migration) can't
+          // blank every voice channel in the sidebar.
+          .select("*")
           .eq("server_id", serverId)
           .eq("type", "voice");
-        voiceIds = ((chs as { id: string }[] | null) ?? []).map((c) => c.id);
+        const list = (chs as { id: string; stage_topic?: string | null }[] | null) ?? [];
+        voiceIds = list.map((c) => c.id);
+        if (!active) return;
+        setStageTopics(new Map(list.filter((c) => c.stage_topic).map((c) => [c.id, c.stage_topic as string])));
       }
       if (!active) return;
       if (voiceIds.length === 0) {
@@ -103,5 +113,5 @@ export function useServerVoicePresence(serverId: string | null) {
     });
   }, [byChannel]);
 
-  return { byChannel, startTimes };
+  return { byChannel, startTimes, stageTopics };
 }

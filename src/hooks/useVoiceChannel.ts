@@ -63,10 +63,15 @@ function waitForSubscribed(channel: RealtimeChannel): Promise<void> {
 }
 
 /** Everyone else on the SFU, and what each of them is sending. */
-function sfuRemotes(list: VoicePresence[], selfId: string | null) {
+function sfuRemotes(list: VoicePresence[], selfId: string | null, stage = false) {
+  // On a stage only speakers are heard or seen (the server refuses the rest).
   return list
     .filter((p) => p.user_id !== selfId && p.transport === "sfu" && p.sfu_session_id)
-    .map((p) => ({ userId: p.user_id, sessionId: p.sfu_session_id as string, tracks: p.sfu_tracks ?? [] }));
+    .map((p) => ({
+      userId: p.user_id,
+      sessionId: p.sfu_session_id as string,
+      tracks: stage && !p.stage_speaker ? [] : p.sfu_tracks ?? [],
+    }));
 }
 
 export function useVoiceChannel(
@@ -77,8 +82,12 @@ export function useVoiceChannel(
   deafened: boolean,
 
   plan: SubscriptionPlan = "free",
+  /** A stage: only speakers are heard, and coming and going is silent. */
+  stage = false,
 ) {
   const [joined, setJoined] = useState(false);
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
 
   useVoiceMinutes(joined);
   const [participants, setParticipants] = useState<(VoicePresence & { profile?: Profile })[]>([]);
@@ -180,8 +189,10 @@ export function useVoiceChannel(
     const prev = prevPresenceRef.current;
     const joinedIds = [...ids].filter((id) => !prev.has(id) && id !== userId);
     const leftIds = [...prev].filter((id) => !ids.has(id) && id !== userId);
-    if (joinedIds.length > 0) playCallJoin();
-    if (leftIds.length > 0) playCallLeave();
+    if (!stageRef.current) {
+      if (joinedIds.length > 0) playCallJoin();
+      if (leftIds.length > 0) playCallLeave();
+    }
     prevPresenceRef.current = ids;
   }, [participants, joined, userId]);
 
@@ -765,7 +776,7 @@ export function useVoiceChannel(
           }
           sfuRef.current = seat;
           publishSfuTracks(tracks);
-          void seat.sync(sfuRemotes(participantsRef.current, userId)).catch(() => {});
+          void seat.sync(sfuRemotes(participantsRef.current, userId, stageRef.current)).catch(() => {});
           void tuneActiveScreenShare();
           console.info("[voice] SFU reconnected");
         } catch (e) {
@@ -1117,8 +1128,8 @@ export function useVoiceChannel(
 
     // Everyone else on the SFU: pull what each of them is sending.
     const seat = sfuRef.current;
-    if (seat) void seat.sync(sfuRemotes(participants, userId)).catch(() => {});
-  }, [participants, joined, userId, createPeer, dropPeer, viaSfu]);
+    if (seat) void seat.sync(sfuRemotes(participants, userId, stage)).catch(() => {});
+  }, [participants, joined, userId, createPeer, dropPeer, viaSfu, stage]);
 
   // Realtime presence can silently stop delivering on a sleeping laptop or a
   // dropped websocket. Poll while joined so a dead peer is eventually

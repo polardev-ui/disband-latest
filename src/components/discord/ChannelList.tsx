@@ -8,12 +8,14 @@ import {
   IconChevron,
   IconClose,
   IconHash,
+  IconHeadphones,
   IconHeadphonesOff,
   IconMegaphone,
   IconMicOff,
   IconVideo,
   IconPlus,
   IconSpeaker,
+  IconStage,
 } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { getAvatarStyle } from "@/lib/profileColor";
@@ -36,6 +38,8 @@ interface ChannelListProps {
   voicePresence: Map<string, PresenceMember[]>;
 
   voiceStartTimes: Map<string, number>;
+  /** Open stages' topics, by channel. */
+  stageTopics?: Map<string, string>;
   onSelectChannel: (id: string) => void;
   onOpenSettings: () => void;
   onOpenProfile?: () => void;
@@ -47,7 +51,7 @@ interface ChannelListProps {
   partner?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
   onMoveCategory?: (categoryId: string, index: number) => void | Promise<string | null>;
-  onCreateChannel?: (name: string, type: ChannelType, categoryId: string | null) => Promise<string | null>;
+  onCreateChannel?: (name: string, type: ChannelType | "stage", categoryId: string | null) => Promise<string | null>;
   onCreateCategory?: (name: string) => Promise<string | null>;
 
   getUnreadCount?: (channelId: string) => number;
@@ -99,6 +103,7 @@ export function ChannelList({
   canManageChannels,
   voicePresence,
   voiceStartTimes,
+  stageTopics,
   onSelectChannel,
   onOpenSettings,
   onOpenProfile,
@@ -141,7 +146,7 @@ export function ChannelList({
   const [addChannelTarget, setAddChannelTarget] =
     useState<{ categoryId: string | null } | null>(null);
   const [addChannelName, setAddChannelName] = useState("");
-  const [addChannelType, setAddChannelType] = useState<ChannelType>("text");
+  const [addChannelType, setAddChannelType] = useState<ChannelType | "stage">("text");
   const [busy, setBusy] = useState(false);
 
   const suppressClickRef = useRef<HTMLElement | null>(null);
@@ -349,20 +354,20 @@ export function ChannelList({
   const renderAddChannelComposer = () => (
     <div className="mb-1 rounded-md bg-bg-accent/50 px-1.5 py-1.5">
       <div className="mb-1 flex items-center gap-1">
-        {(["text", "voice"] as const).map((kind) => (
+        {(["text", "voice", "stage"] as const).map((kind) => (
           <button
             key={kind}
             type="button"
             onClick={() => setAddChannelType(kind)}
-            title={kind === "text" ? t("Text channel") : t("Voice channel")}
+            title={kind === "text" ? t("Text channel") : kind === "stage" ? t("Stage channel") : t("Voice channel")}
             className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
               addChannelType === kind
                 ? "bg-brand/15 text-text-normal"
                 : "text-text-muted hover:text-text-normal"
             }`}
           >
-            {kind === "text" ? <IconHash size={12} /> : <IconSpeaker size={12} />}
-            {kind === "text" ? t("Text") : t("Voice")}
+            {kind === "text" ? <IconHash size={12} /> : kind === "stage" ? <IconStage size={12} /> : <IconSpeaker size={12} />}
+            {kind === "text" ? t("Text") : kind === "stage" ? t("Stage") : t("Voice")}
           </button>
         ))}
       </div>
@@ -375,7 +380,7 @@ export function ChannelList({
             if (e.key === "Enter") void submitAddChannel();
             if (e.key === "Escape") setAddChannelTarget(null);
           }}
-          placeholder={addChannelType === "text" ? t("New channel") : t("New voice channel")}
+          placeholder={addChannelType === "text" ? t("New channel") : addChannelType === "stage" ? t("New stage") : t("New voice channel")}
           className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
         />
         <button
@@ -396,6 +401,7 @@ export function ChannelList({
   const renderChannel = (ch: Channel) => {
     const active = ch.id === activeChannelId;
     const participants = ch.type === "voice" ? voicePresence.get(ch.id) ?? [] : [];
+    const stageTopic = ch.is_stage ? stageTopics?.get(ch.id) ?? null : null;
 
     const unread = !active && (getUnreadCount?.(ch.id) ?? 0) > 0;
     const mentions = active ? 0 : getMentionCount?.(ch.id) ?? 0;
@@ -433,6 +439,8 @@ export function ChannelList({
           <span className={`shrink-0 ${active || unread ? "text-interactive-active/70" : "text-channels-default"}`}>
             {ch.type === "text" ? (
               ch.read_only ? <IconMegaphone size={20} /> : <IconHash size={20} />
+            ) : ch.is_stage ? (
+              <IconStage size={20} className={stageTopic ? "text-status-online" : undefined} />
             ) : (
               <IconSpeaker size={20} />
             )}
@@ -490,7 +498,27 @@ export function ChannelList({
             </span>
           )}
         </button>
-        {ch.type === "voice" && participants.length > 0 && (
+        {ch.is_stage && (stageTopic || participants.length > 0) && (
+          <div className="pb-1 pl-9">
+            {stageTopic && (
+              <p className="truncate px-2 pb-0.5 text-[12px] font-medium text-status-online" title={stageTopic}>{stageTopic}</p>
+            )}
+            {participants.filter((vp) => vp.stage_speaker).map((vp) => (
+              <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default">
+                <MiniAvatar profile={vp.profile} />
+                <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : t("Unknown")}</span>
+                {vp.muted && <IconMicOff size={16} className="shrink-0 text-interactive-normal" />}
+              </span>
+            ))}
+            {participants.some((vp) => !vp.stage_speaker) && (
+              <span className="flex h-6 items-center gap-2 px-2 text-[12px] text-channels-default">
+                <IconHeadphones size={14} className="shrink-0" />
+                {t("{count} listening", { count: participants.filter((vp) => !vp.stage_speaker).length })}
+              </span>
+            )}
+          </div>
+        )}
+        {ch.type === "voice" && !ch.is_stage && participants.length > 0 && (
           <div className="pb-1 pl-9">
             {participants.map((vp) => (
               <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default hover:bg-interactive-hover hover:text-text-normal">
@@ -654,6 +682,28 @@ export function ChannelList({
             </button>
           </div>
         )}
+
+        {/* Open stages ride at the top, as in Discord, so nobody misses one. */}
+        {channels.filter((ch) => ch.is_stage && stageTopics?.has(ch.id)).map((ch) => {
+          const count = voicePresence.get(ch.id)?.length ?? 0;
+          return (
+            <button
+              key={`live-stage:${ch.id}`}
+              type="button"
+              onClick={() => onSelectChannel(ch.id)}
+              className="mb-2 mt-1 flex w-full items-center gap-2.5 rounded-lg bg-status-online/10 px-2.5 py-2 text-left ring-1 ring-status-online/25 transition-colors hover:bg-status-online/15"
+            >
+              <IconStage size={20} className="shrink-0 text-status-online" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-semibold text-header-primary">{stageTopics?.get(ch.id)}</span>
+                <span className="block truncate text-[12px] text-header-secondary">
+                  {ch.name} · {t("{count} listening", { count })}
+                </span>
+              </span>
+              <span className="shrink-0 rounded-[4px] bg-status-online px-1.5 text-[10px] font-bold leading-[16px] text-white">{t("LIVE")}</span>
+            </button>
+          );
+        })}
 
         {sortedCategories.map((cat) => {
           const items = byCategory(cat.id);

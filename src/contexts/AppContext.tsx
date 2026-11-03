@@ -266,7 +266,8 @@ interface AppContextValue {
   getMemberColor: (member: ServerMember) => string | null;
   /** The member's highest role that has an icon (Catalyst Level 2 role icons). */
   getMemberIconRole: (member: ServerMember) => ServerRole | null;
-  createChannel: (data: { name: string; type?: ChannelType; categoryId?: string | null }) => Promise<string | null>;
+  /** "stage" makes a voice channel that is a stage. */
+  createChannel: (data: { name: string; type?: ChannelType | "stage"; categoryId?: string | null }) => Promise<string | null>;
   renameChannel: (channelId: string, name: string) => Promise<string | null>;
   setChannelReadOnly: (channelId: string, readOnly: boolean) => Promise<string | null>;
   deleteChannel: (channelId: string) => Promise<string | null>;
@@ -5610,16 +5611,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [serverPermissions],
   );
 
-  const createChannel = useCallback(async (data: { name: string; type?: ChannelType; categoryId?: string | null }) => {
+  const createChannel = useCallback(async (data: { name: string; type?: ChannelType | "stage"; categoryId?: string | null }) => {
     if (!activeServerId) return "No space selected";
     await ensureFreshSession();
+    const stage = data.type === "stage";
     const { data: id, error } = await getSupabaseClient().rpc("create_channel", {
       p_server_id: activeServerId,
       p_name: data.name.trim(),
-      p_type: data.type ?? "text",
+      p_type: stage ? "voice" : data.type ?? "text",
       p_category_id: data.categoryId ?? null,
     });
     if (error) return error.message;
+    // A stage is a voice channel with is_stage set (needs Manage Channels,
+    // which creating it already did).
+    if (stage && typeof id === "string") {
+      const { error: stageError } = await getSupabaseClient().from("channels").update({ is_stage: true }).eq("id", id);
+      if (stageError) return stageError.message;
+    }
     await loadServerDetails(activeServerId);
     if (typeof id === "string") selectChannel(id);
     return null;

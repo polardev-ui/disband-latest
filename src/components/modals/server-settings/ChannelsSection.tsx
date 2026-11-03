@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import type { ChannelType } from "@/lib/supabase/types";
-import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker, IconTrash } from "@/components/icons";
+import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker, IconStage, IconTrash } from "@/components/icons";
 import { ConfirmDialog, EmptyState, InlineError, Segmented, btn, enterStyle, iconBtn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
 
-type ChannelLite = { id: string; name: string; type: string; category_id?: string | null; read_only?: boolean };
+type ChannelLite = { id: string; name: string; type: string; category_id?: string | null; read_only?: boolean; is_stage?: boolean };
 
 export function ChannelsSection({ onEditChannel }: SectionProps & {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
@@ -18,7 +18,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
   const [name, setName] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
-  const [type, setType] = useState<ChannelType>("text");
+  const [type, setType] = useState<ChannelType | "stage">("text");
   const [categoryId, setCategoryId] = useState<string>("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +78,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             options={[
               { value: "text", label: <><IconHash size={14} /> {t("Text")}</> },
               { value: "voice", label: <><IconSpeaker size={14} /> {t("Voice")}</> },
+              { value: "stage", label: <><IconStage size={14} /> {t("Stage")}</> },
             ]}
           />
           {categories.length > 0 && (
@@ -97,7 +98,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
         <div className="flex gap-2 border-t border-divider px-5 py-4">
           <label className="relative flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-              {type === "text" ? <IconHash size={15} /> : <IconSpeaker size={15} />}
+              {type === "text" ? <IconHash size={15} /> : type === "stage" ? <IconStage size={15} /> : <IconSpeaker size={15} />}
             </span>
             <input
               value={name}
@@ -161,7 +162,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             <ul className="overflow-hidden rounded-lg bg-bg-secondary">
               {group.items.map((c) => {
                 const index = row++;
-                const Icon = c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;
+                const Icon = c.is_stage ? IconStage : c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;
                 return (
                   <li
                     key={c.id}

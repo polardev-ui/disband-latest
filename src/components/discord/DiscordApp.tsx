@@ -38,6 +38,7 @@ import {
   IncomingCallOverlay,
 } from "./CallUI";
 import { GroupCallStage } from "./GroupCallStage";
+import { StagePanel } from "./StagePanel";
 import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
 import { InviteSpaceModal } from "./InviteSpaceModal";
@@ -1903,6 +1904,7 @@ export function DiscordApp() {
                   canManageChannels={canManageChannels}
                   voicePresence={serverVoicePresence.byChannel}
                   voiceStartTimes={serverVoicePresence.startTimes}
+                  stageTopics={serverVoicePresence.stageTopics}
                   onSelectChannel={handleSelectChannel}
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1998,6 +2000,7 @@ export function DiscordApp() {
                     canManageChannels={canManageChannels}
                     voicePresence={serverVoicePresence.byChannel}
                     voiceStartTimes={serverVoicePresence.startTimes}
+                  stageTopics={serverVoicePresence.stageTopics}
                     onSelectChannel={handleSelectChannel}
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -2291,7 +2294,11 @@ export function DiscordApp() {
 
       {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} onTabChange={setDiscoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
 
-      {app.viewMode === "space" && activeChannel && isVoice && (
+      {app.viewMode === "space" && activeChannel && isVoice && activeChannel.is_stage && (
+        <StagePanel channel={activeChannel} />
+      )}
+
+      {app.viewMode === "space" && activeChannel && isVoice && !activeChannel.is_stage && (
         <VoicePanel
           channelId={activeChannel.id}
           channelName={activeChannel.name}
