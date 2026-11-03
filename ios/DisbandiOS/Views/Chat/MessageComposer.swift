@@ -13,8 +13,10 @@ struct MessageComposer: View {
     var placeholder: String = "Message"
     /// Photos or videos are waiting to go, so send works with no text.
     var hasAttachments: Bool = false
+    /// Images or GIFs pasted into the box (their original bytes).
+    var onPasteImages: (([Data]) -> Void)? = nil
 
-    @FocusState private var focused: Bool
+    @State private var focused = false
 
     private var canSend: Bool {
         hasAttachments || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -24,16 +26,23 @@ struct MessageComposer: View {
         HStack(alignment: .bottom, spacing: 4) {
             attachButton
 
-            TextField(placeholder, text: $text, axis: .vertical)
-                .lineLimit(1...6)
-                .font(.body)
-                .foregroundStyle(Brand.textPrimary)
-                .focused($focused)
-                // Height matches the 44pt buttons, so with the row bottom-
-                // aligned a single line sits on the same centre as they do;
-                // extra lines grow upward past it.
-                .padding(.vertical, 11)
+            // Height matches the 44pt buttons, so with the row bottom-aligned
+            // a single line sits on the same centre as they do; extra lines
+            // grow upward past it. A text view rather than a TextField so
+            // images and GIFs can be pasted.
+            ComposerTextView(text: $text, focused: $focused, onPasteImages: onPasteImages)
                 .frame(minHeight: 44)
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .font(.body)
+                            .foregroundStyle(Brand.textMuted)
+                            .lineLimit(1)
+                            .padding(.top, 11)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .accessibilityLabel(placeholder)
 
             if canSend {
                 sendButton

@@ -50,6 +50,10 @@ struct ChatView: View {
     @State private var mentionLookup: String?
     @State private var reactingMessage: DisplayMessage?
     @State private var replyingTo: DisplayMessage?
+    /// My message being edited: the composer holds its text until saved.
+    @State private var editingMessage: DisplayMessage?
+    /// What was in the composer before editing began, given back afterwards.
+    @State private var draftBeforeEdit = ""
     /// Photos and videos picked for the next message, as on desktop: they
     /// wait above the composer (up to ten) until you send.
     @State private var staged: [StagedAttachment] = []
@@ -116,7 +120,8 @@ struct ChatView: View {
             if let composerLockedReason {
                 lockedComposer(composerLockedReason)
             } else {
-                if let replyingTo { replyBanner(replyingTo) }
+                if let editingMessage { editBanner(editingMessage) }
+                else if let replyingTo { replyBanner(replyingTo) }
                 if mentionQuery != nil, !mentions.results.isEmpty {
                     MentionSuggestionList(results: mentions.results) { pick in
                         draft = MentionSearch.applying(pick, to: draft)
@@ -130,7 +135,8 @@ struct ChatView: View {
                                 onGif: { showGifPicker = true },
                                 onPhoto: { if staged.count < maxAttachments { showPhotoPicker = true } },
                                 placeholder: composerPlaceholder,
-                                hasAttachments: !staged.isEmpty)
+                                hasAttachments: !staged.isEmpty,
+                                onPasteImages: editingMessage == nil ? { stagePasted($0) } : nil)
                                 .onChange(of: draft) {
                                     if let name = app.profile?.name, !draft.isEmpty {
                                         model.notifyTyping(displayName: name)
@@ -185,6 +191,11 @@ struct ChatView: View {
                 }
                 Button { Speaker.shared.speak(target.content) } label: {
                     Label("Speak Message", systemImage: "speaker.wave.2.fill")
+                }
+                if target.authorId == app.currentUserId, !target.pending, target.webhook == nil {
+                    Button { startEditing(target) } label: {
+                        Label("Edit Message", systemImage: "pencil")
+                    }
                 }
                 Button { UIPasteboard.general.string = target.content } label: {
                     Label("Copy Text", systemImage: "doc.on.doc")
@@ -811,6 +822,41 @@ struct ChatView: View {
         }
     }
 
+    private func startEditing(_ message: DisplayMessage) {
+        if editingMessage == nil { draftBeforeEdit = draft }
+        staged = []
+        withAnimation {
+            replyingTo = nil
+            editingMessage = message
+        }
+        draft = message.content
+    }
+
+    private func stopEditing() {
+        withAnimation { editingMessage = nil }
+        draft = draftBeforeEdit
+        draftBeforeEdit = ""
+    }
+
+    private func editBanner(_ message: DisplayMessage) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil").foregroundStyle(Brand.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Editing message")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Brand.textSecondary)
+                Text(message.content)
+                    .font(.caption2).foregroundStyle(Brand.textMuted).lineLimit(1)
+            }
+            Spacer()
+            Button { stopEditing() } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(Brand.textMuted)
+            }
+            .accessibilityLabel("Cancel editing")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Brand.surface)
+    }
+
     private func replyBanner(_ message: DisplayMessage) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "arrowshape.turn.up.left.fill").foregroundStyle(Brand.accent)
@@ -879,6 +925,14 @@ struct ChatView: View {
     private func sendDraft() {
         let content = draft
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let editing = editingMessage {
+            // Saving an edit: an emptied message is left alone (delete is
+            // its own action), as on the web.
+            guard !trimmed.isEmpty else { return }
+            stopEditing()
+            Task { await model.editMessage(editing, to: trimmed) }
+            return
+        }
         // The same text again within a moment is the keyboard handing the
         // last message back (see below) and a second tap on send, not a new
         // message. It used to post twice.
@@ -935,6 +989,13 @@ struct ChatView: View {
             } else if let data = try? await item.loadTransferable(type: Data.self) {
                 staged.append(StagedAttachment(kind: .photo(data, UIImage(data: data))))
             }
+        }
+    }
+
+    /// Images and GIFs pasted into the composer wait with picked photos.
+    private func stagePasted(_ images: [Data]) {
+        for data in images.prefix(max(0, maxAttachments - staged.count)) {
+            staged.append(StagedAttachment(kind: .photo(data, UIImage(data: data))))
         }
     }
 
@@ -1015,7 +1076,11 @@ struct ChatView: View {
                 guard case .photo(let data, _) = item.kind else { return nil }
                 // Numbered so a set does not arrive as ten files all called
                 // "image.jpg", which is what the file card would show.
-                return (data, items.count == 1 ? "image.jpg" : "image-\(index + 1).jpg", "image/jpeg", .image)
+                // By its bytes, not assumed JPEG: a GIF sent as image/jpeg
+                // arrived as a still.
+                let format = ImageFormat.sniff(data)
+                return (data, items.count == 1 ? "image.\(format.ext)" : "image-\(index + 1).\(format.ext)",
+                        format.mime, .image)
             }
         let videos = items.compactMap { item -> URL? in
             if case .video(let url) = item.kind { return url }
@@ -1035,6 +1100,21 @@ struct ChatView: View {
                                                authorId: uid)
             }
         }
+    }
+}
+
+/// What kind of image some bytes are, from their first few.
+enum ImageFormat {
+    static func sniff(_ data: Data) -> (ext: String, mime: String) {
+        let head = [UInt8](data.prefix(12))
+        if head.starts(with: [0x47, 0x49, 0x46, 0x38]) { return ("gif", "image/gif") }
+        if head.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return ("png", "image/png") }
+        if head.count >= 12, head[0...3] == [0x52, 0x49, 0x46, 0x46], head[8...11] == [0x57, 0x45, 0x42, 0x50] {
+            return ("webp", "image/webp")
+        }
+        // Anything else (JPEG, and HEIC from the photo library) goes as it
+        // always has.
+        return ("jpg", "image/jpeg")
     }
 }
 

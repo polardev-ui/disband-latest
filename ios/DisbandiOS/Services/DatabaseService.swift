@@ -291,6 +291,17 @@ enum DatabaseService {
         try await client.from("group_messages").delete().eq("id", value: id).execute()
     }
 
+    /// Rewrite one of my own messages, as the web does: new text and when.
+    /// `table` is messages, dm_messages or group_messages.
+    static func editMessage(table: String, id: String, authorId: String, content: String, editedAt: String) async throws {
+        struct Edit: Encodable { let content: String; let edited_at: String }
+        try await client.from(table)
+            .update(Edit(content: content, edited_at: editedAt))
+            .eq("id", value: id)
+            .eq("author_id", value: authorId)
+            .execute()
+    }
+
     // MARK: - Direct messages
 
     static func myDmThreads(currentUserId: String) async throws -> [DmThread] {

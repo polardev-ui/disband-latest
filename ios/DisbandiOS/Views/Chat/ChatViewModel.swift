@@ -669,6 +669,36 @@ final class ChatViewModel {
     }
 
     /// Delete a message (author-only, enforced by RLS) and drop it locally.
+    /// Save new text for one of my messages. Shows straight away; put back
+    /// if the server refuses.
+    func editMessage(_ message: DisplayMessage, to newContent: String) async {
+        guard let uid = currentUserId, message.authorId == uid else { return }
+        let content = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty, content != message.content else { return }
+        let editedAt = ISO8601DateFormatter().string(from: Date())
+        let table: String
+        switch source {
+        case .channel: table = "messages"
+        case .dm: table = "dm_messages"
+        case .group: table = "group_messages"
+        }
+        if let i = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[i].content = content
+            messages[i].editedAt = editedAt
+        }
+        do {
+            try await DatabaseService.editMessage(table: table, id: message.id, authorId: uid,
+                                                  content: content, editedAt: editedAt)
+            cacheNow()
+        } catch {
+            if let i = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[i].content = message.content
+                messages[i].editedAt = message.editedAt
+            }
+            loadError = error.localizedDescription
+        }
+    }
+
     func deleteMessage(_ message: DisplayMessage) async {
         do {
             switch source {

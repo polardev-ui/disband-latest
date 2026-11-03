@@ -190,6 +190,11 @@ struct MessageRow: View {
                             onTapMention(name)
                             return .handled
                         })
+                    if message.editedAt != nil {
+                        Text("(edited)")
+                            .font(.caption2)
+                            .foregroundStyle(Brand.textMuted)
+                    }
                 }
 
                 // Invites and link previews, so a shared server can be joined

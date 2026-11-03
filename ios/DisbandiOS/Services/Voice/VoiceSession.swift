@@ -283,14 +283,20 @@ final class VoiceSession {
     func leave() async {
         guard isActive || room != nil else { return }
         let leavingRoom = room
+        let wasConnected = phase == .connected
+        let leavingSignal = signalChannel
+        let leavingPresence = presenceChannel
         loops.forEach { $0.cancel() }
         loops = []
 
         if let userId, signalChannel != nil {
             broadcast(MeshSignal(type: "leave", from: userId, client: MeshSignal.nativeClient))
         }
-        if leavingRoom != nil { try? await writePresence(joining: false) }
 
+        // The call ends here, on this phone, straight away. The network
+        // clean-up below used to come first, and when it stalled (a dropped
+        // connection, a channel removal that never got its reply) the pill
+        // stayed up and hanging up did nothing.
         for peer in peers.values { peer.close() }
         peers = [:]
         remoteAudio = [:]
@@ -301,14 +307,11 @@ final class VoiceSession {
         stopCamera()
         audioTrack = nil
         factory = nil
-
         signalSubscription = nil
-        if let signalChannel { await client.removeChannel(signalChannel) }
         signalChannel = nil
-        if let presenceChannel { await client.removeChannel(presenceChannel) }
         presenceChannel = nil
 
-        if phase == .connected { CallSounds.shared.playEnd() }
+        if wasConnected { CallSounds.shared.playEnd() }
         if !isDirectCallActive() { CallAudioSession.deactivate() }
 
         room = nil
@@ -321,6 +324,32 @@ final class VoiceSession {
         ringingIds = []
         connectedAt = nil
         minimized = false
+
+        // Then tell everyone. Waited on (briefly) so a quick rejoin of the
+        // same room can't have its new presence row deleted by this one;
+        // the realtime channels are let go in the background.
+        if let leavingRoom {
+            _ = await withDeadline(seconds: 4) { [self] in try? await self.removePresence(for: leavingRoom) }
+        }
+        let client = self.client
+        Task {
+            if let leavingSignal { await client.removeChannel(leavingSignal) }
+            if let leavingPresence { await client.removeChannel(leavingPresence) }
+        }
+    }
+
+    /// Runs `work`, but gives up waiting after `seconds`. True if it finished.
+    private func withDeadline(seconds: Double, _ work: @escaping @Sendable () async -> Void) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await work(); return true }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
     }
 
     // MARK: - Controls
@@ -532,6 +561,19 @@ final class VoiceSession {
     private struct GroupPresenceRow: Codable {
         let group_id: String
         let user_id: String
+    }
+
+    /// Takes my row out of a room I've left (by then `room` is already nil).
+    private func removePresence(for room: VoiceRoom) async throws {
+        guard let userId else { return }
+        switch room {
+        case .channel(let id, _, _, _, _):
+            try await client.from("voice_presence").delete()
+                .eq("channel_id", value: id).eq("user_id", value: userId).execute()
+        case .group(let id, _, _):
+            try await client.from("group_call_presence").delete()
+                .eq("group_id", value: id).eq("user_id", value: userId).execute()
+        }
     }
 
     private func writePresence(joining: Bool) async throws {
