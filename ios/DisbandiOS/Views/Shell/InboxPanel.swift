@@ -134,7 +134,7 @@ struct InboxPanel: View {
     @ViewBuilder private func row(_ item: Item) -> some View {
         switch item {
         case .dm(let thread):
-            NavigationLink(value: SpacesRoute.chat(
+            RouteLink(value: SpacesRoute.chat(
                 .dm(threadId: thread.id, title: thread.friend?.name ?? "Direct Message"),
                 callPeer: thread.friend, canModerate: false)
             ) {
@@ -162,7 +162,7 @@ struct InboxPanel: View {
                 }
             }
         case .group(let group):
-            NavigationLink(value: SpacesRoute.chat(.group(id: group.id, name: group.name),
+            RouteLink(value: SpacesRoute.chat(.group(id: group.id, name: group.name),
                                                    callPeer: nil, canModerate: false)) {
                 ConversationRow(
                     iconUrl: group.iconUrl,

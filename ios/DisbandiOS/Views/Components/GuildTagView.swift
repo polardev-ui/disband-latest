@@ -191,7 +191,7 @@ struct GuildTagBadge: View {
     }
 }
 
-private struct GuildTagSpaceTarget: Identifiable {
+struct GuildTagSpaceTarget: Identifiable {
     let id: String
 }
 

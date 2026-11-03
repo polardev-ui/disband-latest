@@ -10,16 +10,28 @@ import SwiftUI
 struct UserBadgesView: View {
     let profile: Profile
     var size: CGFloat = 13
+    /// Leads the row with their guild tag, so tag and badges wrap as one
+    /// line, as on the web. Side by side in an HStack the tag floated halfway
+    /// down whenever the badges wrapped onto a second line.
+    var showsGuildTag = false
 
     @State private var badges: [AwardedBadge] = []
     @State private var entitlement: Entitlement?
     @State private var showTiers = false
+    @State private var tags = GuildTagStore.shared
+    @State private var tagSpace: GuildTagSpaceTarget?
 
     var body: some View {
         // Wraps rather than running off the edge: a profile that has earned a
         // dozen badges showed only the first few, and the rest were simply cut
         // off by the screen.
         FlowLayout(spacing: 4, lineSpacing: 4) {
+            if showsGuildTag, let tag = tags.tag(for: profile.id) {
+                GuildTagBadge(tag: tag, size: .medium) {
+                    tagSpace = GuildTagSpaceTarget(id: tag.serverId)
+                }
+            }
+
             if let ent = entitlement, ent.plan != "free",
                let tier = SubscriptionTier.forMonths(ent.months) {
                 Button { showTiers = true } label: {
@@ -36,8 +48,12 @@ struct UserBadgesView: View {
             }
         }
         .task(id: profile.id) {
+            if showsGuildTag { tags.ensureLoaded(profile.id) }
             badges = await BadgeService.shared.badges(for: profile.id)
             entitlement = await EntitlementService.shared.entitlement(for: profile.id)
+        }
+        .sheet(item: $tagSpace) { target in
+            GuildTagSpaceView(serverId: target.id)
         }
         .onReceive(NotificationCenter.default.publisher(for: .ownBadgesChanged)) { _ in
             Task { badges = await BadgeService.shared.badges(for: profile.id) }

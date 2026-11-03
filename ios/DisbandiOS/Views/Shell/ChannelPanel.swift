@@ -7,6 +7,40 @@ enum SpacesRoute: Hashable {
     case members(Server)
 }
 
+/// Opens a Home route. On iPhone it's pushed over everything; on iPad
+/// SpacesView sets this so it opens in the pane beside the channel list.
+private struct OpenSpacesRouteKey: EnvironmentKey {
+    static let defaultValue: ((SpacesRoute) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var openSpacesRoute: ((SpacesRoute) -> Void)? {
+        get { self[OpenSpacesRouteKey.self] }
+        set { self[OpenSpacesRouteKey.self] = newValue }
+    }
+}
+
+/// A `NavigationLink(value:)` that follows `openSpacesRoute` when it's set.
+struct RouteLink<Label: View>: View {
+    let route: SpacesRoute
+    @ViewBuilder var label: () -> Label
+
+    @Environment(\.openSpacesRoute) private var open
+
+    init(value route: SpacesRoute, @ViewBuilder label: @escaping () -> Label) {
+        self.route = route
+        self.label = label
+    }
+
+    var body: some View {
+        if let open {
+            Button { open(route) } label: { label() }
+        } else {
+            NavigationLink(value: route) { label() }
+        }
+    }
+}
+
 /// A server's channels, grouped by category, with who is in each voice
 /// channel shown live underneath it.
 struct ChannelPanel: View {
@@ -145,7 +179,7 @@ struct ChannelPanel: View {
 
             HStack(spacing: 8) {
                 pillButton("Invite", symbol: "person.badge.plus") { showInvite = true }
-                NavigationLink(value: SpacesRoute.members(server)) {
+                RouteLink(value: SpacesRoute.members(server)) {
                     pillLabel("Members", symbol: "person.2.fill")
                 }
                 .buttonStyle(.plain)
@@ -300,7 +334,7 @@ struct ChannelPanel: View {
 
     private func textRow(_ channel: Channel) -> some View {
         let locked = lockedReason(for: channel)
-        return NavigationLink(value: SpacesRoute.chat(.channel(id: channel.id, name: channel.name),
+        return RouteLink(value: SpacesRoute.chat(.channel(id: channel.id, name: channel.name),
                                                       callPeer: nil, canModerate: canModerate,
                                                       lockedReason: locked)) {
             HStack(spacing: 10) {

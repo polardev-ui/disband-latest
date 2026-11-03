@@ -401,6 +401,7 @@ private fun Attachments(
         rest.forEach {
             when (it.type) {
                 "audio" -> AudioCard(it, palette, onOpen)
+                "poll" -> PollCard(it.url)
                 else -> FileCard(it, palette, onOpen)
             }
         }

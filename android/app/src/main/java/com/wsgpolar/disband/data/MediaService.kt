@@ -1,5 +1,9 @@
 package com.wsgpolar.disband.data
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.os.Build
 import com.wsgpolar.disband.core.ApiHttp
 import com.wsgpolar.disband.core.AppConfig
 import com.wsgpolar.disband.core.DisbandSupabase
@@ -58,8 +62,34 @@ object MediaService {
      * be used as free storage by whoever finds the endpoint. The old host took
      * anything from anyone, which is why this header did not exist before.
      */
+    /**
+     * HEIC/HEIF photos only display on Apple devices, so anything that isn't
+     * already JPEG, PNG, GIF or WebP is re-encoded as JPEG before it goes up.
+     */
+    private fun webSafe(bytes: ByteArray, filename: String, mimeType: String): Triple<ByteArray, String, String> {
+        fun at(i: Int) = if (i < bytes.size) bytes[i].toInt() and 0xFF else -1
+        val jpeg = at(0) == 0xFF && at(1) == 0xD8 && at(2) == 0xFF
+        val png = at(0) == 0x89 && at(1) == 0x50 && at(2) == 0x4E && at(3) == 0x47
+        val gif = at(0) == 0x47 && at(1) == 0x49 && at(2) == 0x46 && at(3) == 0x38
+        val webp = at(0) == 0x52 && at(1) == 0x49 && at(2) == 0x46 && at(3) == 0x46 &&
+            at(8) == 0x57 && at(9) == 0x45 && at(10) == 0x42 && at(11) == 0x50
+        if (jpeg || png || gif || webp || !mimeType.startsWith("image/")) return Triple(bytes, filename, mimeType)
+        val bitmap = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                ImageDecoder.decodeBitmap(ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes)))
+            } else {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        }.getOrNull() ?: return Triple(bytes, filename, mimeType)
+        val out = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+        val base = filename.substringBeforeLast('.', filename).ifBlank { "image" }
+        return Triple(out.toByteArray(), "$base.jpg", "image/jpeg")
+    }
+
     suspend fun uploadImage(bytes: ByteArray, filename: String = "upload.jpg",
                             mimeType: String = "image/jpeg"): MediaUploadResult {
+        val (bytes, filename, mimeType) = webSafe(bytes, filename, mimeType)
         val token = runCatching {
             DisbandSupabase.auth.currentSessionOrNull()?.accessToken
         }.getOrNull()

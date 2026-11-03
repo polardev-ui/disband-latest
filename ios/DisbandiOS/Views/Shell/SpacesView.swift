@@ -8,6 +8,7 @@ struct SpacesView: View {
     @Environment(DmUnreadStore.self) private var unreadStore
     @Environment(DirectMessagesViewModel.self) private var vm
     @Environment(VoiceSession.self) private var voice
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var servers: [Server] = []
     @State private var selection: SpaceSelection = .inbox
@@ -21,39 +22,8 @@ struct SpacesView: View {
     @AppStorage("disband.lastSpace") private var lastSpace = ""
 
     var body: some View {
-        NavigationStack(path: $path) {
-            HStack(spacing: 0) {
-                ServerRail(
-                    servers: servers,
-                    selection: $selection,
-                    inboxUnread: inboxUnread,
-                    unreadConversations: unreadConversations,
-                    voiceServerId: voiceServerId,
-                    onJoin: { showJoin = true },
-                    onCreate: { showCreate = true },
-                    onDiscover: { showDiscover = true }
-                )
-
-                panel
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Brand.surface)
-                    // The panel is a card laid over the rail, rounded only on
-                    // its leading top corner — the one detail that tells you
-                    // it slides independently of the rail.
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, style: .continuous))
-                    .ignoresSafeArea(edges: .bottom)
-            }
-            .background(Brand.background)
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: SpacesRoute.self) { route in
-                switch route {
-                case .chat(let source, let peer, let canModerate, let lockedReason):
-                    ChatView(source: source, callPeer: peer, canModerate: canModerate,
-                             composerLockedReason: lockedReason)
-                case .members(let server):
-                    ServerMembersView(server: server)
-                }
-            }
+        Group {
+            if sizeClass == .regular { splitLayout } else { stackLayout }
         }
         .task { await loadServers() }
         // A tapped notification lands here: this view owns the navigation
@@ -69,6 +39,79 @@ struct SpacesView: View {
         .sheet(isPresented: $showDiscover) {
             DiscoverServersSheet(joinedIds: Set(servers.map(\.id)),
                                  onOpen: { selection = .server($0) }) { await loadServers() }
+        }
+    }
+
+    /// iPhone, and iPad in a narrow window: conversations push over
+    /// everything at full width.
+    private var stackLayout: some View {
+        NavigationStack(path: $path) {
+            HStack(spacing: 0) {
+                rail
+                panel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Brand.surface)
+                    // The panel is a card laid over the rail, rounded only on
+                    // its leading top corner — the one detail that tells you
+                    // it slides independently of the rail.
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, style: .continuous))
+                    .ignoresSafeArea(edges: .bottom)
+            }
+            .background(Brand.background)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: SpacesRoute.self, destination: destination)
+        }
+    }
+
+    /// iPad: rail and channels stay on the left and the conversation opens
+    /// beside them, so moving between channels is one tap rather than back
+    /// and forward through full-screen pushes.
+    private var splitLayout: some View {
+        HStack(spacing: 0) {
+            rail
+            panel
+                .frame(width: 340)
+                .frame(maxHeight: .infinity)
+                .background(Brand.surface)
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, style: .continuous))
+                .ignoresSafeArea(edges: .bottom)
+                .environment(\.openSpacesRoute) { route in
+                    path = NavigationPath()
+                    path.append(route)
+                }
+            Divider().overlay(Brand.background)
+            NavigationStack(path: $path) {
+                ContentUnavailableView("Pick a conversation", systemImage: "bubble.left.and.bubble.right",
+                                       description: Text("Choose a channel or a direct message to start chatting."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Brand.background)
+                    .toolbar(.hidden, for: .navigationBar)
+                    .navigationDestination(for: SpacesRoute.self, destination: destination)
+            }
+        }
+        .background(Brand.background)
+    }
+
+    private var rail: some View {
+        ServerRail(
+            servers: servers,
+            selection: $selection,
+            inboxUnread: inboxUnread,
+            unreadConversations: unreadConversations,
+            voiceServerId: voiceServerId,
+            onJoin: { showJoin = true },
+            onCreate: { showCreate = true },
+            onDiscover: { showDiscover = true }
+        )
+    }
+
+    @ViewBuilder private func destination(_ route: SpacesRoute) -> some View {
+        switch route {
+        case .chat(let source, let peer, let canModerate, let lockedReason):
+            ChatView(source: source, callPeer: peer, canModerate: canModerate,
+                     composerLockedReason: lockedReason)
+        case .members(let server):
+            ServerMembersView(server: server)
         }
     }
 

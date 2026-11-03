@@ -30,6 +30,12 @@ period = 60
 binding = "MEDIA"
 bucket_name = "disband-media"
 
+# Cloudflare Images, used to serve HEIC/HEIF photos as JPEG (serveHeicAsJpeg).
+# Needs Images enabled on the account; without the binding photos are served
+# as uploaded.
+[images]
+binding = "IMAGES"
+
 [[durable_objects.bindings]]
 name = "MEDIA_QUOTA"
 class_name = "MediaQuota"

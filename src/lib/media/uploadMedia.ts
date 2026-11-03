@@ -63,15 +63,41 @@ export interface UploadMediaOptions {
   maxUploadBytes?: number;
 }
 
+/**
+ * HEIC/HEIF (iPhone photos) only display on Apple devices. Where this browser
+ * can decode one (Safari, and the macOS desktop app), it's re-encoded as JPEG
+ * before upload. Where it can't (Chrome), it goes up as it is and the CDN
+ * serves it as JPEG instead.
+ */
+export async function toWebSafeImage(file: File): Promise<File> {
+  const isHeic = /^image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+  if (!isHeic || typeof createImageBitmap !== "function") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob) return file;
+    const name = `${file.name.replace(/\.[^.]+$/, "") || "image"}.jpg`;
+    return new File([blob], name, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch {
+    return file;
+  }
+}
+
 export async function uploadMedia(
-  file: File,
+  input: File,
   options: UploadMediaOptions = {},
 ): Promise<MediaUploadResult> {
   const { signal, onProgress, maxUploadBytes = MAX_UPLOAD_BYTES } = options;
 
-  if (!file) {
+  if (!input) {
     throw new MediaUploadError("No file provided to uploadMedia().");
   }
+  const file = await toWebSafeImage(input);
   if (file.size > maxUploadBytes) {
     throw new MediaUploadError(`File is too large (max ${maxUploadBytes / (1024 * 1024)} MB).`);
   }

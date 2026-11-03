@@ -9,6 +9,8 @@ struct MessageComposer: View {
     var onSend: () -> Void
     var onGif: () -> Void = {}
     var onPhoto: () -> Void = {}
+    /// Nil where polls can't be posted (while editing a message).
+    var onPoll: (() -> Void)? = nil
     /// "Message #general", "Message @name": says where this will go.
     var placeholder: String = "Message"
     /// Photos or videos are waiting to go, so send works with no text.
@@ -99,6 +101,9 @@ struct MessageComposer: View {
         Menu {
             Button { onPhoto() } label: { Label("Photo", systemImage: "photo") }
             Button { onGif() } label: { Label("GIF", systemImage: "sparkles") }
+            if let onPoll {
+                Button { onPoll() } label: { Label("Poll", systemImage: "chart.bar.xaxis") }
+            }
         } label: {
             ZStack {
                 if uploading {

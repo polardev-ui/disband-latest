@@ -128,7 +128,7 @@ function storageTypeFor(type) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const { pathname } = url;
 
@@ -154,7 +154,7 @@ export default {
 
     if ((request.method === "GET" || request.method === "HEAD")
         && pathname.startsWith("/v1/images/")) {
-      return serve(request, env, decodeURIComponent(pathname.slice("/v1/images/".length)));
+      return serve(request, env, decodeURIComponent(pathname.slice("/v1/images/".length)), ctx);
     }
 
     // Migration endpoint: pulls an object from the old host straight into R2
@@ -821,7 +821,7 @@ function sniffBytes(bytes) {
 
 /* ------------------------------------------------------------------- serve */
 
-async function serve(request, env, key) {
+async function serve(request, env, key, ctx) {
   const legacyKey = /^[0-9a-f-]{36}\.[a-z0-9]+$/i;
   const userKey = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.[a-z0-9]+$/i;
   if (!legacyKey.test(key) && !userKey.test(key)) {
@@ -834,6 +834,12 @@ async function serve(request, env, key) {
   // response came back 206 to clients that had not asked for one, which is
   // not a valid answer to a plain GET.
   const wantsRange = request.headers.has("range");
+
+  if (request.method === "GET" && !wantsRange && env.IMAGES
+      && HEIC_CANDIDATE.test(key) && !new URL(request.url).searchParams.has("original")) {
+    const converted = await serveHeicAsJpeg(request, env, key, ctx);
+    if (converted) return converted;
+  }
   const object = await env.MEDIA.get(key, {
     ...(wantsRange ? { range: request.headers } : {}),
     onlyIf: request.headers,
@@ -862,6 +868,92 @@ async function serve(request, env, key) {
 
   const status = wantsRange && object.range ? 206 : 200;
   return new Response(request.method === "HEAD" ? null : object.body, { status, headers });
+}
+
+/* ------------------------------------------------------------ HEIC → JPEG */
+
+/**
+ * HEIC/HEIF photos only display on Apple devices. Older iPhone builds also
+ * sent them named .jpg, so the bytes are checked, not the name. They stay
+ * stored as uploaded; what's served is a JPEG made by the Images binding,
+ * cached at the edge so each photo is converted once per location rather
+ * than stored twice. `?original=1` returns the file as it was uploaded.
+ */
+const HEIC_CANDIDATE = /\.(jpe?g|hei[cf])$/i;
+const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1"]);
+
+function isHeic(bytes) {
+  if (bytes.length < 12) return false;
+  const ascii = (from, to) => String.fromCharCode(...bytes.subarray(from, to));
+  return ascii(4, 8) === "ftyp" && HEIC_BRANDS.has(ascii(8, 12));
+}
+
+/** The first chunk of a stream, and a stream that still yields all of it. */
+async function peek(body) {
+  const reader = body.getReader();
+  const first = await reader.read();
+  const head = first.done ? new Uint8Array() : first.value;
+  const stream = new ReadableStream({
+    start(controller) {
+      if (head.length) controller.enqueue(head);
+    },
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return { head, stream };
+}
+
+function imageHeaders(contentType, etag) {
+  const headers = new Headers();
+  headers.set("content-type", contentType);
+  if (etag) headers.set("etag", etag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.set("access-control-allow-origin", "*");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("content-security-policy", "default-src 'none'; sandbox");
+  return headers;
+}
+
+/** A JPEG response for a HEIC photo, or null to serve the file as usual. */
+async function serveHeicAsJpeg(request, env, key, ctx) {
+  const cache = caches.default;
+  const cacheKey = new Request(new URL(request.url).toString(), { method: "GET" });
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  const object = await env.MEDIA.get(key);
+  if (object === null) return null;
+  const { head, stream } = await peek(object.body);
+  const etag = object.httpEtag;
+
+  if (!isHeic(head)) {
+    // An ordinary JPEG: send it on without reading it twice.
+    const headers = imageHeaders(object.httpMetadata?.contentType ?? "image/jpeg", etag);
+    headers.set("accept-ranges", "bytes");
+    return new Response(stream, { status: 200, headers });
+  }
+
+  try {
+    const result = await env.IMAGES.input(stream).output({ format: "image/jpeg", quality: 85 });
+    const converted = result.response();
+    const response = new Response(converted.body, {
+      status: 200,
+      headers: imageHeaders("image/jpeg", etag.replace(/"$/, '-jpg"')),
+    });
+    const toCache = response.clone();
+    if (ctx) ctx.waitUntil(cache.put(cacheKey, toCache));
+    else await cache.put(cacheKey, toCache);
+    return response;
+  } catch (err) {
+    console.error("heic conversion failed", key, err);
+    return null;
+  }
 }
 
 /* ----------------------------------------------------------- link preview */

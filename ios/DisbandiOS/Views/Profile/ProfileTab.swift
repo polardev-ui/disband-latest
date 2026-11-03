@@ -15,6 +15,7 @@ struct ProfileTab: View {
     @State private var uploadError: String?
     @State private var showPaywall = false
     @State private var showNotifications = false
+    @State private var staffAccess: StaffAPI.Access?
 
     private var profile: Profile? { app.profile }
 
@@ -63,6 +64,11 @@ struct ProfileTab: View {
                                              title: "Guild tag", detail: nil)
                         }
                         SettingsDivider()
+                        NavigationLink { BadgeSettingsView().hidesDock().solidNavigationBar() } label: {
+                            SettingsRowLabel(symbol: "rosette", tint: Color(hex: 0xF1C40F),
+                                             title: "Badges", detail: "Show or hide")
+                        }
+                        SettingsDivider()
                         NavigationLink { ReferralsView() } label: {
                             SettingsRowLabel(symbol: "gift.fill", tint: Color(hex: 0xEB459E),
                                              title: "Referrals", detail: "Win $100")
@@ -81,6 +87,15 @@ struct ProfileTab: View {
                         NavigationLink { SettingsView().hidesDock() } label: {
                             SettingsRowLabel(symbol: "gearshape.fill", tint: Color(hex: 0x4E5058),
                                              title: "Settings")
+                        }
+                        if let staffAccess, staffAccess.isStaff {
+                            SettingsDivider()
+                            NavigationLink {
+                                StaffToolsView(isManager: staffAccess.isManager).hidesDock().solidNavigationBar()
+                            } label: {
+                                SettingsRowLabel(symbol: "shield.lefthalf.filled", tint: Color(hex: 0x5865F2),
+                                                 title: "Disband Staff", detail: staffAccess.isManager ? "Manager" : nil)
+                            }
                         }
                     }
                     .buttonStyle(.plain)
@@ -117,6 +132,9 @@ struct ProfileTab: View {
             .background(Brand.background)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showPaywall) { AeroPaywallSheet() }
+            .task(id: app.currentUserId) {
+                if let uid = app.currentUserId { staffAccess = await StaffAPI.access(for: uid) }
+            }
             .sheet(isPresented: $showNotifications) { NotificationsSheet() }
             .sheet(isPresented: $showEdit) { EditProfileSheet() }
             .sheet(isPresented: $showStatus) { StatusSheet() }
@@ -204,11 +222,8 @@ struct ProfileTab: View {
                     .font(.subheadline)
                     .foregroundStyle(Brand.textMuted)
                     if let profile {
-                        HStack(spacing: 6) {
-                            GuildTagView(userId: profile.id, size: .medium)
-                            UserBadgesView(profile: profile, size: 15)
-                        }
-                        .padding(.top, 4)
+                        UserBadgesView(profile: profile, size: 15, showsGuildTag: true)
+                            .padding(.top, 4)
                     }
                 }
 

@@ -49,6 +49,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -718,7 +720,15 @@ private fun Composer(
     var sending by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
     var unexpectedError by remember { mutableStateOf<String?>(null) }
+    var attachMenu by remember { mutableStateOf(false) }
+    var showPoll by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    if (showPoll && attachments != null) {
+        PollCreateDialog(onDismiss = { showPoll = false }) { pollId ->
+            val uid = runCatching { com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id }.getOrNull()
+            if (uid != null) scope.launch { attachments.sendPoll(uid, pollId) }
+        }
+    }
     val haptic = LocalHapticFeedback.current
     val hasStaged = attachments?.staged?.isNotEmpty() == true && editingRow == null
     val canSend = enabled && !sending && (text.isNotBlank() || hasStaged)
@@ -750,13 +760,33 @@ private fun Composer(
                 .padding(4.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
-            if (picker != null) IconButton(
-                onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-                enabled = enabled && !sending && editingRow == null,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Box(Modifier.size(34.dp).clip(CircleShape).background(palette.surface), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, "Add attachment", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
+            if (picker != null) Box {
+                IconButton(
+                    onClick = { attachMenu = true },
+                    enabled = enabled && !sending && editingRow == null,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(palette.surface), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Add, "Add attachment", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
+                    }
+                }
+                androidx.compose.material3.DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Photo or video") },
+                        leadingIcon = { Icon(Icons.Filled.Image, contentDescription = null) },
+                        onClick = {
+                            attachMenu = false
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                        },
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Poll") },
+                        leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null) },
+                        onClick = {
+                            attachMenu = false
+                            showPoll = true
+                        },
+                    )
                 }
             } else Spacer(Modifier.width(12.dp))
             BasicTextField(

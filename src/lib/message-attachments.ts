@@ -1,4 +1,4 @@
-import { uploadMedia } from "@/lib/media/uploadMedia";
+import { toWebSafeImage, uploadMedia } from "@/lib/media/uploadMedia";
 
 /** One attachment as it is stored in the `attachments` jsonb column. */
 export interface StoredAttachment {
@@ -39,7 +39,8 @@ export async function uploadAttachments(
 ): Promise<StoredAttachment[]> {
   const out: StoredAttachment[] = [];
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+    // Converted here too, so the stored name and size are the JPEG's.
+    const file = await toWebSafeImage(files[i]);
     try {
       const result = await uploadMedia(file, {
         maxUploadBytes: opts.maxUploadBytes,

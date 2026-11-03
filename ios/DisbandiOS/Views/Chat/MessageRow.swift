@@ -342,11 +342,7 @@ struct MessageRow: View {
                 .padding(.top, 4)
 
             case .poll:
-                AttachmentInfoCard(
-                    icon: "chart.bar.xaxis",
-                    title: message.attachmentName ?? "Poll",
-                    caption: "Open Disband on the web to vote on this poll"
-                )
+                PollCardView(pollId: urlString)
 
             default:
                 AttachmentFileCard(

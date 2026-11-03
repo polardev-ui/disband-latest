@@ -4,13 +4,12 @@ import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -44,6 +43,7 @@ val SharedBadges = BadgeService()
  * has no artwork yet, so it shows as a coloured pill with its name instead.
  */
 @SuppressLint("DiscouragedApi")
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileBadges(userId: String, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
@@ -53,18 +53,16 @@ fun ProfileBadges(userId: String, modifier: Modifier = Modifier) {
     LaunchedEffect(userId) {
         badges = runCatching { SharedBadges.badgesFor(userId) }.getOrDefault(emptyList())
     }
-    if (badges.isEmpty()) return
-
     Column(modifier) {
-        Row(
+        // The guild tag leads the same wrapping row as the badges, as on the
+        // web. It used to sit on a line of its own above a grey strip of
+        // badges that scrolled sideways, which read as two unrelated things.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(palette.elevated)
-                .padding(horizontal = 6.dp, vertical = 4.dp)
-                .horizontalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
+            GuildTagView(userId = userId, size = GuildTagBadgeSize.Medium)
             badges.forEach { badge ->
                 val tint = runCatching { Color(android.graphics.Color.parseColor(badge.def.accent)) }.getOrDefault(palette.accent)
                 val hasArt = remember(badge.def.key) {
@@ -72,7 +70,7 @@ fun ProfileBadges(userId: String, modifier: Modifier = Modifier) {
                 }
                 val tap = Modifier.clickable { selected = if (selected == badge) null else badge }
                 if (hasArt) {
-                    BadgeIcon(badge.def.key, size = 22.dp, contentDescription = badge.def.name, modifier = tap.padding(2.dp))
+                    BadgeIcon(badge.def.key, size = 22.dp, contentDescription = badge.def.name, modifier = tap.padding(1.dp))
                 } else {
                     Box(
                         tap

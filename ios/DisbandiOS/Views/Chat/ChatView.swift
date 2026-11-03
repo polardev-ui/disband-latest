@@ -42,6 +42,7 @@ struct ChatView: View {
     /// sentinel at the top of the viewport, which must not trigger paging.
     @State private var initialScrollSettled = false
     @State private var showGifPicker = false
+    @State private var showPollSheet = false
     @State private var showPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var openProfile: Profile?
@@ -134,6 +135,7 @@ struct ChatView: View {
                 MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
                                 onGif: { showGifPicker = true },
                                 onPhoto: { if staged.count < maxAttachments { showPhotoPicker = true } },
+                                onPoll: editingMessage == nil ? { showPollSheet = true } : nil,
                                 placeholder: composerPlaceholder,
                                 hasAttachments: !staged.isEmpty,
                                 onPasteImages: editingMessage == nil ? { stagePasted($0) } : nil)
@@ -246,6 +248,7 @@ struct ChatView: View {
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
+        .sheet(isPresented: $showPollSheet) { PollCreateSheet { sendPoll($0) } }
         .sheet(item: $openProfile) {
             ProfileDetailView(profile: $0)
                 // A glance, not a destination: it opens part-height and is
@@ -971,6 +974,15 @@ struct ChatView: View {
         stickToBottom = true
         withAnimation { replyingTo = nil }
         Task { await model.sendAttachment(OutgoingAttachment(url: url, type: "gif", key: nil),
+                                          replyToId: reply, authorId: uid) }
+    }
+
+    private func sendPoll(_ pollId: String) {
+        guard let uid = app.currentUserId else { return }
+        let reply = replyingTo?.id
+        stickToBottom = true
+        withAnimation { replyingTo = nil }
+        Task { await model.sendAttachment(OutgoingAttachment(url: pollId, type: "poll", key: nil),
                                           replyToId: reply, authorId: uid) }
     }
 

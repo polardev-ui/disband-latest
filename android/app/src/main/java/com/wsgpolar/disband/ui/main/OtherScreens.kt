@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Logout
@@ -127,6 +128,7 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     var showStatus by remember { mutableStateOf(false) }
     var showReferrals by remember { mutableStateOf(false) }
     var showGuildTag by remember { mutableStateOf(false) }
+    var showBadges by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
     var showNotificationInbox by remember { mutableStateOf(false) }
     var showNotificationSettings by remember { mutableStateOf(false) }
@@ -231,6 +233,11 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
                         detail = null,
                         tint = Color(0xFF9B59B6), palette = palette,
                     ) { showGuildTag = true },
+                    SettingsRow(
+                        Icons.Filled.MilitaryTech, "Badges",
+                        detail = "Show or hide",
+                        tint = Color(0xFFF1C40F), palette = palette,
+                    ) { showBadges = true },
                     SettingsRow(
                         Icons.Filled.CardGiftcard, "Referrals",
                         detail = "Win $100",
@@ -358,6 +365,7 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     if (showStatus) StatusSheet(app) { showStatus = false }
     if (showReferrals) ReferralsSheet(app) { showReferrals = false }
     if (showGuildTag) GuildTagPickerScreen(app) { showGuildTag = false }
+    if (showBadges) BadgeSettingsScreen(app) { showBadges = false }
     if (showAppearance) AppearanceSheet(app) { showAppearance = false }
     if (showNotificationInbox) {
         NotificationInboxSheet(

@@ -195,6 +195,25 @@ class AttachmentSender(
         } finally { progress = null }
     }
 
+    /**
+     * A poll goes out as a message whose attachment is the poll, as on the
+     * web and iOS. It shows up through the conversation's realtime feed.
+     */
+    suspend fun sendPoll(authorId: String, pollId: String): Boolean {
+        val id = try {
+            Database.sendWithAttachments(
+                context = context,
+                parentId = parentId,
+                authorId = authorId,
+                content = "",
+                attachments = listOf(StoredAttachment(url = pollId, type = "poll")),
+            )
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
+        if (id == null) error = "Couldn't send the poll."
+        return id != null
+    }
+
     /** The original filename, so a set does not arrive as ten files all called "image.jpg". */
     private fun displayName(androidContext: Context, uri: Uri): String? = runCatching {
         androidContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
