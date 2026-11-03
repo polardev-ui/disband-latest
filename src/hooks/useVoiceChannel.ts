@@ -18,12 +18,15 @@ import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
 import { fetchIceServers, fetchIceServersQuick, refreshIceServers } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 import { PUBLIC_ENV } from "@/lib/public-env";
+import { receiveSoundboard, setSoundboardSender } from "@/lib/soundboard";
 import { SfuSeat, sfuAvailable, type SfuTrackName } from "@/lib/voice-sfu";
 
 interface SignalPayload {
-  type: "offer" | "answer" | "ice" | "leave" | "screen" | "hello";
+  type: "offer" | "answer" | "ice" | "leave" | "screen" | "hello" | "soundboard";
 
   sharing?: boolean;
+  /** A soundboard clip (soundboard.ts). */
+  url?: string;
   from: string;
   to?: string;
   sdp?: RTCSessionDescriptionInit;
@@ -126,9 +129,25 @@ export function useVoiceChannel(
     localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
   }, [micMuted]);
 
+  const deafenedRef = useRef(deafened);
   useEffect(() => {
+    deafenedRef.current = deafened;
     audioRefsRef.current.forEach((el) => { el.muted = deafened; });
   }, [deafened]);
+
+  // My soundboard clips go to the room as events while I'm in the channel.
+  useEffect(() => {
+    if (!joined || !userId) return;
+    const send = (url: string) => {
+      void signalRef.current?.send({
+        type: "broadcast",
+        event: "signal",
+        payload: { type: "soundboard", from: userId, url } satisfies SignalPayload,
+      });
+    };
+    setSoundboardSender(send);
+    return () => setSoundboardSender(null);
+  }, [joined, userId]);
 
   useEffect(() => {
     if (!channelId || !userId || !joined) return;
@@ -515,6 +534,11 @@ export function useVoiceChannel(
         if (payload.type !== "offer") return;
         await loadPresence();
         if (!participantIdsRef.current.has(payload.from)) return;
+      }
+
+      if (payload.type === "soundboard") {
+        receiveSoundboard(payload.from, payload.url, deafenedRef.current);
+        return;
       }
 
       // A stop signal can arrive before the track's ended event (or instead

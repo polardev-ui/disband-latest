@@ -14,6 +14,7 @@ import {
   bindRemoteTrack, bindLaneStream, streamWithoutEndedTracks,
   ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
+import { receiveSoundboard, setSoundboardSender } from "@/lib/soundboard";
 import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import type { Profile } from "@/lib/supabase/types";
@@ -22,7 +23,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 export type CallPhase = "idle" | "outgoing" | "incoming" | "active";
 
 interface CallSignal {
-  type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave" | "handled" | "screen";
+  type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave" | "handled" | "screen" | "soundboard";
+  /** A soundboard clip (soundboard.ts). */
+  url?: string;
 
   sharing?: boolean;
   from: string;
@@ -117,7 +120,27 @@ export function useCallManager(
   }, []);
 
   useEffect(() => { applyMic(micMuted); }, [micMuted, applyMic]);
-  useEffect(() => { applyDeafen(deafened); }, [deafened, applyDeafen]);
+  const deafenedRef = useRef(deafened);
+  useEffect(() => {
+    deafenedRef.current = deafened;
+    applyDeafen(deafened);
+  }, [deafened, applyDeafen]);
+
+  // My soundboard clips go to the other person as events during a call.
+  useEffect(() => {
+    if (phase !== "active" || !userId) return;
+    const send = (url: string) => {
+      const peerId = activePeerIdRef.current;
+      if (!peerId) return;
+      void signalRef.current?.send({
+        type: "broadcast",
+        event: "call",
+        payload: { type: "soundboard", from: userId, to: peerId, url } satisfies CallSignal,
+      });
+    };
+    setSoundboardSender(send);
+    return () => setSoundboardSender(null);
+  }, [phase, userId]);
 
   const cleanupRtc = useCallback(async () => {
     trackCleanupsRef.current.forEach((cleanup) => cleanup());
@@ -460,6 +483,8 @@ export function useCallManager(
             }
           } else if (p.type === "screen") {
             setPeerSharing(!!p.sharing);
+          } else if (p.type === "soundboard") {
+            receiveSoundboard(p.from, p.url, deafenedRef.current);
           } else if (p.type === "ice" && p.candidate) {
             await addIce(p.candidate);
           } else if (p.type === "leave") {

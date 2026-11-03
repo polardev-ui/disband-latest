@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { IconChevron, IconLock } from "@/components/icons";
+import { IconChevron, IconLock, IconScreenShare, IconScreenShareOff } from "@/components/icons";
+import { Tooltip } from "./Tooltip";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { pushEscapeHandler } from "@/lib/overlay";
@@ -25,7 +26,7 @@ const ALL_RESOLUTIONS: StreamResolution[] = [...RESOLUTIONS, "source"];
  * stream, and pick its frame rate and resolution. Changes apply to a share in
  * progress straight away. Options above your plan show which plan has them.
  */
-export function StreamMenuButton({ sharing, onToggle }: { sharing: boolean; onToggle: () => void | Promise<void> }) {
+export function StreamShareButton({ sharing, onToggle }: { sharing: boolean; onToggle: () => void | Promise<void> }) {
   const { t } = useI18n();
   const { subscriptionPlan: plan } = useApp();
   const [open, setOpen] = useState(false);
@@ -69,18 +70,39 @@ export function StreamMenuButton({ sharing, onToggle }: { sharing: boolean; onTo
 
   return (
     <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={t("Stream options")}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={`flex h-14 w-8 items-center justify-center rounded-full transition-colors ${
-          sharing ? "bg-white text-[#313338] hover:bg-[#e3e5e8]" : "bg-[#2b2d31] text-white hover:bg-[#404249]"
+      {/* One pill, like Discord's: share on the left, options on the right. */}
+      <div
+        className={`flex h-14 items-stretch overflow-hidden rounded-full transition-colors ${
+          sharing ? "bg-white text-[#313338]" : "bg-[#2b2d31] text-white"
         }`}
       >
-        <IconChevron size={16} className="rotate-180" />
-      </button>
+        <Tooltip label={sharing ? t("Stop Streaming") : t("Share Your Screen")} side="top">
+          <button
+            type="button"
+            onClick={() => void onToggle()}
+            aria-label={sharing ? t("Stop Streaming") : t("Share Your Screen")}
+            aria-pressed={sharing || undefined}
+            className={`flex w-14 items-center justify-center pl-1 transition-colors active:scale-95 ${
+              sharing ? "hover:bg-[#e3e5e8]" : "hover:bg-[#404249]"
+            }`}
+          >
+            {sharing ? <IconScreenShareOff size={24} /> : <IconScreenShare size={24} />}
+          </button>
+        </Tooltip>
+        <span className={`my-3 w-px ${sharing ? "bg-black/15" : "bg-white/15"}`} aria-hidden />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={t("Stream options")}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          className={`flex w-9 items-center justify-center pr-1 transition-colors ${
+            sharing ? "hover:bg-[#e3e5e8]" : "hover:bg-[#404249]"
+          } ${open ? (sharing ? "bg-[#e3e5e8]" : "bg-[#404249]") : ""}`}
+        >
+          <IconChevron size={16} className={`transition-transform ${open ? "" : "rotate-180"}`} />
+        </button>
+      </div>
       {open && (
         <div
           role="menu"

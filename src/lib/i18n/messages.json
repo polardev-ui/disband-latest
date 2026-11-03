@@ -1720,7 +1720,11 @@
     "Resolution": "Resolution",
     "Source": "Source",
     "LIVE": "LIVE",
-    "Camera on": "Camera on"
+    "Camera on": "Camera on",
+    "User Volume": "User Volume",
+    "Mute Soundboard": "Mute Soundboard",
+    "Disable Video": "Disable Video",
+    "Profile": "Profile"
   },
   "es": {
     "My Account": "Mi cuenta",
@@ -3444,7 +3448,11 @@
     "Resolution": "Resolución",
     "Source": "Original",
     "LIVE": "EN VIVO",
-    "Camera on": "Cámara encendida"
+    "Camera on": "Cámara encendida",
+    "User Volume": "Volumen del usuario",
+    "Mute Soundboard": "Silenciar efectos de sonido",
+    "Disable Video": "Desactivar vídeo",
+    "Profile": "Perfil"
   },
   "fr": {
     "My Account": "Mon compte",
@@ -5168,7 +5176,11 @@
     "Resolution": "Résolution",
     "Source": "Source",
     "LIVE": "EN DIRECT",
-    "Camera on": "Caméra activée"
+    "Camera on": "Caméra activée",
+    "User Volume": "Volume de l'utilisateur",
+    "Mute Soundboard": "Couper la soundboard",
+    "Disable Video": "Désactiver la vidéo",
+    "Profile": "Profil"
   },
   "de": {
     "My Account": "Mein Konto",
@@ -6892,7 +6904,11 @@
     "Resolution": "Auflösung",
     "Source": "Original",
     "LIVE": "LIVE",
-    "Camera on": "Kamera an"
+    "Camera on": "Kamera an",
+    "User Volume": "Nutzerlautstärke",
+    "Mute Soundboard": "Soundboard stummschalten",
+    "Disable Video": "Video deaktivieren",
+    "Profile": "Profil"
   },
   "pt-BR": {
     "My Account": "Minha conta",
@@ -8616,7 +8632,11 @@
     "Resolution": "Resolução",
     "Source": "Original",
     "LIVE": "AO VIVO",
-    "Camera on": "Câmera ligada"
+    "Camera on": "Câmera ligada",
+    "User Volume": "Volume do usuário",
+    "Mute Soundboard": "Silenciar soundboard",
+    "Disable Video": "Desativar vídeo",
+    "Profile": "Perfil"
   },
   "ja": {
     "My Account": "私のアカウント",
@@ -10340,7 +10360,11 @@
     "Resolution": "解像度",
     "Source": "ソース",
     "LIVE": "ライブ",
-    "Camera on": "カメラオン"
+    "Camera on": "カメラオン",
+    "User Volume": "ユーザー音量",
+    "Mute Soundboard": "サウンドボードをミュート",
+    "Disable Video": "ビデオを無効化",
+    "Profile": "プロフィール"
   },
   "ko": {
     "My Account": "내 계정",
@@ -12064,7 +12088,11 @@
     "Resolution": "해상도",
     "Source": "원본",
     "LIVE": "LIVE",
-    "Camera on": "카메라 켜짐"
+    "Camera on": "카메라 켜짐",
+    "User Volume": "사용자 볼륨",
+    "Mute Soundboard": "사운드보드 음소거",
+    "Disable Video": "비디오 끄기",
+    "Profile": "프로필"
   },
   "zh-CN": {
     "My Account": "我的账户",
@@ -13788,6 +13816,10 @@
     "Resolution": "分辨率",
     "Source": "原始",
     "LIVE": "直播",
-    "Camera on": "摄像头已开启"
+    "Camera on": "摄像头已开启",
+    "User Volume": "用户音量",
+    "Mute Soundboard": "静音音效板",
+    "Disable Video": "禁用视频",
+    "Profile": "个人资料"
   }
 }

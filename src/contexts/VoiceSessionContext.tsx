@@ -64,9 +64,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     audioRefs.current.forEach((el) => { el.muted = deafened; });
   }, [deafened]);
 
+  const deafenedRef = useRef(deafened);
+  deafenedRef.current = deafened;
   useEffect(() => {
     const sync = () => {
-      audioRefs.current.forEach((el, uid) => applyParticipantAudioControls(el, uid));
+      audioRefs.current.forEach((el, uid) => {
+        applyParticipantAudioControls(el, uid);
+        if (deafenedRef.current) el.muted = true;
+      });
     };
     window.addEventListener("disband:participant-controls", sync);
     return () => window.removeEventListener("disband:participant-controls", sync);

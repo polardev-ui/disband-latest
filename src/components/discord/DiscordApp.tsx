@@ -568,6 +568,25 @@ export function DiscordApp() {
     setProfileTarget(profile);
   }, []);
 
+  // The call stage's right-click menu (CallStage.tsx) asks for these.
+  const openDmWithFriend = app.openDmWithFriend;
+  useEffect(() => {
+    const onProfile = (e: Event) => {
+      const profile = (e as CustomEvent<Profile>).detail;
+      if (profile?.id) openProfile(profile);
+    };
+    const onDm = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (typeof id === "string") void openDmWithFriend(id);
+    };
+    window.addEventListener("disband:open-profile", onProfile);
+    window.addEventListener("disband:open-dm", onDm);
+    return () => {
+      window.removeEventListener("disband:open-profile", onProfile);
+      window.removeEventListener("disband:open-dm", onDm);
+    };
+  }, [openProfile, openDmWithFriend]);
+
   const handleAuthorClick = useCallback(
     (author: Profile) => {
       if (author.id === app.user?.id && app.profile) openProfile(app.profile);

@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useApp } from "@/contexts/AppContext";
+import { pushEscapeHandler } from "@/lib/overlay";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconMaximize, IconMicOff, IconSpeaker, IconSpeakerOff } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
@@ -184,8 +187,17 @@ function MemberAvatar({ member, speaking }: { member: StageMember; speaking: boo
 function MemberCircle({ member }: { member: StageMember }) {
   const { t } = useI18n();
   const speaking = useSpeaking(member.ringing ? null : member.stream);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
-    <div className="flex w-28 flex-col items-center gap-2">
+    <div
+      className="flex w-28 flex-col items-center gap-2"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      {menu && <ParticipantMenu member={member} at={menu} onClose={() => setMenu(null)} />}
       <MemberAvatar member={member} speaking={speaking} />
       <span className="max-w-full truncate text-sm font-medium text-header-primary">{member.label}</span>
       {member.ringing && <span className="-mt-1.5 text-[11px] text-header-secondary">{t("Ringing…")}</span>}
@@ -214,17 +226,6 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
     window.addEventListener("disband:participant-controls", sync);
     return () => window.removeEventListener("disband:participant-controls", sync);
   }, [member.id]);
-
-  function update<K extends keyof ParticipantControls>(key: K, value: ParticipantControls[K]) {
-    setParticipantControl(member.id, key, value);
-    const next = { ...controls, [key]: value } as ParticipantControls;
-    setControls(next);
-    if (key === "volume" || key === "micMuted") {
-      document
-        .querySelectorAll(`audio[data-call-user="${CSS.escape(member.id)}"]`)
-        .forEach((el) => applyParticipantAudioControls(el as HTMLAudioElement, member.id));
-    }
-  }
 
   const cameraHidden = controls.cameraDisabled && member.id !== "self";
   const showVideo = hasVideo && !cameraHidden;
@@ -264,53 +265,132 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
           {member.ringing && <span className="shrink-0 text-[11px] text-white/50">{t("Ringing…")}</span>}
         </span>
       </div>
-      {menu && (
-        <>
-          <div className="fixed inset-0 z-[135]" onClick={() => setMenu(null)} />
-          <div
-            className="fixed z-[140] min-w-60 rounded-lg bg-bg-secondary p-3 shadow-[var(--elevation-high)]"
-            style={{ left: Math.min(menu.x, window.innerWidth - 260), top: Math.min(menu.y, window.innerHeight - 240) }}
-          >
-            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">{t("Participant")}</div>
-            <label className="block rounded-lg bg-bg-tertiary p-2">
-              <span className="mb-1 block text-xs font-medium text-text-normal">{t("How loud their mic is")}</span>
+      {menu && <ParticipantMenu member={member} at={menu} onClose={() => setMenu(null)} />}
+    </>
+  );
+}
+
+/**
+ * Right-click on someone in a call: their profile, a message, how loud they
+ * are, and muting their mic, soundboard or camera just for you. Drawn on the
+ * page itself (a portal), so a call layout's animation can't shift or clip it.
+ */
+function ParticipantMenu({ member, at, onClose }: { member: StageMember; at: { x: number; y: number }; onClose: () => void }) {
+  const { t } = useI18n();
+  const { user, deafened } = useApp();
+  const self = member.id === "self" || member.id === user?.id;
+  const [controls, setControls] = useState<ParticipantControls>(() => getParticipantControls(member.id));
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState(at);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const { width, height } = box.getBoundingClientRect();
+    setPos({
+      x: Math.max(8, Math.min(at.x, window.innerWidth - width - 8)),
+      y: Math.max(8, Math.min(at.y, window.innerHeight - height - 8)),
+    });
+  }, [at]);
+
+  useEffect(() => pushEscapeHandler(onClose), [onClose]);
+
+  function update<K extends keyof ParticipantControls>(key: K, value: ParticipantControls[K]) {
+    setParticipantControl(member.id, key, value);
+    setControls({ ...controls, [key]: value } as ParticipantControls);
+    if (key === "volume" || key === "micMuted") {
+      document
+        .querySelectorAll(`audio[data-call-user="${CSS.escape(member.id)}"]`)
+        .forEach((el) => {
+          applyParticipantAudioControls(el as HTMLAudioElement, member.id);
+          // Deafened stays deafened whatever their own settings say.
+          if (deafened) (el as HTMLAudioElement).muted = true;
+        });
+    }
+  }
+
+  const act = (fn: () => void) => {
+    onClose();
+    fn();
+  };
+  const row = "flex w-full items-center justify-between rounded-[4px] px-2 py-1.5 text-left text-[14px] font-medium text-text-normal hover:bg-brand hover:text-white";
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[135]" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      <div
+        ref={boxRef}
+        role="menu"
+        className="menu-pop fixed z-[140] w-[232px] rounded-lg bg-bg-floating p-1.5 shadow-[var(--elevation-high)]"
+        style={{ left: pos.x, top: pos.y }}
+      >
+        {member.profile && (
+          <button type="button" role="menuitem" className={row}
+            onClick={() => act(() => window.dispatchEvent(new CustomEvent("disband:open-profile", { detail: member.profile })))}>
+            {t("Profile")}
+          </button>
+        )}
+        {!self && member.profile && (
+          <button type="button" role="menuitem" className={row}
+            onClick={() => act(() => window.dispatchEvent(new CustomEvent("disband:open-dm", { detail: member.id })))}>
+            {t("Message")}
+          </button>
+        )}
+        {!self && (
+          <>
+            <div className="mx-1.5 my-1.5 h-px bg-divider" />
+            <div className="px-2 pb-2 pt-1">
+              <div className="mb-1.5 flex items-center justify-between text-[12px] font-semibold text-header-secondary">
+                <span>{t("User Volume")}</span>
+                <span className="tabular-nums">{controls.volume}%</span>
+              </div>
               <input
                 type="range"
                 min={0}
                 max={200}
                 value={controls.volume}
                 onChange={(event) => update("volume", Number(event.target.value))}
-                className="w-full"
+                className="w-full accent-brand"
+                aria-label={t("User Volume")}
               />
-            </label>
-            <div className="mt-2 space-y-1">
-              {[
-                { key: "micMuted" as const, label: t("Mute their microphone") },
-                { key: "soundboardMuted" as const, label: t("Mute their soundboard") },
-                { key: "cameraDisabled" as const, label: t("Disable their camera (for you)") },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => update(item.key, !controls[item.key])}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-sm text-text-normal hover:bg-bg-tertiary"
+            </div>
+            {[
+              { key: "micMuted" as const, label: t("Mute") },
+              { key: "soundboardMuted" as const, label: t("Mute Soundboard") },
+              { key: "cameraDisabled" as const, label: t("Disable Video") },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={controls[item.key]}
+                onClick={() => update(item.key, !controls[item.key])}
+                className={`group ${row}`}
+              >
+                <span>{item.label}</span>
+                <span
+                  className={`flex h-[18px] w-[18px] items-center justify-center rounded-[4px] border-2 ${
+                    controls[item.key] ? "border-brand bg-brand group-hover:border-white" : "border-interactive-normal group-hover:border-white"
+                  }`}
                 >
-                  <span>{item.label}</span>
-                  <span className={controls[item.key] ? "font-semibold text-status-dnd" : "text-text-muted"}>
-                    {controls[item.key] ? t("On") : t("Off")}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 border-t border-divider pt-2">
-              <p className="text-[11px] text-text-muted">
-                {t("These settings are saved locally and remain even after leaving the call or closing the app.")}
-              </p>
-            </div>
-          </div>
-        </>
-      )}
-    </>
+                  {controls[item.key] && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" aria-hidden>
+                      <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+              </button>
+            ))}
+          </>
+        )}
+        {!self && member.profile && <div className="mx-1.5 my-1.5 h-px bg-divider" />}
+        <button type="button" role="menuitem" className={row}
+          onClick={() => act(() => void navigator.clipboard.writeText(member.profile?.id ?? member.id))}>
+          {t("Copy User ID")}
+        </button>
+      </div>
+    </>,
+    document.body,
   );
 }
 

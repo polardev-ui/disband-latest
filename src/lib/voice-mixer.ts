@@ -1,4 +1,5 @@
 import { getAutoGainControl, getEchoCancellation, getInputVolume, getNoiseSuppressionMode, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { isSoundboardUrl, playSoundboardLocally, soundboardSender } from "@/lib/soundboard";
 import { AI_NOISE_SAMPLE_RATE, createAiDenoiser, type AiDenoiser } from "@/lib/noise-suppression";
 
 export interface VoiceMixerOptions {
@@ -258,6 +259,13 @@ export function getActiveVoiceMixer(): VoiceMixer | null {
 }
 
 export function playVoiceSoundboardSound(url: string, volume = 1): HTMLAudioElement | null {
+  // In a call that carries soundboard events, everyone (me included) plays
+  // the clip themselves, so each listener can mute it. See soundboard.ts.
+  const send = soundboardSender();
+  if (send && isSoundboardUrl(url)) {
+    send(url);
+    return playSoundboardLocally(url, volume);
+  }
   if (!activeVoiceMixer) {
     const audio = new Audio(url);
     audio.volume = volume;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { receiveSoundboard, setSoundboardSender } from "@/lib/soundboard";
 import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -23,9 +24,11 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 interface SignalPayload {
-  type: "ring" | "offer" | "answer" | "ice" | "leave" | "screen";
+  type: "ring" | "offer" | "answer" | "ice" | "leave" | "screen" | "soundboard";
 
   sharing?: boolean;
+  /** A soundboard clip (soundboard.ts). */
+  url?: string;
   from: string;
   to?: string;
   sdp?: RTCSessionDescriptionInit;
@@ -139,6 +142,16 @@ export function useGroupCallManager(
   const broadcast = useCallback((payload: SignalPayload) => {
     void signalRef.current?.send({ type: "broadcast", event: "group-call", payload });
   }, []);
+
+  const deafenedRef = useRef(deafened);
+  useEffect(() => { deafenedRef.current = deafened; }, [deafened]);
+
+  // My soundboard clips go to the call as events while I'm in it.
+  useEffect(() => {
+    if (!joined || !userId) return;
+    setSoundboardSender((url) => broadcast({ type: "soundboard", from: userId, url }));
+    return () => setSoundboardSender(null);
+  }, [joined, userId, broadcast]);
 
   const prevPresenceRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -377,6 +390,11 @@ export function useGroupCallManager(
       // Joiners bootstrap through the presence-driven initiator path, so a
       // not-yet-visible newcomer still connects via our offer to them.
       if (!presenceIdsRef.current.has(payload.from) && !peersRef.current.has(payload.from)) return;
+
+      if (payload.type === "soundboard") {
+        receiveSoundboard(payload.from, payload.url, deafenedRef.current);
+        return;
+      }
 
       // Screen-share announcements must not depend on a live peer connection:
       // the sharer may have started (or stopped) while nobody else was in the
