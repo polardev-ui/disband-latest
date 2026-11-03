@@ -75,7 +75,7 @@ export function parseMentions(
 }
 
 export function mentionsEveryone(content: string): boolean {
-  return /@everyone\b/i.test(content);
+  return /@(everyone|here)\b/i.test(content);
 }
 
 export function mentionsUsername(content: string, username: string | null | undefined): boolean {

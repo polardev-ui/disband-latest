@@ -67,7 +67,11 @@ struct MessageRow: View {
     private var pingedYou: Bool {
         guard let me = currentUserId, message.authorId != me else { return false }
         if let replyTo, replyTo.authorId == me { return true }
-        return message.mentions?.contains(me) ?? false
+        if message.mentions?.contains(me) == true { return true }
+        // @everyone and @here ping every member, as on the web. Only channel
+        // messages carry `mentions`, so DMs and group chats are left alone.
+        return message.mentions != nil
+            && message.content.range(of: #"@(everyone|here)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     var body: some View {
