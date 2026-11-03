@@ -16,7 +16,7 @@ import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/U
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { BotTag } from "@/components/ui/BotTag";
-import { IconClose, IconEdit } from "@/components/icons";
+import { IconClose, IconEdit, IconUserPlus } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import { safeImageUrl } from "@/lib/safe-url";
@@ -84,7 +84,10 @@ export function UserProfilePopout({
   onSetSelfRoles,
 }: UserProfilePopoutProps) {
   const { t } = useI18n();
-  const { presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage } = useApp();
+  const {
+    presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage,
+    friends, dmThreads, pendingOutgoing, servers, loadMutuals, sendFriendRequest,
+  } = useApp();
   const open = !!profile && !!anchor;
   const { mounted, exiting } = usePresence(open);
   const lastProfile = useRef<Profile | null>(null);
@@ -96,6 +99,34 @@ export function UserProfilePopout({
   const [sendError, setSendError] = useState<string | null>(null);
   const badgeCount = useBadgeCount(p?.id, isSelf ? plan : undefined);
   const note = useUserNote(open && !isSelf ? user?.id : null, open && !isSelf ? p?.id : null);
+  const [friendNote, setFriendNote] = useState<string | null>(null);
+
+  // Strangers can only be messaged as a request, and only when you share a
+  // space other than Disband itself (everyone is in that one). Checked up
+  // front so the card offers Add Friend instead of a box that can't send.
+  const targetId = open && p && !isSelf && !p.is_bot ? p.id : null;
+  const knownContact = !!targetId && (friends.some((f) => f.id === targetId) || dmThreads.some((d) => d.friend?.id === targetId));
+  const [mutualServerIds, setMutualServerIds] = useState<{ id: string; ids: string[] } | null>(null);
+  useEffect(() => {
+    setFriendNote(null);
+    if (!targetId || knownContact) return;
+    let live = true;
+    void loadMutuals(targetId).then((m) => {
+      if (live) setMutualServerIds({ id: targetId, ids: m.serverIds });
+    });
+    return () => {
+      live = false;
+    };
+  }, [targetId, knownContact, loadMutuals]);
+  const friendsOnly =
+    !!targetId &&
+    !knownContact &&
+    mutualServerIds?.id === targetId &&
+    !mutualServerIds.ids.some((id) => {
+      const s = servers.find((sv) => sv.id === id);
+      return !!s && (s.vanity_code ?? "").toLowerCase() !== "disband";
+    });
+  const requestSent = !!targetId && pendingOutgoing.some((f) => f.addressee_id === targetId);
 
   useOverlayDismiss(onClose, open);
 
@@ -155,7 +186,7 @@ export function UserProfilePopout({
     if (err) {
       // Never send: the open failed, so the active DM is someone else's.
       setMessage(text);
-      setSendError(err);
+      setSendError(/share a space with/.test(err) ? t("Add {name} as a friend to message them.", { name: displayName(p) }) : err);
       return;
     }
     // The thread id settles after the open resolves; same beat as forwarding.
@@ -348,6 +379,25 @@ export function UserProfilePopout({
             >
               <IconEdit size={16} /> {t("Edit Profile")}
             </button>
+          ) : friendsOnly ? (
+            <div className="mt-1">
+              <p className="mb-1.5 text-[12px] leading-4 text-text-muted">
+                {t("Add {name} as a friend to message them.", { name: displayName(p) })}
+              </p>
+              <button
+                type="button"
+                disabled={requestSent}
+                onClick={async () => {
+                  if (!p.username) return;
+                  const err = await sendFriendRequest(p.username);
+                  setFriendNote(err);
+                }}
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] bg-brand text-[14px] font-medium text-white transition-[filter] hover:brightness-110 disabled:cursor-default disabled:bg-button-secondary disabled:text-text-muted disabled:hover:brightness-100"
+              >
+                <IconUserPlus size={16} /> {requestSent ? t("Friend Request Sent") : t("Add Friend")}
+              </button>
+              {friendNote && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{friendNote}</p>}
+            </div>
           ) : (
             <input
               value={message}
