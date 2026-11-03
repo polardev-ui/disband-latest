@@ -156,8 +156,12 @@ export default function RootLayout({
         </Script>
       </head>
       <body>
-        <I18nProvider>{children}</I18nProvider>
-        <DialogHost />
+        <I18nProvider>
+          {children}
+          {/* Inside the provider: dialogs translate, and outside it any
+              alert (a failed DM open, say) crashed the whole app. */}
+          <DialogHost />
+        </I18nProvider>
       </body>
     </html>
   );
