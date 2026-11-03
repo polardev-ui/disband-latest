@@ -230,6 +230,11 @@ data class Channel(
     @SerialName("created_at") val createdAt: String? = null,
     /// Announcement channel: only people who can manage channels may post.
     @SerialName("read_only") var readOnly: Boolean? = null,
+    /// A stage: a voice channel where speakers talk and everyone else listens.
+    @SerialName("is_stage") var isStage: Boolean? = null,
+    /// Set while the stage is live.
+    @SerialName("stage_topic") var stageTopic: String? = null,
+    @SerialName("stage_started_at") var stageStartedAt: String? = null,
 )
 
 @Serializable

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,14 +48,19 @@ fun VoicePill(
     onToggleMute: () -> Unit,
     onLeave: () -> Unit,
     onReturn: () -> Unit,
+    /** The audience on a stage has no mic to toggle. */
+    canMute: Boolean = true,
+    isStage: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 8.dp)
             .clip(CircleShape)
-            .background(palette.surfaceRaised.copy(alpha = 0.9f)),
+            .background(palette.surfaceRaised.copy(alpha = 0.9f))
+            .clickable(onClick = onReturn),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onReturn, modifier = Modifier.padding(start = 14.dp)) {
@@ -64,13 +70,14 @@ fun VoicePill(
         Column {
             Text(channelName, color = palette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                if (micMuted) "Muted · $participantCount ${if (participantCount == 1) "person" else "people"}"
+                if (isStage) "Stage · $participantCount here"
+                else if (micMuted) "Muted · $participantCount ${if (participantCount == 1) "person" else "people"}"
                 else "$participantCount ${if (participantCount == 1) "person" else "people"} here",
                 color = Brand.online, fontSize = 12.sp,
             )
         }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = onToggleMute) {
+        if (canMute) IconButton(onClick = onToggleMute) {
             Icon(
                 if (micMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
                 contentDescription = if (micMuted) "Unmute" else "Mute",

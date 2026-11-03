@@ -709,6 +709,12 @@ object Database {
 
     // MARK: - Voice presence
 
+    /** Live stage topics, by channel id; the rows' other columns are left out. */
+    suspend fun stageStates(channelIds: List<String>): Map<String, Channel> =
+        client.from("channels").select(columns("id,server_id,name,type,position,stage_topic,stage_started_at")) {
+            filter { isIn("id", channelIds) }
+        }.decodeList<Channel>().associateBy { it.id }
+
     suspend fun voiceParticipants(channelId: String): List<VoiceParticipant> {
         return client.from("voice_presence")
             .select(columns("*, profile:profiles(*)")) { filter { eq("channel_id", channelId) } }

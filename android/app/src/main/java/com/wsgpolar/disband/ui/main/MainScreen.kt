@@ -174,6 +174,30 @@ fun MainScreen(
         finally { spaceLoading = false }
     }
 
+    // Who's in each voice channel of the open space, and live stages'
+    // topics. Polled while the space is open, like iOS.
+    var voiceOccupants by remember { mutableStateOf<Map<String, List<com.wsgpolar.disband.call.VoiceMember>>>(emptyMap()) }
+    val voiceSpeaking by app.voice.speaking.collectAsStateValue()
+    LaunchedEffect(currentUserId, shellChrome.selectedServerId) {
+        val id = shellChrome.selectedServerId ?: return@LaunchedEffect
+        while (true) {
+            val voiceChannels = allChannels.filter { it.serverId == id && it.type == ChannelType.Voice }
+            runCatching { com.wsgpolar.disband.call.VoiceSession.occupants(voiceChannels.map { it.id }) }
+                .getOrNull()?.let { voiceOccupants = it }
+            val stageIds = voiceChannels.filter { it.isStage == true }.map { it.id }
+            if (stageIds.isNotEmpty()) {
+                runCatching { Database.stageStates(stageIds) }.getOrNull()?.let { states ->
+                    allChannels = allChannels.map { channel ->
+                        val state = states[channel.id] ?: return@map channel
+                        if (state.stageTopic == channel.stageTopic && state.stageStartedAt == channel.stageStartedAt) channel
+                        else channel.copy(stageTopic = state.stageTopic, stageStartedAt = state.stageStartedAt)
+                    }
+                }
+            }
+            delay(6_000)
+        }
+    }
+
     // --- Notification deep link: route once, then tell the caller it's done. ---
     LaunchedEffect(pendingNav) {
         if (pendingNav == null || pendingNav.isBlank) return@LaunchedEffect
@@ -381,6 +405,17 @@ fun MainScreen(
                             onInvite = { inviteFor = it },
                             onMembers = { membersFor = it },
                             onOverflow = { overflowFor = it },
+                            occupantsFor = { channel ->
+                                voiceOccupants[channel.id].orEmpty().map { member ->
+                                    VoiceOccupant(
+                                        id = member.userId,
+                                        name = member.name,
+                                        avatarUrl = member.profile?.avatarUrl,
+                                        speaking = member.userId in voiceSpeaking,
+                                        onStage = channel.isStage != true || member.stageSpeaker,
+                                    )
+                                }
+                            },
                             onAddServer = { showAddSpace = true },
                             onExplore = { showDiscover = true },
                             // Still unwired, but deliberately left as the
@@ -468,6 +503,37 @@ fun MainScreen(
                     .padding(bottom = 6.dp)
                     .background(Color.Transparent),
             )
+        }
+
+        // In voice but looking elsewhere: a pill to get back, mute or leave.
+        val voiceRoom by app.voice.room.collectAsStateValue()
+        val voiceMembers by app.voice.members.collectAsStateValue()
+        val voiceMuted by app.voice.micMuted.collectAsStateValue()
+        val voiceStage by app.voice.stage.collectAsStateValue()
+        val inVoice = voiceRoom
+        AnimatedVisibility(
+            visible = inVoice != null && shellChrome.dockVisible,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            if (inVoice != null) {
+                val me = voiceMembers.firstOrNull { it.userId == currentUserId }
+                com.wsgpolar.disband.ui.calls.VoicePill(
+                    participantCount = voiceMembers.size,
+                    channelName = inVoice.name,
+                    micMuted = voiceMuted,
+                    canMute = voiceStage == null || me?.stageSpeaker == true,
+                    isStage = voiceStage != null,
+                    onToggleMute = { app.voice.toggleMute() },
+                    onLeave = { app.voice.leave() },
+                    onReturn = {
+                        shellChrome.navigateTo(Destination.Home, inVoice.serverId)
+                        shellChrome.selectedChannelId = inVoice.channelId
+                    },
+                    modifier = Modifier.navigationBarsPadding().padding(bottom = 78.dp),
+                )
+            }
         }
 
         CallOverlay(app, shellChrome = shellChrome)

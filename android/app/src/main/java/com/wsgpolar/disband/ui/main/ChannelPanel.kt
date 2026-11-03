@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -75,6 +76,8 @@ data class VoiceOccupant(
     val name: String,
     val avatarUrl: String? = null,
     val speaking: Boolean = false,
+    /** False for a stage's audience, who are counted but not pictured. */
+    val onStage: Boolean = true,
 )
 
 /**
@@ -335,12 +338,16 @@ private fun ChannelRow(
     // Voice takes the speaker, read-only announcement channels the lock, the
     // rest the hash — the same three iOS uses. The glyph carries the "#", so
     // the name is printed plain rather than with one typed in front of it.
+    val isStage = channel.isStage == true
+    val liveTopic = channel.stageTopic?.takeIf { isStage && channel.stageStartedAt != null }
     val icon = when {
+        isStage -> Icons.Filled.Podcasts
         channel.type == ChannelType.Voice -> Icons.Filled.VolumeUp
         channel.readOnly == true -> Icons.Filled.Lock
         else -> Icons.Filled.Tag
     }
     val iconDescription = when {
+        isStage -> "Stage channel"
         channel.type == ChannelType.Voice -> "Voice channel"
         channel.readOnly == true -> "Announcement channel"
         else -> "Text channel"
@@ -372,18 +379,23 @@ private fun ChannelRow(
         Icon(
             icon,
             contentDescription = iconDescription,
-            tint = if (isSelected) palette.accent else palette.textSecondary,
+            tint = if (isSelected) palette.accent else if (liveTopic != null) Brand.online else palette.textSecondary,
             modifier = Modifier.size(18.dp),
         )
-        Text(
-            channel.name,
-            color = if (isSelected) palette.textPrimary else palette.textSecondary,
-            fontSize = 15.sp,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
+        Column(Modifier.weight(1f, fill = false)) {
+            Text(
+                channel.name,
+                color = if (isSelected) palette.textPrimary else palette.textSecondary,
+                fontSize = 15.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (liveTopic != null) {
+                Text(liveTopic, color = Brand.online, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
         Spacer(Modifier.weight(1f))
         if (channel.type == ChannelType.Voice && occupants.isNotEmpty()) {
             VoiceOccupants(occupants)
@@ -423,7 +435,8 @@ private fun VoiceOccupants(occupants: List<VoiceOccupant>) {
                 fontWeight = FontWeight.SemiBold,
             )
         }
-        occupants.take(3).forEach { occupant ->
+        val pictured = occupants.filter { it.onStage }
+        pictured.take(3).forEach { occupant ->
             Box {
                 AvatarImage(
                     url = occupant.avatarUrl,
@@ -440,9 +453,9 @@ private fun VoiceOccupants(occupants: List<VoiceOccupant>) {
                 }
             }
         }
-        if (occupants.size > 3) {
+        if (pictured.size > 3) {
             Text(
-                "+${occupants.size - 3}",
+                "+${pictured.size - 3}",
                 color = palette.textMuted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,

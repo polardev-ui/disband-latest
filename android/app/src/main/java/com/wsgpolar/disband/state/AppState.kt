@@ -54,6 +54,11 @@ class AppState(
 ) {
     private val client get() = DisbandSupabase.client
 
+    /** Server voice channels and stages. */
+    val voice = com.wsgpolar.disband.call.VoiceSession(context, turnService).also { v ->
+        v.isDirectCallActive = { calls.phase.value != com.wsgpolar.disband.call.CallPhase.Idle }
+    }
+
     private val _phase = MutableStateFlow(AuthPhase.Loading)
     val phase: StateFlow<AuthPhase> = _phase.asStateFlow()
 
@@ -108,6 +113,7 @@ class AppState(
                         music.setUser(null)
                         notes.stop()
                         calls.stop()
+                        voice.leave()
                     }
                     is SessionStatus.Authenticated -> {
                         cancelWatchdog()
@@ -146,6 +152,7 @@ class AppState(
             music.setUser(null)
             notes.stop()
             calls.stop()
+            voice.leave()
             return
         }
         _session.value = session
@@ -195,6 +202,10 @@ class AppState(
         scope.launch { _profile.collect { p -> p?.name?.let { calls.myName = it } } }
         calls.myName = _profile.value?.name ?: "User"
         calls.start(uid)
+        // One call at a time: a 1:1 call that connects takes the mic from voice.
+        scope.launch {
+            calls.phase.collect { if (it == com.wsgpolar.disband.call.CallPhase.Active && voice.isActive) voice.leave() }
+        }
         scope.launch {
             runCatching { Database.unreadDmCounts() }.getOrNull()
                 ?.let { rows -> dmUnread.seedUnread(rows.associate { it.threadId to it.unreadCount }) }
