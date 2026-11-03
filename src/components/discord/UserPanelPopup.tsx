@@ -34,6 +34,12 @@ function accountLabel(a: { display_name: string | null; username: string | null;
   return a.display_name || a.username || a.email?.split("@")[0] || "Account";
 }
 
+/** The second line: the @username, which is unique where display names
+ *  repeat across accounts, then the email. */
+function accountDetail(a: { username: string | null; email: string | null }): string {
+  return [a.username ? `@${a.username}` : null, a.email].filter(Boolean).join(" · ");
+}
+
 interface UserPanelPopupProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -165,8 +171,8 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
       ? {
           user_id: currentUserId,
           email: saved?.email ?? user?.email ?? null,
-          display_name: saved?.display_name ?? (profile ? displayName(profile) : null),
-          username: saved?.username ?? profile?.username ?? null,
+          display_name: profile ? profile.display_name ?? null : saved?.display_name ?? null,
+          username: profile?.username ?? saved?.username ?? null,
           avatar_url: profile?.avatar_url ?? saved?.avatar_url ?? null,
         }
       : null;
@@ -473,7 +479,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-medium text-text-normal">{accountLabel(accounts.current)}</span>
-                  <span className="block truncate text-[12px] text-text-muted">{accounts.current.email}</span>
+                  <span className="block truncate text-[12px] text-text-muted">{accountDetail(accounts.current)}</span>
                 </span>
                 <IconCheck size={15} className="shrink-0 text-text-normal" />
               </div>
@@ -500,7 +506,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] text-text-normal">{display}</span>
-                      <span className="block truncate text-[12px] text-text-muted">{acct.email}</span>
+                      <span className="block truncate text-[12px] text-text-muted">{accountDetail(acct)}</span>
                     </span>
                     {busy && (
                       <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" />

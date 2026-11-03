@@ -74,19 +74,24 @@ function persist(list: SavedSession[]) {
   }
 }
 
-export function saveSession(session: Session | null | undefined, profile?: Profile | null): void {
+export function saveSession(session: Session | null | undefined, profileIn?: Profile | null): void {
   if (!session?.user?.id) return;
+  // Mid-switch the new session arrives while the old account's profile is
+  // still loaded; using it filed one account's name and picture under another.
+  const profile = profileIn?.id === session.user.id ? profileIn : null;
   const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
   const existing = getSavedSessions().find((s) => s.user_id === session.user.id);
   const entry: SavedSession = {
     user_id: session.user.id,
     email: session.user.email ?? existing?.email ?? null,
+    // The live profile first: sign-up metadata never changes, so preferring
+    // it kept showing a name the account had long since dropped.
     username:
-      (typeof meta.username === "string" ? meta.username : null)
-      ?? existing?.username ?? profile?.username ?? null,
-    display_name:
-      (typeof meta.display_name === "string" ? meta.display_name : null)
-      ?? existing?.display_name ?? profile?.display_name ?? null,
+      profile?.username ?? existing?.username
+      ?? (typeof meta.username === "string" ? meta.username : null),
+    display_name: profile
+      ? profile.display_name ?? null
+      : existing?.display_name ?? (typeof meta.display_name === "string" ? meta.display_name : null),
     avatar_url: profile?.avatar_url ?? existing?.avatar_url ?? null,
     saved_at: existing?.saved_at ?? Date.now(),
   };
