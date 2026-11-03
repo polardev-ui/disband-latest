@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
@@ -86,7 +87,7 @@ export function UserProfilePopout({
   const { t } = useI18n();
   const {
     presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage,
-    friends, dmThreads, pendingOutgoing, servers, loadMutuals, sendFriendRequest,
+    friends, dmThreads, pendingOutgoing, sendFriendRequest,
   } = useApp();
   const open = !!profile && !!anchor;
   const { mounted, exiting } = usePresence(open);
@@ -106,26 +107,24 @@ export function UserProfilePopout({
   // front so the card offers Add Friend instead of a box that can't send.
   const targetId = open && p && !isSelf && !p.is_bot ? p.id : null;
   const knownContact = !!targetId && (friends.some((f) => f.id === targetId) || dmThreads.some((d) => d.friend?.id === targetId));
-  const [mutualServerIds, setMutualServerIds] = useState<{ id: string; ids: string[] } | null>(null);
+  // Asked of the server, which applies the same rule when the DM opens
+  // (including Disband's staff being able to reach its members).
+  const [canRequest, setCanRequest] = useState<{ id: string; ok: boolean } | null>(null);
   useEffect(() => {
     setFriendNote(null);
     if (!targetId || knownContact) return;
     let live = true;
-    void loadMutuals(targetId).then((m) => {
-      if (live) setMutualServerIds({ id: targetId, ids: m.serverIds });
-    });
+    void getSupabaseClient()
+      .rpc("can_request_dm", { p_user_id: targetId })
+      .then(({ data, error }) => {
+        // On error leave the box: the send reports the real reason.
+        if (live && !error) setCanRequest({ id: targetId, ok: data === true });
+      });
     return () => {
       live = false;
     };
-  }, [targetId, knownContact, loadMutuals]);
-  const friendsOnly =
-    !!targetId &&
-    !knownContact &&
-    mutualServerIds?.id === targetId &&
-    !mutualServerIds.ids.some((id) => {
-      const s = servers.find((sv) => sv.id === id);
-      return !!s && (s.vanity_code ?? "").toLowerCase() !== "disband";
-    });
+  }, [targetId, knownContact]);
+  const friendsOnly = !!targetId && !knownContact && canRequest?.id === targetId && !canRequest.ok;
   const requestSent = !!targetId && pendingOutgoing.some((f) => f.addressee_id === targetId);
 
   useOverlayDismiss(onClose, open);
