@@ -1107,12 +1107,15 @@ private fun BansPage(serverId: String, onBack: () -> Unit) {
 /** Text channel names take dashes for spaces, as on the web; anything else stays. */
 /**
  * Text channel names take dashes for spaces as they're typed, as on Discord
- * ("hall of fame" → "hall-of-fame"). Matches `channelSlug` on the web and
- * migration 0214.
+ * ("hall of fame" → "hall-of-fame"), and drop ASCII punctuation; letters,
+ * numbers, - and _, emoji and other Unicode stay. Matches `channelSlug` on
+ * the web and migration 0215.
  */
+private val CHANNEL_PUNCTUATION = Regex("""[!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~]""")
+
 private fun liveChannelSlug(name: String, type: ChannelType): String =
     if (type != ChannelType.Text) name
-    else name.replace(Regex("\\s+"), "-").replace(Regex("-{2,}"), "-").take(100)
+    else name.replace(CHANNEL_PUNCTUATION, "").replace(Regex("\\s+"), "-").replace(Regex("-{2,}"), "-").take(100)
 
 /** The finished name: dashed, with no dash left at either end. */
 private fun channelSlug(name: String, type: ChannelType): String {

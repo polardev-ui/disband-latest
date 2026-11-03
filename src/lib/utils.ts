@@ -76,12 +76,19 @@ export function parseMentions(
 
 /**
  * A text channel's name as it's typed, as on Discord: spaces become dashes
- * ("hall of fame" → "hall-of-fame"), so it can be linked as #hall-of-fame.
- * Case, emoji and everything else are kept. Matches migration 0214.
+ * ("hall of fame" → "hall-of-fame") and ASCII punctuation is dropped, so it
+ * can be linked as #hall-of-fame. Letters, numbers, - and _, emoji and other
+ * Unicode (decorations like ⸝ or ・) are kept. Matches migration 0215.
  */
 export function channelSlug(value: string): string {
-  return value.replace(/\s+/g, "-").replace(/-{2,}/g, "-").slice(0, 100);
+  return value
+    .replace(CHANNEL_PUNCTUATION, "")
+    .replace(/\s+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 100);
 }
+
+const CHANNEL_PUNCTUATION = /[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g;
 
 /** The finished name: slugged, with no dash left at either end. */
 export function finishChannelName(value: string): string {

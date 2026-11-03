@@ -184,10 +184,13 @@ struct ChannelsAdminView: View {
 }
 
 /// Text channel names take dashes for spaces as they're typed, as on
-/// Discord ("hall of fame" → "hall-of-fame"); anything else (emoji too)
-/// stays. Matches `channelSlug` on the web and migration 0214.
+/// Discord ("hall of fame" → "hall-of-fame"), and drop ASCII punctuation;
+/// letters, numbers, - and _, emoji and other Unicode stay. Matches
+/// `channelSlug` on the web and migration 0215.
 private func liveChannelSlug(_ name: String) -> String {
-    let dashed = name.replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+    let dashed = name
+        .replacingOccurrences(of: ##"[!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~]"##, with: "", options: .regularExpression)
+        .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
         .replacingOccurrences(of: "-{2,}", with: "-", options: .regularExpression)
     return String(dashed.prefix(100))
 }
