@@ -6,6 +6,9 @@ import kotlinx.coroutines.CancellationException
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
+import java.io.File
+import java.util.UUID
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -50,6 +53,33 @@ class AttachmentSender(
         if (progress != null) return
         // The picker is capped too, but a share-sheet hand-off is not.
         staged = (staged + uris).distinct().take(MAX_ATTACHMENTS)
+    }
+
+    /**
+     * An image or GIF from the keyboard (Gboard's GIFs, a pasted screenshot).
+     * The keyboard only lends read access while it's handing it over, so the
+     * bytes are copied into the cache now and that copy is what's sent.
+     * Returns false if it couldn't be read.
+     */
+    fun stagePasted(androidContext: Context, uri: Uri, mimeHint: String?): Boolean {
+        if (progress != null || staged.size >= MAX_ATTACHMENTS) return false
+        val resolver = androidContext.contentResolver
+        val mime = (resolver.getType(uri) ?: mimeHint)?.takeIf { it.startsWith("image/") || it.startsWith("video/") }
+            ?: return false
+        val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "img"
+        val dir = File(androidContext.cacheDir, "pasted").apply { mkdirs() }
+        val file = File(dir, "pasted-${UUID.randomUUID()}.$ext")
+        val copied = runCatching {
+            resolver.openInputStream(uri)?.use { input ->
+                file.outputStream().use { out -> input.copyTo(out) }
+            } != null
+        }.getOrDefault(false)
+        if (!copied || file.length() == 0L) {
+            file.delete()
+            return false
+        }
+        stage(listOf(Uri.fromFile(file)))
+        return true
     }
 
     fun unstage(uri: Uri) {
@@ -103,8 +133,13 @@ class AttachmentSender(
                 failure = "Couldn't read one of those images."
                 continue
             }
-            val name = withContext(Dispatchers.IO) { displayName(androidContext, uri) } ?: "image-${index + 1}.jpg"
-            val mime = androidContext.contentResolver.getType(uri) ?: "image/jpeg"
+            val name = withContext(Dispatchers.IO) { displayName(androidContext, uri) }
+                ?: uri.takeIf { it.scheme == "file" }?.lastPathSegment
+                ?: "image-${index + 1}.jpg"
+            // A pasted copy is a plain file, which has no content type: go by its extension.
+            val mime = androidContext.contentResolver.getType(uri)
+                ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+                ?: "image/jpeg"
 
             val result = try { MediaService.uploadImage(bytes, name, mime) }
                 catch (e: CancellationException) { throw e }

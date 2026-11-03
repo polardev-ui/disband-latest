@@ -5,6 +5,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.content.MediaType
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.derivedStateOf
@@ -690,9 +699,22 @@ private fun Composer(
     onSendAttachments: (suspend (String) -> Boolean)? = null,
     onTyping: () -> Unit = {},
 ) {
-    var draft by rememberSaveable(conversationKey) { mutableStateOf("") }
-    var editText by rememberSaveable(conversationKey, editingRow?.id) { mutableStateOf(editingRow?.content.orEmpty()) }
-    val text = if (editingRow != null) editText else draft
+    // State-based fields: only these take images and GIFs from the keyboard
+    // (the value-based field never told Gboard it could, so it refused).
+    val draftState = rememberSaveable(conversationKey, saver = TextFieldState.Saver) { TextFieldState() }
+    val editState = rememberSaveable(conversationKey, editingRow?.id, saver = TextFieldState.Saver) {
+        TextFieldState(editingRow?.content.orEmpty())
+    }
+    val fieldState = if (editingRow != null) editState else draftState
+    val text = fieldState.text.toString()
+    val androidContext = LocalContext.current
+    LaunchedEffect(fieldState) {
+        var first = true
+        snapshotFlow { fieldState.text.toString() }.collect {
+            if (!first && it.isNotEmpty()) onTyping()
+            first = false
+        }
+    }
     var sending by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
     var unexpectedError by remember { mutableStateOf<String?>(null) }
@@ -738,19 +760,16 @@ private fun Composer(
                 }
             } else Spacer(Modifier.width(12.dp))
             BasicTextField(
-                value = text,
-                onValueChange = {
-                    if (editingRow != null) editText = it else draft = it
-                    if (it.isNotEmpty()) onTyping()
-                },
+                state = fieldState,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).onFocusChanged { focused = it.isFocused }
+                    .pastedMedia(attachments.takeIf { editingRow == null && enabled && !sending }, androidContext)
                     .padding(vertical = 13.dp, horizontal = 4.dp)
                     .semantics { contentDescription = if (editingRow != null) "Edit message" else "Message" },
                 textStyle = TextStyle(color = palette.textPrimary, fontSize = 16.sp, lineHeight = 22.sp),
                 cursorBrush = SolidColor(palette.accent),
-                maxLines = 6,
+                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6),
                 enabled = enabled && !sending,
-                decorationBox = { field ->
+                decorator = { field ->
                     Box {
                         if (text.isEmpty()) Text(placeholder, color = palette.textMuted, fontSize = 16.sp, maxLines = 1,
                             overflow = TextOverflow.Ellipsis)
@@ -773,7 +792,7 @@ private fun Composer(
                                 val success = if (hasStaged && onSendAttachments != null) onSendAttachments(submitted)
                                     else onSend(submitted)
                                 if (success) {
-                                    if (wasEditing) editText = "" else draft = ""
+                                    if (wasEditing) editState.clearText() else draftState.clearText()
                                     haptic.performHapticFeedback(HapticFeedbackType.Confirm)
                                 }
                             } catch (e: CancellationException) { throw e }
@@ -792,6 +811,26 @@ private fun Composer(
                 }
             }
             if (text.isBlank() && !hasStaged) Spacer(Modifier.width(8.dp))
+        }
+    }
+}
+
+/**
+ * Lets the keyboard hand over images and GIFs (Gboard's GIF tab, a copied
+ * screenshot in its clipboard): they're staged like picked photos. Text in
+ * the same paste still goes into the field.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.pastedMedia(attachments: AttachmentSender?, androidContext: android.content.Context): Modifier {
+    if (attachments == null) return this
+    return contentReceiver { content ->
+        if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
+        val mimeHint = content.clipMetadata.clipDescription.let { d ->
+            (0 until d.mimeTypeCount).map { d.getMimeType(it) }.firstOrNull { it.startsWith("image/") }
+        }
+        content.consume { item ->
+            val uri = item.uri ?: return@consume false
+            attachments.stagePasted(androidContext, uri, mimeHint)
         }
     }
 }
