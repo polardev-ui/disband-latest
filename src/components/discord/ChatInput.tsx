@@ -7,7 +7,7 @@ import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { UploadEntry } from "@/hooks/useMediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconAttach, IconPoll, IconClose, IconGame, IconHash, IconMegaphone, IconPlus, IconSend } from "@/components/icons";
-import { displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent, roleMentionSlug } from "@/lib/utils";
+import { channelLinkName, displayName, getMentionQuery, getChannelQuery, getEmojiQuery, getCompletedEmojiToken, normalizeMessageContent, roleMentionSlug } from "@/lib/utils";
 import { applyAtomicEdit, resolveMentionSpans, type MentionSpan } from "@/lib/composer-tokens";
 import { SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
 import { useMemberSearch } from "@/hooks/useMemberSearch";
@@ -415,7 +415,7 @@ export function ChatInput({
     if (!channelCtx) return [];
     const q = channelCtx.query.toLowerCase();
     return channels
-      .filter((c) => q === "" || c.name.toLowerCase().includes(q))
+      .filter((c) => channelLinkName(c.name) && (q === "" || channelLinkName(c.name).includes(q) || c.name.toLowerCase().includes(q)))
       .slice(0, 8);
   }, [channelCtx, channels]);
 
@@ -634,8 +634,9 @@ export function ChatInput({
     if (!channelCtx || !textareaRef.current) return;
     const before = text.slice(0, channelCtx.start);
     const after = text.slice(textareaRef.current.selectionStart);
-    const next = `${before}#${item.name} ${after}`;
-    applyText(text, next, before.length + item.name.length + 2);
+    const link = channelLinkName(item.name);
+    const next = `${before}#${link} ${after}`;
+    applyText(text, next, before.length + link.length + 2);
     setChannelIdx(0);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }

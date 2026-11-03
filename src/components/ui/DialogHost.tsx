@@ -100,7 +100,7 @@ function DialogCard({ request }: { request: DialogRequest }) {
                 id="dialog-input"
                 ref={inputRef}
                 value={value}
-                onChange={(e) => setValue(request.format ? request.format(e.target.value) : e.target.value)}
+                onChange={(e) => setValue(e.target.value)}
                 placeholder={request.placeholder}
                 maxLength={request.maxLength}
                 autoComplete="off"

@@ -5,7 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useMemberSearch } from "@/hooks/useMemberSearch";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { presenceStatusFor } from "@/lib/presence";
-import { displayName } from "@/lib/utils";
+import { channelLinkName, displayName } from "@/lib/utils";
 import { resolveMember } from "@/lib/slash-commands";
 import type { CommandOption, SpaceBotCommand } from "@/lib/bot-commands";
 import type { ChannelLite } from "@/lib/markdown";
@@ -176,7 +176,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
         if (!id) return fail(`No member called ${raw}.`);
         out[o.name] = id;
       } else if (o.type === "channel") {
-        const id = picked[o.name]?.id ?? channels.find((c) => c.name.toLowerCase() === raw.replace(/^#/, "").toLowerCase())?.id;
+        const id = picked[o.name]?.id ?? channels.find((c) => c.name.toLowerCase() === raw.replace(/^#/, "").toLowerCase() || channelLinkName(c.name) === channelLinkName(raw.replace(/^#/, "")))?.id;
         if (!id) return fail(`No channel called ${raw}.`);
         out[o.name] = id;
       } else {

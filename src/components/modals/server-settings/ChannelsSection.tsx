@@ -7,7 +7,6 @@ import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker,
 import { ConfirmDialog, EmptyState, InlineError, Segmented, btn, enterStyle, iconBtn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
-import { channelSlug, finishChannelName } from "@/lib/utils";
 
 type ChannelLite = { id: string; name: string; type: string; category_id?: string | null; read_only?: boolean; is_stage?: boolean };
 
@@ -28,7 +27,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
   const [deleting, setDeleting] = useState<ChannelLite | null>(null);
 
   async function create() {
-    const clean = type === "text" ? finishChannelName(name) : name.trim().slice(0, 100);
+    const clean = name.trim().slice(0, 100);
     if (!clean) return;
     setCreating(true);
     setError(null);
@@ -50,7 +49,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
   }
 
   async function commitRename(channel: ChannelLite) {
-    const next = channel.type === "text" ? finishChannelName(renameValue) : renameValue.trim();
+    const next = renameValue.trim().slice(0, 100);
     setRenamingId(null);
     if (!next || next === channel.name) return;
     const err = await renameChannel(channel.id, next);
@@ -100,7 +99,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             </span>
             <input
               value={name}
-              onChange={(e) => setName(type === "text" ? channelSlug(e.target.value) : e.target.value.slice(0, 100))}
+              onChange={(e) => setName(e.target.value.slice(0, 100))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void create();
               }}
@@ -172,7 +171,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
                       <input
                         autoFocus
                         value={renameValue}
-                        onChange={(e) => setRenameValue(c.type === "text" ? channelSlug(e.target.value) : e.target.value)}
+                        onChange={(e) => setRenameValue(e.target.value)}
                         onBlur={() => void commitRename(c)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") void commitRename(c);

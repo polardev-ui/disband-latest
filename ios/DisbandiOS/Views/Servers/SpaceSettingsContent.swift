@@ -183,23 +183,11 @@ struct ChannelsAdminView: View {
     }
 }
 
-/// Text channel names take dashes for spaces as they're typed, as on
-/// Discord ("hall of fame" → "hall-of-fame"), and drop ASCII punctuation;
-/// letters, numbers, - and _, emoji and other Unicode stay. Matches
-/// `channelSlug` on the web and migration 0215.
-private func liveChannelSlug(_ name: String) -> String {
-    let dashed = name
-        .replacingOccurrences(of: ##"[!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~]"##, with: "", options: .regularExpression)
-        .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
-        .replacingOccurrences(of: "-{2,}", with: "-", options: .regularExpression)
-    return String(dashed.prefix(100))
-}
-
-/// The finished name: dashed, with no dash left at either end.
-private func channelSlug(_ name: String, type: ChannelType) -> String {
-    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard type == .text else { return String(trimmed.prefix(100)) }
-    return liveChannelSlug(trimmed).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+/// Channel names are saved as typed. Links match a channel by its
+/// `#link-name` (spaces as dashes, punctuation dropped), worked out when a
+/// message is shown, so the name itself can keep spaces and symbols.
+private func cleanChannelName(_ name: String) -> String {
+    String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
 }
 
 struct NewChannelSheet: View {
@@ -215,7 +203,7 @@ struct NewChannelSheet: View {
     @State private var error: String?
     @FocusState private var focused: Bool
 
-    private var clean: String { channelSlug(name, type: type) }
+    private var clean: String { cleanChannelName(name) }
 
     var body: some View {
         NavigationStack {
@@ -235,9 +223,6 @@ struct NewChannelSheet: View {
                         Image(systemName: type == .voice ? "speaker.wave.2" : "number")
                             .foregroundStyle(Brand.textMuted)
                         TextField(type == .voice ? "Lounge" : "new-channel", text: $name)
-                            .onChange(of: name) { _, typed in
-                                if type == .text, liveChannelSlug(typed) != typed { name = liveChannelSlug(typed) }
-                            }
                             .textInputAutocapitalization(type == .text ? .never : .sentences)
                             .autocorrectionDisabled()
                             .focused($focused)
@@ -325,7 +310,7 @@ struct ChannelEditView: View {
         _readOnly = State(initialValue: channel.readOnly == true)
     }
 
-    private var clean: String { channelSlug(name, type: channel.type) }
+    private var clean: String { cleanChannelName(name) }
     private var renamed: Bool { !clean.isEmpty && clean != channel.name }
 
     var body: some View {
@@ -334,9 +319,6 @@ struct ChannelEditView: View {
                 HStack(spacing: 6) {
                     Image(systemName: ChannelsAdminView.symbol(for: channel)).foregroundStyle(Brand.textMuted)
                     TextField("Channel name", text: $name)
-                        .onChange(of: name) { _, typed in
-                            if channel.type == .text, liveChannelSlug(typed) != typed { name = liveChannelSlug(typed) }
-                        }
                         .textInputAutocapitalization(channel.type == .text ? .never : .sentences)
                         .autocorrectionDisabled()
                 }

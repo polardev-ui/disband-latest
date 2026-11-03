@@ -1106,22 +1106,11 @@ private fun BansPage(serverId: String, onBack: () -> Unit) {
 
 /** Text channel names take dashes for spaces, as on the web; anything else stays. */
 /**
- * Text channel names take dashes for spaces as they're typed, as on Discord
- * ("hall of fame" → "hall-of-fame"), and drop ASCII punctuation; letters,
- * numbers, - and _, emoji and other Unicode stay. Matches `channelSlug` on
- * the web and migration 0215.
+ * Channel names are saved as typed. Links match a channel by its
+ * `#link-name` (spaces as dashes, punctuation dropped), worked out when a
+ * message is shown, so the name itself can keep spaces and symbols.
  */
-private val CHANNEL_PUNCTUATION = Regex("""[!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~]""")
-
-private fun liveChannelSlug(name: String, type: ChannelType): String =
-    if (type != ChannelType.Text) name
-    else name.replace(CHANNEL_PUNCTUATION, "").replace(Regex("\\s+"), "-").replace(Regex("-{2,}"), "-").take(100)
-
-/** The finished name: dashed, with no dash left at either end. */
-private fun channelSlug(name: String, type: ChannelType): String {
-    val trimmed = name.trim()
-    return if (type == ChannelType.Text) liveChannelSlug(trimmed, type).trim('-') else trimmed.take(100)
-}
+private fun cleanChannelName(name: String): String = name.trim().take(100)
 
 private fun channelIcon(channel: Channel): ImageVector = when {
     channel.type == ChannelType.Voice -> Icons.AutoMirrored.Filled.VolumeUp
@@ -1240,9 +1229,9 @@ private fun ChannelsPage(server: Server, push: (Page) -> Unit, onChanged: () -> 
                             )
                         }
                     }
-                    SettingsField(text, { text = liveChannelSlug(it, newType) }, placeholder = if (newType == ChannelType.Voice) "Lounge" else "new-channel",
+                    SettingsField(text, { text = it }, placeholder = if (newType == ChannelType.Voice) "Lounge" else "new-channel",
                         capitalise = newType == ChannelType.Voice, padded = false)
-                    val clean = channelSlug(text, newType)
+                    val clean = cleanChannelName(text)
                     if (newType == ChannelType.Text && text.isNotBlank() && clean != text) {
                         Text("It'll be created as #$clean.", color = palette.textMuted, fontSize = 13.sp)
                     }
@@ -1260,7 +1249,7 @@ private fun ChannelsPage(server: Server, push: (Page) -> Unit, onChanged: () -> 
                 }
             },
             confirmButton = {
-                val clean = channelSlug(text, newType)
+                val clean = cleanChannelName(text)
                 TextButton(enabled = clean.isNotEmpty(), onClick = {
                     dialog = null
                     val type = newType
@@ -1331,7 +1320,7 @@ private fun ChannelEditPage(channel: Channel, onChanged: () -> Unit, onBack: () 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val clean = channelSlug(name, channel.type)
+    val clean = cleanChannelName(name)
     val renamed = clean.isNotEmpty() && clean != channel.name
 
     fun run(close: Boolean, work: suspend () -> Unit) {
@@ -1356,7 +1345,7 @@ private fun ChannelEditPage(channel: Channel, onChanged: () -> Unit, onBack: () 
         LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
             item {
                 SectionCaption("Name")
-                SettingsField(name, { name = liveChannelSlug(it, channel.type) }, placeholder = "Channel name", capitalise = channel.type == ChannelType.Voice)
+                SettingsField(name, { name = it }, placeholder = "Channel name", capitalise = channel.type == ChannelType.Voice)
                 if (channel.type == ChannelType.Text && renamed && clean != name) Footnote("It'll be saved as #$clean.")
             }
             if (channel.type == ChannelType.Text) {

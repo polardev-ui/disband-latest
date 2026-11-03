@@ -1,6 +1,6 @@
 "use client";
 
-import { displayName, isValidMentionToken, roleMentionSlug } from "@/lib/utils";
+import { channelLinkName, displayName, isValidMentionToken, roleMentionSlug } from "@/lib/utils";
 import { Suspense, lazy, useState } from "react";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
@@ -48,7 +48,7 @@ export interface ChannelLite {
 }
 
 const INLINE_RE =
-  /(@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
+  /(@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[\p{L}\p{N}\p{M}_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/u;
 
 const MENTION_CHIP_CLASS =
   "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
@@ -176,7 +176,7 @@ function renderInlineTokens(
 
     if (token.startsWith("#")) {
       const name = token.slice(1).toLowerCase();
-      const channel = channels?.find((c) => c.name.toLowerCase() === name);
+      const channel = channels?.find((c) => channelLinkName(c.name) === name);
 
       if (channel && onChannelClick) {
         out.push(

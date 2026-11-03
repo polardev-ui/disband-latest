@@ -11,7 +11,6 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
 import type { Channel } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
-import { channelSlug, finishChannelName } from "@/lib/utils";
 
 type ActionKey = "can_view" | "can_post" | "can_react" | "can_attach";
 type TriState = null | boolean;
@@ -150,7 +149,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     );
   };
 
-  const finalName = channel.type === "text" ? finishChannelName(name) : name.trim();
+  const finalName = name.trim();
 
   // Anything differing from what was loaded raises the classic save bar.
   const dirty =
@@ -283,7 +282,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   </span>
                   <input
                     value={name}
-                    onChange={(e) => setName(channel.type === "text" ? channelSlug(e.target.value) : e.target.value)}
+                    onChange={(e) => setName(e.target.value)}
                     className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
                     maxLength={32}
                   />
