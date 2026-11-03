@@ -958,6 +958,7 @@ export function useVoiceChannel(
       // avatars, so flipping joined here starts peer negotiation immediately
       // instead of waiting on a profile fetch.
       const loaded = await loadPresence(true);
+      joinedAtRef.current = Date.now();
       setJoined(true);
 
       const others = loaded.filter((p) => p.user_id !== userId);
@@ -1054,6 +1055,38 @@ export function useVoiceChannel(
     }
   }, [announceSharing, publishSfuTracks]);
 
+  // Taken out of the room by someone else (kicked from the space, banned,
+  // or disconnected from a stage): our row is gone. Hang up rather than
+  // carry on in a room we're no longer in. A fresh join is given a few
+  // seconds, and a miss is checked against the table itself (not the live
+  // view, which a slow heartbeat can briefly drop us from) before leaving.
+  const joinedAtRef = useRef(0);
+  const removedCheckRef = useRef(false);
+  useEffect(() => {
+    if (!joined || !channelId || !userId) return;
+    if (Date.now() - joinedAtRef.current < 5_000) return;
+    if (participants.some((p) => p.user_id === userId) || removedCheckRef.current) return;
+    removedCheckRef.current = true;
+    void (async () => {
+      try {
+        const { data, error: readError } = await getSupabaseClient()
+          .from("voice_presence")
+          .select("user_id")
+          .eq("channel_id", channelId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (!readError && !data) {
+          await leaveRef.current();
+          setError("You were removed from the voice channel.");
+        }
+      } finally {
+        removedCheckRef.current = false;
+      }
+    })();
+  }, [participants, joined, channelId, userId]);
+
+  const leaveRef = useRef<() => Promise<void>>(async () => {});
+
   const leave = useCallback(async () => {
     if (userId && signalRef.current) {
       try {
@@ -1069,6 +1102,7 @@ export function useVoiceChannel(
     await cleanup();
     await loadPresence();
   }, [cleanup, loadPresence, userId]);
+  leaveRef.current = leave;
 
   useEffect(() => {
     if (!channelId) return;
