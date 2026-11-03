@@ -57,7 +57,12 @@ struct VoiceMember: Identifiable, Hashable {
     var profile: Profile?
     var muted = false
     var deafened = false
+    /// Stage channels: on stage (heard), invited up, or asking to speak.
+    var stageSpeaker = false
+    var stageInvited = false
+    var handRaisedAt: String?
     var id: String { userId }
+    var handRaised: Bool { handRaisedAt != nil }
     var name: String { profile?.name ?? "Someone" }
 }
 
@@ -68,6 +73,17 @@ struct GroupRing: Identifiable, Equatable {
     let fromId: String
     let receivedAt = Date()
     var id: String { groupId }
+}
+
+/// A stage channel's own state. Only speakers are heard; everyone else
+/// listens. Mirrors migration 0212 and the web's StagePanel.
+struct StageInfo: Equatable {
+    var topic: String?
+    var startedAt: String?
+    var requestsEnabled = true
+    /// Owner, admins and anyone with Manage Channels run the stage.
+    var isModerator = false
+    var isLive: Bool { startedAt != nil }
 }
 
 enum VoicePhase: Equatable {
@@ -115,6 +131,8 @@ final class VoiceSession {
     /// Presence means someone is in the room; this means their audio can
     /// actually reach us. The difference is what "Connecting…" reflects.
     private(set) var connectedPeerIds: Set<String> = []
+    /// Set while the room is a stage channel.
+    private(set) var stage: StageInfo?
     var incomingRing: GroupRing?
     /// Stage (false) versus the floating pill (true).
     var minimized = false
@@ -133,6 +151,15 @@ final class VoiceSession {
     }
 
     func isIn(_ roomId: String) -> Bool { room?.id == roomId && isActive }
+
+    var isStage: Bool { stage != nil }
+    private var me: VoiceMember? { members.first { $0.userId == userId } }
+    /// On a stage, only speakers may talk. Elsewhere everyone can.
+    var canSpeak: Bool { stage == nil || me?.stageSpeaker == true }
+    var stageInvited: Bool { me?.stageInvited == true }
+    var handRaised: Bool { me?.handRaised == true }
+    /// Whether the microphone actually reaches anyone right now.
+    private var transmitting: Bool { !micMuted && canSpeak }
 
     /// Set by the app so voice never fights a 1:1 call for the audio session.
     @ObservationIgnored var isDirectCallActive: () -> Bool = { false }
@@ -212,6 +239,14 @@ final class VoiceSession {
         minimized = false
         if case .group(let gid, _, _) = room, incomingRing?.groupId == gid { incomingRing = nil }
 
+        // A stage puts everyone in the audience, muted, until they're
+        // brought up. Known before the mic exists so it never opens.
+        stage = nil
+        if case .channel(let id, _, _, _, _) = room {
+            stage = await Self.fetchStage(channelId: id, userId: userId)
+            if stage != nil { micMuted = true }
+        }
+
         CallAudioSession.activate()
         CallAudioSession.setSpeaker(speakerOn)
 
@@ -221,7 +256,7 @@ final class VoiceSession {
         )
         self.factory = factory
         let mic = factory.audioTrack(withTrackId: "mic-\(UUID().uuidString.prefix(8))")
-        mic.isEnabled = !micMuted
+        mic.isEnabled = transmitting
         audioTrack = mic
         iceServers = await TurnService.shared.iceServers()
 
@@ -239,7 +274,8 @@ final class VoiceSession {
 
         phase = .connected
         connectedAt = Date()
-        CallSounds.shared.playConnected()
+        // Coming and going on a stage is silent, as on the web.
+        if stage == nil { CallSounds.shared.playConnected() }
 
         await reloadMembers()
         for member in members where member.userId != userId {
@@ -311,7 +347,7 @@ final class VoiceSession {
         signalChannel = nil
         presenceChannel = nil
 
-        if wasConnected { CallSounds.shared.playEnd() }
+        if wasConnected && stage == nil { CallSounds.shared.playEnd() }
         if !isDirectCallActive() { CallAudioSession.deactivate() }
 
         room = nil
@@ -323,6 +359,7 @@ final class VoiceSession {
         connectedPeerIds = []
         ringingIds = []
         connectedAt = nil
+        stage = nil
         minimized = false
 
         // Then tell everyone. Waited on (briefly) so a quick rejoin of the
@@ -355,17 +392,19 @@ final class VoiceSession {
     // MARK: - Controls
 
     func toggleMute() {
+        // The audience can't unmute; they raise a hand instead.
+        if micMuted && !canSpeak { return }
         micMuted.toggle()
         // Unmuting while deafened would transmit into a call you can't hear.
-        if !micMuted && deafened { deafened = false; applyDeafen() }
-        audioTrack?.isEnabled = !micMuted
+        if !micMuted && deafened { deafened = false; applyRemoteAudio() }
+        audioTrack?.isEnabled = transmitting
         Task { await syncMuteState() }
     }
 
     func toggleDeafen() {
         deafened.toggle()
         if deafened { micMuted = true; audioTrack?.isEnabled = false }
-        applyDeafen()
+        applyRemoteAudio()
         Task { await syncMuteState() }
     }
 
@@ -378,7 +417,7 @@ final class VoiceSession {
         if cameraOn {
             stopCamera()
             for peer in peers.values { peer.setTrack(nil, on: .camera) }
-        } else {
+        } else if canSpeak {
             startCamera()
         }
     }
@@ -428,7 +467,7 @@ final class VoiceSession {
         case "leave":
             dropPeer(signal.from)
             members.removeAll { $0.userId == signal.from }
-            CallSounds.shared.playLeave()
+            if stage == nil { CallSounds.shared.playLeave() }
             // The web ends a group call once nobody else is connected.
             if room?.isGroup == true, peers.isEmpty, ringingIds.isEmpty { await leave() }
         case "screen":
@@ -530,7 +569,7 @@ final class VoiceSession {
         switch lane {
         case .audio:
             guard let audio = track as? RTCAudioTrack else { return }
-            audio.isEnabled = !deafened
+            audio.isEnabled = !deafened && heard(remoteId)
             remoteAudio[remoteId] = audio
         case .camera, .screen:
             guard let video = track as? RTCVideoTrack else { return }
@@ -545,8 +584,14 @@ final class VoiceSession {
         }
     }
 
-    private func applyDeafen() {
-        for track in remoteAudio.values { track.isEnabled = !deafened }
+    /// On a stage only speakers are played. The audience's audio still
+    /// arrives over the direct connection, but stays silent here.
+    private func heard(_ remoteId: String) -> Bool {
+        stage == nil || members.first { $0.userId == remoteId }?.stageSpeaker == true
+    }
+
+    private func applyRemoteAudio() {
+        for (remoteId, track) in remoteAudio { track.isEnabled = !deafened && heard(remoteId) }
     }
 
     // MARK: - Presence
@@ -556,7 +601,22 @@ final class VoiceSession {
         let user_id: String
         var muted: Bool?
         var deafened: Bool?
+        // Read only (nil, so never sent): the database keeps these out of
+        // clients' hands.
+        var stage_speaker: Bool? = nil
+        var stage_invited: Bool? = nil
+        var stage_hand_raised_at: String? = nil
+
+        func member(_ profile: Profile?) -> VoiceMember {
+            VoiceMember(userId: user_id, profile: profile,
+                        muted: muted ?? false, deafened: deafened ?? false,
+                        stageSpeaker: stage_speaker ?? false, stageInvited: stage_invited ?? false,
+                        handRaisedAt: stage_hand_raised_at)
+        }
     }
+
+    private static let presenceColumns =
+        "channel_id,user_id,muted,deafened,stage_speaker,stage_invited,stage_hand_raised_at"
 
     private struct GroupPresenceRow: Codable {
         let group_id: String
@@ -614,18 +674,138 @@ final class VoiceSession {
 
     private func reloadMembers() async {
         guard let room else { return }
-        let loaded = (try? await Self.fetchMembers(of: room)) ?? members
+        guard let loaded = try? await Self.fetchMembers(of: room) else { return }
         guard self.room == room else { return }
+
+        if await wasRemoved(from: room, loaded: loaded) {
+            await leave()
+            error = "You were removed from the voice channel."
+            return
+        }
 
         let previous = Set(members.map(\.userId))
         let now = Set(loaded.map(\.userId))
-        if phase == .connected, !previous.isEmpty {
+        if phase == .connected, !previous.isEmpty, stage == nil {
             if now.subtracting(previous).subtracting([userId ?? ""]).isEmpty == false {
                 CallSounds.shared.playJoin()
             }
         }
         ringingIds.subtract(now)
+        let wasSpeaker = canSpeak
         members = loaded
+
+        if stage != nil, case .channel(let id, _, _, _, _) = room, let userId {
+            if let fresh = await Self.fetchStage(channelId: id, userId: userId, moderator: stage?.isModerator),
+               self.room == room {
+                stage = fresh
+            }
+            // Moved back to the audience: the mic closes, and stays shut
+            // when they're next brought up until they unmute.
+            if wasSpeaker && !canSpeak {
+                micMuted = true
+                Task { await syncMuteState() }
+                if cameraOn { toggleCamera() }
+            }
+            audioTrack?.isEnabled = transmitting
+            applyRemoteAudio()
+        }
+    }
+
+    /// Kicked, banned or disconnected from a stage: our row is gone though
+    /// we never left. Checked against the table itself, not the live view,
+    /// so a few missed heartbeats can't hang anyone up.
+    private func wasRemoved(from room: VoiceRoom, loaded: [VoiceMember]) async -> Bool {
+        guard case .channel(let id, _, _, _, _) = room, let userId, phase == .connected,
+              let connectedAt, Date().timeIntervalSince(connectedAt) > 5,
+              !loaded.contains(where: { $0.userId == userId }) else { return false }
+        struct Row: Decodable { let user_id: String }
+        guard let rows: [Row] = try? await client.from("voice_presence").select("user_id")
+            .eq("channel_id", value: id).eq("user_id", value: userId).execute().value else { return false }
+        return rows.isEmpty && self.room == room
+    }
+
+    // MARK: - Stage
+
+    /// The stage's state, or nil when the channel isn't a stage.
+    static func fetchStage(channelId: String, userId: String, moderator: Bool? = nil) async -> StageInfo? {
+        struct Row: Decodable {
+            let is_stage: Bool?
+            let stage_topic: String?
+            let stage_started_at: String?
+            let stage_requests_enabled: Bool?
+        }
+        let client = SupabaseManager.client
+        guard let rows: [Row] = try? await client.from("channels").select("*")
+            .eq("id", value: channelId).limit(1).execute().value,
+              let row = rows.first, row.is_stage == true else { return nil }
+        var isModerator = moderator ?? false
+        if moderator == nil {
+            struct Args: Encodable { let p_channel_id: String; let p_user_id: String }
+            isModerator = (try? await client.rpc("is_stage_moderator",
+                                                 params: Args(p_channel_id: channelId, p_user_id: userId))
+                .execute().value as Bool) ?? false
+        }
+        return StageInfo(topic: row.stage_topic, startedAt: row.stage_started_at,
+                         requestsEnabled: row.stage_requests_enabled ?? true, isModerator: isModerator)
+    }
+
+    private struct StageArgs: Encodable {
+        let p_channel_id: String
+        var p_user_id: String? = nil
+        var p_topic: String? = nil
+        var p_raised: Bool? = nil
+        var p_accept: Bool? = nil
+        var p_enabled: Bool? = nil
+    }
+
+    /// Runs one of the stage functions (they check who may do what) and
+    /// refreshes. Returns the database's message when it refuses.
+    @discardableResult
+    private func stageCall(_ fn: String, _ args: (String) -> StageArgs) async -> String? {
+        guard case .channel(let id, _, _, _, _) = room, stage != nil else { return nil }
+        do {
+            try await client.rpc(fn, params: args(id)).execute()
+        } catch {
+            let message = (error as? PostgrestError)?.message ?? "Something went wrong. Try again."
+            self.error = message
+            return message
+        }
+        await reloadMembers()
+        return nil
+    }
+
+    func startStage(topic: String) async {
+        await stageCall("stage_start") { StageArgs(p_channel_id: $0, p_topic: topic) }
+    }
+
+    func endStage() async {
+        await stageCall("stage_end") { StageArgs(p_channel_id: $0) }
+    }
+
+    func setHandRaised(_ raised: Bool) async {
+        await stageCall("stage_raise_hand") { StageArgs(p_channel_id: $0, p_raised: raised) }
+    }
+
+    /// Inviting yourself (as a moderator) puts you straight on stage.
+    func inviteToSpeak(_ memberId: String) async {
+        await stageCall("stage_invite") { StageArgs(p_channel_id: $0, p_user_id: memberId) }
+    }
+
+    func respondToInvite(accept: Bool) async {
+        await stageCall("stage_respond_invite") { StageArgs(p_channel_id: $0, p_accept: accept) }
+    }
+
+    /// Yourself, or (moderators) anyone. Also dismisses a raised hand.
+    func moveToAudience(_ memberId: String) async {
+        await stageCall("stage_move_to_audience") { StageArgs(p_channel_id: $0, p_user_id: memberId) }
+    }
+
+    func disconnectFromStage(_ memberId: String) async {
+        await stageCall("stage_disconnect") { StageArgs(p_channel_id: $0, p_user_id: memberId) }
+    }
+
+    func setStageRequests(_ enabled: Bool) async {
+        await stageCall("stage_set_requests") { StageArgs(p_channel_id: $0, p_enabled: enabled) }
     }
 
     /// Who is in a room, for the lobby and the channel list as well as the
@@ -637,13 +817,10 @@ final class VoiceSession {
         switch room {
         case .channel(let id, _, _, _, _):
             let rows: [VoicePresenceRow] = try await client.from("voice_presence_live")
-                .select("channel_id,user_id,muted,deafened")
+                .select(presenceColumns)
                 .eq("channel_id", value: id).execute().value
             let profiles = try await fetchProfiles(rows.map(\.user_id))
-            return rows.map {
-                VoiceMember(userId: $0.user_id, profile: profiles[$0.user_id],
-                            muted: $0.muted ?? false, deafened: $0.deafened ?? false)
-            }
+            return rows.map { $0.member(profiles[$0.user_id]) }
         case .group(let id, _, _):
             let rows: [GroupPresenceRow] = try await client.from("group_call_presence")
                 .select("group_id,user_id").eq("group_id", value: id).execute().value
@@ -658,14 +835,12 @@ final class VoiceSession {
         guard !channelIds.isEmpty else { return [:] }
         let client = SupabaseManager.client
         guard let rows: [VoicePresenceRow] = try? await client.from("voice_presence_live")
-            .select("channel_id,user_id,muted,deafened")
+            .select(presenceColumns)
             .in("channel_id", values: channelIds).execute().value else { return [:] }
         let profiles = (try? await fetchProfiles(rows.map(\.user_id))) ?? [:]
         var byChannel: [String: [VoiceMember]] = [:]
         for row in rows {
-            byChannel[row.channel_id, default: []].append(
-                VoiceMember(userId: row.user_id, profile: profiles[row.user_id],
-                            muted: row.muted ?? false, deafened: row.deafened ?? false))
+            byChannel[row.channel_id, default: []].append(row.member(profiles[row.user_id]))
         }
         return byChannel
     }

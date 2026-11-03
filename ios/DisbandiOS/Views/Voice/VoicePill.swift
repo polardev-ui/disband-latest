@@ -27,15 +27,18 @@ struct VoicePill: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Return to \(voice.room?.title ?? "voice")")
 
-            Button { voice.toggleMute() } label: {
-                Image(systemName: voice.micMuted ? "mic.slash.fill" : "mic.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(voice.micMuted ? Color.white : Brand.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(voice.micMuted ? Brand.dnd : Brand.elevated, in: Circle())
-                    .contentTransition(.symbolEffect(.replace))
+            // The audience on a stage has no mic to toggle.
+            if voice.canSpeak {
+                Button { voice.toggleMute() } label: {
+                    Image(systemName: voice.micMuted ? "mic.slash.fill" : "mic.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(voice.micMuted ? Color.white : Brand.textPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(voice.micMuted ? Brand.dnd : Brand.elevated, in: Circle())
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .accessibilityLabel(voice.micMuted ? "Unmute" : "Mute")
             }
-            .accessibilityLabel(voice.micMuted ? "Unmute" : "Mute")
 
             Button { Task { await voice.leave() } } label: {
                 Image(systemName: "phone.down.fill")
@@ -60,6 +63,10 @@ struct VoicePill: View {
 
     private var subtitle: String {
         if voice.phase == .connecting { return "Connecting…" }
+        if voice.isStage {
+            let speakers = voice.members.filter(\.stageSpeaker).count
+            return "Stage · \(speakers) speaking · \(voice.members.count - speakers) listening"
+        }
         if voice.otherMemberCount == 0 { return "Waiting for others…" }
         if voice.connectedPeerIds.isEmpty { return "Connecting…" }
         let count = voice.members.count

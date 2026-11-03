@@ -229,10 +229,16 @@ struct Channel: Codable, Identifiable, Hashable {
     let createdAt: String?
     /// Announcement channel: only people who can manage channels may post.
     var readOnly: Bool?
+    /// A stage: a voice channel where speakers talk and everyone else listens.
+    var isStage: Bool?
+    /// Set while the stage is live.
+    var stageTopic: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, position
         case readOnly = "read_only"
+        case isStage = "is_stage"
+        case stageTopic = "stage_topic"
         case serverId = "server_id"
         case categoryId = "category_id"
         case createdAt = "created_at"

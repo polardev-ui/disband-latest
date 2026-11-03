@@ -5,6 +5,9 @@ import SwiftUI
 struct VoiceLobbySheet: View {
     let room: VoiceRoom
     var initialMembers: [VoiceMember] = []
+    /// A stage: you join the audience, muted, and the mic toggle goes.
+    var isStage = false
+    var stageTopic: String?
 
     @Environment(VoiceSession.self) private var voice
     @Environment(\.dismiss) private var dismiss
@@ -64,6 +67,11 @@ struct VoiceLobbySheet: View {
     }
 
     private var summary: String {
+        if isStage {
+            let speakers = members.filter(\.stageSpeaker).count
+            let live = stageTopic.map { "\($0)\n" } ?? "This stage hasn't started yet.\n"
+            return live + "\(speakers) speaking · \(members.count - speakers) listening. You'll join the audience, muted."
+        }
         switch members.count {
         case 0: return "No one's here yet — be the first."
         case 1: return "\(members[0].name) is hanging out"
@@ -74,22 +82,24 @@ struct VoiceLobbySheet: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            Button {
-                joinMuted.toggle()
-                UISelectionFeedbackGenerator().selectionChanged()
-            } label: {
-                Image(systemName: joinMuted ? "mic.slash.fill" : "mic.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(joinMuted ? Color.white : Brand.textPrimary)
-                    .frame(width: 58, height: 58)
-                    .background(joinMuted ? Brand.dnd : Brand.elevated, in: Circle())
+            if !isStage {
+                Button {
+                    joinMuted.toggle()
+                    UISelectionFeedbackGenerator().selectionChanged()
+                } label: {
+                    Image(systemName: joinMuted ? "mic.slash.fill" : "mic.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(joinMuted ? Color.white : Brand.textPrimary)
+                        .frame(width: 58, height: 58)
+                        .background(joinMuted ? Brand.dnd : Brand.elevated, in: Circle())
+                }
+                .accessibilityLabel(joinMuted ? "Join muted" : "Join unmuted")
             }
-            .accessibilityLabel(joinMuted ? "Join muted" : "Join unmuted")
 
             Button {
                 joining = true
                 Task {
-                    if joinMuted != voice.micMuted { voice.toggleMute() }
+                    if !isStage, joinMuted != voice.micMuted { voice.toggleMute() }
                     await voice.join(room)
                     joining = false
                     if voice.isIn(room.id) { dismiss() }
@@ -99,9 +109,9 @@ struct VoiceLobbySheet: View {
                     if joining {
                         ProgressView().tint(.white)
                     } else {
-                        Image(systemName: "waveform")
+                        Image(systemName: isStage ? "dot.radiowaves.left.and.right" : "waveform")
                     }
-                    Text(joining ? "Joining…" : "Join Voice")
+                    Text(joining ? "Joining…" : (isStage ? "Join Stage" : "Join Voice"))
                 }
                 .font(.headline)
                 .foregroundStyle(.white)

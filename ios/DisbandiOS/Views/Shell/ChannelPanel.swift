@@ -20,6 +20,8 @@ struct ChannelPanel: View {
     @State private var channels: [Channel] = []
     @State private var categories: [ChannelCategory] = []
     @State private var occupants: [String: [VoiceMember]] = [:]
+    /// Live stages' topics, by channel id; refreshed with the occupants.
+    @State private var stageTopics: [String: String] = [:]
     @State private var loading = true
     @State private var collapsed: Set<String> = []
     @State private var lobby: Channel?
@@ -95,7 +97,8 @@ struct ChannelPanel: View {
         .task(id: server.id) { await load() }
         .task(id: server.id) { await pollOccupants() }
         .sheet(item: $lobby) { channel in
-            VoiceLobbySheet(room: room(for: channel), initialMembers: occupants[channel.id] ?? [])
+            VoiceLobbySheet(room: room(for: channel), initialMembers: occupants[channel.id] ?? [],
+                            isStage: channel.isStage == true, stageTopic: stageTopics[channel.id])
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(32)
@@ -325,21 +328,35 @@ struct ChannelPanel: View {
     }
 
     private func voiceRow(_ channel: Channel) -> some View {
-        let here = occupants[channel.id] ?? []
+        let isStage = channel.isStage == true
+        let everyone = occupants[channel.id] ?? []
+        // A stage lists its speakers; the audience is just a count.
+        let here = isStage ? everyone.filter(\.stageSpeaker) : everyone
+        let listening = everyone.count - here.count
+        let topic = stageTopics[channel.id]
         let connected = voice.isIn(channel.id)
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 if connected { voice.minimized = false } else { lobby = channel }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: connected ? "speaker.wave.2.fill" : "speaker.wave.1.fill")
+                    Image(systemName: isStage ? "dot.radiowaves.left.and.right"
+                          : (connected ? "speaker.wave.2.fill" : "speaker.wave.1.fill"))
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(connected ? Brand.online : Brand.textMuted)
+                        .foregroundStyle(connected || topic != nil ? Brand.online : Brand.textMuted)
                         .frame(width: 22)
-                    Text(channel.name)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(connected ? Brand.textPrimary : Brand.textSecondary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(channel.name)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(connected ? Brand.textPrimary : Brand.textSecondary)
+                            .lineLimit(1)
+                        if let topic {
+                            Text(topic)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Brand.online)
+                                .lineLimit(1)
+                        }
+                    }
                     Spacer()
                     if !here.isEmpty {
                         Text("\(here.count)")
@@ -350,7 +367,7 @@ struct ChannelPanel: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .frame(height: 42)
+                .frame(minHeight: 42)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(ChannelRowStyle(highlighted: connected))
@@ -380,7 +397,14 @@ struct ChannelPanel: View {
                 }
                 .padding(.leading, 42)
                 .padding(.trailing, 12)
-                .padding(.bottom, 8)
+                .padding(.bottom, isStage && listening > 0 ? 2 : 8)
+            }
+            if isStage && listening > 0 {
+                Label("\(listening) listening", systemImage: "headphones")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Brand.textMuted)
+                    .padding(.leading, 42)
+                    .padding(.bottom, 8)
             }
         }
     }
@@ -416,6 +440,18 @@ struct ChannelPanel: View {
         let ids = channels.filter { $0.type == .voice }.map(\.id)
         let next = await VoiceSession.occupants(channelIds: ids)
         if next != occupants { occupants = next }
+
+        let stageIds = channels.filter { $0.isStage == true }.map(\.id)
+        guard !stageIds.isEmpty else { return }
+        struct Row: Decodable { let id: String; let stage_topic: String?; let stage_started_at: String? }
+        if let rows: [Row] = try? await SupabaseManager.client.from("channels")
+            .select("id,stage_topic,stage_started_at").in("id", values: stageIds).execute().value {
+            var topics: [String: String] = [:]
+            for row in rows where row.stage_started_at != nil {
+                if let topic = row.stage_topic { topics[row.id] = topic }
+            }
+            if topics != stageTopics { stageTopics = topics }
+        }
     }
 
     /// Voice rows update while the panel is on screen; the task is cancelled
