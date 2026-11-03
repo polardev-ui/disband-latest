@@ -17,7 +17,7 @@ import {
   IconSpeaker,
   IconStage,
 } from "@/components/icons";
-import { displayName } from "@/lib/utils";
+import { channelSlug, displayName, finishChannelName } from "@/lib/utils";
 import { getAvatarStyle } from "@/lib/profileColor";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { PresenceMember } from "@/hooks/useServerVoicePresence";
@@ -333,10 +333,11 @@ export function ChannelList({
   };
 
   const submitAddChannel = async () => {
-    if (!onCreateChannel || !addChannelName.trim() || !addChannelTarget) return;
+    const name = addChannelType === "text" ? finishChannelName(addChannelName) : addChannelName.trim();
+    if (!onCreateChannel || !name || !addChannelTarget) return;
     if (!canManageChannels) return;
     setBusy(true);
-    await onCreateChannel(addChannelName.trim(), addChannelType, addChannelTarget.categoryId);
+    await onCreateChannel(name, addChannelType, addChannelTarget.categoryId);
     setBusy(false);
     setAddChannelTarget(null);
     setAddChannelName("");
@@ -375,7 +376,7 @@ export function ChannelList({
         <input
           autoFocus
           value={addChannelName}
-          onChange={(e) => setAddChannelName(e.target.value)}
+          onChange={(e) => setAddChannelName(addChannelType === "text" ? channelSlug(e.target.value) : e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") void submitAddChannel();
             if (e.key === "Escape") setAddChannelTarget(null);

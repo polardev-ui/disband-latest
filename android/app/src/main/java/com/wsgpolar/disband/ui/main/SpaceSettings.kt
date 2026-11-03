@@ -1105,10 +1105,19 @@ private fun BansPage(serverId: String, onBack: () -> Unit) {
 // MARK: - Channels
 
 /** Text channel names take dashes for spaces, as on the web; anything else stays. */
+/**
+ * Text channel names take dashes for spaces as they're typed, as on Discord
+ * ("hall of fame" → "hall-of-fame"). Matches `channelSlug` on the web and
+ * migration 0214.
+ */
+private fun liveChannelSlug(name: String, type: ChannelType): String =
+    if (type != ChannelType.Text) name
+    else name.replace(Regex("\\s+"), "-").replace(Regex("-{2,}"), "-").take(100)
+
+/** The finished name: dashed, with no dash left at either end. */
 private fun channelSlug(name: String, type: ChannelType): String {
     val trimmed = name.trim()
-    val clean = if (type == ChannelType.Text) trimmed.replace(Regex("\\s+"), "-") else trimmed
-    return clean.take(100)
+    return if (type == ChannelType.Text) liveChannelSlug(trimmed, type).trim('-') else trimmed.take(100)
 }
 
 private fun channelIcon(channel: Channel): ImageVector = when {
@@ -1228,7 +1237,7 @@ private fun ChannelsPage(server: Server, push: (Page) -> Unit, onChanged: () -> 
                             )
                         }
                     }
-                    SettingsField(text, { text = it }, placeholder = if (newType == ChannelType.Voice) "Lounge" else "new-channel",
+                    SettingsField(text, { text = liveChannelSlug(it, newType) }, placeholder = if (newType == ChannelType.Voice) "Lounge" else "new-channel",
                         capitalise = newType == ChannelType.Voice, padded = false)
                     val clean = channelSlug(text, newType)
                     if (newType == ChannelType.Text && text.isNotBlank() && clean != text) {
@@ -1344,7 +1353,7 @@ private fun ChannelEditPage(channel: Channel, onChanged: () -> Unit, onBack: () 
         LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
             item {
                 SectionCaption("Name")
-                SettingsField(name, { name = it }, placeholder = "Channel name", capitalise = channel.type == ChannelType.Voice)
+                SettingsField(name, { name = liveChannelSlug(it, channel.type) }, placeholder = "Channel name", capitalise = channel.type == ChannelType.Voice)
                 if (channel.type == ChannelType.Text && renamed && clean != name) Footnote("It'll be saved as #$clean.")
             }
             if (channel.type == ChannelType.Text) {

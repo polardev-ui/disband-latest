@@ -33,6 +33,8 @@ export type DialogRequest =
       placeholder?: string;
       maxLength: number;
       confirmLabel: string;
+      /** Reshapes the value as it's typed (e.g. a channel name's dashes). */
+      format?: (value: string) => string;
       resolve: (value: string | null) => void;
     }
   | {
@@ -114,6 +116,7 @@ export function promptDialog(opts: {
   placeholder?: string;
   maxLength?: number;
   confirmLabel?: string;
+  format?: (value: string) => string;
 }): Promise<string | null> {
   if (hosts === 0) return Promise.resolve(window.prompt(opts.title, opts.defaultValue ?? ""));
   return new Promise((resolve) => {
@@ -127,6 +130,7 @@ export function promptDialog(opts: {
       placeholder: opts.placeholder,
       maxLength: opts.maxLength ?? 100,
       confirmLabel: opts.confirmLabel ?? "Save",
+      format: opts.format,
       resolve,
     });
   });

@@ -78,7 +78,7 @@ import {
 } from "@/components/icons";
 const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
 const ShopModal = dynamic(() => import("@/components/shop/ShopModal").then(m => m.ShopModal));
-import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
+import { channelSlug, displayName, finishChannelName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { shopItem, type ShopCategory } from "@/lib/shop";
 import type { Channel, ChannelCategory, Profile, Server, ServerFolder } from "@/lib/supabase/types";
@@ -878,8 +878,10 @@ export function DiscordApp() {
                 label: t("Channel name"),
                 placeholder: "new-channel",
                 confirmLabel: t("Create Channel"),
+                format: channelSlug,
               }).then((name) => {
-                if (name?.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
+                const clean = name ? finishChannelName(name) : "";
+                if (clean) void app.createChannel({ name: clean, type: "text", categoryId: category.id });
               });
             },
           },

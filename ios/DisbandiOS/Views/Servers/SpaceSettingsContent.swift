@@ -183,14 +183,20 @@ struct ChannelsAdminView: View {
     }
 }
 
-/// Text channel names take dashes for spaces, as on the web; anything else
-/// (emoji too) stays.
+/// Text channel names take dashes for spaces as they're typed, as on
+/// Discord ("hall of fame" → "hall-of-fame"); anything else (emoji too)
+/// stays. Matches `channelSlug` on the web and migration 0214.
+private func liveChannelSlug(_ name: String) -> String {
+    let dashed = name.replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+        .replacingOccurrences(of: "-{2,}", with: "-", options: .regularExpression)
+    return String(dashed.prefix(100))
+}
+
+/// The finished name: dashed, with no dash left at either end.
 private func channelSlug(_ name: String, type: ChannelType) -> String {
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    let clean = type == .text
-        ? trimmed.replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
-        : trimmed
-    return String(clean.prefix(100))
+    guard type == .text else { return String(trimmed.prefix(100)) }
+    return liveChannelSlug(trimmed).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
 }
 
 struct NewChannelSheet: View {
@@ -226,6 +232,9 @@ struct NewChannelSheet: View {
                         Image(systemName: type == .voice ? "speaker.wave.2" : "number")
                             .foregroundStyle(Brand.textMuted)
                         TextField(type == .voice ? "Lounge" : "new-channel", text: $name)
+                            .onChange(of: name) { _, typed in
+                                if type == .text, liveChannelSlug(typed) != typed { name = liveChannelSlug(typed) }
+                            }
                             .textInputAutocapitalization(type == .text ? .never : .sentences)
                             .autocorrectionDisabled()
                             .focused($focused)
@@ -322,6 +331,9 @@ struct ChannelEditView: View {
                 HStack(spacing: 6) {
                     Image(systemName: ChannelsAdminView.symbol(for: channel)).foregroundStyle(Brand.textMuted)
                     TextField("Channel name", text: $name)
+                        .onChange(of: name) { _, typed in
+                            if channel.type == .text, liveChannelSlug(typed) != typed { name = liveChannelSlug(typed) }
+                        }
                         .textInputAutocapitalization(channel.type == .text ? .never : .sentences)
                         .autocorrectionDisabled()
                 }
