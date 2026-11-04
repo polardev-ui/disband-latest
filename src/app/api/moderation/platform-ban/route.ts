@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   getUserFromRequest,
-  requirePlatformManager,
-  requirePlatformOwner,
   requireSupportStaff,
   verifyOwnerPassword,
 } from "@/lib/server-auth";
@@ -66,19 +64,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, action: "unban" });
     }
 
-    let targetEmail: string | null = null;
-    try {
-      const { data: authUser } = await service.auth.admin.getUserById(targetUserId);
-      targetEmail = authUser?.user?.email?.toLowerCase() ?? null;
-    } catch {
-      targetEmail = null;
-    }
-
     const { error } = await service.from("platform_bans").upsert({
       user_id: targetUserId,
       banned_by: user.id,
       reason: body.reason?.trim() || "Banned by platform owner",
-      email: targetEmail,
     });
 
     if (error) {
@@ -111,7 +100,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await service
       .from("platform_bans")
-      .select("user_id, reason, email, created_at, banned_by, profile:profiles!platform_bans_user_id_fkey(username, display_name)")
+      .select("user_id, reason, created_at, banned_by, profile:profiles!platform_bans_user_id_fkey(username, display_name)")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -119,10 +108,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const isManager = await requirePlatformManager(user.id);
-    const bans = (data ?? []).map((b: Record<string, unknown>) =>
-      isManager ? b : { ...b, email: null },
-    );
+    const bans = (data ?? []);
 
     return NextResponse.json({ bans });
   } catch (err) {

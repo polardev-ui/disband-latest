@@ -11,7 +11,6 @@ import { apiFetch } from "@/lib/api";
 interface PlatformBanRow {
   user_id: string;
   reason: string | null;
-  email: string | null;
   created_at: string;
   profile?: { username: string | null; display_name: string | null } | null;
 }
@@ -248,7 +247,7 @@ export function PlatformModerationPanel() {
               <li key={ban.user_id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                 <div>
                   <p className="font-medium">
-                    {ban.profile?.display_name || ban.profile?.username || ban.email || ban.user_id}
+                    {ban.profile?.display_name || ban.profile?.username || ban.user_id}
                   </p>
                   {ban.profile?.username && <p className="text-xs text-text-muted">@{ban.profile.username}</p>}
                   {ban.reason && <p className="text-xs text-text-muted">{ban.reason}</p>}
