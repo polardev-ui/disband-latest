@@ -47,8 +47,8 @@ export function PlatformModerationPanel() {
   }, []);
 
   useEffect(() => {
-    if (profile?.show_owner_badge) void loadBans();
-  }, [profile?.show_owner_badge, loadBans]);
+    if (profile?.show_owner_badge || profile?.is_support_staff) void loadBans();
+  }, [profile?.show_owner_badge, profile?.is_support_staff, loadBans]);
 
   useEffect(() => {
     const term = query.trim();
@@ -91,7 +91,7 @@ export function PlatformModerationPanel() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  if (!profile?.show_owner_badge) return null;
+  if (!profile?.show_owner_badge && !profile?.is_support_staff) return null;
 
   function pickUser(user: Profile) {
     setSelected(user);
@@ -127,10 +127,6 @@ export function PlatformModerationPanel() {
   async function handleUnban(userId: string, uname: string | null) {
     setError(null);
     setSuccess(null);
-    if (!password.trim()) {
-      setError("Enter the owner password to unban.");
-      return;
-    }
     setLoading(true);
     try {
       const err = await platformUnbanUser({ userId, password });
@@ -234,7 +230,7 @@ export function PlatformModerationPanel() {
 
       <button
         type="button"
-        disabled={loading || !selected || !password}
+        disabled={loading || !selected}
         onClick={() => void handleBan()}
         className="rounded bg-status-danger px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
       >
@@ -259,7 +255,7 @@ export function PlatformModerationPanel() {
                 </div>
                 <button
                   type="button"
-                  disabled={loading || !password}
+                  disabled={loading}
                   onClick={() => void handleUnban(ban.user_id, ban.profile?.username ?? null)}
                   className="shrink-0 rounded border border-divider px-3 py-1 text-xs hover:bg-interactive-hover disabled:opacity-50"
                 >

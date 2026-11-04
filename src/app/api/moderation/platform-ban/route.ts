@@ -23,11 +23,10 @@ export async function POST(request: Request) {
     const userLimit = rateLimit(`platform-ban:user:${user.id}`, 10, 60_000);
     if (!userLimit.allowed) return tooManyRequests(userLimit.retryAfterSeconds);
 
-    const isManager = await requirePlatformManager(user.id);
-    if (!isManager) {
+    const isStaff = await requireSupportStaff(user.id);
+    if (!isStaff) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
-
     let body: { action?: string; userId?: string; username?: string; password?: string; reason?: string };
     try {
       body = (await request.json()) as typeof body;
