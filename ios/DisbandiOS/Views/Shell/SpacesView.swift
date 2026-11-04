@@ -67,28 +67,48 @@ struct SpacesView: View {
     /// beside them, so moving between channels is one tap rather than back
     /// and forward through full-screen pushes.
     private var splitLayout: some View {
-        HStack(spacing: 0) {
-            rail
-            panel
-                .frame(width: 340)
-                .frame(maxHeight: .infinity)
-                .background(Brand.surface)
-                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, style: .continuous))
-                .ignoresSafeArea(edges: .bottom)
-                .environment(\.openSpacesRoute) { route in
-                    path = NavigationPath()
-                    path.append(route)
+        // Apple's split container rather than a hand-built HStack: a bare
+        // NavigationStack laid beside the list left its UIKit host on top of
+        // the dock and, until the window first resized, swallowed every tap.
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            HStack(spacing: 0) {
+                rail
+                panel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Brand.surface)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, style: .continuous))
+                    .ignoresSafeArea(edges: .bottom)
+            }
+            .background(Brand.background)
+            .environment(\.openSpacesRoute) { route in
+                // Replace the open conversation in one step, without the
+                // push animation, so picking another chat never needs Back.
+                var swap = Transaction()
+                swap.disablesAnimations = true
+                withTransaction(swap) {
+                    var next = NavigationPath()
+                    next.append(route)
+                    path = next
                 }
-            Divider().overlay(Brand.background)
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(420)
+        } detail: {
             NavigationStack(path: $path) {
                 ContentUnavailableView("Pick a conversation", systemImage: "bubble.left.and.bubble.right",
                                        description: Text("Choose a channel or a direct message to start chatting."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Brand.background)
                     .toolbar(.hidden, for: .navigationBar)
-                    .navigationDestination(for: SpacesRoute.self, destination: destination)
+                    .navigationDestination(for: SpacesRoute.self) { route in
+                        // A fresh view per conversation, so switching never
+                        // keeps the last chat's state.
+                        destination(route).id(route)
+                    }
             }
         }
+        .navigationSplitViewStyle(.balanced)
         .background(Brand.background)
     }
 
