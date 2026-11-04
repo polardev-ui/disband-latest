@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   getUserFromRequest,
+  requirePlatformManager,
   requirePlatformOwner,
   requireSupportStaff,
   verifyOwnerPassword,
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
     const userLimit = rateLimit(`platform-ban:user:${user.id}`, 10, 60_000);
     if (!userLimit.allowed) return tooManyRequests(userLimit.retryAfterSeconds);
 
-    const isStaff = await requireSupportStaff(user.id);
-    if (!isStaff) {
+    const isManager = await requirePlatformManager(user.id);
+    if (!isManager) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
 
@@ -119,7 +120,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ bans: data ?? [] });
+    const isManager = await requirePlatformManager(user.id);
+    const bans = (data ?? []).map((b: Record<string, unknown>) =>
+      isManager ? b : { ...b, email: null },
+    );
+
+    return NextResponse.json({ bans });
   } catch (err) {
     console.error("platform-ban GET error", err);
     return NextResponse.json({ error: "Moderation service failed. Try again." }, { status: 500 });

@@ -38,6 +38,16 @@ export async function requirePlatformOwner(userId: string): Promise<boolean> {
   return data?.show_owner_badge === true;
 }
 
+export async function requirePlatformManager(userId: string): Promise<boolean> {
+  const service = getServiceSupabase();
+  if (!service) return false;
+  const [{ data }, { data: badged }] = await Promise.all([
+    service.from("profiles").select("show_owner_badge").eq("id", userId).maybeSingle(),
+    service.rpc("is_platform_manager", { p_user: userId }),
+  ]);
+  return data?.show_owner_badge === true || badged === true;
+}
+
 export async function requireSupportStaff(userId: string): Promise<boolean> {
   const service = getServiceSupabase();
   if (!service) return false;
