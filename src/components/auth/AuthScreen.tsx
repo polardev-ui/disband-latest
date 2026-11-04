@@ -13,7 +13,7 @@ import { Toggle } from "@/components/discord/settings/SettingsPrimitives";
 import { Logo } from "@/components/ui/Logo";
 import { Turnstile } from "@/components/ui/Turnstile";
 import { Avatar } from "@/components/ui/Avatar";
-import { AnonymousAuthPanel, NewBadge } from "@/components/auth/AnonymousAuthPanel";
+// import { AnonymousAuthPanel, NewBadge } from "@/components/auth/AnonymousAuthPanel"; // disabled
 import { useI18n } from "@/contexts/I18nContext";
 
 type AuthMode = "login" | "signup" | "reset";
@@ -99,14 +99,9 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
     );
   }
 
+  // Anonymous accounts are disabled; keep the view state for compatibility.
   if (anonView) {
-    return (
-      <AnonymousAuthPanel
-        initialView={anonView}
-        overlay={overlay}
-        onClose={() => setAnonView(null)}
-      />
-    );
+    return null;
   }
 
   async function submit(e: React.FormEvent) {
@@ -596,24 +591,6 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 )}
               </button>
 
-              {(mode === "login") && (
-                <div className="pt-1">
-                  <div className="mb-4 flex items-center gap-3">
-                    <span className="h-px flex-1 bg-divider" />
-                    <span className="text-[11px] uppercase tracking-wide text-text-muted">or</span>
-                    <span className="h-px flex-1 bg-divider" />
-                  </div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setAnonView("login")}
-                      className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary py-2.5 text-[14px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
-                    >
-                      {t("Login to an Anonymous Account")}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </form>
