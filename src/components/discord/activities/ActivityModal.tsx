@@ -138,7 +138,7 @@ export function ActivityModal({
     if (!open || !activityId) return;
     const timer = window.setInterval(
       () => void refresh(),
-      activity?.board ? 1500 : 4000,
+      activity?.board ? 500 : 2000,
     );
     return () => window.clearInterval(timer);
   }, [open, activityId, refresh, !!activity?.board]);
