@@ -76,13 +76,15 @@ export function StreamShareButton({ sharing, onToggle }: { sharing: boolean; onT
           sharing ? "bg-white text-[#313338]" : "bg-[#2b2d31] text-white"
         }`}
       >
-        <Tooltip label={sharing ? t("Stop Streaming") : t("Share Your Screen")} side="top">
+        {/* Stretched to the pill's full height: the tooltip's wrapper centres
+            its child, which left the hover fill a short square in the middle. */}
+        <Tooltip label={sharing ? t("Stop Streaming") : t("Share Your Screen")} side="top" className="self-stretch !items-stretch">
           <button
             type="button"
             onClick={() => void onToggle()}
             aria-label={sharing ? t("Stop Streaming") : t("Share Your Screen")}
             aria-pressed={sharing || undefined}
-            className={`flex w-14 items-center justify-center pl-1 transition-colors active:scale-95 ${
+            className={`flex w-14 items-center justify-center rounded-l-full pl-1 transition-colors active:scale-95 ${
               sharing ? "hover:bg-[#e3e5e8]" : "hover:bg-[#404249]"
             }`}
           >
