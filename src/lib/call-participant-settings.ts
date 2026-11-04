@@ -56,11 +56,57 @@ export function setParticipantControl<K extends keyof ParticipantControls>(
   writeAll(all);
 }
 
+// --- Web Audio amplification (supports volume > 100%) -----------------------
+// HTMLAudioElement.volume caps at 1.0, so anything above 100% is silent
+// unless we route the element through a GainNode. We cache one gain node per
+// element and reuse it across volume changes.
+
+let sharedAudioContext: AudioContext | null = null;
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioContext) {
+    try {
+      sharedAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    } catch {
+      return null;
+    }
+  }
+  return sharedAudioContext;
+}
+
+const gainNodes = new WeakMap<HTMLAudioElement, GainNode>();
+
+function ensureGainNode(element: HTMLAudioElement): GainNode | null {
+  const existing = gainNodes.get(element);
+  if (existing) return existing;
+  const ctx = getAudioContext();
+  if (!ctx) return null;
+  try {
+    const source = ctx.createMediaElementSource(element);
+    const gain = ctx.createGain();
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    gainNodes.set(element, gain);
+    return gain;
+  } catch {
+    return null;
+  }
+}
+
 export function applyParticipantAudioControls(element: HTMLAudioElement | null, userId: string) {
   if (!element) return;
   const controls = getParticipantControls(userId);
-  element.volume = Math.min(1, Math.max(0, controls.volume / 100));
-  element.muted = controls.micMuted;
+  const gain = ensureGainNode(element);
+  if (gain) {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") void ctx.resume();
+    gain.gain.value = Math.max(0, controls.volume / 100);
+    element.muted = controls.micMuted;
+  } else {
+    // Fallback when Web Audio isn't available.
+    element.volume = Math.min(1, Math.max(0, controls.volume / 100));
+    element.muted = controls.micMuted;
+  }
   element.dataset.callUser = userId;
 }
 
