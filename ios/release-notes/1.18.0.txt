@@ -1,0 +1,10 @@
+What's new in Disband 1.18
+
+• Disband on iPad: a native app that works in any orientation, with Split View and Stage Manager. Your spaces and channels stay on the left while the conversation opens beside them.
+• Polls: vote with a tap and watch the results update live. Create your own from the + menu in any chat, with up to 10 answers.
+• Show or hide your badges: go to You > Badges to choose which ones appear beside your name.
+• Your guild tag and badges now sit together in one tidy row on profiles.
+• Photos from your iPhone now show for everyone, including people on Android, Windows and the web.
+• Channel names keep their spaces and symbols, and you can still link them, e.g. #hall-of-fame.
+• Disband Staff can now moderate from the app.
+• Plus other fixes and improvements.
