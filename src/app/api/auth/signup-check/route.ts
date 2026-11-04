@@ -217,9 +217,10 @@ export async function POST(request: Request) {
       email,
       expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
     });
+    // Logged, not fatal: until the hook is switched on no ticket is needed,
+    // and once it is, a missing ticket is refused by Supabase anyway.
     if (ticketError) {
       console.error("[signup-check] Could not issue sign-up ticket:", ticketError.message);
-      return NextResponse.json({ allowed: false, error: "Signup is unavailable. Try again shortly." }, { status: 503 });
     }
   }
 
