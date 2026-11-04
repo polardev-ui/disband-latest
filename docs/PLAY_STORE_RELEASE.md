@@ -396,7 +396,7 @@ instruction set:
 - Name: `Demo account`
 - Login required: yes
 - Username / Email: `disband@apple.com`
-- Password: `AppleDev123!`
+- Password: stored only in Play Console (App content > App access). Never commit it.
 - Other instructions: "Sign in with the credentials above. The account is
   already a member of demo servers with seeded conversations, so no invite code
   is needed. Voice and video need a device with a mic/camera; on an emulator,
