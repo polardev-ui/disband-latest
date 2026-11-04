@@ -159,6 +159,8 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
           setError(t("Username must be at least 2 characters (letters, numbers, and underscores)."));
         } else if (password !== confirmPassword) {
           setError(t("Passwords don't match. Re-enter them and try again."));
+        } else if (PUBLIC_ENV.turnstileSiteKey && !turnstileToken) {
+          setError(t("Complete the verification check, then press Create account."));
         } else {
           const result = await signUp(email, password, username, appliedRef, turnstileToken, birthdate);
           if (result.error) {
@@ -533,6 +535,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                   <Turnstile
                     key={turnstileKey}
                     siteKey={PUBLIC_ENV.turnstileSiteKey}
+                    action={mode === "signup" ? "signup" : undefined}
                     onToken={setTurnstileToken}
                     onExpire={() => setTurnstileToken(null)}
                     onError={() => {
@@ -543,7 +546,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 </div>
               )}
 
-              {challengeRequired && turnstileFailed && (
+              {(mode === "signup" || challengeRequired) && turnstileFailed && (
                 <p
                   className="rounded-[3px] border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted"
                 >

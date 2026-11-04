@@ -203,6 +203,12 @@ final class AppState {
             authError = "Username must be at least 2 characters (letters, numbers, and underscores)."
             return
         }
+        // The server's sign-up checks (rate limits, bans, username rules) also
+        // issue the one-time ticket Supabase now needs to create the account.
+        if let refusal = await signupCheck(email: normalise(email), username: normalized) {
+            authError = refusal
+            return
+        }
         do {
             let response = try await client.auth.signUp(
                 email: normalise(email),
@@ -239,6 +245,27 @@ final class AppState {
             }
         } catch {
             authError = friendlyAuthError(error)
+        }
+    }
+
+    /// Runs the web's sign-up gate. Returns a message to show, or nil to go on.
+    private func signupCheck(email: String, username: String) async -> String? {
+        struct Body: Encodable { let email: String; let username: String; let platform = "ios" }
+        struct Reply: Decodable { let allowed: Bool?; let error: String? }
+        var req = URLRequest(url: AppConfig.webAppURL.appendingPathComponent("api/auth/signup-check"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONEncoder().encode(Body(email: email, username: username))
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let reply = try? JSONDecoder().decode(Reply.self, from: data)
+            if (200..<300).contains(status), reply?.allowed != false { return nil }
+            if let message = reply?.error { return message }
+            if status == 429 { return "Too many sign-up attempts from your network. Try again later." }
+            return "Sign-up is temporarily unavailable. Please try again in a few minutes."
+        } catch {
+            return "We couldn't reach Disband to check this sign-up. Check your connection and try again."
         }
     }
 

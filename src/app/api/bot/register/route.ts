@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       email: botEmail,
       password: botPassword,
       email_confirm: true,
+      app_metadata: { created_by: "server" },
     });
     if (createUserError || !botUser?.user) {
       return NextResponse.json({ error: "Could not create the bot account." }, { status: 500 });

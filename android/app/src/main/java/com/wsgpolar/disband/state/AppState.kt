@@ -1,5 +1,19 @@
 package com.wsgpolar.disband.state
 
+import com.wsgpolar.disband.core.ApiHttp
+import com.wsgpolar.disband.core.AppConfig
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.http.isSuccess
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import android.content.Context
 import com.wsgpolar.disband.core.DisbandSupabase
 import com.wsgpolar.disband.core.ThemeManager
@@ -302,6 +316,12 @@ class AppState(
     suspend fun signUp(email: String, password: String) {
         _authError.value = null
         _authNotice.value = null
+        // The server's sign-up checks (rate limits, bans) also issue the
+        // one-time ticket Supabase now needs to create the account.
+        signupCheck(normalise(email))?.let {
+            _authError.value = it
+            return
+        }
         try {
             val info = client.auth.signUpWith(Email) {
                 this.email = normalise(email)
@@ -315,6 +335,25 @@ class AppState(
         } catch (e: Exception) {
             _authError.value = friendlyAuthError(e)
         }
+    }
+
+    /** Runs the web's sign-up gate. Returns a message to show, or null to go on. */
+    private suspend fun signupCheck(email: String): String? = try {
+        val res = ApiHttp.client.post("${AppConfig.WEB_APP_URL}/api/auth/signup-check") {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("email", email); put("platform", "android") }.toString())
+        }
+        val reply = runCatching { ApiHttp.json.parseToJsonElement(res.bodyAsText()).jsonObject }.getOrNull()
+        val allowed = reply?.get("allowed")?.jsonPrimitive?.booleanOrNull
+        val error = reply?.get("error")?.jsonPrimitive?.contentOrNull
+        when {
+            res.status.isSuccess() && allowed != false -> null
+            error != null -> error
+            res.status.value == 429 -> "Too many sign-up attempts from your network. Try again later."
+            else -> "Sign-up is temporarily unavailable. Please try again in a few minutes."
+        }
+    } catch (e: Exception) {
+        "We couldn't reach Disband to check this sign-up. Check your connection and try again."
     }
 
     suspend fun sendPasswordReset(email: String) {

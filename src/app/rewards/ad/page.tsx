@@ -50,6 +50,16 @@ export default function RewardedAdPage() {
       if (res.status === 401) throw new Error("Sign in to Disband in this browser first, then come back to this page.");
       if (!res.ok || !json.viewId || !json.apiKey) throw new Error(json.error ?? "No ad is available right now.");
       await loadSdk();
+      // AppLixir's player can fail without calling either callback (a 404 for
+      // the game's ads ends in an uncaught TypeError inside the SDK), which
+      // left this page on "Loading an ad…" for good.
+      window.setTimeout(() => {
+        setState((s) => {
+          if (s !== "loading") return s;
+          setMessage("No ad is available right now. Try again later.");
+          return "error";
+        });
+      }, 20_000);
       window.initializeAndOpenPlayer!({
         apiKey: json.apiKey,
         injectionElementId: "applixir-ad-container",

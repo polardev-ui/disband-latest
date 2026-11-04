@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   getUserFromRequest,
+  requirePlatformManager,
+  requirePlatformOwner,
   requireSupportStaff,
-  verifyOwnerPassword,
 } from "@/lib/server-auth";
 import { getClientIp } from "@/lib/request-ip";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
@@ -21,9 +22,12 @@ export async function POST(request: Request) {
     const userLimit = rateLimit(`platform-ban:user:${user.id}`, 10, 60_000);
     if (!userLimit.allowed) return tooManyRequests(userLimit.retryAfterSeconds);
 
-    const isStaff = await requireSupportStaff(user.id);
-    if (!isStaff) {
-      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+    // Banning or unbanning anyone from the whole platform is a manager power.
+    // Staff and moderators can see the list (GET) but not change it: on
+    // 2026-11-04 a staff-level account was used to platform-ban users.
+    const isManager = await requirePlatformManager(user.id);
+    if (!isManager) {
+      return NextResponse.json({ error: "Only Disband managers can change platform bans." }, { status: 403 });
     }
     let body: { action?: string; userId?: string; username?: string; password?: string; reason?: string };
     try {
@@ -56,6 +60,14 @@ export async function POST(request: Request) {
 
     if (targetUserId === user.id) {
       return NextResponse.json({ error: "You cannot ban yourself." }, { status: 400 });
+    }
+
+    // Nobody can platform-ban the owner, and only the owner can ban a manager.
+    if (await requirePlatformOwner(targetUserId)) {
+      return NextResponse.json({ error: "The platform owner cannot be banned." }, { status: 403 });
+    }
+    if ((await requirePlatformManager(targetUserId)) && !(await requirePlatformOwner(user.id))) {
+      return NextResponse.json({ error: "Only the owner can ban a manager." }, { status: 403 });
     }
 
     if (body.action === "unban") {
