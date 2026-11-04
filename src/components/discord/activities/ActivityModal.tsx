@@ -22,8 +22,9 @@ import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose } from "@/components/icons";
-import { BoardGame } from "./BoardGame";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { ActivityGlyph } from "./ActivityGlyph";
+import { BoardGame } from "./BoardGame";
 import {
   ActivityLeaderboard,
   EightBallGame,
@@ -136,9 +137,39 @@ export function ActivityModal({
 
   useEffect(() => {
     if (!open || !activityId) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel(`activity:${activityId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "activity_sessions", filter: `id=eq.${activityId}` },
+        () => {
+          void (async () => {
+            try {
+              const next = await getActivity(activityId);
+              if (activeId.current !== activityId) return;
+              setActivity((current) =>
+                current?.id === next.id && current.revision > next.revision
+                  ? current
+                  : next,
+              );
+            } catch {
+              /* ignore */
+            }
+          })();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [open, activityId]);
+
+  useEffect(() => {
+    if (!open || !activityId) return;
     const timer = window.setInterval(
       () => void refresh(),
-      activity?.board ? 500 : 2000,
+      activity?.board ? 2000 : 5000,
     );
     return () => window.clearInterval(timer);
   }, [open, activityId, refresh, !!activity?.board]);
