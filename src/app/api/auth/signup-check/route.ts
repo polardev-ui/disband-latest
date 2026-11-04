@@ -82,16 +82,26 @@ export async function POST(request: Request) {
   }
 
   if (email) {
-    const { data: bannedEmail } = await service
-      .from("platform_bans")
+    // Resolve the email to a user via the service-role-only account_emails
+    // table, then check platform_bans by user_id. Emails are never stored in
+    // public.platform_bans.
+    const { data: acct } = await service
+      .from("account_emails")
       .select("user_id")
-      .ilike("email", email)
+      .eq("canonical", email.trim().toLowerCase())
       .maybeSingle();
-    if (bannedEmail) {
-      return NextResponse.json({
-        allowed: false,
-        error: "This email cannot create an account while a platform ban is active.",
-      }, { status: 403 });
+    if (acct?.user_id) {
+      const { data: bannedUser } = await service
+        .from("platform_bans")
+        .select("user_id")
+        .eq("user_id", acct.user_id)
+        .maybeSingle();
+      if (bannedUser) {
+        return NextResponse.json({
+          allowed: false,
+          error: "This email cannot create an account while a platform ban is active.",
+        }, { status: 403 });
+      }
     }
   }
 

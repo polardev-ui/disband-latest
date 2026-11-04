@@ -66,17 +66,24 @@ export async function POST(request: Request) {
 
   // Platform ban on this email: block login early with a generic message.
   if (service) {
-    const { data: banned } = await service
-      .from("platform_bans")
+    const { data: acct } = await service
+      .from("account_emails")
       .select("user_id")
-      .ilike("email", email)
+      .eq("canonical", email.trim().toLowerCase())
       .maybeSingle();
-    if (banned) {
-      await logGateEvent(service, "login_banned", ipHash === "unknown" ? null : ipHash, emailHash);
-      return NextResponse.json(
-        { allowed: false, error: "This account cannot sign in right now." },
-        { status: 403 },
-      );
+    if (acct?.user_id) {
+      const { data: banned } = await service
+        .from("platform_bans")
+        .select("user_id")
+        .eq("user_id", acct.user_id)
+        .maybeSingle();
+      if (banned) {
+        await logGateEvent(service, "login_banned", ipHash === "unknown" ? null : ipHash, emailHash);
+        return NextResponse.json(
+          { allowed: false, error: "This account cannot sign in right now." },
+          { status: 403 },
+        );
+      }
     }
   }
 
