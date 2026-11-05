@@ -60,9 +60,11 @@ struct ProfileActivity: Codable, Hashable, Sendable {
     var buttons: [Button]?
     var source: String?
     var expiresAt: String?
+    var applicationId: String?
 
     enum CodingKeys: String, CodingKey {
         case kind, name, details, state, buttons, source
+        case applicationId = "application_id"
         case startedAt = "started_at"
         case endsAt = "ends_at"
         case largeImage = "large_image"
@@ -76,8 +78,12 @@ struct ProfileActivity: Codable, Hashable, Sendable {
     /// while the game runs, so an expired one is a game that stopped.
     func isLive(now: Date = Date()) -> Bool {
         guard let name, !name.isEmpty, let expires = RelativeTime.date(from: expiresAt) else { return false }
+        // Launchers and services older desktop builds reported as games.
+        if (kind ?? "playing") == "playing", Self.notGames.contains(name.lowercased()) { return false }
         return expires > now
     }
+
+    private static let notGames: Set<String> = ["epic online services", "easyanticheat", "battleye", "epic games launcher"]
 
     /// "Playing", "Listening to", and so on, as the web labels them.
     var verb: String {

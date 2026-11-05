@@ -16,6 +16,11 @@ struct ListeningCard: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             card(now: context.date)
         }
+        .task(id: activity.name) {
+            guard activity.largeImage == nil, (activity.kind ?? "playing") == "playing",
+                  let name = activity.name, !name.isEmpty else { return }
+            foundArt = await GameArt.lookup(name: name, appId: activity.applicationId)
+        }
     }
 
     private func card(now: Date) -> some View {
@@ -105,6 +110,8 @@ struct ListeningCard: View {
 /// any buttons the game offers.
 struct GameActivityCard: View {
     let activity: ProfileActivity
+    /// Art found by name when the player's client sent none (`/api/game-art`).
+    @State private var foundArt: String?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -119,7 +126,7 @@ struct GameActivityCard: View {
                 .foregroundStyle(Brand.textMuted)
             HStack(spacing: 12) {
                 ZStack(alignment: .bottomTrailing) {
-                    RemoteImage(url: safeURL(activity.largeImage)?.absoluteString) {
+                    RemoteImage(url: safeURL(activity.largeImage ?? foundArt)?.absoluteString) {
                         ZStack {
                             Brand.elevated
                             Image(systemName: "gamecontroller.fill")
@@ -195,5 +202,34 @@ struct GameActivityCard: View {
         return h > 0
             ? "\(h):\(String(format: "%02d", m)):\(String(format: "%02d", sec)) elapsed"
             : "\(m):\(String(format: "%02d", sec)) elapsed"
+    }
+}
+
+/// Looks up a game's art by name on the web's `/api/game-art` (Discord,
+/// SteamGridDB, Steam), so every viewer sees a picture even when the player's
+/// client sent none. Cached for the session, misses included.
+actor GameArt {
+    static let shared = GameArt()
+    private var cache: [String: String?] = [:]
+
+    static func lookup(name: String, appId: String?) async -> String? {
+        await shared.find(name: name, appId: appId)
+    }
+
+    private func find(name: String, appId: String?) async -> String? {
+        let key = "\(appId ?? "")|\(name.lowercased())"
+        if let hit = cache[key] { return hit }
+        var parts = URLComponents(url: AppConfig.webAppURL.appendingPathComponent("api/game-art"), resolvingAgainstBaseURL: false)
+        var items = [URLQueryItem(name: "name", value: name)]
+        if let appId, appId.range(of: "^\\d{15,22}$", options: .regularExpression) != nil {
+            items.append(URLQueryItem(name: "app", value: appId))
+        }
+        parts?.queryItems = items
+        guard let url = parts?.url else { return nil }
+        struct Reply: Decodable { let url: String? }
+        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
+        let found = (try? JSONDecoder().decode(Reply.self, from: data))?.url
+        cache[key] = found
+        return found
     }
 }

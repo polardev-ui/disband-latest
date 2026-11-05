@@ -180,7 +180,15 @@ fun GameActivityCard(activity: ProfileActivity, modifier: Modifier = Modifier) {
                     Modifier.size(72.dp).clip(RoundedCornerShape(10.dp)).background(palette.elevated),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val large = safeUrl(activity.largeImage)
+                    // No art from the player's client: look it up by name, so
+                    // every viewer still sees the game's picture.
+                    val found by androidx.compose.runtime.produceState<String?>(null, activity.name, activity.largeImage) {
+                        val n = activity.name
+                        value = if (activity.largeImage == null && (activity.kind ?: "playing") == "playing" && !n.isNullOrBlank()) {
+                            GameArt.lookup(n, activity.applicationId)
+                        } else null
+                    }
+                    val large = safeUrl(activity.largeImage ?: found)
                     if (large != null) {
                         AsyncImage(model = large, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     } else {
@@ -252,5 +260,37 @@ fun ProfileActivityCards(listening: Listening?, activity: ProfileActivity?, modi
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         game?.let { GameActivityCard(it) }
         song?.let { ListeningCard(it) }
+    }
+}
+
+/**
+ * Game art by name from the web's `/api/game-art` (Discord, SteamGridDB,
+ * Steam). Cached for the session, misses included.
+ */
+object GameArt {
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, java.util.Optional<String>>()
+
+    suspend fun lookup(name: String, appId: String?): String? {
+        val key = "${appId ?: ""}|${name.lowercase()}"
+        cache[key]?.let { return it.orElse(null) }
+        val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                var q = "name=" + java.net.URLEncoder.encode(name, "UTF-8")
+                if (appId != null && Regex("^\\d{15,22}$").matches(appId)) q += "&app=$appId"
+                val conn = java.net.URL("https://www.disband.dev/api/game-art?$q").openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                try {
+                    if (conn.responseCode != 200) return@runCatching null
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    val url = org.json.JSONObject(body).optString("url", "")
+                    url.takeIf { it.startsWith("https://") }
+                } finally {
+                    conn.disconnect()
+                }
+            }.getOrNull()
+        }
+        cache[key] = java.util.Optional.ofNullable(found)
+        return found
     }
 }

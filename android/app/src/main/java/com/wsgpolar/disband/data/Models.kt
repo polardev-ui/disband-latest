@@ -600,13 +600,20 @@ data class ProfileActivity(
     @SerialName("ends_at") val endsAt: String? = null,
     @SerialName("expires_at") val expiresAt: String? = null,
     val buttons: List<ActivityButton>? = null,
+    @SerialName("application_id") val applicationId: String? = null,
 ) {
     @Serializable
     data class ActivityButton(val label: String? = null, val url: String? = null)
 
+    private companion object {
+        val NOT_GAMES = setOf("epic online services", "easyanticheat", "battleye", "epic games launcher")
+    }
+
     /** The desktop app keeps pushing expires_at forward while the game runs. */
     fun isLive(now: java.time.Instant = java.time.Instant.now()): Boolean {
         if (name.isNullOrBlank()) return false
+        // Launchers and services older desktop builds reported as games.
+        if ((kind ?: "playing") == "playing" && name.lowercase() in NOT_GAMES) return false
         val expires = expiresAt?.let { TimeParse.instant(it) } ?: return false
         return expires.isAfter(now)
     }
